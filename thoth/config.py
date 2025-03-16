@@ -1,9 +1,9 @@
 """
 Configuration module for Thoth.
 """
+
 import os
 from pathlib import Path
-from typing import Dict, Optional
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator
@@ -32,12 +32,21 @@ class ThothConfig(BaseModel):
 
     # File monitoring
     watch_interval: int = Field(5, description="Interval for file watching in seconds")
-    bulk_process_chunk_size: int = Field(10, description="Chunk size for bulk processing")
+    bulk_process_chunk_size: int = Field(
+        10, description="Chunk size for bulk processing"
+    )
 
     # API keys
     api_keys: APIKeys = Field(..., description="API keys for external services")
 
-    @field_validator("workspace_dir", "pdf_dir", "markdown_dir", "notes_dir", "templates_dir", "log_file")
+    @field_validator(
+        "workspace_dir",
+        "pdf_dir",
+        "markdown_dir",
+        "notes_dir",
+        "templates_dir",
+        "log_file",
+    )
     @classmethod
     def validate_path(cls, v: Path) -> Path:
         """Validate that the path exists and create it if it doesn't."""

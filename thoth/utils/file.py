@@ -1,10 +1,10 @@
 """
 File utilities for Thoth.
 """
+
 import logging
 import shutil
 from pathlib import Path
-from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def copy_file(source: Path, destination: Path) -> Path:
     return Path(shutil.copy2(source, destination))
 
 
-def list_files(directory: Path, pattern: str = "*") -> List[Path]:
+def list_files(directory: Path, pattern: str = "*") -> list[Path]:
     """
     List files in a directory matching a pattern.
 

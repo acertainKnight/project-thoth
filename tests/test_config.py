@@ -1,6 +1,7 @@
 """
 Tests for the configuration module.
 """
+
 import os
 from pathlib import Path
 from unittest.mock import patch
@@ -51,19 +52,22 @@ def test_thoth_config():
     assert config.api_keys.openrouter == "test_openrouter"
 
 
-@patch.dict(os.environ, {
-    "WORKSPACE_DIR": "/tmp/thoth",
-    "PDF_DIR": "/tmp/thoth/pdfs",
-    "MARKDOWN_DIR": "/tmp/thoth/markdown",
-    "NOTES_DIR": "/tmp/thoth/notes",
-    "TEMPLATES_DIR": "/tmp/thoth/templates",
-    "LOG_FILE": "/tmp/thoth/logs/thoth.log",
-    "LOG_LEVEL": "DEBUG",
-    "WATCH_INTERVAL": "10",
-    "BULK_PROCESS_CHUNK_SIZE": "20",
-    "API_MISTRAL_KEY": "test_mistral",
-    "API_OPENROUTER_KEY": "test_openrouter",
-})
+@patch.dict(
+    os.environ,
+    {
+        "WORKSPACE_DIR": "/tmp/thoth",
+        "PDF_DIR": "/tmp/thoth/pdfs",
+        "MARKDOWN_DIR": "/tmp/thoth/markdown",
+        "NOTES_DIR": "/tmp/thoth/notes",
+        "TEMPLATES_DIR": "/tmp/thoth/templates",
+        "LOG_FILE": "/tmp/thoth/logs/thoth.log",
+        "LOG_LEVEL": "DEBUG",
+        "WATCH_INTERVAL": "10",
+        "BULK_PROCESS_CHUNK_SIZE": "20",
+        "API_MISTRAL_KEY": "test_mistral",
+        "API_OPENROUTER_KEY": "test_openrouter",
+    },
+)
 def test_load_config():
     """Test load_config function."""
     config = load_config()

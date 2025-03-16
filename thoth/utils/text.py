@@ -1,8 +1,75 @@
 """
 Text utilities for Thoth.
 """
+
 import re
-from typing import Dict, List, Optional, Tuple
+
+
+def extract_headings(text: str) -> list[tuple[int, str, int]]:
+    """
+    Extract headings from Markdown text.
+
+    Args:
+        text: The Markdown text to extract headings from.
+
+    Returns:
+        List[Tuple[int, str, int]]: A list of tuples containing:
+            - The heading level (1-6)
+            - The heading text
+            - The position of the heading in the text
+    """
+    # Regular expression to match Markdown headings
+    heading_pattern = r"^(#{1,6})\s+(.+?)(?:\s+#{1,6})?$"
+    headings = []
+
+    # Find all headings in the text
+    for line_num, line in enumerate(text.split("\n")):
+        match = re.match(heading_pattern, line)
+        if match:
+            level = len(match.group(1))
+            title = match.group(2).strip()
+            pos = sum(len(line) + 1 for line in text.split("\n")[:line_num])
+            headings.append((level, title, pos))
+
+    return headings
+
+
+def extract_sections(text: str) -> list[tuple[str, str]]:
+    """
+    Extract sections from Markdown text.
+
+    Args:
+        text: The Markdown text to extract sections from.
+
+    Returns:
+        List[Tuple[str, str]]: A list of tuples containing:
+            - The section title
+            - The section content
+    """
+    # Extract headings
+    headings = extract_headings(text)
+
+    # If no headings, return the whole text as a single section
+    if not headings:
+        return [("", text)]
+
+    # Split text into sections
+    sections = []
+    for i, (_level, title, pos) in enumerate(headings):
+        # Get section content (from current heading to next heading or end)
+        if i < len(headings) - 1:
+            section_text = text[pos : headings[i + 1][2]]
+        else:
+            section_text = text[pos:]
+
+        # Remove the heading itself from the section text
+        section_lines = section_text.split("\n")
+        if section_lines:
+            section_text = "\n".join(section_lines[1:])
+
+        sections.append((title, section_text))
+
+    return sections
 
 
 def clean_text(text: str) -> str:
@@ -10,27 +77,24 @@ def clean_text(text: str) -> str:
     Clean text by removing extra whitespace and normalizing line endings.
 
     Args:
-        text (str): The text to clean.
+        text: The text to clean.
 
     Returns:
         str: The cleaned text.
     """
-    # Normalize line endings
-    text = text.replace("\r\n", "\n")
-
-    # Remove multiple consecutive empty lines
+    # Replace multiple newlines with a single newline
     text = re.sub(r"\n{3,}", "\n\n", text)
 
-    # Remove trailing whitespace from lines
-    text = re.sub(r"[ \t]+$", "", text, flags=re.MULTILINE)
+    # Remove trailing whitespace from each line
+    text = "\n".join(line.rstrip() for line in text.split("\n"))
 
-    # Ensure text ends with a single newline
-    text = text.rstrip() + "\n"
+    # Ensure the text ends with a single newline
+    text = text.rstrip("\n") + "\n"
 
     return text
 
 
-def extract_metadata_from_text(text: str) -> Dict[str, str]:
+def extract_metadata_from_text(text: str) -> dict[str, str]:
     """
     Extract metadata from text using common patterns.
 
@@ -63,15 +127,16 @@ def extract_metadata_from_text(text: str) -> Dict[str, str]:
         metadata["doi"] = doi_match.group(1)
 
     # Try to extract abstract
-    abstract_match = re.search(r"(?:Abstract|Summary):\s*(.+?)(?:\n\n|\n#|\Z)",
-                              text, re.IGNORECASE | re.DOTALL)
+    abstract_match = re.search(
+        r"(?:Abstract|Summary):\s*(.+?)(?:\n\n|\n#|\Z)", text, re.IGNORECASE | re.DOTALL
+    )
     if abstract_match:
         metadata["abstract"] = abstract_match.group(1).strip()
 
     return metadata
 
 
-def split_into_sections(text: str) -> List[Tuple[str, str]]:
+def split_into_sections(text: str) -> list[tuple[str, str]]:
     """
     Split text into sections based on headings.
 
@@ -83,7 +148,9 @@ def split_into_sections(text: str) -> List[Tuple[str, str]]:
     """
     # Find all headings and their positions
     heading_pattern = re.compile(r"^(#+)\s+(.+)$", re.MULTILINE)
-    headings = [(m.group(1), m.group(2), m.start()) for m in heading_pattern.finditer(text)]
+    headings = [
+        (m.group(1), m.group(2), m.start()) for m in heading_pattern.finditer(text)
+    ]
 
     # If no headings, return the whole text as a single section
     if not headings:
@@ -91,10 +158,10 @@ def split_into_sections(text: str) -> List[Tuple[str, str]]:
 
     # Split text into sections
     sections = []
-    for i, (level, title, pos) in enumerate(headings):
+    for i, (_level, title, pos) in enumerate(headings):
         # Get section content (from current heading to next heading or end)
         if i < len(headings) - 1:
-            content = text[pos:headings[i+1][2]].strip()
+            content = text[pos : headings[i + 1][2]].strip()
         else:
             content = text[pos:].strip()
 

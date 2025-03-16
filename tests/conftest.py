@@ -1,7 +1,7 @@
 """
 Test fixtures for Thoth.
 """
-import os
+
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -19,11 +19,20 @@ def temp_dir():
 
 
 @pytest.fixture
-def sample_pdf(temp_dir):
+def sample_pdf():
     """Provide a sample PDF for testing."""
-    pdf_path = temp_dir / "sample.pdf"
-    # Create an empty file for testing
-    pdf_path.touch()
+    # Use the consistent test.pdf file
+    pdf_path = Path("tests/fixtures/test.pdf")
+
+    # Ensure the file exists
+    if not pdf_path.exists():
+        # Create the parent directory if it doesn't exist
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Create the test PDF file with minimal content
+        with open(pdf_path, "wb") as f:
+            f.write(b"%PDF-1.5\n%Test PDF file for OCR Manager tests")
+
     return pdf_path
 
 
@@ -36,7 +45,8 @@ Authors: John Doe, Jane Smith
 Year: 2023
 DOI: 10.1234/5678
 
-Abstract: This is the abstract of the sample paper. It contains a summary of the research.
+Abstract: This is the abstract of the sample paper. It contains a summary of the
+research.
 
 ## Introduction
 
@@ -98,7 +108,8 @@ def mock_llm_api():
         }
         mock_client.extract_citations.return_value = [
             {
-                "text": "Smith, J. (2022). Another paper. Journal of Research, 10(2), 123-145.",
+                "text": "Smith, J. (2022). Another paper. Journal of Research, "
+                "10(2), 123-145.",
                 "authors": ["J. Smith"],
                 "title": "Another paper",
                 "year": 2022,

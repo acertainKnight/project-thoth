@@ -1,0 +1,20 @@
+# Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)
+*.lock
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pywz
+*.pyzw
+*.ruff_cache
+*.venv
+*.ipynb_checkpoints
+__pycache__
+*.egg-info
+*.dist-info
+*.build-info
+*.egg
+*.whl
+*.dist
+*.whl

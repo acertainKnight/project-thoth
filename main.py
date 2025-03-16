@@ -3,7 +3,6 @@
 Thoth AI Research Agent - Main entry point
 """
 import logging
-from pathlib import Path
 
 from thoth.config import load_config
 from thoth.utils.logging import setup_logging

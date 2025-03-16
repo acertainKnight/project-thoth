@@ -1,6 +1,7 @@
 """
 Logging utilities for Thoth.
 """
+
 import logging
 import sys
 from pathlib import Path
@@ -24,7 +25,9 @@ def setup_logging(log_level: str, log_file: Path) -> None:
 
     # Create formatters
     console_format = logging.Formatter("%(levelname)s - %(message)s")
-    file_format = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    file_format = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
 
     # Set formatters
     console_handler.setFormatter(console_format)
