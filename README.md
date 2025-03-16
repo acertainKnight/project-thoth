@@ -20,15 +20,19 @@ Thoth builds a core PDF processing pipeline with Obsidian integration. The initi
    cd thoth
    ```
 
-2. Create a virtual environment:
+2. Create a virtual environment using UV:
    ```bash
-   python -m venv .venv
+   # Install UV if you don't have it
+   pip install uv
+
+   # Create and activate virtual environment
+   uv venv
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    ```
 
 3. Install dependencies:
    ```bash
-   pip install -e .
+   uv pip install -e .
    ```
 
 4. Create a `.env` file:
@@ -36,38 +40,117 @@ Thoth builds a core PDF processing pipeline with Obsidian integration. The initi
    cp .env.example .env
    ```
 
-5. Edit the `.env` file with your configuration and API keys.
+5. Edit the `.env` file with your configuration and API keys:
+   ```
+   # Base Configuration
+   WORKSPACE_DIR=/path/to/your/workspace
+   PDF_DIR=${WORKSPACE_DIR}/data/pdfs
+   MARKDOWN_DIR=${WORKSPACE_DIR}/data/markdown
+   NOTES_DIR=${WORKSPACE_DIR}/data/notes
+   TEMPLATES_DIR=${WORKSPACE_DIR}/templates
+   LOG_LEVEL=INFO
+   LOG_FILE=${WORKSPACE_DIR}/logs/thoth.log
+
+   # API Keys
+   API_MISTRAL_KEY=your_mistral_key
+   API_OPENROUTER_KEY=your_openrouter_key
+
+   # File monitoring
+   WATCH_INTERVAL=5
+   BULK_PROCESS_CHUNK_SIZE=10
+   ```
 
 ## Usage
 
-Run Thoth:
+### Running Thoth
+
+Start Thoth to monitor your PDF folder:
+
 ```bash
 python -m thoth
+```
+
+Thoth will:
+1. Initialize all components
+2. Process any existing PDFs in your PDF folder
+3. Start monitoring for new PDFs
+4. Handle URI requests when citations are clicked in Obsidian
+
+### Setting Up Obsidian
+
+1. Create or open an Obsidian vault
+2. Set your `NOTES_DIR` in the `.env` file to point to a folder within your Obsidian vault
+3. Configure Obsidian to handle custom URIs:
+   - In Obsidian settings, go to "Core Plugins" and enable "URI"
+   - On Windows, you may need to register the `thoth://` URI scheme with your system
+
+### Workflow
+
+1. **Adding Research Papers**:
+   - Place PDF files in your configured `PDF_DIR` folder
+   - Thoth will automatically process them and create notes in your Obsidian vault
+
+2. **Exploring Citations**:
+   - When viewing a note in Obsidian, you'll see citations with links
+   - Clicking on a citation link will either:
+     - Navigate to an existing note if the cited paper is already processed
+     - Trigger Thoth to download and process the cited paper if it's not in your library
+
+3. **Discovering Related Papers**:
+   - Thoth maintains bidirectional links between papers
+   - You can see which papers cite a particular paper and which papers it cites
+
+### URI Handling
+
+Thoth uses custom URIs to handle citation links. When you click on a citation link in Obsidian, it triggers a URI request in the format:
+
+- `thoth://doi:10.1234/5678` for DOI-based citations
+- `thoth://url:https://example.com/paper.pdf` for URL-based citations
+
+Thoth will download the cited paper, process it, and create a note for it in your Obsidian vault.
+
+### Folder Structure
+
+After running Thoth, your workspace will have the following structure:
+
+```
+workspace/
+├── data/
+│   ├── pdfs/                   # Your research papers in PDF format
+│   ├── markdown/               # OCR-generated Markdown files
+│   └── notes/                  # Generated Obsidian notes
+├── logs/                       # Log files
+└── templates/                  # Note templates
 ```
 
 ## Development
 
 1. Install development dependencies:
    ```bash
-   pip install -e ".[dev]"
+   uv pip install -e ".[dev]"
    ```
 
-2. Run tests:
+2. Install pre-commit hooks:
+   ```bash
+   pre-commit install
+   ```
+
+3. Run tests:
    ```bash
    pytest
    ```
 
-3. Format code:
+4. Format code:
    ```bash
    black thoth tests
    ```
 
-4. Lint code:
+5. Lint code:
    ```bash
    ruff check thoth tests
    ```
 
-5. Type check:
+6. Type check:
    ```bash
    mypy thoth
    ```
@@ -106,6 +189,7 @@ thoth/
     │   └── note_generator.py   # Generates notes
     ├── citation/
     │   ├── __init__.py
+    │   ├── citation.py         # Citation data model
     │   ├── extractor.py        # Extracts citations
     │   ├── formatter.py        # Formats citations
     │   └── downloader.py       # Downloads cited PDFs
@@ -122,6 +206,30 @@ thoth/
         ├── logging.py          # Logging setup
         ├── file.py             # File utilities
         └── text.py             # Text utilities
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **API Key Errors**:
+   - Ensure your Mistral and OpenRouter API keys are correctly set in the `.env` file
+   - Check the log file for specific error messages
+
+2. **PDF Processing Failures**:
+   - Make sure the PDF is not password-protected
+   - Check if the PDF is text-based or scanned (OCR works better with text-based PDFs)
+
+3. **URI Handling Issues**:
+   - Verify that your system is configured to handle the `thoth://` URI scheme
+   - Check if Thoth is running when you click on a citation link
+
+### Logs
+
+Check the log file specified in your `.env` file for detailed information about any issues:
+
+```bash
+tail -f /path/to/your/workspace/logs/thoth.log
 ```
 
 ## License
