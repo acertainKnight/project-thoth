@@ -10,10 +10,20 @@ from thoth.citation.extractor import (
     CitationExtractor,
     extract_citations,
 )
+from thoth.citation.formatter import (
+    CitationFormatError,
+    CitationFormatter,
+    CitationStyle,
+    format_citation,
+)
 
 __all__ = [
     "Citation",
     "CitationExtractionError",
     "CitationExtractor",
+    "CitationFormatError",
+    "CitationFormatter",
+    "CitationStyle",
     "extract_citations",
+    "format_citation",
 ]
