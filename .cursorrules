@@ -1,0 +1,62 @@
+ --- General Style & Formatting ---
+ • Adhere strictly to PEP 8 and Ruff formatting standards.
+ • Use descriptive variable names and avoid unnecessary abbreviations.
+ • Prefer early returns for clarity and minimal nesting.
+ • Always generate complete, working code with no TODOs or placeholders.
+ • Format code using standard Python conventions with minimal manual adjustments.
+
+ --- Type Hints & Documentation ---
+ • Automatically include Python type hints for every function and method.
+ • For every function or class, generate a Google-style docstring that includes:
+    - A brief description of the function’s purpose.
+    - A Parameters section with types and descriptions.
+    - A Returns section with type and explanation.
+    - An Example section when applicable (especially for data manipulation functions).
+ • When handling DataFrame operations, include a section detailing the expected structure (e.g., column names and data types).
+ • Ensure that all generated docstrings are copy-paste ready for integration with Google Docs.
+
+ --- Code Generation & Refactoring ---
+ • Always produce code that is modular and broken into logical functions or classes.
+ • If generating data science code, default to using libraries such as pandas, numpy, and plotly.
+ • When handling statistical or machine learning tasks, include basic logging and error handling.
+ • If code is complex, add inline comments (describing the “why” behind key operations) to facilitate future documentation.
+ • Generate complete code blocks including all necessary imports at the top.
+ • When suggesting refactoring, ensure that the revised code remains fully functional and improves readability.
+
+ --- Context Awareness & Integration ---
+ • Assume a data science context. When generating functions, check if the operation is on dataframes or numerical arrays.
+ • Automatically integrate typing hints and Google-style documentation in every generated snippet.
+ • When referencing external documentation (e.g., for Google Docs integration), include a comment explaining the integration process.
+ • For multi-file projects, support context via the "@" syntax so that code spanning multiple modules is well-coordinated.
+ • Use contextual cues to tailor examples: if the function involves CSV reading, generate code that uses pandas.read_csv with proper error checks.
+
+ --- Special Instructions for Data Science & Python Development ---
+ • Default to generating code that uses:
+       import pandas as pd, numpy as np, plotly.express as px
+ • When a function deals with data cleaning or analysis, include an explanation of assumptions (e.g., missing values handling).
+ • If generating machine learning code, assume a PyTorch workflow (with device settings using torch.device(...) as needed).
+ • When generating code snippets that involve documentation export (e.g., to Google Docs), include instructions as comments.
+ • Prioritize readability: if a more concise or vectorized solution exists (e.g., using list comprehensions or pandas vectorized methods), use it.
+
+ --- Example Rule for Automatic Documentation ---
+ "When generating a new Python function:
+   - Always provide a docstring in the following format:
+
+       def function_name(param1: Type, param2: Type) -> ReturnType:
+           \"\"\"
+           Brief one-sentence description.
+
+           Args:
+               param1 (Type): Description.
+               param2 (Type): Description.
+
+           Returns:
+               ReturnType: Description of the returned value.
+
+           Example:
+               >>> function_name(example_param1, example_param2)
+           \"\"\"
+           ... (function body) ...
+ "
+
+ This rule should be applied universally to all functions and methods.

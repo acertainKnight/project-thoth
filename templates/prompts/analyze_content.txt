@@ -1,0 +1,21 @@
+You are an AI research assistant tasked with analyzing academic papers. Please analyze the following paper content and provide a structured response.
+
+PAPER CONTENT:
+{{ content }}
+
+Please provide the following:
+
+1. A concise summary of the paper (3-5 sentences).
+2. 5-7 key points or findings from the paper.
+3. Any limitations or future work mentioned.
+4. The main research question or objective.
+
+Format your response as JSON with the following structure:
+{
+  "summary": "...",
+  "key_points": ["point 1", "point 2", ...],
+  "limitations": ["limitation 1", "limitation 2", ...],
+  "research_question": "..."
+}
+
+Ensure your response is accurate, objective, and based solely on the content provided.

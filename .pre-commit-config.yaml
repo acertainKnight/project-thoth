@@ -1,0 +1,40 @@
+repos:
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: pytest
+        language: python
+        pass_filenames: false
+        types: [python]
+
+      - id: nbstripout
+        name: nbstripout
+        entry: nbstripout
+        language: python
+        types: [jupyter]
+
+      - id: codespell
+        name: codespell
+        entry: codespell
+        language: python
+        types: [python]
+        exclude: |
+          (?x)(
+            .*\.csv|
+            .*\.ipynb  # Jupyter notebooks
+          )
+        args: [--ignore-words=.codespellignore]
+
+      - id: black
+        name: black
+        entry: black
+        language: python
+        types: [python]
+
+      - id: ruff
+        name: ruff
+        entry: ruff check --force-exclude
+        language: python
+        types: [ python ]
+        args: [ --fix ]

@@ -1,0 +1,29 @@
+You are an AI research assistant tasked with extracting citations from academic papers. Please extract all citations from the following paper content.
+
+PAPER CONTENT:
+{{ content }}
+
+For each citation, provide the following information:
+1. The citation text as it appears in the paper
+2. The authors (as a list)
+3. The title of the cited work
+4. The year of publication (if available)
+5. The DOI (if available)
+6. The journal or conference (if available)
+7. The context in which the citation appears (the surrounding sentence or paragraph)
+
+Format your response as a JSON array of citation objects with the following structure:
+[
+  {
+    "text": "Full citation text as it appears",
+    "authors": ["Author 1", "Author 2", ...],
+    "title": "Title of the cited work",
+    "year": 2023,
+    "doi": "10.xxxx/xxxxx",
+    "journal": "Journal name",
+    "context": "The sentence or paragraph where the citation appears"
+  },
+  ...
+]
+
+If any field is not available, omit it from the JSON object. Ensure your extraction is accurate and comprehensive.

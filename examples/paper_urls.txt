@@ -1,0 +1,14 @@
+# Example URLs for testing the bulk upload feature
+# One URL per line
+
+# ArXiv papers
+https://arxiv.org/pdf/2307.10430
+https://arxiv.org/pdf/1805.06061
+
+# Other academic papers
+https://aclanthology.org/2024.naacl-industry.6.pdf
+https://aclanthology.org/2024.findings-naacl.28.pdf
+https://dl.acm.org/doi/pdf/10.1145/3677052.3698647
+https://aclanthology.org/2023.findings-eacl.192.pdf
+
+# Note: These are real academic paper URLs for testing purposes
