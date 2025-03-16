@@ -151,3 +151,12 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+# Ruff
+.ruff_cache/
+
+# Pytest
+.pytest_cache/
+
+# Logs
+logs/
