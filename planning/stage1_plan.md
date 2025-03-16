@@ -96,7 +96,7 @@ thoth/
 │   └── notes/                  # Generated Obsidian notes
 ├── templates/
 │   ├── note_template.md        # Obsidian note template
-│   └── prompts/                # LLM prompt templates
+│   └── prompts/                # LLM prompt templates using Jinja2
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py             # Test fixtures and configuration
@@ -209,6 +209,26 @@ def process_uri(uri: str) -> bool:
 # thoth/uri/generator.py
 def generate_uri(citation: Citation) -> str:
     """Generate a custom URI for a citation."""
+```
+
+### 4.5. Prompt Templates
+
+The project uses Jinja2 templates for LLM prompts to ensure consistency and maintainability:
+
+```python
+# Example of using Jinja2 templates for LLM prompts
+def analyze_content(content: str, model: str, api_key: str) -> dict:
+    """Analyze content with LLM using Jinja2 templates."""
+    # Load the template
+    template = jinja_env.get_template("analyze_content.j2")
+
+    # Render the template with content
+    prompt = template.render(content=content)
+
+    # Use the rendered prompt with LLM
+    response = call_llm_api(prompt, model, api_key)
+
+    return parse_response(response)
 ```
 
 ## 5. Application Flow
