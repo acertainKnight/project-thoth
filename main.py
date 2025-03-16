@@ -81,8 +81,7 @@ def process_pdf(pdf_path: Path, components):
 
 def main():
     """Main entry point for Thoth."""
-    # Check for URI handling
-    if len(sys.argv) > 1 and sys.argv[1].startswith("thoth://"):
+    try:
         # Load configuration
         config = load_config()
 
@@ -90,66 +89,63 @@ def main():
         setup_logging(config.log_level, config.log_file)
         logger = logging.getLogger(__name__)
 
-        # Process URI
-        uri = sys.argv[1]
-        logger.info(f"Processing URI: {uri}")
+        # Check for URI handling
+        if len(sys.argv) > 1 and sys.argv[1].startswith("thoth://"):
+            # Process URI
+            uri = sys.argv[1]
+            logger.info(f"Processing URI: {uri}")
 
-        uri_handler = URIHandler(config)
-        success = uri_handler.process_uri(uri)
+            uri_handler = URIHandler(config)
+            success = uri_handler.process_uri(uri)
 
-        # Exit with appropriate status code
-        sys.exit(0 if success else 1)
+            # Exit with appropriate status code
+            sys.exit(0 if success else 1)
 
-    # Normal startup
-    # Load configuration
-    config = load_config()
+        logger.info(f"Thoth started. Monitoring {config.pdf_dir} for new PDFs.")
 
-    # Set up logging
-    setup_logging(config.log_level, config.log_file)
-    logger = logging.getLogger(__name__)
+        # Initialize components
+        ocr_manager = OCRManager(config.api_keys.mistral)
+        markdown_processor = MarkdownProcessor()
+        llm_processor = LLMProcessor(config.api_keys.openrouter)
+        note_generator = NoteGenerator(config.templates_dir, config.notes_dir)
+        link_manager = LinkManager(config.notes_dir)
+        pdf_monitor = PDFMonitor(config.pdf_dir)
 
-    logger.info(f"Thoth started. Monitoring {config.pdf_dir} for new PDFs.")
+        # Store components in a dictionary for easy access
+        components = {
+            "ocr_manager": ocr_manager,
+            "markdown_processor": markdown_processor,
+            "llm_processor": llm_processor,
+            "note_generator": note_generator,
+            "link_manager": link_manager,
+            "pdf_monitor": pdf_monitor,
+        }
 
-    # Initialize components
-    ocr_manager = OCRManager(config.api_keys.mistral)
-    markdown_processor = MarkdownProcessor()
-    llm_processor = LLMProcessor(config.api_keys.openrouter)
-    note_generator = NoteGenerator(config.templates_dir, config.notes_dir)
-    link_manager = LinkManager(config.notes_dir)
-    pdf_monitor = PDFMonitor(config.pdf_dir)
+        # Register callback for new PDFs
+        pdf_monitor.on_new_pdf(lambda pdf_path: process_pdf(pdf_path, components))
 
-    # Store components in a dictionary for easy access
-    components = {
-        "ocr_manager": ocr_manager,
-        "markdown_processor": markdown_processor,
-        "llm_processor": llm_processor,
-        "note_generator": note_generator,
-        "link_manager": link_manager,
-        "pdf_monitor": pdf_monitor,
-    }
+        # Process existing PDFs
+        logger.info("Processing existing PDFs...")
+        pdf_monitor.process_existing_pdfs()
+        logger.info("Finished processing existing PDFs.")
 
-    # Register callback for new PDFs
-    pdf_monitor.on_new_pdf(lambda pdf_path: process_pdf(pdf_path, components))
+        try:
+            # Start monitoring
+            pdf_monitor.start()
+            logger.info(f"Now monitoring {config.pdf_dir} for new PDFs.")
 
-    # Process existing PDFs
-    logger.info("Processing existing PDFs...")
-    pdf_monitor.process_existing_pdfs()
-    logger.info("Finished processing existing PDFs.")
+            # Keep the main thread running
+            while True:
+                import time
 
-    try:
-        # Start monitoring
-        pdf_monitor.start()
-        logger.info(f"Now monitoring {config.pdf_dir} for new PDFs.")
-
-        # Keep the main thread running
-        while True:
-            import time
-
-            time.sleep(1)
-    except KeyboardInterrupt:
-        logger.info("Stopping Thoth...")
-        pdf_monitor.stop()
-        logger.info("Thoth stopped.")
+                time.sleep(1)
+        except KeyboardInterrupt:
+            logger.info("Stopping Thoth...")
+            pdf_monitor.stop()
+            logger.info("Thoth stopped.")
+    except Exception as e:
+        print(f"Error initializing Thoth: {e!s}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

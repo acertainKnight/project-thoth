@@ -7,14 +7,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from thoth.config import ThothConfig
+from thoth.config import ThothSettings
 from thoth.uri.handler import URIHandler, process_uri
 
 
 @pytest.fixture
 def mock_config():
     """Create a mock configuration for testing."""
-    config = MagicMock(spec=ThothConfig)
+    config = MagicMock(spec=ThothSettings)
     config.pdf_dir = Path("/tmp/thoth/pdfs")
     return config
 

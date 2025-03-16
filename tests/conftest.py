@@ -1,121 +1,127 @@
 """
-Test fixtures for Thoth.
+Pytest configuration for Thoth tests.
 """
 
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from thoth.config import APIKeys, ThothConfig
+from thoth.config import APIKeys, ThothSettings
 
 
 @pytest.fixture
 def temp_dir():
-    """Create a temporary directory for testing."""
+    """Create a temporary directory for tests."""
     with tempfile.TemporaryDirectory() as temp_dir:
         yield Path(temp_dir)
 
 
 @pytest.fixture
-def sample_pdf():
-    """Provide a sample PDF for testing."""
-    # Use the consistent test.pdf file
-    pdf_path = Path("tests/fixtures/test.pdf")
+def workspace_dir(temp_dir):
+    """Create a workspace directory for tests."""
+    workspace_dir = temp_dir / "workspace"
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    return workspace_dir
 
-    # Ensure the file exists
-    if not pdf_path.exists():
-        # Create the parent directory if it doesn't exist
-        pdf_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Create the test PDF file with minimal content
-        with open(pdf_path, "wb") as f:
-            f.write(b"%PDF-1.5\n%Test PDF file for OCR Manager tests")
+@pytest.fixture
+def pdf_dir(workspace_dir):
+    """Create a PDF directory for tests."""
+    pdf_dir = workspace_dir / "pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    return pdf_dir
 
+
+@pytest.fixture
+def markdown_dir(workspace_dir):
+    """Create a Markdown directory for tests."""
+    markdown_dir = workspace_dir / "markdown"
+    markdown_dir.mkdir(parents=True, exist_ok=True)
+    return markdown_dir
+
+
+@pytest.fixture
+def notes_dir(workspace_dir):
+    """Create a notes directory for tests."""
+    notes_dir = workspace_dir / "notes"
+    notes_dir.mkdir(parents=True, exist_ok=True)
+    return notes_dir
+
+
+@pytest.fixture
+def templates_dir(workspace_dir):
+    """Create a templates directory for tests."""
+    templates_dir = workspace_dir / "templates"
+    templates_dir.mkdir(parents=True, exist_ok=True)
+    return templates_dir
+
+
+@pytest.fixture
+def log_dir(workspace_dir):
+    """Create a log directory for tests."""
+    log_dir = workspace_dir / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return log_dir
+
+
+@pytest.fixture
+def api_keys():
+    """Create API keys for tests."""
+    return APIKeys(mistral="test_mistral_key", openrouter="test_openrouter_key")
+
+
+@pytest.fixture
+def config(
+    workspace_dir, pdf_dir, markdown_dir, notes_dir, templates_dir, log_dir, api_keys
+):
+    """Create a configuration for tests."""
+    return ThothSettings(
+        workspace_dir=workspace_dir,
+        pdf_dir=pdf_dir,
+        markdown_dir=markdown_dir,
+        notes_dir=notes_dir,
+        templates_dir=templates_dir,
+        log_file=log_dir / "thoth.log",
+        mistral_key=api_keys.mistral,
+        openrouter_key=api_keys.openrouter,
+    )
+
+
+@pytest.fixture
+def sample_pdf(pdf_dir):
+    """Create a sample PDF for tests."""
+    pdf_path = pdf_dir / "sample.pdf"
+    pdf_path.touch()
     return pdf_path
 
 
 @pytest.fixture
-def sample_markdown():
-    """Provide sample Markdown content for testing."""
-    return """# Sample Paper Title
-
-Authors: John Doe, Jane Smith
-Year: 2023
-DOI: 10.1234/5678
-
-Abstract: This is the abstract of the sample paper. It contains a summary of the
-research.
-
-## Introduction
-
-This is the introduction section of the paper.
-
-## Methods
-
-These are the methods used in the research.
-
-## Results
-
-These are the results of the research.
-
-## Conclusion
-
-This is the conclusion of the paper.
-
-## References
-
-1. Smith, J. (2022). Another paper. Journal of Research, 10(2), 123-145.
-2. Doe, A. (2021). Yet another paper. Conference on Research, 45-67.
-"""
+def sample_markdown(markdown_dir):
+    """Create a sample Markdown file for tests."""
+    markdown_path = markdown_dir / "sample.md"
+    with open(markdown_path, "w") as f:
+        f.write("# Sample Markdown\n\nThis is a sample Markdown file.")
+    return markdown_path
 
 
 @pytest.fixture
-def mock_config():
-    """Provide a mock configuration for testing."""
-    return ThothConfig(
-        workspace_dir=Path("/tmp/thoth"),
-        pdf_dir=Path("/tmp/thoth/pdfs"),
-        markdown_dir=Path("/tmp/thoth/markdown"),
-        notes_dir=Path("/tmp/thoth/notes"),
-        templates_dir=Path("/tmp/thoth/templates"),
-        log_file=Path("/tmp/thoth/logs/thoth.log"),
-        api_keys=APIKeys(mistral="test_mistral", openrouter="test_openrouter"),
-    )
+def sample_note(notes_dir):
+    """Create a sample note for tests."""
+    note_path = notes_dir / "sample.md"
+    with open(note_path, "w") as f:
+        f.write("# Sample Note\n\nThis is a sample note.")
+    return note_path
 
 
 @pytest.fixture
 def mock_ocr_api():
     """Mock the OCR API for testing."""
-    with patch("thoth.core.ocr_manager.MistralClient") as mock:
-        mock_client = MagicMock()
-        mock_client.process_pdf.return_value = "Sample markdown content"
-        mock.return_value = mock_client
-        yield mock
+    return MagicMock()
 
 
 @pytest.fixture
 def mock_llm_api():
     """Mock the LLM API for testing."""
-    with patch("thoth.core.llm_processor.OpenRouterClient") as mock:
-        mock_client = MagicMock()
-        mock_client.analyze_content.return_value = {
-            "summary": "Sample summary",
-            "key_points": ["point1", "point2"],
-            "limitations": ["limitation1"],
-            "research_question": "Sample research question",
-        }
-        mock_client.extract_citations.return_value = [
-            {
-                "text": "Smith, J. (2022). Another paper. Journal of Research, "
-                "10(2), 123-145.",
-                "authors": ["J. Smith"],
-                "title": "Another paper",
-                "year": 2022,
-                "journal": "Journal of Research",
-                "context": "This is the context of the citation.",
-            }
-        ]
-        mock.return_value = mock_client
-        yield mock
+    return MagicMock()

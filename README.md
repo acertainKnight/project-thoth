@@ -67,6 +67,10 @@ Thoth builds a core PDF processing pipeline with Obsidian integration. The initi
 Start Thoth to monitor your PDF folder:
 
 ```bash
+# Run directly from the project root
+python main.py
+
+# Or run as a module
 python -m thoth
 ```
 
@@ -180,6 +184,7 @@ thoth/
 │   └── test_uri/               # Tests for URI handling
 └── thoth/
     ├── __init__.py
+    ├── __main__.py             # Module entry point
     ├── core/
     │   ├── __init__.py
     │   ├── pdf_monitor.py      # Monitors PDF folder
@@ -223,6 +228,10 @@ thoth/
 3. **URI Handling Issues**:
    - Verify that your system is configured to handle the `thoth://` URI scheme
    - Check if Thoth is running when you click on a citation link
+
+4. **Module Not Found Errors**:
+   - If you get a "No module named thoth.__main__" error, make sure you're running from the project root directory
+   - Try running `python main.py` directly instead of `python -m thoth`
 
 ### Logs
 

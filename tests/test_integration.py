@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from thoth.config import APIKeys, ThothConfig
+from thoth.config import ThothSettings
 
 
 @pytest.fixture
@@ -157,16 +157,16 @@ def test_end_to_end(tmp_path, monkeypatch):
     for directory in [pdf_dir, markdown_dir, notes_dir, templates_dir, log_dir]:
         directory.mkdir(parents=True, exist_ok=True)
 
-    # Create a mock config with proper APIKeys
-    api_keys = APIKeys(mistral="test_mistral_key", openrouter="test_openrouter_key")
-    config = ThothConfig(
+    # Create a mock config with proper API keys
+    config = ThothSettings(
         workspace_dir=workspace_dir,
         pdf_dir=pdf_dir,
         markdown_dir=markdown_dir,
         notes_dir=notes_dir,
         templates_dir=templates_dir,
         log_file=log_dir / "thoth.log",
-        api_keys=api_keys,
+        mistral_key="test_mistral_key",
+        openrouter_key="test_openrouter_key",
     )
 
     # Mock the load_config function

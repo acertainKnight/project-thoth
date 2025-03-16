@@ -17,6 +17,7 @@ dependencies = [
     "openrouter>=0.0.1",         # For LLM API access
     "jinja2>=3.1.2",             # For template rendering
     "pydantic>=2.4.2",           # For data validation
+    "pydantic-settings>=2.0.0",  # For settings management
     "loguru>=0.7.0",             # For logging
     "python-dotenv>=1.0.0",      # For environment variables
     "aiohttp>=3.8.5",            # For async HTTP requests

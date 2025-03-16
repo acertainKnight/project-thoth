@@ -10,7 +10,7 @@ import urllib.parse
 
 from thoth.citation.citation import Citation
 from thoth.citation.downloader import download_citation
-from thoth.config import ThothConfig
+from thoth.config import ThothSettings
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class URIHandler:
     DOI_PATTERN = re.compile(r"doi:(?P<doi>10\.\d+/[^/\s]+)")
     URL_PATTERN = re.compile(r"url:(?P<url>https?://[^\s]+)")
 
-    def __init__(self, config: ThothConfig):
+    def __init__(self, config: ThothSettings):
         """
         Initialize the URIHandler.
 
@@ -135,7 +135,7 @@ class URIHandler:
         return pdf_path is not None
 
 
-def process_uri(uri: str, config: ThothConfig) -> bool:
+def process_uri(uri: str, config: ThothSettings) -> bool:
     """
     Process a custom URI and trigger appropriate actions.
 
