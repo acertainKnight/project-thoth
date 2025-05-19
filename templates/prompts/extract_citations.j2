@@ -1,15 +1,47 @@
 You are a research assistant that extracts citation information.
+Only provide the analysis in the required structured format. No other information is needed.
+If you cannot find the information, return None.
 
-Extract and structure the citations from the following references section of an academic paper.
-For each citation, provide:
-1. The full citation text
-2. List of authors
-3. Title of the cited work
-4. Publication year
-5. Journal name (if applicable)
-6. Any context from the paper where this citation is referenced (if you can find it)
+Clean up the content to ensure any formatting is removed and the content is in a standard format.
 
-Format your response as a JSON array of citation objects.
+You will be given the references section of an academic paper. Analyze the content and provide a list of structured citations.
+This list will be used to create a structured report of the papers cited and incoporated in a complex knowledge graph connecting them.
+
+Citations will often be separated by a line break.
+
+The response must be a single JSON object.
+This object must contain a key named "citations".
+The value of the "citations" key must be a JSON array.
+**Each element in this JSON array must be a complete JSON object that strictly conforms to the `item_schema` provided below.**
+
+For example, a single item in the "citations" array should look like this (refer to `item_schema` for all fields):
+```json
+{
+  "text": "Full text of the citation...",
+  "authors": "Author A; Author B",
+  "title": "Title of the work",
+  "year": 2023,
+  "journal": "Journal Name",
+  "doi": "10.xxxx/xxxxxx",
+  "backup_id": "arXiv:xxxx.xxxx",
+  "url": "http://example.com/paper.pdf",
+  "volume": "10",
+  "issue": "2",
+  "pages": "100-110",
+  "affiliations": "Affiliation A; Affiliation B"
+}
+```
+Ensure all fields from the `item_schema` are present in each object, using `null` if a value cannot be found for a specific field in a specific citation.
+
+The schema for an individual citation item (`item_schema`) is:
+```json
+{{ item_schema }}
+```
+
+The overall JSON response format (`response_schema`), which dictates the top-level structure including the 'citations' list, is:
+```json
+{{ response_schema }}
+```
 
 References section:
 {{ references_section }}

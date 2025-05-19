@@ -1,19 +1,29 @@
 repos:
+  # Format first ────────────────────────────────────────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.10
+    hooks:
+      - id: ruff-format          # auto-wraps lines to 88 chars
+
+  # Project-local hooks ─────────────────────────────────────────────────────────
   - repo: local
     hooks:
+      # Pytest
       - id: pytest
         name: pytest
-        entry: pytest
+        entry: pytest # Reverted from bash -c 'pytest || ([ $? -eq 5 ] && exit 0 || exit $?)'
         language: python
         pass_filenames: false
         types: [python]
 
+      # Strip notebook output
       - id: nbstripout
         name: nbstripout
         entry: nbstripout
         language: python
         types: [jupyter]
 
+      # Spell-checking
       - id: codespell
         name: codespell
         entry: codespell
@@ -22,19 +32,42 @@ repos:
         exclude: |
           (?x)(
             .*\.csv|
-            .*\.ipynb  # Jupyter notebooks
+            .*\.ipynb        # Jupyter notebooks
           )
         args: [--ignore-words=.codespellignore]
 
-      - id: black
-        name: black
-        entry: black
+      # SQL lint/auto-fix
+      - id: sqlfluff-fix
+        name: sqlfluff-fix
+        entry: sqlfluff fix --show-lint-violations --processes 0 --disable-progress-bar
         language: python
-        types: [python]
+        types: [sql]
 
-      - id: ruff
+      # Ruff lint (auto-fix) – runs every commit
+      - id: ruff-lint
         name: ruff
         entry: ruff check --force-exclude
         language: python
-        types: [ python ]
-        args: [ --fix ]
+        types: [python]
+        args: [--fix]
+
+      # ✔ NEW: Ruff add-noqa – manual only
+      - id: ruff-add-noqa
+        name: ruff (add-noqa)
+        entry: ruff check --force-exclude --add-noqa
+        language: python
+        pass_filenames: false
+        stages: [manual]      # won't run unless you call it explicitly
+
+  # Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0  # Use the latest version
+    hooks:
+      - id: check-added-large-files
+        args: [--maxkb=2048]
+      # Add other standard hooks here if needed, e.g.:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict

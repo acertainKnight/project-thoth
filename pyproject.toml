@@ -12,18 +12,29 @@ authors = [{name="Nick Hallmark", email="NHALLMARK3@BLOOMBERG.NET"}]
 
 dependencies = [
     # Core Dependencies
-    "watchdog>=3.0.0",           # For monitoring PDF folder
-    "mistralai>=0.0.7",          # For OCR API access
-    "openrouter>=0.0.1",         # For LLM API access
-    "jinja2>=3.1.2",             # For template rendering
-    "pydantic>=2.4.2",           # For data validation
-    "pydantic-settings>=2.0.0",  # For settings management
-    "loguru>=0.7.0",             # For logging
-    "python-dotenv>=1.0.0",      # For environment variables
-    "aiohttp>=3.8.5",            # For async HTTP requests
-    "pypdf>=4.0.0",              # For PDF processing
-    "requests>=2.31.0",          # For HTTP requests
-    "click>=8.1.8",              # For CLI
+    "watchdog>=3.0.0", # For monitoring PDF folder
+    "mistralai>=0.0.7", # For OCR API access
+    "openrouter>=0.0.1", # For LLM API access
+    "jinja2>=3.1.2", # For template rendering
+    "pydantic>=2.4.2", # For data validation
+    "pydantic-settings>=2.0.0", # For settings management
+    "loguru>=0.7.0", # For logging
+    "python-dotenv>=1.0.0", # For environment variables
+    "aiohttp>=3.8.5", # For async HTTP requests
+    "pypdf>=4.0.0", # For PDF processing
+    "requests>=2.31.0", # For HTTP requests
+    "click>=8.1.8", # For CLI
+    "fastapi>=0.100.0", # For API endpoints
+    "uvicorn>=0.23.0", # For ASGI server
+    # LangChain Dependencies
+    "langchain>=0.0.335", # For document processing and chunking
+    "langchain-text-splitters>=0.0.1", # For text splitting capabilities
+    "langchain-openai>=0.3.9",
+    "networkx>=3.4.2",
+    "scholarly>=1.7.11",
+    "tiktoken>=0.9.0",
+    "grandalf>=0.8",
+    "json-repair>=0.44.1",
 ]
 
 [project.optional-dependencies]
@@ -54,116 +65,56 @@ jupyter = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 
-### Docker ###########################################################################
-[tool.docker.base_images.default]
-image = ""
-
-[tool.docker.base_images.cuda]
-image = ""
-cuda_version = "12.1"
-cudnn_version = "8.9.2.26"
-nccl_version = "2.18.5"
-
-### STANDARDIZED CODE REQUIREMENTS
-### black ############################################################################
-[tool.black]
-line-length = 88 # ensure this matches ruff this is the default
-target-version = ['py310', 'py311', 'py312']
-include = '\.py$'
-skip-string-normalization = true
-
+### STANDARDIZED CODE REQUIREMENTS ###################################################
 ### pytest ###########################################################################
 [tool.pytest.ini_options]
-testpaths = [
-    "tests",
-]
+testpaths = ["tests"]
 
 ### ruff #############################################################################
 [tool.ruff]
-line-length = 88  # ensure this matches black this is the default
+line-length    = 88
+target-version = "py312"
 
 [tool.ruff.lint]
 select = [
-    # All rules enabled as defined here:
-    # https://github.com/charliermarsh/ruff#supported-rules
-    # Pyflakes
-    "F",
-    # pydocstyle
-    "E",
-    "W",
-    # isort
-    "I",
-    # pyupgrade
-    "UP",
-    # flake8-bugbear
-    "B",
-    # flake8-unused-arguments
-    "ARG",
-    # Ruff-specific
-    "RUF",
-    # pep8-naming
-    # InvalidClassName
-    "N801",
-    # InvalidFunctionName
-    "N802",
-    # InvalidArgumentName
-    "N803",
-    # InvalidFirstArgumentNameForClassMethod
-    "N804",
-    # InvalidFirstArgumentNameForMethod
-    "N805",
-    # NonLowercaseVariableInFunction
-    "N806",
-    #pandas-vet
-    # UseOfInplaceArgument
-    "PD002",
-    # UseOfDotIsNull
-    "PD003",
-    # UseOfDotNotNull
-    "PD004",
-    # UseOfDotIx
-    "PD007",
-    # UseOfDotAt
-    "PD008",
-    # UseOfDotIat
-    "PD009",
-    # UseOfDotPivotOrUnstack
-    "PD010",
-    # UseOfDotValues
-    "PD011",
-    # UseOfDotReadTable
-    "PD012",
-    # UseOfDotStack
-    "PD013",
-    # UseOfPdMerge
-    "PD015",
+    "F", "E", "W", "I", "UP", "B", "ARG", "RUF",
+    "N801", "N802", "N803", "N804", "N805", "N806",
+    "PD002", "PD003", "PD004", "PD007", "PD008",
+    "PD009", "PD010", "PD011", "PD012", "PD013", "PD015",
 ]
-# Add rules to explicitly ignore here
-ignore = [
-]
+ignore = ["E501"]
 extend-unsafe-fixes = ["UP034"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
 
+[tool.ruff.lint.pycodestyle]
+max-doc-length = 88
+
 [tool.ruff.lint.flake8-quotes]
-inline-quotes = 'single'
+inline-quotes = "single"
 
 [tool.ruff.format]
-quote-style = 'single'
+quote-style               = "single"
+indent-style              = "space"
+skip-magic-trailing-comma = false
+line-ending               = "auto"
+docstring-code-format = true
+
+### Black (for auto-wrapping) ########################################################
+[tool.black]
+line-length    = 88
+target-version = ["py39"]
 
 ### sqlfluff ########################################################################
 [tool.sqlfluff.core]
-dialect = "bigquery"
-
-templater = "jinja"
-
-# For a breakdown of rules, check out https://docs.sqlfluff.com/en/stable/rules.html
+dialect    = "bigquery"
+templater  = "jinja"
 exclude_rules = "L015,L026,L027,L031,L034,L042,L054"
+ignore        = "templating"
 
-ignore = "templating"
 [tool.sqlfluff.rules]
 tab_space_size = 2
 
@@ -172,7 +123,7 @@ capitalisation_policy = "upper"
 
 [tool.sqlfluff.rules.L014]
 extended_capitalisation_policy = "lower"
-unquoted_identifiers_policy = "all"
+unquoted_identifiers_policy    = "all"
 
 [tool.sqlfluff.rules.L016]
 ignore_comment_lines = true
@@ -180,5 +131,6 @@ ignore_comment_lines = true
 [tool.sqlfluff.rules.L030]
 extended_capitalisation_policy = "upper"
 
+### codespell ########################################################################
 [tool.codespell]
 exclude-file = ".codespellignore"
