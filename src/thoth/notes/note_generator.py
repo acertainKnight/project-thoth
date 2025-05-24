@@ -7,7 +7,6 @@ This module handles the generation of Obsidian notes from processed content.
 import os
 import re
 import urllib.parse
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -70,95 +69,164 @@ class NoteGenerator:
         markdown_path: Path,
         analysis: AnalysisResponse,
         citations: list[Citation],
-    ) -> str:
+    ) -> tuple[str, Path, Path]:
         """
-        Create a note from the provided data.
+        Create a note from the provided data and rename associated files.
 
         Args:
-            pdf_path: Path to the PDF file
-            markdown_path: Path to the Markdown file
-            analysis: Analysis response containing paper details and content analysis
-            citations: List of citations extracted from the paper
+            pdf_path: Path to the PDF file.
+            markdown_path: Path to the Markdown file.
+            analysis: Analysis response containing paper details and content analysis.
+            citations: List of citations extracted from the paper.
 
         Returns:
-            str: The path to the created note.
+            tuple[str, Path, Path]: The path to the created note,
+                                   the new path to the PDF file,
+                                   and the new path to the markdown file.
         """
         logger.info('Creating note from analysis')
 
-        pdf_path_str = str(pdf_path) if pdf_path else ''
-        markdown_path_str = str(markdown_path) if markdown_path else ''
+        # Find the main article's citation for metadata
+        main_citation = next(
+            (c for c in citations if getattr(c, 'is_document_citation', False)), None
+        )
+        if not main_citation and citations:
+            main_citation = citations[0]
 
-        source_files_data = {'pdf': pdf_path_str, 'markdown': markdown_path_str}
+        title_for_filename = 'Unknown Title'
+        if main_citation and main_citation.title:
+            title_for_filename = main_citation.title
+        elif analysis and analysis.title:
+            title_for_filename = analysis.title
 
-        metadata_data = {
-            'title': analysis.title,
-            'authors': (
-                analysis.authors.split(', ')
-                if isinstance(analysis.authors, str)
-                else (analysis.authors if analysis.authors else [])
-            ),  # Ensure authors is a list
-            'year': (
-                analysis.year if hasattr(analysis, 'year') else None
-            ),  # Assuming AnalysisResponse might have these
-            'doi': analysis.doi if hasattr(analysis, 'doi') else None,
-            'journal': analysis.journal if hasattr(analysis, 'journal') else None,
-        }
-        if analysis.affiliations:
-            metadata_data['affiliations'] = analysis.affiliations
+        metadata_data = {}  # populated later
+
+        # Ensure metadata_data is populated before this point if it's used for title
+        if main_citation:
+            metadata_data = {
+                'title': main_citation.title,
+                'authors': main_citation.authors or [],
+                'year': main_citation.year,
+                'doi': main_citation.doi,
+                'journal': main_citation.journal,
+            }
+            if main_citation.affiliations:
+                metadata_data['affiliations'] = main_citation.affiliations
+        else:  # Fallback if no main_citation
+            metadata_data = {
+                'title': analysis.title
+                if analysis
+                else 'Unknown Title',  # Use analysis title as fallback
+                'authors': analysis.authors.split(', ')
+                if analysis and analysis.authors
+                else [],
+                'year': analysis.year,
+                'doi': analysis.doi,
+                'journal': analysis.journal,
+            }
+
+        title_for_filename = metadata_data.get('title') or 'Unknown Title'
 
         analysis_dict_data = {}
-        for field_name, field_value in analysis.model_dump().items():
-            if field_value is not None and field_name not in [
-                'title',
-                'authors',
-                'affiliations',
-                'year',
-                'doi',
-                'journal',
-            ]:
-                analysis_dict_data[field_name] = field_value
+        if analysis:  # Ensure analysis object exists
+            for field_name, field_value in analysis.model_dump().items():
+                if field_value is not None and field_name not in [
+                    'title',
+                    'authors',
+                    'affiliations',
+                    'year',
+                    'doi',
+                    'journal',
+                ]:
+                    analysis_dict_data[field_name] = field_value
 
-        # Ensure key_points is a list of strings if it's a string with newlines
-        if isinstance(analysis_dict_data.get('key_points'), str):
-            analysis_dict_data['key_points'] = analysis_dict_data[
-                'key_points'
-            ].splitlines()
-
-        data_for_template = {
-            'metadata': metadata_data,
-            'analysis': analysis_dict_data,
-            'citations': citations,  # Pass raw citations, linking logic will be in _format_template
-            'source_files': source_files_data,
-        }
+            if isinstance(analysis_dict_data.get('key_points'), str):
+                analysis_dict_data['key_points'] = analysis_dict_data[
+                    'key_points'
+                ].splitlines()
 
         try:
             jinja_template = self.env.get_template('paper_note.md')
             logger.debug(
                 'Loaded template from templates/paper_note.md using Jinja2 environment'
             )
-        except Exception as e:  # Catch Jinja's TemplateNotFound or other errors
+        except Exception as e:
             logger.warning(
                 f'Template not found or error loading from templates/paper_note.md: {e}, using default template string.'
             )
             default_template_content = self._get_default_template()
             jinja_template = self.env.from_string(default_template_content)
 
-        title = analysis.title or 'Unknown Title'
-        logger.info(f'Creating note for: {title}')
+        logger.info(f'Creating note for: {title_for_filename}')
 
-        filename = self._sanitize_filename(title)
-        logger.debug(f'Sanitized filename: {filename}')
+        # Generate the base filename for the note (without extension)
+        new_base_filename = self._sanitize_filename(title_for_filename)
+        logger.debug(f'Sanitized base filename: {new_base_filename}')
+        new_pdf_path = pdf_path
+        new_markdown_path = markdown_path
+        target_pdf_path = pdf_path.parent / (new_base_filename + pdf_path.suffix)
+        target_markdown_path = markdown_path.parent / (
+            new_base_filename + markdown_path.suffix
+        )
+        source_files_data = {
+            'pdf': str(target_pdf_path),
+            'markdown': str(target_markdown_path),
+        }
+
+        data_for_template = {
+            'metadata': metadata_data,
+            'analysis': analysis_dict_data,
+            'citations': citations,
+            'source_files': source_files_data,
+        }
 
         note_content = self._format_template(jinja_template, data_for_template)
+        note_output_path = self.notes_dir / f'{new_base_filename}.md'
+        logger.debug(f'Note output path: {note_output_path}')
 
-        output_path = self.notes_dir / f'{filename}.md'
-        logger.debug(f'Output path: {output_path}')
-
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(note_output_path, 'w', encoding='utf-8') as f:
             f.write(note_content)
+        logger.info(f'Note created successfully at {note_output_path}')
 
-        logger.info(f'Note created successfully at {output_path}')
-        return str(output_path)
+        # --- Rename PDF and Markdown files ---
+        if pdf_path and pdf_path.exists():
+            try:
+                if pdf_path != target_pdf_path:  # Avoid renaming if paths are identical
+                    pdf_path.rename(target_pdf_path)
+                    new_pdf_path = target_pdf_path
+                    logger.info(f'Renamed PDF file to: {new_pdf_path}')
+                else:
+                    logger.debug(
+                        f'PDF path {pdf_path} already matches target. No rename needed.'
+                    )
+            except OSError as e:
+                logger.error(
+                    f'Error renaming PDF file {pdf_path} to {target_pdf_path}: {e}'
+                )
+                # new_pdf_path remains original if rename fails
+
+        if markdown_path and markdown_path.exists():
+            try:
+                target_markdown_path = markdown_path.parent / (
+                    new_base_filename + markdown_path.suffix
+                )
+                if (
+                    markdown_path != target_markdown_path
+                ):  # Avoid renaming if paths are identical
+                    markdown_path.rename(target_markdown_path)
+                    new_markdown_path = target_markdown_path
+                    logger.info(f'Renamed Markdown file to: {new_markdown_path}')
+                else:
+                    logger.debug(
+                        f'Markdown path {markdown_path} already matches target. No rename needed.'
+                    )
+            except OSError as e:
+                logger.error(
+                    f'Error renaming Markdown file {markdown_path} to {target_markdown_path}: {e}'
+                )
+                # new_markdown_path remains original if rename fails
+
+        return str(note_output_path), new_pdf_path, new_markdown_path
 
     def _sanitize_filename(self, title: str) -> str:
         """
@@ -178,9 +246,10 @@ class NoteGenerator:
         if len(filename) > 100:
             filename = filename[:100]
 
-        # Add date prefix for uniqueness
-        date_str = datetime.now().strftime('%Y%m%d')
-        return f'{date_str}-{filename}'
+        # Remove date prefix for uniqueness
+        # date_str = datetime.now().strftime('%Y%m%d') # Removed
+        # return f'{date_str}-{filename}' # Removed
+        return filename  # Return filename directly
 
     def _format_template(self, jinja_template: Any, data: dict[str, Any]) -> str:
         """
@@ -210,25 +279,39 @@ class NoteGenerator:
                 markdown_link_for_citation = link_text  # Default to text if no link
 
                 try:
-                    citation_id = cit_obj.doi or (
-                        cit_obj.backup_id or self._sanitize_filename(cit_obj.text)
-                    )
-                    obsidian_note_stem = self._find_citation_note(citation_id)
-                    if obsidian_note_stem:
-                        full_note_path = self.notes_dir / f'{obsidian_note_stem}.md'
-                        # Use _create_file_link to generate [[wikilink|text]] or [text](file://...)
-                        markdown_link_for_citation = self._create_file_link(
-                            str(full_note_path), link_text
+                    # First, try to find the note using the expected path based on title
+                    expected_note_path = self._get_expected_citation_note_path(cit_obj)
+                    if expected_note_path and expected_note_path.exists():
+                        logger.debug(
+                            f'Found existing note at expected path: {expected_note_path}'
                         )
-                    elif citation_id:
-                        uri_target = ''
-                        if self.citation_format == 'uri':
-                            uri_target = f'thoth://process_citation/{citation_id}'
-                        else:
-                            # Ensure citation_id is URL-safe if it contains special characters  # noqa: W505
-                            safe_citation_id = urllib.parse.quote(str(citation_id))
-                            uri_target = f'{self.api_base_url}/process_citation/{safe_citation_id}'
-                        markdown_link_for_citation = f'[{link_text}]({uri_target})'
+                        markdown_link_for_citation = self._create_file_link(
+                            str(expected_note_path), link_text
+                        )
+                    else:
+                        # Fallback to the original citation ID-based search
+                        citation_id = cit_obj.doi or (
+                            cit_obj.backup_id or self._sanitize_filename(cit_obj.text)
+                        )
+                        obsidian_note_stem = self._find_citation_note(citation_id)
+                        if obsidian_note_stem:
+                            full_note_path = self.notes_dir / f'{obsidian_note_stem}.md'
+                            # Use _create_file_link to generate [[wikilink|text]] or [text](file://...)
+                            markdown_link_for_citation = self._create_file_link(
+                                str(full_note_path), link_text
+                            )
+                        elif cit_obj.url:  # Prioritize the citation's direct URL
+                            uri_target = cit_obj.url
+                            markdown_link_for_citation = f'[{link_text}]({uri_target})'
+                        elif citation_id:  # Fallback to current API/thoth URI linking
+                            uri_target = ''
+                            if self.citation_format == 'uri':
+                                uri_target = f'thoth://process_citation/{citation_id}'
+                            else:
+                                # Ensure citation_id is URL-safe if it contains special characters  # noqa: W505
+                                safe_citation_id = urllib.parse.quote(str(citation_id))
+                                uri_target = f'{self.api_base_url}/process_citation/{safe_citation_id}'
+                            markdown_link_for_citation = f'[{link_text}]({uri_target})'
                 except Exception as e:
                     logger.error(f'Error processing citation: {e}')
 
@@ -244,6 +327,7 @@ class NoteGenerator:
             'journal': metadata.get('journal'),
             # Spread analysis content (summary, key_points, abstract, etc.)
             **analysis_content,
+            'analysis': analysis_content,
             'citations': citations_for_template,
             'source_files': {
                 'pdf_link': self._create_file_link(
@@ -306,7 +390,6 @@ class NoteGenerator:
         # Check if the file exists
         if not path.exists():
             logger.warning(f'File not found: {path}')
-            return f'{file_type} file not found: {path.name}'
 
         # Get the filename
         filename = path.name
@@ -326,7 +409,7 @@ class NoteGenerator:
             )
             return f'[{filename}](file://{path.absolute()})'
 
-    def _find_citation_note(self, citation_id: str) -> str | None:
+    def _find_citation_note(self, note_stem: str) -> str | None:
         """
         Find an existing note for a citation by searching for the citation ID in note filenames.
 
@@ -336,22 +419,22 @@ class NoteGenerator:
         Returns:
             Optional[str]: The path to the note if found, None otherwise.
         """  # noqa: W505
-        logger.debug(f'Searching for note with citation ID: {citation_id}')
+        logger.debug(f'Searching for note with citation ID: {note_stem}')
 
         # This is a simple implementation that looks for the citation ID in filenames
         # A more sophisticated approach might search within note content
         for note_file in self.notes_dir.glob('*.md'):
             logger.debug(f'Checking note file: {note_file}')
             logger.debug(f'Note file stem: {note_file.stem}')
-            logger.debug(f'Citation ID: {citation_id}')
-            if citation_id in note_file.stem:
+            logger.debug(f'Citation ID: {note_stem}')
+            if note_stem in note_file.stem:
                 # Return the relative path from the notes directory
                 logger.debug(
-                    f'Found note for citation ID {citation_id}: {note_file.stem}'
+                    f'Found note for citation ID {note_stem}: {note_file.stem}'
                 )
                 return note_file.stem
 
-        logger.debug(f'No note found for citation ID: {citation_id}')
+        logger.debug(f'No note found for citation ID: {note_stem}')
         return None
 
     def _get_default_template(self) -> str:
@@ -514,3 +597,31 @@ ${source_files}
             filename = f'{base[:250]}.{ext}'
 
         return filename
+
+    def _get_expected_citation_note_path(self, citation: Citation) -> Path | None:
+        """
+        Get the expected note path for a citation based on its title.
+
+        This method predicts what the note filename would be for a citation
+        if it were processed as a main document, using the same naming
+        convention as the main note generation.
+
+        Args:
+            citation: Citation object to get expected path for.
+
+        Returns:
+            Path | None: Expected full path to the citation's note if it has a title,
+                        None otherwise.
+        """
+        if not citation.title:
+            logger.debug(f'Citation has no title, cannot predict note path: {citation}')
+            return None
+
+        # Use the same sanitization logic as the main note generation
+        sanitized_title = self._sanitize_filename(citation.title)
+        expected_note_path = self.notes_dir / f'{sanitized_title}.md'
+
+        logger.debug(
+            f'Predicted note path for citation "{citation.title}": {expected_note_path}'
+        )
+        return expected_note_path

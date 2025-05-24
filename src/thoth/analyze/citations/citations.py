@@ -11,6 +11,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable, RunnableConfig
 from langgraph.graph import END, StateGraph
 from loguru import logger
+from pydantic import ValidationError
 
 from thoth.analyze.citations.arxivcitation import ArxivClient
 from thoth.analyze.citations.opencitation import OpenCitationsAPI
@@ -35,6 +36,7 @@ class CitationState(TypedDict):
     headings: list[str] | None
     references_heading: str | None
     references_section: str | None
+    cleaned_references_section: str | None  # New field for cleaned text
     raw_citations: list[str] | None
     citations: list[Citation] | None
     processed_citations: list[Citation] | None
@@ -53,9 +55,10 @@ class CitationProcessor:
 
     This class provides functionality to:
     1. Identify and extract references sections from documents
-    2. Extract structured citations from text
-    3. Enhance citations with missing information using LLM and OpenCitations API
-    4. Use web search as a fallback when OpenCitations doesn't have required information
+    2. Clean the references section using an LLM to ensure one citation per line
+    3. Extract structured citations from text
+    4. Enhance citations with missing information using LLM and OpenCitations API
+    5. Use web search as a fallback when OpenCitations doesn't have required information
 
     The processing follows a LangGraph workflow with distinct nodes and edges.
     """
@@ -252,6 +255,16 @@ class CitationProcessor:
         self.find_references_chain = self.find_references_prompt | self.references_llm
         logger.debug('References section identification chain initialized')
 
+        # References section cleaning chain
+        logger.debug('Setting up references section cleaning chain')
+        self.clean_references_prompt = self._create_prompt_from_template(
+            'clean_references_section.j2'
+        )
+        self.clean_references_chain = (
+            self.clean_references_prompt | self.llm
+        )  # Use the base LLM
+        logger.debug('References section cleaning chain initialized')
+
         # Citation extraction chain with cleaning
         logger.debug('Setting up citation extraction chain')
         self.extract_citation_single_prompt = self._create_prompt_from_template(
@@ -288,6 +301,11 @@ class CitationProcessor:
         """Loads content from the markdown file path in the state."""
         logger.info('Loading content from markdown file...')
         markdown_path = state.get('markdown_path')
+        if isinstance(markdown_path, str):
+            state['content'] = markdown_path
+            logger.info('Using provided markdown content directly')
+            return state
+
         if not markdown_path or not isinstance(markdown_path, Path):
             raise ValueError('Markdown path not found or invalid in state.')
 
@@ -439,23 +457,57 @@ class CitationProcessor:
         state['references_section'] = section_text
         return state
 
-    def _split_references_to_raw_citations(self, state: CitationState) -> CitationState:
-        """Split the references section into individual citation strings."""
-        logger.debug('Splitting references section into raw citations')
-        references_section = state['references_section']
+    def _clean_references_section_text(self, state: CitationState) -> CitationState:
+        """Clean the references section text using LLM for better parsing."""
+        logger.debug('Cleaning references section text with LLM')
+        references_section_text = state.get('references_section')
 
-        if not references_section:
-            logger.warning('No references section to split')
+        if not references_section_text:
+            logger.warning('No references section text to clean.')
+            state['cleaned_references_section'] = ''
+            return state
+
+        try:
+            response = self.clean_references_chain.invoke(
+                {'references_section_text': references_section_text}
+            )
+            # Assuming the LLM directly returns the cleaned string or an AIMessage with content  # noqa: W505
+            cleaned_text = (
+                response.content if hasattr(response, 'content') else str(response)
+            )
+            state['cleaned_references_section'] = cleaned_text.strip()
+            logger.info(
+                f'Successfully cleaned references section. Original length: {len(references_section_text)}, Cleaned length: {len(cleaned_text)}'
+            )
+        except Exception as e:
+            logger.error(f'Error cleaning references section text with LLM: {e}')
+            logger.warning(
+                'Falling back to using the original references section text.'
+            )
+            state['cleaned_references_section'] = references_section_text  # Fallback
+
+        return state
+
+    def _split_references_to_raw_citations(self, state: CitationState) -> CitationState:
+        """Split the cleaned references section into individual citation strings."""
+        logger.debug('Splitting cleaned references section into raw citations')
+        # Use the cleaned references section if available, otherwise fall back to original  # noqa: W505
+        references_section_to_split = state.get(
+            'cleaned_references_section', state.get('references_section')
+        )
+
+        if not references_section_to_split:
+            logger.warning('No references section (cleaned or original) to split')
             state['raw_citations'] = []
             return state
 
-        # Split using a pattern that handles various formats
-        raw_citations = re.split(r'\n\s*(?:\n|\d+\.|\[\d+\]|\*)\s*', references_section)
+        # Split based on newlines, as the LLM should have formatted each citation on its own line  # noqa: W505
+        raw_citations = references_section_to_split.split('\n')
 
         # Clean up empty strings and whitespace
         raw_citations = [c.strip() for c in raw_citations if c.strip()]
         logger.debug(
-            f'Split references section into {len(raw_citations)} potential citation strings'
+            f'Split cleaned references section into {len(raw_citations)} potential citation strings'
         )
 
         state['raw_citations'] = raw_citations
@@ -477,64 +529,124 @@ class CitationProcessor:
         for i in range(0, len(raw_citations), self.citation_batch_size):
             batch = raw_citations[i : i + self.citation_batch_size]
             batch_text = '\n\n'.join(batch)
-
             batch_num = (i // self.citation_batch_size) + 1
+
             logger.debug(f'Processing batch {batch_num} with {len(batch)} citations')
             logger.debug(f'Batch text: {batch_text}')
-            if self.citation_batch_size == 1:
-                batch_result = self.extract_citation_single_chain.invoke(
-                    {
-                        'citation': batch_text,
-                        'json_schema': CitationExtraction.model_json_schema(),
-                    }
-                )
-                all_citations.append(batch_result)
-            else:
+
+            successful_extraction = False
+            # Retry logic: 1 initial attempt + 1 retry
+            for attempt in range(2):  # 0 for initial, 1 for retry
                 try:
-                    # batch_invoke_result will be a dict: {'raw': ..., 'parsed': ...}
-                    # because self.citations_llm has include_raw=True
-                    batch_invoke_result = self.extract_citations_chain.invoke(
-                        {
-                            'references_section': batch_text,
-                            'response_schema': CitationExtractionResponse.model_json_schema(),
-                            'item_schema': CitationExtraction.model_json_schema(),
-                        }
-                    )
-                    logger.debug(
-                        f'LLM invocation result for batch {batch_num}: {batch_invoke_result}'
-                    )
-
-                    parsed_output = batch_invoke_result.get('parsed')
-
-                    if parsed_output and hasattr(parsed_output, 'citations'):
-                        all_citations.extend(parsed_output.citations)
-                        logger.debug(
-                            f'Successfully extracted {len(parsed_output.citations)} citations from batch {batch_num}'
+                    if self.citation_batch_size == 1:
+                        batch_result = self.extract_citation_single_chain.invoke(
+                            {
+                                'citation': batch_text,
+                                'json_schema': CitationExtraction.model_json_schema(),
+                            }
                         )
+                        all_citations.append(batch_result)
+                        successful_extraction = True
+                        break  # Success, exit retry loop
                     else:
-                        logger.error(
-                            f"Failed to parse citation extraction output or 'citations' attribute missing for batch {batch_num}."
+                        batch_invoke_result = self.extract_citations_chain.invoke(
+                            {
+                                'references_section': batch_text,
+                                'response_schema': CitationExtractionResponse.model_json_schema(),
+                                'item_schema': CitationExtraction.model_json_schema(),
+                            }
                         )
-                        raw_output = batch_invoke_result.get(
-                            'raw', 'Raw output not available.'
+                        logger.debug(
+                            f'LLM invocation result for batch {batch_num}, attempt {attempt + 1}: {batch_invoke_result}'
                         )
-                        logger.error(
-                            f'Raw LLM output for failing batch {batch_num}:\n{raw_output}'
-                        )
-                        # Depending on desired behavior, you might want to raise an error here  # noqa: W505
-                        # or simply skip this batch as is currently implemented.
+
+                        parsed_output = batch_invoke_result.get('parsed')
+
+                        if parsed_output and hasattr(parsed_output, 'citations'):
+                            try:
+                                all_citations.extend(parsed_output.citations)
+                                logger.debug(
+                                    f'Successfully extracted {len(parsed_output.citations)} citations from batch {batch_num}, attempt {attempt + 1}'
+                                )
+                                successful_extraction = True
+                                break  # Success, exit retry loop
+                            except ValidationError as ve:
+                                logger.error(
+                                    f'Validation error processing parsed citations for batch {batch_num}, attempt {attempt + 1}: {ve}'
+                                )
+                                logger.error(
+                                    f'Problematic parsed output for batch {batch_num}, attempt {attempt + 1}:\n{parsed_output}'
+                                )
+                                # Fall through to retry or final error log
+                            except Exception as e:  # General exception handler
+                                logger.error(
+                                    f'Unexpected error processing parsed citations for batch {batch_num}, attempt {attempt + 1}: {e}'
+                                )
+                                logger.error(
+                                    f'Problematic parsed output for batch {batch_num}, attempt {attempt + 1}:\n{parsed_output}'
+                                )
+                                # Fall through to retry or final error log
+                        else:
+                            logger.error(
+                                f"Failed to parse citation extraction output or 'citations' attribute missing for batch {batch_num}, attempt {attempt + 1}."
+                            )
+                            raw_output = batch_invoke_result.get(
+                                'raw', 'Raw output not available.'
+                            )
+                            logger.error(
+                                f'Raw LLM output for failing batch {batch_num}, attempt {attempt + 1}: {raw_output}'
+                            )
+                            # Fall through to retry or final error log
+                except ValidationError as ve:
+                    logger.error(
+                        f'Validation error during single citation extraction for batch {batch_num}, attempt {attempt + 1}: {ve}'
+                    )
+                    logger.error(
+                        f'Problematic batch text for single extraction, batch {batch_num}, attempt {attempt + 1}:\n{batch_text}'
+                    )
+                    # Fall through to retry or final error log
                 except Exception as e:
                     logger.error(
-                        f'Exception during citation extraction for batch {batch_num}: {e}'
+                        f'Exception during citation extraction for batch {batch_num}, attempt {attempt + 1}: {e}'
                     )
                     logger.error(
-                        f'Problematic batch text for batch {batch_num}:\n{batch_text}'
+                        f'Problematic batch text for batch {batch_num}, attempt {attempt + 1}:\n{batch_text}'
                     )
+                    # Fall through to retry or final error log
 
-        logger.info(f'Extracted a total of {len(all_citations)} citations')
-        state['citations'] = [
-            Citation.from_citation_extraction(citation) for citation in all_citations
-        ]
+                # If an error occurred and this was the first attempt, log retry
+                if not successful_extraction and attempt == 0:
+                    logger.warning(f'Retrying batch {batch_num} (attempt 2 of 2)...')
+
+            # After both attempts, if still not successful, log skipping the batch
+            if not successful_extraction:
+                logger.error(
+                    f'Both attempts failed for batch {batch_num}. Skipping this batch.'
+                )
+
+        logger.info(f'Extracted a total of {len(all_citations)} raw citation objects')
+
+        processed_citations_list = []
+        for idx, citation_data in enumerate(all_citations):
+            try:
+                processed_citations_list.append(
+                    Citation.from_citation_extraction(citation_data)
+                )
+            except ValidationError as ve:
+                logger.error(
+                    f'Validation error converting CitationExtraction to Citation for item {idx}: {ve}'
+                )
+                logger.error(f'Problematic citation data: {citation_data}')
+            except Exception as e:
+                logger.error(
+                    f'Unexpected error converting CitationExtraction to Citation for item {idx}: {e}'
+                )
+                logger.error(f'Problematic citation data: {citation_data}')
+
+        state['citations'] = processed_citations_list
+        logger.info(
+            f'Successfully converted {len(processed_citations_list)} citations to Citation model.'
+        )
         return state
 
     def _enhance_citations_with_services(self, state: CitationState) -> CitationState:
@@ -972,6 +1084,9 @@ class CitationProcessor:
             'extract_references_section', self._extract_references_section
         )
         workflow.add_node(
+            'clean_references_section_text', self._clean_references_section_text
+        )
+        workflow.add_node(
             'split_references_to_raw_citations', self._split_references_to_raw_citations
         )
         workflow.add_node(
@@ -990,8 +1105,9 @@ class CitationProcessor:
         workflow.add_edge('extract_document_citation', 'get_section_headings')
         workflow.add_edge('get_section_headings', 'identify_references_heading')
         workflow.add_edge('identify_references_heading', 'extract_references_section')
+        workflow.add_edge('extract_references_section', 'clean_references_section_text')
         workflow.add_edge(
-            'extract_references_section', 'split_references_to_raw_citations'
+            'clean_references_section_text', 'split_references_to_raw_citations'
         )
         workflow.add_edge(
             'split_references_to_raw_citations', 'extract_citations_from_raw'
@@ -1012,14 +1128,14 @@ class CitationProcessor:
 
     def process_document(
         self,
-        markdown_path: Path,
+        markdown_path: Path | str,
         config: RunnableConfig | None = None,
     ) -> list[Citation]:
         """
         Process a document to extract and enhance citations.
 
         Args:
-            markdown_path: The path to the markdown file to process.
+            markdown_path: The path to the markdown file to process or the markdown content directly.
             config: Optional LangChain RunnableConfig for the graph invocation.
 
         Returns:
@@ -1046,6 +1162,7 @@ class CitationProcessor:
             'headings': None,
             'references_heading': None,
             'references_section': None,
+            'cleaned_references_section': None,
             'raw_citations': None,
             'citations': None,
             'processed_citations': None,

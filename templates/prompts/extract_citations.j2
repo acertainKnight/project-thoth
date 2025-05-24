@@ -1,47 +1,24 @@
-You are a research assistant that extracts citation information.
-Only provide the analysis in the required structured format. No other information is needed.
-If you cannot find the information, return None.
+You are a research assistant. Your task is to analyze a block of text containing multiple academic citation strings, identify each individual citation, and then for EACH identified citation, convert it into a structured JSON object.
 
-Clean up the content to ensure any formatting is removed and the content is in a standard format.
+The input text you will receive (`references_section`) contains multiple citation strings. These citation strings are typically separated by one or two newlines. You need to process all of them.
 
-You will be given the references section of an academic paper. Analyze the content and provide a list of structured citations.
-This list will be used to create a structured report of the papers cited and incoporated in a complex knowledge graph connecting them.
+Your output **MUST** be a single JSON object.
+This JSON object has one top-level key: "citations".
+The value of the "citations" key **MUST** be a JSON array.
 
-Citations will often be separated by a line break.
+**Crucially, EACH element in this JSON array MUST be a complete JSON object that strictly conforms to the `CITATION_ITEM_SCHEMA` provided below.**
+If you identify N citation strings in the input, the "citations" array in your output should contain N JSON objects.
+If a specific citation string from the input cannot be fully parsed or if some information is missing, you should still produce a JSON object for that citation string, using `null` for the missing fields within that object. Do not replace the entire object for that citation with `null` or a string.
 
-The response must be a single JSON object.
-This object must contain a key named "citations".
-The value of the "citations" key must be a JSON array.
-**Each element in this JSON array must be a complete JSON object that strictly conforms to the `item_schema` provided below.**
+Input text containing multiple citation strings to process:
+{{ references_section }}
 
-For example, a single item in the "citations" array should look like this (refer to `item_schema` for all fields):
-```json
-{
-  "text": "Full text of the citation...",
-  "authors": "Author A; Author B",
-  "title": "Title of the work",
-  "year": 2023,
-  "journal": "Journal Name",
-  "doi": "10.xxxx/xxxxxx",
-  "backup_id": "arXiv:xxxx.xxxx",
-  "url": "http://example.com/paper.pdf",
-  "volume": "10",
-  "issue": "2",
-  "pages": "100-110",
-  "affiliations": "Affiliation A; Affiliation B"
-}
-```
-Ensure all fields from the `item_schema` are present in each object, using `null` if a value cannot be found for a specific field in a specific citation.
-
-The schema for an individual citation item (`item_schema`) is:
+Schema for EACH INDIVIDUAL JSON OBJECT in the "citations" array (this is the CITATION_ITEM_SCHEMA):
 ```json
 {{ item_schema }}
 ```
 
-The overall JSON response format (`response_schema`), which dictates the top-level structure including the 'citations' list, is:
+The overall JSON schema for your entire response (which includes the "citations" array whose elements must match the CITATION_ITEM_SCHEMA above) is:
 ```json
 {{ response_schema }}
 ```
-
-References section:
-{{ references_section }}

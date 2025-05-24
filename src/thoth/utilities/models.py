@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Literal, TypedDict
 
 from langchain.schema import Document
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Citation(BaseModel):
@@ -359,85 +359,100 @@ class SearchResponse(BaseModel):
 
 
 class AnalysisResponse(BaseModel):
-    """Extracts information from the Research Paper and formats it in a clean parsed
-    format. No other information is needed.
+    """
+    Extracts and stores structured information from a research paper for downstream analysis and note generation.
+
+    This model is designed to capture all relevant metadata, content summaries, and analytical details from a research paper. Fields are optional to allow for partial extraction and flexible downstream use. The model is intended to be updated as new analytical requirements arise; any new fields added will automatically propagate to note generation and other consumers.
 
     Args:
-        title: Title of the document if available
-        authors: List of authors of the content
-        affiliations: List of affiliations of the authors in the format
-                      'Affiliation of Author1, Affiliation of Author2, ...'
-        abstract: A concise abstract of the content
-        key_points: Key points extracted from the content
-        summary: A concise summary of the content
-        methodology: The methodology used to collect the data
-        results: The results of the analysis
-        limitations: Limitations of the study
-        related_work: Related work to the content
-    """
+        abstract (str | None): The abstract of the content as it appears in the document.
+        key_points (str | None): 10-15 key points extracted from the content, as a newline-separated string.
+        summary (str | None): A multi-paragraph summary of the content.
+        objectives (str | None): Primary objectives or research questions addressed.
+        methodology (str | None): Detailed description of the methods and study design, including model architecture if applicable.
+        data (str | None): Datasets or data sources used, including size and key characteristics.
+        experimental_setup (str | None): Experimental or analytical setup, including controls and variables.
+        evaluation_metrics (str | None): Metrics used to evaluate performance or results.
+        results (str | None): Key quantitative or qualitative results.
+        discussion (str | None): Interpretation of the results and their implications.
+        strengths (str | None): Strengths and positive aspects of the study.
+        weaknesses (str | None): Weaknesses, shortcomings, or areas of concern.
+        limitations (str | None): Explicitly stated or inferred limitations of the study.
+        future_work (str | None): Suggested future work or open questions.
+        related_work (str | None): Key related works and how this paper differs.
+        tags (list[str] | None): List of tags or keywords associated with the article.
 
-    title: str | None = Field(
-        description='Title of the document if available', default=None
-    )
-    authors: str | None = Field(
-        description='List of authors of the content', default=None
-    )
-    affiliations: str | None = Field(
-        description='List of affiliations of the authors in the format'
-        "'Affiliation of Author1, Affiliation of Author2, ...'",
+    Returns:
+        AnalysisResponse: An instance containing all extracted and structured analysis fields for a research paper.
+
+    Example:
+        >>> analysis = AnalysisResponse(
+        ...     abstract='This paper explores...',
+        ...     key_points='- Point one\n- Point two',
+        ...     summary='A comprehensive summary...',
+        ...     objectives='To investigate...',
+        ...     methodology='We used a randomized control trial...',
+        ...     data='Dataset X, 10,000 samples',
+        ...     tags=['machine learning', 'NLP'],
+        ... )
+    """  # noqa: W505
+
+    abstract: str | None = Field(
+        description='The abstract of the content as it appears in the document',
         default=None,
     )
-    abstract: str | None = Field(
-        description='A concise abstract of the content', default=None
-    )
     key_points: str | None = Field(
-        description='Key points extracted from the content', default=None
+        description='10 - 15 key points extracted from the content. This should serve as a quick overview of the content. '
+        'These should be bullet points that are easy to read and understand, but do not include the punctuation marks for the bullet points.'
+        'These should be the most important points of the content.',
+        default=None,
     )
     summary: str | None = Field(
-        description='A concise summary of the content', default=None
+        description='A summary of the content. This should be a multi-paragraph summary of the content.'
+        'This should be a summary of the content that is easy to read and understand.',
+        default=None,
     )
     objectives: str | None = Field(
         description='Primary objectives or research questions addressed', default=None
     )
     methodology: str | None = Field(
-        description='Detailed description of the methods and study design', default=None
+        description='Detailed description of the methods and study design. '
+        'Include the model design architecture if applicable. '
+        'This should be an extremely detailed description of the study design.',
+        default=None,
     )
     data: str | None = Field(
         description='Datasets or data sources used, including size and key characteristics',
         default=None,
     )
     experimental_setup: str | None = Field(
-        description='Experimental or analytical setup, including controls and variables',
+        description='Experimental or analytical setup, including controls and variables. '
+        'This should be a detailed description of the experimental or analytical setup of the study.',
         default=None,
     )
     evaluation_metrics: str | None = Field(
-        description='Metrics used to evaluate performance or results', default=None
+        description='Metrics used to evaluate performance or results. '
+        'This should be a summary of the metrics used to evaluate the performance of the study.',
+        default=None,
     )
     results: str | None = Field(
-        description='Key quantitative or qualitative results', default=None
+        description='Key quantitative or qualitative results. '
+        'This should be a summary of the results of the study.',
+        default=None,
     )
     discussion: str | None = Field(
-        description='Interpretation of the results and their implications', default=None
-    )
-    novelty: str | None = Field(
-        description='What is novel about this work compared with prior art',
+        description='Interpretation of the results and their implications. '
+        'What does this article contribute to the field? '
+        'What advancements does it bring? '
+        'How can this be applied in other domains?',
         default=None,
-    )
-    significance: str | None = Field(
-        description='Why the findings matter for the field', default=None
     )
     strengths: str | None = Field(
-        description='Strengths and positive aspects of the study', default=None
-    )
-    weaknesses: str | None = Field(
-        description='Weaknesses, shortcomings, or areas of concern', default=None
-    )
-    limitations: str | None = Field(
-        description='Explicitly stated or inferred limitations of the study',
+        description='Strengths and positive aspects of the study, including the model architecture, data, and methodology',
         default=None,
     )
-    ethical_considerations: str | None = Field(
-        description='Ethical or societal considerations discussed or implied',
+    limitations: str | None = Field(
+        description='Explicitly stated or inferred limitations, weaknesses, shortcomings, or areas of concern',
         default=None,
     )
     future_work: str | None = Field(
@@ -446,9 +461,36 @@ class AnalysisResponse(BaseModel):
     related_work: str | None = Field(
         description='Key related works and how this paper differs', default=None
     )
-    references_count: int | None = Field(
-        description='Number of references cited', default=None
+    tags: list[str] | None = Field(
+        description=(
+            'List of clear, simple, and consistent tags or keywords for the article. '
+            'Tags should use common, identifiable words so that different reviewers '
+            'are likely to assign the same tags to related articles, ensuring uniform '
+            'organization and easy discovery across a larger collection.'
+        ),
+        default=None,
     )
+
+    @field_validator('tags')
+    def normalize_tags(cls, tags: list[str] | None) -> list[str] | None:  # noqa: N805
+        """Normalize tags by lowercasing, removing punctuation, and replacing spaces with underscores.
+
+        Args:
+            tags (list[str] | None): List of tags to normalize.
+
+        Returns:
+            list[str] | None: Normalized tags with leading '#' or None if input is None.
+        """  # noqa: W505
+        if tags is None:
+            return None
+        normalized: list[str] = []
+        for tag in tags:
+            core = tag[1:] if tag.startswith('#') else tag
+            core = core.lower().replace(' ', '_')
+            # Remove all characters except alphanumeric and underscore
+            core = ''.join(char for char in core if char.isalnum() or char == '_')
+            normalized.append(f'#{core}')
+        return normalized
 
 
 # Define the state for the LangGraph

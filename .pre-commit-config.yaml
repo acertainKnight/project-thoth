@@ -52,6 +52,8 @@ repos:
         args: [--fix]
 
       # ✔ NEW: Ruff add-noqa – manual only
+      # To invoke this hook, run:
+      #   pre-commit run --hook-stage manual ruff-add-noqa --all-files
       - id: ruff-add-noqa
         name: ruff (add-noqa)
         entry: ruff check --force-exclude --add-noqa

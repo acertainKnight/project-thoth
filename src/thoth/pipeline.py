@@ -82,11 +82,18 @@ class ThothPipeline:
             api_key=ocr_api_key or self.config.api_keys.mistral_key
         )
 
+        # Note Generator (must be initialized before CitationTracker)
+        self.note_generator = NoteGenerator(
+            templates_dir=self.config.templates_dir,
+            notes_dir=self.config.notes_dir,
+            api_base_url=self.config.api_server_config.base_url,
+        )
+
         # Ensure workspace_dir is not duplicated by removing it from api_keys if present
 
         self.llm_processor = LLMProcessor(
             model=self.config.llm_config.model,
-            max_tokens=self.config.llm_config.max_tokens,
+            max_output_tokens=self.config.llm_config.max_output_tokens,
             max_context_length=self.config.llm_config.max_context_length,
             chunk_size=self.config.llm_config.chunk_size,
             chunk_overlap=self.config.llm_config.chunk_overlap,
@@ -121,13 +128,10 @@ class ThothPipeline:
         self.citation_tracker = CitationTracker(
             knowledge_base_dir=self.config.knowledge_base_dir,
             graph_storage_path=self.config.graph_storage_path,
-        )
-
-        # Note Generator
-        self.note_generator = NoteGenerator(
-            templates_dir=self.config.templates_dir,
+            note_generator=self.note_generator,
+            pdf_dir=self.config.pdf_dir,
+            markdown_dir=self.config.markdown_dir,
             notes_dir=self.config.notes_dir,
-            api_base_url=self.config.api_server_config.base_url,
         )
 
         logger.info('Thoth pipeline initialized')
@@ -149,19 +153,19 @@ class ThothPipeline:
         logger.info(f'Processing PDF: {pdf_path}')
 
         # Step 1: OCR conversion
-        markdown_path = self._ocr_convert(pdf_path)
+        markdown_path, no_images_markdown = self._ocr_convert(pdf_path)
         logger.info(f'OCR conversion completed: {markdown_path}')
 
         # Step 2: LLM analysis
-        analysis = self._analyze_content(markdown_path)
+        analysis = self._analyze_content(no_images_markdown)
         logger.info('Content analysis completed')
 
         # Step 3: Citation extraction
-        citations = self._extract_citations(markdown_path)
+        citations = self._extract_citations(no_images_markdown)
         logger.info(f'Citation extraction completed: {len(citations)} citations found')
 
         # Step 4: Generate note
-        note_path = self._generate_note(
+        note_path, new_pdf_path, new_markdown_path = self._generate_note(
             pdf_path=pdf_path,
             markdown_path=markdown_path,
             analysis=analysis,
@@ -169,9 +173,9 @@ class ThothPipeline:
         )
         logger.info(f'Note generation completed: {note_path}')
 
-        return Path(note_path)
+        return Path(note_path), Path(new_pdf_path), Path(new_markdown_path)
 
-    def _ocr_convert(self, pdf_path: Path) -> Path:
+    def _ocr_convert(self, pdf_path: Path) -> tuple[Path, Path]:
         """
         Convert PDF to Markdown using OCR.
 
@@ -179,11 +183,11 @@ class ThothPipeline:
             pdf_path: Path to the PDF file.
 
         Returns:
-            Path: Path to the generated Markdown file.
+            tuple[Path, Path]: Path to the generated Markdown file and the path to the generated Markdown file without images.
 
         Raises:
             OCRError: If OCR conversion fails.
-        """
+        """  # noqa: W505
         try:
             return self.ocr_manager.convert_pdf_to_markdown(
                 pdf_path=pdf_path, output_dir=self.markdown_dir
@@ -217,7 +221,6 @@ class ThothPipeline:
             list[Citation]: The extracted citations.
         """
         citations = self.citation_processor.process_document(markdown_path)
-        self.citation_tracker.process_citations(citations)
         return self.citation_formatter.format_citations(citations)
 
     def _generate_note(
@@ -226,9 +229,9 @@ class ThothPipeline:
         markdown_path: Path,
         analysis: AnalysisResponse,
         citations: list[Citation],
-    ) -> str:
+    ) -> tuple[str, str, str]:
         """
-        Generate an Obsidian note.
+        Generate an Obsidian note and update file paths in the citation tracker.
 
         Args:
             pdf_path: Path to the PDF file.
@@ -239,12 +242,65 @@ class ThothPipeline:
         Returns:
             str: Path to the generated note.
         """
-        return self.note_generator.create_note(
+        article_id = self.citation_tracker.process_citations(
             pdf_path=pdf_path,
             markdown_path=markdown_path,
             analysis=analysis,
             citations=citations,
         )
+
+        note_path_str, new_pdf_path, new_markdown_path = (
+            self.note_generator.create_note(
+                pdf_path=pdf_path,
+                markdown_path=markdown_path,
+                analysis=analysis,
+                citations=citations,
+            )
+        )
+
+        if article_id:
+            self.citation_tracker.update_article_file_paths(
+                article_id=article_id,
+                new_pdf_path=new_pdf_path,
+                new_markdown_path=new_markdown_path,
+                note_path=note_path_str,
+            )
+        else:
+            logger.warning(
+                'Could not obtain article_id from process_citations. '
+                'File paths in citation tracker may not be updated for the renamed files.'
+            )
+
+        return note_path_str, str(new_pdf_path), str(new_markdown_path)
+
+    def regenerate_all_notes(self) -> list[tuple[Path, Path]]:
+        """
+        Regenerate all markdown notes for all articles in the citation graph.
+
+        This method delegates to the CitationTracker's regenerate_all_notes method
+        and returns a list of (final_pdf_path, final_note_path) for successfully
+        regenerated notes.
+
+        Returns:
+            list[tuple[Path, Path]]: A list of (PDF path, note path) tuples for successes.
+        """  # noqa: W505
+        if not self.citation_tracker:
+            logger.error(
+                'CitationTracker is not initialized. Cannot regenerate all notes.'
+            )
+            return []
+        if not self.citation_tracker.note_generator:
+            logger.error(
+                'NoteGenerator not configured in CitationTracker. Cannot regenerate all notes.'
+            )
+            return []
+
+        logger.info('Pipeline initiating regeneration of all notes.')
+        successful_files = self.citation_tracker.regenerate_all_notes()
+        logger.info(
+            f'Pipeline completed regeneration of all notes. {len(successful_files)} notes successfully regenerated.'
+        )
+        return successful_files
 
 
 # Example usage

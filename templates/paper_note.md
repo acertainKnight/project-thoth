@@ -1,9 +1,13 @@
 # {{ title }}
 
 **Authors**: {{ authors | join(", ") if authors else "N/A" }}
-{% if year %}**Year**: {{ year }}{% endif %}
-{% if doi %}**DOI**: {{ doi }}{% endif %}
-{% if journal %}**Journal**: {{ journal }}{% endif %}
+**Year**: {{ year if year else "N/A" }}
+**DOI**: {{ doi if doi else "N/A" }}
+**Journal**: {{ journal if journal else "N/A" }}
+**Tags**: {{ tags | join(", ") if tags else "N/A" }}
+
+**PDF Link**: {{ source_files.pdf_link | safe if source_files.pdf_link else "N/A" }}
+
 
 ## Summary
 
@@ -39,6 +43,16 @@ N/A
 
 {{ related_work | default("N/A") }}
 
+## Full Analysis Details
+
+{% for key, value in analysis.items() %}
+{% if key not in [
+    'summary', 'key_points', 'abstract', 'methodology', 'results', 'limitations', 'related_work', 'tags'
+] and value %}
+- **{{ key.replace('_', ' ').title() }}**: {{ value }}
+{% endif %}
+{% endfor %}
+
 ## Citations
 
 {% if citations %}
@@ -48,8 +62,3 @@ N/A
 {% else %}
 No citations found.
 {% endif %}
-
-## Source Files
-
-- PDF Link: {{ source_files.pdf_link | safe if source_files.pdf_link else "N/A" }}
-- Markdown Link: {{ source_files.markdown_link | safe if source_files.markdown_link else "N/A" }}

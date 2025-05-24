@@ -234,11 +234,20 @@ class PDFHandler(FileSystemEventHandler):
 
         try:
             # Process the file
-            note_path = self.pipeline.process_pdf(file_path)
+            note_path, new_pdf_path, new_markdown_path = self.pipeline.process_pdf(
+                file_path
+            )
             logger.info(f'Successfully processed: {file_path} -> {note_path}')
 
             # Mark as processed
-            self.pdf_tracker.mark_processed(file_path, {'note_path': str(note_path)})
+            self.pdf_tracker.mark_processed(
+                new_pdf_path,
+                {
+                    'note_path': str(note_path),
+                    'new_pdf_path': str(new_pdf_path),
+                    'new_markdown_path': str(new_markdown_path),
+                },
+            )
         except Exception as e:
             logger.error(f'Error processing {file_path}: {e!s}')
 
@@ -319,8 +328,22 @@ class PDFMonitor:
         """
         Stop monitoring the directory.
         """
+        logger.info('Attempting to stop PDF monitoring...')
         self.observer.stop()
-        self.observer.join()
+        try:
+            self.observer.join(timeout=2.0)  # Add a timeout to the join call
+            if self.observer.is_alive():
+                logger.warning(
+                    'Observer thread did not stop in time. Forcing shutdown.'
+                )
+                # If it's a PollingObserver, there isn't a direct force stop.
+                # The process will exit when the main thread finishes.
+                # For other observers like InotifyObserver, there might be OS-level cleanup.  # noqa: W505
+            else:
+                logger.info('Observer thread stopped successfully.')
+        except Exception as e:
+            logger.error(f'Exception during observer shutdown: {e}')
+
         logger.info('PDF monitoring stopped')
 
     def _process_existing_files(self):

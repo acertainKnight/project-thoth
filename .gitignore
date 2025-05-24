@@ -160,3 +160,7 @@ Thumbs.db
 
 # Logs
 logs/
+
+
+# Data
+knowledge/

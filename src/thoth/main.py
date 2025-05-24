@@ -13,7 +13,7 @@ from pathlib import Path
 from loguru import logger
 
 from thoth.monitor.obsidian import start_server as start_obsidian_server
-from thoth.monitor.pdf_monitor import PDFMonitor
+from thoth.monitor.pdf_monitor import PDFMonitor, PDFTracker
 from thoth.pipeline import ThothPipeline
 from thoth.utilities.config import get_config
 
@@ -89,6 +89,24 @@ def parse_args():
         '--base-url',
         type=str,
         help='Base URL for the API server. Overrides config value.',
+    )
+
+    # Reprocess-note command
+    reprocess_parser = subparsers.add_parser(
+        'reprocess-note',
+        help='Regenerate the note for an existing article in the graph',
+    )
+    reprocess_parser.add_argument(
+        '--article-id',
+        type=str,
+        required=True,
+        help='The unique ID of the article (e.g., DOI) whose note needs to be reprocessed.',
+    )
+
+    # Regenerate all notes command
+    regenerate_all_parser = subparsers.add_parser(  # noqa: F841
+        'regenerate-all-notes',
+        help='Regenerate all markdown notes for all articles in the graph.',
     )
 
     return parser.parse_args()
@@ -191,6 +209,143 @@ def process_pdf(args):
     logger.info(f'Successfully processed: {pdf_path} -> {note_path}')
 
 
+def run_reprocess_note(args):
+    """
+    Regenerate the note for an existing article.
+
+    Args:
+        args: Command line arguments containing 'article_id'.
+
+    Returns:
+        int: Exit code.
+    """
+    logger.info(f'Attempting to reprocess note for article_id: {args.article_id}')
+    config = get_config()  # Ensure config is loaded if needed by pipeline components
+
+    # Initialize pipeline
+    # We need to pass the API base URL to ThothPipeline if it's used by NoteGenerator for links,  # noqa: W505
+    # or ensure NoteGenerator can get it from config/env itself.
+    # Assuming ThothPipeline and its components handle their config/env loading.
+    pipeline = ThothPipeline(
+        ocr_api_key=config.api_keys.mistral_key,
+        llm_api_key=config.api_keys.openrouter_key,
+        templates_dir=Path(config.templates_dir),
+        prompts_dir=Path(config.prompts_dir),
+        output_dir=Path(config.output_dir),
+        notes_dir=Path(config.notes_dir),
+        api_base_url=config.api_server_config.base_url,
+    )
+
+    article_id = args.article_id
+
+    # Fetch data for regeneration from CitationTracker
+    regen_data = pipeline.citation_tracker.get_article_data_for_regeneration(article_id)
+
+    if not regen_data:
+        logger.error(
+            f"Could not retrieve data for article_id '{article_id}'. "
+            'Ensure the article exists in the graph and has all necessary data (PDF path, Markdown path, analysis).'
+        )
+        return 1
+
+    try:
+        logger.info(f'Regenerating note for {article_id}...')
+        # create_note returns (note_path_str, new_pdf_path, new_markdown_path)
+        note_path, new_pdf_path, new_markdown_path = (
+            pipeline.note_generator.create_note(
+                pdf_path=regen_data['pdf_path'],
+                markdown_path=regen_data['markdown_path'],
+                analysis=regen_data['analysis'],
+                citations=regen_data['citations'],
+            )
+        )
+        logger.info(f'Successfully regenerated note for {article_id} at: {note_path}')
+        logger.info(f'Associated PDF path: {new_pdf_path}')
+        logger.info(f'Associated Markdown path: {new_markdown_path}')
+
+        # Update the file paths in the tracker if they were changed by create_note
+        # This is important if the original file paths in the graph were different from what create_note produced  # noqa: W505
+        # (e.g., if a file was manually moved or if the title changed, leading to a new sanitized name)  # noqa: W505
+        pipeline.citation_tracker.update_article_file_paths(
+            article_id=article_id,
+            new_pdf_path=new_pdf_path,
+            new_markdown_path=new_markdown_path,
+        )
+        logger.info(f'Updated file paths in tracker for {article_id} if changed.')
+
+        return 0
+    except Exception as e:
+        logger.error(
+            f"Error during note reprocessing for article_id '{article_id}': {e}"
+        )
+        return 1
+
+
+def run_regenerate_all_notes(args):  # noqa: ARG001
+    """
+    Regenerate all notes for all articles in the citation graph
+    and update the processed files database.
+
+    Args:
+        args: Command line arguments (not used in this function but part of the pattern).
+
+    Returns:
+        int: Exit code.
+    """  # noqa: W505
+    logger.info('Attempting to regenerate all notes for all articles.')
+    config = get_config()
+
+    try:
+        pipeline = ThothPipeline(
+            ocr_api_key=config.api_keys.mistral_key,
+            llm_api_key=config.api_keys.openrouter_key,
+            templates_dir=Path(config.templates_dir),
+            prompts_dir=Path(config.prompts_dir),
+            output_dir=Path(config.output_dir),
+            notes_dir=Path(config.notes_dir),
+            api_base_url=config.api_server_config.base_url,
+        )
+        successfully_regenerated_files = pipeline.regenerate_all_notes()
+        logger.info(
+            f'Regeneration process completed. {len(successfully_regenerated_files)} notes reported as successfully regenerated.'
+        )
+
+        if successfully_regenerated_files:
+            processed_db_filename = getattr(
+                config, 'processed_pdfs_file', 'processed_pdfs.json'
+            )
+            processed_db_json_path = Path(config.output_dir) / processed_db_filename
+
+            # Use PDFTracker to interact with the processed files database
+            pdf_tracker = PDFTracker(track_file=processed_db_json_path)
+            logger.info(
+                f'Updating processed files database at: {processed_db_json_path}'
+            )
+
+            for final_pdf_path, final_note_path in successfully_regenerated_files:
+                if not final_pdf_path.exists():
+                    logger.warning(
+                        f'Regenerated PDF path {final_pdf_path} does not exist. Cannot update tracking for it.'
+                    )
+                    continue
+                try:
+                    # PDFTracker's mark_processed method handles getting stats and saving  # noqa: W505
+                    pdf_tracker.mark_processed(
+                        final_pdf_path,
+                        metadata={'note_path': str(final_note_path)},
+                    )
+                    logger.info(
+                        f'Updated tracking for regenerated file: {final_pdf_path} -> {final_note_path}'
+                    )
+                except Exception as e:
+                    logger.error(f'Error updating tracking for {final_pdf_path}: {e}')
+
+        return 0
+    except Exception as e:
+        logger.error(f'Error during overall regeneration of all notes: {e}')
+        return 1
+
+
 def run_api_server(args):
     """
     Run the Obsidian API server.
@@ -238,6 +393,10 @@ def main():
         return process_pdf(args)
     elif args.command == 'api':
         return run_api_server(args)
+    elif args.command == 'reprocess-note':
+        return run_reprocess_note(args)
+    elif args.command == 'regenerate-all-notes':
+        return run_regenerate_all_notes(args)
     else:
         logger.error('No command specified')
         return 1

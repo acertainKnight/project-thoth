@@ -36,15 +36,15 @@ class LLMProcessor:
     def __init__(
         self,
         model: str = 'openai/gpt-4o-mini',
-        max_tokens: int = 500000,
+        max_output_tokens: int = 500000,
         max_context_length: int = 8000,
         chunk_size: int = 4000,
         chunk_overlap: int = 200,
         openrouter_api_key: str | None = None,
         prompts_dir: str | Path = 'templates/prompts',
         model_kwargs: dict[str, Any] | None = None,
-        refine_threshold_multiplier: float = 1.2,  # Threshold multiplier for choosing refine over direct
-        map_reduce_threshold_multiplier: float = 3.0,  # Threshold multiplier for choosing map_reduce over refine
+        refine_threshold_multiplier: float = 0.8,  # Threshold multiplier for choosing refine over direct
+        map_reduce_threshold_multiplier: float = 0.9,  # Threshold multiplier for choosing map_reduce over refine
     ):
         """
         Initialize the LLMProcessor with LangGraph.
@@ -62,7 +62,7 @@ class LLMProcessor:
             map_reduce_threshold_multiplier: Multiplier for max_context_length to choose 'map_reduce'.
         """  # noqa: W505
         self.model = model
-        self.max_tokens = max_tokens
+        self.max_output_tokens = max_output_tokens
         self.max_context_length = max_context_length
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
@@ -72,6 +72,14 @@ class LLMProcessor:
         self.map_reduce_threshold = int(
             max_context_length * map_reduce_threshold_multiplier
         )
+
+        logger.debug(f'Refine threshold: {self.refine_threshold}')
+        logger.debug(f'Map-reduce threshold: {self.map_reduce_threshold}')
+        logger.debug(f'Max context length: {self.max_context_length}')
+        logger.debug(f'Max output tokens: {self.max_output_tokens}')
+        logger.debug(f'Chunk size: {self.chunk_size}')
+        logger.debug(f'Chunk overlap: {self.chunk_overlap}')
+        logger.debug(f'Model kwargs: {self.model_kwargs}')
 
         # Initialize the LLM
         self.llm = OpenRouterClient(
@@ -145,6 +153,14 @@ class LLMProcessor:
         """Loads content from the markdown file path in the state."""
         logger.info('Loading content from markdown file...')
         markdown_path = state.get('markdown_path')
+
+        # If markdown_path is a string, treat it as the content directly
+        if isinstance(markdown_path, str):
+            state['original_content'] = markdown_path
+            logger.info('Using provided markdown content directly')
+            return state
+
+        # Otherwise treat as a file path
         if not markdown_path or not isinstance(markdown_path, Path):
             raise ValueError('Markdown path not found or invalid in state.')
 
@@ -167,21 +183,13 @@ class LLMProcessor:
             )
 
         token_count = self._count_tokens(content)
-
-        if token_count <= self.max_tokens:
+        logger.debug(f'Token count: {token_count}')
+        if token_count <= self.map_reduce_threshold:
             strategy = 'direct'
         elif token_count <= self.refine_threshold:
-            # Using refine if slightly larger than context window allows initial + refinement  # noqa: W505
-            strategy = 'refine'
-        elif token_count <= self.map_reduce_threshold:
-            # Using refine if it fits within a reasonable multiplier, else map_reduce
-            # Adjust multiplier based on typical prompt overhead and desired behavior
-            strategy = (
-                'refine'  # Let's favour refine up to map_reduce_threshold for now
-            )
-            # strategy = "map_reduce" # Uncomment this if refine struggles with larger content  # noqa: W505
+            strategy = 'map_reduce'
         else:
-            strategy = 'map_reduce'  # Fallback for very large documents
+            strategy = 'refine'
 
         logger.info(f'Selected strategy: {strategy}')
         state['strategy'] = strategy
@@ -205,7 +213,7 @@ class LLMProcessor:
         content = state.get('original_content')
         if not content:
             raise ValueError('Original content not found in state for direct analysis.')
-
+        logger.info(f'Analysis schema: {AnalysisResponse.model_json_schema()}')
         result = self.direct_chain.invoke(
             {
                 'content': content,
@@ -403,7 +411,7 @@ class LLMProcessor:
 
     def analyze_content(
         self,
-        markdown_path: Path,  # Changed input parameter
+        markdown_path: Path | str,  # Changed input parameter
         force_processing_strategy: (
             Literal['direct', 'map_reduce', 'refine'] | None
         ) = None,
@@ -413,7 +421,7 @@ class LLMProcessor:
         Analyze content with LLM using the LangGraph workflow.
 
         Args:
-            markdown_path: The path to the markdown file to analyze. # Updated docstring
+            markdown_path: The path to the markdown file to analyze or the markdown content directly. # Updated docstring
             force_processing_strategy: Force a specific processing strategy (overrides dynamic selection).
             config: Optional LangChain RunnableConfig for the graph invocation.
 

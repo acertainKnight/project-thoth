@@ -62,6 +62,7 @@ class LLMConfig(BaseSettings):
         env_file_encoding='utf-8',
         case_sensitive=False,  # Make case-insensitive to handle env vars
         extra='allow',
+        env_nested_delimiter='_',  # Explicitly set single underscore for nesting
     )
     model: str = Field(..., description='LLM model')
     model_settings: ModelConfig = Field(
@@ -70,7 +71,7 @@ class LLMConfig(BaseSettings):
     doc_processing: str = Field(
         'auto', description='LLM document processing strategy hint'
     )
-    max_tokens: int = Field(
+    max_output_tokens: int = Field(
         500000, description='LLM max input tokens for direct processing strategy'
     )
     max_context_length: int = Field(
@@ -103,7 +104,7 @@ class CitationLLMConfig(BaseSettings):
     model_settings: ModelConfig = Field(
         default_factory=ModelConfig, description='Citation model configuration'
     )
-    max_tokens: int = Field(
+    max_output_tokens: int = Field(
         10000,
         description='Citation LLM max tokens for generation (typically for smaller, focused outputs)',
     )

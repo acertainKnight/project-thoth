@@ -14,7 +14,8 @@ from typing import Any
 import networkx as nx
 from loguru import logger
 
-from thoth.utilities.models import Citation
+from thoth.notes.note_generator import NoteGenerator
+from thoth.utilities.models import AnalysisResponse, Citation
 
 
 class CitationReference:
@@ -48,7 +49,13 @@ class CitationTracker:
     """
 
     def __init__(
-        self, knowledge_base_dir: Path, graph_storage_path: Path | None = None
+        self,
+        knowledge_base_dir: Path,
+        graph_storage_path: Path | None = None,
+        note_generator: NoteGenerator | None = None,
+        pdf_dir: Path | None = None,
+        markdown_dir: Path | None = None,
+        notes_dir: Path | None = None,
     ) -> None:
         """
         Initialize the citation tracker.
@@ -56,11 +63,19 @@ class CitationTracker:
         Args:
             knowledge_base_dir: Path to the knowledge base directory containing markdown notes
             graph_storage_path: Optional path to store the serialized knowledge graph
+            note_generator: Optional instance of NoteGenerator for regenerating notes
+            pdf_dir: Optional path to the directory where PDF files are stored.
+            markdown_dir: Optional path to the directory for Thoth-generated markdown files.
+            notes_dir: Optional path to the Obsidian notes directory.
         """  # noqa: W505
         self.knowledge_base_dir = Path(knowledge_base_dir)
         self.graph_storage_path = (
             graph_storage_path or self.knowledge_base_dir / 'citation_graph.json'
         )
+        self.note_generator = note_generator
+        self.pdf_dir = pdf_dir
+        self.markdown_dir = markdown_dir
+        self.notes_dir = notes_dir
 
         # Initialize the citation graph
         self.graph = nx.DiGraph()
@@ -155,6 +170,8 @@ class CitationTracker:
         metadata = citation.model_dump(exclude={'obsidian_uri'})
 
         # Add article to graph
+        # For articles added this way, pdf_path and markdown_path are not directly known from citation obj.  # noqa: W505
+        # They are typically set for the main processed article.
         self.add_article(article_id, metadata, citation.obsidian_uri)
 
         return article_id
@@ -179,6 +196,9 @@ class CitationTracker:
         article_id: str,
         metadata: dict[str, Any],
         obsidian_path: str | None = None,
+        pdf_path: Path | None = None,
+        markdown_path: Path | None = None,
+        analysis: AnalysisResponse | dict[str, Any] | None = None,
     ) -> None:
         """
         Add an article to the citation graph.
@@ -187,6 +207,9 @@ class CitationTracker:
             article_id: Unique identifier for the article (e.g., DOI or sanitized title)
             metadata: Article metadata including title, authors, year, etc.
             obsidian_path: Path to the corresponding Obsidian markdown note if it exists
+            pdf_path: Path to the article's PDF file
+            markdown_path: Path to the article's markdown file
+            analysis: AnalysisResponse object or dictionary containing analysis data
 
         Returns:
             None
@@ -196,12 +219,28 @@ class CitationTracker:
             >>> tracker.add_article(
             ...     '10.1234/example',
             ...     {'title': 'Example Paper', 'authors': ['Smith, J.'], 'year': 2023},
-            ...     '20230101-example-paper.md',
+            ...     obsidian_path='20230101-example-paper.md',
+            ...     pdf_path=Path('papers/example.pdf'),
+            ...     markdown_path=Path('notes/example.md'),
+            ...     analysis={'summary': 'This is an example paper.'},
             ... )
         """
         node_data = {'metadata': metadata}
         if obsidian_path:
-            node_data['obsidian_path'] = obsidian_path
+            node_data['obsidian_path'] = (
+                obsidian_path  # Should be the note stub/filename
+            )
+        if pdf_path:
+            node_data['pdf_path'] = pdf_path.name  # Store as string (name/stub)
+        if markdown_path:
+            node_data['markdown_path'] = (
+                markdown_path.name
+            )  # Store as string (name/stub)
+        if analysis:
+            if isinstance(analysis, AnalysisResponse):
+                node_data['analysis'] = analysis.model_dump()
+            else:
+                node_data['analysis'] = analysis
 
         article_title = metadata.get('title', article_id)
 
@@ -211,12 +250,10 @@ class CitationTracker:
             logger.info(f'Added article to citation graph: {article_title}')
         else:
             # Update existing node
-            current_metadata = self.graph.nodes[article_id].get('metadata', {})
-            current_metadata.update(metadata)
-            self.graph.nodes[article_id]['metadata'] = current_metadata
-
-            if obsidian_path:
-                self.graph.nodes[article_id]['obsidian_path'] = obsidian_path
+            existing_node_data = self.graph.nodes[article_id]
+            existing_node_data.update(
+                node_data
+            )  # Merge new data, overwriting if keys exist
 
             logger.info(f'Updated article in citation graph: {article_title}')
 
@@ -272,15 +309,24 @@ class CitationTracker:
         # Save the updated graph
         self._save_graph()
 
-    def process_citations(self, citations: list[Citation]) -> None:
+    def process_citations(
+        self,
+        pdf_path: Path,
+        markdown_path: Path,
+        analysis: AnalysisResponse,
+        citations: list[Citation],
+    ) -> str | None:
         """
         Process a list of citations for an article.
 
         Args:
+            pdf_path: Path to the PDF file
+            markdown_path: Path to the markdown file
+            analysis: AnalysisResponse object
             citations: List of Citation objects
 
         Returns:
-            None
+            str | None: The article ID of the processed article or None if it exits early
 
         Example:
             >>> tracker = CitationTracker(Path('knowledge_base'))
@@ -290,16 +336,27 @@ class CitationTracker:
             ...         authors=['Smith, J.'],
             ...         title='Example Paper',
             ...         year=2023,
+            ...         is_document_citation=True,  # Mark this as the main article
+            ...         doi='10.1234/main_article',
             ...     ),
             ...     Citation(
             ...         text='Jones, A. (2022). Another Paper.',
             ...         authors=['Jones, A.'],
             ...         title='Another Paper',
             ...         year=2022,
+            ...         doi='10.5678/cited_article',
             ...     ),
             ... ]
-            >>> tracker.process_citations(citations)
-        """
+            >>> analysis_response = AnalysisResponse(
+            ...     summary='Main article summary', keywords=['test']
+            ... )
+            >>> article_id = tracker.process_citations(
+            ...     Path('path/to/main.pdf'),
+            ...     Path('path/to/main.md'),
+            ...     analysis_response,
+            ...     citations,
+            ... )
+        """  # noqa: W505
         # Find the citation for the document itself (marked with is_document_citation flag)  # noqa: W505
         article_citation = next(
             (citation for citation in citations if citation.is_document_citation), None
@@ -307,25 +364,89 @@ class CitationTracker:
 
         # If no document citation is found, use the first citation as a fallback
         if article_citation is None and citations:
-            article_citation = citations[0]
+            # Ensure the first citation is marked, if we decide to use it as the main document.  # noqa: W505
+            # This logic might need refinement based on how `is_document_citation` is set.  # noqa: W505
+            # For now, we assume if no explicit document citation, the first one might be it.  # noqa: W505
+            # However, this could be risky if the first citation is not the document itself.  # noqa: W505
+            # A better approach might be to require `is_document_citation` to be set.
             logger.warning(
-                'No document citation found, using first citation as fallback'
+                "No citation explicitly marked as 'is_document_citation'. "
+                'Attempting to use the first citation as the main article. '
+                'This may lead to incorrect main article identification.'
             )
+            article_citation = citations[0]  # Fallback, consider implications
 
-        # Generate article ID based on available identifiers
-        article_id = (
-            self._generate_article_id(article_citation) if article_citation else None
+        if not article_citation:
+            logger.error('No valid article citation found, cannot process citations.')
+            return None
+
+        # Generate article ID for the main document
+        article_id = self._generate_article_id(article_citation)
+
+        # Add or update the main article with all its details
+        self.add_article(
+            article_id=article_id,
+            metadata=article_citation.model_dump(exclude={'obsidian_uri'}),
+            obsidian_path=article_citation.obsidian_uri,  # This is the note stub
+            pdf_path=pdf_path,  # Pass Path object, add_article will take .name
+            markdown_path=markdown_path,  # Pass Path object, add_article will take .name
+            analysis=analysis.model_dump(),
         )
 
-        if not article_id:
-            logger.warning('No valid article citation found, cannot process citations')
-            return
+        # Process other citations (references made by the main article)
         for citation in citations:
-            # Add the citation to the graph and get its ID
+            if citation is article_citation:  # Skip the main article itself
+                continue
+
+            # Add the cited article to the graph and get its ID
             target_id = self.add_article_from_citation(citation)
 
-            # Add the citation relationship
+            # Add the citation relationship from the main article to the cited article
             self.add_citation(article_id, target_id, {'citation_text': citation.text})
+
+        # After processing all citations for the current article, regenerate notes for connected articles  # noqa: W505
+        if self.note_generator:
+            connected_articles_ids = set()
+            # Articles that cite the current article
+            connected_articles_ids.update(self.get_citing_articles(article_id))
+            # Articles cited by the current article
+            connected_articles_ids.update(self.get_cited_articles(article_id))
+
+            for connected_id in connected_articles_ids:
+                if (
+                    connected_id == article_id
+                ):  # Don't regenerate the note we just created/updated
+                    continue
+
+                logger.info(
+                    f'Attempting to regenerate note for connected article: {connected_id}'
+                )
+                regen_data = self.get_article_data_for_regeneration(connected_id)
+                if regen_data:
+                    try:
+                        self.note_generator.create_note(
+                            pdf_path=regen_data['pdf_path'],
+                            markdown_path=regen_data['markdown_path'],
+                            analysis=regen_data['analysis'],
+                            citations=regen_data['citations'],
+                        )
+                        logger.info(
+                            f'Successfully regenerated note for connected article: {connected_id}'
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f'Failed to regenerate note for connected article {connected_id}: {e}'
+                        )
+                else:
+                    logger.warning(
+                        f'Could not retrieve data for connected article {connected_id}. Skipping note regeneration.'
+                    )
+        else:
+            logger.debug(
+                'Note generator not configured in CitationTracker. Skipping regeneration of connected notes.'
+            )
+
+        return article_id
 
     def get_citation(self, article_id: str) -> Citation | None:
         """
@@ -466,21 +587,27 @@ class CitationTracker:
             >>> len(results)
             8
         """
+        if not query:
+            return []
+
         query = query.lower()
         results = []
 
         for node_id, node_data in self.graph.nodes(data=True):
             metadata = node_data.get('metadata', {})
 
-            # Search in title
-            if 'title' in metadata and query in metadata['title'].lower():
+            # Search in title - check for None values
+            title = metadata.get('title')
+            if title and query in title.lower():
                 results.append(node_id)
                 continue
 
-            # Search in authors
-            if 'authors' in metadata:
-                for author in metadata['authors']:
-                    if query in author.lower():
+            # Search in authors - check for None values
+            authors = metadata.get('authors', [])
+            if authors:
+                for author in authors:
+                    # Ensure author is not None or empty
+                    if author and query in author.lower():
                         results.append(node_id)
                         break
 
@@ -550,13 +677,19 @@ class CitationTracker:
             >>> tracker.update_obsidian_links('10.1234/article')
         """
         # Get the Obsidian path for the article
-        obsidian_path = self.get_obsidian_path(article_id)
-        if not obsidian_path:
+        obsidian_path_stub = self.get_obsidian_path(article_id)
+        if not obsidian_path_stub:
             logger.warning(f'No Obsidian note found for article {article_id}')
             return
 
+        if not self.notes_dir:
+            logger.error(
+                'Notes directory not configured in CitationTracker. Cannot update Obsidian links.'
+            )
+            return
+
         # Get the full path to the markdown file
-        md_path = self.knowledge_base_dir / obsidian_path
+        md_path = self.notes_dir / obsidian_path_stub
         if not md_path.exists():
             logger.warning(f'Markdown file not found: {md_path}')
             return
@@ -619,3 +752,297 @@ class CitationTracker:
         )
         sanitized = '-'.join(filter(None, sanitized.split()))
         return sanitized
+
+    def get_article_data_for_regeneration(
+        self, article_id: str
+    ) -> dict[str, Any] | None:
+        """
+        Retrieve all necessary data for an article to regenerate its note.
+
+        Args:
+            article_id: The ID of the article for which to retrieve data.
+
+        Returns:
+            A dictionary containing 'pdf_path', 'markdown_path', 'analysis',
+            and 'citations' (list of Citation objects) if all data is found.
+            Returns None otherwise.
+        """
+        if not self._node_exists(article_id):
+            logger.warning(
+                f'Article {article_id} not found. Cannot retrieve data for note regeneration.'
+            )
+            return None
+
+        node_data = self.graph.nodes[article_id]
+
+        pdf_stub = node_data.get('pdf_path')
+        markdown_stub = node_data.get('markdown_path')
+        analysis_dict = node_data.get('analysis')
+        obsidian_stub = node_data.get('obsidian_path')  # This is the note stub
+
+        if not all([pdf_stub, markdown_stub, analysis_dict]):
+            logger.warning(
+                f'Missing essential data (PDF path stub, Markdown path stub, or analysis) for article {article_id}.'
+                'Cannot regenerate note.'
+            )
+            return None
+
+        if not self.pdf_dir or not self.markdown_dir:
+            logger.error(
+                'PDF or Markdown directory not configured in CitationTracker. Cannot reconstruct paths.'
+            )
+            return None
+
+        try:
+            pdf_path = self.pdf_dir / pdf_stub
+            markdown_path = self.markdown_dir / markdown_stub
+            analysis = AnalysisResponse(**analysis_dict)
+        except Exception as e:
+            logger.error(
+                f'Error reconstructing data for article {article_id}: {e}. Cannot regenerate note.'
+            )
+            return None
+
+        # Get the main citation for this article_id
+        main_citation_data = node_data.get('metadata', {})
+        if not main_citation_data.get('title'):  # A basic check for valid metadata
+            logger.warning(
+                f'Missing metadata for main article {article_id}. Cannot regenerate note.'
+            )
+            return None
+
+        # Remove 'is_document_citation' from the dictionary before splatting,
+        # to avoid "multiple values for keyword argument" error, then explicitly set it.
+        main_citation_data.pop('is_document_citation', None)
+        main_citation = Citation(**main_citation_data, is_document_citation=True)
+        if obsidian_stub:  # Add obsidian_uri if it exists (obsidian_stub from graph)
+            main_citation.obsidian_uri = obsidian_stub
+
+        all_citations_for_note = [main_citation]
+
+        # Get all cited articles (successors)
+        cited_article_ids = self.get_cited_articles(article_id)
+        for cited_id in cited_article_ids:
+            cited_node_data = self.graph.nodes.get(cited_id)
+            if cited_node_data and 'metadata' in cited_node_data:
+                citation_obj = self.get_citation(
+                    cited_id
+                )  # Use existing method to build Citation
+                if citation_obj:
+                    all_citations_for_note.append(citation_obj)
+            else:
+                logger.warning(
+                    f'Metadata not found for cited article {cited_id} when regenerating for {article_id}'
+                )
+
+        # Prepare data for regeneration
+        regeneration_data = {
+            'pdf_path': pdf_path,
+            'markdown_path': markdown_path,
+            'analysis': analysis,
+            'citations': all_citations_for_note,
+        }
+
+        return regeneration_data
+
+    def update_article_file_paths(
+        self, article_id: str, new_pdf_path: Path, new_markdown_path: Path
+    ) -> None:
+        """
+        Update the stored PDF and Markdown paths for an article in the graph.
+
+        Args:
+            article_id: The ID of the article to update.
+            new_pdf_path: The new Path object for the PDF file.
+            new_markdown_path: The new Path object for the Markdown file.
+        """
+        if not self._node_exists(article_id):
+            logger.warning(f'Article {article_id} not found. Cannot update file paths.')
+            return
+
+        node_data = self.graph.nodes[article_id]
+        updated_paths = False
+        if new_pdf_path and new_pdf_path.exists():
+            node_data['pdf_path'] = new_pdf_path.name
+            updated_paths = True
+            logger.info(f'Updated pdf_path for {article_id} to {new_pdf_path.name}')
+        else:
+            logger.warning(
+                f'New PDF path for {article_id} is invalid or file does not exist: {new_pdf_path}. Path not updated.'
+            )
+
+        if new_markdown_path and new_markdown_path.exists():
+            node_data['markdown_path'] = new_markdown_path.name
+            updated_paths = True
+            logger.info(
+                f'Updated markdown_path for {article_id} to {new_markdown_path.name}'
+            )
+        else:
+            logger.warning(
+                f'New Markdown path for {article_id} is invalid or file does not exist: {new_markdown_path}. Path not updated.'
+            )
+
+        if updated_paths:
+            self._save_graph()
+
+    def regenerate_all_notes(self) -> list[tuple[Path, Path]]:
+        """
+        Regenerate all markdown notes for all articles in the graph.
+
+        This method iterates through each article in the citation graph,
+        retrieves its data, uses the NoteGenerator to recreate its
+        markdown note, and returns a list of (PDF path, note path) tuples
+        for successfully regenerated notes.
+
+        Returns:
+            list[tuple[Path, Path]]: A list of tuples, where each tuple
+                                     contains the final Path to the PDF file
+                                     and the final Path to its regenerated note.
+        """
+        if not self.note_generator:
+            logger.error('NoteGenerator not configured. Cannot regenerate all notes.')
+            return []
+
+        logger.info(
+            f'Starting regeneration of all notes for {len(self.graph.nodes)} articles.'
+        )
+        regenerated_count = 0
+        failed_count = 0
+        successfully_regenerated_files: list[tuple[Path, Path]] = []
+        obsidian_paths: dict[str, Path] = {}
+        markdown_paths: dict[str, Path] = {}
+        pdf_paths: dict[str, Path] = {}
+
+        for article_id in list(self.graph.nodes):  # Iterate over a copy of node IDs
+            article_title = (
+                self.graph.nodes[article_id]
+                .get('metadata', {})
+                .get('title', article_id)
+            )
+            logger.info(f'Attempting to regenerate note for: {article_title}')
+            regeneration_data = self.get_article_data_for_regeneration(article_id)
+
+            if regeneration_data:
+                try:
+                    (
+                        note_path_str,
+                        final_pdf_path,
+                        markdown_path,
+                    ) = self.note_generator.create_note(
+                        pdf_path=regeneration_data['pdf_path'],
+                        markdown_path=regeneration_data['markdown_path'],
+                        analysis=regeneration_data['analysis'],
+                        citations=regeneration_data['citations'],
+                    )
+                    logger.info(
+                        f'Successfully regenerated note for: {article_title} at {note_path_str}'
+                    )
+                    regenerated_count += 1
+                    successfully_regenerated_files.append(
+                        (final_pdf_path, Path(note_path_str))
+                    )
+                    obsidian_paths[article_id] = str(note_path_str)
+                    markdown_paths[article_id] = str(markdown_path)
+                    pdf_paths[article_id] = str(final_pdf_path)
+                except Exception as e:
+                    logger.error(
+                        f'Failed to regenerate note for {article_title} (ID: {article_id}): {e}'
+                    )
+                    failed_count += 1
+            else:
+                logger.warning(
+                    f'Could not retrieve sufficient data for {article_title} (ID: {article_id}). Skipping note regeneration.'
+                )
+                failed_count += 1
+
+        logger.info(
+            f'Finished regenerating notes. Successfully regenerated: {regenerated_count}, Failed: {failed_count}.'
+        )
+
+        self.update_node_attributes(
+            attribute_name='obsidian_path',
+            id_to_value_mapping=obsidian_paths,
+        )
+        self.update_node_attributes(
+            attribute_name='markdown_path',
+            id_to_value_mapping=markdown_paths,
+        )
+        self.update_node_attributes(
+            attribute_name='pdf_path',
+            id_to_value_mapping=pdf_paths,
+        )
+
+        self._save_graph()
+        return successfully_regenerated_files
+
+    def update_node_attributes(
+        self, attribute_name: str, id_to_value_mapping: dict[str, Any]
+    ) -> None:
+        """
+        Update or add a specific attribute for multiple nodes in the graph.
+
+        If a value in the mapping is `None`, the corresponding node attribute
+        will be set to `None`. This method only sets attribute values;
+        it does not delete attributes if a value is `None` (it sets the attribute to `None`).
+
+        Args:
+            attribute_name: The name of the node attribute to update or add.
+            id_to_value_mapping: A dictionary mapping article_id to the new
+                                 value for the specified attribute.
+        """  # noqa: W505
+        if not attribute_name:
+            logger.error('Attribute name cannot be empty.')
+            return
+
+        if not id_to_value_mapping:
+            logger.info(
+                f"Received an empty mapping for attribute '{attribute_name}'. No updates to perform."
+            )
+            return
+
+        logger.info(
+            f"Starting to update attribute '{attribute_name}' for specified nodes."
+        )
+
+        processed_existing_nodes_count = 0
+        actually_changed_count = 0
+        nodes_not_found_count = 0
+
+        for node_id, new_value in id_to_value_mapping.items():
+            if self.graph.has_node(node_id):
+                processed_existing_nodes_count += 1
+                node_data = self.graph.nodes[node_id]
+                current_value = node_data.get(attribute_name)
+
+                if current_value != new_value:
+                    node_data[attribute_name] = new_value
+                    actually_changed_count += 1
+                    logger.debug(
+                        f"Set attribute '{attribute_name}' to '{new_value}' for node {node_id}"
+                    )
+            else:
+                logger.warning(
+                    f"Node {node_id} not found in graph. Cannot update attribute '{attribute_name}'."
+                )
+                nodes_not_found_count += 1
+
+        if actually_changed_count > 0:
+            logger.info(
+                f"Attribute '{attribute_name}' was newly set or changed for {actually_changed_count} "
+                f'out of {processed_existing_nodes_count} processed existing nodes.'
+            )
+            self._save_graph()
+        elif processed_existing_nodes_count > 0:
+            logger.info(
+                f"Processed {processed_existing_nodes_count} existing nodes for attribute '{attribute_name}'. "
+                'No values required changing.'
+            )
+        else:  # Only if id_to_value_mapping was not empty but all nodes were not found
+            logger.info(
+                f"No existing nodes were updated for attribute '{attribute_name}' as no specified nodes were found in the graph."
+            )
+
+        if nodes_not_found_count > 0:
+            logger.warning(
+                f'{nodes_not_found_count} nodes specified in the mapping were not found in the graph.'
+            )

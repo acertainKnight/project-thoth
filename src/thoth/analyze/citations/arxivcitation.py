@@ -22,7 +22,7 @@ class ArxivClient:
         base_url: str = 'http://export.arxiv.org/api/query',
         timeout: int = 10,
         delay_seconds: float = 3.0,
-        max_retries: int = 3,
+        max_retries: int = 9,
     ):
         """
         Initialize arXiv API client.

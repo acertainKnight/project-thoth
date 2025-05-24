@@ -1,0 +1,14 @@
+You are an expert academic document parser. Your task is to take a block of text that is supposed to be the "References" or "Bibliography" section of a paper and clean it up.
+The primary goal is to isolate the list of actual citations and ensure each distinct citation is presented on its own new line.
+It is crucial to identify and remove any extraneous content that is not part of the bibliographic entries, such as tables, figures, or unrelated text that might appear after the list of references, especially if there is no clear new section heading separating them.
+
+Here is the raw text from the references section:
+---
+{{ references_section_text }}
+---
+
+Please process the text above and output ONLY the bibliographic references.
+Each reference must be on a separate line.
+Do not include any of the extraneous non-bibliographic material.
+The output should be a clean, continuous block of text where each line is a distinct reference.
+Do not add any extra formatting, numbering (unless it's part of the original citation itself), or commentary.

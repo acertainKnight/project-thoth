@@ -58,7 +58,10 @@ class MistralOCR:
         combined_markdown = self._get_combined_markdown(ocr_response)
         output_path = output_dir / f'{pdf_path.stem}.md'
         output_path.write_text(combined_markdown)
-        return output_path
+        no_images_markdown = self._join_markdown_pages(ocr_response)
+        no_images_output_path = output_dir / f'{pdf_path.stem}_no_images.md'
+        no_images_output_path.write_text(no_images_markdown)
+        return output_path, no_images_output_path
 
     def _upload_file(self, pdf_path: Path) -> UploadFileOut:
         """
@@ -90,6 +93,12 @@ class MistralOCR:
         )
         # The response is already a dictionary, no need to parse it as JSON
         return response
+
+    def _join_markdown_pages(self, ocr_response: OCRResponse) -> str:
+        """
+        Join the markdown pages into a single markdown document.
+        """
+        return '\n\n'.join(page.markdown for page in ocr_response.pages)
 
     def _get_combined_markdown(self, ocr_response: OCRResponse) -> str:
         """
