@@ -66,7 +66,7 @@ class LLMProcessor:
         self.max_context_length = max_context_length
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        self.prompts_dir = Path(prompts_dir)
+        self.prompts_dir = Path(prompts_dir) / model.split('/')[0]
         self.model_kwargs = model_kwargs if model_kwargs else {}
         self.refine_threshold = int(max_context_length * refine_threshold_multiplier)
         self.map_reduce_threshold = int(

@@ -1,16 +1,23 @@
-You are an expert research librarian and knowledge organizer tasked with identifying canonical tags from a collection of academic article tags.
+You are an expert research librarian and knowledge organizer. Your task is to analyze the provided list of tags and return a strictly valid JSON object (no markdown, no extra text) that follows the required schema below. This prompt is optimized for Gemini models—be precise and exhaustive.
 
-**TASK**: Analyze the provided list of existing tags and determine what the canonical (standardized) tags should be after consolidation, AND suggest new category-level and aggregate tags for better organization.
+Instructions for Gemini:
+- Carefully group tags that represent the same concept, choosing the most descriptive and widely used term as the canonical tag.
+- Suggest new category-level and aggregate tags for better organization.
+- Output must be a single valid JSON object matching the schema below. Do not include any commentary, markdown, or extra formatting.
+- If information is missing, use null or an empty list as appropriate.
 
-**Input Tags**:
+Input Tags:
 {{ existing_tags | join(', ') }}
 
-**Your Job**:
-1. Identify groups of tags that represent the same concept but with different wording
-2. For each group, choose the most clear, descriptive, and commonly used term as the canonical tag
-3. Create a final list of canonical tags that covers all the concepts represented in the input
-4. **NEW**: Suggest category-level tags that would help organize these canonical tags into broader research areas
-5. **NEW**: Suggest aggregate tags that combine related concepts for cross-cutting themes
+Required JSON schema:
+{
+  "consolidated_tags": ["#tag1", "#tag2"],
+  "suggested_category_tags": ["#category1", "#category2"],
+  "suggested_aggregate_tags": ["#aggregate1", "#aggregate2"],
+  "reasoning": "Explanation of key consolidation decisions and new tag suggestions."
+}
+
+Return only the JSON object matching the schema above.
 
 **Consolidation Rules**:
 - Group similar tags together (e.g., "#ml", "#machine_learning", "#machine-learning" should become one canonical tag)
@@ -30,11 +37,5 @@ You are an expert research librarian and knowledge organizer tasked with identif
 - Canonical: ["#machine_learning", "#artificial_intelligence", "#natural_language_processing", "#computer_vision", "#deep_learning"]
 - Category suggestions: ["#ai_methods", "#computational_intelligence"]
 - Aggregate suggestions: ["#neural_networks", "#data_science", "#pattern_recognition"]
-
-**REQUIRED OUTPUT**:
-1. **consolidated_tags**: The final list of canonical tags that should be used
-2. **suggested_category_tags**: New broader category tags that would help organize the canonical tags
-3. **suggested_aggregate_tags**: New cross-cutting tags that combine related concepts
-4. **reasoning**: Brief text explanation for key consolidation decisions and new tag suggestions
 
 Focus on creating a clean, well-organized set of canonical tags plus useful organizational tags that academic researchers would find intuitive and helpful for discovery.

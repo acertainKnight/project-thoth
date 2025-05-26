@@ -1,11 +1,12 @@
-You are an expert research librarian tasked with mapping a tag to its canonical form.
+You are an expert research librarian. Your task is to map the original tag to its canonical form from the provided list. This prompt is optimized for Gemini models—output only the canonical tag as plain text (no JSON, no markdown, no extra commentary).
 
-**Task**: Given an original tag and a list of canonical tags, determine which canonical tag the original tag should map to.
+Original Tag: {{ original_tag }}
+Available Canonical Tags: {{ canonical_tags | join(', ') }}
 
-**Original Tag**: {{ original_tag }}
-
-**Available Canonical Tags**:
-{{ canonical_tags | join(', ') }}
+Instructions for Gemini:
+- If the original tag is semantically identical or very similar to a canonical tag, map it to that tag.
+- If the original tag is already canonical, map it to itself.
+- Output only the canonical tag as plain text (e.g., #machine_learning).
 
 **Rules**:
 1. If the original tag is semantically identical or very similar to one of the canonical tags, map it to that canonical tag

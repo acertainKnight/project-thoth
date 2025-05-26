@@ -58,7 +58,11 @@ class TagConsolidator:
         self.consolidate_model = consolidate_model
         self.map_model = map_model
         self.suggest_model = suggest_model
-        self.prompts_dir = Path(prompts_dir)
+        self.consolidate_prompts_dir = (
+            Path(prompts_dir) / self.consolidate_model.split('/')[0]
+        )
+        self.map_prompts_dir = Path(prompts_dir) / self.map_model.split('/')[0]
+        self.suggest_prompts_dir = Path(prompts_dir) / self.suggest_model.split('/')[0]
         self.model_kwargs = model_kwargs if model_kwargs else {}
 
         # Initialize the LLM
@@ -98,21 +102,31 @@ class TagConsolidator:
         )
 
         # Initialize Jinja environment
-        self.jinja_env = Environment(
-            loader=FileSystemLoader(self.prompts_dir),
+        self.consolidate_jinja_env = Environment(
+            loader=FileSystemLoader(self.consolidate_prompts_dir),
+            trim_blocks=True,
+            lstrip_blocks=True,
+        )
+        self.map_jinja_env = Environment(
+            loader=FileSystemLoader(self.map_prompts_dir),
+            trim_blocks=True,
+            lstrip_blocks=True,
+        )
+        self.suggest_jinja_env = Environment(
+            loader=FileSystemLoader(self.suggest_prompts_dir),
             trim_blocks=True,
             lstrip_blocks=True,
         )
 
         # Load prompts
         self.consolidated_tags_prompt = self._create_prompt_from_template(
-            'consolidate_tags.j2'
+            'consolidate_tags.j2', self.consolidate_jinja_env
         )
         self.single_mapping_prompt = self._create_prompt_from_template(
-            'map_single_tag.j2'
+            'map_single_tag.j2', self.map_jinja_env
         )
         self.suggestion_prompt = self._create_prompt_from_template(
-            'suggest_additional_tags.j2'
+            'suggest_additional_tags.j2', self.suggest_jinja_env
         )
 
         # Build analysis chains
@@ -124,7 +138,9 @@ class TagConsolidator:
 
         logger.info('TagConsolidator initialized with two-step consolidation approach')
 
-    def _create_prompt_from_template(self, template_name: str) -> ChatPromptTemplate:
+    def _create_prompt_from_template(
+        self, template_name: str, loader: Environment
+    ) -> ChatPromptTemplate:
         """
         Create a ChatPromptTemplate from a Jinja2 template file.
 
@@ -137,8 +153,8 @@ class TagConsolidator:
         Raises:
             FileNotFoundError: If the template file doesn't exist.
         """
-        template_source, _filename, _uptodate = self.jinja_env.loader.get_source(
-            self.jinja_env, template_name
+        template_source, _filename, _uptodate = loader.loader.get_source(
+            loader, template_name
         )
         return ChatPromptTemplate.from_template(
             template_source, template_format='jinja2'

@@ -98,7 +98,7 @@ class CitationProcessor:
         )
 
         self.model = model
-        self.prompts_dir = Path(prompts_dir)
+        self.prompts_dir = Path(prompts_dir) / model.split('/')[0]
         self.model_kwargs = model_kwargs if model_kwargs else {}
         self.citation_batch_size = citation_batch_size  # Store batch size
 
