@@ -9,6 +9,7 @@ This module contains the main pipeline that orchestrates the processing of PDF d
 """  # noqa: W505
 
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
@@ -16,6 +17,7 @@ from thoth.analyze.citations.citations import CitationProcessor
 from thoth.analyze.citations.formatter import CitationFormatter
 from thoth.analyze.citations.tracker import CitationTracker
 from thoth.analyze.llm_processor import AnalysisResponse, LLMProcessor
+from thoth.analyze.tag_consolidator import TagConsolidator
 from thoth.notes.note_generator import NoteGenerator
 from thoth.ocr.ocr_manager import MistralOCR, OCRError
 from thoth.utilities.config import get_config
@@ -134,7 +136,29 @@ class ThothPipeline:
             notes_dir=self.config.notes_dir,
         )
 
+        # Tag Consolidator (initialized lazily when needed)
+        self._tag_consolidator = None
+
         logger.info('Thoth pipeline initialized')
+
+    @property
+    def tag_consolidator(self) -> TagConsolidator:
+        """
+        Lazy initialization of TagConsolidator.
+
+        Returns:
+            TagConsolidator: The initialized tag consolidator instance.
+        """
+        if self._tag_consolidator is None:
+            self._tag_consolidator = TagConsolidator(
+                consolidate_model=self.config.tag_consolidator_llm_config.consolidate_model,
+                suggest_model=self.config.tag_consolidator_llm_config.suggest_model,
+                map_model=self.config.tag_consolidator_llm_config.map_model,
+                openrouter_api_key=self.config.api_keys.openrouter_key,
+                prompts_dir=self.prompts_dir,
+                model_kwargs=self.config.tag_consolidator_llm_config.model_settings.model_dump(),
+            )
+        return self._tag_consolidator
 
     def process_pdf(self, pdf_path: str | Path) -> Path:
         """
@@ -263,7 +287,6 @@ class ThothPipeline:
                 article_id=article_id,
                 new_pdf_path=new_pdf_path,
                 new_markdown_path=new_markdown_path,
-                note_path=note_path_str,
             )
         else:
             logger.warning(
@@ -301,6 +324,415 @@ class ThothPipeline:
             f'Pipeline completed regeneration of all notes. {len(successful_files)} notes successfully regenerated.'
         )
         return successful_files
+
+    def consolidate_tags_only(self) -> dict[str, Any]:
+        """
+        Consolidate existing tags without suggesting additional tags.
+
+        This method performs only the tag consolidation process:
+        1. Extracts all existing tags from the citation graph
+        2. Consolidates similar tags into canonical forms using LLM analysis
+        3. Updates existing articles with their consolidated tag equivalents
+
+        Returns:
+            dict[str, Any]: Summary statistics of the consolidation process,
+                           including counts of articles processed and tags consolidated.
+
+        Example:
+            >>> pipeline = ThothPipeline()
+            >>> stats = pipeline.consolidate_tags_only()
+            >>> print(f'Processed {stats["articles_processed"]} articles')
+            >>> print(f'Consolidated {stats["tags_consolidated"]} tags')
+        """
+        if not self.citation_tracker:
+            logger.error('CitationTracker is not initialized. Cannot consolidate tags.')
+            return {
+                'articles_processed': 0,
+                'articles_updated': 0,
+                'tags_consolidated': 0,
+                'original_tag_count': 0,
+                'final_tag_count': 0,
+                'consolidation_mappings': {},
+                'all_available_tags': [],
+            }
+
+        logger.info(
+            'Pipeline initiating tag consolidation process (consolidation only).'
+        )
+
+        try:
+            # Step 1: Extract all existing tags
+            existing_tags = self.tag_consolidator.extract_all_tags_from_graph(
+                self.citation_tracker
+            )
+            if not existing_tags:
+                logger.warning('No existing tags found in the citation graph')
+                return {
+                    'articles_processed': 0,
+                    'articles_updated': 0,
+                    'tags_consolidated': 0,
+                    'original_tag_count': 0,
+                    'final_tag_count': 0,
+                    'consolidation_mappings': {},
+                    'all_available_tags': [],
+                }
+
+            # Step 2: Consolidate tags
+            consolidation_response = self.tag_consolidator.consolidate_tags(
+                existing_tags
+            )
+            all_available_tags = consolidation_response.consolidated_tags
+
+            # Step 3: Apply consolidation mappings to existing articles
+            articles_processed = 0
+            articles_updated = 0
+
+            for article_id, node_data in self.citation_tracker.graph.nodes(data=True):
+                analysis_dict = node_data.get('analysis')
+                metadata = node_data.get('metadata', {})
+
+                if not analysis_dict:
+                    logger.debug(
+                        f'No analysis data found for article {article_id}, skipping'
+                    )
+                    continue
+
+                # Get article info
+                title = metadata.get('title', article_id)
+                current_tags = analysis_dict.get('tags', [])
+
+                # Apply tag consolidation mappings to current tags
+                updated_tags = []
+                for tag in current_tags or []:
+                    canonical_tag = consolidation_response.tag_mappings.get(tag, tag)
+                    updated_tags.append(canonical_tag)
+
+                # Remove duplicates while preserving order
+                final_tags = list(dict.fromkeys(updated_tags))
+
+                # Update the analysis with new tags if they changed
+                if final_tags != current_tags:
+                    analysis_dict['tags'] = final_tags
+                    articles_updated += 1
+                    logger.info(
+                        f'Updated tags for "{title}": {len(current_tags or [])} -> {len(final_tags)} tags'
+                    )
+
+                # Step 3e: Save the updated graph
+                if articles_updated > 0:
+                    self.citation_tracker._save_graph()
+                    logger.info('Saved updated citation graph with consolidated tags')
+
+                articles_processed += 1
+
+            # Step 5: Return summary statistics
+            stats = {
+                'articles_processed': articles_processed,
+                'articles_updated': articles_updated,
+                'tags_consolidated': len(consolidation_response.tag_mappings),
+                'original_tag_count': len(existing_tags),
+                'final_tag_count': len(all_available_tags),
+                'consolidation_mappings': consolidation_response.tag_mappings,
+                'all_available_tags': all_available_tags,
+                'total_vocabulary_size': len(all_available_tags),
+            }
+
+            logger.info(
+                f'Tag consolidation completed. '
+                f'Processed {articles_processed} articles, '
+                f'updated {articles_updated} articles, '
+                f'consolidated {len(consolidation_response.tag_mappings)} tags.'
+            )
+
+            return stats
+
+        except Exception as e:
+            logger.error(f'Tag consolidation failed: {e}')
+            raise PipelineError(f'Tag consolidation failed: {e}') from e
+
+    def suggest_additional_tags(self) -> dict[str, Any]:
+        """
+        Suggest additional relevant tags for all articles using existing tag vocabulary.
+
+        This method suggests additional tags for articles based on their abstracts
+        and the existing tag vocabulary in the citation graph.
+
+        Returns:
+            dict[str, Any]: Summary statistics of the tag suggestion process,
+                           including counts of articles processed and tags added.
+
+        Example:
+            >>> pipeline = ThothPipeline()
+            >>> stats = pipeline.suggest_additional_tags()
+            >>> print(f'Processed {stats["articles_processed"]} articles')
+            >>> print(f'Added {stats["tags_added"]} new tags')
+        """
+        if not self.citation_tracker:
+            logger.error(
+                'CitationTracker is not initialized. Cannot suggest additional tags.'
+            )
+            return {
+                'articles_processed': 0,
+                'articles_updated': 0,
+                'tags_added': 0,
+                'vocabulary_size': 0,
+            }
+
+        logger.info('Pipeline initiating tag suggestion process.')
+
+        try:
+            # Step 1: Extract all existing tags to use as vocabulary
+            available_tags = self.tag_consolidator.extract_all_tags_from_graph(
+                self.citation_tracker
+            )
+            if not available_tags:
+                logger.warning(
+                    'No existing tags found in the citation graph to use as vocabulary'
+                )
+                return {
+                    'articles_processed': 0,
+                    'articles_updated': 0,
+                    'tags_added': 0,
+                    'vocabulary_size': 0,
+                }
+
+            logger.info(
+                f'Using {len(available_tags)} tags as vocabulary for suggestions (includes canonical, category, and aggregate tags)'
+            )
+
+            # Step 2: Process each article for tag suggestions
+            articles_processed = 0
+            articles_updated = 0
+            total_tags_added = 0
+
+            for article_id, node_data in self.citation_tracker.graph.nodes(data=True):
+                analysis_dict = node_data.get('analysis')
+                metadata = node_data.get('metadata', {})
+
+                if not analysis_dict:
+                    logger.trace(
+                        f'No analysis data found for article {article_id}, skipping'
+                    )
+                    continue
+
+                # Get article info
+                title = metadata.get('title', article_id)
+                abstract = analysis_dict.get('abstract', '')
+                current_tags = analysis_dict.get('tags', [])
+
+                # Skip if no abstract available
+                if not abstract:
+                    logger.debug(
+                        f'No abstract available for article "{title}", skipping tag suggestions'
+                    )
+                    articles_processed += 1
+                    continue
+
+                # Suggest additional tags
+                try:
+                    suggestion_response = self.tag_consolidator.suggest_additional_tags(
+                        title=title,
+                        abstract=abstract,
+                        current_tags=current_tags or [],
+                        available_tags=available_tags,
+                    )
+                    suggested_tags = suggestion_response.suggested_tags
+
+                    if suggested_tags:
+                        # Combine current tags with suggested tags and remove duplicates
+                        final_tags = list(
+                            dict.fromkeys((current_tags or []) + suggested_tags)
+                        )
+
+                        # Update the analysis with new tags
+                        analysis_dict['tags'] = final_tags
+                        articles_updated += 1
+                        total_tags_added += len(suggested_tags)
+
+                        logger.info(
+                            f'Added {len(suggested_tags)} tags to "{title}": {suggested_tags}'
+                        )
+
+                except Exception as e:
+                    logger.warning(
+                        f'Failed to suggest tags for article {article_id}: {e}'
+                    )
+
+                # Step 3e: Save the updated graph
+                if articles_updated > 0:
+                    self.citation_tracker._save_graph()
+                    logger.info('Saved updated citation graph with suggested tags')
+
+                articles_processed += 1
+
+            # Step 4: Return summary statistics
+            stats = {
+                'articles_processed': articles_processed,
+                'articles_updated': articles_updated,
+                'tags_added': total_tags_added,
+                'vocabulary_size': len(available_tags),
+            }
+
+            logger.info(
+                f'Tag suggestion completed. '
+                f'Processed {articles_processed} articles, '
+                f'updated {articles_updated} articles, '
+                f'added {total_tags_added} new tags.'
+            )
+
+            return stats
+
+        except Exception as e:
+            logger.error(f'Tag suggestion failed: {e}')
+            raise PipelineError(f'Tag suggestion failed: {e}') from e
+
+    def consolidate_and_retag_all_articles(self) -> dict[str, Any]:
+        """
+        Consolidate existing tags and suggest additional relevant tags for all articles.
+
+        This method performs a complete tag consolidation and re-tagging process:
+        1. Extracts all existing tags from the citation graph
+        2. Consolidates similar tags into canonical forms using LLM analysis
+        3. Updates existing articles with their consolidated tag equivalents
+        4. Suggests additional relevant tags for each article based on abstracts
+        5. Updates the citation graph with the enhanced tag information
+
+        Returns:
+            dict[str, Any]: Summary statistics of the consolidation and re-tagging
+                process, including counts of articles processed, tags consolidated,
+                and tags added.
+
+        Example:
+            >>> pipeline = ThothPipeline()
+            >>> stats = pipeline.consolidate_and_retag_all_articles()
+            >>> print(f'Processed {stats["articles_processed"]} articles')
+            >>> print(f'Consolidated {stats["tags_consolidated"]} tags')
+            >>> print(f'Added {stats["tags_added"]} new tags')
+        """
+        if not self.citation_tracker:
+            logger.error(
+                'CitationTracker is not initialized. Cannot consolidate and retag articles.'
+            )
+            return {
+                'articles_processed': 0,
+                'tags_consolidated': 0,
+                'tags_added': 0,
+                'original_tag_count': 0,
+                'final_tag_count': 0,
+            }
+
+        logger.info('Pipeline initiating tag consolidation and re-tagging process.')
+
+        try:
+            # Step 1: Extract all existing tags
+            existing_tags = self.tag_consolidator.extract_all_tags_from_graph(
+                self.citation_tracker
+            )
+            if not existing_tags:
+                logger.warning('No existing tags found in the citation graph')
+                return {
+                    'articles_processed': 0,
+                    'tags_consolidated': 0,
+                    'tags_added': 0,
+                    'original_tag_count': 0,
+                    'final_tag_count': 0,
+                }
+
+            # Step 2: Consolidate tags
+            consolidation_response = self.tag_consolidator.consolidate_tags(
+                existing_tags
+            )
+            all_available_tags = consolidation_response.consolidated_tags
+
+            # Step 3: Process each article
+            articles_processed = 0
+            articles_updated = 0
+            total_tags_added = 0
+
+            for article_id, node_data in self.citation_tracker.graph.nodes(data=True):
+                analysis_dict = node_data.get('analysis')
+                metadata = node_data.get('metadata', {})
+
+                if not analysis_dict:
+                    logger.debug(
+                        f'No analysis data found for article {article_id}, skipping'
+                    )
+                    continue
+
+                # Get article info
+                title = metadata.get('title', article_id)
+                abstract = analysis_dict.get('abstract', '')
+                current_tags = analysis_dict.get('tags', [])
+
+                # Step 3a: Apply tag consolidation mappings to current tags
+                updated_tags = []
+                for tag in current_tags or []:
+                    canonical_tag = consolidation_response.tag_mappings.get(tag, tag)
+                    updated_tags.append(canonical_tag)
+
+                # Step 3b: Suggest additional tags if we have an abstract
+                additional_tags = []
+                if abstract and all_available_tags:
+                    try:
+                        suggestion_response = (
+                            self.tag_consolidator.suggest_additional_tags(
+                                title=title,
+                                abstract=abstract,
+                                current_tags=updated_tags,
+                                available_tags=all_available_tags,
+                            )
+                        )
+                        additional_tags = suggestion_response.suggested_tags
+                        total_tags_added += len(additional_tags)
+                    except Exception as e:
+                        logger.warning(
+                            f'Failed to suggest tags for article {article_id}: {e}'
+                        )
+
+                # Step 3c: Combine and deduplicate tags
+                final_tags = list(dict.fromkeys(updated_tags + additional_tags))
+
+                # Step 3d: Update the analysis with new tags
+                if final_tags != current_tags:
+                    analysis_dict['tags'] = final_tags
+                    articles_updated += 1
+                    logger.info(
+                        f'Updated tags for "{title}": {len(current_tags or [])} -> {len(final_tags)} tags'
+                    )
+
+                articles_processed += 1
+
+                # Step 3e: Save the updated graph
+                if articles_updated > 0:
+                    self.citation_tracker._save_graph()
+                    logger.info('Saved updated citation graph with consolidated tags')
+
+            # Step 5: Return summary statistics
+            stats = {
+                'articles_processed': articles_processed,
+                'articles_updated': articles_updated,
+                'tags_consolidated': len(consolidation_response.tag_mappings),
+                'tags_added': total_tags_added,
+                'original_tag_count': len(existing_tags),
+                'final_tag_count': len(all_available_tags),
+                'consolidation_mappings': consolidation_response.tag_mappings,
+                'all_available_tags': all_available_tags,
+                'total_vocabulary_size': len(all_available_tags),
+            }
+
+            logger.info(
+                f'Pipeline completed tag consolidation and re-tagging. '
+                f'Processed {articles_processed} articles, '
+                f'updated {articles_updated} articles, '
+                f'consolidated {len(consolidation_response.tag_mappings)} tags, '
+                f'added {total_tags_added} new tags.'
+            )
+
+            return stats
+
+        except Exception as e:
+            logger.error(f'Tag consolidation and re-tagging failed: {e}')
+            raise PipelineError(f'Tag consolidation and re-tagging failed: {e}') from e
 
 
 # Example usage

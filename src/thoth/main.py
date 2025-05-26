@@ -109,6 +109,24 @@ def parse_args():
         help='Regenerate all markdown notes for all articles in the graph.',
     )
 
+    # Consolidate tags command
+    consolidate_tags_parser = subparsers.add_parser(  # noqa: F841
+        'consolidate-tags',
+        help='Consolidate existing tags and suggest additional relevant tags for all articles in the graph.',
+    )
+
+    # Consolidate tags only command (new)
+    consolidate_tags_only_parser = subparsers.add_parser(  # noqa: F841
+        'consolidate-tags-only',
+        help='Consolidate existing tags without suggesting additional tags.',
+    )
+
+    # Suggest tags command (new)
+    suggest_tags_parser = subparsers.add_parser(  # noqa: F841
+        'suggest-tags',
+        help='Suggest additional relevant tags for all articles using existing tag vocabulary.',
+    )
+
     return parser.parse_args()
 
 
@@ -378,6 +396,161 @@ def run_api_server(args):
         return 1
 
 
+def run_consolidate_tags(args):  # noqa: ARG001
+    """
+    Consolidate existing tags and suggest additional relevant tags for all articles.
+
+    This function performs a complete tag consolidation and re-tagging process
+    across all articles in the citation graph.
+
+    Args:
+        args: Command line arguments (not used in this function but part of the pattern).
+
+    Returns:
+        int: Exit code.
+    """  # noqa: W505
+    logger.info('Attempting to consolidate tags and retag all articles.')
+    config = get_config()
+
+    try:
+        pipeline = ThothPipeline(
+            ocr_api_key=config.api_keys.mistral_key,
+            llm_api_key=config.api_keys.openrouter_key,
+            templates_dir=Path(config.templates_dir),
+            prompts_dir=Path(config.prompts_dir),
+            output_dir=Path(config.output_dir),
+            notes_dir=Path(config.notes_dir),
+            api_base_url=config.api_server_config.base_url,
+        )
+
+        stats = pipeline.consolidate_and_retag_all_articles()
+
+        logger.info('Tag consolidation and re-tagging process completed successfully.')
+        logger.info('Summary statistics:')
+        logger.info(f'  - Articles processed: {stats["articles_processed"]}')
+        logger.info(f'  - Articles updated: {stats["articles_updated"]}')
+        logger.info(f'  - Tags consolidated: {stats["tags_consolidated"]}')
+        logger.info(f'  - Tags added: {stats["tags_added"]}')
+        logger.info(f'  - Original tag count: {stats["original_tag_count"]}')
+        logger.info(f'  - Final tag count: {stats["final_tag_count"]}')
+        logger.info(f'  - Total vocabulary size: {stats["total_vocabulary_size"]}')
+
+        if stats['consolidation_mappings']:
+            logger.info('Tag consolidation mappings:')
+            for old_tag, new_tag in stats['consolidation_mappings'].items():
+                if old_tag != new_tag:  # Only show actual changes
+                    logger.info(f'  {old_tag} -> {new_tag}')
+
+        logger.info(
+            f'All available tags in vocabulary ({len(stats["all_available_tags"])}):'
+        )
+        for tag in sorted(stats['all_available_tags']):
+            logger.info(f'  {tag}')
+
+        return 0
+    except Exception as e:
+        logger.error(f'Error during tag consolidation and re-tagging: {e}')
+        return 1
+
+
+def run_consolidate_tags_only(args):  # noqa: ARG001
+    """
+    Consolidate existing tags without suggesting additional tags.
+
+    This function performs only the tag consolidation process across all articles
+    in the citation graph, updating existing tags to their canonical forms.
+
+    Args:
+        args: Command line arguments (not used in this function but part of the pattern).
+
+    Returns:
+        int: Exit code.
+    """  # noqa: W505
+    logger.info('Attempting to consolidate existing tags only.')
+    config = get_config()
+
+    try:
+        pipeline = ThothPipeline(
+            ocr_api_key=config.api_keys.mistral_key,
+            llm_api_key=config.api_keys.openrouter_key,
+            templates_dir=Path(config.templates_dir),
+            prompts_dir=Path(config.prompts_dir),
+            output_dir=Path(config.output_dir),
+            notes_dir=Path(config.notes_dir),
+            api_base_url=config.api_server_config.base_url,
+        )
+
+        stats = pipeline.consolidate_tags_only()
+
+        logger.info('Tag consolidation process completed successfully.')
+        logger.info('Summary statistics:')
+        logger.info(f'  - Articles processed: {stats["articles_processed"]}')
+        logger.info(f'  - Articles updated: {stats["articles_updated"]}')
+        logger.info(f'  - Tags consolidated: {stats["tags_consolidated"]}')
+        logger.info(f'  - Original tag count: {stats["original_tag_count"]}')
+        logger.info(f'  - Final tag count: {stats["final_tag_count"]}')
+        logger.info(f'  - Total vocabulary size: {stats["total_vocabulary_size"]}')
+
+        if stats['consolidation_mappings']:
+            logger.info('Tag consolidation mappings:')
+            for old_tag, new_tag in stats['consolidation_mappings'].items():
+                if old_tag != new_tag:  # Only show actual changes
+                    logger.info(f'  {old_tag} -> {new_tag}')
+
+        logger.info(
+            f'All available tags in vocabulary ({len(stats["all_available_tags"])}):'
+        )
+        for tag in sorted(stats['all_available_tags']):
+            logger.info(f'  {tag}')
+
+        return 0
+    except Exception as e:
+        logger.error(f'Error during tag consolidation: {e}')
+        return 1
+
+
+def run_suggest_tags(args):  # noqa: ARG001
+    """
+    Suggest additional relevant tags for all articles using existing tag vocabulary.
+
+    This function suggests additional tags for articles based on their abstracts
+    and the existing tag vocabulary in the citation graph.
+
+    Args:
+        args: Command line arguments (not used in this function but part of the pattern).
+
+    Returns:
+        int: Exit code.
+    """  # noqa: W505
+    logger.info('Attempting to suggest additional tags for all articles.')
+    config = get_config()
+
+    try:
+        pipeline = ThothPipeline(
+            ocr_api_key=config.api_keys.mistral_key,
+            llm_api_key=config.api_keys.openrouter_key,
+            templates_dir=Path(config.templates_dir),
+            prompts_dir=Path(config.prompts_dir),
+            output_dir=Path(config.output_dir),
+            notes_dir=Path(config.notes_dir),
+            api_base_url=config.api_server_config.base_url,
+        )
+
+        stats = pipeline.suggest_additional_tags()
+
+        logger.info('Tag suggestion process completed successfully.')
+        logger.info('Summary statistics:')
+        logger.info(f'  - Articles processed: {stats["articles_processed"]}')
+        logger.info(f'  - Articles updated: {stats["articles_updated"]}')
+        logger.info(f'  - Tags added: {stats["tags_added"]}')
+        logger.info(f'  - Available tag vocabulary size: {stats["vocabulary_size"]}')
+
+        return 0
+    except Exception as e:
+        logger.error(f'Error during tag suggestion: {e}')
+        return 1
+
+
 def main():
     """
     Main entry point.
@@ -397,6 +570,12 @@ def main():
         return run_reprocess_note(args)
     elif args.command == 'regenerate-all-notes':
         return run_regenerate_all_notes(args)
+    elif args.command == 'consolidate-tags':
+        return run_consolidate_tags(args)
+    elif args.command == 'consolidate-tags-only':
+        return run_consolidate_tags_only(args)
+    elif args.command == 'suggest-tags':
+        return run_suggest_tags(args)
     else:
         logger.error('No command specified')
         return 1

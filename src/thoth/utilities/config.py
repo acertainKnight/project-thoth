@@ -114,6 +114,32 @@ class CitationLLMConfig(BaseSettings):
     )
 
 
+class TagConsolidatorLLMConfig(BaseSettings):
+    """Configuration for the LLM used specifically for tag consolidation."""
+
+    model_config = SettingsConfigDict(
+        env_prefix='TAG_LLM_',
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='allow',
+    )
+    consolidate_model: str = Field(..., description='Tag consolidator LLM model')
+    suggest_model: str = Field(..., description='Tag suggestor LLM model')
+    map_model: str = Field(..., description='Tag mapper LLM model')
+    model_settings: ModelConfig = Field(
+        default_factory=ModelConfig, description='Tag consolidator model configuration'
+    )
+    max_output_tokens: int = Field(
+        10000,
+        description='Tag consolidator LLM max tokens for generation (typically for smaller, focused outputs)',
+    )
+    max_context_length: int = Field(
+        8000,
+        description='Tag consolidator LLM max context length for model',
+    )
+
+
 class CitationConfig(BaseSettings):
     """Configuration for citations."""
 
@@ -248,6 +274,10 @@ class ThothConfig(BaseSettings):
     )
     citation_llm_config: CitationLLMConfig = Field(
         default_factory=CitationLLMConfig, description='Citation LLM configuration'
+    )
+    tag_consolidator_llm_config: TagConsolidatorLLMConfig = Field(
+        default_factory=TagConsolidatorLLMConfig,
+        description='Tag consolidator LLM configuration',
     )
     citation_config: CitationConfig = Field(
         default_factory=CitationConfig, description='Citation configuration'

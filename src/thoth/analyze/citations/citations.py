@@ -671,7 +671,7 @@ class CitationProcessor:
             # Put document_citation in a list to use the lookup helpers
             temp_doc_citation_list = [document_citation]
             enhanced_doc_citation = None
-
+            document_citation.url = None
             has_identifier, has_missing_fields = self._check_citation(document_citation)
 
             if (
@@ -762,6 +762,8 @@ class CitationProcessor:
         if reference_citations:
             logger.info(f'Enhancing {len(reference_citations)} reference citations.')
             citations_to_process_further = []
+            for citation in reference_citations:
+                citation.url = None
 
             # First pass with Semantic Scholar if enabled
             if self.use_semanticscholar and self.semanticscholar_tool:

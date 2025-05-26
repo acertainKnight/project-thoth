@@ -521,3 +521,127 @@ class ArxivPaper(BaseModel):
     journal_ref: str | None = Field(description='Journal reference', default=None)
     doi: str | None = Field(description='Digital Object Identifier', default=None)
     citation_count: int | None = Field(description='Number of citations', default=None)
+
+
+class TagConsolidationResponse(BaseModel):
+    """Schema for tag consolidation response from LLM.
+
+    This model represents the response from the LLM when consolidating similar
+    tags across the citation graph to create a unified tagging system.
+
+    Args:
+        tag_mappings: Dictionary mapping old tags to their canonical equivalents
+        consolidated_tags: List of all unique canonical tags after consolidation
+        reasoning: Dictionary explaining the reasoning for each canonical tag choice
+
+    Example:
+        >>> response = TagConsolidationResponse(
+        ...     tag_mappings={
+        ...         '#ml': '#machine_learning',
+        ...         '#ai': '#artificial_intelligence',
+        ...     },
+        ...     consolidated_tags=['#machine_learning', '#artificial_intelligence'],
+        ...     reasoning={
+        ...         '#machine_learning': 'Chose as canonical over abbreviation #ml'
+        ...     },
+        ... )
+    """
+
+    tag_mappings: dict[str, str] = Field(
+        description='Dictionary mapping ALL input tags to their canonical equivalents (including tags that map to themselves)',
+        default_factory=dict,
+    )
+    consolidated_tags: list[str] = Field(
+        description='List of all unique canonical tags after consolidation'
+    )
+    reasoning: str = Field(
+        description='Text explaining the reasoning for each canonical tag choice and new tag suggestions',
+        default='',
+    )
+
+
+class ConsolidatedTagsResponse(BaseModel):
+    """Schema for getting the consolidated list of canonical tags (first step).
+
+    This model represents the response from the LLM when identifying which tags
+    should be the canonical tags after consolidation, without worrying about mappings.
+    Also includes suggestions for new category-level and aggregate tags.
+
+    Args:
+        consolidated_tags: List of all unique canonical tags after consolidation
+        suggested_category_tags: List of new broader category tags for organization
+        suggested_aggregate_tags: List of new cross-cutting aggregate tags
+        reasoning: Dictionary explaining the reasoning for each canonical tag choice and
+        new tag suggestions
+
+    Example:
+        >>> response = ConsolidatedTagsResponse(
+        ...     consolidated_tags=['#machine_learning', '#artificial_intelligence'],
+        ...     suggested_category_tags=['#ai_methods', '#computational_intelligence'],
+        ...     suggested_aggregate_tags=['#data_science', '#pattern_recognition'],
+        ...     reasoning={
+        ...         '#machine_learning': 'Chose as canonical for ML-related tags'
+        ...     },
+        ... )
+    """
+
+    consolidated_tags: list[str] = Field(
+        description='List of all unique canonical tags after consolidation'
+    )
+    suggested_category_tags: list[str] = Field(
+        description='List of new broader category tags that would help organize the canonical tags',
+        default_factory=list,
+    )
+    suggested_aggregate_tags: list[str] = Field(
+        description='List of new cross-cutting aggregate tags that combine related concepts',
+        default_factory=list,
+    )
+    reasoning: str = Field(
+        description='Text explaining the reasoning for each canonical tag choice and new tag suggestions',
+        default='',
+    )
+
+
+class SingleTagMappingResponse(BaseModel):
+    """Schema for mapping a single tag to its canonical form (second step).
+
+    This model represents the response when asking the LLM to map one specific
+    tag to its canonical equivalent from a provided list.
+
+    Args:
+        canonical_tag: The canonical tag that the original tag should map to
+
+    Example:
+        >>> response = SingleTagMappingResponse(canonical_tag='#machine_learning')
+    """
+
+    canonical_tag: str = Field(
+        description='The canonical tag that the original tag should map to'
+    )
+
+
+class TagSuggestionResponse(BaseModel):
+    """Schema for additional tag suggestions response from LLM.
+
+    This model represents the response from the LLM when suggesting additional
+    relevant tags for an article based on its abstract and existing tag vocabulary.
+
+    Args:
+        suggested_tags: List of additional relevant tags from the existing vocabulary
+        reasoning: Text explaining why each suggested tag is relevant to the article
+
+    Example:
+        >>> response = TagSuggestionResponse(
+        ...     suggested_tags=['#deep_learning', '#computer_vision'],
+        ...     reasoning='Article uses neural networks extensively',
+        ... )
+    """
+
+    suggested_tags: list[str] = Field(
+        description='List of additional relevant tags from the existing vocabulary',
+        default_factory=list,
+    )
+    reasoning: str = Field(
+        description='Text explaining why each suggested tag is relevant to the article',
+        default='',
+    )

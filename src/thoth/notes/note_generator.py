@@ -10,6 +10,7 @@ import urllib.parse
 from pathlib import Path
 from typing import Any
 
+import requests  # Added for URL accessibility check
 from jinja2 import Environment, FileSystemLoader
 from loguru import logger
 
@@ -300,7 +301,16 @@ class NoteGenerator:
                             markdown_link_for_citation = self._create_file_link(
                                 str(full_note_path), link_text
                             )
-                        elif cit_obj.url:  # Prioritize the citation's direct URL
+                        elif (
+                            cit_obj.url
+                            and isinstance(cit_obj.url, str)
+                            and cit_obj.url.strip()
+                            and (
+                                cit_obj.url.startswith('http://')
+                                or cit_obj.url.startswith('https://')
+                            )
+                            and self._is_url_accessible(cit_obj.url)
+                        ):  # Prioritize the citation's direct URL
                             uri_target = cit_obj.url
                             markdown_link_for_citation = f'[{link_text}]({uri_target})'
                         elif citation_id:  # Fallback to current API/thoth URI linking
@@ -625,3 +635,33 @@ ${source_files}
             f'Predicted note path for citation "{citation.title}": {expected_note_path}'
         )
         return expected_note_path
+
+    def _is_url_accessible(self, url: str, timeout: float = 3.0) -> bool:
+        """
+        Check if a URL is accessible by sending a HEAD request.
+
+        Args:
+            url (str): The URL to check.
+            timeout (float): Timeout in seconds for the request (default is 3.0).
+
+        Returns:
+            bool: True if the URL is reachable (status code 200-399 or 429), False
+                otherwise.
+
+        Notes:
+            HTTP 429 (rate limit) is considered accessible, as are all 2xx/3xx
+            responses. Only 4xx/5xx errors except 429 are considered inaccessible.
+
+        Example:
+            >>> self._is_url_accessible('https://example.com')
+            True
+        """
+        try:
+            response = requests.head(url, allow_redirects=True, timeout=timeout)
+            # Accept 2xx, 3xx, and 429 (rate limit) as accessible
+            if 200 <= response.status_code < 400 or response.status_code == 429:
+                return True
+            return False
+        except requests.RequestException as exc:
+            logger.warning(f'URL not accessible: {url} ({exc})')
+            return False
