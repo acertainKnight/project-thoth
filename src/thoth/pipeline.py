@@ -15,9 +15,9 @@ from loguru import logger
 
 from thoth.analyze.citations.citations import CitationProcessor
 from thoth.analyze.citations.formatter import CitationFormatter
-from thoth.analyze.citations.tracker import CitationTracker
 from thoth.analyze.llm_processor import AnalysisResponse, LLMProcessor
 from thoth.analyze.tag_consolidator import TagConsolidator
+from thoth.monitor.tracker import CitationTracker
 from thoth.notes.note_generator import NoteGenerator
 from thoth.ocr.ocr_manager import MistralOCR, OCRError
 from thoth.utilities.config import get_config
