@@ -1,0 +1,40 @@
+{
+  "name": "deep_learning_nlp",
+  "description": "Deep learning approaches to natural language processing",
+  "research_question": "How are modern deep learning architectures being applied to NLP tasks?",
+  "keywords": [
+    "transformer",
+    "attention",
+    "BERT",
+    "GPT",
+    "neural language model",
+    "deep learning",
+    "natural language processing"
+  ],
+  "required_topics": [
+    "natural language processing",
+    "deep learning"
+  ],
+  "preferred_topics": [
+    "transformer architecture",
+    "attention mechanisms",
+    "language modeling",
+    "text classification",
+    "machine translation"
+  ],
+  "excluded_topics": [
+    "computer vision",
+    "robotics",
+    "hardware optimization"
+  ],
+  "methodology_preferences": [
+    "experimental evaluation",
+    "benchmark datasets",
+    "ablation studies"
+  ],
+  "publication_date_range": null,
+  "minimum_relevance_score": 0.7,
+  "created_at": "2025-05-25T22:08:14.205978",
+  "updated_at": "2025-05-25T22:08:14.205978",
+  "is_active": true
+}

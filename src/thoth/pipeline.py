@@ -139,6 +139,9 @@ class ThothPipeline:
         # Tag Consolidator (initialized lazily when needed)
         self._tag_consolidator = None
 
+        # Scrape Filter (initialized lazily when needed)
+        self._scrape_filter = None
+
         logger.info('Thoth pipeline initialized')
 
     @property
@@ -159,6 +162,34 @@ class ThothPipeline:
                 model_kwargs=self.config.tag_consolidator_llm_config.model_settings.model_dump(),
             )
         return self._tag_consolidator
+
+    @property
+    def scrape_filter(self):
+        """
+        Lazy initialization of ScrapeFilter.
+
+        Returns:
+            ScrapeFilter: The initialized scrape filter instance.
+        """
+        if self._scrape_filter is None:
+            from thoth.ingestion.agent import ResearchAssistantAgent
+            from thoth.ingestion.scrape_filter import ScrapeFilter
+
+            # Initialize with existing configuration
+            agent = ResearchAssistantAgent(
+                model=self.config.llm_config.model,
+                openrouter_api_key=self.config.api_keys.openrouter_key,
+                prompts_dir=self.prompts_dir,
+                queries_dir=self.config.queries_dir,
+                agent_storage_dir=self.config.agent_storage_dir,
+                model_kwargs=self.config.llm_config.model_settings.model_dump(),
+            )
+
+            self._scrape_filter = ScrapeFilter(
+                agent=agent,
+                agent_storage_dir=self.config.agent_storage_dir,
+            )
+        return self._scrape_filter
 
     def process_pdf(self, pdf_path: str | Path) -> Path:
         """

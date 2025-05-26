@@ -1,0 +1,28 @@
+{
+  "name": "natural_language_processing",
+  "description": "Natural language processing and computational linguistics",
+  "research_question": "How are NLP techniques being advanced?",
+  "keywords": [
+    "NLP",
+    "natural language processing",
+    "transformer",
+    "language model"
+  ],
+  "required_topics": [
+    "natural language processing"
+  ],
+  "preferred_topics": [
+    "language modeling",
+    "text classification"
+  ],
+  "excluded_topics": [
+    "computer vision",
+    "robotics"
+  ],
+  "methodology_preferences": [],
+  "publication_date_range": null,
+  "minimum_relevance_score": 0.7,
+  "created_at": "2025-05-25T22:33:18.412770",
+  "updated_at": "2025-05-25T22:33:18.412770",
+  "is_active": true
+}

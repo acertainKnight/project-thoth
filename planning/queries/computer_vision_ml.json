@@ -1,0 +1,36 @@
+{
+  "name": "computer_vision_ml",
+  "description": "Machine learning approaches to computer vision problems",
+  "research_question": "What are the latest advances in computer vision using machine learning?",
+  "keywords": [
+    "computer vision",
+    "convolutional neural network",
+    "CNN",
+    "image classification",
+    "object detection",
+    "deep learning"
+  ],
+  "required_topics": [
+    "computer vision",
+    "machine learning"
+  ],
+  "preferred_topics": [
+    "image recognition",
+    "object detection",
+    "semantic segmentation",
+    "neural networks"
+  ],
+  "excluded_topics": [
+    "natural language processing",
+    "audio processing"
+  ],
+  "methodology_preferences": [
+    "experimental validation",
+    "benchmark evaluation"
+  ],
+  "publication_date_range": null,
+  "minimum_relevance_score": 0.6,
+  "created_at": "2025-05-25T22:08:14.206391",
+  "updated_at": "2025-05-25T22:08:14.206391",
+  "is_active": true
+}

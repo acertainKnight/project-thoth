@@ -1,0 +1,28 @@
+{
+  "name": "machine_learning_general",
+  "description": "General machine learning research papers",
+  "research_question": "What are the latest advances in machine learning?",
+  "keywords": [
+    "machine learning",
+    "neural network",
+    "deep learning",
+    "AI"
+  ],
+  "required_topics": [
+    "machine learning"
+  ],
+  "preferred_topics": [
+    "neural networks",
+    "deep learning"
+  ],
+  "excluded_topics": [
+    "pure mathematics",
+    "theoretical physics"
+  ],
+  "methodology_preferences": [],
+  "publication_date_range": null,
+  "minimum_relevance_score": 0.6,
+  "created_at": "2025-05-25T22:33:18.412242",
+  "updated_at": "2025-05-25T22:33:18.412242",
+  "is_active": true
+}
