@@ -127,6 +127,17 @@ def parse_args():
         help='Suggest additional relevant tags for all articles using existing tag vocabulary.',
     )
 
+    # Scrape filter command
+    scrape_filter_parser = subparsers.add_parser(
+        'scrape-filter',
+        help='Test the scrape filter with sample articles',
+    )
+    scrape_filter_parser.add_argument(
+        '--create-sample-queries',
+        action='store_true',
+        help='Create sample research queries for testing',
+    )
+
     return parser.parse_args()
 
 
@@ -305,11 +316,12 @@ def run_regenerate_all_notes(args):  # noqa: ARG001
     and update the processed files database.
 
     Args:
-        args: Command line arguments (not used in this function but part of the pattern).
+        args: Command line arguments (not used in this function but part of the
+            pattern).
 
     Returns:
         int: Exit code.
-    """  # noqa: W505
+    """
     logger.info('Attempting to regenerate all notes for all articles.')
     config = get_config()
 
@@ -404,11 +416,12 @@ def run_consolidate_tags(args):  # noqa: ARG001
     across all articles in the citation graph.
 
     Args:
-        args: Command line arguments (not used in this function but part of the pattern).
+        args: Command line arguments (not used in this function but part of the
+            pattern).
 
     Returns:
         int: Exit code.
-    """  # noqa: W505
+    """
     logger.info('Attempting to consolidate tags and retag all articles.')
     config = get_config()
 
@@ -461,11 +474,12 @@ def run_consolidate_tags_only(args):  # noqa: ARG001
     in the citation graph, updating existing tags to their canonical forms.
 
     Args:
-        args: Command line arguments (not used in this function but part of the pattern).
+        args: Command line arguments (not used in this function but part of the
+            pattern).
 
     Returns:
         int: Exit code.
-    """  # noqa: W505
+    """
     logger.info('Attempting to consolidate existing tags only.')
     config = get_config()
 
@@ -517,11 +531,12 @@ def run_suggest_tags(args):  # noqa: ARG001
     and the existing tag vocabulary in the citation graph.
 
     Args:
-        args: Command line arguments (not used in this function but part of the pattern).
+        args: Command line arguments (not used in this function but part of the
+            pattern).
 
     Returns:
         int: Exit code.
-    """  # noqa: W505
+    """
     logger.info('Attempting to suggest additional tags for all articles.')
     config = get_config()
 

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import Any, Literal, TypedDict
 
 from langchain.schema import Document
 from pydantic import BaseModel, Field, field_validator
@@ -644,4 +644,420 @@ class TagSuggestionResponse(BaseModel):
     reasoning: str = Field(
         description='Text explaining why each suggested tag is relevant to the article',
         default='',
+    )
+
+
+class ResearchQuery(BaseModel):
+    """Schema for a research query that defines what kinds of articles to collect.
+
+    This model represents a structured research query that can be used to evaluate
+    whether articles meet specific research interests and criteria.
+
+    Args:
+        name: Unique name/identifier for this query
+        description: Human-readable description of what this query is looking for
+        research_question: The main research question or interest area
+        keywords: List of important keywords that should be present
+        required_topics: Topics that must be present in relevant articles
+        preferred_topics: Topics that are preferred but not required
+        excluded_topics: Topics that should exclude an article
+        methodology_preferences: Preferred research methodologies
+        publication_date_range: Date range for relevant publications
+        minimum_relevance_score: Minimum score (0-1) for an article to be
+            considered relevant
+        created_at: When this query was created
+        updated_at: When this query was last modified
+        is_active: Whether this query is currently being used for filtering
+
+    Example:
+        >>> query = ResearchQuery(
+        ...     name='deep_learning_nlp',
+        ...     description='Deep learning approaches to natural language processing',
+        ...     research_question='How are transformer architectures being applied to
+        ...     NLP tasks?',
+        ...     keywords=['transformer', 'attention', 'BERT', 'GPT'],
+        ...     required_topics=['natural language processing', 'deep learning'],
+        ...     preferred_topics=['transformer architecture', 'attention mechanisms'],
+        ...     excluded_topics=['computer vision', 'robotics'],
+        ...     minimum_relevance_score=0.7,
+        ... )
+    """
+
+    name: str = Field(description='Unique name/identifier for this query')
+    description: str = Field(
+        description='Human-readable description of what this query is looking for'
+    )
+    research_question: str = Field(
+        description='The main research question or interest area'
+    )
+    keywords: list[str] = Field(
+        description='List of important keywords that should be present',
+        default_factory=list,
+    )
+    required_topics: list[str] = Field(
+        description='Topics that must be present in relevant articles',
+        default_factory=list,
+    )
+    preferred_topics: list[str] = Field(
+        description='Topics that are preferred but not required',
+        default_factory=list,
+    )
+    excluded_topics: list[str] = Field(
+        description='Topics that should exclude an article', default_factory=list
+    )
+    methodology_preferences: list[str] = Field(
+        description='Preferred research methodologies', default_factory=list
+    )
+    publication_date_range: dict[str, str] | None = Field(
+        description='Date range for relevant publications (start_date, end_date)',
+        default=None,
+    )
+    minimum_relevance_score: float = Field(
+        description='Minimum score (0-1) for an article to be considered relevant',
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+    )
+    created_at: str | None = Field(
+        description='When this query was created', default=None
+    )
+    updated_at: str | None = Field(
+        description='When this query was last modified', default=None
+    )
+    is_active: bool = Field(
+        description='Whether this query is currently being used for filtering',
+        default=True,
+    )
+
+    @field_validator('name')
+    def validate_name(cls, name: str) -> str:  # noqa: N805
+        """Validate that the name is a valid filename."""
+        # Remove or replace invalid filename characters
+        import re
+
+        clean_name = re.sub(r'[^\w\-_.]', '_', name.lower())
+        return clean_name
+
+
+class QueryEvaluationResponse(BaseModel):
+    """Schema for evaluating how well an article matches a research query.
+
+    This model represents the LLM's evaluation of whether an article meets
+    the criteria defined in a research query.
+
+    Args:
+        relevance_score: Overall relevance score from 0.0 to 1.0
+        meets_criteria: Whether the article meets the minimum criteria
+        keyword_matches: List of keywords from the query that were found
+        topic_analysis: Analysis of how well the article matches required/preferred
+            topics
+        methodology_match: How well the article's methodology matches preferences
+        reasoning: Detailed explanation of the evaluation
+        recommendation: Whether to keep, reject, or review the article
+        confidence: Confidence level in the evaluation (0.0 to 1.0)
+
+    Example:
+        >>> evaluation = QueryEvaluationResponse(
+        ...     relevance_score=0.85,
+        ...     meets_criteria=True,
+        ...     keyword_matches=['transformer', 'attention'],
+        ...     topic_analysis='Strong match for NLP and deep learning topics',
+        ...     recommendation='keep',
+        ...     confidence=0.9,
+        ... )
+    """
+
+    relevance_score: float = Field(
+        description='Overall relevance score from 0.0 to 1.0', ge=0.0, le=1.0
+    )
+    meets_criteria: bool = Field(
+        description='Whether the article meets the minimum criteria'
+    )
+    keyword_matches: list[str] = Field(
+        description='List of keywords from the query that were found',
+        default_factory=list,
+    )
+    topic_analysis: str = Field(
+        description='Analysis of how well the article matches required/preferred topics'
+    )
+    methodology_match: str | None = Field(
+        description="How well the article's methodology matches preferences",
+        default=None,
+    )
+    reasoning: str = Field(description='Detailed explanation of the evaluation')
+    recommendation: Literal['keep', 'reject', 'review'] = Field(
+        description='Whether to keep, reject, or review the article'
+    )
+    confidence: float = Field(
+        description='Confidence level in the evaluation (0.0 to 1.0)',
+        ge=0.0,
+        le=1.0,
+        default=0.8,
+    )
+
+
+class QueryRefinementSuggestion(BaseModel):
+    """Schema for suggestions on how to improve a research query.
+
+    This model represents suggestions from the LLM on how to refine or improve
+    a research query based on analysis of articles and user feedback.
+
+    Args:
+        suggested_keywords: New keywords to add to the query
+        suggested_topics: New topics to consider
+        refinement_reasoning: Explanation of why these refinements are suggested
+        query_improvements: Specific improvements to the research question
+        methodology_suggestions: Suggestions for methodology preferences
+
+    Example:
+        >>> suggestion = QueryRefinementSuggestion(
+        ...     suggested_keywords=['BERT', 'fine-tuning'],
+        ...     suggested_topics=['transfer learning'],
+        ...     refinement_reasoning='Based on recent articles, these terms are
+        ...     commonly used',
+        ... )
+    """
+
+    suggested_keywords: list[str] = Field(
+        description='New keywords to add to the query', default_factory=list
+    )
+    suggested_topics: list[str] = Field(
+        description='New topics to consider', default_factory=list
+    )
+    refinement_reasoning: str = Field(
+        description='Explanation of why these refinements are suggested'
+    )
+    query_improvements: str | None = Field(
+        description='Specific improvements to the research question', default=None
+    )
+    methodology_suggestions: list[str] = Field(
+        description='Suggestions for methodology preferences', default_factory=list
+    )
+
+
+class ResearchAgentState(TypedDict):
+    """Represents the state of the research query agent conversation."""
+
+    # Current conversation context
+    user_message: str | None  # Current user input
+    agent_response: str | None  # Agent's response
+    conversation_history: list[dict[str, str]] | None  # Previous messages
+
+    # Query being worked on
+    current_query: ResearchQuery | None  # Query being created/edited
+    query_name: str | None  # Name of query being edited
+    available_queries: list[str] | None  # List of existing query names
+
+    # Article being evaluated
+    current_article: AnalysisResponse | None  # Article being evaluated
+    evaluation_result: QueryEvaluationResponse | None  # Evaluation result
+
+    # Agent actions and state
+    action: (
+        Literal[
+            'create_query',
+            'edit_query',
+            'evaluate_article',
+            'refine_query',
+            'list_queries',
+            'delete_query',
+            'chat',
+            'end',
+        ]
+        | None
+    )
+    needs_user_input: bool | None  # Whether agent is waiting for user input
+    error_message: str | None  # Any error that occurred
+
+
+class ScrapedArticleMetadata(BaseModel):
+    """Schema for scraped article metadata before PDF download.
+
+    This model represents the metadata extracted from article scraping
+    that will be used for initial filtering before downloading PDFs.
+
+    Args:
+        title: Title of the article
+        authors: List of authors
+        abstract: Abstract or summary of the article
+        publication_date: Publication date
+        journal: Journal or venue name
+        doi: Digital Object Identifier
+        arxiv_id: ArXiv identifier if applicable
+        url: URL to the article
+        pdf_url: Direct URL to PDF if available
+        keywords: Keywords associated with the article
+        source: Source where the article was scraped from
+        scrape_timestamp: When the article was scraped
+        additional_metadata: Any additional metadata from scraping
+
+    Example:
+        >>> metadata = ScrapedArticleMetadata(
+        ...     title='Deep Learning for Natural Language Processing',
+        ...     authors=['Smith, J.', 'Doe, A.'],
+        ...     abstract='This paper presents a novel approach...',
+        ...     journal='Nature Machine Intelligence',
+        ...     doi='10.1038/s42256-023-00123-4',
+        ...     source='arxiv',
+        ... )
+    """
+
+    title: str = Field(description='Title of the article')
+    authors: list[str] = Field(description='List of authors', default_factory=list)
+    abstract: str | None = Field(
+        description='Abstract or summary of the article', default=None
+    )
+    publication_date: str | None = Field(description='Publication date', default=None)
+    journal: str | None = Field(description='Journal or venue name', default=None)
+    doi: str | None = Field(description='Digital Object Identifier', default=None)
+    arxiv_id: str | None = Field(
+        description='ArXiv identifier if applicable', default=None
+    )
+    url: str | None = Field(description='URL to the article', default=None)
+    pdf_url: str | None = Field(
+        description='Direct URL to PDF if available', default=None
+    )
+    keywords: list[str] = Field(
+        description='Keywords associated with the article', default_factory=list
+    )
+    source: str = Field(description='Source where the article was scraped from')
+    scrape_timestamp: str | None = Field(
+        description='When the article was scraped', default=None
+    )
+    additional_metadata: dict[str, Any] = Field(
+        description='Any additional metadata from scraping', default_factory=dict
+    )
+
+    def to_analysis_response(self) -> AnalysisResponse:
+        """
+        Convert scraped metadata to AnalysisResponse format for evaluation.
+
+        Returns:
+            AnalysisResponse: Converted analysis response with available fields.
+
+        Example:
+            >>> metadata = ScrapedArticleMetadata(title='Test', abstract='Abstract')
+            >>> analysis = metadata.to_analysis_response()
+            >>> print(analysis.title)
+            'Test'
+        """
+        return AnalysisResponse(
+            abstract=self.abstract,
+            key_points=None,  # Not available from scraping
+            summary=self.abstract,  # Use abstract as summary
+            objectives=None,
+            methodology=None,
+            data=None,
+            experimental_setup=None,
+            evaluation_metrics=None,
+            results=None,
+            discussion=None,
+            strengths=None,
+            limitations=None,
+            future_work=None,
+            related_work=None,
+            tags=self.keywords if self.keywords else None,
+        )
+
+
+class PreDownloadEvaluationResponse(BaseModel):
+    """Schema for evaluating scraped article metadata before PDF download.
+
+    This model represents the evaluation of whether an article should be
+    downloaded based on its metadata (title, abstract, etc.).
+
+    Args:
+        relevance_score: Overall relevance score from 0.0 to 1.0
+        should_download: Whether the article should be downloaded
+        keyword_matches: List of keywords from the query that were found
+        topic_analysis: Analysis of how well the article matches required/preferred
+            topics
+        reasoning: Detailed explanation of the evaluation
+        confidence: Confidence level in the evaluation (0.0 to 1.0)
+        matching_queries: List of query names that recommend downloading
+
+    Example:
+        >>> evaluation = PreDownloadEvaluationResponse(
+        ...     relevance_score=0.85,
+        ...     should_download=True,
+        ...     keyword_matches=['machine learning', 'healthcare'],
+        ...     topic_analysis='Strong match for ML and healthcare topics',
+        ...     reasoning='Article clearly focuses on ML applications in healthcare',
+        ...     confidence=0.9,
+        ... )
+    """
+
+    relevance_score: float = Field(
+        description='Overall relevance score from 0.0 to 1.0', ge=0.0, le=1.0
+    )
+    should_download: bool = Field(
+        description='Whether the article should be downloaded'
+    )
+    keyword_matches: list[str] = Field(
+        description='List of keywords from the query that were found',
+        default_factory=list,
+    )
+    topic_analysis: str = Field(
+        description='Analysis of how well the article matches required/preferred topics'
+    )
+    reasoning: str = Field(description='Detailed explanation of the evaluation')
+    confidence: float = Field(
+        description='Confidence level in the evaluation (0.0 to 1.0)',
+        ge=0.0,
+        le=1.0,
+        default=0.8,
+    )
+    matching_queries: list[str] = Field(
+        description='List of query names that recommend downloading',
+        default_factory=list,
+    )
+
+
+class FilterLogEntry(BaseModel):
+    """Schema for logging article filtering decisions.
+
+    This model represents a log entry that records the filtering decision
+    for an article, including metadata and reasoning.
+
+    Args:
+        timestamp: When the filtering decision was made
+        article_metadata: The scraped article metadata
+        evaluation_result: The evaluation result
+        decision: Final decision (download/skip)
+        queries_evaluated: List of queries that were evaluated
+        pdf_downloaded: Whether PDF was successfully downloaded
+        pdf_path: Path where PDF was stored (if downloaded)
+        error_message: Any error that occurred during processing
+
+    Example:
+        >>> log_entry = FilterLogEntry(
+        ...     timestamp='2023-12-01T10:30:00',
+        ...     article_metadata=metadata,
+        ...     evaluation_result=evaluation,
+        ...     decision='download',
+        ...     queries_evaluated=['ml_healthcare'],
+        ... )
+    """
+
+    timestamp: str = Field(description='When the filtering decision was made')
+    article_metadata: ScrapedArticleMetadata = Field(
+        description='The scraped article metadata'
+    )
+    evaluation_result: PreDownloadEvaluationResponse = Field(
+        description='The evaluation result'
+    )
+    decision: Literal['download', 'skip'] = Field(
+        description='Final decision (download/skip)'
+    )
+    queries_evaluated: list[str] = Field(
+        description='List of queries that were evaluated', default_factory=list
+    )
+    pdf_downloaded: bool = Field(
+        description='Whether PDF was successfully downloaded', default=False
+    )
+    pdf_path: str | None = Field(
+        description='Path where PDF was stored (if downloaded)', default=None
+    )
+    error_message: str | None = Field(
+        description='Any error that occurred during processing', default=None
     )

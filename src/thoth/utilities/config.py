@@ -210,6 +210,72 @@ class MonitorConfig(BaseSettings):
     bulk_process_size: int = Field(10, description='Number of files to process in bulk')
 
 
+class ResearchAgentLLMConfig(BaseSettings):
+    """Configuration for the LLM used specifically for research agent tasks."""
+
+    model_config = SettingsConfigDict(
+        env_prefix='RESEARCH_AGENT_LLM_',
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='allow',
+    )
+    model: str = Field(..., description='Research agent LLM model')
+    model_settings: ModelConfig = Field(
+        default_factory=ModelConfig, description='Research agent model configuration'
+    )
+    max_output_tokens: int = Field(
+        50000,
+        description='Research agent LLM max tokens for generation',
+    )
+    max_context_length: int = Field(
+        100000,
+        description='Research agent LLM max context length for model',
+    )
+
+
+class ScrapeFilterLLMConfig(BaseSettings):
+    """Configuration for the LLM used specifically for scrape filtering tasks."""
+
+    model_config = SettingsConfigDict(
+        env_prefix='SCRAPE_FILTER_LLM_',
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='allow',
+    )
+    model: str = Field(..., description='Scrape filter LLM model')
+    model_settings: ModelConfig = Field(
+        default_factory=ModelConfig, description='Scrape filter model configuration'
+    )
+    max_output_tokens: int = Field(
+        10000,
+        description='Scrape filter LLM max tokens for generation',
+    )
+    max_context_length: int = Field(
+        50000,
+        description='Scrape filter LLM max context length for model',
+    )
+
+
+class ResearchAgentConfig(BaseSettings):
+    """Configuration for the research agent."""
+
+    model_config = SettingsConfigDict(
+        env_prefix='RESEARCH_AGENT_',
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,  # Make case-insensitive to handle env vars
+        extra='ignore',  # Ignore extra inputs
+    )
+    auto_start: bool = Field(
+        False, description='Whether to automatically start the research agent CLI'
+    )
+    default_queries: bool = Field(
+        True, description='Whether to create default research queries on first run'
+    )
+
+
 class LoggingConfig(BaseSettings):
     """Configuration for logging."""
 
@@ -265,6 +331,14 @@ class ThothConfig(BaseSettings):
         description='Path for citation graph storage',
     )
 
+    # Research agent directories
+    queries_dir: Path = Field(
+        Path('data/queries'), description='Directory for research query files'
+    )
+    agent_storage_dir: Path = Field(
+        Path('data/agent'), description='Directory for agent-managed articles'
+    )
+
     # Configuration objects
     api_keys: APIKeys = Field(
         default_factory=APIKeys, description='API keys for external services'
@@ -290,6 +364,17 @@ class ThothConfig(BaseSettings):
     )
     monitor_config: MonitorConfig = Field(
         default_factory=MonitorConfig, description='Monitor configuration'
+    )
+    research_agent_config: ResearchAgentConfig = Field(
+        default_factory=ResearchAgentConfig, description='Research agent configuration'
+    )
+    research_agent_llm_config: ResearchAgentLLMConfig = Field(
+        default_factory=ResearchAgentLLMConfig,
+        description='Research agent LLM configuration',
+    )
+    scrape_filter_llm_config: ScrapeFilterLLMConfig = Field(
+        default_factory=ScrapeFilterLLMConfig,
+        description='Scrape filter LLM configuration',
     )
 
     def setup_logging(self) -> None:
