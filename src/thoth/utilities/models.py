@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, TypedDict, Union
 
 from langchain.schema import Document
 from pydantic import BaseModel, Field, field_validator
@@ -1060,4 +1060,235 @@ class FilterLogEntry(BaseModel):
     )
     error_message: str | None = Field(
         description='Any error that occurred during processing', default=None
+    )
+
+
+# Discovery System Models
+
+
+class DiscoverySource(BaseModel):
+    """Schema for a discovery source configuration.
+
+    This model represents a source for discovering new articles, which can be
+    either an API-based source or a web scraping configuration.
+
+    Args:
+        name: Unique name for this discovery source
+        source_type: Type of source (api or scraper)
+        description: Human-readable description of the source
+        is_active: Whether this source is currently enabled
+        schedule_config: Configuration for when to run this source
+        api_config: Configuration for API-based sources (if applicable)
+        scraper_config: Configuration for web scraping (if applicable)
+        query_filters: List of research query names to filter results
+        last_run: Timestamp of last successful run
+        created_at: When this source was created
+        updated_at: When this source was last modified
+
+    Example:
+        >>> source = DiscoverySource(
+        ...     name='arxiv_ml',
+        ...     source_type='api',
+        ...     description='ArXiv machine learning papers',
+        ...     api_config={'source': 'arxiv', 'categories': ['cs.LG', 'cs.AI']},
+        ...     query_filters=['machine_learning', 'deep_learning'],
+        ... )
+    """
+
+    name: str = Field(description='Unique name for this discovery source')
+    source_type: Literal['api', 'scraper'] = Field(description='Type of source')
+    description: str = Field(description='Human-readable description of the source')
+    is_active: bool = Field(
+        description='Whether this source is currently enabled', default=True
+    )
+    schedule_config: 'ScheduleConfig' = Field(
+        description='Configuration for when to run this source'
+    )
+    api_config: dict[str, Any] | None = Field(
+        description='Configuration for API-based sources', default=None
+    )
+    scraper_config: Union['ScrapeConfiguration', None] = Field(
+        description='Configuration for web scraping', default=None
+    )
+    query_filters: list[str] = Field(
+        description='List of research query names to filter results',
+        default_factory=list,
+    )
+    last_run: str | None = Field(
+        description='Timestamp of last successful run', default=None
+    )
+    created_at: str | None = Field(
+        description='When this source was created', default=None
+    )
+    updated_at: str | None = Field(
+        description='When this source was last modified', default=None
+    )
+
+    @field_validator('name')
+    def validate_name(cls, name: str) -> str:  # noqa: N805
+        """Validate that the name is a valid filename."""
+        import re
+
+        clean_name = re.sub(r'[^\w\-_.]', '_', name.lower())
+        return clean_name
+
+
+class ScheduleConfig(BaseModel):
+    """Schema for scheduling configuration.
+
+    Args:
+        interval_minutes: How often to run in minutes
+        max_articles_per_run: Maximum articles to process per run
+        enabled: Whether scheduling is enabled
+        time_of_day: Preferred time of day to run (HH:MM format)
+        days_of_week: Days of week to run (0=Monday, 6=Sunday)
+
+    Example:
+        >>> schedule = ScheduleConfig(
+        ...     interval_minutes=60,
+        ...     max_articles_per_run=50,
+        ...     time_of_day='09:00',
+        ...     days_of_week=[0, 1, 2, 3, 4],  # Weekdays only
+        ... )
+    """
+
+    interval_minutes: int = Field(description='How often to run in minutes', default=60)
+    max_articles_per_run: int = Field(
+        description='Maximum articles to process per run', default=50
+    )
+    enabled: bool = Field(description='Whether scheduling is enabled', default=True)
+    time_of_day: str | None = Field(
+        description='Preferred time of day to run (HH:MM format)', default=None
+    )
+    days_of_week: list[int] | None = Field(
+        description='Days of week to run (0=Monday, 6=Sunday)', default=None
+    )
+
+
+class ScrapeConfiguration(BaseModel):
+    """Schema for web scraping configuration.
+
+    This model represents the configuration for scraping a specific website,
+    including navigation rules and data extraction selectors.
+
+    Args:
+        base_url: Starting URL for scraping
+        navigation_rules: Rules for navigating through pages
+        extraction_rules: Rules for extracting article metadata
+        pagination_config: Configuration for handling pagination
+        rate_limiting: Configuration for rate limiting requests
+        headers: Custom headers to send with requests
+        cookies: Cookies to include with requests
+
+    Example:
+        >>> config = ScrapeConfiguration(
+        ...     base_url='https://example-journal.com/latest',
+        ...     extraction_rules={
+        ...         'title': {'selector': 'h1.article-title', 'attribute': 'text'},
+        ...         'authors': {
+        ...             'selector': '.author-list .author',
+        ...             'attribute': 'text',
+        ...             'multiple': True,
+        ...         },
+        ...         'abstract': {'selector': '.abstract p', 'attribute': 'text'},
+        ...     },
+        ... )
+    """
+
+    base_url: str = Field(description='Starting URL for scraping')
+    navigation_rules: dict[str, Any] = Field(
+        description='Rules for navigating through pages', default_factory=dict
+    )
+    extraction_rules: dict[str, Any] = Field(
+        description='Rules for extracting article metadata'
+    )
+    pagination_config: dict[str, Any] = Field(
+        description='Configuration for handling pagination', default_factory=dict
+    )
+    rate_limiting: dict[str, Any] = Field(
+        description='Configuration for rate limiting requests', default_factory=dict
+    )
+    headers: dict[str, str] = Field(
+        description='Custom headers to send with requests', default_factory=dict
+    )
+    cookies: dict[str, str] = Field(
+        description='Cookies to include with requests', default_factory=dict
+    )
+
+
+class DiscoveryResult(BaseModel):
+    """Schema for a discovery result.
+
+    This model represents the result of running a discovery source,
+    including statistics and any errors encountered.
+
+    Args:
+        source_name: Name of the discovery source
+        run_timestamp: When the discovery was run
+        articles_found: Number of articles found
+        articles_filtered: Number of articles that passed filtering
+        articles_downloaded: Number of PDFs successfully downloaded
+        errors: List of errors encountered during discovery
+        execution_time_seconds: How long the discovery took
+
+    Example:
+        >>> result = DiscoveryResult(
+        ...     source_name='arxiv_ml',
+        ...     run_timestamp='2023-12-01T10:00:00',
+        ...     articles_found=25,
+        ...     articles_filtered=8,
+        ...     articles_downloaded=6,
+        ... )
+    """
+
+    source_name: str = Field(description='Name of the discovery source')
+    run_timestamp: str = Field(description='When the discovery was run')
+    articles_found: int = Field(description='Number of articles found')
+    articles_filtered: int = Field(
+        description='Number of articles that passed filtering'
+    )
+    articles_downloaded: int = Field(
+        description='Number of PDFs successfully downloaded'
+    )
+    errors: list[str] = Field(
+        description='List of errors encountered during discovery', default_factory=list
+    )
+    execution_time_seconds: float = Field(
+        description='How long the discovery took', default=0.0
+    )
+
+
+class ChromeExtensionConfig(BaseModel):
+    """Schema for Chrome extension scraper configuration.
+
+    This model represents the configuration created by the Chrome extension
+    for point-and-click scraper setup.
+
+    Args:
+        site_name: Human-readable name for the site
+        base_url: Base URL of the site
+        selectors: CSS selectors for extracting data
+        navigation_steps: Steps for navigating the site
+        test_data: Sample data extracted during configuration
+
+    Example:
+        >>> config = ChromeExtensionConfig(
+        ...     site_name='Example Journal',
+        ...     base_url='https://example.com',
+        ...     selectors={
+        ...         'title': 'h1.title',
+        ...         'authors': '.authors .author',
+        ...         'abstract': '.abstract',
+        ...     },
+        ... )
+    """
+
+    site_name: str = Field(description='Human-readable name for the site')
+    base_url: str = Field(description='Base URL of the site')
+    selectors: dict[str, str] = Field(description='CSS selectors for extracting data')
+    navigation_steps: list[dict[str, Any]] = Field(
+        description='Steps for navigating the site', default_factory=list
+    )
+    test_data: dict[str, Any] = Field(
+        description='Sample data extracted during configuration', default_factory=dict
     )

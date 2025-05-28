@@ -8,6 +8,7 @@ This module provides a command-line interface for running the Thoth system.
 import argparse
 import sys
 import threading
+import time
 from pathlib import Path
 
 from loguru import logger
@@ -136,6 +137,77 @@ def parse_args():
         '--create-sample-queries',
         action='store_true',
         help='Create sample research queries for testing',
+    )
+
+    # Discovery commands
+    discovery_parser = subparsers.add_parser(
+        'discovery',
+        help='Manage article discovery sources and scheduling',
+    )
+    discovery_subparsers = discovery_parser.add_subparsers(
+        dest='discovery_command', help='Discovery command to run'
+    )
+
+    # Discovery run command
+    discovery_run_parser = discovery_subparsers.add_parser(
+        'run', help='Run discovery for sources'
+    )
+    discovery_run_parser.add_argument(
+        '--source',
+        type=str,
+        help='Specific source to run (runs all active if not specified)',
+    )
+    discovery_run_parser.add_argument(
+        '--max-articles', type=int, help='Maximum articles to process'
+    )
+
+    # Discovery list command
+    discovery_list_parser = discovery_subparsers.add_parser(  # noqa: F841
+        'list', help='List all discovery sources'
+    )
+
+    # Discovery create command
+    discovery_create_parser = discovery_subparsers.add_parser(
+        'create', help='Create a new discovery source'
+    )
+    discovery_create_parser.add_argument(
+        '--name', type=str, required=True, help='Name for the discovery source'
+    )
+    discovery_create_parser.add_argument(
+        '--type',
+        type=str,
+        choices=['api', 'scraper'],
+        required=True,
+        help='Type of source',
+    )
+    discovery_create_parser.add_argument(
+        '--description', type=str, required=True, help='Description of the source'
+    )
+    discovery_create_parser.add_argument(
+        '--config-file', type=str, help='JSON file containing source configuration'
+    )
+
+    # Discovery scheduler commands
+    scheduler_parser = discovery_subparsers.add_parser(
+        'scheduler', help='Manage discovery scheduler'
+    )
+    scheduler_subparsers = scheduler_parser.add_subparsers(
+        dest='scheduler_command', help='Scheduler command to run'
+    )
+
+    # Scheduler start command
+    scheduler_start_parser = scheduler_subparsers.add_parser(  # noqa: F841
+        'start', help='Start the discovery scheduler'
+    )
+
+    # Scheduler stop command
+    scheduler_stop_parser = scheduler_subparsers.add_parser(  # noqa: F841
+        'stop', help='Stop the discovery scheduler'
+    )
+
+    # Scheduler status command
+    scheduler_status_parser = scheduler_subparsers.add_parser(  # noqa: F841
+        'status', help='Show scheduler status'
     )
 
     return parser.parse_args()
@@ -566,6 +638,360 @@ def run_suggest_tags(args):  # noqa: ARG001
         return 1
 
 
+def run_scrape_filter_test(args):
+    """
+    Test the scrape filter with sample articles.
+
+    Args:
+        args: Command line arguments.
+
+    Returns:
+        int: Exit code.
+    """
+    logger.info('Testing scrape filter functionality.')
+    config = get_config()
+
+    try:
+        # Initialize pipeline to get scrape filter
+        pipeline = ThothPipeline(
+            ocr_api_key=config.api_keys.mistral_key,
+            llm_api_key=config.api_keys.openrouter_key,
+            templates_dir=Path(config.templates_dir),
+            prompts_dir=Path(config.prompts_dir),
+            output_dir=Path(config.output_dir),
+            notes_dir=Path(config.notes_dir),
+            api_base_url=config.api_server_config.base_url,
+        )
+
+        # Create sample queries if requested
+        if args.create_sample_queries:
+            from thoth.utilities.models import ResearchQuery
+
+            sample_queries = [
+                ResearchQuery(
+                    name='machine_learning',
+                    description='Machine learning and AI research',
+                    research_question='What are the latest developments in machine learning?',
+                    keywords=[
+                        'machine learning',
+                        'artificial intelligence',
+                        'neural networks',
+                    ],
+                    required_topics=['machine learning'],
+                    preferred_topics=['deep learning', 'neural networks'],
+                    excluded_topics=['hardware', 'robotics'],
+                ),
+                ResearchQuery(
+                    name='nlp_research',
+                    description='Natural language processing research',
+                    research_question='How are transformer models being applied to NLP tasks?',
+                    keywords=[
+                        'natural language processing',
+                        'transformer',
+                        'BERT',
+                        'GPT',
+                    ],
+                    required_topics=['natural language processing'],
+                    preferred_topics=['transformer', 'attention mechanism'],
+                    excluded_topics=['computer vision'],
+                ),
+            ]
+
+            for query in sample_queries:
+                pipeline.scrape_filter.agent.create_query(query)
+                logger.info(f'Created sample query: {query.name}')
+
+        # Test with sample article metadata
+        from thoth.utilities.models import ScrapedArticleMetadata
+
+        sample_articles = [
+            ScrapedArticleMetadata(
+                title='Attention Is All You Need',
+                authors=['Vaswani, A.', 'Shazeer, N.', 'Parmar, N.'],
+                abstract='We propose a new simple network architecture, the Transformer, based solely on attention mechanisms.',
+                journal='NIPS',
+                source='test',
+                keywords=['transformer', 'attention', 'neural networks'],
+            ),
+            ScrapedArticleMetadata(
+                title='BERT: Pre-training of Deep Bidirectional Transformers',
+                authors=['Devlin, J.', 'Chang, M.', 'Lee, K.'],
+                abstract='We introduce BERT, a new language representation model.',
+                journal='NAACL',
+                source='test',
+                keywords=['BERT', 'transformer', 'language model'],
+            ),
+        ]
+
+        logger.info('Testing scrape filter with sample articles...')
+
+        for article in sample_articles:
+            result = pipeline.scrape_filter.process_scraped_article(
+                metadata=article,
+                download_pdf=False,  # Don't actually download for testing
+            )
+
+            logger.info(f'Article: {article.title}')
+            logger.info(f'Decision: {result["decision"]}')
+            logger.info(f'Score: {result["evaluation"].relevance_score:.2f}')
+            logger.info(f'Reasoning: {result["evaluation"].reasoning}')
+            logger.info('---')
+
+        logger.info('Scrape filter test completed successfully.')
+        return 0
+
+    except Exception as e:
+        logger.error(f'Error during scrape filter test: {e}')
+        return 1
+
+
+def run_discovery_command(args):
+    """
+    Handle discovery commands.
+
+    Args:
+        args: Command line arguments.
+
+    Returns:
+        int: Exit code.
+    """
+    if not hasattr(args, 'discovery_command') or not args.discovery_command:
+        logger.error('No discovery subcommand specified')
+        return 1
+
+    try:
+        if args.discovery_command == 'run':
+            return run_discovery_run(args)
+        elif args.discovery_command == 'list':
+            return run_discovery_list(args)
+        elif args.discovery_command == 'create':
+            return run_discovery_create(args)
+        elif args.discovery_command == 'scheduler':
+            return run_discovery_scheduler(args)
+        else:
+            logger.error(f'Unknown discovery command: {args.discovery_command}')
+            return 1
+
+    except ImportError as e:
+        logger.error(f'Discovery system not available: {e}')
+        return 1
+
+
+def run_discovery_run(args):
+    """
+    Run discovery for sources.
+
+    Args:
+        args: Command line arguments.
+
+    Returns:
+        int: Exit code.
+    """
+    try:
+        from thoth.discovery import DiscoveryManager
+
+        # Initialize discovery manager with scrape filter
+        pipeline = ThothPipeline()
+
+        discovery_manager = DiscoveryManager(
+            scrape_filter=pipeline.scrape_filter,
+        )
+
+        # Run discovery
+        result = discovery_manager.run_discovery(
+            source_name=args.source,
+            max_articles=args.max_articles,
+        )
+
+        logger.info('Discovery run completed:')
+        logger.info(f'  Articles found: {result.articles_found}')
+        logger.info(f'  Articles filtered: {result.articles_filtered}')
+        logger.info(f'  Articles downloaded: {result.articles_downloaded}')
+        logger.info(f'  Execution time: {result.execution_time_seconds:.2f}s')
+
+        if result.errors:
+            logger.warning(f'  Errors encountered: {len(result.errors)}')
+            for error in result.errors:
+                logger.warning(f'    - {error}')
+
+        return 0
+
+    except Exception as e:
+        logger.error(f'Error running discovery: {e}')
+        return 1
+
+
+def run_discovery_list(args):  # noqa: ARG001
+    """
+    List all discovery sources.
+
+    Args:
+        args: Command line arguments.
+
+    Returns:
+        int: Exit code.
+    """
+    try:
+        from thoth.discovery import DiscoveryManager
+
+        discovery_manager = DiscoveryManager()
+        sources = discovery_manager.list_sources()
+
+        if not sources:
+            logger.info('No discovery sources configured.')
+            return 0
+
+        logger.info(f'Found {len(sources)} discovery sources:')
+        logger.info('')
+
+        for source in sources:
+            logger.info(f'Name: {source.name}')
+            logger.info(f'  Type: {source.source_type}')
+            logger.info(f'  Description: {source.description}')
+            logger.info(f'  Active: {source.is_active}')
+            logger.info(f'  Last run: {source.last_run or "Never"}')
+
+            if source.schedule_config:
+                logger.info(
+                    f'  Schedule: Every {source.schedule_config.interval_minutes} minutes'
+                )
+                logger.info(
+                    f'  Max articles: {source.schedule_config.max_articles_per_run}'
+                )
+
+            logger.info('')
+
+        return 0
+
+    except Exception as e:
+        logger.error(f'Error listing discovery sources: {e}')
+        return 1
+
+
+def run_discovery_create(args):
+    """
+    Create a new discovery source.
+
+    Args:
+        args: Command line arguments.
+
+    Returns:
+        int: Exit code.
+    """
+    try:
+        import json
+
+        from thoth.discovery import DiscoveryManager
+        from thoth.utilities.models import DiscoverySource, ScheduleConfig
+
+        discovery_manager = DiscoveryManager()
+
+        # Load configuration from file if provided
+        config_data = {}
+        if args.config_file:
+            config_file = Path(args.config_file)
+            if not config_file.exists():
+                logger.error(f'Configuration file not found: {config_file}')
+                return 1
+
+            with open(config_file) as f:
+                config_data = json.load(f)
+
+        # Create basic source configuration
+        source_config = {
+            'name': args.name,
+            'source_type': args.type,
+            'description': args.description,
+            'is_active': True,
+            'schedule_config': ScheduleConfig(
+                interval_minutes=60,
+                max_articles_per_run=50,
+                enabled=True,
+            ),
+            'query_filters': [],
+        }
+
+        # Merge with config file data
+        source_config.update(config_data)
+
+        # Create source
+        source = DiscoverySource(**source_config)
+        discovery_manager.create_source(source)
+
+        logger.info(f'Successfully created discovery source: {args.name}')
+        logger.info(f'  Type: {args.type}')
+        logger.info(f'  Description: {args.description}')
+
+        return 0
+
+    except Exception as e:
+        logger.error(f'Error creating discovery source: {e}')
+        return 1
+
+
+def run_discovery_scheduler(args):
+    """
+    Handle discovery scheduler commands.
+
+    Args:
+        args: Command line arguments.
+
+    Returns:
+        int: Exit code.
+    """
+    if not hasattr(args, 'scheduler_command') or not args.scheduler_command:
+        logger.error('No scheduler subcommand specified')
+        return 1
+
+    try:
+        from thoth.discovery import DiscoveryScheduler
+
+        if args.scheduler_command == 'start':
+            scheduler = DiscoveryScheduler()
+            scheduler.start()
+            logger.info('Discovery scheduler started. Press Ctrl+C to stop.')
+
+            try:
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                scheduler.stop()
+                logger.info('Discovery scheduler stopped.')
+
+            return 0
+
+        elif args.scheduler_command == 'status':
+            scheduler = DiscoveryScheduler()
+            status = scheduler.get_schedule_status()
+
+            logger.info(f'Scheduler running: {status["running"]}')
+            logger.info(f'Total sources: {status["total_sources"]}')
+            logger.info(f'Enabled sources: {status["enabled_sources"]}')
+            logger.info('')
+
+            if status['sources']:
+                logger.info('Sources:')
+                for source in status['sources']:
+                    logger.info(f'  {source["name"]}:')
+                    logger.info(f'    Enabled: {source["enabled"]}')
+                    logger.info(f'    Type: {source["source_type"]}')
+                    logger.info(f'    Last run: {source["last_run"] or "Never"}')
+                    logger.info(
+                        f'    Next run: {source["next_run"] or "Not scheduled"}'
+                    )
+                    logger.info('')
+
+            return 0
+
+        else:
+            logger.error(f'Unknown scheduler command: {args.scheduler_command}')
+            return 1
+
+    except Exception as e:
+        logger.error(f'Error with scheduler command: {e}')
+        return 1
+
+
 def main():
     """
     Main entry point.
@@ -591,6 +1017,10 @@ def main():
         return run_consolidate_tags_only(args)
     elif args.command == 'suggest-tags':
         return run_suggest_tags(args)
+    elif args.command == 'scrape-filter':
+        return run_scrape_filter_test(args)
+    elif args.command == 'discovery':
+        return run_discovery_command(args)
     else:
         logger.error('No command specified')
         return 1

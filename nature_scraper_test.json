@@ -1,0 +1,43 @@
+{
+  "scraper_config": {
+    "base_url": "https://www.nature.com/subjects/machine-learning",
+    "extraction_rules": {
+      "title": {
+        "selector": "h3.c-card__title a",
+        "attribute": "text"
+      },
+      "authors": {
+        "selector": ".c-author-list__item",
+        "attribute": "text",
+        "multiple": true
+      },
+      "abstract": {
+        "selector": ".c-card__summary",
+        "attribute": "text"
+      },
+      "url": {
+        "selector": "h3.c-card__title a",
+        "attribute": "href"
+      },
+      "publication_date": {
+        "selector": "time",
+        "attribute": "datetime"
+      }
+    },
+    "navigation_rules": {
+      "article_container": ".c-card"
+    },
+    "pagination_config": {
+      "enabled": false
+    },
+    "rate_limiting": {
+      "delay": 2.0
+    }
+  },
+  "schedule_config": {
+    "interval_minutes": 1440,
+    "max_articles_per_run": 5,
+    "enabled": true
+  },
+  "query_filters": ["machine_learning"]
+}
