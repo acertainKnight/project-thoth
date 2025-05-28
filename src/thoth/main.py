@@ -139,6 +139,11 @@ def parse_args():
         help='Create sample research queries for testing',
     )
 
+    # Agent command
+    agent_parser = subparsers.add_parser(  # noqa: F841
+        'agent', help='Start an interactive chat with the research assistant agent'
+    )
+
     # Discovery commands
     discovery_parser = subparsers.add_parser(
         'discovery',
@@ -745,6 +750,95 @@ def run_scrape_filter_test(args):
         return 1
 
 
+def run_agent_chat(args):  # noqa: ARG001
+    """
+    Start an interactive chat with the research assistant agent.
+
+    Args:
+        args: Command line arguments.
+
+    Returns:
+        int: Exit code.
+    """
+    try:
+        from thoth.pipeline import ThothPipeline
+
+        logger.info('Starting research assistant agent chat...')
+
+        # Initialize pipeline to get proper configuration
+        pipeline = ThothPipeline()
+        agent = pipeline.scrape_filter.agent
+
+        print('\n' + '=' * 60)
+        print('🧠 Welcome to the Thoth Research Assistant Agent!')
+        print('=' * 60)
+        print('I can help you create and manage research queries for automatic')
+        print('article filtering and collection.')
+        print('\nAvailable commands:')
+        print("  - 'create query' - Create a new research query")
+        print("  - 'list queries' - Show existing queries")
+        print("  - 'help' - Get help with using the system")
+        print("  - 'exit' or 'quit' - End the session")
+        print('\nType your message and press Enter to start!')
+        print('=' * 60 + '\n')
+
+        conversation_history = []
+
+        while True:
+            try:
+                user_message = input('You: ').strip()
+
+                if user_message.lower() in {'exit', 'quit', 'bye', 'done'}:
+                    print('\n👋 Thank you for using the Thoth Research Assistant!')
+                    print(
+                        'Your queries have been saved and will be used for automatic filtering.'
+                    )
+                    break
+
+                if not user_message:
+                    continue
+
+                # Get response from agent
+                response = agent.chat(
+                    user_message, conversation_history=conversation_history
+                )
+
+                print(f'\nAgent: {response["agent_response"]}')
+
+                # Show available queries if relevant
+                if response.get('available_queries'):
+                    print(
+                        f'\nAvailable queries: {", ".join(response["available_queries"])}'
+                    )
+
+                print()  # Add spacing
+
+                # Update conversation history
+                conversation_history.append({'role': 'user', 'content': user_message})
+                conversation_history.append(
+                    {'role': 'agent', 'content': response['agent_response']}
+                )
+
+                # Keep conversation history manageable
+                if len(conversation_history) > 20:
+                    conversation_history = conversation_history[-20:]
+
+            except KeyboardInterrupt:
+                print('\n\n👋 Session interrupted. Goodbye!')
+                break
+            except Exception as e:
+                logger.error(f'Error in agent chat: {e}')
+                print(f'\n❌ Error: {e}')
+                print("Please try again or type 'exit' to quit.")
+
+        return 0
+
+    except Exception as e:
+        logger.error(f'Failed to start agent chat: {e}')
+        print(f'❌ Failed to start agent chat: {e}')
+        return 1
+
+
 def run_discovery_command(args):
     """
     Handle discovery commands.
@@ -1019,6 +1113,8 @@ def main():
         return run_suggest_tags(args)
     elif args.command == 'scrape-filter':
         return run_scrape_filter_test(args)
+    elif args.command == 'agent':
+        return run_agent_chat(args)
     elif args.command == 'discovery':
         return run_discovery_command(args)
     else:
