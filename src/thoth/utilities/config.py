@@ -258,6 +258,36 @@ class ScrapeFilterLLMConfig(BaseSettings):
     )
 
 
+class DiscoveryConfig(BaseSettings):
+    """Configuration for the discovery system."""
+
+    model_config = SettingsConfigDict(
+        env_prefix='DISCOVERY_',
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='ignore',
+    )
+    auto_start_scheduler: bool = Field(
+        False, description='Whether to automatically start the discovery scheduler'
+    )
+    default_max_articles: int = Field(
+        50, description='Default maximum articles per discovery run'
+    )
+    default_interval_minutes: int = Field(
+        60, description='Default interval between discovery runs in minutes'
+    )
+    rate_limit_delay: float = Field(
+        1.0, description='Default delay between web scraping requests in seconds'
+    )
+    chrome_extension_enabled: bool = Field(
+        True, description='Whether Chrome extension integration is enabled'
+    )
+    chrome_extension_port: int = Field(
+        8765, description='Port for Chrome extension WebSocket communication'
+    )
+
+
 class ResearchAgentConfig(BaseSettings):
     """Configuration for the research agent."""
 
@@ -339,6 +369,19 @@ class ThothConfig(BaseSettings):
         Path('data/agent'), description='Directory for agent-managed articles'
     )
 
+    # Discovery directories
+    discovery_sources_dir: Path = Field(
+        Path('data/discovery/sources'),
+        description='Directory for discovery source configurations',
+    )
+    discovery_results_dir: Path = Field(
+        Path('data/discovery/results'), description='Directory for discovery results'
+    )
+    chrome_extension_configs_dir: Path = Field(
+        Path('data/discovery/chrome_configs'),
+        description='Directory for Chrome extension configurations',
+    )
+
     # Configuration objects
     api_keys: APIKeys = Field(
         default_factory=APIKeys, description='API keys for external services'
@@ -375,6 +418,9 @@ class ThothConfig(BaseSettings):
     scrape_filter_llm_config: ScrapeFilterLLMConfig = Field(
         default_factory=ScrapeFilterLLMConfig,
         description='Scrape filter LLM configuration',
+    )
+    discovery_config: DiscoveryConfig = Field(
+        default_factory=DiscoveryConfig, description='Discovery system configuration'
     )
 
     def setup_logging(self) -> None:

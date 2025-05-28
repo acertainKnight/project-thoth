@@ -36,6 +36,7 @@ dependencies = [
     "grandalf>=0.8",
     "json-repair>=0.44.1",
     "langgraph>=0.4.7",
+    "websockets>=15.0.1",
 ]
 
 [project.optional-dependencies]

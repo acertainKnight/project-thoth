@@ -1,0 +1,27 @@
+{
+  "name": "nlp_research",
+  "description": "Natural language processing research",
+  "research_question": "How are transformer models being applied to NLP tasks?",
+  "keywords": [
+    "natural language processing",
+    "transformer",
+    "BERT",
+    "GPT"
+  ],
+  "required_topics": [
+    "natural language processing"
+  ],
+  "preferred_topics": [
+    "transformer",
+    "attention mechanism"
+  ],
+  "excluded_topics": [
+    "computer vision"
+  ],
+  "methodology_preferences": [],
+  "publication_date_range": null,
+  "minimum_relevance_score": 0.7,
+  "created_at": "2025-05-27T22:11:36.351984",
+  "updated_at": "2025-05-27T22:11:36.351984",
+  "is_active": true
+}

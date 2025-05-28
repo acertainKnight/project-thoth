@@ -142,6 +142,9 @@ class ThothPipeline:
         # Scrape Filter (initialized lazily when needed)
         self._scrape_filter = None
 
+        # Discovery Manager (initialized lazily when needed)
+        self._discovery_manager = None
+
         logger.info('Thoth pipeline initialized')
 
     @property
@@ -190,6 +193,23 @@ class ThothPipeline:
                 agent_storage_dir=self.config.agent_storage_dir,
             )
         return self._scrape_filter
+
+    @property
+    def discovery_manager(self):
+        """
+        Lazy initialization of DiscoveryManager.
+
+        Returns:
+            DiscoveryManager: The initialized discovery manager instance.
+        """
+        if self._discovery_manager is None:
+            from thoth.discovery.discovery_manager import DiscoveryManager
+
+            self._discovery_manager = DiscoveryManager(
+                scrape_filter=self.scrape_filter,
+                sources_config_dir=self.config.discovery_sources_dir,
+            )
+        return self._discovery_manager
 
     def process_pdf(self, pdf_path: str | Path) -> Path:
         """
