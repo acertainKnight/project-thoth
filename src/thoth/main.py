@@ -171,6 +171,14 @@ def parse_args():
         'list', help='List all discovery sources'
     )
 
+    # Discovery show command
+    discovery_show_parser = discovery_subparsers.add_parser(
+        'show', help='Show detailed information about a discovery source'
+    )
+    discovery_show_parser.add_argument(
+        '--name', type=str, required=True, help='Name of the discovery source to show'
+    )
+
     # Discovery create command
     discovery_create_parser = discovery_subparsers.add_parser(
         'create', help='Create a new discovery source'
@@ -190,6 +198,36 @@ def parse_args():
     )
     discovery_create_parser.add_argument(
         '--config-file', type=str, help='JSON file containing source configuration'
+    )
+
+    # Discovery edit command
+    discovery_edit_parser = discovery_subparsers.add_parser(
+        'edit', help='Edit an existing discovery source'
+    )
+    discovery_edit_parser.add_argument(
+        '--name', type=str, required=True, help='Name of the discovery source to edit'
+    )
+    discovery_edit_parser.add_argument(
+        '--description', type=str, help='New description for the source'
+    )
+    discovery_edit_parser.add_argument(
+        '--config-file',
+        type=str,
+        help='JSON file containing updated source configuration',
+    )
+    discovery_edit_parser.add_argument(
+        '--active', type=str, choices=['true', 'false'], help='Set source active status'
+    )
+
+    # Discovery delete command
+    discovery_delete_parser = discovery_subparsers.add_parser(
+        'delete', help='Delete a discovery source'
+    )
+    discovery_delete_parser.add_argument(
+        '--name', type=str, required=True, help='Name of the discovery source to delete'
+    )
+    discovery_delete_parser.add_argument(
+        '--confirm', action='store_true', help='Confirm deletion without prompting'
     )
 
     # Discovery scheduler commands
@@ -769,18 +807,42 @@ def run_agent_chat(args):  # noqa: ARG001
         pipeline = ThothPipeline()
         agent = pipeline.scrape_filter.agent
 
-        print('\n' + '=' * 60)
-        print('🧠 Welcome to the Thoth Research Assistant Agent!')
-        print('=' * 60)
-        print('I can help you create and manage research queries for automatic')
-        print('article filtering and collection.')
-        print('\nAvailable commands:')
-        print("  - 'create query' - Create a new research query")
-        print("  - 'list queries' - Show existing queries")
-        print("  - 'help' - Get help with using the system")
-        print("  - 'exit' or 'quit' - End the session")
-        print('\nType your message and press Enter to start!')
-        print('=' * 60 + '\n')
+        print('\n' + '=' * 70)
+        print('🤖 Welcome to the Enhanced Thoth Research Assistant Agent!')
+        print('=' * 70)
+        print('I can help you manage research queries AND discovery sources for')
+        print('automatic article discovery, filtering, and collection.')
+
+        print('\n🔍 **Discovery Source Management:**')
+        print("  • 'list discovery sources' - Show all configured sources")
+        print(
+            '  • \'create an arxiv source called "ml_papers" for machine learning\' - Create ArXiv source'
+        )
+        print(
+            '  • \'create a pubmed source called "bio_research" searching for neuroscience\' - Create PubMed source'
+        )
+        print("  • 'run discovery for arxiv_test' - Run specific source")
+        print("  • 'run discovery with max 5 articles' - Run all sources with limit")
+        print("  • 'edit arxiv_test source' - Modify existing source")
+        print("  • 'delete old_source' - Remove a source")
+
+        print('\n📝 **Research Query Management:**')
+        print("  • 'create query' - Create new research query")
+        print("  • 'list queries' - Show existing queries")
+        print("  • 'help' - Get help with using the system")
+
+        print('\n🚀 **Quick Start:**')
+        print("1. Try: 'list discovery sources' to see current sources")
+        print(
+            '2. Create: \'create an arxiv source called "my_research" for deep learning\''
+        )
+        print("3. Run: 'run discovery for my_research'")
+
+        print('\n💡 **Tips:**')
+        print('  • Use natural language - I understand context!')
+        print('  • Discovery sources automatically filter using your research queries')
+        print("  • Type 'exit' or 'quit' to end the session")
+        print('=' * 70 + '\n')
 
         conversation_history = []
 
@@ -791,7 +853,7 @@ def run_agent_chat(args):  # noqa: ARG001
                 if user_message.lower() in {'exit', 'quit', 'bye', 'done'}:
                     print('\n👋 Thank you for using the Thoth Research Assistant!')
                     print(
-                        'Your queries have been saved and will be used for automatic filtering.'
+                        'Your queries and discovery sources have been saved and will be used for automatic filtering.'
                     )
                     break
 
@@ -860,8 +922,14 @@ def run_discovery_command(args):
             return run_discovery_list(args)
         elif args.discovery_command == 'create':
             return run_discovery_create(args)
+        elif args.discovery_command == 'edit':
+            return run_discovery_edit(args)
+        elif args.discovery_command == 'delete':
+            return run_discovery_delete(args)
         elif args.discovery_command == 'scheduler':
             return run_discovery_scheduler(args)
+        elif args.discovery_command == 'show':
+            return run_discovery_show(args)
         else:
             logger.error(f'Unknown discovery command: {args.discovery_command}')
             return 1
@@ -962,6 +1030,49 @@ def run_discovery_list(args):  # noqa: ARG001
         return 1
 
 
+def run_discovery_show(args):
+    """
+    Show detailed information about a discovery source.
+
+    Args:
+        args: Command line arguments.
+
+    Returns:
+        int: Exit code.
+    """
+    try:
+        from thoth.discovery import DiscoveryManager
+
+        discovery_manager = DiscoveryManager()
+        source = discovery_manager.get_source(args.name)
+        if not source:
+            logger.error(f'Discovery source not found: {args.name}')
+            return 1
+
+        logger.info('Discovery Source Details:')
+        logger.info(f'  Name: {source.name}')
+        logger.info(f'  Type: {source.source_type}')
+        logger.info(f'  Description: {source.description}')
+        logger.info(f'  Active: {source.is_active}')
+        logger.info(f'  Last run: {source.last_run or "Never"}')
+
+        if source.schedule_config:
+            logger.info(
+                f'  Schedule: Every {source.schedule_config.interval_minutes} minutes'
+            )
+            logger.info(
+                f'  Max articles: {source.schedule_config.max_articles_per_run}'
+            )
+
+        logger.info('')
+
+        return 0
+
+    except Exception as e:
+        logger.error(f'Error showing discovery source: {e}')
+        return 1
+
+
 def run_discovery_create(args):
     """
     Create a new discovery source.
@@ -1020,6 +1131,131 @@ def run_discovery_create(args):
 
     except Exception as e:
         logger.error(f'Error creating discovery source: {e}')
+        return 1
+
+
+def run_discovery_edit(args):
+    """
+    Edit an existing discovery source.
+
+    Args:
+        args: Command line arguments.
+
+    Returns:
+        int: Exit code.
+    """
+    try:
+        import json
+
+        from thoth.discovery import DiscoveryManager
+
+        discovery_manager = DiscoveryManager()
+
+        # Fetch existing source
+        source = discovery_manager.get_source(args.name)
+        if not source:
+            logger.error(f'Discovery source not found: {args.name}')
+            return 1
+
+        logger.info(f'Editing discovery source: {args.name}')
+
+        # Update source attributes
+        if args.description:
+            source.description = args.description
+            logger.info(f'Updated description: {args.description}')
+
+        if args.config_file:
+            config_file = Path(args.config_file)
+            if not config_file.exists():
+                logger.error(f'Configuration file not found: {config_file}')
+                return 1
+
+            with open(config_file) as f:
+                config_data = json.load(f)
+
+            # Update configuration fields
+            if 'api_config' in config_data:
+                source.api_config = config_data['api_config']
+                logger.info('Updated API configuration')
+
+            if 'scraper_config' in config_data:
+                source.scraper_config = config_data['scraper_config']
+                logger.info('Updated scraper configuration')
+
+            if 'schedule_config' in config_data:
+                from thoth.utilities.models import ScheduleConfig
+
+                source.schedule_config = ScheduleConfig(
+                    **config_data['schedule_config']
+                )
+                logger.info('Updated schedule configuration')
+
+            if 'query_filters' in config_data:
+                source.query_filters = config_data['query_filters']
+                logger.info('Updated query filters')
+
+        # Update active status
+        if args.active:
+            source.is_active = args.active.lower() == 'true'
+            logger.info(f'Updated active status: {source.is_active}')
+
+        # Save updated source
+        discovery_manager.update_source(source)
+
+        logger.info(f'Successfully updated discovery source: {args.name}')
+        logger.info(f'  Description: {source.description}')
+        logger.info(f'  Active: {source.is_active}')
+
+        return 0
+
+    except Exception as e:
+        logger.error(f'Error updating discovery source: {e}')
+        return 1
+
+
+def run_discovery_delete(args):
+    """
+    Delete a discovery source.
+
+    Args:
+        args: Command line arguments.
+
+    Returns:
+        int: Exit code.
+    """
+    try:
+        from thoth.discovery import DiscoveryManager
+
+        discovery_manager = DiscoveryManager()
+
+        # Check if source exists
+        source = discovery_manager.get_source(args.name)
+        if not source:
+            logger.error(f'Discovery source not found: {args.name}')
+            return 1
+
+        # Confirm deletion
+        if not args.confirm:
+            print('\nDiscovery Source Details:')
+            print(f'  Name: {source.name}')
+            print(f'  Type: {source.source_type}')
+            print(f'  Description: {source.description}')
+            print(f'  Active: {source.is_active}')
+            print('\nAre you sure you want to delete this discovery source?')
+            print('This action cannot be undone.')
+            response = input('Type "delete" to confirm: ')
+            if response.lower() != 'delete':
+                logger.info('Deletion cancelled.')
+                return 0
+
+        # Delete source
+        discovery_manager.delete_source(args.name)
+
+        logger.info(f'Successfully deleted discovery source: {args.name}')
+        return 0
+
+    except Exception as e:
+        logger.error(f'Error deleting discovery source: {e}')
         return 1
 
 
