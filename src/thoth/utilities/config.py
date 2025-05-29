@@ -306,6 +306,54 @@ class ResearchAgentConfig(BaseSettings):
     )
 
 
+class RAGConfig(BaseSettings):
+    """Configuration for the RAG (Retrieval-Augmented Generation) system."""
+
+    model_config = SettingsConfigDict(
+        env_prefix='RAG_',
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='ignore',
+    )
+    # Embedding configuration
+    embedding_model: str = Field(
+        'openai/text-embedding-3-small',
+        description='Model to use for generating embeddings',
+    )
+    embedding_batch_size: int = Field(
+        100, description='Batch size for embedding generation'
+    )
+
+    # Vector store configuration
+    vector_db_path: Path = Field(
+        Path('knowledge/vector_db'),
+        description='Path to persist the vector database',
+    )
+    collection_name: str = Field(
+        'thoth_knowledge', description='Name of the vector database collection'
+    )
+
+    # Document processing configuration
+    chunk_size: int = Field(
+        1000, description='Size of text chunks for splitting documents'
+    )
+    chunk_overlap: int = Field(200, description='Overlap between consecutive chunks')
+
+    # Question answering configuration
+    qa_model: str = Field(
+        'openai/gpt-4o-mini',
+        description='Model to use for question answering',
+    )
+    qa_temperature: float = Field(
+        0.2, description='Temperature for QA model (lower = more focused)'
+    )
+    qa_max_tokens: int = Field(2000, description='Maximum tokens for QA responses')
+    retrieval_k: int = Field(
+        4, description='Number of documents to retrieve for context'
+    )
+
+
 class LoggingConfig(BaseSettings):
     """Configuration for logging."""
 
@@ -421,6 +469,9 @@ class ThothConfig(BaseSettings):
     )
     discovery_config: DiscoveryConfig = Field(
         default_factory=DiscoveryConfig, description='Discovery system configuration'
+    )
+    rag_config: RAGConfig = Field(
+        default_factory=RAGConfig, description='RAG system configuration'
     )
 
     def setup_logging(self) -> None:
