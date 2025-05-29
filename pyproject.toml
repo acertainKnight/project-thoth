@@ -12,31 +12,55 @@ authors = [{name="Nick Hallmark", email="NHALLMARK3@BLOOMBERG.NET"}]
 
 dependencies = [
     # Core Dependencies
-    "watchdog>=3.0.0", # For monitoring PDF folder
-    "mistralai>=0.0.7", # For OCR API access
-    "openrouter>=0.0.1", # For LLM API access
-    "jinja2>=3.1.2", # For template rendering
-    "pydantic>=2.4.2", # For data validation
-    "pydantic-settings>=2.0.0", # For settings management
-    "loguru>=0.7.0", # For logging
-    "python-dotenv>=1.0.0", # For environment variables
+    "watchdog>=6.0.0", # For monitoring PDF folder
+    "mistralai>=1.5.1", # For OCR API access
+    "openrouter>=1.0", # For LLM API access
+    "jinja2>=3.1.6", # For template rendering
+    "pydantic>=2.9.2", # For data validation
+    "pydantic-settings>=2.5.0", # For settings management
+    "loguru>=0.7.3", # For logging
+    "python-dotenv>=1.0.1", # For environment variables
     "aiohttp>=3.8.5", # For async HTTP requests
-    "pypdf>=4.0.0", # For PDF processing
-    "requests>=2.31.0", # For HTTP requests
+    "pypdf>=5.3.1", # For PDF processing
+    "requests>=2.32.3", # For HTTP requests
     "click>=8.1.8", # For CLI
-    "fastapi>=0.100.0", # For API endpoints
-    "uvicorn>=0.23.0", # For ASGI server
+    "fastapi>=0.115.12", # For API endpoints
+    "uvicorn>=0.32.0", # For ASGI server
     # LangChain Dependencies
-    "langchain>=0.0.335", # For document processing and chunking
-    "langchain-text-splitters>=0.0.1", # For text splitting capabilities
+    "langchain>=0.3.21", # For document processing and chunking
+    "langchain-core>=0.3.45",
+    "langchain-text-splitters>=0.3.7", # For text splitting capabilities
     "langchain-openai>=0.3.9",
+    "langgraph>=0.4.7",
+    "langgraph-checkpoint>=2.0.26",
+    "langgraph-sdk>=0.1.70",
+    "langgraph-prebuilt>=0.2.1",
+    "langsmith>=0.3.16",
+    # Vector Store and RAG Dependencies
+    "chromadb>=0.5.0", # For vector database
+    "langchain-chroma>=0.1.0", # For ChromaDB integration with LangChain
+    # Data Processing Dependencies
     "networkx>=3.4.2",
     "scholarly>=1.7.11",
     "tiktoken>=0.9.0",
     "grandalf>=0.8",
     "json-repair>=0.44.1",
-    "langgraph>=0.4.7",
     "websockets>=15.0.1",
+    "openai>=1.57.0",
+    "beautifulsoup4>=4.13.2",
+    "lxml>=5.3.0",
+    "matplotlib>=3.9.2",
+    "plotly>=5.20.0",
+    "bibtexparser>=1.4.2",
+    "selenium>=4.29.0",
+    "fake-useragent>=2.1.0",
+    "arrow>=1.3.0",
+    "sqlalchemy>=2.0.39",
+    "deprecated>=1.2.18",
+    "httpx>=0.27.0",
+    "jsonpatch>=1.33",
+    "roman-numerals-py>=3.1.0",
+    "feedparser>=6.0.11",
 ]
 
 [project.optional-dependencies]

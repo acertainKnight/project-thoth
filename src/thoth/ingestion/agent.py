@@ -2298,6 +2298,12 @@ I'm an AI assistant that helps you manage both research queries AND discovery so
 • Use `show_queries_location` - Show where queries are stored (debugging)
 • Use `evaluate_article` - Test how well an article matches your queries
 
+**📚 Knowledge Base RAG (NEW):**
+• Use `search_knowledge` - Search through your research papers and notes
+• Use `ask_knowledge` - Ask questions about your research collection
+• Use `index_knowledge` - Index all documents into the RAG system
+• Use `rag_stats` - Get statistics about the indexed knowledge base
+
 **🎯 How It Works:**
 1. **Discovery Sources** automatically find new research articles from:
    - ArXiv API (computer science, physics, math papers)
@@ -2309,17 +2315,22 @@ I'm an AI assistant that helps you manage both research queries AND discovery so
    - Your queries automatically filter discovered articles
    - Only relevant articles are downloaded and processed
 
+3. **Knowledge Base RAG** helps you explore your research:
+   - Search through all your papers and notes
+   - Ask questions and get answers with citations
+   - Find connections between different papers
+
 **💡 Tool Usage Examples:**
 • Create ArXiv source: Use create_arxiv_source with {"name": "ai_research", "keywords": ["artificial intelligence"], "categories": ["cs.AI", "cs.LG"]}
-• List sources: Use list_discovery_sources
-• Run discovery: Use run_discovery with {"source_name": "ai_research"}
-• Create query: Use create_query with complete query configuration
+• Search knowledge: Use search_knowledge with {"query": "transformer architecture"}
+• Ask question: Use ask_knowledge with {"question": "What are the main contributions of attention mechanisms?"}
 
 **🚀 Quick Start:**
 1. Use list_discovery_sources to see current sources
 2. Use create_arxiv_source or create_pubmed_source to add sources
 3. Use create_query to define filtering criteria
 4. Use run_discovery to start finding articles
+5. Use search_knowledge or ask_knowledge to explore your collection
 
 I can intelligently choose the right tools based on your requests!
 """
@@ -2329,6 +2340,188 @@ I can intelligently choose the right tools based on your requests!
                 name='get_help',
                 description='Get comprehensive help information about all available capabilities and tool usage examples.',
                 func=_get_help_tool,
+            ),
+        )
+
+        # --- RAG Knowledge Base Tools ---
+
+        def _search_knowledge_tool(input_json: str) -> str:
+            """Search the knowledge base for relevant documents. Input should be JSON
+            with 'query' and optional 'k' (number of results) and 'filter'
+            parameters."""
+            import json as _json
+
+            try:
+                # Get pipeline instance to access RAG manager
+                from thoth.pipeline import ThothPipeline
+
+                pipeline = ThothPipeline()
+
+                params = _json.loads(input_json) if input_json else {}
+                query = params.get('query')
+
+                if not query:
+                    return "Error: Please provide 'query' in JSON format."
+
+                k = params.get('k', 4)
+                filter_dict = params.get('filter')
+
+                results = pipeline.search_knowledge_base(
+                    query=query,
+                    k=k,
+                    filter=filter_dict,
+                )
+
+                if not results:
+                    return f"No results found for query: '{query}'"
+
+                response = [f"Search results for: '{query}'\n"]
+                for i, result in enumerate(results, 1):
+                    response.append(f'\n**Result {i}:**')
+                    response.append(f'Title: {result["title"]}')
+                    response.append(f'Type: {result["document_type"]}')
+                    response.append(f'Score: {result["score"]:.3f}')
+                    response.append(f'Preview: {result["content"][:200]}...')
+
+                return '\n'.join(response)
+
+            except Exception as e:
+                return f'Error searching knowledge base: {e}'
+
+        tools.append(
+            Tool(
+                name='search_knowledge',
+                description='Search the knowledge base for relevant documents. Provide JSON with query and optional k (number of results, default 4).',
+                func=_search_knowledge_tool,
+            ),
+        )
+
+        def _ask_knowledge_tool(input_json: str) -> str:
+            """Ask a question about the knowledge base. Input should be JSON with
+            'question' and optional 'k' (number of context docs) parameters."""
+            import json as _json
+
+            try:
+                # Get pipeline instance to access RAG manager
+                from thoth.pipeline import ThothPipeline
+
+                pipeline = ThothPipeline()
+
+                params = _json.loads(input_json) if input_json else {}
+                question = params.get('question')
+
+                if not question:
+                    return "Error: Please provide 'question' in JSON format."
+
+                k = params.get('k', 4)
+                filter_dict = params.get('filter')
+
+                result = pipeline.ask_knowledge_base(
+                    question=question,
+                    k=k,
+                    filter=filter_dict,
+                )
+
+                response = [f'**Question:** {result["question"]}\n']
+                response.append(f'**Answer:** {result["answer"]}\n')
+
+                if result.get('sources'):
+                    response.append('**Sources:**')
+                    for i, source in enumerate(result['sources'], 1):
+                        title = source['metadata'].get('title', 'Unknown')
+                        doc_type = source['metadata'].get('document_type', 'Unknown')
+                        response.append(f'{i}. {title} ({doc_type})')
+
+                return '\n'.join(response)
+
+            except Exception as e:
+                return f'Error asking knowledge base: {e}'
+
+        tools.append(
+            Tool(
+                name='ask_knowledge',
+                description='Ask a question about your research knowledge base. Provide JSON with question and optional k (number of context documents, default 4).',
+                func=_ask_knowledge_tool,
+            ),
+        )
+
+        def _index_knowledge_tool(_input: str) -> str:
+            """Index all documents in the knowledge base for RAG search."""
+            try:
+                # Get pipeline instance to access RAG manager
+                from thoth.pipeline import ThothPipeline
+
+                pipeline = ThothPipeline()
+
+                stats = pipeline.index_knowledge_base()
+
+                response = ['**Knowledge Base Indexing Complete!**\n']
+                response.append(f'Total files indexed: {stats["total_files"]}')
+                response.append(f'- Markdown files: {stats["markdown_files"]}')
+                response.append(f'- Note files: {stats["note_files"]}')
+                response.append(f'Total chunks created: {stats["total_chunks"]}')
+
+                if stats['errors']:
+                    response.append('\n**Errors encountered:**')
+                    for error in stats['errors']:
+                        response.append(f'- {error}')
+
+                if 'vector_store' in stats:
+                    response.append('\n**Vector Store Info:**')
+                    response.append(
+                        f'- Collection: {stats["vector_store"]["collection_name"]}'
+                    )
+                    response.append(
+                        f'- Documents: {stats["vector_store"]["document_count"]}'
+                    )
+
+                return '\n'.join(response)
+
+            except Exception as e:
+                return f'Error indexing knowledge base: {e}'
+
+        tools.append(
+            Tool(
+                name='index_knowledge',
+                description='Index all documents in the knowledge base for RAG search. This enables semantic search and question answering.',
+                func=_index_knowledge_tool,
+            ),
+        )
+
+        def _rag_stats_tool(_input: str) -> str:
+            """Get statistics about the RAG knowledge base."""
+            try:
+                # Get pipeline instance to access RAG manager
+                from thoth.pipeline import ThothPipeline
+
+                pipeline = ThothPipeline()
+
+                stats = pipeline.get_rag_stats()
+
+                response = ['**RAG System Statistics:**\n']
+                response.append(f'Documents indexed: {stats.get("document_count", 0)}')
+                response.append(
+                    f'Collection name: {stats.get("collection_name", "Unknown")}'
+                )
+                response.append(
+                    f'Embedding model: {stats.get("embedding_model", "Unknown")}'
+                )
+                response.append(f'QA model: {stats.get("qa_model", "Unknown")}')
+                response.append(f'Chunk size: {stats.get("chunk_size", "Unknown")}')
+                response.append(
+                    f'Chunk overlap: {stats.get("chunk_overlap", "Unknown")}'
+                )
+
+                return '\n'.join(response)
+
+            except Exception as e:
+                return f'Error getting RAG stats: {e}'
+
+        tools.append(
+            Tool(
+                name='rag_stats',
+                description='Get statistics about the RAG knowledge base system.',
+                func=_rag_stats_tool,
             ),
         )
 

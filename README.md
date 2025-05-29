@@ -109,3 +109,89 @@ Configuration is managed through environment variables and the `.env` file. Key 
 ## License
 
 [MIT License](LICENSE)
+
+# Discovery System
+
+The discovery system automatically finds and downloads research papers based on your interests:
+
+```bash
+# List configured sources
+python -m thoth discovery list
+
+# Create a new ArXiv source
+python -m thoth discovery create --name "ml_papers" --type api --description "Machine learning papers"
+
+# Run discovery
+python -m thoth discovery run --source ml_papers --max-articles 10
+
+# Start the scheduler for automatic discovery
+python -m thoth discovery scheduler start
+```
+
+For detailed information about the discovery system, see [DISCOVERY_SYSTEM_README.md](DISCOVERY_SYSTEM_README.md).
+
+## 📚 RAG Knowledge Base
+
+Thoth includes a powerful RAG (Retrieval-Augmented Generation) system that allows you to search through and ask questions about your entire research collection:
+
+### Setting Up RAG
+
+```bash
+# Index all your documents (run this after processing PDFs)
+python -m thoth rag index
+
+# Check RAG system status
+python -m thoth rag stats
+```
+
+### Using RAG
+
+```bash
+# Search for relevant documents
+python -m thoth rag search --query "transformer architecture" --k 5
+
+# Ask questions about your research
+python -m thoth rag ask --question "What are the main contributions of attention mechanisms in neural networks?"
+
+# Filter searches by document type
+python -m thoth rag search --query "deep learning" --filter-type note
+```
+
+### RAG in the Research Agent
+
+The research agent has full access to the RAG system:
+
+```bash
+python -m thoth agent
+
+# In the agent:
+You: search my knowledge base for transformer papers
+Agent: [searches and returns relevant papers]
+
+You: what do my notes say about attention mechanisms?
+Agent: [searches notes and provides summary]
+
+You: explain the key differences between BERT and GPT based on my papers
+Agent: [analyzes your collection and provides insights]
+```
+
+### RAG Configuration
+
+Configure RAG in your `.env` file:
+
+```env
+# Embedding model for semantic search
+RAG_EMBEDDING_MODEL="openai/text-embedding-3-small"
+
+# Model for answering questions
+RAG_QA_MODEL="openai/gpt-4o-mini"
+
+# Chunk settings for document processing
+RAG_CHUNK_SIZE=1000
+RAG_CHUNK_OVERLAP=200
+
+# Number of documents to retrieve for context
+RAG_RETRIEVAL_K=4
+```
+
+## 🤖 Interactive Research Agent
