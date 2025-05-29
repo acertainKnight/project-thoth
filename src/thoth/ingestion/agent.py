@@ -52,6 +52,10 @@ class ResearchAssistantAgent:
         queries_dir: str | Path | None = None,
         agent_storage_dir: str | Path | None = None,
         model_kwargs: dict[str, Any] | None = None,
+        *,
+        use_tool_agent: bool = True,
+        enable_persistent_memory: bool = False,
+        memory_file: str | Path | None = None,
     ):
         """
         Initialize the Research Assistant Agent.
@@ -69,6 +73,10 @@ class ResearchAssistantAgent:
             agent_storage_dir: Directory for storing agent-managed articles (defaults to
                 config).
             model_kwargs: Additional keyword arguments for the model.
+            use_tool_agent: Whether to use the tool-based agent (defaults to True).
+            enable_persistent_memory: Whether to enable persistent memory
+                (defaults to False).
+            memory_file: Path to the file for persistent memory (optional).
         """
         # Load configuration
         self.config = get_config()
@@ -92,9 +100,7 @@ class ResearchAssistantAgent:
             or self.config.research_agent_llm_config.model_settings.model_dump()
         )
 
-        self.prompts_dir = (
-            Path(prompts_dir or self.config.prompts_dir) / (self.model).split('/')[0]
-        )
+        self.prompts_dir = Path(prompts_dir or self.config.prompts_dir) / 'agent'
 
         # Create directories if they don't exist
         self.queries_dir.mkdir(parents=True, exist_ok=True)
@@ -117,6 +123,17 @@ class ResearchAssistantAgent:
         # Initialize Discovery Manager
         # Lazy loaded to avoid circular import
         self._discovery_manager = None
+
+        # Initialize persistent memory if enabled
+        self.enable_persistent_memory = enable_persistent_memory
+        self.memory_file = Path(
+            memory_file or (self.agent_storage_dir / 'conversation_memory.json')
+        )
+        self._persistent_conversation_history: list[dict[str, str]] = []
+
+        if self.enable_persistent_memory:
+            self._load_conversation_memory()
+            logger.info(f'Persistent memory enabled, using: {self.memory_file}')
 
         # Create structured LLMs for different tasks
         self.evaluation_llm = self.llm.with_structured_output(
@@ -155,6 +172,36 @@ class ResearchAssistantAgent:
         # Build the LangGraph workflow
         self.app = self._build_graph()
 
+        # ------------------------------------------------------------------
+        #  Tool-calling agent (Model Context Protocol)
+        # ------------------------------------------------------------------
+        # Opt-in to the new LangChain "model context" approach where the LLM
+        # decides which tools to invoke.  This provides far greater
+        # flexibility compared to the legacy keyword-parsing flow above and
+        # makes it trivial to add new capabilities - simply register a new
+        # Tool instance.
+
+        self.use_tool_agent = use_tool_agent
+        self.agent_executor = None
+        self.use_modern_agent = (
+            False  # Will be set to True if modern LangGraph agent initializes
+        )
+        self.modern_agent = None
+        self._current_conversation_context = ''  # Initialize conversation context
+
+        if self.use_tool_agent:
+            try:
+                self._init_tool_agent()
+                logger.info('Tool-calling agent initialised successfully')
+
+            except Exception as e:
+                # If tool agent initialisation fails fall back to legacy flow
+                logger.warning(
+                    'Failed to initialise tool-calling agent - falling back to '
+                    f'legacy mode: {e}',
+                )
+                self.use_tool_agent = False
+
         logger.info('Research Assistant Agent initialized successfully')
 
     @property
@@ -164,7 +211,12 @@ class ResearchAssistantAgent:
             try:
                 from thoth.discovery import DiscoveryManager
 
-                self._discovery_manager = DiscoveryManager()
+                # Always point to the canonical discovery_sources_dir defined in
+                # the global configuration so the agent sees the same sources
+                # as the CLI and scheduler.
+                self._discovery_manager = DiscoveryManager(
+                    sources_config_dir=self.config.discovery_sources_dir,
+                )
             except ImportError as e:
                 logger.warning(f'Discovery manager not available: {e}')
                 self._discovery_manager = None
@@ -191,8 +243,12 @@ class ResearchAssistantAgent:
                 template_source, template_format='jinja2'
             )
         except Exception as e:
-            logger.error(f'Failed to load template {template_name}: {e}')
-            raise FileNotFoundError(f'Template {template_name} not found') from e
+            logger.error(
+                f'Failed to load template {template_name} from {self.prompts_dir}: {e}'
+            )
+            raise FileNotFoundError(
+                f'Template {template_name} not found in {self.prompts_dir}'
+            ) from e
 
     # --- Query Management Methods ---
 
@@ -662,6 +718,7 @@ I'm an AI assistant that helps you manage both research queries AND discovery so
 • `list queries` - Show all existing research queries
 • `edit query_name` - Modify an existing query
 • `delete query_name` - Remove a research query
+• `show_queries_location` - Show where queries are stored (debugging)
 • `evaluate article` - Test how well an article matches your queries
 
 **🎯 How It Works:**
@@ -1216,6 +1273,11 @@ Please specify which source you'd like to delete.
         """
         Process a user message and return the agent's response.
 
+        This method implements a hybrid MCP framework that:
+        1. Uses the tool-calling agent for most structured requests
+        2. Falls back to legacy graph-based handlers for conversational flows
+        3. Provides intelligent routing between the two approaches
+
         Args:
             user_message: The user's input message.
             conversation_history: Previous conversation messages.
@@ -1229,7 +1291,260 @@ Please specify which source you'd like to delete.
         """
         logger.info(f'Processing user message: {user_message[:100]}...')
 
-        # Construct initial state
+        # Combine persistent memory with session memory if enabled
+        combined_history = []
+        if self.enable_persistent_memory:
+            combined_history.extend(self._persistent_conversation_history)
+        if conversation_history:
+            combined_history.extend(conversation_history)
+
+        # Set conversation context for tools to access
+        self._current_conversation_context = self._build_conversation_context(
+            user_message, combined_history
+        )
+
+        # ------------------------------------------------------------------
+        #  Enhanced Tool-agent mode with intelligent routing
+        # ------------------------------------------------------------------
+        if self.use_tool_agent:
+            # Try modern LangGraph agent first (best practice)
+            if self.use_modern_agent and self.modern_agent is not None:
+                try:
+                    return self._handle_with_modern_agent(
+                        user_message, combined_history, config
+                    )
+                except Exception as e:
+                    logger.warning(f'Modern agent failed, falling back to legacy: {e}')
+                    # Fall through to legacy agent
+
+            # Legacy tool-calling agent
+            if self.agent_executor is not None:
+                try:
+                    # Check if this is a simple conversational request
+                    # that should use legacy mode
+                    user_lower = user_message.lower().strip()
+
+                    # Conversational patterns that work better with legacy handlers
+                    conversational_patterns = [
+                        'hello',
+                        'hi',
+                        'hey',
+                        'what can you do',
+                        'what are you',
+                        'how are you',
+                        'thanks',
+                        'thank you',
+                        'goodbye',
+                        'bye',
+                        'exit',
+                        'quit',
+                        'done',
+                        'help me understand',
+                        'explain',
+                        'i need help',
+                        'can you help',
+                        'guide me',
+                        'walk me through',
+                    ]
+
+                    # If it's a simple conversational request, use legacy mode for
+                    # better UX
+                    if any(
+                        pattern in user_lower for pattern in conversational_patterns
+                    ):
+                        logger.debug('Using legacy mode for conversational request')
+                        return self._handle_with_legacy_mode(
+                            user_message, combined_history, config
+                        )
+
+                    # For structured requests, enhance the message with tool guidance
+                    enhanced_message = self._enhance_message_for_tools(user_message)
+
+                    # Convert conversation history to the format expected by LangChain
+                    chat_history = []
+                    if combined_history:
+                        for msg in combined_history:
+                            role = msg.get('role', '')
+                            content = msg.get('content', '')
+                            if role == 'user':
+                                chat_history.append(('human', content))
+                            elif role in ['agent', 'assistant']:
+                                chat_history.append(('ai', content))
+
+                    # Use the tool-calling agent with conversation history
+                    agent_reply = self.agent_executor.invoke(
+                        {'input': enhanced_message, 'chat_history': chat_history}
+                    )
+
+                    # Debug: Log the full agent response
+                    logger.debug(f'Full agent response: {agent_reply}')
+
+                    # Extract the actual content from the agent response
+                    if isinstance(agent_reply, dict):
+                        content = (
+                            agent_reply.get('output')
+                            or agent_reply.get('content')
+                            or agent_reply.get('text')
+                            or agent_reply.get('response')
+                            or str(agent_reply)
+                        )
+                    elif hasattr(agent_reply, 'content'):
+                        content = agent_reply.content
+                    else:
+                        content = str(agent_reply)
+
+                    # Debug: Log the extracted content
+                    logger.debug(f'Extracted content: {content}')
+
+                    # If we got an empty response, try to handle the request directly
+                    if not content or not str(content).strip():
+                        logger.warning(
+                            'Agent returned empty response, handling directly'
+                        )
+
+                        # Try to extract tool name from the enhanced message
+                        import re
+
+                        tool_match = re.search(
+                            r'(create_arxiv_source|create_pubmed_source|list_discovery_sources|run_discovery|list_queries|get_query|delete_query)',
+                            enhanced_message,
+                        )
+                        tool_name = tool_match.group(1) if tool_match else None
+
+                        if tool_name:
+                            try:
+                                tools = self._create_tools()
+                                tool = next(
+                                    (t for t in tools if t.name == tool_name), None
+                                )
+                                if tool:
+                                    logger.debug(f'Calling tool directly: {tool_name}')
+                                    content = tool.func('')
+                                    logger.debug(f'Direct tool output: {content}')
+                            except Exception as e:
+                                logger.error(f'Error calling {tool_name} directly: {e}')
+                                content = f'I can help you with {tool_name}, but encountered an error: {e}'
+
+                        # Generic fallback
+                        if not content or not str(content).strip():
+                            content = '⚠️ The tool did not return any output. Please try again or check the tool implementation.'
+                            logger.debug('Using generic fallback for empty tool output')
+
+                    # Save conversation to persistent memory if enabled
+                    if self.enable_persistent_memory and content:
+                        self._persistent_conversation_history.append(
+                            {'role': 'user', 'content': user_message}
+                        )
+                        self._persistent_conversation_history.append(
+                            {'role': 'agent', 'content': content}
+                        )
+                        self._save_conversation_memory()
+
+                    return {
+                        'agent_response': content,
+                        'action': 'tool_agent',
+                        'needs_user_input': True,
+                        'error_message': None,
+                        'available_queries': self._list_queries(),
+                    }
+
+                except Exception as e:
+                    logger.warning(
+                        f'Tool-agent processing failed, falling back to legacy mode: {e}'
+                    )
+                    # Fall back to legacy mode if tool agent fails
+                    return self._handle_with_legacy_mode(
+                        user_message, combined_history, config
+                    )
+
+        # ------------------------------------------------------------------
+        #  Legacy keyword-parsing mode (fallback)
+        # ------------------------------------------------------------------
+        return self._handle_with_legacy_mode(user_message, combined_history, config)
+
+    def _enhance_message_for_tools(self, user_message: str) -> str:
+        """
+        Enhance a user message with context about available tools and expected JSON
+        formats.
+
+        This helps the LLM understand how to structure requests for the MCP framework.
+
+        Args:
+            user_message: The original user message.
+
+        Returns:
+            str: Enhanced message with tool guidance.
+        """
+        # Get conversation context
+        context = getattr(self, '_current_conversation_context', '')
+
+        # Analyze message to suggest specific tools
+        suggested_tools = []
+        message_lower = user_message.lower()
+
+        if (
+            any(word in message_lower for word in ['create', 'make', 'build'])
+            and 'arxiv' in message_lower
+        ):
+            suggested_tools.append(
+                'create_arxiv_source - Use this to create the ArXiv source we discussed'
+            )
+        if (
+            any(word in message_lower for word in ['create', 'make', 'build'])
+            and 'pubmed' in message_lower
+        ):
+            suggested_tools.append(
+                'create_pubmed_source - Use this to create the PubMed source'
+            )
+        if 'list' in message_lower and 'source' in message_lower:
+            suggested_tools.append(
+                'list_discovery_sources - Show all configured sources'
+            )
+        if 'run' in message_lower and 'discovery' in message_lower:
+            suggested_tools.append('run_discovery - Execute discovery for sources')
+
+        # Build enhanced message
+        enhanced = f"""{user_message}
+
+Recent conversation context: {context}
+
+Available tools:
+- Query management: list_queries, create_query, get_query, delete_query
+- Discovery sources: list_discovery_sources, create_arxiv_source, create_pubmed_source, run_discovery
+- Help: get_help"""
+
+        if suggested_tools:
+            enhanced += '\n\nSuggested tools for this request:\n- ' + '\n- '.join(
+                suggested_tools
+            )
+
+        enhanced += '\n\nUse appropriate tools to complete the request. For ArXiv sources, use JSON format like: {"name": "source_name", "keywords": ["keyword1", "keyword2"], "categories": ["cs.LG", "cs.AI"]}'
+
+        return enhanced
+
+    def _handle_with_legacy_mode(
+        self,
+        user_message: str,
+        conversation_history: list[dict[str, str]] | None = None,
+        config: RunnableConfig | None = None,
+    ) -> dict[str, Any]:
+        """
+        Handle a request using the legacy graph-based mode.
+
+        This provides the conversational experience and handles edge cases
+        that the tool-calling agent might not handle well.
+
+        Args:
+            user_message: The user's input message.
+            conversation_history: Previous conversation messages.
+            config: Optional LangChain RunnableConfig.
+
+        Returns:
+            dict: Response from the legacy graph-based agent.
+        """
+        logger.debug('Using legacy graph-based mode')
+
+        # Construct initial state for the LangGraph workflow
         initial_state: ResearchAgentState = {
             'user_message': user_message,
             'agent_response': None,
@@ -1245,11 +1560,20 @@ Please specify which source you'd like to delete.
         }
 
         try:
-            # Invoke the graph
             final_state = self.app.invoke(initial_state, config=config)
 
-            # Extract response information
-            response = {
+            # Save conversation to persistent memory if enabled
+            response_content = final_state.get('agent_response')
+            if self.enable_persistent_memory and response_content:
+                self._persistent_conversation_history.append(
+                    {'role': 'user', 'content': user_message}
+                )
+                self._persistent_conversation_history.append(
+                    {'role': 'agent', 'content': response_content}
+                )
+                self._save_conversation_memory()
+
+            return {
                 'agent_response': final_state.get('agent_response'),
                 'action': final_state.get('action'),
                 'needs_user_input': final_state.get('needs_user_input', True),
@@ -1257,12 +1581,11 @@ Please specify which source you'd like to delete.
                 'available_queries': final_state.get('available_queries', []),
             }
 
-            logger.info('Successfully processed user message')
-            return response
-
         except Exception as e:
-            logger.error(f'Error processing user message: {e}')
-            raise ResearchAgentError(f'Failed to process message: {e!s}') from e
+            logger.error(f'Error processing user message (legacy mode): {e}')
+            raise ResearchAgentError(
+                f'Failed to process message: {e!s}',
+            ) from e
 
     def evaluate_article(
         self, article: AnalysisResponse, query_name: str
@@ -1423,3 +1746,819 @@ Please specify which source you'd like to delete.
             dict: Discovery results including articles found, filtered, and downloaded.
         """
         return self._run_discovery(source_name, max_articles)
+
+    # ------------------------------------------------------------------
+    #  Tool-agent helpers
+    # ------------------------------------------------------------------
+
+    def _create_tools(self):
+        """Create a comprehensive list of LangChain Tool objects backed by internal
+        methods."""
+
+        from langchain.tools import Tool
+
+        tools: list[Tool] = []
+
+        # --- Query Management Tools ---
+
+        def _list_queries_tool(_input: str) -> str:
+            """Return a newline-separated list of available research queries."""
+            queries = self._list_queries()
+            return '\n'.join(queries) if queries else 'No research queries found.'
+
+        tools.append(
+            Tool(
+                name='list_queries',
+                description='List all available research queries.',
+                func=_list_queries_tool,
+            ),
+        )
+
+        def _show_queries_location_tool(_input: str) -> str:
+            """Show where queries are stored and provide detailed path information."""
+            from pathlib import Path
+
+            result = ['**Query Storage Information:**\n']
+            result.append(f'📁 **Configured queries directory:** {self.queries_dir}')
+            result.append(f'🔍 **Directory exists:** {self.queries_dir.exists()}')
+            result.append(f'📍 **Absolute path:** {self.queries_dir.resolve()}')
+
+            # List actual query files in the configured directory
+            if self.queries_dir.exists():
+                query_files = list(self.queries_dir.glob('*.json'))
+                result.append(
+                    f'\n📝 **Query files in configured directory:** {len(query_files)}'
+                )
+                for f in query_files:
+                    result.append(f'   - {f.name}')
+            else:
+                result.append('\n❌ **Configured directory does not exist!**')
+
+            # Check for legacy queries directory
+            legacy_dir = Path('queries')
+            if legacy_dir.exists():
+                legacy_files = list(legacy_dir.glob('*.json'))
+                result.append(
+                    f'\n📁 **Legacy queries directory found:** {legacy_dir.resolve()}'
+                )
+                result.append(f'📝 **Legacy query files:** {len(legacy_files)}')
+                for f in legacy_files:
+                    result.append(f'   - {f.name}')
+
+            # Check planning/queries too
+            planning_dir = Path('planning/queries')
+            if planning_dir.exists():
+                planning_files = list(planning_dir.glob('*.json'))
+                result.append(
+                    f'\n📁 **Planning queries directory found:** {planning_dir.resolve()}'
+                )
+                result.append(f'📝 **Planning query files:** {len(planning_files)}')
+                for f in planning_files:
+                    result.append(f'   - {f.name}')
+
+            return '\n'.join(result)
+
+        tools.append(
+            Tool(
+                name='show_queries_location',
+                description='Show where research queries are stored and provide detailed path information for debugging.',
+                func=_show_queries_location_tool,
+            ),
+        )
+
+        def _get_query_tool(input_json: str) -> str:
+            """Get details of a specific research query. Input should be JSON with
+            'query_name' key."""
+            import json as _json
+
+            try:
+                params = _json.loads(input_json) if input_json else {}
+                query_name = params.get('query_name')
+
+                if not query_name:
+                    return "Error: Please provide 'query_name' in JSON format."
+
+                query = self._load_query(query_name)
+                if not query:
+                    return f"Query '{query_name}' not found."
+
+                return _json.dumps(query.model_dump(), indent=2)
+
+            except Exception as e:
+                return f'Error getting query: {e}'
+
+        tools.append(
+            Tool(
+                name='get_query',
+                description='Get detailed information about a specific research query. Provide JSON with query_name.',
+                func=_get_query_tool,
+            ),
+        )
+
+        def _create_query_tool(input_json: str) -> str:
+            """Create a new research query. Input should be JSON with query
+            configuration."""
+            import json as _json
+
+            from thoth.utilities.models import ResearchQuery
+
+            try:
+                if not input_json:
+                    return 'Error: Please provide query configuration in JSON format.'
+
+                query_data = _json.loads(input_json)
+                query = ResearchQuery(**query_data)
+
+                if self._save_query(query):
+                    return f'Successfully created research query: {query.name}'
+                else:
+                    return f'Failed to create query: {query.name}'
+
+            except Exception as e:
+                return f'Error creating query: {e}'
+
+        tools.append(
+            Tool(
+                name='create_query',
+                description='Create a new research query. Provide JSON with query configuration including name, research_question, keywords, etc.',
+                func=_create_query_tool,
+            ),
+        )
+
+        def _delete_query_tool(input_json: str) -> str:
+            """Delete a research query. Input should be JSON with 'query_name' key."""
+            import json as _json
+
+            try:
+                params = _json.loads(input_json) if input_json else {}
+                query_name = params.get('query_name')
+
+                if not query_name:
+                    return "Error: Please provide 'query_name' in JSON format."
+
+                if self._delete_query(query_name):
+                    return f'Successfully deleted query: {query_name}'
+                else:
+                    return f'Failed to delete query: {query_name} (may not exist)'
+
+            except Exception as e:
+                return f'Error deleting query: {e}'
+
+        tools.append(
+            Tool(
+                name='delete_query',
+                description='Delete a research query. Provide JSON with query_name.',
+                func=_delete_query_tool,
+            ),
+        )
+
+        # --- Discovery Source Management Tools ---
+
+        def _list_discovery_sources_tool(_input: str) -> str:
+            """Return a detailed list of discovery sources with status information."""
+            try:
+                if not self.discovery_manager:
+                    return 'Discovery manager not available. Please check your installation.'
+
+                sources = self.discovery_manager.list_sources()
+                if not sources:
+                    return 'No discovery sources configured.'
+
+                result = ['Discovery Sources:\n']
+                for source in sources:
+                    status = '🟢 Active' if source.is_active else '🔴 Inactive'
+                    result.append(
+                        f'**{source.name}** ({source.source_type}) - {status}'
+                    )
+                    result.append(f'  Description: {source.description}')
+                    if source.last_run:
+                        result.append(f'  Last run: {source.last_run}')
+                    if source.schedule_config:
+                        result.append(
+                            f'  Schedule: Every {source.schedule_config.interval_minutes} minutes'
+                        )
+                        result.append(
+                            f'  Max articles: {source.schedule_config.max_articles_per_run}'
+                        )
+                    result.append('')
+
+                return '\n'.join(result)
+
+            except Exception as e:
+                return f'Error listing discovery sources: {e}'
+
+        tools.append(
+            Tool(
+                name='list_discovery_sources',
+                description='List all configured discovery sources with detailed status information.',
+                func=_list_discovery_sources_tool,
+            ),
+        )
+
+        def _get_discovery_source_tool(input_json: str) -> str:
+            """Get detailed information about a specific discovery source. Input should
+            be JSON with 'source_name' key."""
+            import json as _json
+
+            try:
+                params = _json.loads(input_json) if input_json else {}
+                source_name = params.get('source_name')
+
+                if not source_name:
+                    return "Error: Please provide 'source_name' in JSON format."
+
+                source = self._get_discovery_source(source_name)
+                if not source:
+                    return f"Discovery source '{source_name}' not found."
+
+                return _json.dumps(source.model_dump(), indent=2)
+
+            except Exception as e:
+                return f'Error getting discovery source: {e}'
+
+        tools.append(
+            Tool(
+                name='get_discovery_source',
+                description='Get detailed information about a specific discovery source. Provide JSON with source_name.',
+                func=_get_discovery_source_tool,
+            ),
+        )
+
+        def _create_discovery_source_tool(input_json: str) -> str:
+            """Create a new discovery source. Input should be JSON with source
+            configuration."""
+            import json as _json
+
+            try:
+                if not input_json:
+                    return 'Error: Please provide source configuration in JSON format.'
+
+                source_config = _json.loads(input_json)
+
+                if self._create_discovery_source(source_config):
+                    return f'Successfully created discovery source: {source_config.get("name", "unknown")}'
+                else:
+                    return f'Failed to create discovery source: {source_config.get("name", "unknown")}'
+
+            except Exception as e:
+                return f'Error creating discovery source: {e}'
+
+        tools.append(
+            Tool(
+                name='create_discovery_source',
+                description='Create a new discovery source. Provide JSON with complete source configuration including name, source_type, description, api_config/scraper_config, etc.',
+                func=_create_discovery_source_tool,
+            ),
+        )
+
+        def _create_arxiv_source_tool(input_json: str) -> str:
+            """Create an ArXiv discovery source with simplified parameters. Input should
+            be JSON with 'name', 'keywords', and optional 'categories'."""
+            import json as _json
+
+            try:
+                params = _json.loads(input_json) if input_json else {}
+                name = params.get('name')
+                keywords = params.get('keywords', [])
+                categories = params.get('categories', ['cs.LG', 'cs.AI'])
+
+                # If parameters are missing, try to extract from recent conversation
+                # context
+                if not name or not keywords:
+                    # Access conversation history to understand context
+                    recent_context = ''
+                    if hasattr(self, '_current_conversation_context'):
+                        recent_context = self._current_conversation_context
+
+                    # Provide helpful guidance based on missing parameters
+                    missing_params = []
+                    if not name:
+                        missing_params.append("name (e.g., 'Daily ML & Econ ArXiv')")
+                    if not keywords:
+                        missing_params.append(
+                            "keywords (e.g., ['machine learning', 'economics'])"
+                        )
+
+                    guidance = (
+                        f'Missing required parameters: {", ".join(missing_params)}. '
+                    )
+                    if recent_context:
+                        guidance += f'Based on our conversation, you mentioned: {recent_context[:200]}... '
+                    guidance += 'Please provide the missing information.'
+
+                    return guidance
+
+                # Create source configuration
+                source_config = {
+                    'name': name,
+                    'source_type': 'api',
+                    'description': f'ArXiv source for {", ".join(categories)} papers',
+                    'is_active': True,
+                    'api_config': {
+                        'source': 'arxiv',
+                        'categories': categories,
+                        'keywords': keywords,
+                        'sort_by': 'lastUpdatedDate',
+                        'sort_order': 'descending',
+                    },
+                    'schedule_config': {
+                        'interval_minutes': 1440,  # Daily (24 hours) as requested
+                        'max_articles_per_run': 50,  # More articles for daily runs
+                        'enabled': True,
+                    },
+                    'query_filters': [],
+                }
+
+                if self._create_discovery_source(source_config):
+                    return f"✅ Successfully created ArXiv source '{name}'!\n\n📋 **Configuration:**\n- Categories: {categories}\n- Keywords: {keywords}\n- Schedule: Daily (every 24 hours)\n- Max articles per run: 50\n\n🚀 The source is now active and will automatically discover new papers daily."
+                else:
+                    return f"❌ Failed to create ArXiv source '{name}'. Please check the logs for more details."
+
+            except json.JSONDecodeError as e:
+                return f"❌ Invalid JSON format: {e}. Please provide valid JSON with 'name' and 'keywords' fields."
+            except Exception as e:
+                return f'❌ Error creating ArXiv source: {e}'
+
+        tools.append(
+            Tool(
+                name='create_arxiv_source',
+                description='IMMEDIATELY create an ArXiv discovery source when user wants an ArXiv source. Use this tool directly - do NOT just explain what you would do. Provide JSON with name (required), keywords (required list), and optional categories (defaults to cs.LG, cs.AI). Example: {"name": "daily_ml_source", "keywords": ["machine learning", "neural networks"], "categories": ["cs.LG", "cs.AI", "cs.CL"]}',
+                func=_create_arxiv_source_tool,
+            ),
+        )
+
+        def _create_pubmed_source_tool(input_json: str) -> str:
+            """Create a PubMed discovery source with simplified parameters. Input should
+            be JSON with 'name' and 'keywords'."""
+            import json as _json
+
+            try:
+                params = _json.loads(input_json) if input_json else {}
+                name = params.get('name')
+                keywords = params.get('keywords', [])
+
+                if not name:
+                    return "Error: Please provide 'name' for the PubMed source."
+
+                if not keywords:
+                    return (
+                        "Error: Please provide 'keywords' list for the PubMed source."
+                    )
+
+                # Create source configuration
+                source_config = {
+                    'name': name,
+                    'source_type': 'api',
+                    'description': f'PubMed source for {", ".join(keywords)} research',
+                    'is_active': True,
+                    'api_config': {
+                        'source': 'pubmed',
+                        'keywords': keywords,
+                        'sort_by': 'date',
+                        'sort_order': 'descending',
+                    },
+                    'schedule_config': {
+                        'interval_minutes': 240,
+                        'max_articles_per_run': 5,
+                        'enabled': True,
+                    },
+                    'query_filters': [],
+                }
+
+                if self._create_discovery_source(source_config):
+                    return f"Successfully created PubMed source '{name}' with keywords {keywords}"
+                else:
+                    return f"Failed to create PubMed source '{name}'"
+
+            except Exception as e:
+                return f'Error creating PubMed source: {e}'
+
+        tools.append(
+            Tool(
+                name='create_pubmed_source',
+                description='Create a PubMed discovery source with simplified parameters. Provide JSON with name (required) and keywords (required list).',
+                func=_create_pubmed_source_tool,
+            ),
+        )
+
+        def _update_discovery_source_tool(input_json: str) -> str:
+            """Update an existing discovery source. Input should be JSON with
+            'source_name' and updated configuration."""
+            import json as _json
+
+            try:
+                params = _json.loads(input_json) if input_json else {}
+                source_name = params.get('source_name')
+
+                if not source_name:
+                    return "Error: Please provide 'source_name' in JSON format."
+
+                # Get existing source
+                source = self._get_discovery_source(source_name)
+                if not source:
+                    return f"Discovery source '{source_name}' not found."
+
+                # Update with provided parameters
+                updates = {k: v for k, v in params.items() if k != 'source_name'}
+
+                # Update the source object
+                for key, value in updates.items():
+                    if hasattr(source, key):
+                        setattr(source, key, value)
+
+                if self._update_discovery_source(source):
+                    return f'Successfully updated discovery source: {source_name}'
+                else:
+                    return f'Failed to update discovery source: {source_name}'
+
+            except Exception as e:
+                return f'Error updating discovery source: {e}'
+
+        tools.append(
+            Tool(
+                name='update_discovery_source',
+                description='Update an existing discovery source. Provide JSON with source_name and any fields to update (description, is_active, api_config, etc.).',
+                func=_update_discovery_source_tool,
+            ),
+        )
+
+        def _delete_discovery_source_tool(input_json: str) -> str:
+            """Delete a discovery source. Input should be JSON with 'source_name'
+            key."""
+            import json as _json
+
+            try:
+                params = _json.loads(input_json) if input_json else {}
+                source_name = params.get('source_name')
+
+                if not source_name:
+                    return "Error: Please provide 'source_name' in JSON format."
+
+                if self._delete_discovery_source(source_name):
+                    return f'Successfully deleted discovery source: {source_name}'
+                else:
+                    return f'Failed to delete discovery source: {source_name} (may not exist)'
+
+            except Exception as e:
+                return f'Error deleting discovery source: {e}'
+
+        tools.append(
+            Tool(
+                name='delete_discovery_source',
+                description='Delete a discovery source. Provide JSON with source_name.',
+                func=_delete_discovery_source_tool,
+            ),
+        )
+
+        def _run_discovery_tool(input_json: str) -> str:
+            """Run discovery. Input should be JSON with optional keys 'source_name'
+            (str) and 'max_articles' (int). Returns the discovery result as a JSON
+            string."""
+            import json as _json
+
+            if not input_json:
+                params: dict[str, Any] = {}
+            else:
+                try:
+                    params = _json.loads(input_json)
+                except Exception:
+                    params = {}
+
+            result = self._run_discovery(
+                source_name=params.get('source_name'),
+                max_articles=params.get('max_articles'),
+            )
+
+            return _json.dumps(result, indent=2)
+
+        tools.append(
+            Tool(
+                name='run_discovery',
+                description=(
+                    'Run article discovery for a specific source or for all '
+                    'active sources. Provide JSON input with optional '
+                    'source_name and max_articles.'
+                ),
+                func=_run_discovery_tool,
+            ),
+        )
+
+        # --- Article Evaluation Tools ---
+
+        def _evaluate_article_tool(input_json: str) -> str:
+            """Evaluate an article against a research query. Input should be JSON with
+            'query_name', 'article_title', 'article_abstract', and optionally
+            'article_content'."""
+            import json as _json
+
+            try:
+                params = _json.loads(input_json) if input_json else {}
+                query_name = params.get('query_name')
+
+                if not query_name:
+                    return "Error: Please provide 'query_name' in JSON format."
+
+                # This would need actual article data - for now return guidance
+                return f"To evaluate an article against query '{query_name}', please provide article data including title, abstract, and optionally full content."
+
+            except Exception as e:
+                return f'Error evaluating article: {e}'
+
+        tools.append(
+            Tool(
+                name='evaluate_article',
+                description='Evaluate an article against a research query. Provide JSON with query_name, article_title, article_abstract, and optionally article_content.',
+                func=_evaluate_article_tool,
+            ),
+        )
+
+        # --- Help and Information Tools ---
+
+        def _get_help_tool(_input: str) -> str:
+            """Get comprehensive help information about all available capabilities."""
+            return """
+🤖 **Enhanced Thoth Research Assistant - Full Capabilities**
+
+I'm an AI assistant that helps you manage both research queries AND discovery sources for automatic article collection and filtering.
+
+**🔍 Discovery Source Management:**
+• Use `list_discovery_sources` - Show all configured discovery sources
+• Use `create_arxiv_source` with JSON: {"name": "ml_papers", "keywords": ["machine learning", "neural networks"]}
+• Use `create_pubmed_source` with JSON: {"name": "bio_research", "keywords": ["neuroscience", "brain imaging"]}
+• Use `run_discovery` with JSON: {"source_name": "arxiv_test"} - Run discovery for specific source
+• Use `run_discovery` with JSON: {"max_articles": 5} - Run all active sources with article limit
+• Use `update_discovery_source` - Modify an existing source
+• Use `delete_discovery_source` - Remove a discovery source
+
+**📝 Research Query Management:**
+• Use `create_query` - Create a new research query to filter articles
+• Use `list_queries` - Show all existing research queries
+• Use `get_query` - Get details about a specific query
+• Use `delete_query` - Remove a research query
+• Use `show_queries_location` - Show where queries are stored (debugging)
+• Use `evaluate_article` - Test how well an article matches your queries
+
+**🎯 How It Works:**
+1. **Discovery Sources** automatically find new research articles from:
+   - ArXiv API (computer science, physics, math papers)
+   - PubMed API (biomedical research)
+   - Web scrapers (journal websites)
+
+2. **Research Queries** define what you're interested in:
+   - Keywords, required/preferred/excluded topics
+   - Your queries automatically filter discovered articles
+   - Only relevant articles are downloaded and processed
+
+**💡 Tool Usage Examples:**
+• Create ArXiv source: Use create_arxiv_source with {"name": "ai_research", "keywords": ["artificial intelligence"], "categories": ["cs.AI", "cs.LG"]}
+• List sources: Use list_discovery_sources
+• Run discovery: Use run_discovery with {"source_name": "ai_research"}
+• Create query: Use create_query with complete query configuration
+
+**🚀 Quick Start:**
+1. Use list_discovery_sources to see current sources
+2. Use create_arxiv_source or create_pubmed_source to add sources
+3. Use create_query to define filtering criteria
+4. Use run_discovery to start finding articles
+
+I can intelligently choose the right tools based on your requests!
+"""
+
+        tools.append(
+            Tool(
+                name='get_help',
+                description='Get comprehensive help information about all available capabilities and tool usage examples.',
+                func=_get_help_tool,
+            ),
+        )
+
+        logger.info(f'Created {len(tools)} tools for the MCP framework')
+        return tools
+
+    def _init_tool_agent(self) -> None:
+        """Initialise the LangChain AgentExecutor that uses function calling
+        (legacy approach)."""
+
+        # Try modern approach first
+        if self._init_modern_langgraph_agent():
+            self.use_modern_agent = True
+            return
+
+        # Fallback to legacy approach
+        self.use_modern_agent = False
+
+        from langchain.agents import AgentExecutor, create_openai_functions_agent
+        from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
+        tools = self._create_tools()
+
+        # Simpler, more natural prompt (closer to LangChain best practices)
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    'system',
+                    'You are a helpful research assistant for the Thoth system. You help users manage research queries and discovery sources for automatic article collection and filtering. Pay attention to conversation context and previous discussions when selecting and using tools. Be conversational and remember what was discussed earlier.',
+                ),
+                MessagesPlaceholder(variable_name='chat_history'),
+                ('user', '{input}'),
+                MessagesPlaceholder(variable_name='agent_scratchpad'),
+            ]
+        )
+
+        # Create the agent using the legacy approach
+        agent = create_openai_functions_agent(llm=self.llm, tools=tools, prompt=prompt)
+
+        # Create the agent executor with memory support
+        self.agent_executor = AgentExecutor(
+            agent=agent,
+            tools=tools,
+            verbose=False,
+            return_intermediate_steps=False,
+            handle_parsing_errors=True,
+        )
+
+    def _init_modern_langgraph_agent(self) -> None:
+        """Initialize a modern LangGraph-based agent following current LangChain best
+        practices."""
+        try:
+            from langgraph.checkpoint.memory import MemorySaver
+            from langgraph.prebuilt import create_react_agent
+
+            tools = self._create_tools()
+
+            # Use modern LangGraph approach with built-in memory (simplest approach)
+            memory = MemorySaver()
+
+            self.modern_agent = create_react_agent(self.llm, tools, checkpointer=memory)
+
+            logger.info('Modern LangGraph agent initialized successfully')
+            return True
+
+        except ImportError:
+            logger.warning('LangGraph not available, falling back to legacy agent')
+            return False
+        except Exception as e:
+            logger.warning(f'Failed to initialize modern LangGraph agent: {e}')
+            return False
+
+    # --- Memory Management Methods ---
+
+    def _load_conversation_memory(self) -> None:
+        """Load conversation history from persistent storage."""
+        try:
+            if self.memory_file.exists():
+                with open(self.memory_file, encoding='utf-8') as f:
+                    data = json.load(f)
+                    self._persistent_conversation_history = data.get(
+                        'conversation_history', []
+                    )
+                    logger.debug(
+                        f'Loaded {len(self._persistent_conversation_history)} messages from memory'
+                    )
+            else:
+                self._persistent_conversation_history = []
+                logger.debug('No existing memory file found, starting fresh')
+        except Exception as e:
+            logger.warning(f'Failed to load conversation memory: {e}')
+            self._persistent_conversation_history = []
+
+    def _save_conversation_memory(self) -> None:
+        """Save conversation history to persistent storage."""
+        try:
+            # Keep only the last 100 messages to prevent file from growing too large
+            trimmed_history = self._persistent_conversation_history[-100:]
+
+            data = {
+                'conversation_history': trimmed_history,
+                'last_updated': datetime.now().isoformat(),
+            }
+
+            with open(self.memory_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            logger.debug(f'Saved {len(trimmed_history)} messages to memory')
+        except Exception as e:
+            logger.warning(f'Failed to save conversation memory: {e}')
+
+    def get_conversation_history(self) -> list[dict[str, str]]:
+        """
+        Get the current conversation history.
+
+        Returns:
+            list[dict[str, str]]: The conversation history with role and content.
+        """
+        if self.enable_persistent_memory:
+            return self._persistent_conversation_history.copy()
+        return []
+
+    def clear_conversation_memory(self) -> None:
+        """Clear all conversation history."""
+        if self.enable_persistent_memory:
+            self._persistent_conversation_history.clear()
+            self._save_conversation_memory()
+            logger.info('Conversation memory cleared')
+
+    def _build_conversation_context(
+        self, current_message: str, conversation_history: list[dict[str, str]]
+    ) -> str:
+        """
+        Build a conversation context summary for tools to understand references.
+
+        Args:
+            current_message: The current user message
+            conversation_history: Recent conversation messages
+
+        Returns:
+            str: Summarized context for tools
+        """
+        context_parts = []
+
+        # Add current message context
+        context_parts.append(f'Current request: {current_message}')
+
+        # Add recent conversation context (last 3 exchanges)
+        if conversation_history:
+            recent_messages = conversation_history[-6:]  # Last 6 messages (3 exchanges)
+            for msg in recent_messages:
+                role = msg.get('role', '')
+                content = msg.get('content', '')[:150]  # Truncate long messages
+                if role == 'user':
+                    context_parts.append(f'User previously said: {content}')
+                elif role in ['agent', 'assistant']:
+                    context_parts.append(f'Agent previously responded: {content}')
+
+        return ' | '.join(context_parts)
+
+    def _handle_with_modern_agent(
+        self,
+        user_message: str,
+        conversation_history: list[dict[str, str]] | None = None,
+        config: RunnableConfig | None = None,  # noqa: ARG002
+    ) -> dict[str, Any]:
+        """
+        Handle a request using the modern LangGraph agent (LangChain best practice).
+
+        Uses thread-based conversation management and natural tool selection.
+
+        Args:
+            user_message: The user's input message.
+            conversation_history: Previous conversation messages
+                (used for thread_id generation).
+            config: Optional LangChain RunnableConfig.
+
+        Returns:
+            dict: Response from the modern LangGraph agent.
+        """
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        logger.debug('Using modern LangGraph agent')
+
+        try:
+            # Use a stable thread_id so LangGraph can maintain proper conversation
+            # memory. Don't hash conversation - use a consistent ID for this session
+            thread_id = 'main_conversation'  # Stable ID for memory persistence
+
+            # Modern LangGraph approach with thread-based memory
+            agent_config = {'configurable': {'thread_id': thread_id}}
+
+            # Build the full conversation context for LangGraph
+            messages = []
+
+            # Add conversation history to messages
+            if conversation_history:
+                for msg in conversation_history:
+                    role = msg.get('role', '')
+                    content = msg.get('content', '')
+                    if role == 'user':
+                        messages.append(HumanMessage(content=content))
+                    elif role in ['agent', 'assistant']:
+                        messages.append(AIMessage(content=content))
+
+            # Add the current user message
+            messages.append(HumanMessage(content=user_message))
+
+            result = self.modern_agent.invoke(
+                {'messages': messages},  # Full conversation context
+                config=agent_config,
+            )
+
+            # Extract the response from LangGraph result
+            result_messages = result.get('messages', [])
+            if result_messages:
+                last_message = result_messages[-1]
+                content = getattr(last_message, 'content', str(last_message))
+            else:
+                content = (
+                    "I'm here to help with research queries and discovery sources."
+                )
+
+            return {
+                'agent_response': content,
+                'action': 'modern_agent',
+                'needs_user_input': True,
+                'error_message': None,
+                'available_queries': self._list_queries(),
+            }
+
+        except Exception as e:
+            logger.error(f'Error in modern agent processing: {e}')
+            raise  # Re-raise to trigger fallback

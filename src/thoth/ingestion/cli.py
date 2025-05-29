@@ -86,12 +86,6 @@ class ResearchAssistantCLI:
                         {'role': 'assistant', 'content': response['agent_response']}
                     )
 
-                # Show available queries if relevant
-                if response.get('available_queries'):
-                    queries = response['available_queries']
-                    if queries and response.get('action') == 'list_queries':
-                        print(f'📋 Available queries: {", ".join(queries)}\n')
-
             except KeyboardInterrupt:
                 print('\n\n🔬 Thank you for using the Research Assistant!')
                 break
