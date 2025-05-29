@@ -1,0 +1,44 @@
+You are evaluating whether a research article meets the criteria defined in a research query. Analyze the article carefully and provide a structured evaluation.
+
+## Research Query Criteria:
+**Name:** {{ query.name }}
+**Description:** {{ query.description }}
+**Research Question:** {{ query.research_question }}
+
+**Keywords:** {{ query.keywords | join(', ') }}
+**Required Topics:** {{ query.required_topics | join(', ') }}
+**Preferred Topics:** {{ query.preferred_topics | join(', ') }}
+**Excluded Topics:** {{ query.excluded_topics | join(', ') }}
+**Methodology Preferences:** {{ query.methodology_preferences | join(', ') }}
+**Minimum Relevance Score:** {{ query.minimum_relevance_score }}
+
+## Article to Evaluate:
+**Title:** {{ article.title if article.title else 'Not available' }}
+**Abstract:** {{ article.abstract if article.abstract else 'Not available' }}
+**Key Points:**
+{{ article.key_points if article.key_points else 'Not available' }}
+
+**Summary:**
+{{ article.summary if article.summary else 'Not available' }}
+
+**Methodology:**
+{{ article.methodology if article.methodology else 'Not available' }}
+
+**Tags:** {{ article.tags | join(', ') if article.tags else 'Not available' }}
+
+## Evaluation Instructions:
+1. **Keyword Analysis:** Check how many of the required keywords appear in the article
+2. **Topic Matching:** Evaluate how well the article matches required and preferred topics
+3. **Exclusion Check:** Verify the article doesn't focus on excluded topics
+4. **Methodology Assessment:** Compare the article's methodology with preferences
+5. **Overall Relevance:** Provide an overall relevance score (0.0 to 1.0)
+6. **Recommendation:** Decide whether to keep, reject, or review the article
+
+## Response Format:
+Provide your evaluation in the exact JSON schema format specified. Be thorough in your reasoning and specific about which criteria are met or not met.
+
+Focus on:
+- Exact keyword matches (case-insensitive)
+- Conceptual topic alignment
+- Methodological approach compatibility
+- Overall contribution to the research question
