@@ -103,7 +103,7 @@ docstring-code-format = true
 ### Black (for auto-wrapping) ########################################################
 [tool.black]
 line-length    = 88
-target-version = ["py39"]
+target-version = ["py312"]
 
 ### sqlfluff ########################################################################
 [tool.sqlfluff.core]
