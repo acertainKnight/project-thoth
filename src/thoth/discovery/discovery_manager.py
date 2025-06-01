@@ -16,7 +16,7 @@ from loguru import logger
 
 from thoth.discovery.api_sources import ArxivAPISource, PubMedAPISource
 from thoth.discovery.web_scraper import WebScraper
-from thoth.ingestion.scrape_filter import ScrapeFilter
+from thoth.ingestion.filter import Filter
 from thoth.utilities.config import get_config
 from thoth.utilities.models import (
     DiscoveryResult,
@@ -38,28 +38,28 @@ class DiscoveryManager:
     This class orchestrates the discovery process by:
     1. Managing discovery source configurations
     2. Running discovery from APIs and web scrapers
-    3. Applying filtering through the existing ScrapeFilter
+    3. Applying filtering through the Filter
     4. Coordinating with the scheduling system
     """
 
     def __init__(
         self,
-        scrape_filter: ScrapeFilter | None = None,
+        filter: Filter | None = None,
         sources_config_dir: str | Path | None = None,
     ):
         """
         Initialize the Discovery Manager.
 
         Args:
-            scrape_filter: ScrapeFilter instance for filtering articles.
+            filter: Filter instance for filtering articles.
             sources_config_dir: Directory containing discovery source configurations.
         """
         self.config = get_config()
-        self.scrape_filter = scrape_filter
+        self.filter = filter
 
         # Set up sources configuration directory
         self.sources_config_dir = Path(
-            sources_config_dir or (self.config.agent_storage_dir / 'discovery_sources')
+            sources_config_dir or self.config.discovery_sources_dir
         )
         self.sources_config_dir.mkdir(parents=True, exist_ok=True)
 
@@ -73,7 +73,7 @@ class DiscoveryManager:
         self.web_scraper = WebScraper()
 
         # Results storage
-        self.results_dir = self.config.agent_storage_dir / 'discovery_results'
+        self.results_dir = self.config.discovery_results_dir
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info(
@@ -291,7 +291,7 @@ class DiscoveryManager:
                     logger.info(f'Found {len(articles)} articles from {source.name}')
 
                     # Filter and process articles
-                    if self.scrape_filter and articles:
+                    if self.filter and articles:
                         filtered_count, downloaded_count, errors = (
                             self._filter_and_process_articles(
                                 articles, source.query_filters
@@ -383,7 +383,12 @@ class DiscoveryManager:
             return []
 
         api_source = self.api_sources[source_type]
-        return api_source.search(api_config, max_articles or 50)
+        # Use the source's configured max_articles_per_run
+        # if no explicit max_articles provided
+        default_max = api_config.get('schedule_config', {}).get(
+            'max_articles_per_run', 50
+        )
+        return api_source.search(api_config, max_articles or default_max)
 
     def _discover_from_scraper(
         self, scraper_config, max_articles: int | None = None
@@ -421,8 +426,8 @@ class DiscoveryManager:
 
         for article in articles:
             try:
-                # Process through scrape filter
-                result = self.scrape_filter.process_scraped_article(
+                # Process through filter
+                result = self.filter.process_article(
                     metadata=article,
                     query_names=query_filters if query_filters else None,
                     download_pdf=True,
