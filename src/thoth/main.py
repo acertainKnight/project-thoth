@@ -130,8 +130,8 @@ def parse_args():
 
     # Scrape filter command
     scrape_filter_parser = subparsers.add_parser(
-        'scrape-filter',
-        help='Test the scrape filter with sample articles',
+        'filter-test',
+        help='Test the filter with sample articles',
     )
     scrape_filter_parser.add_argument(
         '--create-sample-queries',
@@ -741,7 +741,7 @@ def run_suggest_tags(args):  # noqa: ARG001
 
 def run_scrape_filter_test(args):
     """
-    Test the scrape filter with sample articles.
+    Test the filter with sample articles.
 
     Args:
         args: Command line arguments.
@@ -749,11 +749,11 @@ def run_scrape_filter_test(args):
     Returns:
         int: Exit code.
     """
-    logger.info('Testing scrape filter functionality.')
+    logger.info('Testing filter functionality.')
     config = get_config()
 
     try:
-        # Initialize pipeline to get scrape filter
+        # Initialize pipeline to get filter
         pipeline = ThothPipeline(
             ocr_api_key=config.api_keys.mistral_key,
             llm_api_key=config.api_keys.openrouter_key,
@@ -799,7 +799,7 @@ def run_scrape_filter_test(args):
             ]
 
             for query in sample_queries:
-                pipeline.scrape_filter.agent.create_query(query)
+                pipeline.filter.agent.create_query(query)
                 logger.info(f'Created sample query: {query.name}')
 
         # Test with sample article metadata
@@ -824,10 +824,10 @@ def run_scrape_filter_test(args):
             ),
         ]
 
-        logger.info('Testing scrape filter with sample articles...')
+        logger.info('Testing filter with sample articles...')
 
         for article in sample_articles:
-            result = pipeline.scrape_filter.process_scraped_article(
+            result = pipeline.filter.process_article(
                 metadata=article,
                 download_pdf=False,  # Don't actually download for testing
             )
@@ -838,11 +838,11 @@ def run_scrape_filter_test(args):
             logger.info(f'Reasoning: {result["evaluation"].reasoning}')
             logger.info('---')
 
-        logger.info('Scrape filter test completed successfully.')
+        logger.info('Filter test completed successfully.')
         return 0
 
     except Exception as e:
-        logger.error(f'Error during scrape filter test: {e}')
+        logger.error(f'Error during filter test: {e}')
         return 1
 
 
@@ -857,91 +857,77 @@ def run_agent_chat(args):  # noqa: ARG001
         int: Exit code.
     """
     try:
+        from thoth.ingestion.agent_v2 import create_research_assistant
         from thoth.pipeline import ThothPipeline
 
-        logger.info('Starting research assistant agent chat...')
+        logger.info('Starting modern research assistant agent chat...')
 
         # Initialize pipeline to get proper configuration
         pipeline = ThothPipeline()
-        agent = pipeline.scrape_filter.agent
+
+        # Create the modern agent
+        agent = create_research_assistant(
+            llm=pipeline.llm_processor.llm,
+            pipeline=pipeline,
+            enable_memory=True,
+        )
 
         print('\n' + '=' * 70)
-        print('🤖 Welcome to the Enhanced Thoth Research Assistant Agent!')
+        print('🤖 Welcome to Thoth Research Assistant!')
         print('=' * 70)
-        print('I can help you manage research queries AND discovery sources for')
-        print('automatic article discovery, filtering, and collection.')
-
-        print('\n🔍 **Discovery Source Management:**')
-        print("  • 'list discovery sources' - Show all configured sources")
         print(
-            '  • \'create an arxiv source called "ml_papers" for machine learning\' - Create ArXiv source'
+            'I am your AI research assistant, powered by LangGraph and MCP framework.'
         )
-        print(
-            '  • \'create a pubmed source called "bio_research" searching for neuroscience\' - Create PubMed source'
-        )
-        print("  • 'run discovery for arxiv_test' - Run specific source")
-        print("  • 'run discovery with max 5 articles' - Run all sources with limit")
-        print("  • 'edit arxiv_test source' - Modify existing source")
-        print("  • 'delete old_source' - Remove a source")
+        print('I can help you manage your research with these capabilities:')
 
-        print('\n📝 **Research Query Management:**')
-        print("  • 'create query' - Create new research query")
-        print("  • 'list queries' - Show existing queries")
-        print("  • 'help' - Get help with using the system")
+        print('\n📚 **Research Management:**')
+        print('  • Discovery Sources - Automatically find papers from ArXiv, PubMed')
+        print('  • Research Queries - Filter articles based on your interests')
+        print('  • Knowledge Base - Search and analyze your paper collection')
+        print('  • Paper Analysis - Find connections and analyze research topics')
 
-        print('\n🚀 **Quick Start:**')
-        print("1. Try: 'list discovery sources' to see current sources")
-        print(
-            '2. Create: \'create an arxiv source called "my_research" for deep learning\''
-        )
-        print("3. Run: 'run discovery for my_research'")
+        print('\n💡 **Example Commands:**')
+        print('  • "Show me my discovery sources"')
+        print('  • "Create an ArXiv source for machine learning papers"')
+        print('  • "What papers do I have on transformers?"')
+        print('  • "Explain the connection between paper A and paper B"')
+        print('  • "Analyze deep learning research in my collection"')
 
-        print('\n💡 **Tips:**')
-        print('  • Use natural language - I understand context!')
-        print('  • Discovery sources automatically filter using your research queries')
-        print("  • Type 'exit' or 'quit' to end the session")
+        print('\n🚀 **Tips:**')
+        print('  • I can use multiple tools to provide comprehensive answers')
+        print('  • I remember our conversation context')
+        print('  • Type "exit" or "quit" to end the session')
         print('=' * 70 + '\n')
 
-        conversation_history = []
+        session_id = f'chat_{int(time.time())}'
 
         while True:
             try:
                 user_message = input('You: ').strip()
 
                 if user_message.lower() in {'exit', 'quit', 'bye', 'done'}:
-                    print('\n👋 Thank you for using the Thoth Research Assistant!')
-                    print(
-                        'Your queries and discovery sources have been saved and will be used for automatic filtering.'
-                    )
+                    print('\n👋 Thank you for using Thoth Research Assistant!')
+                    print('Your research configuration has been saved.')
                     break
 
                 if not user_message:
                     continue
 
-                # Get response from agent
+                # Get response from modern agent
                 response = agent.chat(
-                    user_message, conversation_history=conversation_history
+                    message=user_message,
+                    session_id=session_id,
                 )
 
-                print(f'\nAgent: {response["agent_response"]}')
+                print(f'\nAssistant: {response["response"]}')
 
-                # Show available queries if relevant
-                if response.get('available_queries'):
-                    print(
-                        f'\nAvailable queries: {", ".join(response["available_queries"])}'
-                    )
+                # Show tool calls if any
+                if response.get('tool_calls'):
+                    print('\n🔧 Tools used:')
+                    for tool_call in response['tool_calls']:
+                        print(f'  - {tool_call["tool"]}')
 
                 print()  # Add spacing
-
-                # Update conversation history
-                conversation_history.append({'role': 'user', 'content': user_message})
-                conversation_history.append(
-                    {'role': 'agent', 'content': response['agent_response']}
-                )
-
-                # Keep conversation history manageable
-                if len(conversation_history) > 20:
-                    conversation_history = conversation_history[-20:]
 
             except KeyboardInterrupt:
                 print('\n\n👋 Session interrupted. Goodbye!')
@@ -1010,11 +996,11 @@ def run_discovery_run(args):
     try:
         from thoth.discovery import DiscoveryManager
 
-        # Initialize discovery manager with scrape filter
+        # Initialize discovery manager with filter
         pipeline = ThothPipeline()
 
         discovery_manager = DiscoveryManager(
-            scrape_filter=pipeline.scrape_filter,
+            filter=pipeline.filter,
         )
 
         # Run discovery
@@ -1629,7 +1615,7 @@ def main():
         return run_consolidate_tags_only(args)
     elif args.command == 'suggest-tags':
         return run_suggest_tags(args)
-    elif args.command == 'scrape-filter':
+    elif args.command == 'filter-test':
         return run_scrape_filter_test(args)
     elif args.command == 'agent':
         return run_agent_chat(args)

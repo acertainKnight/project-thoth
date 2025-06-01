@@ -139,8 +139,8 @@ class ThothPipeline:
         # Tag Consolidator (initialized lazily when needed)
         self._tag_consolidator = None
 
-        # Scrape Filter (initialized lazily when needed)
-        self._scrape_filter = None
+        # Filter (initialized lazily when needed)
+        self._filter = None
 
         # Discovery Manager (initialized lazily when needed)
         self._discovery_manager = None
@@ -170,32 +170,22 @@ class ThothPipeline:
         return self._tag_consolidator
 
     @property
-    def scrape_filter(self):
+    def filter(self):
         """
-        Lazy initialization of ScrapeFilter.
+        Lazy initialization of Filter.
 
         Returns:
-            ScrapeFilter: The initialized scrape filter instance.
+            Filter: The initialized filter instance.
         """
-        if self._scrape_filter is None:
-            from thoth.ingestion.agent import ResearchAssistantAgent
-            from thoth.ingestion.scrape_filter import ScrapeFilter
+        if self._filter is None:
+            from thoth.ingestion.filter import Filter
 
-            # Initialize with existing configuration
-            agent = ResearchAssistantAgent(
-                model=self.config.llm_config.model,
-                openrouter_api_key=self.config.api_keys.openrouter_key,
-                prompts_dir=self.prompts_dir,
-                queries_dir=self.config.queries_dir,
-                agent_storage_dir=self.config.agent_storage_dir,
-                model_kwargs=self.config.llm_config.model_settings.model_dump(),
+            # Initialize filter without legacy agent - it can handle queries directly
+            self._filter = Filter(
+                agent=None,  # Filter now handles queries directly
+                storage_dir=self.config.agent_storage_dir,
             )
-
-            self._scrape_filter = ScrapeFilter(
-                agent=agent,
-                agent_storage_dir=self.config.agent_storage_dir,
-            )
-        return self._scrape_filter
+        return self._filter
 
     @property
     def discovery_manager(self):
@@ -209,7 +199,7 @@ class ThothPipeline:
             from thoth.discovery.discovery_manager import DiscoveryManager
 
             self._discovery_manager = DiscoveryManager(
-                scrape_filter=self.scrape_filter,
+                filter=self.filter,
                 sources_config_dir=self.config.discovery_sources_dir,
             )
         return self._discovery_manager
