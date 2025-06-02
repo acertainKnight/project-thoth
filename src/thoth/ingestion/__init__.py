@@ -1,19 +1,12 @@
 """
 Thoth ingestion package.
 
-This package provides functionality for ingesting various types of content into Thoth.
+This package contains components for ingesting and processing research articles,
+including the research assistant agent and filtering capabilities.
 """
 
-# New modular agent
-from thoth.ingestion.agent_v2 import ResearchAssistant, create_research_assistant
+# Export main components for convenience
+# Note: Some imports are not included here to avoid circular imports
+# Import them directly when needed
 
-# Filter for discovery
-from thoth.ingestion.filter import Filter
-from thoth.ingestion.pdf_downloader import download_pdf
-
-__all__ = [
-    'Filter',
-    'ResearchAssistant',
-    'create_research_assistant',
-    'download_pdf',
-]
+__all__ = []

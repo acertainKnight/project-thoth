@@ -13,14 +13,12 @@ from pathlib import Path
 from typing import Any
 
 import requests
-from jinja2 import Environment, FileSystemLoader
-from langchain_core.prompts import ChatPromptTemplate
 from loguru import logger
 
-from thoth.ingestion.agent_v2.core.research_agent import ResearchAssistantAgent
+from thoth.ingestion.agent_adapter import AgentAdapter
+from thoth.services.service_manager import ServiceManager
 from thoth.utilities.config import get_config
 from thoth.utilities.models import PreDownloadEvaluationResponse, ScrapedArticleMetadata
-from thoth.utilities.openrouter import OpenRouterClient
 
 
 class FilterError(Exception):
@@ -42,46 +40,24 @@ class Filter:
 
     def __init__(
         self,
-        agent: ResearchAssistantAgent | None = None,
-        model: str | None = None,
-        max_output_tokens: int | None = None,
-        max_context_length: int | None = None,
-        openrouter_api_key: str | None = None,
-        prompts_dir: str | Path | None = None,
+        service_manager: ServiceManager | None = None,
         storage_dir: str | Path | None = None,
-        model_kwargs: dict[str, Any] | None = None,
     ):
         """
         Initialize the Filter.
 
         Args:
-            agent: Research assistant agent instance (creates new if None).
-            model: The model to use for filtering (defaults to config).
-            max_output_tokens: Maximum output tokens for the model.
-            max_context_length: Maximum context length for the model.
-            openrouter_api_key: The OpenRouter API key.
-            prompts_dir: Directory containing Jinja2 prompt templates.
-            storage_dir: Directory for storing all outputs.
-            model_kwargs: Additional keyword arguments for the model.
+            service_manager: ServiceManager instance (creates new if None)
+            storage_dir: Directory for storing all outputs
         """
         self.config = get_config()
-        self.agent = agent  # Will be None if not provided
-        self.queries_dir = Path(self.config.queries_dir)
-        self.queries_dir.mkdir(parents=True, exist_ok=True)
 
-        # Set up model configuration
-        self.model = model or self.config.scrape_filter_llm_config.model
-        self.max_output_tokens = (
-            max_output_tokens or self.config.scrape_filter_llm_config.max_output_tokens
-        )
-        self.max_context_length = (
-            max_context_length
-            or self.config.scrape_filter_llm_config.max_context_length
-        )
-        self.model_kwargs = (
-            model_kwargs
-            or self.config.scrape_filter_llm_config.model_settings.model_dump()
-        )
+        # Initialize service manager
+        self.service_manager = service_manager or ServiceManager(self.config)
+        self.service_manager.initialize()
+
+        # Create adapter for backward compatibility
+        self.agent = AgentAdapter(self.service_manager)
 
         # Set up directories
         self.storage_dir = Path(storage_dir or self.config.agent_storage_dir)
@@ -97,80 +73,8 @@ class Filter:
         self.log_file = self.storage_dir / 'filter.log'
         self.json_log_file = self.storage_dir / 'filter.json'
 
-        # Set up prompts directory
-        self.prompts_dir = (
-            Path(prompts_dir or self.config.prompts_dir) / self.model.split('/')[0]
-        )
-
-        # Initialize the LLM
-        self.llm = OpenRouterClient(
-            api_key=openrouter_api_key or self.config.api_keys.openrouter_key,
-            model=self.model,
-            **self.model_kwargs,
-        )
-
-        # Create structured LLM for evaluation
-        self.evaluation_llm = self.llm.with_structured_output(
-            PreDownloadEvaluationResponse,
-            include_raw=False,
-            method='json_schema',
-        )
-
-        # Initialize Jinja environment
-        self.jinja_env = Environment(
-            loader=FileSystemLoader(self.prompts_dir),
-            trim_blocks=True,
-            lstrip_blocks=True,
-        )
-
-        # Load evaluation prompt
-        self.evaluation_prompt = self._create_prompt_from_template(
-            'evaluate_scraped_metadata.j2'
-        )
-
-        # Build evaluation chain
-        self.evaluation_chain = self.evaluation_prompt | self.evaluation_llm
-
         logger.info(f'Filter initialized with storage: {self.storage_dir}')
-        logger.info(f'Using model: {self.model}')
-
-    def _list_queries(self) -> list[str]:
-        """List all available query names from the queries directory."""
-        try:
-            query_files = list(self.queries_dir.glob('*.json'))
-            return [f.stem for f in query_files]
-        except Exception as e:
-            logger.error(f'Error listing queries: {e}')
-            return []
-
-    def _get_query(self, query_name: str):
-        """Load a research query from file."""
-        from thoth.utilities.models import ResearchQuery
-
-        query_path = self.queries_dir / f'{query_name}.json'
-        if not query_path.exists():
-            return None
-
-        try:
-            with open(query_path, encoding='utf-8') as f:
-                query_data = json.load(f)
-            return ResearchQuery(**query_data)
-        except Exception as e:
-            logger.error(f'Failed to load query {query_name}: {e}')
-            return None
-
-    def _create_prompt_from_template(self, template_name: str) -> ChatPromptTemplate:
-        """Create a ChatPromptTemplate from a Jinja2 template file."""
-        try:
-            template_source, _, _ = self.jinja_env.loader.get_source(
-                self.jinja_env, template_name
-            )
-            return ChatPromptTemplate.from_template(
-                template_source, template_format='jinja2'
-            )
-        except Exception as e:
-            logger.error(f'Failed to load template {template_name}: {e}')
-            raise FileNotFoundError(f'Template {template_name} not found') from e
+        logger.info('Using service layer architecture')
 
     def process_article(
         self,
@@ -201,11 +105,7 @@ class Filter:
         try:
             # Get queries to evaluate against
             if query_names is None:
-                query_names = (
-                    self._list_queries()
-                    if not self.agent
-                    else self.agent.list_queries()
-                )
+                query_names = self.service_manager.query.list_queries()
 
             if not query_names:
                 logger.warning('No research queries available for evaluation')
@@ -222,40 +122,19 @@ class Filter:
                 decision = 'skip'
             else:
                 # Evaluate against all queries
-                all_evaluations = []
+                queries = []
                 for query_name in query_names:
-                    try:
-                        query = (
-                            self._get_query(query_name)
-                            if not self.agent
-                            else self.agent.get_query(query_name)
-                        )
-                        if not query:
-                            logger.warning(f'Query {query_name} not found')
-                            continue
+                    query = self.service_manager.query.get_query(query_name)
+                    if query:
+                        queries.append(query)
+                    else:
+                        logger.warning(f'Query {query_name} not found')
 
-                        eval_result = self.evaluation_chain.invoke(
-                            {
-                                'query': query.model_dump(),
-                                'metadata': metadata.model_dump(),
-                            }
-                        )
-
-                        all_evaluations.append(
-                            {
-                                'query_name': query_name,
-                                'query': query.model_dump(),
-                                'evaluation': eval_result,
-                            }
-                        )
-
-                    except Exception as e:
-                        logger.error(
-                            f'Error evaluating against query {query_name}: {e}'
-                        )
-
-                # Determine overall decision
-                evaluation, decision = self._determine_overall_decision(all_evaluations)
+                # Use ArticleService for evaluation
+                evaluation = self.service_manager.article.evaluate_for_download(
+                    metadata, queries
+                )
+                decision = 'download' if evaluation.should_download else 'skip'
 
             # Download PDF if approved
             pdf_path = None
@@ -273,7 +152,6 @@ class Filter:
                 metadata=metadata,
                 decision=decision,
                 evaluation=evaluation,
-                all_evaluations=all_evaluations if query_names else [],
                 pdf_path=pdf_path,
                 error_message=error_message,
                 timestamp=timestamp,
@@ -324,7 +202,6 @@ class Filter:
                 metadata=metadata,
                 decision='error',
                 evaluation=error_evaluation,
-                all_evaluations=[],
                 pdf_path=None,
                 error_message=error_message,
                 timestamp=timestamp,
@@ -339,89 +216,6 @@ class Filter:
                 'error_message': error_message,
                 'timestamp': timestamp,
             }
-
-    def _determine_overall_decision(
-        self, all_evaluations: list[dict[str, Any]]
-    ) -> tuple[PreDownloadEvaluationResponse, str]:
-        """
-        Determine the overall evaluation and decision from individual query evaluations.
-
-        Returns:
-            tuple: (overall_evaluation, decision)
-        """
-        if not all_evaluations:
-            return PreDownloadEvaluationResponse(
-                relevance_score=0.0,
-                should_download=False,
-                keyword_matches=[],
-                topic_analysis='No evaluations completed',
-                reasoning='No queries were successfully evaluated',
-                confidence=0.0,
-                matching_queries=[],
-            ), 'skip'
-
-        # Collect data from all evaluations
-        download_evaluations = []
-        all_keyword_matches = set()
-        all_scores = []
-
-        for eval_data in all_evaluations:
-            evaluation = eval_data['evaluation']
-            all_scores.append(evaluation.relevance_score)
-            all_keyword_matches.update(evaluation.keyword_matches)
-
-            if evaluation.should_download:
-                download_evaluations.append(eval_data)
-
-        highest_score = max(all_scores)
-        matching_queries = [
-            eval_data['query_name'] for eval_data in download_evaluations
-        ]
-
-        # Decision: download if ANY query recommends it
-        if download_evaluations:
-            best_eval = max(
-                download_evaluations, key=lambda x: x['evaluation'].relevance_score
-            )['evaluation']
-
-            # Build comprehensive reasoning
-            reasoning_parts = [
-                f'Recommended by {len(download_evaluations)}/{len(all_evaluations)} queries.',
-                f'Highest relevance score: {highest_score:.2f}',
-                f'Matching queries: {", ".join(matching_queries)}',
-                f'Best match reasoning: {best_eval.reasoning}',
-            ]
-
-            return PreDownloadEvaluationResponse(
-                relevance_score=highest_score,
-                should_download=True,
-                keyword_matches=list(all_keyword_matches),
-                topic_analysis=best_eval.topic_analysis,
-                reasoning=' '.join(reasoning_parts),
-                confidence=best_eval.confidence,
-                matching_queries=matching_queries,
-            ), 'download'
-        else:
-            # All queries recommend skipping
-            best_eval = max(
-                all_evaluations, key=lambda x: x['evaluation'].relevance_score
-            )['evaluation']
-
-            reasoning_parts = [
-                f'Not recommended by any of {len(all_evaluations)} queries.',
-                f'Highest relevance score: {highest_score:.2f}',
-                f'Best match reasoning: {best_eval.reasoning}',
-            ]
-
-            return PreDownloadEvaluationResponse(
-                relevance_score=highest_score,
-                should_download=False,
-                keyword_matches=list(all_keyword_matches),
-                topic_analysis=best_eval.topic_analysis,
-                reasoning=' '.join(reasoning_parts),
-                confidence=best_eval.confidence,
-                matching_queries=[],
-            ), 'skip'
 
     def _download_pdf(self, metadata: ScrapedArticleMetadata) -> str | None:
         """Download PDF for an article."""
@@ -472,7 +266,6 @@ class Filter:
         metadata: ScrapedArticleMetadata,
         decision: str,
         evaluation: PreDownloadEvaluationResponse,
-        all_evaluations: list[dict[str, Any]],
         pdf_path: str | None,
         error_message: str | None,
         timestamp: str,
@@ -480,8 +273,7 @@ class Filter:
         """
         Save detailed evaluation results for analysis and debugging.
 
-        This saves ALL information about the evaluation process, including
-        the full reasoning from each query evaluation.
+        This saves ALL information about the evaluation process.
         """
         # Create unique filename
         timestamp_short = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -499,20 +291,9 @@ class Filter:
             'decision': decision,
             'article_metadata': metadata.model_dump(),
             'overall_evaluation': evaluation.model_dump(),
-            'individual_query_evaluations': [
-                {
-                    'query_name': eval_data['query_name'],
-                    'query': eval_data['query'],
-                    'evaluation': eval_data['evaluation'].model_dump(),
-                }
-                for eval_data in all_evaluations
-            ],
             'pdf_path': pdf_path,
             'error_message': error_message,
             'processing_details': {
-                'queries_evaluated': len(all_evaluations),
-                'queries_matched': len(evaluation.matching_queries),
-                'highest_score': evaluation.relevance_score,
                 'download_attempted': decision == 'download',
                 'download_successful': pdf_path is not None,
             },
@@ -595,11 +376,7 @@ class Filter:
                     'errors': 0,
                     'download_rate': 0.0,
                     'average_score': 0.0,
-                    'available_queries': len(
-                        self._list_queries()
-                        if not self.agent
-                        else self.agent.list_queries()
-                    ),
+                    'available_queries': len(self.service_manager.query.list_queries()),
                 }
 
             with open(self.json_log_file, encoding='utf-8') as f:
@@ -624,11 +401,7 @@ class Filter:
                 'errors': errors,
                 'download_rate': downloaded / total if total > 0 else 0.0,
                 'average_score': avg_score,
-                'available_queries': len(
-                    self._list_queries()
-                    if not self.agent
-                    else self.agent.list_queries()
-                ),
+                'available_queries': len(self.service_manager.query.list_queries()),
             }
 
         except Exception as e:

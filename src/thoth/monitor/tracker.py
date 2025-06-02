@@ -14,7 +14,7 @@ from typing import Any
 import networkx as nx
 from loguru import logger
 
-from thoth.notes.note_generator import NoteGenerator
+from thoth.services.service_manager import ServiceManager
 from thoth.utilities.models import AnalysisResponse, Citation
 
 
@@ -52,35 +52,48 @@ class CitationTracker:
         self,
         knowledge_base_dir: Path,
         graph_storage_path: Path | None = None,
-        note_generator: NoteGenerator | None = None,
+        note_generator: Any
+        | None = None,  # Deprecated - kept for backward compatibility
         pdf_dir: Path | None = None,
         markdown_dir: Path | None = None,
         notes_dir: Path | None = None,
+        service_manager: ServiceManager | None = None,
     ) -> None:
         """
-        Initialize the citation tracker.
+        Initialize the CitationTracker.
 
         Args:
-            knowledge_base_dir: Path to the knowledge base directory containing markdown notes
-            graph_storage_path: Optional path to store the serialized knowledge graph
-            note_generator: Optional instance of NoteGenerator for regenerating notes
-            pdf_dir: Optional path to the directory where PDF files are stored.
-            markdown_dir: Optional path to the directory for Thoth-generated markdown files.
-            notes_dir: Optional path to the Obsidian notes directory.
-        """  # noqa: W505
+            knowledge_base_dir: Base directory for the knowledge base
+            graph_storage_path: Path to save the citation graph. If None, defaults to
+                knowledge_base_dir / 'citation_graph.pkl'
+            note_generator: Deprecated - use service_manager instead
+            pdf_dir: Directory where PDF files are stored
+            markdown_dir: Directory where markdown files are stored
+            notes_dir: Directory where notes are stored
+            service_manager: ServiceManager instance for accessing services
+
+        Returns:
+            None
+
+        Example:
+            >>> from pathlib import Path
+            >>> tracker = CitationTracker(Path('/home/user/knowledge_base'))
+        """
         self.knowledge_base_dir = Path(knowledge_base_dir)
-        self.graph_storage_path = (
-            graph_storage_path or self.knowledge_base_dir / 'citation_graph.json'
-        )
-        self.note_generator = note_generator
+        self.knowledge_base_dir.mkdir(parents=True, exist_ok=True)
+
+        if graph_storage_path:
+            self.graph_storage_path = Path(graph_storage_path)
+        else:
+            self.graph_storage_path = self.knowledge_base_dir / 'citation_graph.pkl'
+
+        self.note_generator = note_generator  # Keep for backward compatibility
+        self.service_manager = service_manager
         self.pdf_dir = pdf_dir
         self.markdown_dir = markdown_dir
         self.notes_dir = notes_dir
 
-        # Initialize the citation graph
-        self.graph = nx.DiGraph()
-
-        # Load existing graph if available
+        self.graph: nx.DiGraph = nx.DiGraph()
         self._load_graph()
 
         logger.info(
@@ -405,7 +418,7 @@ class CitationTracker:
             self.add_citation(article_id, target_id, {'citation_text': citation.text})
 
         # After processing all citations for the current article, regenerate notes for connected articles  # noqa: W505
-        if self.note_generator:
+        if self.service_manager or self.note_generator:
             connected_articles_ids = set()
             # Articles that cite the current article
             connected_articles_ids.update(self.get_citing_articles(article_id))
@@ -424,12 +437,22 @@ class CitationTracker:
                 regen_data = self.get_article_data_for_regeneration(connected_id)
                 if regen_data:
                     try:
-                        self.note_generator.create_note(
-                            pdf_path=regen_data['pdf_path'],
-                            markdown_path=regen_data['markdown_path'],
-                            analysis=regen_data['analysis'],
-                            citations=regen_data['citations'],
-                        )
+                        if self.service_manager:
+                            # Use NoteService through ServiceManager
+                            self.service_manager.note.create_note(
+                                pdf_path=regen_data['pdf_path'],
+                                markdown_path=regen_data['markdown_path'],
+                                analysis=regen_data['analysis'],
+                                citations=regen_data['citations'],
+                            )
+                        elif self.note_generator:
+                            # Fallback to legacy note_generator
+                            self.note_generator.create_note(
+                                pdf_path=regen_data['pdf_path'],
+                                markdown_path=regen_data['markdown_path'],
+                                analysis=regen_data['analysis'],
+                                citations=regen_data['citations'],
+                            )
                         logger.info(
                             f'Successfully regenerated note for connected article: {connected_id}'
                         )
@@ -443,7 +466,7 @@ class CitationTracker:
                     )
         else:
             logger.debug(
-                'Note generator not configured in CitationTracker. Skipping regeneration of connected notes.'
+                'Neither ServiceManager nor NoteGenerator configured in CitationTracker. Skipping regeneration of connected notes.'
             )
 
         return article_id
@@ -890,7 +913,7 @@ class CitationTracker:
         Regenerate all markdown notes for all articles in the graph.
 
         This method iterates through each article in the citation graph,
-        retrieves its data, uses the NoteGenerator to recreate its
+        retrieves its data, uses the NoteService to recreate its
         markdown note, and returns a list of (PDF path, note path) tuples
         for successfully regenerated notes.
 
@@ -899,8 +922,10 @@ class CitationTracker:
                                      contains the final Path to the PDF file
                                      and the final Path to its regenerated note.
         """
-        if not self.note_generator:
-            logger.error('NoteGenerator not configured. Cannot regenerate all notes.')
+        if not (self.service_manager or self.note_generator):
+            logger.error(
+                'Neither ServiceManager nor NoteGenerator configured. Cannot regenerate all notes.'
+            )
             return []
 
         logger.info(
@@ -924,24 +949,38 @@ class CitationTracker:
 
             if regeneration_data:
                 try:
-                    (
-                        note_path_str,
-                        final_pdf_path,
-                        markdown_path,
-                    ) = self.note_generator.create_note(
-                        pdf_path=regeneration_data['pdf_path'],
-                        markdown_path=regeneration_data['markdown_path'],
-                        analysis=regeneration_data['analysis'],
-                        citations=regeneration_data['citations'],
-                    )
+                    if self.service_manager:
+                        # Use NoteService through ServiceManager
+                        (
+                            note_path,
+                            final_pdf_path,
+                            markdown_path,
+                        ) = self.service_manager.note.create_note(
+                            pdf_path=regeneration_data['pdf_path'],
+                            markdown_path=regeneration_data['markdown_path'],
+                            analysis=regeneration_data['analysis'],
+                            citations=regeneration_data['citations'],
+                        )
+                    elif self.note_generator:
+                        # Fallback to legacy note_generator
+                        (
+                            note_path_str,
+                            final_pdf_path,
+                            markdown_path,
+                        ) = self.note_generator.create_note(
+                            pdf_path=regeneration_data['pdf_path'],
+                            markdown_path=regeneration_data['markdown_path'],
+                            analysis=regeneration_data['analysis'],
+                            citations=regeneration_data['citations'],
+                        )
+                        note_path = Path(note_path_str)
+
                     logger.info(
-                        f'Successfully regenerated note for: {article_title} at {note_path_str}'
+                        f'Successfully regenerated note for: {article_title} at {note_path}'
                     )
                     regenerated_count += 1
-                    successfully_regenerated_files.append(
-                        (final_pdf_path, Path(note_path_str))
-                    )
-                    obsidian_paths[article_id] = str(note_path_str)
+                    successfully_regenerated_files.append((final_pdf_path, note_path))
+                    obsidian_paths[article_id] = str(note_path)
                     markdown_paths[article_id] = str(markdown_path)
                     pdf_paths[article_id] = str(final_pdf_path)
                 except Exception as e:

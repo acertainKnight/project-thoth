@@ -453,13 +453,11 @@ def run_reprocess_note(args):
     try:
         logger.info(f'Regenerating note for {article_id}...')
         # create_note returns (note_path_str, new_pdf_path, new_markdown_path)
-        note_path, new_pdf_path, new_markdown_path = (
-            pipeline.note_generator.create_note(
-                pdf_path=regen_data['pdf_path'],
-                markdown_path=regen_data['markdown_path'],
-                analysis=regen_data['analysis'],
-                citations=regen_data['citations'],
-            )
+        note_path, new_pdf_path, new_markdown_path = pipeline.services.note.create_note(
+            pdf_path=regen_data['pdf_path'],
+            markdown_path=regen_data['markdown_path'],
+            analysis=regen_data['analysis'],
+            citations=regen_data['citations'],
         )
         logger.info(f'Successfully regenerated note for {article_id} at: {note_path}')
         logger.info(f'Associated PDF path: {new_pdf_path}')
@@ -857,6 +855,7 @@ def run_agent_chat(args):  # noqa: ARG001
         int: Exit code.
     """
     try:
+        from thoth.ingestion.agent_adapter import AgentAdapter
         from thoth.ingestion.agent_v2 import create_research_assistant
         from thoth.pipeline import ThothPipeline
 
@@ -865,10 +864,12 @@ def run_agent_chat(args):  # noqa: ARG001
         # Initialize pipeline to get proper configuration
         pipeline = ThothPipeline()
 
-        # Create the modern agent
+        # Create adapter for the agent
+        adapter = AgentAdapter(pipeline.services)
+
+        # Create the modern agent with service layer access
         agent = create_research_assistant(
-            llm=pipeline.llm_processor.llm,
-            pipeline=pipeline,
+            adapter=adapter,
             enable_memory=True,
         )
 
@@ -994,17 +995,11 @@ def run_discovery_run(args):
         int: Exit code.
     """
     try:
-        from thoth.discovery import DiscoveryManager
-
-        # Initialize discovery manager with filter
+        # Initialize pipeline with service layer
         pipeline = ThothPipeline()
 
-        discovery_manager = DiscoveryManager(
-            filter=pipeline.filter,
-        )
-
-        # Run discovery
-        result = discovery_manager.run_discovery(
+        # Run discovery through service layer
+        result = pipeline.services.discovery.run_discovery(
             source_name=args.source,
             max_articles=args.max_articles,
         )
@@ -1038,10 +1033,11 @@ def run_discovery_list(args):  # noqa: ARG001
         int: Exit code.
     """
     try:
-        from thoth.discovery import DiscoveryManager
+        # Initialize pipeline with service layer
+        pipeline = ThothPipeline()
 
-        discovery_manager = DiscoveryManager()
-        sources = discovery_manager.list_sources()
+        # List sources through service layer
+        sources = pipeline.services.discovery.list_sources()
 
         if not sources:
             logger.info('No discovery sources configured.')
@@ -1085,10 +1081,11 @@ def run_discovery_show(args):
         int: Exit code.
     """
     try:
-        from thoth.discovery import DiscoveryManager
+        # Initialize pipeline with service layer
+        pipeline = ThothPipeline()
 
-        discovery_manager = DiscoveryManager()
-        source = discovery_manager.get_source(args.name)
+        # Get source through service layer
+        source = pipeline.services.discovery.get_source(args.name)
         if not source:
             logger.error(f'Discovery source not found: {args.name}')
             return 1
@@ -1130,10 +1127,10 @@ def run_discovery_create(args):
     try:
         import json
 
-        from thoth.discovery import DiscoveryManager
         from thoth.utilities.models import DiscoverySource, ScheduleConfig
 
-        discovery_manager = DiscoveryManager()
+        # Initialize pipeline with service layer
+        pipeline = ThothPipeline()
 
         # Load configuration from file if provided
         config_data = {}
@@ -1165,7 +1162,7 @@ def run_discovery_create(args):
 
         # Create source
         source = DiscoverySource(**source_config)
-        discovery_manager.create_source(source)
+        pipeline.services.discovery.create_source(source)
 
         logger.info(f'Successfully created discovery source: {args.name}')
         logger.info(f'  Type: {args.type}')
@@ -1191,12 +1188,11 @@ def run_discovery_edit(args):
     try:
         import json
 
-        from thoth.discovery import DiscoveryManager
-
-        discovery_manager = DiscoveryManager()
+        # Initialize pipeline with service layer
+        pipeline = ThothPipeline()
 
         # Fetch existing source
-        source = discovery_manager.get_source(args.name)
+        source = pipeline.services.discovery.get_source(args.name)
         if not source:
             logger.error(f'Discovery source not found: {args.name}')
             return 1
@@ -1244,7 +1240,7 @@ def run_discovery_edit(args):
             logger.info(f'Updated active status: {source.is_active}')
 
         # Save updated source
-        discovery_manager.update_source(source)
+        pipeline.services.discovery.update_source(source)
 
         logger.info(f'Successfully updated discovery source: {args.name}')
         logger.info(f'  Description: {source.description}')
@@ -1268,12 +1264,11 @@ def run_discovery_delete(args):
         int: Exit code.
     """
     try:
-        from thoth.discovery import DiscoveryManager
-
-        discovery_manager = DiscoveryManager()
+        # Initialize pipeline with service layer
+        pipeline = ThothPipeline()
 
         # Check if source exists
-        source = discovery_manager.get_source(args.name)
+        source = pipeline.services.discovery.get_source(args.name)
         if not source:
             logger.error(f'Discovery source not found: {args.name}')
             return 1
@@ -1293,7 +1288,7 @@ def run_discovery_delete(args):
                 return 0
 
         # Delete source
-        discovery_manager.delete_source(args.name)
+        pipeline.services.discovery.delete_source(args.name)
 
         logger.info(f'Successfully deleted discovery source: {args.name}')
         return 0
@@ -1318,25 +1313,24 @@ def run_discovery_scheduler(args):
         return 1
 
     try:
-        from thoth.discovery import DiscoveryScheduler
+        # Initialize pipeline with service layer
+        pipeline = ThothPipeline()
 
         if args.scheduler_command == 'start':
-            scheduler = DiscoveryScheduler()
-            scheduler.start()
+            pipeline.services.discovery.start_scheduler()
             logger.info('Discovery scheduler started. Press Ctrl+C to stop.')
 
             try:
                 while True:
                     time.sleep(1)
             except KeyboardInterrupt:
-                scheduler.stop()
+                pipeline.services.discovery.stop_scheduler()
                 logger.info('Discovery scheduler stopped.')
 
             return 0
 
         elif args.scheduler_command == 'status':
-            scheduler = DiscoveryScheduler()
-            status = scheduler.get_schedule_status()
+            status = pipeline.services.discovery.get_schedule_status()
 
             logger.info(f'Scheduler running: {status["running"]}')
             logger.info(f'Total sources: {status["total_sources"]}')

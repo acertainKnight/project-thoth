@@ -15,12 +15,8 @@ from thoth.ingestion.agent_v2.tools.base_tool import BaseThothTool
 class EvaluateArticleInput(BaseModel):
     """Input schema for evaluating an article."""
 
+    article_title: str = Field(description='Title of the article to evaluate')
     query_name: str = Field(description='Name of the query to use for evaluation')
-    article_title: str = Field(description='Title of the article')
-    article_abstract: str = Field(description='Abstract of the article')
-    article_content: str | None = Field(
-        default=None, description='Full content of the article (optional)'
-    )
 
 
 class EvaluateArticleTool(BaseThothTool):
@@ -35,58 +31,64 @@ class EvaluateArticleTool(BaseThothTool):
 
     def _run(
         self,
-        query_name: str,
         article_title: str,
-        article_abstract: str,
-        article_content: str | None = None,  # noqa: ARG002
+        query_name: str,
     ) -> str:
-        """Evaluate an article."""
+        """Evaluate an article against a query."""
         try:
             # Get the query
-            query = self.pipeline.filter.agent.get_query(query_name)
+            query = self.adapter.get_query(query_name)
             if not query:
-                return f"❌ Query '{query_name}' not found."
+                return f"❌ Query '{query_name}' not found. Use 'list_queries' to see available queries."
 
-            # Create mock article analysis for evaluation
+            # For now, we'll search for the article and use its abstract
+            # In the future, this could use the full analysis from the citation graph
+            results = self.adapter.search_knowledge(
+                query=article_title,
+                k=1,
+            )
+
+            if not results:
+                return f"❌ Could not find article: '{article_title}'"
+
+            # Create a simplified article object for evaluation
             from thoth.utilities.models import AnalysisResponse
 
-            mock_analysis = AnalysisResponse(
-                title=article_title,
-                abstract=article_abstract,
-                key_findings=['Evaluation in progress...'],
+            article = AnalysisResponse(
+                title=results[0]['title'],
+                abstract=results[0]['content'][:500],  # Use first 500 chars as abstract
+                key_findings=[],
+                methodology='',
+                implications='',
+                limitations='',
+                future_work='',
                 tags=[],
-                summary='Evaluation in progress...',
             )
 
-            # Evaluate the article
-            evaluation = self.pipeline.filter.agent.evaluate_article(
-                article=mock_analysis, query_name=query_name
-            )
+            evaluation = self.adapter.evaluate_article(article, query_name)
 
             if not evaluation:
                 return f"❌ Failed to evaluate article against query '{query_name}'"
 
-            response = ['📊 **Article Evaluation Results**\n']
-            response.append(f'📄 Article: {article_title}')
-            response.append(f'🔍 Query: {query_name}\n')
-            response.append(f'✨ **Relevance Score:** {evaluation.relevance_score}/10')
-            response.append(f'🎯 **Recommendation:** {evaluation.recommendation}')
-            response.append(f'\n💭 **Reasoning:**\n{evaluation.reasoning}')
+            output = '📊 **Evaluation Results**\n\n'
+            output += f'**Article:** {article_title}\n'
+            output += f'**Query:** {query_name}\n\n'
+            output += f'**Relevance Score:** {evaluation.relevance_score}/10\n'
+            output += f'**Decision:** {evaluation.recommendation.value.upper()}\n\n'
+            output += f'**Reasoning:**\n{evaluation.reasoning}\n\n'
 
-            if evaluation.matched_keywords:
-                response.append(
-                    f'\n🔤 **Matched Keywords:** {", ".join(evaluation.matched_keywords)}'
+            if evaluation.matching_keywords:
+                output += f'**Matching Keywords:** {", ".join(evaluation.matching_keywords)}\n'
+
+            if evaluation.suggested_queries:
+                output += (
+                    f'**Also relevant to:** {", ".join(evaluation.suggested_queries)}\n'
                 )
 
-            if evaluation.matched_topics:
-                response.append(
-                    f'\n📌 **Matched Topics:** {", ".join(evaluation.matched_topics)}'
-                )
-
-            return '\n'.join(response)
+            return output.strip()
 
         except Exception as e:
-            return self.handle_error(e, 'evaluating article')
+            return self.handle_error(e, f"evaluating article '{article_title}'")
 
 
 class AnalyzeTopicInput(BaseModel):
@@ -116,22 +118,20 @@ class AnalyzeTopicTool(BaseThothTool):
             k = k_values.get(depth, 6)
 
             # Search for papers on this topic
-            search_results = self.pipeline.search_knowledge_base(
-                query=topic, k=k, filter={'document_type': 'article'}
-            )
+            search_results = self.adapter.search_knowledge(query=topic, k=k)
 
             if not search_results:
-                return f"No papers found on topic: '{topic}'"
+                return f"No papers found on the topic: '{topic}'"
 
-            # Ask comprehensive questions about the topic
+            # Prepare a question based on depth
             questions = {
-                'quick': f'What are the main findings about {topic} in my research collection?',
-                'medium': f'Provide a comprehensive overview of {topic} research in my collection, including key findings, methodologies, and open questions.',
-                'deep': f'Provide an in-depth analysis of {topic} in my research collection: key contributions, evolution of ideas, methodological approaches, contradictions, gaps, and future directions.',
+                'overview': f'Provide a brief overview of research on {topic}',
+                'medium': f'What are the key findings and methodologies in {topic} research?',
+                'detailed': f'Provide a comprehensive analysis of {topic} research including key findings, methodologies, open challenges, and future directions',
             }
 
             question = questions.get(depth, questions['medium'])
-            analysis = self.pipeline.ask_knowledge_base(question=question, k=k)
+            analysis = self.adapter.ask_knowledge(question=question, k=k)
 
             response = [f'📚 **Topic Analysis: {topic}**\n']
             response.append(f'🔍 Analysis depth: {depth}')
@@ -159,6 +159,9 @@ class FindRelatedInput(BaseModel):
     max_results: int = Field(
         default=5, description='Maximum number of related papers to return'
     )
+    explain_connections: bool = Field(
+        default=False, description='Whether to explain connections between papers'
+    )
 
 
 class FindRelatedTool(BaseThothTool):
@@ -171,59 +174,59 @@ class FindRelatedTool(BaseThothTool):
     )
     args_schema: type[BaseModel] = FindRelatedInput
 
-    def _run(self, paper_title: str, max_results: int = 5) -> str:
+    def _run(
+        self, paper_title: str, max_results: int = 5, explain_connections: bool = False
+    ) -> str:
         """Find related papers."""
         try:
             # First, find the target paper
-            target_results = self.pipeline.search_knowledge_base(
-                query=paper_title, k=1, filter={'document_type': 'article'}
-            )
+            target_results = self.adapter.search_knowledge(query=paper_title, k=1)
 
             if not target_results:
                 return f"❌ Could not find paper: '{paper_title}'"
 
-            target = target_results[0]
+            target_title = target_results[0]['title']
+            target_content = target_results[0]['content']
 
-            # Extract key concepts from the target paper
-            # Use a portion of the abstract/content as the search query
-            search_query = target['content'][:500]  # Use first 500 chars
+            # Extract key concepts for search
+            search_query = f'{target_title} {target_content[:500]}'
 
             # Search for related papers (excluding the target itself)
-            related_results = self.pipeline.search_knowledge_base(
+            related_results = self.adapter.search_knowledge(
                 query=search_query,
                 k=max_results + 1,  # Get extra in case target is included
-                filter={'document_type': 'article'},
             )
 
             # Filter out the target paper
-            related_papers = [
-                r
-                for r in related_results
-                if r['title'].lower() != target['title'].lower()
-            ][:max_results]
+            related_papers = []
+            for result in related_results:
+                if (
+                    result['title'] != target_title
+                    and len(related_papers) < max_results
+                ):
+                    related_papers.append(result)
 
             if not related_papers:
                 return f"No related papers found for: '{paper_title}'"
 
-            response = [f'🔗 **Related Papers for:** {paper_title}\n']
+            response = [f'🔗 **Related Papers for: {target_title}**\n']
+
+            # Analyze connections if requested
+            if explain_connections and related_papers:
+                titles = [paper['title'] for paper in related_papers[:3]]
+                connections_question = (
+                    f"How do these papers: {', '.join(titles)} relate to '{titles[0]}'"
+                )
+                connections = self.adapter.ask_knowledge(
+                    question=connections_question, k=3
+                )
+                response.append(f'💡 **Key Relationships:**\n{connections["answer"]}')
 
             for i, paper in enumerate(related_papers, 1):
                 response.append(f'**{i}. {paper["title"]}**')
                 response.append(f'   📊 Similarity: {paper["score"]:.3f}')
                 response.append(f'   📝 Preview: {paper["content"][:150]}...')
                 response.append('')
-
-            # Ask about relationships
-            if len(related_papers) >= 2:
-                titles = [paper_title] + [p['title'] for p in related_papers[:2]]
-                connections_question = (
-                    f"Briefly explain how '{titles[1]}' and '{titles[2]}' "
-                    f"relate to '{titles[0]}'"
-                )
-                connections = self.pipeline.ask_knowledge_base(
-                    question=connections_question, k=3
-                )
-                response.append(f'💡 **Key Relationships:**\n{connections["answer"]}')
 
             return '\n'.join(response)
 

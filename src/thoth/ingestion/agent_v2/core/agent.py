@@ -13,6 +13,7 @@ from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from loguru import logger
 
+from thoth.ingestion.agent_adapter import AgentAdapter
 from thoth.ingestion.agent_v2.core.state import ResearchAgentState
 from thoth.ingestion.agent_v2.tools.analysis_tools import (
     AnalyzeTopicTool,
@@ -35,10 +36,10 @@ from thoth.ingestion.agent_v2.tools.query_tools import (
     ListQueriesTool,
 )
 from thoth.ingestion.agent_v2.tools.rag_tools import (
-    AskKnowledgeTool,
+    AskQuestionTool,
     ExplainConnectionsTool,
     GetRAGStatsTool,
-    IndexKnowledgeTool,
+    IndexKnowledgeBaseTool,
     SearchKnowledgeTool,
 )
 
@@ -53,8 +54,7 @@ class ResearchAssistant:
 
     def __init__(
         self,
-        llm,
-        pipeline,
+        adapter: AgentAdapter,
         enable_memory: bool = True,
         system_prompt: str | None = None,
     ):
@@ -62,17 +62,18 @@ class ResearchAssistant:
         Initialize the research assistant.
 
         Args:
-            llm: The language model to use for reasoning
-            pipeline: ThothPipeline instance for accessing core functionality
+            adapter: AgentAdapter instance for accessing services
             enable_memory: Whether to enable conversation memory
             system_prompt: Custom system prompt (uses default if None)
         """
-        self.llm = llm
-        self.pipeline = pipeline
+        self.adapter = adapter
         self.enable_memory = enable_memory
 
+        # Get LLM from adapter
+        self.llm = adapter.get_llm()
+
         # Initialize tool registry and register all tools
-        self.tool_registry = ToolRegistry(pipeline=pipeline)
+        self.tool_registry = ToolRegistry(adapter=adapter)
         self._register_tools()
 
         # Get all tool instances
@@ -109,8 +110,8 @@ class ResearchAssistant:
 
         # RAG tools
         self.tool_registry.register('search_knowledge', SearchKnowledgeTool)
-        self.tool_registry.register('ask_knowledge', AskKnowledgeTool)
-        self.tool_registry.register('index_knowledge', IndexKnowledgeTool)
+        self.tool_registry.register('ask_knowledge', AskQuestionTool)
+        self.tool_registry.register('index_knowledge', IndexKnowledgeBaseTool)
         self.tool_registry.register('explain_connections', ExplainConnectionsTool)
         self.tool_registry.register('rag_stats', GetRAGStatsTool)
 
@@ -297,8 +298,7 @@ Remember: You have direct access to tools - use them immediately rather than jus
 
 
 def create_research_assistant(
-    llm,
-    pipeline,
+    adapter: AgentAdapter,
     enable_memory: bool = True,
     system_prompt: str | None = None,
 ) -> ResearchAssistant:
@@ -306,8 +306,7 @@ def create_research_assistant(
     Factory function to create a research assistant.
 
     Args:
-        llm: Language model instance
-        pipeline: ThothPipeline instance
+        adapter: AgentAdapter instance
         enable_memory: Whether to enable conversation memory
         system_prompt: Custom system prompt
 
@@ -315,8 +314,7 @@ def create_research_assistant(
         ResearchAssistant: Configured research assistant instance
     """
     return ResearchAssistant(
-        llm=llm,
-        pipeline=pipeline,
+        adapter=adapter,
         enable_memory=enable_memory,
         system_prompt=system_prompt,
     )
