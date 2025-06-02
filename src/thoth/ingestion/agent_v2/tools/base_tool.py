@@ -22,11 +22,11 @@ class BaseThothTool(BaseTool, ABC):
     """
 
     # Common attributes that all tools might need
-    pipeline: Any = Field(default=None, exclude=True)
+    adapter: Any = Field(default=None, exclude=True)
     config: Any = Field(default=None, exclude=True)
 
     def __init__(self, **kwargs):
-        """Initialize the tool with optional pipeline and config."""
+        """Initialize the tool with optional adapter and config."""
         super().__init__(**kwargs)
 
     @abstractmethod
@@ -71,15 +71,15 @@ class ToolRegistry:
     with the required dependencies.
     """
 
-    def __init__(self, pipeline=None, config=None):
+    def __init__(self, adapter=None, config=None):
         """
         Initialize the tool registry.
 
         Args:
-            pipeline: ThothPipeline instance for accessing core functionality
+            adapter: AgentAdapter instance for accessing services
             config: Configuration object
         """
-        self.pipeline = pipeline
+        self.adapter = adapter
         self.config = config
         self._tools: dict[str, type[BaseThothTool]] = {}
 
@@ -106,7 +106,7 @@ class ToolRegistry:
             raise ValueError(f"Tool '{name}' not registered")
 
         tool_class = self._tools[name]
-        return tool_class(pipeline=self.pipeline, config=self.config, **kwargs)
+        return tool_class(adapter=self.adapter, config=self.config, **kwargs)
 
     def create_all_tools(self) -> list[BaseThothTool]:
         """

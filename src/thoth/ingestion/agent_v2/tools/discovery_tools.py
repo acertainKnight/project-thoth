@@ -21,10 +21,7 @@ class ListDiscoverySourcesTool(BaseThothTool):
     def _run(self) -> str:
         """List discovery sources."""
         try:
-            if not self.pipeline.discovery_manager:
-                return '❌ Discovery manager not available. Please check your installation.'
-
-            sources = self.pipeline.discovery_manager.list_sources()
+            sources = self.adapter.list_discovery_sources()
             if not sources:
                 return "No discovery sources configured. Use 'create_arxiv_source' or 'create_pubmed_source' to add one."
 
@@ -103,7 +100,7 @@ class CreateArxivSourceTool(BaseThothTool):
                 'query_filters': [],
             }
 
-            if self.pipeline.filter.agent._create_discovery_source(source_config):
+            if self.adapter.create_discovery_source(source_config):
                 return (
                     f'✅ **ArXiv Discovery Source Created Successfully!**\n\n'
                     f'**Source Details:**\n'
@@ -170,7 +167,7 @@ class CreatePubmedSourceTool(BaseThothTool):
                 'query_filters': [],
             }
 
-            if self.pipeline.filter.agent._create_discovery_source(source_config):
+            if self.adapter.create_discovery_source(source_config):
                 return (
                     f'✅ **PubMed Discovery Source Created Successfully!**\n\n'
                     f'**Source Details:**\n'
@@ -215,17 +212,12 @@ class RunDiscoveryTool(BaseThothTool):
     ) -> str:
         """Run discovery."""
         try:
-            if not self.pipeline.discovery_manager:
-                return '❌ Discovery manager not available.'
-
             if source_name:
                 message = f"🚀 **Running discovery for '{source_name}'**...\n\n"
             else:
                 message = '🚀 **Running discovery for all active sources**...\n\n'
 
-            result = self.pipeline.filter.agent._run_discovery(
-                source_name, max_articles
-            )
+            result = self.adapter.run_discovery(source_name, max_articles)
 
             if result.get('success'):
                 message += '✅ **Discovery completed successfully!**\n\n'
@@ -272,7 +264,7 @@ class DeleteDiscoverySourceTool(BaseThothTool):
     def _run(self, source_name: str) -> str:
         """Delete a discovery source."""
         try:
-            if self.pipeline.filter.agent._delete_discovery_source(source_name):
+            if self.adapter.delete_discovery_source(source_name):
                 return f"✅ Successfully deleted discovery source '{source_name}'"
             else:
                 return f"❌ Failed to delete source '{source_name}' (may not exist)"
