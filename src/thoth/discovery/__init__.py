@@ -1,21 +1,13 @@
 """
 Thoth discovery package.
 
-This package provides functionality for discovering new research articles through
-various sources including APIs and web scraping.
+This package contains components for discovering research articles from
+various sources like ArXiv, PubMed, and web scrapers.
 """
 
-from thoth.discovery.api_sources import ArxivAPISource, PubMedAPISource
-from thoth.discovery.chrome_extension import ChromeExtensionServer
-from thoth.discovery.discovery_manager import DiscoveryManager
-from thoth.discovery.scheduler import DiscoveryScheduler
-from thoth.discovery.web_scraper import WebScraper
+# Export main components for convenience
+# Note: DiscoveryManager is not imported here to avoid circular imports
+# Import it directly when needed: from thoth.discovery.discovery_manager
+# import DiscoveryManager
 
-__all__ = [
-    'ArxivAPISource',
-    'ChromeExtensionServer',
-    'DiscoveryManager',
-    'DiscoveryScheduler',
-    'PubMedAPISource',
-    'WebScraper',
-]
+__all__ = []

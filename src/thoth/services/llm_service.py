@@ -1,0 +1,342 @@
+"""
+LLM service for managing language model interactions.
+
+This module consolidates all LLM-related operations including client
+initialization, prompt management, and model selection.
+"""
+
+from typing import Any
+
+from langchain_core.prompts import ChatPromptTemplate
+from pydantic import BaseModel
+
+from thoth.services.base import BaseService, ServiceError
+from thoth.utilities.openrouter import OpenRouterClient
+
+
+class LLMService(BaseService):
+    """
+    Service for managing LLM operations.
+
+    This service consolidates:
+    - LLM client initialization and configuration
+    - Prompt template management
+    - Model selection and switching
+    - Structured output generation
+    - Error handling and retries
+    """
+
+    def __init__(self, config=None):
+        """
+        Initialize the LLMService.
+
+        Args:
+            config: Optional configuration object
+        """
+        super().__init__(config)
+        self._clients = {}  # Cache for different model clients
+        self._structured_clients: dict[str, Any] = {}
+        self._prompt_templates: dict[str, ChatPromptTemplate] = {}
+
+    def initialize(self) -> None:
+        """Initialize the LLM service."""
+        self.logger.info('LLM service initialized')
+
+    def get_client(
+        self,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        use_rate_limiter: bool = True,
+        **kwargs,
+    ) -> OpenRouterClient:
+        """
+        Get or create an LLM client with specified configuration.
+
+        Args:
+            model: Model to use (defaults to config)
+            temperature: Temperature setting
+            max_tokens: Maximum tokens
+            use_rate_limiter: Whether to use rate limiting
+            **kwargs: Additional model parameters
+
+        Returns:
+            OpenRouterClient: Configured LLM client
+
+        Raises:
+            ServiceError: If client creation fails
+        """
+        try:
+            # Use defaults from config
+            if model is None:
+                model = self.config.llm_config.model
+            if temperature is None:
+                temperature = self.config.llm_config.model_settings.temperature
+            if max_tokens is None:
+                max_tokens = self.config.llm_config.model_settings.max_tokens
+
+            # Create cache key
+            cache_key = f'{model}_{temperature}_{max_tokens}'
+
+            # Check cache
+            if cache_key in self._clients:
+                return self._clients[cache_key]
+
+            # Merge kwargs with config
+            model_kwargs = self.config.llm_config.model_settings.model_dump()
+            model_kwargs.update(kwargs)
+
+            # Remove parameters that we're passing explicitly to avoid conflicts
+            model_kwargs.pop('temperature', None)
+            model_kwargs.pop('max_tokens', None)
+            model_kwargs.pop('use_rate_limiter', None)
+
+            # Create new client
+            client = OpenRouterClient(
+                api_key=self.config.api_keys.openrouter_key,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                use_rate_limiter=use_rate_limiter,
+                **model_kwargs,
+            )
+
+            # Cache and return
+            self._clients[cache_key] = client
+
+            self.log_operation(
+                'client_created',
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
+            return client
+
+        except Exception as e:
+            raise ServiceError(
+                self.handle_error(e, f"creating LLM client for model '{model}'")
+            ) from e
+
+    def get_llm(
+        self,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        use_rate_limiter: bool = True,
+        **kwargs,
+    ) -> OpenRouterClient:
+        """
+        Get an LLM client (alias for get_client for backward compatibility).
+
+        Args:
+            model: Model to use (defaults to config)
+            temperature: Temperature setting
+            max_tokens: Maximum tokens
+            use_rate_limiter: Whether to use rate limiting
+            **kwargs: Additional model parameters
+
+        Returns:
+            OpenRouterClient: Configured LLM client
+
+        Raises:
+            ServiceError: If client creation fails
+        """
+        return self.get_client(
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            use_rate_limiter=use_rate_limiter,
+            **kwargs,
+        )
+
+    def get_structured_client(
+        self,
+        schema: type[BaseModel],
+        model: str | None = None,
+        method: str = 'json_schema',
+        include_raw: bool = False,
+        **client_kwargs,
+    ) -> Any:
+        """
+        Get an LLM client configured for structured output.
+
+        Args:
+            schema: Pydantic model schema for output
+            model: Model to use
+            method: Structured output method
+            include_raw: Whether to include raw response
+            **client_kwargs: Additional client parameters
+
+        Returns:
+            Structured LLM client
+
+        Raises:
+            ServiceError: If client creation fails
+        """
+        try:
+            # Get base client
+            client = self.get_client(model=model, **client_kwargs)
+
+            # Create structured client
+            structured_client = client.with_structured_output(
+                schema,
+                include_raw=include_raw,
+                method=method,
+            )
+
+            self.log_operation(
+                'structured_client_created',
+                schema=schema.__name__,
+                method=method,
+            )
+
+            return structured_client
+
+        except Exception as e:
+            raise ServiceError(
+                self.handle_error(
+                    e, f'creating structured client for {schema.__name__}'
+                )
+            ) from e
+
+    def create_prompt_template(
+        self,
+        template: str,
+        template_format: str = 'f-string',
+        validate_template: bool = True,
+    ) -> ChatPromptTemplate:
+        """
+        Create a chat prompt template.
+
+        Args:
+            template: Template string
+            template_format: Format type ('f-string' or 'jinja2')
+            validate_template: Whether to validate the template
+
+        Returns:
+            ChatPromptTemplate: Created template
+
+        Raises:
+            ServiceError: If template creation fails
+        """
+        try:
+            prompt_template = ChatPromptTemplate.from_template(
+                template=template,
+                template_format=template_format,
+                validate_template=validate_template,
+            )
+
+            self.log_operation(
+                'prompt_template_created',
+                format=template_format,
+            )
+
+            return prompt_template
+
+        except Exception as e:
+            raise ServiceError(self.handle_error(e, 'creating prompt template')) from e
+
+    def invoke_with_retry(
+        self,
+        client: Any,
+        input_data: Any,
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
+    ) -> Any:
+        """
+        Invoke LLM with retry logic.
+
+        Args:
+            client: LLM client to invoke
+            input_data: Input data for the client
+            max_retries: Maximum retry attempts
+            retry_delay: Delay between retries
+
+        Returns:
+            Response from the LLM
+
+        Raises:
+            ServiceError: If all retries fail
+        """
+        import time
+
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                response = client.invoke(input_data)
+
+                self.log_operation(
+                    'llm_invoked',
+                    attempt=attempt + 1,
+                    success=True,
+                )
+
+                return response
+
+            except Exception as e:
+                last_error = e
+                self.logger.warning(
+                    f'LLM invocation failed (attempt {attempt + 1}/{max_retries}): {e}'
+                )
+
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+                continue
+
+        raise ServiceError(
+            self.handle_error(last_error, f'invoking LLM after {max_retries} attempts')
+        )
+
+    def get_model_config(self, model_type: str) -> dict[str, Any]:
+        """
+        Get configuration for a specific model type.
+
+        Args:
+            model_type: Type of model (e.g., 'analysis', 'citation', 'filter')
+
+        Returns:
+            dict[str, Any]: Model configuration
+        """
+        try:
+            configs = {
+                'analysis': {
+                    'model': self.config.llm_config.model,
+                    'settings': self.config.llm_config.model_settings.model_dump(),
+                    'max_output_tokens': self.config.llm_config.max_output_tokens,
+                    'max_context_length': self.config.llm_config.max_context_length,
+                },
+                'citation': {
+                    'model': self.config.citation_llm_config.model,
+                    'settings': self.config.citation_llm_config.model_settings.model_dump(),
+                    'max_output_tokens': self.config.citation_llm_config.max_output_tokens,
+                },
+                'filter': {
+                    'model': self.config.scrape_filter_llm_config.model,
+                    'settings': self.config.scrape_filter_llm_config.model_settings.model_dump(),
+                    'max_output_tokens': self.config.scrape_filter_llm_config.max_output_tokens,
+                },
+                'agent': {
+                    'model': self.config.research_agent_llm_config.model,
+                    'settings': self.config.research_agent_llm_config.model_settings.model_dump(),
+                    'max_output_tokens': self.config.research_agent_llm_config.max_output_tokens,
+                },
+                'tag': {
+                    'consolidate_model': self.config.tag_consolidator_llm_config.consolidate_model,
+                    'suggest_model': self.config.tag_consolidator_llm_config.suggest_model,
+                    'map_model': self.config.tag_consolidator_llm_config.map_model,
+                    'settings': self.config.tag_consolidator_llm_config.model_settings.model_dump(),
+                },
+            }
+
+            return configs.get(model_type, configs['analysis'])
+
+        except Exception as e:
+            self.logger.error(self.handle_error(e, f'getting config for {model_type}'))
+            return {}
+
+    def clear_cache(self) -> None:
+        """Clear the client cache."""
+        self._clients.clear()
+        self.log_operation('cache_cleared', count=len(self._clients))
