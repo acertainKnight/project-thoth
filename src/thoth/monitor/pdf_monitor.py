@@ -8,13 +8,16 @@ and process them through the Thoth pipeline automatically.
 import json
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING, Optional
 
 from loguru import logger
 from watchdog.events import FileCreatedEvent, FileSystemEventHandler
 from watchdog.observers.polling import PollingObserver
 
-from thoth.pipeline import ThothPipeline
 from thoth.utilities.config import get_config
+
+if TYPE_CHECKING:
+    from thoth.pipeline import ThothPipeline
 
 
 class PDFTracker:
@@ -43,6 +46,10 @@ class PDFTracker:
         # Load existing tracked files
         self.processed_files: dict[str, dict] = {}
         self._load_tracked_files()
+
+        # Create the file if it doesn't exist
+        if not self.track_file.exists():
+            self._save_tracked_files()
 
         logger.info(f'PDF tracker initialized with tracking file: {self.track_file}')
 
@@ -190,7 +197,7 @@ class PDFHandler(FileSystemEventHandler):
     the processing pipeline when new PDFs are detected.
     """
 
-    def __init__(self, pipeline: ThothPipeline, pdf_tracker: PDFTracker):
+    def __init__(self, pipeline: 'ThothPipeline', pdf_tracker: PDFTracker):
         """
         Initialize the PDF handler.
 
@@ -241,7 +248,7 @@ class PDFHandler(FileSystemEventHandler):
 
             # Mark as processed
             self.pdf_tracker.mark_processed(
-                new_pdf_path,
+                file_path,
                 {
                     'note_path': str(note_path),
                     'new_pdf_path': str(new_pdf_path),
@@ -263,7 +270,7 @@ class PDFMonitor:
     def __init__(
         self,
         watch_dir: Path | None = None,
-        pipeline: ThothPipeline | None = None,
+        pipeline: Optional['ThothPipeline'] = None,
         polling_interval: float = 1.0,
         recursive: bool = False,
         track_file: Path | None = None,
@@ -285,7 +292,12 @@ class PDFMonitor:
         self.watch_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize pipeline if not provided
-        self.pipeline = pipeline or ThothPipeline()
+        if pipeline is None:
+            from thoth.pipeline import ThothPipeline
+
+            self.pipeline = ThothPipeline()
+        else:
+            self.pipeline = pipeline
 
         # Set up the observer
         self.observer = PollingObserver(timeout=polling_interval)
@@ -371,13 +383,22 @@ class PDFMonitor:
             logger.info(f'Processing existing PDF: {pdf_file}')
 
             try:
-                note_path = self.pipeline.process_pdf(pdf_file)
+                note_path, new_pdf_path, new_markdown_path = self.pipeline.process_pdf(
+                    pdf_file
+                )
                 logger.info(
                     f'Successfully processed existing file: {pdf_file} -> {note_path}'
                 )
 
                 # Mark as processed
-                self.pdf_tracker.mark_processed(pdf_file, {'note_path': str(note_path)})
+                self.pdf_tracker.mark_processed(
+                    pdf_file,
+                    {
+                        'note_path': str(note_path),
+                        'new_pdf_path': str(new_pdf_path),
+                        'new_markdown_path': str(new_markdown_path),
+                    },
+                )
             except Exception as e:
                 logger.error(f'Error processing existing file {pdf_file}: {e!s}')
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Demonstration script for the Research Assistant Agent.
+Demonstration script for the Modern Research Assistant.
 
-This script shows how to use the Research Assistant Agent programmatically
+This script shows how to use the modern Research Assistant with the service layer
 to create queries, evaluate articles, and filter content.
 """
 
@@ -12,12 +12,11 @@ from pathlib import Path
 # Add the src directory to the path so we can import thoth modules
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from thoth.ingestion.agent import ResearchAssistantAgent
-from thoth.ingestion.filter import ArticleFilter
+from thoth.pipeline import ThothPipeline
 from thoth.utilities.models import AnalysisResponse, ResearchQuery
 
 
-def create_sample_queries(agent: ResearchAssistantAgent) -> None:
+def create_sample_queries(pipeline: ThothPipeline) -> None:
     """Create some sample research queries for demonstration."""
     print('📝 Creating sample research queries...')
 
@@ -101,10 +100,10 @@ def create_sample_queries(agent: ResearchAssistantAgent) -> None:
         minimum_relevance_score=0.65,
     )
 
-    # Create the queries
+    # Create the queries using the service layer
     queries = [nlp_query, cv_query, rl_query]
     for query in queries:
-        success = agent.create_query(query)
+        success = pipeline.services.query.create_query(query)
         if success:
             print(f'✅ Created query: {query.name}')
         else:
@@ -144,7 +143,7 @@ Ablation studies on attention components
     )
 
 
-def demonstrate_article_evaluation(agent: ResearchAssistantAgent) -> None:
+def demonstrate_article_evaluation(pipeline: ThothPipeline) -> None:
     """Demonstrate article evaluation against queries."""
     print('\n🔍 Demonstrating article evaluation...')
 
@@ -153,110 +152,137 @@ def demonstrate_article_evaluation(agent: ResearchAssistantAgent) -> None:
     print(f'Sample article: {sample_article.summary[:100]}...')
 
     # Get available queries
-    queries = agent.list_queries()
+    queries = pipeline.services.query.list_queries()
     print(f'Available queries: {queries}')
 
     # Evaluate against each query
     for query_name in queries:
         print(f'\n📊 Evaluating against query: {query_name}')
         try:
-            evaluation = agent.evaluate_article(sample_article, query_name)
-            if evaluation:
+            query = pipeline.services.query.get_query(query_name)
+            if query:
+                evaluation = pipeline.services.article.evaluate_against_query(
+                    sample_article, query
+                )
                 print(f'  Score: {evaluation.relevance_score:.2f}')
                 print(f'  Recommendation: {evaluation.recommendation}')
                 print(f'  Meets criteria: {evaluation.meets_criteria}')
                 print(f'  Keyword matches: {evaluation.keyword_matches}')
                 print(f'  Reasoning: {evaluation.reasoning[:200]}...')
             else:
-                print('  ❌ Evaluation failed')
+                print(f'  ❌ Query not found: {query_name}')
         except Exception as e:
             print(f'  ❌ Error: {e}')
 
 
-def demonstrate_article_filtering() -> None:
-    """Demonstrate automatic article filtering."""
+def demonstrate_article_filtering(pipeline: ThothPipeline) -> None:
+    """Demonstrate automatic article filtering using the Filter."""
     print('\n🔄 Demonstrating article filtering...')
-
-    # Create article filter
-    article_filter = ArticleFilter()
 
     # Create sample article
     sample_article = create_sample_article()
 
-    # Filter the article
-    filter_result = article_filter.filter_article(sample_article)
+    # Filter the article using all queries
+    queries = []
+    for query_name in pipeline.services.query.list_queries():
+        query = pipeline.services.query.get_query(query_name)
+        if query:
+            queries.append(query)
 
-    print(f'Overall recommendation: {filter_result["overall_recommendation"]}')
-    print(f'Reason: {filter_result["reason"]}')
-    print(f'Highest score: {filter_result.get("highest_score", "N/A")}')
-    print(f'Matching queries: {filter_result.get("matching_queries", [])}')
+    if queries:
+        # Use the ArticleService to evaluate for download
+        from thoth.utilities.models import ScrapedArticleMetadata
 
-    # Show statistics
-    stats = article_filter.get_statistics()
+        # Convert AnalysisResponse to ScrapedArticleMetadata for evaluation
+        scraped_metadata = ScrapedArticleMetadata(
+            title=sample_article.summary.split('.')[0]
+            if sample_article.summary
+            else 'Sample Article',
+            authors=['Sample Author'],
+            abstract=sample_article.abstract,
+            source='demo',
+            keywords=[tag.strip('#') for tag in (sample_article.tags or [])],
+        )
+
+        evaluation = pipeline.services.article.evaluate_for_download(
+            scraped_metadata, queries
+        )
+
+        print(
+            f'Overall recommendation: {"download" if evaluation.should_download else "skip"}'
+        )
+        print(f'Relevance score: {evaluation.relevance_score:.2f}')
+        print(f'Matching queries: {evaluation.matching_queries}')
+        print(f'Reasoning: {evaluation.reasoning[:200]}...')
+    else:
+        print('❌ No queries available for filtering')
+
+    # Show filter statistics
+    stats = pipeline.filter.get_statistics()
     print('\n📈 Filter statistics:')
     print(f'  Total articles processed: {stats["total_articles"]}')
-    print(f'  Approved: {stats["approved_count"]}')
-    print(f'  Rejected: {stats["rejected_count"]}')
-    print(f'  Needs review: {stats["review_count"]}')
-    print(f'  Available queries: {stats["available_queries"]}')
+    print(f'  Downloaded: {stats["downloaded"]}')
+    print(f'  Skipped: {stats["skipped"]}')
 
 
-def demonstrate_conversational_interface(agent: ResearchAssistantAgent) -> None:
-    """Demonstrate the conversational interface."""
-    print('\n💬 Demonstrating conversational interface...')
+def demonstrate_modern_agent(pipeline: ThothPipeline) -> None:
+    """Demonstrate the modern agent interface."""
+    print('\n🤖 Demonstrating modern agent interface...')
+
+    from thoth.ingestion.agent_adapter import AgentAdapter
+    from thoth.ingestion.agent_v2 import create_research_assistant
+
+    # Create adapter and agent
+    adapter = AgentAdapter(pipeline.services)
+    agent = create_research_assistant(adapter=adapter, enable_memory=True)
 
     # Simulate a conversation
-    conversation_history = []
-
     messages = [
-        'Hello, I need help creating a research query',
-        'I want to find papers about machine learning for healthcare',
-        'List my current queries',
+        'List my research queries',
+        'What papers do I have about transformers?',
+        'Create a new query for healthcare machine learning',
     ]
 
+    session_id = 'demo_session'
+
     for message in messages:
-        print(f'\nUser: {message}')
+        print(f'\n💬 User: {message}')
         try:
-            response = agent.chat(message, conversation_history)
-            print(f'Assistant: {response["agent_response"]}')
+            response = agent.chat(message, session_id)
+            print(f'🤖 Assistant: {response["response"][:300]}...')
 
-            # Update conversation history
-            conversation_history.append({'role': 'user', 'content': message})
-            if response.get('agent_response'):
-                conversation_history.append(
-                    {'role': 'assistant', 'content': response['agent_response']}
-                )
-
+            if response.get('tool_calls'):
+                print(f'   Tools used: {[t["tool"] for t in response["tool_calls"]]}')
         except Exception as e:
-            print(f'Error: {e}')
+            print(f'❌ Error: {e}')
 
 
 def main() -> None:
     """Main demonstration function."""
-    print('🔬 Research Assistant Agent Demonstration')
+    print('🔬 Modern Research Assistant Demonstration')
     print('=' * 50)
 
     try:
-        # Initialize the agent
-        print('🚀 Initializing Research Assistant Agent...')
-        agent = ResearchAssistantAgent()
-        print('✅ Agent initialized successfully')
+        # Initialize the pipeline
+        print('🚀 Initializing Thoth Pipeline with service layer...')
+        pipeline = ThothPipeline()
+        print('✅ Pipeline initialized successfully')
 
         # Create sample queries
-        create_sample_queries(agent)
+        create_sample_queries(pipeline)
 
         # Demonstrate article evaluation
-        demonstrate_article_evaluation(agent)
+        demonstrate_article_evaluation(pipeline)
 
         # Demonstrate article filtering
-        demonstrate_article_filtering()
+        demonstrate_article_filtering(pipeline)
 
-        # Demonstrate conversational interface
-        demonstrate_conversational_interface(agent)
+        # Demonstrate modern agent interface
+        demonstrate_modern_agent(pipeline)
 
         print('\n✅ Demonstration completed successfully!')
         print('\nTo interact with the agent directly, run:')
-        print('python -m thoth.ingestion.cli')
+        print('python -m thoth agent')
 
     except Exception as e:
         print(f'❌ Error during demonstration: {e}')
