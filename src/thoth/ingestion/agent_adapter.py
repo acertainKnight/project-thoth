@@ -38,7 +38,7 @@ class AgentAdapter:
 
     def list_queries(self) -> list[ResearchQuery]:
         """List all research queries."""
-        return self.services.query.list_queries()
+        return self.services.query.get_all_queries()
 
     def create_query(self, query_data: ResearchQuery) -> bool:
         """Create a new research query."""
@@ -94,7 +94,15 @@ class AgentAdapter:
     ) -> dict[str, Any]:
         """Run discovery for sources."""
         try:
-            result = self.services.discovery.run_discovery(source_name, max_articles)
+            # Create filter function using the service manager
+            from thoth.ingestion.filter import Filter
+
+            filter_instance = Filter(self.services)
+            filter_func = filter_instance.process_article
+
+            result = self.services.discovery.run_discovery(
+                source_name, max_articles, filter_func
+            )
             return {
                 'success': True,
                 'articles_found': result.articles_found,

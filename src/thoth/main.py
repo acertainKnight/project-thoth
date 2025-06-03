@@ -869,7 +869,7 @@ def run_agent_chat(args):  # noqa: ARG001
 
         # Create the modern agent with service layer access
         agent = create_research_assistant(
-            adapter=adapter,
+            adapter=adapter,  # Pass the adapter instance
             enable_memory=True,
         )
 
@@ -998,10 +998,17 @@ def run_discovery_run(args):
         # Initialize pipeline with service layer
         pipeline = ThothPipeline()
 
+        # Create filter function for discovery
+        from thoth.ingestion.filter import Filter
+
+        filter_instance = Filter(pipeline.services)
+        filter_func = filter_instance.process_article
+
         # Run discovery through service layer
         result = pipeline.services.discovery.run_discovery(
             source_name=args.source,
             max_articles=args.max_articles,
+            filter_func=filter_func,
         )
 
         logger.info('Discovery run completed:')

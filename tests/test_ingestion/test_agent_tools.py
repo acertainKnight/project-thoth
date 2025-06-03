@@ -55,9 +55,8 @@ class TestQueryTools:
             result = tool._run(
                 name='test_query',
                 description='Test query description',
-                evaluation_criteria='Must be about machine learning',
+                research_question='What are the latest developments in machine learning?',
                 keywords=['machine learning', 'AI'],
-                exclusion_keywords=['hardware'],
             )
 
             assert 'Successfully created' in result
@@ -92,11 +91,12 @@ class TestQueryTools:
         mock_query = MagicMock()
         mock_query.name = 'test_query'
         mock_query.description = 'Test description'
-        mock_query.evaluation_criteria = 'Test criteria'
+        mock_query.research_question = 'Test research question'
         mock_query.created_at = '2023-01-01'
         mock_query.keywords = ['ml', 'ai']
-        mock_query.exclusion_keywords = ['hardware']
-        mock_query.tags = None
+        mock_query.required_topics = ['machine learning']
+        mock_query.preferred_topics = ['deep learning']
+        mock_query.excluded_topics = ['hardware']
 
         # Mock adapter response
         mock_adapter.get_query.return_value = mock_query
@@ -105,7 +105,7 @@ class TestQueryTools:
         result = tool._run(query_name='test_query')
 
         assert 'test_query' in result
-        assert 'Test criteria' in result
+        assert 'Test research question' in result
 
 
 class TestDiscoveryTools:
