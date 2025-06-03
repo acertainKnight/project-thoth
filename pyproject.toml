@@ -61,6 +61,13 @@ dependencies = [
     "jsonpatch>=1.33",
     "roman-numerals-py>=3.1.0",
     "feedparser>=6.0.11",
+    "pre-commit>=4.2.0",
+    "ruff>=0.11.11",
+    "black>=25.1.0",
+    "codespell>=2.4.1",
+    "pytest>=8.3.5",
+    "instructor>=1.8.3",
+    "pytest-cov>=6.1.1",
 ]
 
 [project.optional-dependencies]
@@ -76,8 +83,16 @@ dev = [
     "pytest-asyncio>=0.26.0",
     "pytest-cov>=6.1.1",
     "pytest-mock>=3.14.0",
+    "pytest-timeout>=2.1.0",
     "ruff>=0.11.11",
     "twine>=6.1.0",
+]
+test = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+    "pytest-cov>=6.1.1",
+    "pytest-mock>=3.14.0",
+    "pytest-timeout>=2.1.0",
 ]
 jupyter = [
     "ipykernel>=6.29.5",

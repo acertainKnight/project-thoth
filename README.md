@@ -1,3 +1,329 @@
+# 🦉 Thoth - Research Assistant AI
+
+Thoth is a production-ready AI-powered research assistant that automates the collection, analysis, and organization of academic literature. Named after the ancient Egyptian god of wisdom and knowledge, Thoth helps researchers efficiently manage their knowledge base and discover new insights.
+
+## ✨ Key Features
+
+### 📚 **Automated Paper Processing**
+- **PDF OCR Conversion**: Converts academic PDFs to markdown using Mistral's OCR
+- **Content Analysis**: Extracts key findings, methodology, results using LLMs
+- **Citation Extraction**: Identifies and processes all references with metadata enrichment
+- **Note Generation**: Creates structured Obsidian-compatible notes automatically
+
+### 🔍 **Research Discovery & Filtering**
+- **Multi-Source Discovery**: Automated paper discovery from ArXiv, PubMed, and custom sources
+- **Smart Filtering**: AI-powered evaluation of papers against research queries
+- **Scheduled Discovery**: Automated periodic searches for new relevant papers
+- **Web Scraping**: Support for custom journal scraping with Chrome extension
+
+### 🤖 **Interactive Research Agent**
+- **Natural Language Interface**: Chat with your research collection
+- **Query Management**: Create and manage research interests
+- **Paper Analysis**: Find connections between papers and analyze research trends
+- **Tool Integration**: Built on LangGraph with MCP framework
+
+### 🔗 **Knowledge Management**
+- **Citation Network**: Tracks relationships between papers in a graph structure
+- **RAG System**: Vector search and question-answering over your collection
+- **Tag Management**: Intelligent tag consolidation and suggestions
+- **Obsidian Integration**: Seamless integration with Obsidian for note-taking
+
+## 📋 Prerequisites
+
+- Python 3.10+
+- API Keys:
+  - **Mistral API**: For PDF OCR conversion
+  - **OpenRouter API**: For LLM analysis and agent
+  - **OpenCitations** (optional): For citation metadata
+  - **Semantic Scholar** (optional): For citation enrichment
+
+## 🚀 Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/project-thoth.git
+   cd project-thoth
+   ```
+
+2. **Install dependencies**
+   ```bash
+   pip install -e .
+   ```
+
+3. **Configure environment**
+   Create a `.env` file with your API keys:
+   ```env
+   # Required API Keys
+   API_MISTRAL_KEY=your_mistral_key
+   API_OPENROUTER_KEY=your_openrouter_key
+
+   # Optional API Keys
+   API_OPENCITATIONS_KEY=your_opencitations_key
+   API_SEMANTICSCHOLAR_API_KEY=your_semanticscholar_key
+
+   # LLM Configuration
+   LLM_MODEL=openai/gpt-4o-mini
+   CITATION_LLM_MODEL=openai/gpt-4
+   RESEARCH_AGENT_LLM_MODEL=openai/gpt-4o-mini
+
+   # API Server Configuration
+   ENDPOINT_HOST=localhost
+   ENDPOINT_PORT=8000
+   ENDPOINT_BASE_URL=http://localhost:8000
+   ```
+
+## 📖 Quick Start
+
+### 1. Process a Single PDF
+```bash
+thoth process --pdf-path /path/to/paper.pdf
+```
+
+### 2. Start the PDF Monitor
+Monitor a folder for new PDFs and process them automatically:
+```bash
+thoth monitor --watch-dir /path/to/pdfs --api-server
+```
+
+### 3. Chat with the Research Agent
+```bash
+thoth agent
+```
+
+Example conversation:
+```
+You: Create an ArXiv source for machine learning papers
+Assistant: ✅ ArXiv Discovery Source Created Successfully!
+...
+
+You: What papers do I have on transformers?
+Assistant: 🔍 I found 12 papers on transformers in your collection...
+```
+
+### 4. Index Your Knowledge Base
+```bash
+thoth rag index
+```
+
+### 5. Ask Questions About Your Research
+```bash
+thoth rag ask --question "What are the main contributions of the transformer architecture?"
+```
+
+## 🏗️ Architecture
+
+### Service Layer Architecture
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Presentation   │     │      Agent      │     │       CLI       │
+│   (Commands)    │     │  (LangGraph)    │     │   (Commands)    │
+└────────┬────────┘     └────────┬────────┘     └────────┬────────┘
+         │                       │                         │
+         └───────────────────────┴─────────────────────────┘
+                                 │
+                    ┌────────────┴────────────┐
+                    │    Service Manager      │
+                    └────────────┬────────────┘
+                                 │
+     ┌───────────────────────────┴───────────────────────────┐
+     │                                                       │
+┌────┴─────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──┴───────┐
+│Processing│  │Discovery │  │   RAG    │  │Citation  │  │  Query   │
+│ Service  │  │ Service  │  │ Service  │  │ Service  │  │ Service  │
+└──────────┘  └──────────┘  └──────────┘  └──────────┘  └──────────┘
+```
+
+### Key Components
+
+- **Pipeline**: Orchestrates the complete document processing workflow
+- **Service Layer**: Centralized business logic for all operations
+- **Citation Tracker**: Maintains the knowledge graph of paper relationships
+- **Filter**: Evaluates papers against research queries
+- **Agent**: Interactive assistant built with LangGraph
+
+## 🛠️ Commands
+
+### Document Processing
+- `thoth process --pdf-path <path>` - Process a single PDF
+- `thoth monitor` - Monitor directory for new PDFs
+- `thoth reprocess-note --article-id <doi>` - Regenerate a note
+- `thoth regenerate-all-notes` - Regenerate all notes
+
+### Discovery & Filtering
+- `thoth discovery list` - List all discovery sources
+- `thoth discovery create --name <name> --type <api|scraper>` - Create source
+- `thoth discovery run --source <name>` - Run discovery
+- `thoth filter-test` - Test the filtering system
+
+### Knowledge Base
+- `thoth rag index` - Index all documents
+- `thoth rag search --query <query>` - Search knowledge base
+- `thoth rag ask --question <question>` - Ask questions
+- `thoth rag stats` - Show RAG statistics
+
+### Tag Management
+- `thoth consolidate-tags` - Consolidate and suggest tags
+- `thoth consolidate-tags-only` - Only consolidate existing tags
+- `thoth suggest-tags` - Suggest new tags for articles
+
+### Agent & API
+- `thoth agent` - Start interactive agent chat
+- `thoth api` - Start the API server
+
+## 📂 Directory Structure
+
+```
+project-thoth/
+├── data/
+│   ├── pdf/              # Original PDF files
+│   ├── markdown/         # OCR-converted markdown
+│   ├── notes/            # Generated Obsidian notes
+│   ├── agent/            # Agent-managed files
+│   ├── discovery/        # Discovery configurations
+│   ├── queries/          # Research queries
+│   └── knowledge/        # Citation graph
+├── src/
+│   └── thoth/
+│       ├── services/     # Service layer
+│       ├── ingestion/    # Agent and filtering
+│       ├── analyze/      # Analysis tools
+│       ├── discovery/    # Discovery sources
+│       ├── monitor/      # File monitoring
+│       └── rag/          # RAG system
+└── templates/            # Note templates
+```
+
+## 🔧 Configuration
+
+The system uses a hierarchical configuration with environment variables:
+
+```python
+# Example configuration structure
+THOTH_CONFIG = {
+    'pdf_dir': 'data/pdf',
+    'notes_dir': 'data/notes',
+    'llm_config': {
+        'model': 'openai/gpt-4o-mini',
+        'temperature': 0.7,
+        'max_tokens': 500000
+    },
+    'discovery_config': {
+        'default_interval_minutes': 60,
+        'default_max_articles': 50
+    }
+}
+```
+
+## 📊 API Endpoints
+
+When running the API server (`thoth api`):
+
+- `GET /download-pdf?url=<pdf_url>` - Download PDF for Obsidian
+- `GET /view-markdown?path=<path>` - View markdown content
+- `GET /health` - Health check endpoint
+
+## 📚 RAG Knowledge Base
+
+The RAG (Retrieval-Augmented Generation) system allows you to search through and ask questions about your entire research collection:
+
+### Setting Up RAG
+```bash
+# Index all your documents (run this after processing PDFs)
+thoth rag index
+
+# Check RAG system status
+thoth rag stats
+```
+
+### Using RAG
+```bash
+# Search for relevant documents
+thoth rag search --query "transformer architecture" --k 5
+
+# Ask questions about your research
+thoth rag ask --question "What are the main contributions of attention mechanisms?"
+
+# Filter searches by document type
+thoth rag search --query "deep learning" --filter-type note
+```
+
+### RAG in the Research Agent
+The research agent has full access to the RAG system:
+```
+You: search my knowledge base for transformer papers
+Agent: [searches and returns relevant papers]
+
+You: what do my notes say about attention mechanisms?
+Agent: [searches notes and provides summary]
+```
+
+## 🧩 Extending Thoth
+
+### Adding New Discovery Sources
+
+```python
+from thoth.discovery.api_sources import BaseAPISource
+
+class CustomAPISource(BaseAPISource):
+    def search(self, config, max_results=50):
+        # Implement your API logic
+        return articles
+```
+
+### Creating Custom Agent Tools
+
+```python
+from thoth.ingestion.agent_v2.tools.base_tool import BaseThothTool
+
+class CustomTool(BaseThothTool):
+    name = "custom_tool"
+    description = "My custom research tool"
+
+    def _run(self, query: str) -> str:
+        # Tool logic here
+        return result
+```
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1. **OCR Failures**: Check Mistral API key and file size limits
+2. **LLM Timeouts**: Adjust chunk sizes in configuration
+3. **Discovery Errors**: Verify API keys and rate limits
+4. **Import Errors**: Ensure proper installation with `pip install -e .`
+
+### Debug Mode
+
+Enable debug logging:
+```bash
+export LOG_LEVEL=DEBUG
+thoth <command>
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🙏 Acknowledgments
+
+- Built with [LangChain](https://langchain.com/) and [LangGraph](https://github.com/langchain-ai/langgraph)
+- OCR powered by [Mistral AI](https://mistral.ai/)
+- LLMs via [OpenRouter](https://openrouter.ai/)
+- Citation data from [OpenCitations](https://opencitations.net/) and [Semantic Scholar](https://semanticscholar.org/)
+
+---
+
+**Thoth**: *Transforming how researchers discover, analyze, and organize academic knowledge.*
+
 # Project Thoth
 
 Thoth is an academic PDF processing system that automatically analyzes PDF documents and generates structured notes.
