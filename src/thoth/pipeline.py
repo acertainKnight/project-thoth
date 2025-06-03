@@ -13,7 +13,6 @@ from typing import Any
 
 from loguru import logger
 
-from thoth.ingestion.agent_adapter import AgentAdapter
 from thoth.ingestion.filter import Filter
 from thoth.monitor.tracker import CitationTracker
 from thoth.services.service_manager import ServiceManager
@@ -85,12 +84,11 @@ class ThothPipeline:
         self.services = ServiceManager(config=self.config)
         self.services.initialize()
 
-        # Initialize filter with service manager through adapter
-        adapter = AgentAdapter(self.services)
-        self.filter = Filter(adapter=adapter)
+        # Initialize filter with service manager
+        self.filter = Filter(service_manager=self.services)
 
         # Set filter function on discovery service
-        self.services.set_filter_function(self.filter.filter_article)
+        self.services.set_filter_function(self.filter.process_article)
 
         # Initialize components that aren't yet services
         # TODO: CitationTracker should eventually be converted to a service

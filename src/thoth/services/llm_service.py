@@ -86,6 +86,11 @@ class LLMService(BaseService):
             model_kwargs = self.config.llm_config.model_settings.model_dump()
             model_kwargs.update(kwargs)
 
+            # Remove parameters that we're passing explicitly to avoid conflicts
+            model_kwargs.pop('temperature', None)
+            model_kwargs.pop('max_tokens', None)
+            model_kwargs.pop('use_rate_limiter', None)
+
             # Create new client
             client = OpenRouterClient(
                 api_key=self.config.api_keys.openrouter_key,
@@ -112,6 +117,38 @@ class LLMService(BaseService):
             raise ServiceError(
                 self.handle_error(e, f"creating LLM client for model '{model}'")
             ) from e
+
+    def get_llm(
+        self,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        use_rate_limiter: bool = True,
+        **kwargs,
+    ) -> OpenRouterClient:
+        """
+        Get an LLM client (alias for get_client for backward compatibility).
+
+        Args:
+            model: Model to use (defaults to config)
+            temperature: Temperature setting
+            max_tokens: Maximum tokens
+            use_rate_limiter: Whether to use rate limiting
+            **kwargs: Additional model parameters
+
+        Returns:
+            OpenRouterClient: Configured LLM client
+
+        Raises:
+            ServiceError: If client creation fails
+        """
+        return self.get_client(
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            use_rate_limiter=use_rate_limiter,
+            **kwargs,
+        )
 
     def get_structured_client(
         self,

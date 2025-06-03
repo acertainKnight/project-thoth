@@ -32,8 +32,18 @@ class ListQueriesTool(BaseThothTool):
                 output += f'  - Created: {query.created_at}\n'
                 if query.keywords:
                     output += f'  - Keywords: {", ".join(query.keywords)}\n'
-                if query.tags:
-                    output += f'  - Tags: {", ".join(query.tags)}\n'
+                if query.required_topics:
+                    output += (
+                        f'  - Required Topics: {", ".join(query.required_topics)}\n'
+                    )
+                if query.preferred_topics:
+                    output += (
+                        f'  - Preferred Topics: {", ".join(query.preferred_topics)}\n'
+                    )
+                if query.excluded_topics:
+                    output += (
+                        f'  - Excluded Topics: {", ".join(query.excluded_topics)}\n'
+                    )
                 output += '\n'
             return output.strip()
         except Exception as e:
@@ -45,14 +55,20 @@ class CreateQueryInput(BaseModel):
 
     name: str = Field(description='Unique name for the query')
     description: str = Field(description='Description of what this query searches for')
-    evaluation_criteria: str = Field(
-        description='Criteria for evaluating articles against this query'
+    research_question: str = Field(
+        description='Main research question this query addresses'
     )
     keywords: list[str] = Field(
         default_factory=list, description='Keywords to search for'
     )
-    exclusion_keywords: list[str] = Field(
-        default_factory=list, description='Keywords to exclude'
+    required_topics: list[str] = Field(
+        default_factory=list, description='Topics that must be present'
+    )
+    preferred_topics: list[str] = Field(
+        default_factory=list, description='Topics that are preferred but not required'
+    )
+    excluded_topics: list[str] = Field(
+        default_factory=list, description='Topics that should exclude the article'
     )
 
 
@@ -67,18 +83,22 @@ class CreateQueryTool(BaseThothTool):
         self,
         name: str,
         description: str,
-        evaluation_criteria: str,
+        research_question: str,
         keywords: list[str] | None = None,
-        exclusion_keywords: list[str] | None = None,
+        required_topics: list[str] | None = None,
+        preferred_topics: list[str] | None = None,
+        excluded_topics: list[str] | None = None,
     ) -> str:
         """Create a new research query."""
         try:
             query = ResearchQuery(
                 name=name,
                 description=description,
-                evaluation_criteria=evaluation_criteria,
+                research_question=research_question,
                 keywords=keywords or [],
-                exclusion_keywords=exclusion_keywords or [],
+                required_topics=required_topics or [],
+                preferred_topics=preferred_topics or [],
+                excluded_topics=excluded_topics or [],
             )
 
             success = self.adapter.create_query(query)
@@ -106,15 +126,17 @@ class GetQueryTool(BaseThothTool):
 
             output = f'📋 **Query: {query.name}**\n\n'
             output += f'**Description:** {query.description}\n'
-            output += f'**Evaluation Criteria:** {query.evaluation_criteria}\n'
+            output += f'**Research Question:** {query.research_question}\n'
             output += f'**Created:** {query.created_at}\n'
 
             if query.keywords:
                 output += f'**Keywords:** {", ".join(query.keywords)}\n'
-            if query.exclusion_keywords:
-                output += f'**Exclusions:** {", ".join(query.exclusion_keywords)}\n'
-            if query.tags:
-                output += f'**Tags:** {", ".join(query.tags)}\n'
+            if query.required_topics:
+                output += f'**Required Topics:** {", ".join(query.required_topics)}\n'
+            if query.preferred_topics:
+                output += f'**Preferred Topics:** {", ".join(query.preferred_topics)}\n'
+            if query.excluded_topics:
+                output += f'**Excluded Topics:** {", ".join(query.excluded_topics)}\n'
 
             return output
         except Exception as e:
@@ -126,10 +148,16 @@ class EditQueryInput(BaseModel):
 
     query_name: str = Field(description='Name of the query to edit')
     description: str | None = Field(None, description='New description')
-    evaluation_criteria: str | None = Field(None, description='New evaluation criteria')
+    research_question: str | None = Field(None, description='New research question')
     keywords: list[str] | None = Field(None, description='New keywords list')
-    exclusion_keywords: list[str] | None = Field(
-        None, description='New exclusion keywords'
+    required_topics: list[str] | None = Field(
+        None, description='New required topics list'
+    )
+    preferred_topics: list[str] | None = Field(
+        None, description='New preferred topics list'
+    )
+    excluded_topics: list[str] | None = Field(
+        None, description='New excluded topics list'
     )
 
 
@@ -144,9 +172,11 @@ class EditQueryTool(BaseThothTool):
         self,
         query_name: str,
         description: str | None = None,
-        evaluation_criteria: str | None = None,
+        research_question: str | None = None,
         keywords: list[str] | None = None,
-        exclusion_keywords: list[str] | None = None,
+        required_topics: list[str] | None = None,
+        preferred_topics: list[str] | None = None,
+        excluded_topics: list[str] | None = None,
     ) -> str:
         """Edit a query."""
         try:
@@ -154,12 +184,16 @@ class EditQueryTool(BaseThothTool):
             updates = {}
             if description is not None:
                 updates['description'] = description
-            if evaluation_criteria is not None:
-                updates['evaluation_criteria'] = evaluation_criteria
+            if research_question is not None:
+                updates['research_question'] = research_question
             if keywords is not None:
                 updates['keywords'] = keywords
-            if exclusion_keywords is not None:
-                updates['exclusion_keywords'] = exclusion_keywords
+            if required_topics is not None:
+                updates['required_topics'] = required_topics
+            if preferred_topics is not None:
+                updates['preferred_topics'] = preferred_topics
+            if excluded_topics is not None:
+                updates['excluded_topics'] = excluded_topics
 
             if not updates:
                 return '❌ No updates provided'
