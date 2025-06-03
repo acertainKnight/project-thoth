@@ -521,18 +521,3 @@ RAG_RETRIEVAL_K=4
 ```
 
 ## 🤖 Interactive Research Agent
-
-## 🧩 Obsidian Plugin
-
-A minimal plugin is provided in `obsidian-plugin/thoth-obsidian`. To build the plugin and load it into Obsidian:
-
-1. Install dependencies and compile the TypeScript:
-   ```bash
-   cd obsidian-plugin/thoth-obsidian
-   npm install
-   npm run build
-   ```
-2. Copy the generated files (`manifest.json`, `main.js`, `styles.css`) to your Obsidian vault's `plugins/thoth-obsidian` folder.
-3. Enable **Thoth Research Assistant** in Obsidian's community plugins settings.
-
-Once enabled you can configure API keys and start the `thoth agent` process directly from Obsidian.
