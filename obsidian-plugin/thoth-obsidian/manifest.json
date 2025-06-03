@@ -1,0 +1,6 @@
+{
+  "id": "thoth-obsidian",
+  "name": "Thoth Research Assistant",
+  "version": "0.1.0",
+  "main": "main.js"
+}
