@@ -22,6 +22,8 @@ class SemanticScholarAPI:
         timeout: int = 10,
         delay_seconds: float = 1.0,
         max_retries: int = 9,
+        batch_size: int = 100,
+        enable_caching: bool = True,
     ):
         """
         Initialize Semantic Scholar API client.
@@ -32,12 +34,19 @@ class SemanticScholarAPI:
             timeout: Timeout for API requests in seconds.
             delay_seconds: Delay between API requests to avoid rate limiting.
             max_retries: Maximum number of retry attempts for failed requests.
+            batch_size: Number of citations to process in each batch.
+            enable_caching: Whether to enable caching of API responses.
         """  # noqa: W505
         self.base_url = base_url
         self.api_key = api_key
         self.timeout = timeout
         self.delay_seconds = delay_seconds
         self.max_retries = max_retries
+        self.batch_size = batch_size
+        self.enable_caching = enable_caching
+        self._doi_cache: dict[str, Any] = {}
+        self._arxiv_cache: dict[str, Any] = {}
+        self._cache_size = 1000  # Maximum number of items to cache
 
         self.client = httpx.Client(timeout=timeout)
         self.last_request_time = 0
@@ -51,6 +60,8 @@ class SemanticScholarAPI:
         self,
         endpoint: str,
         params: dict[str, Any] | None = None,
+        method: str = 'GET',
+        json_data: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         """
         Make a request to the Semantic Scholar API with rate limiting and retries.
@@ -58,6 +69,8 @@ class SemanticScholarAPI:
         Args:
             endpoint: API endpoint to call.
             params: API query parameters.
+            method: HTTP method to use.
+            json_data: JSON data for POST requests.
 
         Returns:
             dict | None: JSON response data or None if the request failed.
@@ -65,11 +78,17 @@ class SemanticScholarAPI:
         Raises:
             httpx.HTTPError: If the request fails after retries.
         """
-        # Implement rate limiting
+        # Implement rate limiting with adaptive delay based on API key status
         current_time = time.time()
         time_since_last_request = current_time - self.last_request_time
-        if time_since_last_request < self.delay_seconds:
-            sleep_time = self.delay_seconds - time_since_last_request
+
+        # Use shorter delays for authenticated requests
+        effective_delay = (
+            self.delay_seconds if not self.api_key else self.delay_seconds * 0.1
+        )
+
+        if time_since_last_request < effective_delay:
+            sleep_time = effective_delay - time_since_last_request
             logger.debug(
                 f'Rate limiting: sleeping for {sleep_time:.2f} seconds before request.'
             )
@@ -77,23 +96,30 @@ class SemanticScholarAPI:
 
         # Prepare headers
         headers = {'Accept': 'application/json'}
+        if json_data:
+            headers['Content-Type'] = 'application/json'
         if self.api_key:
             headers['x-api-key'] = self.api_key
 
         # Prepare URL with parameters
         url = f'{self.base_url}/{endpoint}'
-        if params:
+        if params and method == 'GET':
             url = f'{url}?{urllib.parse.urlencode(params)}'
 
         for attempt in range(self.max_retries + 1):
             try:
                 logger.debug(
-                    f'Making request to Semantic Scholar API: {url} (Attempt {attempt + 1}/{self.max_retries + 1})'
+                    f'Making {method} request to Semantic Scholar API: {url} (Attempt {attempt + 1}/{self.max_retries + 1})'
                 )
-                response = self.client.get(url, headers=headers)
-                self.last_request_time = (
-                    time.time()
-                )  # Update last request time after the call
+
+                if method == 'POST':
+                    response = self.client.post(
+                        url, headers=headers, json=json_data, params=params
+                    )
+                else:
+                    response = self.client.get(url, headers=headers)
+
+                self.last_request_time = time.time()
                 response.raise_for_status()
                 return response.json()
             except httpx.HTTPStatusError as e:
@@ -113,12 +139,12 @@ class SemanticScholarAPI:
                                 )
                             except ValueError:
                                 # Default to exponential backoff if Retry-After is not an int  # noqa: W505
-                                sleep_duration = self.delay_seconds * (2**attempt)
+                                sleep_duration = effective_delay * (2**attempt)
                                 logger.info(
                                     f'Rate limit hit (429). Retrying after {sleep_duration:.2f} seconds (exponential backoff).'
                                 )
                         else:
-                            sleep_duration = self.delay_seconds * (
+                            sleep_duration = effective_delay * (
                                 2**attempt
                             )  # Exponential backoff
                             logger.info(
@@ -126,7 +152,7 @@ class SemanticScholarAPI:
                             )
                         time.sleep(sleep_duration)
                     elif e.response.status_code >= 500:  # Server-side errors
-                        sleep_duration = self.delay_seconds * (
+                        sleep_duration = effective_delay * (
                             2**attempt
                         )  # Exponential backoff
                         logger.warning(
@@ -145,7 +171,7 @@ class SemanticScholarAPI:
                     f'Semantic Scholar API request failed due to network/request error (Attempt {attempt + 1}/{self.max_retries + 1}): {e}'
                 )
                 if attempt < self.max_retries:
-                    sleep_duration = self.delay_seconds * (
+                    sleep_duration = effective_delay * (
                         2**attempt
                     )  # Exponential backoff
                     logger.info(f'Retrying after {sleep_duration:.2f} seconds.')
@@ -162,12 +188,66 @@ class SemanticScholarAPI:
                 if attempt == self.max_retries:  # if it's the last attempt
                     raise  # Re-raise the caught exception
                 # For unexpected errors, a simple delay might be enough before retry
-                sleep_duration = self.delay_seconds * (2**attempt)
+                sleep_duration = effective_delay * (2**attempt)
                 logger.info(
                     f'Retrying after {sleep_duration:.2f} seconds due to unexpected error.'
                 )
                 time.sleep(sleep_duration)
         return None  # Should be unreachable if max_retries is handled correctly
+
+    def _cached_paper_lookup_by_doi(
+        self, doi: str, fields_str: str
+    ) -> dict[str, Any] | None:
+        """Lookup paper by DOI with caching.
+
+        Args:
+            doi: The DOI to look up.
+            fields_str: Comma-separated list of fields to return.
+
+        Returns:
+            dict[str, Any] | None: The paper data or None if not found.
+        """
+        if not self.enable_caching:
+            return self.paper_lookup_by_doi(doi, fields_str)
+
+        cache_key = f'{doi}:{fields_str}'
+        if cache_key in self._doi_cache:
+            return self._doi_cache[cache_key]
+
+        result = self.paper_lookup_by_doi(doi, fields_str)
+        if result:
+            # Implement LRU-like behavior by removing oldest items if cache is full
+            if len(self._doi_cache) >= self._cache_size:
+                self._doi_cache.pop(next(iter(self._doi_cache)))
+            self._doi_cache[cache_key] = result
+        return result
+
+    def _cached_paper_lookup_by_arxiv(
+        self, arxiv_id: str, fields_str: str
+    ) -> dict[str, Any] | None:
+        """Lookup paper by arXiv ID with caching.
+
+        Args:
+            arxiv_id: The arXiv ID to look up.
+            fields_str: Comma-separated list of fields to return.
+
+        Returns:
+            dict[str, Any] | None: The paper data or None if not found.
+        """
+        if not self.enable_caching:
+            return self.paper_lookup_by_arxiv(arxiv_id, fields_str)
+
+        cache_key = f'{arxiv_id}:{fields_str}'
+        if cache_key in self._arxiv_cache:
+            return self._arxiv_cache[cache_key]
+
+        result = self.paper_lookup_by_arxiv(arxiv_id, fields_str)
+        if result:
+            # Implement LRU-like behavior by removing oldest items if cache is full
+            if len(self._arxiv_cache) >= self._cache_size:
+                self._arxiv_cache.pop(next(iter(self._arxiv_cache)))
+            self._arxiv_cache[cache_key] = result
+        return result
 
     def paper_lookup_by_doi(
         self, doi: str, fields: list[str] | None = None
@@ -182,6 +262,10 @@ class SemanticScholarAPI:
         Returns:
             dict | None: Paper metadata or None if not found.
         """
+        if self.enable_caching:
+            fields_str = ','.join(fields) if fields else ''
+            return self._cached_paper_lookup_by_doi(doi, fields_str)
+
         params = {}
         if fields:
             params['fields'] = ','.join(fields)
@@ -206,6 +290,10 @@ class SemanticScholarAPI:
         Returns:
             dict | None: Paper metadata or None if not found.
         """
+        if self.enable_caching:
+            fields_str = ','.join(fields) if fields else ''
+            return self._cached_paper_lookup_by_arxiv(arxiv_id, fields_str)
+
         params = {}
         if fields:
             params['fields'] = ','.join(fields)
@@ -269,6 +357,33 @@ class SemanticScholarAPI:
         Returns:
             list: List of paper metadata records.
         """  # noqa: W505
+        if not paper_ids:
+            return []
+
+        # Split into batches if necessary
+        all_results = []
+        for i in range(0, len(paper_ids), self.batch_size):
+            batch_ids = paper_ids[i : i + self.batch_size]
+            batch_results = self._paper_lookup_batch_single(batch_ids, fields)
+            all_results.extend(batch_results)
+
+        return all_results
+
+    def _paper_lookup_batch_single(
+        self,
+        paper_ids: list[str],
+        fields: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Look up a single batch of papers (internal method).
+
+        Args:
+            paper_ids: List of paper IDs (should be <= batch_size).
+            fields: Specific fields to return in the response.
+
+        Returns:
+            list: List of paper metadata records.
+        """
         params = {}
         if fields:
             params['fields'] = ','.join(fields)
@@ -277,21 +392,13 @@ class SemanticScholarAPI:
             # Convert the list to the required format for the Semantic Scholar API
             ids_payload = {'ids': paper_ids}
 
-            # Use POST for batch requests
-            headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
-            if self.api_key:
-                headers['x-api-key'] = self.api_key
+            response = self._make_request(
+                'paper/batch', params=params, method='POST', json_data=ids_payload
+            )
 
-            url = f'{self.base_url}/paper/batch'
-            if params:
-                url = f'{url}?{urllib.parse.urlencode(params)}'
-
-            response = self.client.post(url, json=ids_payload, headers=headers)
-            response.raise_for_status()
-
-            data = response.json()
-            if 'data' in data:
-                return data['data']
+            if response and 'data' in response:
+                # Filter out None results (papers not found)
+                return [paper for paper in response['data'] if paper is not None]
             return []
         except Exception as e:
             logger.error(f'Failed to look up papers in batch: {e}')
@@ -354,12 +461,13 @@ class SemanticScholarAPI:
         if (
             not citation.doi
             and 'externalIds' in paper_data
+            and paper_data['externalIds']
             and 'DOI' in paper_data['externalIds']
         ):
             citation.doi = paper_data['externalIds']['DOI']
 
         # Update authors if available
-        if not citation.authors and 'authors' in paper_data:
+        if not citation.authors and 'authors' in paper_data and paper_data['authors']:
             citation.authors = [
                 author['name'] for author in paper_data['authors'] if 'name' in author
             ]
@@ -369,7 +477,7 @@ class SemanticScholarAPI:
             citation.abstract = paper_data['abstract']
 
         # Update journal information
-        if not citation.journal and 'journal' in paper_data:
+        if not citation.journal and 'journal' in paper_data and paper_data['journal']:
             citation.journal = (
                 paper_data['journal']['name']
                 if 'name' in paper_data['journal']
@@ -377,7 +485,7 @@ class SemanticScholarAPI:
             )
 
         # Update publication year
-        if not citation.year and 'year' in paper_data:
+        if not citation.year and 'year' in paper_data and paper_data['year']:
             citation.year = paper_data['year']
 
         # Update publication venue
@@ -401,6 +509,16 @@ class SemanticScholarAPI:
         # Update fields of study
         if not citation.fields_of_study and 'fieldsOfStudy' in paper_data:
             citation.fields_of_study = paper_data['fieldsOfStudy']
+
+        # Update backup_id if arXiv ID is available and not already set
+        if (
+            not citation.backup_id
+            and 'externalIds' in paper_data
+            and paper_data['externalIds']
+            and 'ArXiv' in paper_data['externalIds']
+        ):
+            citation.backup_id = f'arxiv:{paper_data["externalIds"]["ArXiv"]}'
+
         # Map any additional Semantic Scholar attributes to Citation if present
         if (
             'referenceCount' in paper_data
@@ -425,7 +543,7 @@ class SemanticScholarAPI:
 
     def semantic_scholar_lookup(self, citations: list[Citation]) -> list[Citation]:
         """
-        Look up citations in Semantic Scholar and enhance with additional metadata.
+        Look up citations in Semantic Scholar and enhance with additional metadata using optimized batch processing.
 
         Args:
             citations: List of citations to enhance.
@@ -433,7 +551,12 @@ class SemanticScholarAPI:
         Returns:
             list[Citation]: The citations with enhanced information from Semantic Scholar.
         """  # noqa: W505
-        logger.debug(f'Looking up {len(citations)} citations in Semantic Scholar')
+        if not citations:
+            return citations
+
+        logger.info(
+            f'Looking up {len(citations)} citations in Semantic Scholar using optimized batch processing'
+        )
 
         # Fields to request from Semantic Scholar API
         fields = [
@@ -448,39 +571,116 @@ class SemanticScholarAPI:
             'citationCount',
             'openAccessPdf',
             'fieldsOfStudy',
+            'referenceCount',
+            'influentialCitationCount',
+            'isOpenAccess',
+            's2FieldsOfStudy',
         ]
 
+        # Group citations by lookup strategy for optimal batching
+        doi_citations = []
+        arxiv_citations = []
+        title_search_citations = []
+        citation_lookup_map = {}  # Maps paper_id -> list of citations
+
         for citation in citations:
+            if citation.doi:
+                paper_id = f'DOI:{citation.doi}'
+                doi_citations.append(paper_id)
+                if paper_id not in citation_lookup_map:
+                    citation_lookup_map[paper_id] = []
+                citation_lookup_map[paper_id].append(citation)
+            elif citation.backup_id and citation.backup_id.startswith('arxiv:'):
+                arxiv_id = citation.backup_id.split(':', 1)[1]
+                paper_id = f'arXiv:{arxiv_id}'
+                arxiv_citations.append(paper_id)
+                if paper_id not in citation_lookup_map:
+                    citation_lookup_map[paper_id] = []
+                citation_lookup_map[paper_id].append(citation)
+            elif citation.title:
+                title_search_citations.append(citation)
+
+        # Batch process DOI and arXiv lookups
+        batch_paper_ids = doi_citations + arxiv_citations
+        enhanced_count = 0
+
+        if batch_paper_ids:
+            logger.info(
+                f'Batch processing {len(batch_paper_ids)} citations with identifiers (DOI/arXiv)'
+            )
             try:
-                # Try to look up by DOI first if available
-                paper_data = None
-                if citation.doi:
-                    paper_data = self.paper_lookup_by_doi(citation.doi, fields)
+                batch_results = self.paper_lookup_batch(batch_paper_ids, fields)
 
-                # If DOI lookup failed or no DOI, try arXiv ID if available
-                if (
-                    not paper_data
-                    and citation.backup_id
-                    and citation.backup_id.startswith('arxiv:')
-                ):
-                    arxiv_id = citation.backup_id.split(':', 1)[1]
-                    paper_data = self.paper_lookup_by_arxiv(arxiv_id, fields)
+                # Map results back to citations
+                for paper_data in batch_results:
+                    if not paper_data:
+                        continue
 
-                # If both failed or neither available, search by title
-                if not paper_data and citation.title:
+                    # Find the paper ID that matches this result
+                    paper_id = None
+
+                    # Check DOI match
+                    if paper_data.get('externalIds'):
+                        if 'DOI' in paper_data['externalIds']:
+                            paper_id = f'DOI:{paper_data["externalIds"]["DOI"]}'
+                        elif 'ArXiv' in paper_data['externalIds']:
+                            paper_id = f'arXiv:{paper_data["externalIds"]["ArXiv"]}'
+
+                    if paper_id and paper_id in citation_lookup_map:
+                        for citation in citation_lookup_map[paper_id]:
+                            self.update_citation_from_semantic_scholar(
+                                citation, paper_data
+                            )
+                            enhanced_count += 1
+
+            except Exception as e:
+                logger.error(f'Error in batch lookup: {e}')
+                # Fall back to individual lookups for batch_paper_ids
+                for paper_id in batch_paper_ids:
+                    try:
+                        if paper_id.startswith('DOI:'):
+                            doi = paper_id[4:]  # Remove "DOI:" prefix
+                            paper_data = self.paper_lookup_by_doi(doi, fields)
+                        elif paper_id.startswith('arXiv:'):
+                            arxiv_id = paper_id[6:]  # Remove "arXiv:" prefix
+                            paper_data = self.paper_lookup_by_arxiv(arxiv_id, fields)
+                        else:
+                            continue
+
+                        if paper_data and paper_id in citation_lookup_map:
+                            for citation in citation_lookup_map[paper_id]:
+                                self.update_citation_from_semantic_scholar(
+                                    citation, paper_data
+                                )
+                                enhanced_count += 1
+                    except Exception as individual_e:
+                        logger.warning(
+                            f'Failed individual lookup for {paper_id}: {individual_e}'
+                        )
+
+        # Handle title-based searches (these cannot be batched easily)
+        if title_search_citations:
+            logger.info(
+                f'Processing {len(title_search_citations)} citations via title search'
+            )
+            for citation in title_search_citations:
+                try:
+                    # Use exact title search with quotes
                     search_results = self.paper_search(
                         f'"{citation.title}"', fields, limit=1
                     )
                     if search_results:
                         paper_data = search_results[0]
+                        self.update_citation_from_semantic_scholar(citation, paper_data)
+                        enhanced_count += 1
+                except Exception as e:
+                    logger.warning(
+                        f'Error enhancing citation via title search "{citation.title}": {e}'
+                    )
 
-                # Update citation with retrieved data
-                if paper_data:
-                    self.update_citation_from_semantic_scholar(citation, paper_data)
-
-            except Exception as e:
-                logger.error(f'Error enhancing citation with Semantic Scholar: {e}')
-
+        logger.info(
+            f'Successfully enhanced {enhanced_count} out of {len(citations)} citations with Semantic Scholar'
+        )
         return citations
 
     def close(self) -> None:
