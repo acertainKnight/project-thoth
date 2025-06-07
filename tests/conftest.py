@@ -142,7 +142,14 @@ def sample_pdf_path(temp_workspace):
         Path: Path to the sample PDF file.
     """
     pdf_path = temp_workspace / 'pdf' / 'sample.pdf'
-    pdf_path.write_bytes(b'Sample PDF content for testing')
+
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+    with open(pdf_path, 'wb') as f:
+        writer.write(f)
+
     return pdf_path
 
 

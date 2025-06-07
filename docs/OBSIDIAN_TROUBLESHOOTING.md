@@ -44,7 +44,7 @@ The latest version includes comprehensive remote management capabilities to solv
 - **On Connect**: When connecting to remote server
 
 ### **What Gets Synced**
-- **API Keys**: Mistral, OpenRouter keys
+- **API Keys**: OpenRouter (Mistral optional) keys
 - **Directories**: Workspace and Obsidian paths
 - **Server Settings**: Host, port configuration
 - **Plugin Preferences**: Auto-start, status bar settings
@@ -178,7 +178,7 @@ tail -f logs/thoth.log | grep "obsidian.py"
 ### **Settings Checklist**
 
 #### **Required Settings**
-- [ ] **Mistral API Key**: Must be valid
+- [ ] **Mistral API Key** (optional): Provide if using remote OCR
 - [ ] **OpenRouter API Key**: Must be valid
 - [ ] **Workspace Directory**: Must exist and contain `pyproject.toml`
 - [ ] **Remote URL**: Must be reachable (if using remote mode)

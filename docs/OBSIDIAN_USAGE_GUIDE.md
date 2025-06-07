@@ -30,8 +30,8 @@ Before using the plugin, ensure you have:
    ```
 
 2. **API Keys Configured**:
-   - At minimum: **Mistral API Key** AND **OpenRouter API Key**
-   - Both are required for the agent to function
+   - At minimum: **OpenRouter API Key**
+   - **Mistral API Key** is optional for remote OCR
 
 3. **Directory Structure**:
    - Set correct workspace directory (where project-thoth is located)
@@ -40,7 +40,7 @@ Before using the plugin, ensure you have:
 ### **2. First Time Setup**
 
 1. **Configure Plugin**: Go to Settings → Community Plugins → Thoth Research Assistant
-2. **Set API Keys**: Enter your Mistral and OpenRouter API keys
+2. **Set API Keys**: Enter your OpenRouter API key (Mistral key optional)
 3. **Set Directories**:
    - **Workspace Directory**: `/home/nick/python/project-thoth`
    - **Obsidian Directory**: `/path/to/your/obsidian/vault/thoth`
@@ -51,8 +51,8 @@ Before using the plugin, ensure you have:
 Go to **Settings → Community plugins → Thoth Research Assistant**:
 
 #### **🔑 API Keys (Required)**
-- **Mistral API Key**: For PDF processing and OCR
-- **OpenRouter API Key**: For AI research capabilities
+ - **Mistral API Key** (optional): For remote OCR
+ - **OpenRouter API Key**: For AI research capabilities
 
 #### **📁 Directory Settings (Critical)**
 - **Workspace Directory**: `/home/nick/python/project-thoth` (where you cloned the repo)
@@ -195,7 +195,7 @@ uv run python -m thoth --help
 
 #### **Check 2: API Keys**
 - Go to plugin settings
-- Verify Mistral API key is set
+- Verify Mistral API key is set (optional)
 - Verify OpenRouter API key is set
 - Test keys at their respective websites
 
@@ -222,7 +222,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 #### **"API key error"**
 **Solution**: Check API keys in plugin settings
-- Visit [console.mistral.ai](https://console.mistral.ai) for Mistral key
+- Visit [console.mistral.ai](https://console.mistral.ai) for a Mistral key (optional)
 - Visit [openrouter.ai](https://openrouter.ai) for OpenRouter key
 
 #### **"Address already in use"**
