@@ -17,6 +17,9 @@ from thoth.ingestion.agent_v2.tools.analysis_tools import (
 from thoth.ingestion.agent_v2.tools.discovery_tools import (
     CreateArxivSourceTool,
     CreatePubmedSourceTool,
+    CreateCrossrefSourceTool,
+    CreateOpenalexSourceTool,
+    CreateBiorxivSourceTool,
     ListDiscoverySourcesTool,
     RunDiscoveryTool,
 )
@@ -180,6 +183,55 @@ class TestDiscoveryTools:
 
         assert 'Successfully' in result or 'Created' in result
         assert 'pubmed_test' in result
+
+    def test_create_crossref_source_tool(self, mock_adapter):
+        """Test CreateCrossrefSourceTool."""
+        tool = CreateCrossrefSourceTool(adapter=mock_adapter)
+
+        mock_adapter.create_discovery_source.return_value = True
+
+        result = tool._run(
+            name='crossref_test',
+            keywords=['biology'],
+            max_articles=15,
+            schedule_hours=24,
+        )
+
+        assert 'Successfully' in result or 'Created' in result
+        assert 'crossref_test' in result
+
+    def test_create_openalex_source_tool(self, mock_adapter):
+        """Test CreateOpenalexSourceTool."""
+        tool = CreateOpenalexSourceTool(adapter=mock_adapter)
+
+        mock_adapter.create_discovery_source.return_value = True
+
+        result = tool._run(
+            name='openalex_test',
+            keywords=['physics'],
+            max_articles=10,
+            schedule_hours=12,
+        )
+
+        assert 'Successfully' in result or 'Created' in result
+        assert 'openalex_test' in result
+
+    def test_create_biorxiv_source_tool(self, mock_adapter):
+        """Test CreateBiorxivSourceTool."""
+        tool = CreateBiorxivSourceTool(adapter=mock_adapter)
+
+        mock_adapter.create_discovery_source.return_value = True
+
+        result = tool._run(
+            name='biorxiv_test',
+            start_date='2024-01-01',
+            end_date='2024-01-07',
+            max_articles=5,
+            schedule_hours=24,
+        )
+
+        assert 'Successfully' in result or 'Created' in result
+        assert 'biorxiv_test' in result
 
     def test_run_discovery_tool(self, mock_adapter):
         """Test RunDiscoveryTool."""
