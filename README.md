@@ -5,7 +5,7 @@ Thoth is a production-ready AI-powered research assistant that automates the col
 ## ✨ Key Features
 
 ### 📚 **Automated Paper Processing**
-- **PDF OCR Conversion**: Converts academic PDFs to markdown using Mistral's OCR
+- **PDF Conversion**: Converts PDFs to markdown via Mistral OCR or a local fallback
 - **Content Analysis**: Extracts key findings, methodology, results using LLMs
 - **Citation Extraction**: Identifies and processes all references with metadata enrichment
 - **Note Generation**: Creates structured Obsidian-compatible notes automatically
@@ -32,7 +32,7 @@ Thoth is a production-ready AI-powered research assistant that automates the col
 
 - Python 3.10+
 - API Keys:
-  - **Mistral API**: For PDF OCR conversion
+  - **Mistral API** (optional): For remote OCR conversion
   - **OpenRouter API**: For LLM analysis and agent
   - **OpenCitations** (optional): For citation metadata
   - **Semantic Scholar** (optional): For citation enrichment
@@ -316,7 +316,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 🙏 Acknowledgments
 
 - Built with [LangChain](https://langchain.com/) and [LangGraph](https://github.com/langchain-ai/langgraph)
-- OCR powered by [Mistral AI](https://mistral.ai/)
+- OCR optionally powered by [Mistral AI](https://mistral.ai/)
 - LLMs via [OpenRouter](https://openrouter.ai/)
 - Citation data from [OpenCitations](https://opencitations.net/) and [Semantic Scholar](https://semanticscholar.org/)
 
