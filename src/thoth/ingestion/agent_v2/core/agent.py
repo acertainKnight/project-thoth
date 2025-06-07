@@ -24,6 +24,9 @@ from thoth.ingestion.agent_v2.tools.base_tool import ToolRegistry
 from thoth.ingestion.agent_v2.tools.discovery_tools import (
     CreateArxivSourceTool,
     CreatePubmedSourceTool,
+    CreateCrossrefSourceTool,
+    CreateOpenalexSourceTool,
+    CreateBiorxivSourceTool,
     DeleteDiscoverySourceTool,
     ListDiscoverySourcesTool,
     RunDiscoveryTool,
@@ -103,6 +106,9 @@ class ResearchAssistant:
         self.tool_registry.register('list_discovery_sources', ListDiscoverySourcesTool)
         self.tool_registry.register('create_arxiv_source', CreateArxivSourceTool)
         self.tool_registry.register('create_pubmed_source', CreatePubmedSourceTool)
+        self.tool_registry.register('create_crossref_source', CreateCrossrefSourceTool)
+        self.tool_registry.register('create_openalex_source', CreateOpenalexSourceTool)
+        self.tool_registry.register('create_biorxiv_source', CreateBiorxivSourceTool)
         self.tool_registry.register('run_discovery', RunDiscoveryTool)
         self.tool_registry.register(
             'delete_discovery_source', DeleteDiscoverySourceTool
