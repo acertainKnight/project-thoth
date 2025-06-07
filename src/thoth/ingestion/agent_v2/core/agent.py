@@ -15,6 +15,7 @@ from loguru import logger
 
 from thoth.ingestion.agent_adapter import AgentAdapter
 from thoth.ingestion.agent_v2.core.state import ResearchAgentState
+from thoth.ingestion.agent_v2.core.token_tracker import TokenUsageTracker
 from thoth.ingestion.agent_v2.tools.analysis_tools import (
     AnalyzeTopicTool,
     EvaluateArticleTool,
@@ -71,6 +72,9 @@ class ResearchAssistant:
 
         # Get LLM from adapter
         self.llm = adapter.get_llm()
+
+        # Token usage tracker
+        self.usage_tracker = TokenUsageTracker()
 
         # Initialize tool registry and register all tools
         self.tool_registry = ToolRegistry(adapter=adapter)
@@ -200,6 +204,7 @@ Remember: You have direct access to tools - use them immediately rather than jus
         self,
         message: str,
         session_id: str | None = None,
+        user_id: str | None = None,
         context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
@@ -208,6 +213,7 @@ Remember: You have direct access to tools - use them immediately rather than jus
         Args:
             message: User's input message
             session_id: Optional session ID for memory persistence
+            user_id: Identifier for the current user
             context: Optional context to pass to the agent
 
         Returns:
@@ -247,6 +253,15 @@ Remember: You have direct access to tools - use them immediately rather than jus
                 'response': final_message.content,
                 'tool_calls': [],
             }
+
+            # Track token usage if available
+            if (
+                hasattr(final_message, 'usage_metadata')
+                and final_message.usage_metadata
+            ):
+                response['usage'] = final_message.usage_metadata
+                if user_id:
+                    self.usage_tracker.add_usage(user_id, final_message.usage_metadata)
 
             # Add tool call information if any
             if hasattr(final_message, 'tool_calls') and final_message.tool_calls:
@@ -295,6 +310,10 @@ Remember: You have direct access to tools - use them immediately rather than jus
                 config = {'configurable': {'thread_id': session_id}}
                 self.app.checkpointer.put(config, ResearchAgentState())
             logger.info(f'Reset memory for session: {session_id}')
+
+    def get_token_usage(self, user_id: str) -> dict[str, int]:
+        """Return accumulated token usage for a user."""
+        return self.usage_tracker.get_usage(user_id)
 
 
 def create_research_assistant(
