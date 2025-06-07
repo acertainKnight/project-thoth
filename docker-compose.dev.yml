@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  thoth-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: thoth-api-dev
+    ports:
+      - "8000:8000"
+      - "8001:8001"  # Additional port for development
+    volumes:
+      # Mount source code for hot reloading
+      - ./src:/app/src
+      - ./templates:/app/templates
+      - ./.env:/app/.env
+
+      # Data directories
+      - ./data:/app/data
+      - ./knowledge:/app/knowledge
+      - ./logs:/app/logs
+      - ./obsidian-vault:/app/obsidian-vault
+
+      # Development specific
+      - ./tests:/app/tests
+      - ./docs:/app/docs
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=DEBUG
+      - DEVELOPMENT=true
+      - WATCHDOG_ENABLED=true
+
+    networks:
+      - thoth-dev-net
+
+    # Override command for development with auto-reload
+    command: >
+      sh -c "
+        echo 'Starting Thoth in development mode...' &&
+        uv run python -m thoth api --host 0.0.0.0 --port 8000 --reload
+      "
+
+    # Don't restart automatically in dev mode
+    restart: "no"
+
+    # Development resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+
+  # Development database (optional)
+  thoth-db-dev:
+    image: postgres:15-alpine
+    container_name: thoth-db-dev
+    environment:
+      - POSTGRES_DB=thoth_dev
+      - POSTGRES_USER=thoth
+      - POSTGRES_PASSWORD=thoth_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - thoth-db-dev-data:/var/lib/postgresql/data
+    networks:
+      - thoth-dev-net
+
+  # Redis for caching (optional)
+  thoth-redis-dev:
+    image: redis:7-alpine
+    container_name: thoth-redis-dev
+    ports:
+      - "6379:6379"
+    networks:
+      - thoth-dev-net
+
+networks:
+  thoth-dev-net:
+    driver: bridge
+
+volumes:
+  thoth-db-dev-data:
