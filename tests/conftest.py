@@ -100,6 +100,12 @@ def mock_config(temp_workspace):
             'base_url': 'http://localhost:8000',
             'auto_start': False,
         },
+        'mcp_server_config': {
+            'host': 'localhost',
+            'port': 8001,
+            'base_url': 'http://localhost:8001',
+            'auto_start': False,
+        },
     }
 
 
