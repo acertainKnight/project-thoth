@@ -15,6 +15,7 @@ from typing import Any
 from loguru import logger
 
 from thoth.discovery.api_sources import ArxivAPISource, PubMedAPISource
+from thoth.discovery.emulator_scraper import EmulatorScraper
 from thoth.discovery.web_scraper import WebScraper
 from thoth.ingestion.filter import Filter
 from thoth.utilities.config import get_config
@@ -37,7 +38,7 @@ class DiscoveryManager:
 
     This class orchestrates the discovery process by:
     1. Managing discovery source configurations
-    2. Running discovery from APIs and web scrapers
+    2. Running discovery from APIs, web scrapers, and browser recordings
     3. Applying filtering through the Filter
     4. Coordinating with the scheduling system
     """
@@ -71,6 +72,7 @@ class DiscoveryManager:
 
         # Initialize web scraper
         self.web_scraper = WebScraper()
+        self.emulator_scraper = EmulatorScraper()
 
         # Results storage
         self.results_dir = self.config.discovery_results_dir
@@ -354,6 +356,16 @@ class DiscoveryManager:
             elif source.source_type == 'scraper' and source.scraper_config:
                 articles = self._discover_from_scraper(
                     source.scraper_config, max_articles
+                )
+            elif (
+                source.source_type == 'emulator'
+                and source.scraper_config
+                and source.browser_recording
+            ):
+                articles = self.emulator_scraper.scrape(
+                    source.browser_recording,
+                    source.scraper_config,
+                    max_articles or 50,
                 )
             else:
                 logger.warning(f'Invalid source configuration for {source.name}')
