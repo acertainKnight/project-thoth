@@ -13,7 +13,7 @@ from thoth.utilities.models import (
     ResearchQuery,
     ScrapedArticleMetadata,
 )
-from thoth.utilities.openrouter import OpenRouterClient
+from thoth.utilities import OpenRouterClient
 
 
 class ArticleService(BaseService):
