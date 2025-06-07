@@ -1,0 +1,82 @@
+{
+  "test_session": {
+    "timestamp": "2025-06-06 23:22:15",
+    "configuration": {
+      "test_semantic_scholar": true,
+      "test_batch_processing": true,
+      "batch_sizes_tested": [
+        1,
+        5,
+        10,
+        15
+      ]
+    }
+  },
+  "test_results": {
+    "semantic_scholar": {
+      "test_name": "Semantic Scholar Optimizations",
+      "batch_processing": {
+        "success": true,
+        "processing_time": 0.34343671798706055,
+        "citations_processed": 5,
+        "citations_enhanced": 3,
+        "performance_metrics": {
+          "citations_per_second": 14.55872286838119,
+          "average_time_per_citation": 0.0686873435974121
+        }
+      },
+      "individual_processing": {
+        "success": true,
+        "processing_time": 1.3916816711425781,
+        "citations_processed": 5,
+        "citations_enhanced": 3,
+        "performance_metrics": {
+          "citations_per_second": 3.5927756351745104,
+          "average_time_per_citation": 0.2783363342285156
+        }
+      },
+      "caching_test": {
+        "success": true,
+        "cached_processing_time": 0.12329363822937012,
+        "cache_speedup": 2.7855185629946764
+      },
+      "performance_comparison": {
+        "speedup_factor": 4.05222155423408,
+        "time_saved_seconds": 1.0482449531555176,
+        "efficiency_improvement_percent": 75.32217854783579
+      }
+    },
+    "llm_batch_processing": {
+      "test_name": "LLM Batch Processing",
+      "batch_size_tests": {
+        "1": {
+          "success": false,
+          "error": "'identify_references_section.j2' not found in search path: 'templates/prompts/openai'"
+        },
+        "5": {
+          "success": false,
+          "error": "'identify_references_section.j2' not found in search path: 'templates/prompts/openai'"
+        },
+        "10": {
+          "success": false,
+          "error": "'identify_references_section.j2' not found in search path: 'templates/prompts/openai'"
+        },
+        "15": {
+          "success": false,
+          "error": "'identify_references_section.j2' not found in search path: 'templates/prompts/openai'"
+        }
+      },
+      "prompt_improvements": {},
+      "fallback_mechanisms": {}
+    }
+  },
+  "summary": {
+    "overall_success": true,
+    "performance_improvements": {
+      "semantic_scholar_speedup": "4.1x"
+    },
+    "recommendations": [
+      "Semantic Scholar batch processing shows good improvements"
+    ]
+  }
+}

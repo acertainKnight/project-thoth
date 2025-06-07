@@ -161,14 +161,19 @@ class CitationConfig(BaseSettings):
         False, description='Whether to use Scholarly for Google Scholar search'
     )
     use_semanticscholar: bool = Field(
-        False, description='Whether to use Semantic Scholar API for metadata enrichment'
+        True, description='Whether to use Semantic Scholar API for metadata enrichment'
     )
     use_arxiv: bool = Field(
         False, description='Whether to use Arxiv API for metadata enrichment'
     )
     citation_batch_size: int = Field(
-        5,
-        description='Batch size for processing citation strings with LLM (if applicable for batch extraction)',
+        10,
+        description='Batch size for processing citation strings with LLM. '
+        'Optimized default of 10 provides good balance of speed and accuracy. '
+        'Set to 1 for maximum accuracy but slower processing, '
+        'or up to 20 for faster processing with potentially lower accuracy.',
+        ge=1,
+        le=20,
     )
 
 
