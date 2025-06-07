@@ -97,6 +97,17 @@ def parse_args():
         help='Enable auto-reload for development. Restarts server on code changes.',
     )
 
+    # MCP server command
+    mcp_parser = subparsers.add_parser(
+        'mcp-server', help='Run the MCP agent server'
+    )
+    mcp_parser.add_argument(
+        '--host', type=str, help='Host for the MCP server. Overrides config value.'
+    )
+    mcp_parser.add_argument(
+        '--port', type=int, help='Port for the MCP server. Overrides config value.'
+    )
+
     # Reprocess-note command
     reprocess_parser = subparsers.add_parser(
         'reprocess-note',
@@ -588,6 +599,24 @@ def run_api_server(args):
         return 0
     except Exception as e:
         logger.error(f'Error in API server: {e}')
+        return 1
+
+
+def run_mcp_server(args):
+    """Run the MCP agent server."""
+    config = get_config()
+
+    host = args.host or config.mcp_server_config.host
+    port = args.port or config.mcp_server_config.port
+
+    from thoth.ingestion.agent_v2.server import start_mcp_server
+
+    try:
+        logger.info(f'Starting MCP server on {host}:{port}')
+        start_mcp_server(host=host, port=port)
+        return 0
+    except Exception as e:
+        logger.error(f'Error in MCP server: {e}')
         return 1
 
 
@@ -1618,6 +1647,8 @@ def main():
         return process_pdf(args)
     elif args.command == 'api':
         return run_api_server(args)
+    elif args.command == 'mcp-server':
+        return run_mcp_server(args)
     elif args.command == 'reprocess-note':
         return run_reprocess_note(args)
     elif args.command == 'regenerate-all-notes':
