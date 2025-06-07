@@ -27,6 +27,7 @@ interface ThothSettings {
   queriesDirectory: string;
   agentStorageDirectory: string;
   pdfDirectory: string;
+  promptsDirectory: string;
 
   // === CONNECTION SETTINGS ===
   remoteMode: boolean;
@@ -115,6 +116,7 @@ const DEFAULT_SETTINGS: ThothSettings = {
   queriesDirectory: '',
   agentStorageDirectory: '',
   pdfDirectory: '',
+  promptsDirectory: '',
 
   // === CONNECTION SETTINGS ===
   remoteMode: false,
@@ -622,6 +624,7 @@ export default class ThothPlugin extends Plugin {
       QUERIES_DIR: this.settings.queriesDirectory,
       AGENT_STORAGE_DIR: this.settings.agentStorageDirectory,
       PDF_DIR: this.settings.pdfDirectory,
+      PROMPTS_DIR: this.settings.promptsDirectory || path.join(this.settings.workspaceDirectory, 'templates/prompts'),
 
       // Server settings
       ENDPOINT_HOST: this.settings.endpointHost,
@@ -704,6 +707,7 @@ export default class ThothPlugin extends Plugin {
         `QUERIES_DIR=${this.settings.queriesDirectory}`,
         `AGENT_STORAGE_DIR=${this.settings.agentStorageDirectory}`,
         `PDF_DIR=${this.settings.pdfDirectory}`,
+        `PROMPTS_DIR=${this.settings.promptsDirectory || `${this.settings.workspaceDirectory}/templates/prompts`}`,
         '',
         '# ----------------------------------------------------------------------------------',
         '# --- 3. Server Configuration ---',
@@ -1173,6 +1177,19 @@ class ThothSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.obsidianDirectory)
           .onChange(async (value) => {
             this.plugin.settings.obsidianDirectory = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(dirSection)
+      .setName('Prompts Directory')
+      .setDesc('Folder with custom prompts (leave blank for defaults)')
+      .addText((text) =>
+        text
+          .setPlaceholder('e.g., /path/to/prompts')
+          .setValue(this.plugin.settings.promptsDirectory)
+          .onChange(async (value) => {
+            this.plugin.settings.promptsDirectory = value;
             await this.plugin.saveSettings();
           })
       );
