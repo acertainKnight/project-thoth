@@ -7,14 +7,14 @@ An intelligent research assistant plugin that brings AI-powered research capabil
 Before you begin, make sure you have:
 
 - [ ] **Thoth installed**: Test with `uv run python -m thoth --help` in terminal
-- [ ] **API Keys**: Get [Mistral API](https://console.mistral.ai) and [OpenRouter API](https://openrouter.ai) keys
+- [ ] **API Keys**: Get [OpenRouter API](https://openrouter.ai) key (Mistral key optional)
 - [ ] **Plugin installed**: Enable in Obsidian Settings → Community Plugins
 
 ### **Essential Setup (5 minutes)**
 
 1. **Configure API Keys** (Settings → Community Plugins → Thoth Research Assistant):
-   - Enter your Mistral API Key
    - Enter your OpenRouter API Key
+   - Enter your Mistral API Key if available
 
 2. **Set Directories**:
    - **Workspace Directory**: `/home/nick/python/project-thoth` (where you cloned the repo)
@@ -102,7 +102,7 @@ Run Thoth in Docker and connect from any Obsidian:
 
 1. Open Obsidian Settings → Community Plugins → Thoth Research Assistant
 2. Configure your API keys:
-   - **Mistral API Key**: Your API key for Mistral AI services
+   - **Mistral API Key** (optional): Your API key for Mistral AI services
    - **OpenRouter API Key**: Your API key for OpenRouter (multiple model access)
 3. Set connection details:
    - **Endpoint Host**: Usually `localhost` for local installations
@@ -232,7 +232,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - Built for the [Obsidian](https://obsidian.md) knowledge management platform
-- Powered by [Mistral AI](https://mistral.ai) and [OpenRouter](https://openrouter.ai)
+- Powered by [OpenRouter](https://openrouter.ai) with optional OCR from [Mistral AI](https://mistral.ai)
 - Inspired by the need for seamless research integration
 
 ## 🔮 Roadmap
