@@ -15,6 +15,7 @@ Thoth is a production-ready AI-powered research assistant that automates the col
 - **Smart Filtering**: AI-powered evaluation of papers against research queries
 - **Scheduled Discovery**: Automated periodic searches for new relevant papers
 - **Web Scraping**: Support for custom journal scraping with Chrome extension
+- **Browser Emulator Recording**: Record login sessions and map elements on sites without APIs
 
 ### 🤖 **Interactive Research Agent**
 - **Natural Language Interface**: Chat with your research collection
@@ -151,7 +152,7 @@ thoth rag ask --question "What are the main contributions of the transformer arc
 
 ### Discovery & Filtering
 - `thoth discovery list` - List all discovery sources
-- `thoth discovery create --name <name> --type <api|scraper>` - Create source
+- `thoth discovery create --name <name> --type <api|scraper|emulator>` - Create source
 - `thoth discovery run --source <name>` - Run discovery
 - `thoth filter-test` - Test the filtering system
 
