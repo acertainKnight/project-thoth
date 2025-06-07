@@ -165,6 +165,20 @@ python -m thoth.discovery.chrome_extension
 4. **Save Configuration**: Save your scraper configuration for reuse
 5. **Test Scraping**: Run a full test to see extracted articles
 
+### Web Emulator Recording
+
+For sites that require manual navigation or login, you can launch a browser
+emulator and record your actions:
+
+```bash
+python -m thoth.discovery.web_emulator <url>
+```
+
+The recorder will open a Chrome window where you can log in and navigate to the
+desired page. When you close the window a ``BrowserRecording`` file is saved
+with the final URL and your session cookies. This recording can be combined with
+a scrape configuration to create an ``emulator`` discovery source.
+
 ## API Sources Configuration
 
 ### ArXiv Configuration Options

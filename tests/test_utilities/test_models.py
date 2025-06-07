@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from thoth.utilities.models import (
     AnalysisResponse,
+    BrowserRecording,
     Citation,
     DiscoveryResult,
     DiscoverySource,
@@ -278,11 +279,28 @@ class TestDiscoverySource:
         with pytest.raises(ValidationError):
             DiscoverySource(
                 name='invalid',
-                source_type='invalid_type',  # Should be 'api' or 'scraper'
+                source_type='invalid_type',  # Should be 'api', 'scraper', or 'emulator'
                 description='Invalid source',
                 is_active=True,
                 schedule_config=schedule,
             )
+
+    def test_emulator_source_type(self):
+        """Ensure 'emulator' is accepted as a source type."""
+        schedule = ScheduleConfig()
+
+        source = DiscoverySource(
+            name='site_recorder',
+            source_type='emulator',
+            description='Recorded site',
+            is_active=True,
+            schedule_config=schedule,
+            browser_recording=BrowserRecording(
+                start_url='http://example.com', end_url='http://example.com', cookies=[]
+            ),
+        )
+
+        assert source.source_type == 'emulator'
 
     def test_name_sanitization(self):
         """Test that names are sanitized to be valid filenames."""
