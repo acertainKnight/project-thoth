@@ -14,7 +14,13 @@ from typing import Any
 
 from loguru import logger
 
-from thoth.discovery.api_sources import ArxivAPISource, PubMedAPISource
+from thoth.discovery.api_sources import (
+    ArxivAPISource,
+    PubMedAPISource,
+    CrossRefAPISource,
+    OpenAlexAPISource,
+    BioRxivAPISource,
+)
 from thoth.discovery.web_scraper import WebScraper
 from thoth.ingestion.filter import Filter
 from thoth.utilities.config import get_config
@@ -67,6 +73,9 @@ class DiscoveryManager:
         self.api_sources = {
             'arxiv': ArxivAPISource(),
             'pubmed': PubMedAPISource(),
+            'crossref': CrossRefAPISource(),
+            'openalex': OpenAlexAPISource(),
+            'biorxiv': BioRxivAPISource(),
         }
 
         # Initialize web scraper
