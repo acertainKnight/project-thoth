@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from typing import Any, TypedDict
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, ChoiceLoader
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable, RunnableConfig
 from langgraph.graph import END, StateGraph
@@ -99,6 +99,13 @@ class CitationProcessor:
 
         self.model = model
         self.prompts_dir = Path(prompts_dir) / model.split('/')[0]
+        # Default prompts packaged with Thoth
+        self.default_prompts_dir = (
+            Path(__file__).resolve().parents[3]
+            / 'templates'
+            / 'prompts'
+            / model.split('/')[0]
+        )
         self.model_kwargs = model_kwargs if model_kwargs else {}
 
         # Ensure reasonable batch size limits
@@ -206,9 +213,14 @@ class CitationProcessor:
         )
         logger.debug(f'Enrich LLM created with model: {self.model}')
 
-        # Initialize Jinja environment
+        # Initialize Jinja environment with fallback to default prompts
         self.jinja_env = Environment(
-            loader=FileSystemLoader(self.prompts_dir),
+            loader=ChoiceLoader(
+                [
+                    FileSystemLoader(self.prompts_dir),
+                    FileSystemLoader(self.default_prompts_dir),
+                ]
+            ),
             trim_blocks=True,
             lstrip_blocks=True,
         )
