@@ -74,7 +74,7 @@ class CitationProcessor:
         use_opencitations: bool | None = None,
         use_scholarly: bool | None = None,
         use_arxiv: bool | None = None,
-        citation_batch_size: int = 1,  # Added batch size parameter
+        citation_batch_size: int = 10,  # Increased default batch size for better efficiency
         model_kwargs: dict[str, Any] | None = None,
     ):
         """
@@ -100,7 +100,12 @@ class CitationProcessor:
         self.model = model
         self.prompts_dir = Path(prompts_dir) / model.split('/')[0]
         self.model_kwargs = model_kwargs if model_kwargs else {}
-        self.citation_batch_size = citation_batch_size  # Store batch size
+
+        # Ensure reasonable batch size limits
+        self.citation_batch_size = max(
+            1, min(citation_batch_size, 20)
+        )  # Cap at 20 for reliability
+        logger.info(f'Citation batch size set to: {self.citation_batch_size}')
 
         # Use configuration values if not explicitly provided
         self.use_semanticscholar = (
@@ -128,10 +133,12 @@ class CitationProcessor:
             **self.model_kwargs,
         )
 
-        # Initialize Semantic Scholar tool if enabled
+        # Initialize Semantic Scholar tool if enabled with optimized settings
         if self.use_semanticscholar:
             self.semanticscholar_tool = SemanticScholarAPI(
                 api_key=self.semanticscholar_api_key,
+                batch_size=500,  # Use maximum batch size for efficiency
+                enable_caching=True,  # Enable caching for better performance
             )
         else:
             self.semanticscholar_tool = None
@@ -514,8 +521,18 @@ class CitationProcessor:
         return state
 
     def _extract_citations_from_raw(self, state: CitationState) -> CitationState:
-        """Extract structured citations from raw citation strings using LLM."""
-        logger.debug('Extracting structured citations from raw strings')
+        """Extract structured citations from raw citation strings using optimized LLM
+        batch processing.
+
+        Args:
+            state: The current state containing raw citations to process.
+
+        Returns:
+            CitationState: Updated state with extracted citations.
+        """
+        logger.debug(
+            'Extracting structured citations from raw strings using optimized batch processing'
+        )
         raw_citations = state['raw_citations']
 
         if not raw_citations:
@@ -523,109 +540,42 @@ class CitationProcessor:
             state['citations'] = []
             return state
 
+        logger.info(
+            f'Processing {len(raw_citations)} raw citations with batch size {self.citation_batch_size}'
+        )
         all_citations = []
+        total_batches = (
+            len(raw_citations) + self.citation_batch_size - 1
+        ) // self.citation_batch_size
 
-        # Process in batches
+        # Process in optimized batches
         for i in range(0, len(raw_citations), self.citation_batch_size):
             batch = raw_citations[i : i + self.citation_batch_size]
-            batch_text = '\n\n'.join(batch)
             batch_num = (i // self.citation_batch_size) + 1
 
-            logger.debug(f'Processing batch {batch_num} with {len(batch)} citations')
-            logger.debug(f'Batch text: {batch_text}')
+            logger.info(
+                f'Processing batch {batch_num}/{total_batches} with {len(batch)} citations'
+            )
 
-            successful_extraction = False
-            # Retry logic: 1 initial attempt + 1 retry
-            for attempt in range(2):  # 0 for initial, 1 for retry
-                try:
-                    if self.citation_batch_size == 1:
-                        batch_result = self.extract_citation_single_chain.invoke(
-                            {
-                                'citation': batch_text,
-                                'json_schema': CitationExtraction.model_json_schema(),
-                            }
-                        )
-                        all_citations.append(batch_result)
-                        successful_extraction = True
-                        break  # Success, exit retry loop
-                    else:
-                        batch_invoke_result = self.extract_citations_chain.invoke(
-                            {
-                                'references_section': batch_text,
-                                'response_schema': CitationExtractionResponse.model_json_schema(),
-                                'item_schema': CitationExtraction.model_json_schema(),
-                            }
-                        )
-                        logger.debug(
-                            f'LLM invocation result for batch {batch_num}, attempt {attempt + 1}: {batch_invoke_result}'
-                        )
-
-                        parsed_output = batch_invoke_result.get('parsed')
-
-                        if parsed_output and hasattr(parsed_output, 'citations'):
-                            try:
-                                all_citations.extend(parsed_output.citations)
-                                logger.debug(
-                                    f'Successfully extracted {len(parsed_output.citations)} citations from batch {batch_num}, attempt {attempt + 1}'
-                                )
-                                successful_extraction = True
-                                break  # Success, exit retry loop
-                            except ValidationError as ve:
-                                logger.error(
-                                    f'Validation error processing parsed citations for batch {batch_num}, attempt {attempt + 1}: {ve}'
-                                )
-                                logger.error(
-                                    f'Problematic parsed output for batch {batch_num}, attempt {attempt + 1}:\n{parsed_output}'
-                                )
-                                # Fall through to retry or final error log
-                            except Exception as e:  # General exception handler
-                                logger.error(
-                                    f'Unexpected error processing parsed citations for batch {batch_num}, attempt {attempt + 1}: {e}'
-                                )
-                                logger.error(
-                                    f'Problematic parsed output for batch {batch_num}, attempt {attempt + 1}:\n{parsed_output}'
-                                )
-                                # Fall through to retry or final error log
-                        else:
-                            logger.error(
-                                f"Failed to parse citation extraction output or 'citations' attribute missing for batch {batch_num}, attempt {attempt + 1}."
-                            )
-                            raw_output = batch_invoke_result.get(
-                                'raw', 'Raw output not available.'
-                            )
-                            logger.error(
-                                f'Raw LLM output for failing batch {batch_num}, attempt {attempt + 1}: {raw_output}'
-                            )
-                            # Fall through to retry or final error log
-                except ValidationError as ve:
-                    logger.error(
-                        f'Validation error during single citation extraction for batch {batch_num}, attempt {attempt + 1}: {ve}'
-                    )
-                    logger.error(
-                        f'Problematic batch text for single extraction, batch {batch_num}, attempt {attempt + 1}:\n{batch_text}'
-                    )
-                    # Fall through to retry or final error log
-                except Exception as e:
-                    logger.error(
-                        f'Exception during citation extraction for batch {batch_num}, attempt {attempt + 1}: {e}'
-                    )
-                    logger.error(
-                        f'Problematic batch text for batch {batch_num}, attempt {attempt + 1}:\n{batch_text}'
-                    )
-                    # Fall through to retry or final error log
-
-                # If an error occurred and this was the first attempt, log retry
-                if not successful_extraction and attempt == 0:
-                    logger.warning(f'Retrying batch {batch_num} (attempt 2 of 2)...')
-
-            # After both attempts, if still not successful, log skipping the batch
-            if not successful_extraction:
-                logger.error(
-                    f'Both attempts failed for batch {batch_num}. Skipping this batch.'
+            # Use single citation processing if batch size is 1, otherwise use batch
+            # processing
+            if self.citation_batch_size == 1:
+                success = self._process_single_citation_batch(batch, all_citations)
+            else:
+                success = self._process_multiple_citation_batch(
+                    batch, all_citations, batch_num
                 )
 
-        logger.info(f'Extracted a total of {len(all_citations)} raw citation objects')
+            if not success:
+                logger.warning(
+                    f'Batch {batch_num} failed completely, skipping these citations'
+                )
 
+        logger.info(
+            f'Extracted a total of {len(all_citations)} citation objects from {len(raw_citations)} raw citations'
+        )
+
+        # Convert to Citation objects
         processed_citations_list = []
         for idx, citation_data in enumerate(all_citations):
             try:
@@ -648,6 +598,118 @@ class CitationProcessor:
             f'Successfully converted {len(processed_citations_list)} citations to Citation model.'
         )
         return state
+
+    def _process_single_citation_batch(
+        self, batch: list[str], all_citations: list
+    ) -> bool:
+        """Process a single citation using the single citation chain."""
+        try:
+            batch_text = batch[0]  # Single citation
+            batch_result = self.extract_citation_single_chain.invoke(
+                {
+                    'citation': batch_text,
+                    'json_schema': CitationExtraction.model_json_schema(),
+                }
+            )
+            all_citations.append(batch_result)
+            return True
+        except Exception as e:
+            logger.error(f'Error processing single citation: {e}')
+            return False
+
+    def _process_multiple_citation_batch(
+        self, batch: list[str], all_citations: list, batch_num: int
+    ) -> bool:
+        """Process multiple citations using the batch citation chain with improved error
+        handling."""
+        batch_text = '\n\n'.join(batch)
+
+        # Try the batch processing with up to 2 attempts
+        for attempt in range(2):
+            try:
+                logger.debug(
+                    f'Batch {batch_num}, attempt {attempt + 1}: Processing {len(batch)} citations'
+                )
+
+                # Use the improved batch processing prompt
+                batch_invoke_result = self.extract_citations_chain.invoke(
+                    {
+                        'references_section': batch_text,
+                    }
+                )
+
+                # Handle the structured output result
+                if (
+                    isinstance(batch_invoke_result, dict)
+                    and 'parsed' in batch_invoke_result
+                ):
+                    parsed_output = batch_invoke_result['parsed']
+                else:
+                    parsed_output = batch_invoke_result
+
+                if parsed_output and hasattr(parsed_output, 'citations'):
+                    citations_list = parsed_output.citations
+                    if citations_list:
+                        all_citations.extend(citations_list)
+                        logger.info(
+                            f'Successfully extracted {len(citations_list)} citations from batch {batch_num}'
+                        )
+                        return True
+                    else:
+                        logger.warning(
+                            f'Batch {batch_num}, attempt {attempt + 1}: Empty citations list'
+                        )
+                else:
+                    logger.error(
+                        f'Batch {batch_num}, attempt {attempt + 1}: Invalid parsed output structure'
+                    )
+                    if (
+                        isinstance(batch_invoke_result, dict)
+                        and 'raw' in batch_invoke_result
+                    ):
+                        logger.debug(f'Raw LLM output: {batch_invoke_result["raw"]}')
+
+            except ValidationError as ve:
+                logger.error(
+                    f'Validation error in batch {batch_num}, attempt {attempt + 1}: {ve}'
+                )
+            except Exception as e:
+                logger.error(
+                    f'Exception in batch {batch_num}, attempt {attempt + 1}: {e}'
+                )
+
+            # If first attempt failed, log retry
+            if attempt == 0:
+                logger.warning(f'Retrying batch {batch_num} (attempt 2 of 2)...')
+
+        # If batch processing completely failed, fall back to individual processing
+        logger.warning(
+            f'Batch {batch_num} failed completely, falling back to individual processing'
+        )
+        return self._fallback_individual_processing(batch, all_citations)
+
+    def _fallback_individual_processing(
+        self, batch: list[str], all_citations: list
+    ) -> bool:
+        """Fallback to process citations individually when batch processing fails."""
+        success_count = 0
+        for i, citation_text in enumerate(batch):
+            try:
+                result = self.extract_citation_single_chain.invoke(
+                    {
+                        'citation': citation_text,
+                        'json_schema': CitationExtraction.model_json_schema(),
+                    }
+                )
+                all_citations.append(result)
+                success_count += 1
+            except Exception as e:
+                logger.warning(f'Failed to process individual citation {i + 1}: {e}')
+
+        logger.info(
+            f'Individual fallback processing: {success_count}/{len(batch)} citations successful'
+        )
+        return success_count > 0
 
     def _enhance_citations_with_services(self, state: CitationState) -> CitationState:
         """Enhance citations with external services if enabled."""

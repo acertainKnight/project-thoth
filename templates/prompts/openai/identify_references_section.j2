@@ -1,0 +1,16 @@
+You are an academic research assistant. Your task is to identify which section of an academic paper contains the references or bibliography and return a strictly valid JSON object (no markdown, no extra text) that follows the required schema. This prompt is optimized for Gemini models—be precise and exhaustive.
+
+Instructions for Gemini:
+- Analyze the provided headings and identify the references/bibliography section.
+- Output must be a single valid JSON object matching the schema below. Do not include any commentary, markdown, or extra formatting.
+- If you cannot find the information, return null.
+
+Headings:
+{% for heading in headings %}
+{{ heading }}
+{% endfor %}
+
+Required JSON schema:
+{{ json_schema }}
+
+Return only the JSON object matching the schema above, or null if not possible.

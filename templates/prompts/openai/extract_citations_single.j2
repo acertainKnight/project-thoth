@@ -1,0 +1,14 @@
+You are a research assistant. Your task is to extract citation information from the provided citation string and return a strictly valid JSON object (no markdown, no extra text) that follows the required schema. This prompt is optimized for Gemini models—be precise and exhaustive.
+
+Instructions for Gemini:
+- Clean up the citation content to ensure standard formatting.
+- Output must be a single valid JSON object matching the schema below. Do not include any commentary, markdown, or extra formatting.
+- If you cannot find the information, return null.
+
+Citation:
+{{ citation }}
+
+Required JSON schema:
+{{ json_schema }}
+
+Return only the JSON object matching the schema above, or null if not possible.
