@@ -16,7 +16,7 @@ from langgraph.graph import END, StateGraph
 from loguru import logger
 
 from thoth.utilities.models import AnalysisResponse, AnalysisState
-from thoth.utilities.openrouter import OpenRouterClient
+from thoth.utilities import OpenRouterClient
 
 
 class LLMError(Exception):
