@@ -1,0 +1,648 @@
+/* Thoth Research Assistant Plugin Styles */
+
+/* ===== RIBBON ICON ===== */
+.thoth-ribbon-icon {
+    color: var(--text-normal);
+}
+
+.thoth-ribbon-icon:hover {
+    color: var(--text-accent);
+}
+
+/* ===== SETTINGS UI ===== */
+
+/* Settings Header */
+.thoth-settings-header {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--color-accent-2), var(--background-secondary));
+    border: 1px solid var(--background-modifier-border);
+}
+
+.thoth-settings-header h1 {
+    margin: 0 0 0.5rem 0;
+    color: var(--text-accent);
+    font-size: 2rem;
+    font-weight: 600;
+}
+
+.thoth-settings-subtitle {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    font-style: italic;
+}
+
+/* Settings Sections */
+.thoth-settings-section {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    border-radius: 8px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+}
+
+.thoth-settings-section h2 {
+    margin: 0 0 1rem 0;
+    color: var(--text-accent);
+    font-size: 1.3rem;
+    border-bottom: 2px solid var(--color-accent-2);
+    padding-bottom: 0.5rem;
+}
+
+.thoth-section-desc {
+    margin: 0 0 1.5rem 0;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+
+.thoth-subsection {
+    margin: 1.5rem 0;
+    padding: 1rem;
+    border-radius: 6px;
+    background: var(--background-secondary-alt);
+    border-left: 3px solid var(--color-accent-2);
+}
+
+.thoth-subsection h3 {
+    margin: 0 0 1rem 0;
+    color: var(--text-normal);
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+/* Optional sections (collapsible) */
+.thoth-optional-section {
+    margin: 1rem 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    background: var(--background-secondary);
+}
+
+.thoth-optional-section summary {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--text-accent);
+    user-select: none;
+    border-radius: 6px;
+    transition: background-color 0.2s ease;
+}
+
+.thoth-optional-section summary:hover {
+    background: var(--background-modifier-hover);
+}
+
+.thoth-optional-section[open] summary {
+    border-bottom: 1px solid var(--background-modifier-border);
+    border-radius: 6px 6px 0 0;
+}
+
+.thoth-optional-section .setting-item {
+    margin: 0.75rem 1rem;
+}
+
+/* Quick Status Grid */
+.thoth-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.thoth-status-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+}
+
+.thoth-status-label {
+    font-weight: 500;
+    color: var(--text-normal);
+    margin-right: 0.5rem;
+}
+
+.thoth-status-indicator {
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.thoth-status-success {
+    background: var(--color-green);
+    color: white;
+}
+
+.thoth-status-error {
+    background: var(--color-red);
+    color: white;
+}
+
+.thoth-status-warning {
+    background: var(--color-orange);
+    color: white;
+}
+
+.thoth-status-info {
+    background: var(--color-blue);
+    color: white;
+}
+
+/* Test Connection */
+.thoth-test-container {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 1rem 0;
+    padding: 1rem;
+    border-radius: 6px;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+}
+
+.thoth-test-button {
+    padding: 0.5rem 1rem;
+    background: var(--color-accent);
+    color: var(--text-on-accent);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    min-width: 150px;
+}
+
+.thoth-test-button:hover:not(:disabled) {
+    background: var(--color-accent-hover);
+    transform: translateY(-1px);
+}
+
+.thoth-test-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.thoth-test-result {
+    font-weight: 500;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.thoth-test-success {
+    background: var(--color-green);
+    color: white;
+}
+
+.thoth-test-error {
+    background: var(--color-red);
+    color: white;
+}
+
+/* Advanced Settings */
+.thoth-advanced-section {
+    border: 2px dashed var(--background-modifier-border);
+    background: var(--background-secondary-alt);
+}
+
+.thoth-advanced-section h2 {
+    color: var(--text-muted);
+}
+
+/* Controls Section */
+.thoth-controls-section {
+    border: 2px solid var(--color-accent-2);
+    background: var(--background-primary-alt);
+}
+
+.thoth-controls-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.thoth-control-button {
+    padding: 0.75rem 1rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+    min-height: 48px;
+}
+
+.thoth-control-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.thoth-control-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.thoth-button-start {
+    background: var(--color-green);
+    color: white;
+}
+
+.thoth-button-start:hover:not(:disabled) {
+    background: #28a745;
+}
+
+.thoth-button-stop {
+    background: var(--color-red);
+    color: white;
+}
+
+.thoth-button-stop:hover:not(:disabled) {
+    background: #dc3545;
+}
+
+.thoth-button-restart {
+    background: var(--color-orange);
+    color: white;
+}
+
+.thoth-button-restart:hover:not(:disabled) {
+    background: #fd7e14;
+}
+
+.thoth-button-test {
+    background: var(--color-blue);
+    color: white;
+}
+
+.thoth-button-test:hover:not(:disabled) {
+    background: #0056b3;
+}
+
+.thoth-button-chat {
+    background: var(--color-accent);
+    color: var(--text-on-accent);
+}
+
+.thoth-button-chat:hover:not(:disabled) {
+    background: var(--color-accent-hover);
+}
+
+/* Setting Item Enhancements */
+.thoth-settings-section .setting-item {
+    border-bottom: 1px solid var(--background-modifier-border);
+    padding: 1rem 0;
+}
+
+.thoth-settings-section .setting-item:last-child {
+    border-bottom: none;
+}
+
+.thoth-subsection .setting-item {
+    border-bottom: 1px solid var(--background-modifier-border-hover);
+    padding: 0.75rem 0;
+}
+
+.thoth-subsection .setting-item:last-child {
+    border-bottom: none;
+}
+
+/* Password input styling */
+.thoth-settings-section input[type="password"] {
+    font-family: monospace;
+    letter-spacing: 1px;
+}
+
+/* Slider enhancements */
+.thoth-settings-section .slider {
+    accent-color: var(--color-accent);
+}
+
+/* Dropdown enhancements */
+.thoth-settings-section select {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    background: var(--background-primary);
+    color: var(--text-normal);
+    padding: 0.5rem;
+}
+
+.thoth-settings-section select:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px var(--color-accent-2);
+}
+
+/* Toggle switch enhancements */
+.thoth-settings-section .checkbox-container {
+    accent-color: var(--color-accent);
+}
+
+/* External link button styling */
+.thoth-settings-section .setting-item-control .clickable-icon {
+    color: var(--text-muted);
+    transition: color 0.2s ease;
+}
+
+.thoth-settings-section .setting-item-control .clickable-icon:hover {
+    color: var(--color-accent);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .thoth-status-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .thoth-controls-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .thoth-settings-section {
+        padding: 1rem;
+    }
+
+    .thoth-settings-header {
+        padding: 1rem;
+    }
+
+    .thoth-settings-header h1 {
+        font-size: 1.5rem;
+    }
+}
+
+/* Dark theme adjustments */
+.theme-dark .thoth-settings-header {
+    background: linear-gradient(135deg, var(--color-accent-2), var(--background-modifier-border));
+}
+
+.theme-dark .thoth-settings-section {
+    background: var(--background-primary-alt);
+}
+
+.theme-dark .thoth-subsection {
+    background: var(--background-secondary);
+}
+
+/* Animation for settings sections */
+.thoth-settings-section {
+    animation: thoth-section-appear 0.3s ease-out;
+}
+
+@keyframes thoth-section-appear {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Focus states for accessibility */
+.thoth-control-button:focus,
+.thoth-test-button:focus {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+}
+
+.thoth-optional-section summary:focus {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+}
+
+/* Chat Modal Styles */
+.thoth-chat-modal {
+  max-width: 800px;
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.thoth-chat-modal .modal-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.thoth-chat-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  background: var(--background-primary-alt);
+  max-height: 400px;
+}
+
+.thoth-message {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  position: relative;
+}
+
+.thoth-message-user {
+  background: var(--color-accent);
+  color: var(--text-on-accent);
+  margin-left: 2rem;
+}
+
+.thoth-message-assistant {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  margin-right: 2rem;
+}
+
+.thoth-message-system {
+  background: var(--background-modifier-error);
+  color: var(--text-error);
+  text-align: center;
+  font-style: italic;
+}
+
+.thoth-message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
+.thoth-message-sender {
+  font-weight: 600;
+}
+
+.thoth-message-time {
+  font-size: 0.75em;
+}
+
+.thoth-message-content {
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.thoth-chat-input-wrapper {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.thoth-chat-input {
+  flex: 1;
+  min-height: 60px;
+  max-height: 120px;
+  padding: 0.75rem;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-family: var(--font-interface);
+  resize: vertical;
+}
+
+.thoth-chat-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent-2);
+}
+
+.thoth-send-button {
+  padding: 0.75rem 1.5rem;
+  background: var(--color-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+  min-width: 80px;
+}
+
+.thoth-send-button:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.thoth-send-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Status Bar Styles */
+.status-bar-item.plugin-thoth {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.status-bar-item.plugin-thoth:hover {
+  opacity: 0.8;
+}
+
+/* Settings Styles */
+.setting-item-description {
+  font-size: 0.9em;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+/* Research Query Highlight */
+.thoth-research-highlight {
+  background: var(--color-accent-2);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.thoth-research-highlight:hover {
+  background: var(--color-accent);
+  color: var(--text-on-accent);
+}
+
+/* Loading Spinner */
+.thoth-loading {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--background-modifier-border);
+  border-radius: 50%;
+  border-top-color: var(--color-accent);
+  animation: thoth-spin 1s ease-in-out infinite;
+}
+
+@keyframes thoth-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .thoth-chat-modal {
+    width: 95vw;
+    height: 90vh;
+  }
+
+  .thoth-message-user {
+    margin-left: 1rem;
+  }
+
+  .thoth-message-assistant {
+    margin-right: 1rem;
+  }
+
+  .thoth-chat-input-wrapper {
+    flex-direction: column;
+  }
+
+  .thoth-send-button {
+    width: 100%;
+  }
+}
+
+/* Dark Theme Adjustments */
+.theme-dark .thoth-message-assistant {
+  background: var(--background-secondary-alt);
+}
+
+.theme-dark .thoth-chat-output {
+  background: var(--background-secondary);
+}
+
+/* Accessibility */
+.thoth-chat-input:focus,
+.thoth-send-button:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Animation for new messages */
+.thoth-message {
+  animation: thoth-message-appear 0.3s ease-out;
+}
+
+@keyframes thoth-message-appear {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -91,6 +91,11 @@ def parse_args():
         type=str,
         help='Base URL for the API server. Overrides config value.',
     )
+    api_parser.add_argument(
+        '--reload',
+        action='store_true',
+        help='Enable auto-reload for development. Restarts server on code changes.',
+    )
 
     # Reprocess-note command
     reprocess_parser = subparsers.add_parser(
@@ -563,15 +568,22 @@ def run_api_server(args):
     host = args.host or config.api_server_config.host
     port = args.port or config.api_server_config.port
     base_url = args.base_url or config.api_server_config.base_url
+    reload = getattr(args, 'reload', False)
 
     try:
-        logger.info(f'Starting Obsidian API server on {host}:{port}')
+        if reload:
+            logger.info(
+                f'Starting Obsidian API server on {host}:{port} with auto-reload enabled'
+            )
+        else:
+            logger.info(f'Starting Obsidian API server on {host}:{port}')
         start_obsidian_server(
             host=host,
             port=port,
             pdf_directory=config.pdf_dir,
             notes_directory=config.notes_dir,
             api_base_url=base_url,
+            reload=reload,
         )
         return 0
     except Exception as e:

@@ -161,6 +161,8 @@ Thumbs.db
 # Logs
 logs/
 
+# Node
+node_modules/
 
 # Data
 knowledge/
