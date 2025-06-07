@@ -13,8 +13,8 @@ cp -r dist/* /path/to/your/vault/.obsidian/plugins/thoth-research-assistant/
 2. **Enable Remote Mode**: Toggle ON
 3. **Set Remote URL**: `http://localhost:8000`
 4. **Add API Keys**:
-   - Mistral API Key: `your_mistral_key`
    - OpenRouter API Key: `your_openrouter_key`
+   - Mistral API Key (optional): `your_mistral_key`
 5. **Set Directories**:
    - Workspace Directory: `/home/nick/python/project-thoth`
    - Obsidian Directory: `/path/to/your/vault/thoth`

@@ -199,3 +199,16 @@ This is the content of the paper.
 
             assert pdf_out.exists()
             assert markdown_out == no_images_path
+
+    def test_local_conversion_without_mistral_key(
+        self, processing_service, sample_pdf_path, temp_workspace
+    ):
+        """Test fallback conversion when no Mistral key is set."""
+        processing_service.config.api_keys.mistral_key = None
+
+        md_path, no_img_path = processing_service.ocr_convert(
+            sample_pdf_path, output_dir=temp_workspace
+        )
+
+        assert md_path.exists()
+        assert no_img_path.exists()

@@ -10,6 +10,7 @@ from typing import Any
 
 from mistralai import DocumentURLChunk, Mistral
 from mistralai.models import OCRResponse, UploadFileOut
+from pypdf import PdfReader
 
 from thoth.analyze.llm_processor import LLMProcessor
 from thoth.services.base import BaseService, ServiceError
@@ -51,6 +52,8 @@ class ProcessingService(BaseService):
     def mistral_client(self) -> Mistral:
         """Get or create the Mistral client for OCR."""
         if self._mistral_client is None:
+            if not self.config.api_keys.mistral_key:
+                raise ServiceError('Mistral API key not configured')
             self._mistral_client = Mistral(api_key=self.config.api_keys.mistral_key)
         return self._mistral_client
 
@@ -98,26 +101,25 @@ class ProcessingService(BaseService):
             if not pdf_path.exists():
                 raise ServiceError(f'PDF file not found: {pdf_path}')
 
-            # Set output directory
             if output_dir is None:
                 output_dir = self.config.markdown_dir
             output_dir.mkdir(parents=True, exist_ok=True)
 
-            # Upload file to Mistral
+            if not self.config.api_keys.mistral_key:
+                self.logger.info('Using local PDF to markdown conversion')
+                return self._local_pdf_to_markdown(pdf_path, output_dir)
+
             self.logger.info(f'Uploading PDF for OCR: {pdf_path}')
             uploaded_file = self._upload_file_to_mistral(pdf_path)
 
-            # Get signed URL
             signed_url_obj = self.mistral_client.files.get_signed_url(
                 file_id=uploaded_file.id, expiry=1
             )
             signed_url = signed_url_obj.url
 
-            # Process with OCR
             self.logger.info('Processing with Mistral OCR')
             ocr_response = self._call_mistral_ocr(signed_url)
 
-            # Generate markdown files
             combined_markdown = self._get_combined_markdown(ocr_response)
             output_path = output_dir / f'{pdf_path.stem}.md'
             output_path.write_text(combined_markdown)
@@ -285,6 +287,25 @@ class ProcessingService(BaseService):
             )
         return markdown_str
 
+    def _local_pdf_to_markdown(
+        self, pdf_path: Path, output_dir: Path
+    ) -> tuple[Path, Path]:
+        """Fallback local PDF to markdown conversion using PyPDF."""
+        reader = PdfReader(str(pdf_path))
+        markdown_pages: list[str] = []
+        for i, page in enumerate(reader.pages, start=1):
+            text = page.extract_text() or ''
+            markdown_pages.append(f'## Page {i}\n\n{text.strip()}')
+
+        markdown_content = '\n\n'.join(markdown_pages).strip()
+        output_path = output_dir / f'{pdf_path.stem}.md'
+        output_path.write_text(markdown_content)
+
+        no_images_output_path = output_dir / f'{pdf_path.stem}_no_images.md'
+        no_images_output_path.write_text(markdown_content)
+
+        return output_path, no_images_output_path
+
     def extract_metadata(
         self,
         content: str,
@@ -407,7 +428,7 @@ class ProcessingService(BaseService):
         try:
             # This would aggregate stats from various sources
             stats = {
-                'ocr_available': self._mistral_client is not None,
+                'ocr_available': bool(self.config.api_keys.mistral_key),
                 'llm_model': self.config.llm_config.model,
                 'max_context_length': self.config.llm_config.max_context_length,
                 'chunk_size': self.config.llm_config.chunk_size,
