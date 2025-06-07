@@ -14,6 +14,7 @@ from thoth.utilities.models import (
     DiscoverySource,
     QueryEvaluationResponse,
     ResearchQuery,
+    SearchResult,
 )
 
 
@@ -131,6 +132,14 @@ class AgentAdapter:
     def ask_knowledge(self, question: str, k: int = 4) -> dict[str, Any]:
         """Ask a question about the knowledge base."""
         return self.services.rag.ask_question(question, k)
+
+    def web_search(
+        self, query: str, num_results: int = 5, provider: str | None = None
+    ) -> list[SearchResult]:
+        """Perform a general web search."""
+        return self.services.web_search.search(
+            query, num_results, provider=provider
+        )
 
     def index_knowledge_file(self, file_path: Path) -> bool:
         """Index a file to the knowledge base."""
