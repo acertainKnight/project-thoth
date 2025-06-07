@@ -7,10 +7,15 @@ using a modern LangGraph architecture with MCP framework.
 
 from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
-from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.prebuilt import ToolNode, tools_condition, create_react_agent
 from loguru import logger
 
 from thoth.ingestion.agent_adapter import AgentAdapter
@@ -145,35 +150,38 @@ When users ask about their research or express interests:
 
 Remember: You have direct access to tools - use them immediately rather than just explaining what you would do."""
 
-    def _build_graph(self) -> StateGraph:
-        """Build the LangGraph agent graph."""
-        # Create the graph
-        graph = StateGraph(ResearchAgentState)
+    def _build_graph(self) -> Any:
+        """Build the LangGraph agent graph using MCP tooling."""
+        memory = MemorySaver() if self.enable_memory else None
 
-        # Add nodes
+        try:
+            # Attempt to use the modern prebuilt agent from LangGraph
+            return create_react_agent(
+                model=self.llm,
+                tools=self.tools,
+                prompt=self.system_prompt,
+                state_schema=ResearchAgentState,
+                checkpointer=memory,
+            )
+        except Exception as e:  # pragma: no cover - fallback rarely triggered
+            logger.warning(f"Falling back to legacy graph: {e}")
+
+        # Legacy graph construction for maximum compatibility
+        graph = StateGraph(ResearchAgentState)
         graph.add_node('agent', self._agent_node)
         graph.add_node('tools', ToolNode(self.tools))
-
-        # Set entry point
         graph.set_entry_point('agent')
-
-        # Add edges
         graph.add_conditional_edges(
             'agent',
-            tools_condition,  # Built-in condition that routes to tools or END
+            tools_condition,
             {
                 'tools': 'tools',
                 END: END,
             },
         )
-        graph.add_edge('tools', 'agent')  # After tools, always go back to agent
+        graph.add_edge('tools', 'agent')
 
-        # Compile with memory if enabled
-        if self.enable_memory:
-            memory = MemorySaver()
-            return graph.compile(checkpointer=memory)
-        else:
-            return graph.compile()
+        return graph.compile(checkpointer=memory) if memory else graph.compile()
 
     def _agent_node(self, state: ResearchAgentState) -> dict[str, Any]:
         """
@@ -262,6 +270,79 @@ Remember: You have direct access to tools - use them immediately rather than jus
 
         except Exception as e:
             logger.error(f'Error in agent chat: {e}')
+            return {
+                'response': f'I encountered an error: {e!s}',
+                'error': str(e),
+            }
+
+    def chat_messages(
+        self,
+        messages: list[dict[str, Any]],
+        session_id: str | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Process a list of chat messages following MCP format."""
+
+        lc_messages = []
+        for msg in messages:
+            role = msg.get('role')
+            content = msg.get('content', '')
+            if role == 'user':
+                lc_messages.append(HumanMessage(content=content))
+            elif role == 'assistant':
+                lc_messages.append(AIMessage(content=content))
+            elif role == 'tool':
+                lc_messages.append(
+                    ToolMessage(
+                        content=content,
+                        tool_call_id=msg.get('tool_call_id', ''),
+                    )
+                )
+            elif role == 'system':
+                lc_messages.append(SystemMessage(content=content))
+
+        initial_state = ResearchAgentState(
+            messages=lc_messages,
+            session_id=session_id,
+            user_context=context or {},
+        )
+
+        config = {}
+        if self.enable_memory and session_id:
+            config['configurable'] = {'thread_id': session_id}
+
+        try:
+            result = self.app.invoke(initial_state, config)
+            final_message = None
+            for m in reversed(result['messages']):
+                if isinstance(m, AIMessage):
+                    final_message = m
+                    break
+
+            if not final_message:
+                return {
+                    'response': 'I encountered an error processing your request.',
+                    'error': 'No AI response generated',
+                }
+
+            response = {
+                'response': final_message.content,
+                'tool_calls': [],
+            }
+
+            if hasattr(final_message, 'tool_calls') and final_message.tool_calls:
+                for tc in final_message.tool_calls:
+                    response['tool_calls'].append(
+                        {
+                            'tool': tc['name'],
+                            'args': tc['args'],
+                        }
+                    )
+
+            return response
+
+        except Exception as e:  # pragma: no cover - runtime failures
+            logger.error(f'Error in agent chat_messages: {e}')
             return {
                 'response': f'I encountered an error: {e!s}',
                 'error': str(e),
