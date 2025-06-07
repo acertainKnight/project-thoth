@@ -12,7 +12,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from thoth.discovery.api_sources import ArxivAPISource, PubMedAPISource
+from thoth.discovery.api_sources import (
+    ArxivAPISource,
+    PubMedAPISource,
+    CrossRefAPISource,
+)
 from thoth.discovery.web_scraper import WebScraper
 from thoth.services.base import BaseService, ServiceError
 from thoth.utilities.models import (
@@ -60,6 +64,7 @@ class DiscoveryService(BaseService):
         self.api_sources = {
             'arxiv': ArxivAPISource(),
             'pubmed': PubMedAPISource(),
+            'crossref': CrossRefAPISource(),
         }
 
         # Initialize web scraper

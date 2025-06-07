@@ -17,6 +17,7 @@ from thoth.ingestion.agent_v2.tools.analysis_tools import (
 from thoth.ingestion.agent_v2.tools.discovery_tools import (
     CreateArxivSourceTool,
     CreatePubmedSourceTool,
+    CreateCrossrefSourceTool,
     ListDiscoverySourcesTool,
     RunDiscoveryTool,
 )
@@ -180,6 +181,22 @@ class TestDiscoveryTools:
 
         assert 'Successfully' in result or 'Created' in result
         assert 'pubmed_test' in result
+
+    def test_create_crossref_source_tool(self, mock_adapter):
+        """Test CreateCrossrefSourceTool."""
+        tool = CreateCrossrefSourceTool(adapter=mock_adapter)
+
+        mock_adapter.create_discovery_source.return_value = True
+
+        result = tool._run(
+            name='crossref_test',
+            keywords=['biology'],
+            max_articles=15,
+            schedule_hours=24,
+        )
+
+        assert 'Successfully' in result or 'Created' in result
+        assert 'crossref_test' in result
 
     def test_run_discovery_tool(self, mock_adapter):
         """Test RunDiscoveryTool."""
