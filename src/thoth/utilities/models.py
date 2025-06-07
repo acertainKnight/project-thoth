@@ -1074,7 +1074,7 @@ class DiscoverySource(BaseModel):
 
     Args:
         name: Unique name for this discovery source
-        source_type: Type of source (api or scraper)
+        source_type: Type of source (api, scraper, or emulator)
         description: Human-readable description of the source
         is_active: Whether this source is currently enabled
         schedule_config: Configuration for when to run this source
@@ -1096,7 +1096,9 @@ class DiscoverySource(BaseModel):
     """
 
     name: str = Field(description='Unique name for this discovery source')
-    source_type: Literal['api', 'scraper'] = Field(description='Type of source')
+    source_type: Literal['api', 'scraper', 'emulator'] = Field(
+        description='Type of source'
+    )
     description: str = Field(description='Human-readable description of the source')
     is_active: bool = Field(
         description='Whether this source is currently enabled', default=True
@@ -1109,6 +1111,9 @@ class DiscoverySource(BaseModel):
     )
     scraper_config: Union['ScrapeConfiguration', None] = Field(
         description='Configuration for web scraping', default=None
+    )
+    browser_recording: 'BrowserRecording | None' = Field(
+        description='Recorded browser session for emulator sources', default=None
     )
     query_filters: list[str] = Field(
         description='List of research query names to filter results',
@@ -1291,4 +1296,17 @@ class ChromeExtensionConfig(BaseModel):
     )
     test_data: dict[str, Any] = Field(
         description='Sample data extracted during configuration', default_factory=dict
+    )
+
+
+class BrowserRecording(BaseModel):
+    """Recorded browser session for dynamic sites."""
+
+    start_url: str = Field(description='URL opened when recording started')
+    end_url: str = Field(description='URL when recording stopped')
+    cookies: list[dict[str, Any]] = Field(
+        default_factory=list, description='Cookies captured during the session'
+    )
+    actions: list[dict[str, Any]] = Field(
+        default_factory=list, description='List of recorded browser actions'
     )
