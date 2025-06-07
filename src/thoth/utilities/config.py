@@ -20,7 +20,9 @@ class APIKeys(BaseSettings):
         case_sensitive=False,  # Make case-insensitive to handle env vars
         extra='allow',
     )
-    mistral_key: str = Field(..., description='Mistral API key for OCR')
+    mistral_key: str | None = Field(
+        None, description='Mistral API key for OCR (optional)'
+    )
     openrouter_key: str = Field(..., description='OpenRouter API key for LLM')
     opencitations_key: str = Field(..., description='OpenCitations API key')
     google_api_key: str | None = Field(
