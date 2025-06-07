@@ -19,6 +19,8 @@ const DEFAULT_SETTINGS = {
     googleApiKey: '',
     googleSearchEngineId: '',
     semanticscholarApiKey: '',
+    webSearchKey: '',
+    webSearchProviders: 'serper',
     // Default Model Settings
     modelTemperature: 0.9,
     modelMaxTokens: 50000,
@@ -208,6 +210,8 @@ class ThothPlugin extends obsidian_1.Plugin {
                     `API_GOOGLE_API_KEY=${this.settings.googleApiKey}`,
                     `API_GOOGLE_SEARCH_ENGINE_ID=${this.settings.googleSearchEngineId}`,
                     `API_SEMANTICSCHOLAR_API_KEY=${this.settings.semanticscholarApiKey}`,
+                    `API_WEB_SEARCH_KEY=${this.settings.webSearchKey}`,
+                    `API_WEB_SEARCH_PROVIDERS=${this.settings.webSearchProviders}`,
                     '',
                     '# ----------------------------------------------------------------------------------',
                     '# --- 2. Default Model Settings ---',
@@ -476,7 +480,7 @@ class ThothPlugin extends obsidian_1.Plugin {
                 // Create environment with all necessary variables
                 const envVars = Object.assign(Object.assign({}, process.env), {
                     // API Keys
-                    API_MISTRAL_KEY: this.settings.mistralKey, API_OPENROUTER_KEY: this.settings.openrouterKey, API_OPENCITATIONS_KEY: this.settings.opencitationsKey, API_GOOGLE_API_KEY: this.settings.googleApiKey, API_GOOGLE_SEARCH_ENGINE_ID: this.settings.googleSearchEngineId, API_SEMANTICSCHOLAR_API_KEY: this.settings.semanticscholarApiKey,
+                    API_MISTRAL_KEY: this.settings.mistralKey, API_OPENROUTER_KEY: this.settings.openrouterKey, API_OPENCITATIONS_KEY: this.settings.opencitationsKey, API_GOOGLE_API_KEY: this.settings.googleApiKey, API_GOOGLE_SEARCH_ENGINE_ID: this.settings.googleSearchEngineId, API_SEMANTICSCHOLAR_API_KEY: this.settings.semanticscholarApiKey, API_WEB_SEARCH_KEY: this.settings.webSearchKey, API_WEB_SEARCH_PROVIDERS: this.settings.webSearchProviders,
                     // Endpoint Configuration
                     ENDPOINT_HOST: this.settings.endpointHost, ENDPOINT_PORT: this.settings.endpointPort, ENDPOINT_BASE_URL: this.settings.endpointBaseUrl,
                     // Directory Configuration
@@ -803,6 +807,26 @@ class ThothSettingTab extends obsidian_1.PluginSettingTab {
             .setValue(this.plugin.settings.semanticscholarApiKey)
             .onChange((value) => __awaiter(this, void 0, void 0, function* () {
             this.plugin.settings.semanticscholarApiKey = value;
+            yield this.plugin.saveSettings();
+        })));
+        new obsidian_1.Setting(containerEl)
+            .setName('Serper API Key')
+            .setDesc('API key for web search via Serper.dev')
+            .addText((text) => text
+            .setPlaceholder('Enter Serper API key')
+            .setValue(this.plugin.settings.webSearchKey)
+            .onChange((value) => __awaiter(this, void 0, void 0, function* () {
+            this.plugin.settings.webSearchKey = value;
+            yield this.plugin.saveSettings();
+        })));
+        new obsidian_1.Setting(containerEl)
+            .setName('Web Search Providers')
+            .setDesc('Comma-separated providers')
+            .addText((text) => text
+            .setPlaceholder('serper,duckduckgo')
+            .setValue(this.plugin.settings.webSearchProviders)
+            .onChange((value) => __awaiter(this, void 0, void 0, function* () {
+            this.plugin.settings.webSearchProviders = value;
             yield this.plugin.saveSettings();
         })));
         // Model Configuration Section

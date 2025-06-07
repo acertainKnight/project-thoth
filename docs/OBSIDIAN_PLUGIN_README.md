@@ -15,6 +15,8 @@ Before you begin, make sure you have:
 1. **Configure API Keys** (Settings → Community Plugins → Thoth Research Assistant):
    - Enter your OpenRouter API Key
    - Enter your Mistral API Key if available
+   - *(Optional)* Enter your Serper API Key for web search
+   - Choose enabled Web Search Providers (Serper, DuckDuckGo, Scrape)
 
 2. **Set Directories**:
    - **Workspace Directory**: `/home/nick/python/project-thoth` (where you cloned the repo)
@@ -116,6 +118,8 @@ Run Thoth in Docker and connect from any Obsidian:
 To get your API keys:
 - **Mistral AI**: Visit [console.mistral.ai](https://console.mistral.ai)
 - **OpenRouter**: Visit [openrouter.ai](https://openrouter.ai)
+- **Serper**: Visit [serper.dev](https://serper.dev)
+- **DuckDuckGo Search**: Uses built-in library, no key required
 
 ## 🎯 Usage
 
