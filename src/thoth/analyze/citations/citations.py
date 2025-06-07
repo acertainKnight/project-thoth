@@ -23,7 +23,7 @@ from thoth.utilities.models import (
     CitationExtractionResponse,
     ReferencesSection,
 )
-from thoth.utilities.openrouter import OpenRouterClient
+from thoth.utilities import OpenRouterClient
 
 
 # Define the state for the citation processor graph
