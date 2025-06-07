@@ -8,7 +8,7 @@ and the suggestion of additional relevant tags for articles based on their abstr
 from pathlib import Path
 from typing import Any
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, ChoiceLoader
 from langchain_core.prompts import ChatPromptTemplate
 from loguru import logger
 
@@ -63,6 +63,17 @@ class TagConsolidator:
         )
         self.map_prompts_dir = Path(prompts_dir) / self.map_model.split('/')[0]
         self.suggest_prompts_dir = Path(prompts_dir) / self.suggest_model.split('/')[0]
+        # Default prompts packaged with Thoth
+        root_dir = Path(__file__).resolve().parents[3]
+        self.default_consolidate_prompts_dir = (
+            root_dir / 'templates' / 'prompts' / self.consolidate_model.split('/')[0]
+        )
+        self.default_map_prompts_dir = (
+            root_dir / 'templates' / 'prompts' / self.map_model.split('/')[0]
+        )
+        self.default_suggest_prompts_dir = (
+            root_dir / 'templates' / 'prompts' / self.suggest_model.split('/')[0]
+        )
         self.model_kwargs = model_kwargs if model_kwargs else {}
 
         # Initialize the LLM
@@ -101,19 +112,34 @@ class TagConsolidator:
             method='json_schema',
         )
 
-        # Initialize Jinja environment
+        # Initialize Jinja environments with fallback to default prompts
         self.consolidate_jinja_env = Environment(
-            loader=FileSystemLoader(self.consolidate_prompts_dir),
+            loader=ChoiceLoader(
+                [
+                    FileSystemLoader(self.consolidate_prompts_dir),
+                    FileSystemLoader(self.default_consolidate_prompts_dir),
+                ]
+            ),
             trim_blocks=True,
             lstrip_blocks=True,
         )
         self.map_jinja_env = Environment(
-            loader=FileSystemLoader(self.map_prompts_dir),
+            loader=ChoiceLoader(
+                [
+                    FileSystemLoader(self.map_prompts_dir),
+                    FileSystemLoader(self.default_map_prompts_dir),
+                ]
+            ),
             trim_blocks=True,
             lstrip_blocks=True,
         )
         self.suggest_jinja_env = Environment(
-            loader=FileSystemLoader(self.suggest_prompts_dir),
+            loader=ChoiceLoader(
+                [
+                    FileSystemLoader(self.suggest_prompts_dir),
+                    FileSystemLoader(self.default_suggest_prompts_dir),
+                ]
+            ),
             trim_blocks=True,
             lstrip_blocks=True,
         )
