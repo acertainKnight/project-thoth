@@ -16,7 +16,7 @@ from loguru import logger
 from thoth.rag.embeddings import EmbeddingManager
 from thoth.rag.vector_store import VectorStoreManager
 from thoth.utilities.config import get_config
-from thoth.utilities.openrouter import OpenRouterClient
+from thoth.utilities import OpenRouterClient
 
 
 class RAGManager:

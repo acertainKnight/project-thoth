@@ -18,7 +18,7 @@ from thoth.utilities.models import (
     TagConsolidationResponse,
     TagSuggestionResponse,
 )
-from thoth.utilities.openrouter import OpenRouterClient
+from thoth.utilities import OpenRouterClient
 
 
 class TagConsolidatorError(Exception):

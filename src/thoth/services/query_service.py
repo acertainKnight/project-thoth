@@ -12,7 +12,7 @@ from typing import Any
 
 from thoth.services.base import BaseService, ServiceError
 from thoth.utilities.models import QueryEvaluationResponse, ResearchQuery
-from thoth.utilities.openrouter import OpenRouterClient
+from thoth.utilities import OpenRouterClient
 
 
 class QueryService(BaseService):
