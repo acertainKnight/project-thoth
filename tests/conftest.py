@@ -86,6 +86,8 @@ def mock_config(temp_workspace):
         'api_keys': {
             'mistral_key': 'test_mistral_key',
             'openrouter_key': 'test_openrouter_key',
+            'openai_key': 'test_openai_key',
+            'anthropic_key': 'test_anthropic_key',
             'opencitations_key': 'test_opencitations_key',
             'semanticscholar_key': 'test_semanticscholar_key',
         },
@@ -278,6 +280,8 @@ def mock_env_vars(monkeypatch):
     """
     monkeypatch.setenv('API_MISTRAL_KEY', 'test_mistral_key')
     monkeypatch.setenv('API_OPENROUTER_KEY', 'test_openrouter_key')
+    monkeypatch.setenv('API_OPENAI_KEY', 'test_openai_key')
+    monkeypatch.setenv('API_ANTHROPIC_KEY', 'test_anthropic_key')
     monkeypatch.setenv('LLM_MODEL', 'openai/gpt-4o-mini')
     monkeypatch.setenv('ENDPOINT_HOST', 'localhost')
     monkeypatch.setenv('ENDPOINT_PORT', '8000')

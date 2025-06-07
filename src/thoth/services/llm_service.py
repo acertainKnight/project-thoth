@@ -11,7 +11,11 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
 
 from thoth.services.base import BaseService, ServiceError
-from thoth.utilities.openrouter import OpenRouterClient
+from thoth.utilities import (
+    OpenRouterClient,
+    OpenAIClient,
+    AnthropicClient,
+)
 
 
 class LLMService(BaseService):
@@ -49,7 +53,7 @@ class LLMService(BaseService):
         max_tokens: int | None = None,
         use_rate_limiter: bool = True,
         **kwargs,
-    ) -> OpenRouterClient:
+    ) -> Any:
         """
         Get or create an LLM client with specified configuration.
 
@@ -61,7 +65,7 @@ class LLMService(BaseService):
             **kwargs: Additional model parameters
 
         Returns:
-            OpenRouterClient: Configured LLM client
+            Any: Configured LLM client
 
         Raises:
             ServiceError: If client creation fails
@@ -91,15 +95,43 @@ class LLMService(BaseService):
             model_kwargs.pop('max_tokens', None)
             model_kwargs.pop('use_rate_limiter', None)
 
-            # Create new client
-            client = OpenRouterClient(
-                api_key=self.config.api_keys.openrouter_key,
-                model=model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                use_rate_limiter=use_rate_limiter,
-                **model_kwargs,
-            )
+            provider, model_name = (model.split('/', 1) if '/' in model else (None, model))
+
+            if (
+                provider == 'openai'
+                and self.config.api_keys.openai_key
+                and not self.config.api_keys.openrouter_key
+            ):
+                client = OpenAIClient(
+                    api_key=self.config.api_keys.openai_key,
+                    model=model_name,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    use_rate_limiter=use_rate_limiter,
+                    **model_kwargs,
+                )
+            elif (
+                provider == 'anthropic'
+                and self.config.api_keys.anthropic_key
+                and not self.config.api_keys.openrouter_key
+            ):
+                client = AnthropicClient(
+                    api_key=self.config.api_keys.anthropic_key,
+                    model=model_name,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    use_rate_limiter=use_rate_limiter,
+                    **model_kwargs,
+                )
+            else:
+                client = OpenRouterClient(
+                    api_key=self.config.api_keys.openrouter_key,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    use_rate_limiter=use_rate_limiter,
+                    **model_kwargs,
+                )
 
             # Cache and return
             self._clients[cache_key] = client
@@ -107,6 +139,7 @@ class LLMService(BaseService):
             self.log_operation(
                 'client_created',
                 model=model,
+                provider=provider or 'openrouter',
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
@@ -125,7 +158,7 @@ class LLMService(BaseService):
         max_tokens: int | None = None,
         use_rate_limiter: bool = True,
         **kwargs,
-    ) -> OpenRouterClient:
+    ) -> Any:
         """
         Get an LLM client (alias for get_client for backward compatibility).
 
@@ -137,7 +170,7 @@ class LLMService(BaseService):
             **kwargs: Additional model parameters
 
         Returns:
-            OpenRouterClient: Configured LLM client
+            Any: Configured LLM client
 
         Raises:
             ServiceError: If client creation fails
