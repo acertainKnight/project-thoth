@@ -15,6 +15,8 @@ cp -r dist/* /path/to/your/vault/.obsidian/plugins/thoth-research-assistant/
 4. **Add API Keys**:
    - OpenRouter API Key: `your_openrouter_key`
    - Mistral API Key (optional): `your_mistral_key`
+   - Serper API Key (optional): `your_serper_key`
+   - Web Search Providers: `serper,duckduckgo`
 5. **Set Directories**:
    - Workspace Directory: `/home/nick/python/project-thoth`
    - Obsidian Directory: `/path/to/your/vault/thoth`

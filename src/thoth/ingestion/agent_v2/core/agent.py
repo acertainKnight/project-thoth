@@ -43,6 +43,7 @@ from thoth.ingestion.agent_v2.tools.rag_tools import (
     IndexKnowledgeBaseTool,
     SearchKnowledgeTool,
 )
+from thoth.ingestion.agent_v2.tools.web_tools import WebSearchTool
 
 
 class ResearchAssistant:
@@ -118,6 +119,7 @@ class ResearchAssistant:
         self.tool_registry.register('index_knowledge', IndexKnowledgeBaseTool)
         self.tool_registry.register('explain_connections', ExplainConnectionsTool)
         self.tool_registry.register('rag_stats', GetRAGStatsTool)
+        self.tool_registry.register('web_search', WebSearchTool)
 
         # Analysis tools
         self.tool_registry.register('evaluate_article', EvaluateArticleTool)

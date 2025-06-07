@@ -16,6 +16,7 @@ from thoth.services.note_service import NoteService
 from thoth.services.processing_service import ProcessingService
 from thoth.services.query_service import QueryService
 from thoth.services.rag_service import RAGService
+from thoth.services.web_search_service import WebSearchService
 from thoth.services.tag_service import TagService
 from thoth.utilities.config import ThothConfig, get_config
 
@@ -63,6 +64,8 @@ class ServiceManager:
         )
 
         self._services['rag'] = RAGService(config=self.config)
+
+        self._services['web_search'] = WebSearchService(config=self.config)
 
         # Initialize services that need dependencies
         self._services['citation'] = CitationService(config=self.config)
@@ -115,6 +118,12 @@ class ServiceManager:
         """Get the RAG service."""
         self._ensure_initialized()
         return self._services['rag']
+
+    @property
+    def web_search(self) -> WebSearchService:
+        """Get the web search service."""
+        self._ensure_initialized()
+        return self._services['web_search']
 
     @property
     def citation(self) -> CitationService:
