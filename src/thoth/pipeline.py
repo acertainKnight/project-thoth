@@ -17,7 +17,7 @@ from thoth.ingestion.filter import Filter
 from thoth.monitor.tracker import CitationTracker
 from thoth.services.service_manager import ServiceManager
 from thoth.utilities.config import get_config
-from thoth.utilities.models import Citation
+from thoth.utilities.models import Citation, SearchResult
 
 
 class PipelineError(Exception):
@@ -492,6 +492,19 @@ class ThothPipeline:
         except Exception as e:
             logger.error(f'Failed to answer question: {e}')
             raise PipelineError(f'Failed to answer question: {e}') from e
+
+    def web_search(
+        self, query: str, num_results: int = 5, provider: str | None = None
+    ) -> list[SearchResult]:
+        """Perform a general web search."""
+        try:
+            logger.info(f'Performing web search for: {query}')
+            return self.services.web_search.search(
+                query, num_results, provider=provider
+            )
+        except Exception as e:
+            logger.error(f'Web search failed: {e}')
+            raise PipelineError(f'Web search failed: {e}') from e
 
     def clear_rag_index(self) -> None:
         """

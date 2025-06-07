@@ -14,6 +14,7 @@ from thoth.services.note_service import NoteService
 from thoth.services.processing_service import ProcessingService
 from thoth.services.query_service import QueryService
 from thoth.services.rag_service import RAGService
+from thoth.services.web_search_service import WebSearchService
 from thoth.services.service_manager import ServiceManager
 from thoth.services.tag_service import TagService
 
@@ -27,6 +28,7 @@ __all__ = [
     'ProcessingService',
     'QueryService',
     'RAGService',
+    'WebSearchService',
     'ServiceManager',
     'TagService',
 ]

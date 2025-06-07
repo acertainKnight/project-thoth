@@ -34,6 +34,14 @@ class APIKeys(BaseSettings):
     semanticscholar_api_key: str | None = Field(
         None, description='Semantic Scholar API key'
     )
+    web_search_key: str | None = Field(
+        None, description='Serper.dev API key for general web search'
+    )
+    web_search_providers: list[str] = Field(
+        default_factory=lambda: ['serper'],
+        description='Comma-separated list of enabled web search providers '
+        '(serper, duckduckgo, scrape)',
+    )
 
 
 class ModelConfig(BaseSettings):
