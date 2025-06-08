@@ -64,10 +64,10 @@ dependencies = [
     "roman-numerals-py>=3.1.0",
     "feedparser>=6.0.11",
     "pre-commit>=4.2.0",
-    "ruff>=0.11.11",
+    "ruff[dev]>=0.11.11",
     "black>=25.1.0",
-    "codespell>=2.4.1",
-    "pytest>=8.3.5",
+    "codespell[dev]>=2.4.1",
+    "pytest[dev]>=8.3.5",
     "instructor>=1.8.3",
     "pytest-cov>=6.1.1",
 ]

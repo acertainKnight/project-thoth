@@ -52,6 +52,26 @@ The latest version includes comprehensive remote management capabilities to solv
 ### **Manual Sync**
 Force settings sync by clicking **"Test Connection"** button in settings.
 
+## 🩺 **System Health Check (Start Here)**
+
+**Before troubleshooting specific issues, run the comprehensive health check:**
+
+```bash
+# From your project-thoth directory
+uv run python health_check.py
+```
+
+This will validate:
+- ✅ Python environment and dependencies
+- ✅ Configuration files and API keys
+- ✅ Service layer and agent functionality
+- ✅ Directory permissions and structure
+- ✅ Optional components (Docker, API server)
+
+**Most connection and configuration issues are identified by the health check with specific solutions.**
+
+---
+
 ## 🐛 **Connection Error Solutions**
 
 ### **Error: "Failed to connect to remote server"**

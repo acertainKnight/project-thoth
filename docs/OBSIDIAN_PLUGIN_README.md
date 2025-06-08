@@ -4,9 +4,17 @@ An intelligent research assistant plugin that brings AI-powered research capabil
 
 ## 🚀 **Quick Start Checklist**
 
+### **📚 Choose Your Setup Path**
+
+For the fastest setup experience, use our guided paths:
+- **[Quick Start Paths](QUICK_START_ENHANCED.md)** - 🎯 Multiple 5-minute setup paths for different use cases
+- **[Command Reference](COMMAND_REFERENCE_CARD.md)** - 📋 Essential commands cheat sheet
+
+### **📋 Prerequisites Check**
+
 Before you begin, make sure you have:
 
-- [ ] **Thoth installed**: Test with `uv run python -m thoth --help` in terminal
+- [ ] **Thoth installed**: Test with `uv run python health_check.py` in terminal
 - [ ] **API Keys**: Get [OpenRouter API](https://openrouter.ai) key (Mistral key optional)
 - [ ] **Plugin installed**: Enable in Obsidian Settings → Community Plugins
 
