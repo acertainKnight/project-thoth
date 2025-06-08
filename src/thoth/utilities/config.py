@@ -23,13 +23,9 @@ class APIKeys(BaseSettings):
     mistral_key: str | None = Field(
         None, description='Mistral API key for OCR (optional)'
     )
-    openrouter_key: str | None = Field(
-        None, description='OpenRouter API key for LLM'
-    )
+    openrouter_key: str | None = Field(None, description='OpenRouter API key for LLM')
     openai_key: str | None = Field(None, description='OpenAI API key for LLM')
-    anthropic_key: str | None = Field(
-        None, description='Anthropic API key for LLM'
-    )
+    anthropic_key: str | None = Field(None, description='Anthropic API key for LLM')
     opencitations_key: str = Field(..., description='OpenCitations API key')
     google_api_key: str | None = Field(
         None, description='Google API key for web search (legacy)'
@@ -339,8 +335,8 @@ class RAGConfig(BaseSettings):
     )
     # Embedding configuration
     embedding_model: str = Field(
-        'openai/text-embedding-3-small',
-        description='Model to use for generating embeddings',
+        'all-MiniLM-L6-v2',
+        description='Model to use for generating embeddings (local sentence-transformers model)',
     )
     embedding_batch_size: int = Field(
         100, description='Batch size for embedding generation'
@@ -357,9 +353,15 @@ class RAGConfig(BaseSettings):
 
     # Document processing configuration
     chunk_size: int = Field(
-        1000, description='Size of text chunks for splitting documents'
+        500, description='Size of text chunks in tokens for splitting documents'
     )
-    chunk_overlap: int = Field(200, description='Overlap between consecutive chunks')
+    chunk_overlap: int = Field(
+        50, description='Overlap between consecutive chunks in tokens'
+    )
+    chunk_encoding: str = Field(
+        'cl100k_base',
+        description='Encoding to use for token counting (cl100k_base for GPT-4, p50k_base for GPT-3.5)',
+    )
 
     # Question answering configuration
     qa_model: str = Field(

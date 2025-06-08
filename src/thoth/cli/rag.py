@@ -173,6 +173,11 @@ def configure_subparser(subparsers):
     index_parser = rag_subparsers.add_parser(
         'index', help='Index all documents in the knowledge base'
     )
+    index_parser.add_argument(
+        '--force',
+        action='store_true',
+        help='Force re-indexing of all documents.',
+    )
     index_parser.set_defaults(func=run_rag_index)
 
     search_parser = rag_subparsers.add_parser(
