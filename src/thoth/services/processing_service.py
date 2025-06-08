@@ -14,7 +14,7 @@ from pypdf import PdfReader
 
 from thoth.analyze.llm_processor import LLMProcessor
 from thoth.services.base import BaseService, ServiceError
-from thoth.utilities.models import AnalysisResponse
+from thoth.utilities.schemas import AnalysisResponse
 
 
 class ProcessingService(BaseService):

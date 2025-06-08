@@ -1,5 +1,5 @@
 """
-Tests for utilities models.
+Tests for utilities schemas.
 
 Tests the data models and schemas used throughout the application.
 """
@@ -7,7 +7,7 @@ Tests the data models and schemas used throughout the application.
 import pytest
 from pydantic import ValidationError
 
-from thoth.utilities.models import (
+from thoth.utilities.schemas import (
     AnalysisResponse,
     BrowserRecording,
     Citation,

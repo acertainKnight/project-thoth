@@ -8,7 +8,7 @@ You're absolutely right - no API needed! Here's how to integrate the Research As
 
 ```python
 from thoth.ingestion.scrape_filter import ScrapeFilter
-from thoth.utilities.models import ScrapedArticleMetadata
+from thoth.utilities.schemas import ScrapedArticleMetadata
 from datetime import datetime
 
 # Initialize once at the start of your scraper
@@ -82,7 +82,7 @@ while True:
 ## Log Output Example
 
 ```
-[2023-12-01T15:30:00] DECISION: DOWNLOAD | SCORE: 0.85 | TITLE: Attention Is All You Need | AUTHORS: Vaswani, A., Shazeer, N. | SOURCE: arxiv | QUERIES: natural_language_processing | MATCHES: transformer, attention, NLP | REASONING: Strong match for NLP and transformer topics
+[2023-12-01T15:30:00] DECISION: DOWNLOAD | SCORE: 0.85 | TITLE: Attention Is All You Need | AUTHORS: Vaswani, A., Shazeer, N. | SOURCE: arxiv | QUERIES: natural_language_processing | MATCHES: transformer, attention | REASONING: Strong match for NLP and transformer topics
 ```
 
 ## Directory Structure Created

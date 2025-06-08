@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 from thoth.discovery.emulator_scraper import EmulatorScraper
 from thoth.discovery.web_emulator import BrowserRecording, WebEmulatorRecorder
-from thoth.utilities.models import ScrapeConfiguration
+from thoth.utilities.schemas import ScrapeConfiguration
 
 
 def test_web_emulator_recording(tmp_path):

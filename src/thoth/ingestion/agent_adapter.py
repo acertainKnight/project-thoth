@@ -9,11 +9,12 @@ from pathlib import Path
 from typing import Any
 
 from thoth.services.service_manager import ServiceManager
-from thoth.utilities.models import (
+from thoth.utilities.schemas import (
     AnalysisResponse,
     DiscoverySource,
     QueryEvaluationResponse,
     ResearchQuery,
+    ScheduleConfig,
     SearchResult,
 )
 
@@ -75,8 +76,6 @@ class AgentAdapter:
 
     def create_discovery_source(self, source_config: dict[str, Any]) -> bool:
         """Create a new discovery source."""
-        from thoth.utilities.models import DiscoverySource, ScheduleConfig
-
         # Convert config dict to DiscoverySource
         if 'schedule_config' in source_config:
             source_config['schedule_config'] = ScheduleConfig(
@@ -137,9 +136,7 @@ class AgentAdapter:
         self, query: str, num_results: int = 5, provider: str | None = None
     ) -> list[SearchResult]:
         """Perform a general web search."""
-        return self.services.web_search.search(
-            query, num_results, provider=provider
-        )
+        return self.services.web_search.search(query, num_results, provider=provider)
 
     def index_knowledge_file(self, file_path: Path) -> bool:
         """Index a file to the knowledge base."""

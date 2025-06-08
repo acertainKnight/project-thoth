@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from thoth.monitor.pdf_monitor import PDFMonitor, PDFTracker
+from thoth.server.pdf_monitor import PDFMonitor, PDFTracker
 
 
 class TestPDFTracker:

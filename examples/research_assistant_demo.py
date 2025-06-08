@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from thoth.pipeline import ThothPipeline
-from thoth.utilities.models import AnalysisResponse, ResearchQuery
+from thoth.utilities.schemas import AnalysisResponse, ResearchQuery
 
 
 def create_sample_queries(pipeline: ThothPipeline) -> None:
@@ -191,7 +191,7 @@ def demonstrate_article_filtering(pipeline: ThothPipeline) -> None:
 
     if queries:
         # Use the ArticleService to evaluate for download
-        from thoth.utilities.models import ScrapedArticleMetadata
+        from thoth.utilities.schemas import ScrapedArticleMetadata
 
         # Convert AnalysisResponse to ScrapedArticleMetadata for evaluation
         scraped_metadata = ScrapedArticleMetadata(

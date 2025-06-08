@@ -8,7 +8,7 @@ from enum import Enum
 
 from loguru import logger
 
-from thoth.utilities.models import Citation
+from thoth.utilities.schemas import Citation
 
 
 class CitationStyle(Enum):

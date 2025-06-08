@@ -19,7 +19,7 @@ from thoth.discovery.emulator_scraper import EmulatorScraper
 from thoth.discovery.web_scraper import WebScraper
 from thoth.ingestion.filter import Filter
 from thoth.utilities.config import get_config
-from thoth.utilities.models import (
+from thoth.utilities.schemas import (
     DiscoveryResult,
     DiscoverySource,
     ScrapedArticleMetadata,

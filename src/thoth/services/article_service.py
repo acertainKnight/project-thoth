@@ -6,14 +6,14 @@ scattered across Filter, agent tools, and other components.
 """
 
 from thoth.services.base import BaseService, ServiceError
-from thoth.utilities.models import (
+from thoth.utilities import OpenRouterClient
+from thoth.utilities.schemas import (
     AnalysisResponse,
     PreDownloadEvaluationResponse,
     QueryEvaluationResponse,
     ResearchQuery,
     ScrapedArticleMetadata,
 )
-from thoth.utilities import OpenRouterClient
 
 
 class ArticleService(BaseService):

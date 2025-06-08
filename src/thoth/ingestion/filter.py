@@ -18,7 +18,10 @@ from loguru import logger
 from thoth.ingestion.agent_adapter import AgentAdapter
 from thoth.services.service_manager import ServiceManager
 from thoth.utilities.config import get_config
-from thoth.utilities.models import PreDownloadEvaluationResponse, ScrapedArticleMetadata
+from thoth.utilities.schemas import (
+    PreDownloadEvaluationResponse,
+    ScrapedArticleMetadata,
+)
 
 
 class FilterError(Exception):

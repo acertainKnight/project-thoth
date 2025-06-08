@@ -8,6 +8,7 @@ and related components.
 from typing import Any
 
 from thoth.analyze.tag_consolidator import TagConsolidator
+from thoth.knowledge.graph import CitationGraph
 from thoth.services.base import BaseService, ServiceError
 
 
@@ -26,7 +27,7 @@ class TagService(BaseService):
         self,
         config=None,
         tag_consolidator: TagConsolidator | None = None,
-        citation_tracker=None,
+        citation_tracker: CitationGraph = None,
         llm_service=None,
     ):
         """

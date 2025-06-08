@@ -11,7 +11,7 @@ from typing import Any
 from thoth.analyze.citations.citations import CitationProcessor
 from thoth.analyze.citations.formatter import CitationFormatter, CitationStyle
 from thoth.services.base import BaseService, ServiceError
-from thoth.utilities.models import AnalysisResponse, Citation
+from thoth.utilities.schemas import AnalysisResponse, Citation
 
 
 class CitationService(BaseService):

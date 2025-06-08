@@ -7,7 +7,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
 from thoth.discovery.web_scraper import WebScraper
-from thoth.utilities.models import (
+from thoth.utilities.schemas import (
     BrowserRecording,
     ScrapeConfiguration,
     ScrapedArticleMetadata,

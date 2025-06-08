@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from thoth.ingestion.filter import Filter
-from thoth.utilities.models import (
+from thoth.utilities.schemas import (
     PreDownloadEvaluationResponse,
     ScrapedArticleMetadata,
 )
