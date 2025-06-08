@@ -137,10 +137,20 @@ def configure_subparser(subparsers):
         'regenerate-all-notes',
         help='Regenerate all markdown notes for all articles in the graph.',
     )
+    regenerate_all_parser.add_argument(
+        '--force',
+        action='store_true',
+        help='Force regeneration even if notes already exist.',
+    )
     regenerate_all_parser.set_defaults(func=run_regenerate_all_notes)
 
     consolidate_tags_parser = subparsers.add_parser(
         'consolidate-tags',
         help='Consolidate existing tags and suggest additional relevant tags for all articles in the graph.',
+    )
+    consolidate_tags_parser.add_argument(
+        '--force',
+        action='store_true',
+        help='Force consolidation and re-tagging even if recently performed.',
     )
     consolidate_tags_parser.set_defaults(func=run_consolidate_tags)

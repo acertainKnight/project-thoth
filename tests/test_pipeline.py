@@ -55,7 +55,7 @@ class TestThothPipeline:
                 pipeline.services.processing, 'analyze_document'
             ) as mock_analyze:
                 with patch.object(
-                    pipeline.services.citation, 'extract_from_document'
+                    pipeline.services.citation, 'extract_citations'
                 ) as mock_citations:
                     with patch.object(
                         pipeline.services.note, 'create_note'

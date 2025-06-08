@@ -40,6 +40,8 @@ dependencies = [
     # Vector Store and RAG Dependencies
     "chromadb>=0.5.0", # For vector database
     "langchain-chroma>=0.1.0", # For ChromaDB integration with LangChain
+    "langchain-huggingface>=0.1.0", # For local embeddings with sentence-transformers
+    "sentence-transformers>=3.0.0", # For local embedding models
     # Data Processing Dependencies
     "networkx>=3.4.2",
     "scholarly>=1.7.11",

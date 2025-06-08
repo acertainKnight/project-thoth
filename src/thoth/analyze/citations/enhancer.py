@@ -45,11 +45,11 @@ class CitationEnhancer:
                 continue
 
             if self.use_opencitations and self.opencitations_tool and has_identifier:
-                citation.update_from_opencitation(
-                    self.opencitations_tool.lookup_metadata_sync(
-                        [f'doi:{citation.doi}' if citation.doi else citation.backup_id]
-                    )[0]
+                results = self.opencitations_tool.lookup_metadata_sync(
+                    [f'doi:{citation.doi}' if citation.doi else citation.backup_id]
                 )
+                if results:
+                    citation.update_from_opencitation(results[0])
 
             if (
                 self.use_arxiv
