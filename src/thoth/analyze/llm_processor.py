@@ -15,8 +15,8 @@ from langchain_core.runnables import Runnable, RunnableConfig
 from langgraph.graph import END, StateGraph
 from loguru import logger
 
-from thoth.utilities.models import AnalysisResponse, AnalysisState
 from thoth.utilities import OpenRouterClient
+from thoth.utilities.schemas import AnalysisResponse, AnalysisState
 
 
 class LLMError(Exception):

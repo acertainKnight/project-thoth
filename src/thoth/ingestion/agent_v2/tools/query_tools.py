@@ -9,7 +9,7 @@ while leveraging the consolidated business logic.
 from pydantic import BaseModel, Field
 
 from thoth.ingestion.agent_v2.tools.base_tool import BaseThothTool, QueryNameInput
-from thoth.utilities.models import ResearchQuery
+from thoth.utilities.schemas import ResearchQuery
 
 
 class ListQueriesTool(BaseThothTool):

@@ -30,7 +30,7 @@ from thoth.ingestion.agent_v2.tools.rag_tools import (
     IndexKnowledgeBaseTool,
     SearchKnowledgeTool,
 )
-from thoth.utilities.models import DiscoverySource, ScheduleConfig
+from thoth.utilities.schemas import DiscoverySource, ScheduleConfig
 
 
 class TestQueryTools:

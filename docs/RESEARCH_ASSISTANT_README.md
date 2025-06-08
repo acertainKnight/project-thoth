@@ -117,7 +117,7 @@ Example interactions:
 ```python
 from thoth.ingestion.agent import ResearchAssistantAgent
 from thoth.ingestion.filter import ArticleFilter
-from thoth.utilities.models import ResearchQuery
+from thoth.utilities.schemas import ResearchQuery
 
 # Initialize the agent
 agent = ResearchAssistantAgent()

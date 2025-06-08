@@ -1,5 +1,5 @@
 """
-Citation tracker module for maintaining a knowledge graph of article citations.
+Citation graph module for maintaining a knowledge graph of article citations.
 
 This module provides functionality to track articles and their citations,
 enabling proper linking between Obsidian markdown notes.
@@ -9,13 +9,15 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import networkx as nx
 from loguru import logger
 
-from thoth.services.service_manager import ServiceManager
-from thoth.utilities.models import AnalysisResponse, Citation
+if TYPE_CHECKING:
+    from thoth.services.service_manager import ServiceManager
+
+from thoth.utilities.schemas import AnalysisResponse, Citation
 
 
 class CitationReference:
@@ -39,7 +41,7 @@ class CitationReference:
         return self.article_id
 
 
-class CitationTracker:
+class CitationGraph:
     """
     Tracks and manages article citations in a knowledge graph structure.
 
@@ -50,17 +52,16 @@ class CitationTracker:
 
     def __init__(
         self,
-        knowledge_base_dir: Path,
-        graph_storage_path: Path | None = None,
-        note_generator: Any
-        | None = None,  # Deprecated - kept for backward compatibility
+        knowledge_base_dir: str | Path,
+        graph_storage_path: str | Path | None = None,
+        note_generator: Any | None = None,  # Deprecated
         pdf_dir: Path | None = None,
         markdown_dir: Path | None = None,
         notes_dir: Path | None = None,
-        service_manager: ServiceManager | None = None,
+        service_manager: 'ServiceManager | None' = None,
     ) -> None:
         """
-        Initialize the CitationTracker.
+        Initialize the CitationGraph.
 
         Args:
             knowledge_base_dir: Base directory for the knowledge base
@@ -77,7 +78,7 @@ class CitationTracker:
 
         Example:
             >>> from pathlib import Path
-            >>> tracker = CitationTracker(Path('/home/user/knowledge_base'))
+            >>> tracker = CitationGraph(Path('/home/user/knowledge_base'))
         """
         self.knowledge_base_dir = Path(knowledge_base_dir)
         self.knowledge_base_dir.mkdir(parents=True, exist_ok=True)
@@ -97,7 +98,7 @@ class CitationTracker:
         self._load_graph()
 
         logger.info(
-            f'CitationTracker initialized with knowledge base at {knowledge_base_dir}'
+            f'CitationGraph initialized with knowledge base at {knowledge_base_dir}'
         )
 
     def _load_graph(self) -> None:
@@ -166,7 +167,7 @@ class CitationTracker:
             str: The article ID used in the graph
 
         Example:
-            >>> tracker = CitationTracker(Path('knowledge_base'))
+            >>> tracker = CitationGraph(Path('knowledge_base'))
             >>> citation = Citation(
             ...     text='Smith, J. (2023). Example Paper.',
             ...     authors=['Smith, J.'],
@@ -228,7 +229,7 @@ class CitationTracker:
             None
 
         Example:
-            >>> tracker = CitationTracker(Path('knowledge_base'))
+            >>> tracker = CitationGraph(Path('knowledge_base'))
             >>> tracker.add_article(
             ...     '10.1234/example',
             ...     {'title': 'Example Paper', 'authors': ['Smith, J.'], 'year': 2023},
@@ -290,7 +291,7 @@ class CitationTracker:
             None
 
         Example:
-            >>> tracker = CitationTracker(Path('knowledge_base'))
+            >>> tracker = CitationGraph(Path('knowledge_base'))
             >>> tracker.add_citation(
             ...     '10.1234/source',
             ...     '10.5678/target',
@@ -342,7 +343,7 @@ class CitationTracker:
             str | None: The article ID of the processed article or None if it exits early
 
         Example:
-            >>> tracker = CitationTracker(Path('knowledge_base'))
+            >>> tracker = CitationGraph(Path('knowledge_base'))
             >>> citations = [
             ...     Citation(
             ...         text='Smith, J. (2023). Example Paper.',
@@ -466,7 +467,7 @@ class CitationTracker:
                     )
         else:
             logger.debug(
-                'Neither ServiceManager nor NoteGenerator configured in CitationTracker. Skipping regeneration of connected notes.'
+                'Neither ServiceManager nor NoteGenerator configured in CitationGraph. Skipping regeneration of connected notes.'
             )
 
         return article_id
@@ -482,7 +483,7 @@ class CitationTracker:
             Citation | None: Citation object if the article exists, None otherwise
 
         Example:
-            >>> tracker = CitationTracker(Path('knowledge_base'))
+            >>> tracker = CitationGraph(Path('knowledge_base'))
             >>> citation = tracker.get_citation('10.1234/article')
             >>> citation.title
             'Example Paper'
@@ -519,7 +520,7 @@ class CitationTracker:
             list[str]: List of article IDs that cite the specified article
 
         Example:
-            >>> tracker = CitationTracker(Path('knowledge_base'))
+            >>> tracker = CitationGraph(Path('knowledge_base'))
             >>> citing_articles = tracker.get_citing_articles('10.1234/article')
             >>> len(citing_articles)
             5
@@ -541,7 +542,7 @@ class CitationTracker:
             list[str]: List of article IDs cited by the specified article
 
         Example:
-            >>> tracker = CitationTracker(Path('knowledge_base'))
+            >>> tracker = CitationGraph(Path('knowledge_base'))
             >>> cited_articles = tracker.get_cited_articles('10.1234/article')
             >>> len(cited_articles)
             12
@@ -563,7 +564,7 @@ class CitationTracker:
             str | None: Path to the Obsidian markdown note or None if not found
 
         Example:
-            >>> tracker = CitationTracker(Path('knowledge_base'))
+            >>> tracker = CitationGraph(Path('knowledge_base'))
             >>> path = tracker.get_obsidian_path('10.1234/article')
             >>> path
             '20230101-example-paper.md'
@@ -584,7 +585,7 @@ class CitationTracker:
             dict[str, Any]: Article metadata
 
         Example:
-            >>> tracker = CitationTracker(Path('knowledge_base'))
+            >>> tracker = CitationGraph(Path('knowledge_base'))
             >>> metadata = tracker.get_article_metadata('10.1234/article')
             >>> metadata['title']
             'Example Paper'
@@ -605,7 +606,7 @@ class CitationTracker:
             list[str]: List of article IDs matching the query
 
         Example:
-            >>> tracker = CitationTracker(Path('knowledge_base'))
+            >>> tracker = CitationGraph(Path('knowledge_base'))
             >>> results = tracker.search_articles('machine learning')
             >>> len(results)
             8
@@ -648,7 +649,7 @@ class CitationTracker:
             nx.DiGraph: A subgraph representing the citation network
 
         Example:
-            >>> tracker = CitationTracker(Path('knowledge_base'))
+            >>> tracker = CitationGraph(Path('knowledge_base'))
             >>> network = tracker.get_citation_network('10.1234/article', depth=2)
             >>> len(network.nodes)
             15
@@ -696,7 +697,7 @@ class CitationTracker:
             None
 
         Example:
-            >>> tracker = CitationTracker(Path('knowledge_base'))
+            >>> tracker = CitationGraph(Path('knowledge_base'))
             >>> tracker.update_obsidian_links('10.1234/article')
         """
         # Get the Obsidian path for the article
@@ -707,7 +708,7 @@ class CitationTracker:
 
         if not self.notes_dir:
             logger.error(
-                'Notes directory not configured in CitationTracker. Cannot update Obsidian links.'
+                'Notes directory not configured in CitationGraph. Cannot update Obsidian links.'
             )
             return
 
@@ -812,7 +813,7 @@ class CitationTracker:
 
         if not self.pdf_dir or not self.markdown_dir:
             logger.error(
-                'PDF or Markdown directory not configured in CitationTracker. Cannot reconstruct paths.'
+                'PDF or Markdown directory not configured in CitationGraph. Cannot reconstruct paths.'
             )
             return None
 

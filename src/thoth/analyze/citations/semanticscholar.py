@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 from loguru import logger
 
-from thoth.utilities.models import Citation
+from thoth.utilities.schemas import Citation
 
 
 class SemanticScholarAPI:

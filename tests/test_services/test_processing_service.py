@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from thoth.services.processing_service import ProcessingService
-from thoth.utilities.models import AnalysisResponse
+from thoth.utilities.schemas import AnalysisResponse
 
 
 class TestProcessingService:

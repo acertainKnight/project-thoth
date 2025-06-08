@@ -12,13 +12,14 @@ from jinja2 import Environment, FileSystemLoader
 from langchain_core.prompts import ChatPromptTemplate
 from loguru import logger
 
-from thoth.utilities.models import (
+from thoth.knowledge.graph import CitationGraph
+from thoth.utilities import OpenRouterClient
+from thoth.utilities.schemas import (
     ConsolidatedTagsResponse,
     SingleTagMappingResponse,
     TagConsolidationResponse,
     TagSuggestionResponse,
 )
-from thoth.utilities import OpenRouterClient
 
 
 class TagConsolidatorError(Exception):
@@ -160,12 +161,12 @@ class TagConsolidator:
             template_source, template_format='jinja2'
         )
 
-    def extract_all_tags_from_graph(self, citation_tracker) -> list[str]:
+    def extract_all_tags_from_graph(self, citation_tracker: CitationGraph) -> list[str]:
         """
         Extract all unique tags from all articles in the citation graph.
 
         Args:
-            citation_tracker: The CitationTracker instance containing the graph.
+            citation_tracker: The CitationGraph instance containing the graph.
 
         Returns:
             list[str]: A list of all unique tags found across all articles.
@@ -367,7 +368,9 @@ class TagConsolidator:
                 f'Failed to suggest tags for "{title}": {e}'
             ) from e
 
-    def consolidate_and_retag_all_articles(self, citation_tracker) -> dict[str, Any]:
+    def consolidate_and_retag_all_articles(
+        self, citation_tracker: CitationGraph
+    ) -> dict[str, Any]:
         """
         Perform complete tag consolidation and re-tagging for all articles in the graph.
 
@@ -379,7 +382,7 @@ class TagConsolidator:
         5. Updates the citation graph with the new tags
 
         Args:
-            citation_tracker: The CitationTracker instance containing the graph.
+            citation_tracker: The CitationGraph instance containing the graph.
 
         Returns:
             dict[str, Any]: Summary statistics of the consolidation and re-tagging

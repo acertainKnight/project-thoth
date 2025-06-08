@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
 from thoth.discovery.discovery_manager import DiscoveryManager
-from thoth.utilities.models import (
+from thoth.utilities.schemas import (
     BrowserRecording,
     DiscoverySource,
     ScheduleConfig,
