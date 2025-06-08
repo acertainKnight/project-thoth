@@ -1,5 +1,9 @@
 # 🚀 Quick Setup - Fix Connection & Chat Icon Issues
 
+> **📚 For comprehensive setup options, see: [Enhanced Quick Start Paths](QUICK_START_ENHANCED.md)**
+>
+> This guide is specifically for fixing connection and chat icon issues. For general setup, use the enhanced guide above.
+
 ## 📋 **Immediate Steps to Fix Your Issues**
 
 ### **Step 1: Install the Updated Plugin**
