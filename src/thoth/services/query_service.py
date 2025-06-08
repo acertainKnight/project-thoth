@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Any
 
 from thoth.services.base import BaseService, ServiceError
-from thoth.utilities.models import QueryEvaluationResponse, ResearchQuery
 from thoth.utilities import OpenRouterClient
+from thoth.utilities.schemas import QueryEvaluationResponse, ResearchQuery
 
 
 class QueryService(BaseService):

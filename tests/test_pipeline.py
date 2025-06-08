@@ -22,7 +22,7 @@ class TestThothPipeline:
         # We'll mock the services to avoid initialization issues
         with patch('thoth.pipeline.ServiceManager') as mock_service_manager:
             with patch('thoth.pipeline.Filter') as mock_filter:
-                with patch('thoth.pipeline.CitationTracker') as mock_tracker:
+                with patch('thoth.pipeline.CitationGraph') as mock_tracker:
                     # Mock the service manager
                     mock_services = MagicMock()
                     mock_service_manager.return_value = mock_services

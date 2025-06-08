@@ -10,6 +10,7 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from thoth.ingestion.agent_v2.tools.base_tool import BaseThothTool
+from thoth.utilities.schemas import AnalysisResponse
 
 
 class EvaluateArticleInput(BaseModel):
@@ -52,8 +53,6 @@ class EvaluateArticleTool(BaseThothTool):
                 return f"❌ Could not find article: '{article_title}'"
 
             # Create a simplified article object for evaluation
-            from thoth.utilities.models import AnalysisResponse
-
             article = AnalysisResponse(
                 title=results[0]['title'],
                 abstract=results[0]['content'][:500],  # Use first 500 chars as abstract

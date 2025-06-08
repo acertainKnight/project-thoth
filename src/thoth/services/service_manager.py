@@ -7,6 +7,7 @@ all services in a consistent way.
 
 from typing import Any
 
+from thoth.knowledge.graph import CitationGraph
 from thoth.services.article_service import ArticleService
 from thoth.services.base import BaseService
 from thoth.services.citation_service import CitationService
@@ -16,8 +17,8 @@ from thoth.services.note_service import NoteService
 from thoth.services.processing_service import ProcessingService
 from thoth.services.query_service import QueryService
 from thoth.services.rag_service import RAGService
-from thoth.services.web_search_service import WebSearchService
 from thoth.services.tag_service import TagService
+from thoth.services.web_search_service import WebSearchService
 from thoth.utilities.config import ThothConfig, get_config
 
 
@@ -155,12 +156,12 @@ class ServiceManager:
             raise KeyError(f"Service '{name}' not found")
         return self._services[name]
 
-    def set_citation_tracker(self, citation_tracker: Any) -> None:
+    def set_citation_tracker(self, citation_tracker: CitationGraph) -> None:
         """
         Set the citation tracker for services that need it.
 
         Args:
-            citation_tracker: CitationTracker instance
+            citation_tracker: CitationGraph instance
         """
         self._ensure_initialized()
         self._services['tag']._citation_tracker = citation_tracker

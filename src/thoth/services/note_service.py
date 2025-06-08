@@ -11,7 +11,7 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader
 
 from thoth.services.base import BaseService, ServiceError
-from thoth.utilities.models import AnalysisResponse, Citation
+from thoth.utilities.schemas import AnalysisResponse, Citation
 
 
 class NoteService(BaseService):

@@ -14,10 +14,10 @@ from typing import Any
 from loguru import logger
 
 from thoth.ingestion.filter import Filter
-from thoth.monitor.tracker import CitationTracker
+from thoth.knowledge.graph import CitationGraph
 from thoth.services.service_manager import ServiceManager
 from thoth.utilities.config import get_config
-from thoth.utilities.models import Citation, SearchResult
+from thoth.utilities.schemas import Citation, SearchResult
 
 
 class PipelineError(Exception):
@@ -91,8 +91,8 @@ class ThothPipeline:
         self.services.set_filter_function(self.filter.process_article)
 
         # Initialize components that aren't yet services
-        # TODO: CitationTracker should eventually be converted to a service
-        self.citation_tracker = CitationTracker(
+        # TODO: CitationGraph should eventually be converted to a service
+        self.citation_tracker = CitationGraph(
             knowledge_base_dir=self.config.knowledge_base_dir,
             graph_storage_path=self.config.graph_storage_path,
             note_generator=None,  # Deprecated - using ServiceManager
@@ -269,7 +269,7 @@ class ThothPipeline:
         """
         Regenerate all markdown notes for all articles in the citation graph.
 
-        This method delegates to the CitationTracker's regenerate_all_notes method
+        This method delegates to the CitationGraph's regenerate_all_notes method
         and returns a list of (final_pdf_path, final_note_path) for successfully
         regenerated notes.
 
@@ -278,12 +278,12 @@ class ThothPipeline:
         """  # noqa: W505
         if not self.citation_tracker:
             logger.error(
-                'CitationTracker is not initialized. Cannot regenerate all notes.'
+                'CitationGraph is not initialized. Cannot regenerate all notes.'
             )
             return []
         if not self.citation_tracker.note_generator:
             logger.error(
-                'NoteGenerator not configured in CitationTracker. Cannot regenerate all notes.'
+                'NoteGenerator not configured in CitationGraph. Cannot regenerate all notes.'
             )
             return []
 
@@ -314,7 +314,7 @@ class ThothPipeline:
             >>> print(f'Consolidated {stats["tags_consolidated"]} tags')
         """
         if not self.citation_tracker:
-            logger.error('CitationTracker is not initialized. Cannot consolidate tags.')
+            logger.error('CitationGraph is not initialized. Cannot consolidate tags.')
             return {
                 'articles_processed': 0,
                 'articles_updated': 0,
@@ -346,7 +346,7 @@ class ThothPipeline:
         """
         if not self.citation_tracker:
             logger.error(
-                'CitationTracker is not initialized. Cannot suggest additional tags.'
+                'CitationGraph is not initialized. Cannot suggest additional tags.'
             )
             return {
                 'articles_processed': 0,
@@ -382,7 +382,7 @@ class ThothPipeline:
         """
         if not self.citation_tracker:
             logger.error(
-                'CitationTracker is not initialized. Cannot consolidate and retag articles.'
+                'CitationGraph is not initialized. Cannot consolidate and retag articles.'
             )
             return {
                 'articles_processed': 0,

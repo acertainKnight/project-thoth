@@ -148,7 +148,7 @@ The Chrome extension allows you to configure web scrapers through a point-and-cl
 
 1. Start the Chrome extension server:
 ```bash
-python -m thoth.discovery.chrome_extension
+python -m thoth.server.chrome_extension
 ```
 
 2. Install the Chrome extension (extension files would be provided separately)
@@ -508,7 +508,7 @@ Always test new configurations:
 
 ```python
 from thoth.discovery import WebScraper
-from thoth.utilities.models import ScrapeConfiguration
+from thoth.utilities.schemas import ScrapeConfiguration
 
 scraper = WebScraper()
 config = ScrapeConfiguration(...)
@@ -527,7 +527,7 @@ Extend the system with custom API sources:
 
 ```python
 from thoth.discovery.api_sources import BaseAPISource
-from thoth.utilities.models import ScrapedArticleMetadata
+from thoth.utilities.schemas import ScrapedArticleMetadata
 
 class CustomAPISource(BaseAPISource):
     def search(self, config, max_results=50):

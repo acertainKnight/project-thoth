@@ -10,7 +10,7 @@ from loguru import logger
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
-from thoth.utilities.models import BrowserRecording
+from thoth.utilities.schemas import BrowserRecording
 
 
 class WebEmulatorRecorder:

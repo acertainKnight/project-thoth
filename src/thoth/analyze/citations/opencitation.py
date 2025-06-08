@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 from loguru import logger
 
-from thoth.utilities.models import OpenCitation
+from thoth.utilities.schemas import OpenCitation
 
 
 class OpenCitationsAPI:

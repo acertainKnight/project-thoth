@@ -15,7 +15,7 @@ from typing import Any
 from thoth.discovery.api_sources import ArxivAPISource, PubMedAPISource
 from thoth.discovery.web_scraper import WebScraper
 from thoth.services.base import BaseService, ServiceError
-from thoth.utilities.models import (
+from thoth.utilities.schemas import (
     DiscoveryResult,
     DiscoverySource,
     ScheduleConfig,

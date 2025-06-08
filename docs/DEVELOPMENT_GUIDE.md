@@ -379,7 +379,7 @@ from typing import Dict, List, Any
 from datetime import datetime
 
 from thoth.discovery.api_sources import BaseAPISource
-from thoth.utilities.models import ScrapedArticleMetadata
+from thoth.utilities.schemas import ScrapedArticleMetadata
 
 
 class CustomAPISource(BaseAPISource):

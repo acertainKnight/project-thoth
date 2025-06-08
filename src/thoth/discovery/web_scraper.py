@@ -15,7 +15,7 @@ import requests
 from bs4 import BeautifulSoup
 from loguru import logger
 
-from thoth.utilities.models import ScrapeConfiguration, ScrapedArticleMetadata
+from thoth.utilities.schemas import ScrapeConfiguration, ScrapedArticleMetadata
 
 
 class WebScraperError(Exception):

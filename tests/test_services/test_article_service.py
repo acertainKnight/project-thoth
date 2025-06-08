@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from thoth.services.article_service import ArticleService
-from thoth.utilities.models import (
+from thoth.utilities.schemas import (
     QueryEvaluationResponse,
     ResearchQuery,
     ScrapedArticleMetadata,

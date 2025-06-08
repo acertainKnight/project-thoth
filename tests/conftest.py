@@ -15,6 +15,8 @@ from unittest.mock import MagicMock
 import pytest
 from dotenv import load_dotenv
 
+from thoth.utilities.schemas import AnalysisResponse, Citation, ResearchQuery
+
 # Load test environment
 load_dotenv('.env.test', override=True)
 
@@ -197,8 +199,6 @@ def sample_analysis_response():
     Returns:
         dict: Sample analysis response.
     """
-    from thoth.utilities.models import AnalysisResponse
-
     return AnalysisResponse(
         title='Sample Paper Title',
         authors=['Author One', 'Author Two'],
@@ -227,8 +227,6 @@ def sample_research_query():
     Returns:
         ResearchQuery: Sample research query.
     """
-    from thoth.utilities.models import ResearchQuery
-
     return ResearchQuery(
         name='test_query',
         description='Test research query',
@@ -248,8 +246,6 @@ def sample_citations():
     Returns:
         list: List of sample citations.
     """
-    from thoth.utilities.models import Citation
-
     return [
         Citation(
             title='Citation One',
