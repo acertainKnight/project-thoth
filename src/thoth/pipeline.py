@@ -95,7 +95,6 @@ class ThothPipeline:
         self.citation_tracker = CitationGraph(
             knowledge_base_dir=self.config.knowledge_base_dir,
             graph_storage_path=self.config.graph_storage_path,
-            note_generator=None,  # Deprecated - using ServiceManager
             pdf_dir=self.config.pdf_dir,
             markdown_dir=self.config.markdown_dir,
             notes_dir=self.config.notes_dir,
@@ -200,7 +199,7 @@ class ThothPipeline:
         Returns:
             list[Citation]: The extracted citations.
         """
-        return self.services.citation.extract_from_document(markdown_path)
+        return self.services.citation.extract_citations(markdown_path)
 
     def _generate_note(
         self,
@@ -279,11 +278,6 @@ class ThothPipeline:
         if not self.citation_tracker:
             logger.error(
                 'CitationGraph is not initialized. Cannot regenerate all notes.'
-            )
-            return []
-        if not self.citation_tracker.note_generator:
-            logger.error(
-                'NoteGenerator not configured in CitationGraph. Cannot regenerate all notes.'
             )
             return []
 

@@ -51,7 +51,12 @@ class ReferenceExtractor:
             ReferencesSection, include_raw=False, method='json_schema'
         )
         chain = self.prompt | structured_llm
-        result = chain.invoke({'headings': headings})
+        result = chain.invoke(
+            {
+                'headings': headings,
+                'json_schema': ReferencesSection.model_json_schema(),
+            }
+        )
         logger.debug(f'LLM identified references heading: {result.heading}')
         return result.heading
 

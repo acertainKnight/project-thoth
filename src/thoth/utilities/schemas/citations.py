@@ -38,8 +38,6 @@ class Citation(BaseModel):
             'volume': 'volume',
             'issue': 'issue',
             'page': 'pages',
-            'abstract': 'abstract',
-            'citation_count': 'citation_count',
         }
         for open_field, citation_field in field_mapping.items():
             open_value = getattr(open_citation, open_field)

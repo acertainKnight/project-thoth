@@ -49,14 +49,9 @@ class CitationService(BaseService):
                 model=self.config.citation_llm_config.model,
                 openrouter_api_key=self.config.api_keys.openrouter_key,
                 prompts_dir=self.config.prompts_dir,
-                use_opencitations=self.config.citation_config.use_opencitations,
-                use_scholarly=self.config.citation_config.use_scholarly,
-                use_semanticscholar=self.config.citation_config.use_semanticscholar,
-                use_arxiv=self.config.citation_config.use_arxiv,
-                opencitations_token=self.config.api_keys.opencitations_key,
-                semanticscholar_api_key=self.config.api_keys.semanticscholar_api_key,
                 citation_batch_size=self.config.citation_config.citation_batch_size,
                 model_kwargs=self.config.citation_llm_config.model_settings.model_dump(),
+                config=self.config,
             )
         return self._citation_processor
 
