@@ -16,7 +16,6 @@ def run_monitor(args, pipeline: ThothPipeline):
     config = get_config()
     watch_dir = Path(args.watch_dir) if args.watch_dir else config.pdf_dir
     watch_dir.mkdir(parents=True, exist_ok=True)
-    track_file = Path(args.track_file) if args.track_file else None
 
     if args.api_server or config.api_server_config.auto_start:
         api_host = args.api_host or config.api_server_config.host
@@ -36,7 +35,6 @@ def run_monitor(args, pipeline: ThothPipeline):
         pipeline=pipeline,
         polling_interval=args.polling_interval,
         recursive=args.recursive,
-        track_file=track_file,
     )
     try:
         logger.info(
@@ -176,9 +174,6 @@ def configure_subparser(subparsers):
         '--recursive',
         action='store_true',
         help='Watch directory recursively. Default: False',
-    )
-    monitor_parser.add_argument(
-        '--track-file', type=str, help='Path to the file tracking database.'
     )
     monitor_parser.add_argument(
         '--api-server',
