@@ -3,23 +3,18 @@ from pathlib import Path
 
 from loguru import logger
 
-from thoth.ingestion.filter import Filter
 from thoth.pipeline import ThothPipeline
 from thoth.utilities.schemas import DiscoverySource, ScheduleConfig
 
 
-def run_discovery_run(args):
+def run_discovery_run(args, pipeline: ThothPipeline):
     """
     Run discovery for sources.
     """
     try:
-        pipeline = ThothPipeline()
-        filter_instance = Filter(pipeline.services)
-        filter_func = filter_instance.process_article
         result = pipeline.services.discovery.run_discovery(
             source_name=args.source,
             max_articles=args.max_articles,
-            filter_func=filter_func,
         )
         logger.info('Discovery run completed:')
         logger.info(f'  Articles found: {result.articles_found}')
@@ -36,10 +31,9 @@ def run_discovery_run(args):
         return 1
 
 
-def run_discovery_list(_args):
+def run_discovery_list(_args, pipeline: ThothPipeline):
     """List all discovery sources."""
     try:
-        pipeline = ThothPipeline()
         sources = pipeline.services.discovery.list_sources()
         if not sources:
             logger.info('No discovery sources configured.')
@@ -66,12 +60,11 @@ def run_discovery_list(_args):
         return 1
 
 
-def run_discovery_show(args):
+def run_discovery_show(args, pipeline: ThothPipeline):
     """
     Show detailed information about a discovery source.
     """
     try:
-        pipeline = ThothPipeline()
         source = pipeline.services.discovery.get_source(args.name)
         if not source:
             logger.error(f'Discovery source not found: {args.name}')
@@ -96,12 +89,11 @@ def run_discovery_show(args):
         return 1
 
 
-def run_discovery_create(args):
+def run_discovery_create(args, pipeline: ThothPipeline):
     """
     Create a new discovery source.
     """
     try:
-        pipeline = ThothPipeline()
         config_data = {}
         if args.config_file:
             config_file = Path(args.config_file)
@@ -135,12 +127,11 @@ def run_discovery_create(args):
         return 1
 
 
-def run_discovery_edit(args):
+def run_discovery_edit(args, pipeline: ThothPipeline):
     """
     Edit an existing discovery source.
     """
     try:
-        pipeline = ThothPipeline()
         source = pipeline.services.discovery.get_source(args.name)
         if not source:
             logger.error(f'Discovery source not found: {args.name}')
@@ -183,12 +174,11 @@ def run_discovery_edit(args):
         return 1
 
 
-def run_discovery_delete(args):
+def run_discovery_delete(args, pipeline: ThothPipeline):
     """
     Delete a discovery source.
     """
     try:
-        pipeline = ThothPipeline()
         source = pipeline.services.discovery.get_source(args.name)
         if not source:
             logger.error(f'Discovery source not found: {args.name}')
@@ -213,14 +203,13 @@ def run_discovery_delete(args):
         return 1
 
 
-def run_discovery_scheduler(args):
+def run_discovery_scheduler(args, pipeline: ThothPipeline):
     """
     Handle discovery scheduler commands.
     """
     import time
 
     try:
-        pipeline = ThothPipeline()
         if args.scheduler_command == 'start':
             pipeline.services.discovery.start_scheduler()
             logger.info('Discovery scheduler started. Press Ctrl+C to stop.')
@@ -257,10 +246,9 @@ def run_discovery_scheduler(args):
         return 1
 
 
-def run_discovery_scheduler_stop(_args):
+def run_discovery_scheduler_stop(_args, pipeline: ThothPipeline):
     """Stop the discovery scheduler."""
     try:
-        pipeline = ThothPipeline()
         pipeline.services.discovery.stop_scheduler()
         logger.info('Discovery scheduler stopped.')
         return 0
@@ -269,7 +257,7 @@ def run_discovery_scheduler_stop(_args):
         return 1
 
 
-def run_discovery_command(args):
+def run_discovery_command(args, pipeline: ThothPipeline):
     """
     Handle discovery commands.
     """
@@ -277,19 +265,19 @@ def run_discovery_command(args):
         logger.error('No discovery subcommand specified')
         return 1
     if args.discovery_command == 'run':
-        return run_discovery_run(args)
+        return run_discovery_run(args, pipeline)
     elif args.discovery_command == 'list':
-        return run_discovery_list(args)
+        return run_discovery_list(args, pipeline)
     elif args.discovery_command == 'create':
-        return run_discovery_create(args)
+        return run_discovery_create(args, pipeline)
     elif args.discovery_command == 'edit':
-        return run_discovery_edit(args)
+        return run_discovery_edit(args, pipeline)
     elif args.discovery_command == 'delete':
-        return run_discovery_delete(args)
+        return run_discovery_delete(args, pipeline)
     elif args.discovery_command == 'scheduler':
-        return run_discovery_scheduler(args)
+        return run_discovery_scheduler(args, pipeline)
     elif args.discovery_command == 'show':
-        return run_discovery_show(args)
+        return run_discovery_show(args, pipeline)
     else:
         logger.error(f'Unknown discovery command: {args.discovery_command}')
         return 1

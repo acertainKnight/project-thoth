@@ -17,7 +17,6 @@ from loguru import logger
 from thoth.discovery.api_sources import ArxivAPISource, PubMedAPISource
 from thoth.discovery.emulator_scraper import EmulatorScraper
 from thoth.discovery.web_scraper import WebScraper
-from thoth.ingestion.filter import Filter
 from thoth.utilities.config import get_config
 from thoth.utilities.schemas import (
     DiscoveryResult,
@@ -45,18 +44,15 @@ class DiscoveryManager:
 
     def __init__(
         self,
-        filter: Filter | None = None,
         sources_config_dir: str | Path | None = None,
     ):
         """
         Initialize the Discovery Manager.
 
         Args:
-            filter: Filter instance for filtering articles.
             sources_config_dir: Directory containing discovery source configurations.
         """
         self.config = get_config()
-        self.filter = filter
 
         # Set up sources configuration directory
         self.sources_config_dir = Path(
@@ -293,7 +289,7 @@ class DiscoveryManager:
                     logger.info(f'Found {len(articles)} articles from {source.name}')
 
                     # Filter and process articles
-                    if self.filter and articles:
+                    if articles:
                         filtered_count, downloaded_count, errors = (
                             self._filter_and_process_articles(
                                 articles, source.query_filters

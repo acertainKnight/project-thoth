@@ -20,7 +20,7 @@ PLUGIN_SRC_DIR = obsidian-plugin/thoth-obsidian
 PLUGIN_DEST_DIR = $(OBSIDIAN_VAULT)/.obsidian/plugins/thoth-obsidian
 
 # API Server configuration
-API_HOST ?= 127.0.0.1
+API_HOST ?= 0.0.0.0
 API_PORT ?= 8000
 API_RELOAD ?= false
 

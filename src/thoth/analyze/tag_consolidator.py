@@ -13,7 +13,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from loguru import logger
 
 from thoth.knowledge.graph import CitationGraph
-from thoth.utilities import OpenRouterClient
+from thoth.services.llm_service import LLMService
+from thoth.utilities.config import ThothConfig
 from thoth.utilities.schemas import (
     ConsolidatedTagsResponse,
     SingleTagMappingResponse,
@@ -39,48 +40,56 @@ class TagConsolidator:
 
     def __init__(
         self,
-        consolidate_model: str = 'openai/gpt-4o-mini',
-        map_model: str = 'openai/gpt-4o-mini',
-        suggest_model: str = 'openai/gpt-4o-mini',
-        openrouter_api_key: str | None = None,
-        prompts_dir: str | Path = 'templates/prompts',
+        llm_service: LLMService,
+        prompts_dir: str | Path,
+        config: ThothConfig,
         model_kwargs: dict[str, Any] | None = None,
     ):
         """
-        Initialize the TagConsolidator.
+        Initializes the TagConsolidator.
 
         Args:
-            model: The model to use for API calls (e.g., 'openai/gpt-4o-mini').
-            openrouter_api_key: The OpenRouter API key (optional, uses env var if not
-            provided).
+            llm_service: The LLM service for creating clients.
             prompts_dir: Directory containing Jinja2 prompt templates.
+            config: The main Thoth configuration object.
             model_kwargs: Additional keyword arguments for the model.
         """
-        self.consolidate_model = consolidate_model
-        self.map_model = map_model
-        self.suggest_model = suggest_model
-        self.consolidate_prompts_dir = (
-            Path(prompts_dir) / self.consolidate_model.split('/')[0]
-        )
-        self.map_prompts_dir = Path(prompts_dir) / self.map_model.split('/')[0]
-        self.suggest_prompts_dir = Path(prompts_dir) / self.suggest_model.split('/')[0]
+        self.llm_service = llm_service
+        self.config = config
+        self.prompts_dir = Path(prompts_dir)
         self.model_kwargs = model_kwargs if model_kwargs else {}
 
-        # Initialize the LLM
-        self.consolidate_llm = OpenRouterClient(
-            api_key=openrouter_api_key,
-            model=consolidate_model,
-            **self.model_kwargs,
+        # Get models from config
+        self.consolidate_model = (
+            self.config.tag_consolidator_llm_config.consolidate_model
         )
-        self.map_llm = OpenRouterClient(
-            api_key=openrouter_api_key,
-            model=map_model,
-            **self.model_kwargs,
+        self.map_model = self.config.tag_consolidator_llm_config.map_model
+        self.suggest_model = self.config.tag_consolidator_llm_config.suggest_model
+
+        # Set up prompt directories based on model provider
+        self.consolidate_prompts_dir = (
+            self.prompts_dir / self.consolidate_model.split('/')[0]
         )
-        self.suggest_llm = OpenRouterClient(
-            api_key=openrouter_api_key,
-            model=suggest_model,
-            **self.model_kwargs,
+        if not self.consolidate_prompts_dir.exists():
+            self.consolidate_prompts_dir = self.prompts_dir / 'google'
+
+        self.map_prompts_dir = self.prompts_dir / self.map_model.split('/')[0]
+        if not self.map_prompts_dir.exists():
+            self.map_prompts_dir = self.prompts_dir / 'google'
+
+        self.suggest_prompts_dir = self.prompts_dir / self.suggest_model.split('/')[0]
+        if not self.suggest_prompts_dir.exists():
+            self.suggest_prompts_dir = self.prompts_dir / 'google'
+
+        # Initialize LLM clients
+        self.consolidate_llm = self.llm_service.get_client(
+            model=self.consolidate_model, **self.model_kwargs
+        )
+        self.map_llm = self.llm_service.get_client(
+            model=self.map_model, **self.model_kwargs
+        )
+        self.suggest_llm = self.llm_service.get_client(
+            model=self.suggest_model, **self.model_kwargs
         )
 
         # Create structured LLMs for different response types

@@ -5,8 +5,12 @@ This module consolidates all article-related operations that were previously
 scattered across Filter, agent tools, and other components.
 """
 
+from pathlib import Path
+
+from jinja2 import Environment, FileSystemLoader
+
 from thoth.services.base import BaseService, ServiceError
-from thoth.utilities import OpenRouterClient
+from thoth.services.llm_service import LLMService
 from thoth.utilities.schemas import (
     AnalysisResponse,
     PreDownloadEvaluationResponse,
@@ -27,29 +31,38 @@ class ArticleService(BaseService):
     - Determining download decisions
     """
 
-    def __init__(self, config=None, llm_client: OpenRouterClient | None = None):
+    def __init__(self, config=None, llm_service: LLMService | None = None):
         """
         Initialize the ArticleService.
 
         Args:
             config: Optional configuration object
-            llm_client: Optional LLM client for evaluations
+            llm_service: Optional LLM service for evaluations
         """
         super().__init__(config)
-        self._llm = llm_client
-        self.llm_service = llm_client
+        self._llm_service = llm_service
         self.query_service = None
 
+        # Set up prompts directory and Jinja environment
+        self.prompts_dir = Path(self.config.prompts_dir)
+
+        # Initialize Jinja environments for different providers
+        self.jinja_envs = {}
+        for provider in ['openai', 'google']:
+            provider_dir = self.prompts_dir / provider
+            if provider_dir.exists():
+                self.jinja_envs[provider] = Environment(
+                    loader=FileSystemLoader(provider_dir),
+                    trim_blocks=True,
+                    lstrip_blocks=True,
+                )
+
     @property
-    def llm(self) -> OpenRouterClient:
-        """Get or create the LLM client for evaluations."""
-        if self._llm is None:
-            self._llm = OpenRouterClient(
-                api_key=self.config.api_keys.openrouter_key,
-                model=self.config.scrape_filter_llm_config.model,
-                **self.config.scrape_filter_llm_config.model_settings.model_dump(),
-            )
-        return self._llm
+    def llm_service(self) -> LLMService:
+        """Get or create the LLM service."""
+        if self._llm_service is None:
+            self._llm_service = LLMService(self.config)
+        return self._llm_service
 
     def initialize(self) -> None:
         """Initialize the article service."""
@@ -80,7 +93,10 @@ class ArticleService(BaseService):
             prompt = self._build_evaluation_prompt(article, query)
 
             # Get structured response
-            structured_llm = self.llm.with_structured_output(
+            llm = self.llm_service.get_client(
+                model=self.config.scrape_filter_llm_config.model
+            )
+            structured_llm = llm.with_structured_output(
                 QueryEvaluationResponse,
                 include_raw=False,
                 method='json_schema',
@@ -246,32 +262,33 @@ class ArticleService(BaseService):
         if isinstance(article, AnalysisResponse):
             title = article.title if hasattr(article, 'title') else 'Unknown'
             abstract = article.abstract or article.summary or ''
+            content = getattr(article, 'content', None)
         else:  # ScrapedArticleMetadata
             title = article.title
             abstract = article.abstract or ''
+            content = None
 
-        prompt = f"""Evaluate how well this article matches the research query.
+        # Get model provider from config
+        model = self.config.scrape_filter_llm_config.model
+        provider = model.split('/')[0] if '/' in model else 'openai'
 
-Research Query: {query.name}
-Description: {query.description}
-Research Question: {query.research_question}
-Keywords: {', '.join(query.keywords)}
-Required Topics: {', '.join(query.required_topics)}
-Preferred Topics: {', '.join(query.preferred_topics)}
-Excluded Topics: {', '.join(query.excluded_topics)}
+        # Fall back to google templates if provider-specific templates don't exist
+        if provider not in self.jinja_envs:
+            provider = (
+                'google'
+                if 'google' in self.jinja_envs
+                else next(iter(self.jinja_envs.keys()))
+            )
 
-Article Title: {title}
-Article Abstract: {abstract}
+        # Load and render template
+        template = self.jinja_envs[provider].get_template('evaluate_article.j2')
+        prompt = template.render(
+            query=query,
+            title=title,
+            abstract=abstract,
+            content=content,
+        )
 
-Evaluate the article and provide:
-1. A relevance score from 0.0 to 1.0
-2. Whether it meets the criteria
-3. Matched keywords
-4. Topic analysis
-5. Detailed reasoning
-6. A recommendation: 'keep', 'reject', or 'review'
-7. Your confidence level (0.0 to 1.0)
-"""
         return prompt
 
     def _aggregate_topic_analysis(

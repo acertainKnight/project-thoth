@@ -15,7 +15,7 @@ from langchain_core.runnables import Runnable, RunnableConfig
 from langgraph.graph import END, StateGraph
 from loguru import logger
 
-from thoth.utilities import OpenRouterClient
+from thoth.services.llm_service import LLMService
 from thoth.utilities.schemas import AnalysisResponse, AnalysisState
 
 
@@ -35,32 +35,36 @@ class LLMProcessor:
 
     def __init__(
         self,
-        model: str = 'openai/gpt-4o-mini',
+        llm_service: LLMService,
+        model: str,
+        prompts_dir: str | Path,
         max_output_tokens: int = 500000,
         max_context_length: int = 8000,
         chunk_size: int = 4000,
         chunk_overlap: int = 200,
-        openrouter_api_key: str | None = None,
-        prompts_dir: str | Path = 'templates/prompts',
         model_kwargs: dict[str, Any] | None = None,
         refine_threshold_multiplier: float = 0.8,  # Threshold multiplier for choosing refine over direct
-        map_reduce_threshold_multiplier: float = 0.9,  # Threshold multiplier for choosing map_reduce over refine
+        map_reduce_threshold_multiplier: float = 2.5,  # Threshold multiplier for choosing map_reduce over refine
     ):
         """
-        Initialize the LLMProcessor with LangGraph.
+        Initializes the LLMProcessor.
 
         Args:
+            llm_service: The LLM service instance.
             model: The model to use for API calls (e.g., 'openai/gpt-4o-mini').
+            prompts_dir: Directory containing Jinja2 prompt templates.
+            max_output_tokens: Maximum output tokens for the model.
             max_context_length: Maximum context length for the model in tokens.
                                 Used to determine processing strategy.
             chunk_size: Target size of chunks for document splitting in tokens.
             chunk_overlap: Overlap between chunks in tokens.
-            openrouter_api_key: The OpenRouter API key (optional, uses env var if not provided).
-            prompts_dir: Directory containing Jinja2 prompt templates.
             model_kwargs: Additional keyword arguments for the model.
-            refine_threshold_multiplier: Multiplier for max_context_length to choose 'refine'.
-            map_reduce_threshold_multiplier: Multiplier for max_context_length to choose 'map_reduce'.
-        """  # noqa: W505
+            refine_threshold_multiplier: Multiplier for max_context_length to choose
+                'refine'.
+            map_reduce_threshold_multiplier: Multiplier for max_context_length to
+                choose 'map_reduce'.
+        """
+        self.llm_service = llm_service
         self.model = model
         self.max_output_tokens = max_output_tokens
         self.max_context_length = max_context_length
@@ -72,6 +76,12 @@ class LLMProcessor:
         self.map_reduce_threshold = int(
             max_context_length * map_reduce_threshold_multiplier
         )
+        model_kwargs.pop('max_tokens', None)
+        self.llm = self.llm_service.get_client(
+            model=self.model,
+            max_tokens=self.max_output_tokens,
+            **self.model_kwargs,
+        )
 
         logger.debug(f'Refine threshold: {self.refine_threshold}')
         logger.debug(f'Map-reduce threshold: {self.map_reduce_threshold}')
@@ -80,13 +90,6 @@ class LLMProcessor:
         logger.debug(f'Chunk size: {self.chunk_size}')
         logger.debug(f'Chunk overlap: {self.chunk_overlap}')
         logger.debug(f'Model kwargs: {self.model_kwargs}')
-
-        # Initialize the LLM
-        self.llm = OpenRouterClient(
-            api_key=openrouter_api_key,
-            model=model,
-            **self.model_kwargs,
-        )
 
         # Create a structured LLM that returns the AnalysisResponse format
         self.structured_llm = self.llm.with_structured_output(

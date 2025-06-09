@@ -5,6 +5,8 @@ This module consolidates all note-related operations including
 note creation, formatting, and linking.
 """
 
+import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +32,8 @@ class NoteService(BaseService):
         config=None,
         templates_dir: Path | None = None,
         notes_dir: Path | None = None,
+        pdf_dir: Path | None = None,
+        markdown_dir: Path | None = None,
         api_base_url: str | None = None,
     ):
         """
@@ -39,15 +43,21 @@ class NoteService(BaseService):
             config: Optional configuration object
             templates_dir: Directory containing templates
             notes_dir: Directory for saving notes
+            pdf_dir: Directory for storing PDFs
+            markdown_dir: Directory for storing markdown files
             api_base_url: Base URL for API links
         """
         super().__init__(config)
         self.templates_dir = Path(templates_dir or self.config.templates_dir)
         self.notes_dir = Path(notes_dir or self.config.notes_dir)
+        self.pdf_dir = Path(pdf_dir or self.config.pdf_dir)
+        self.markdown_dir = Path(markdown_dir or self.config.markdown_dir)
         self.api_base_url = api_base_url or self.config.api_server_config.base_url
 
         # Ensure directories exist
         self.notes_dir.mkdir(parents=True, exist_ok=True)
+        self.pdf_dir.mkdir(parents=True, exist_ok=True)
+        self.markdown_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize Jinja environment
         self.jinja_env = Environment(
@@ -99,22 +109,33 @@ class NoteService(BaseService):
             # Generate note filename
             note_filename = self._generate_note_filename(content)
             note_path = self.notes_dir / note_filename
+            note_stem = note_path.stem
 
-            # Move files to notes directory
-            final_pdf_path = self._move_file_to_notes(pdf_path, content['title'])
-            final_markdown_path = self._move_file_to_notes(
-                markdown_path, content['title'], suffix='_markdown'
-            )
+            # Move and rename PDF and Markdown files to match the note's title
+            final_pdf_path = self.pdf_dir / f'{note_stem}{pdf_path.suffix}'
+            if pdf_path.exists():
+                pdf_path.rename(final_pdf_path)
 
-            # Update content with final paths
-            content['pdf_link'] = self._create_file_link(final_pdf_path, 'PDF')
-            content['markdown_link'] = self._create_file_link(
-                final_markdown_path, 'Markdown'
+            final_markdown_path = (
+                self.markdown_dir / f'{note_stem}_markdown{markdown_path.suffix}'
             )
+            if markdown_path.exists():
+                markdown_path.rename(final_markdown_path)
+
+            # Update content with final paths and correct link formats
+            content['source_files'] = {
+                'pdf_link': self._create_file_link(final_pdf_path, final_pdf_path.name),
+                'markdown_link': self._create_file_link(
+                    final_markdown_path, final_markdown_path.name
+                ),
+            }
 
             # Render template
             template = self.jinja_env.get_template(template_name)
             note_content = template.render(**content)
+
+            # Remove redundant title header from note content
+            note_content = re.sub(r'^# .*\n\n?', '', note_content, count=1)
 
             # Write note
             note_path.write_text(note_content, encoding='utf-8')
@@ -157,8 +178,10 @@ class NoteService(BaseService):
                 'title': metadata.get('title', 'Untitled'),
                 'abstract': metadata.get('abstract', 'No abstract available'),
                 'tags': metadata.get('tags', []),
-                'pdf_link': self._create_file_link(pdf_path, 'PDF'),
-                'markdown_link': self._create_file_link(markdown_path, 'Markdown'),
+                'pdf_link': self._create_file_link(pdf_path, pdf_path.name),
+                'markdown_link': self._create_file_link(
+                    markdown_path, markdown_path.name
+                ),
             }
 
             # Generate filename
@@ -198,15 +221,44 @@ class NoteService(BaseService):
         # Extract document citation
         document_citation = next((c for c in citations if c.is_document_citation), None)
 
-        # Format authors
-        if document_citation and document_citation.authors:
-            authors = ', '.join(document_citation.authors)
-        else:
-            authors = 'Unknown'
-
-        # Clean title
+        # Prioritize analysis object for metadata, fallback to document_citation
         title = self._clean_title(
-            document_citation.title if document_citation else 'Untitled'
+            analysis.title
+            if analysis and analysis.title
+            else document_citation.title
+            if document_citation
+            else 'Untitled'
+        )
+
+        authors_list = (
+            analysis.authors
+            if analysis and analysis.authors
+            else document_citation.authors
+            if document_citation
+            else []
+        )
+        authors = ', '.join(authors_list) if authors_list else 'Unknown'
+
+        year = (
+            analysis.year
+            if analysis and analysis.year
+            else document_citation.year
+            if document_citation
+            else 'Unknown'
+        )
+        doi = (
+            analysis.doi
+            if analysis and analysis.doi
+            else document_citation.doi
+            if document_citation
+            else None
+        )
+        journal = (
+            analysis.journal
+            if analysis and analysis.journal
+            else document_citation.journal
+            if document_citation
+            else None
         )
 
         # Format citations
@@ -217,8 +269,9 @@ class NoteService(BaseService):
         content = {
             'title': title,
             'authors': authors,
-            'year': document_citation.year if document_citation else 'Unknown',
-            'doi': document_citation.doi if document_citation else None,
+            'year': year,
+            'doi': doi,
+            'journal': journal,
             'abstract': analysis.abstract or 'No abstract available',
             'summary': analysis.summary or 'No summary available',
             'key_points': self._format_key_points(analysis.key_points),
@@ -236,6 +289,9 @@ class NoteService(BaseService):
             'tags': [f'#{tag}' for tag in (analysis.tags or [])],
             'citations': formatted_citations,
             'citation_count': len(reference_citations),
+            'analysis': analysis.model_dump()
+            if hasattr(analysis, 'model_dump')
+            else analysis.__dict__,
         }
 
         return content
@@ -249,6 +305,12 @@ class NoteService(BaseService):
         for i, citation in enumerate(citations, 1):
             # Find existing note if available
             obsidian_link = self._find_citation_note(citation)
+
+            if not obsidian_link and citation.url:
+                link_text = citation.title or 'External Link'
+                obsidian_link = f'[{link_text}]({citation.url})'
+            elif not obsidian_link:
+                obsidian_link = citation.title or citation.text or 'Untitled'
 
             formatted_citation = {
                 'number': i,
@@ -276,49 +338,26 @@ class NoteService(BaseService):
 
         # Search for matching notes
         for note_file in self.notes_dir.glob('*.md'):
-            if clean_title.lower() in note_file.stem.lower():
+            if clean_title.lower() == note_file.stem.lower():
                 return f'[[{note_file.stem}]]'
 
         return None
 
     def _create_file_link(self, file_path: Path, link_text: str) -> str:
-        """Create a link to a file."""
-        if self.api_base_url:
-            # Create API link
-            if 'PDF' in link_text:
-                endpoint = 'download-pdf'
-            else:
-                endpoint = 'view-markdown'
+        """Create a relative Obsidian wikilink."""
+        if not file_path or not file_path.exists():
+            return f'{link_text} file not found.'
 
-            return f'[{link_text}]({self.api_base_url}/{endpoint}?path={file_path})'
-        else:
-            # Create local file link
-            return f'[{link_text}](file://{file_path})'
-
-    def _move_file_to_notes(
-        self, source_path: Path, title: str, suffix: str = ''
-    ) -> Path:
-        """Move a file to the notes directory with a clean name."""
-        clean_title = self._clean_filename(title)
-        extension = source_path.suffix
-
-        # Generate target filename
-        target_filename = f'{clean_title}{suffix}{extension}'
-        target_path = self.notes_dir / target_filename
-
-        # Ensure unique filename
-        counter = 1
-        while target_path.exists():
-            target_filename = f'{clean_title}{suffix}_{counter}{extension}'
-            target_path = self.notes_dir / target_filename
-            counter += 1
-
-        # Move file
-        import shutil
-
-        shutil.move(str(source_path), str(target_path))
-
-        return target_path
+        try:
+            # Create a relative path from the notes directory to the file.
+            rel_path = os.path.relpath(file_path, self.notes_dir)
+            # Obsidian uses forward slashes for paths.
+            rel_path = rel_path.replace(os.path.sep, '/')
+            return f'[[{rel_path}|{link_text}]]'
+        except ValueError:
+            # Fallback for when a relative path cannot be created
+            # (e.g. different drives)
+            return f'[{link_text}](file:///{file_path.resolve()})'
 
     def _generate_note_filename(self, content: dict[str, Any]) -> str:
         """Generate a filename for the note."""
@@ -332,8 +371,6 @@ class NoteService(BaseService):
             return 'Untitled'
 
         # Remove special characters but keep some punctuation
-        import re
-
         cleaned = re.sub(r'[<>:"/\\|?*]', '', title)
         cleaned = cleaned.strip()
 
@@ -347,12 +384,12 @@ class NoteService(BaseService):
         cleaned = re.sub(r'[^a-zA-Z0-9\s\-]', '', filename)
         # Replace multiple spaces with single space
         cleaned = re.sub(r'\s+', ' ', cleaned)
-        # Replace spaces with underscores
-        cleaned = cleaned.replace(' ', '_')
+        # Replace spaces with hyphens for better readability in URLs/filenames
+        cleaned = cleaned.replace(' ', '-')
         # Limit length
         cleaned = cleaned[:100]
 
-        return cleaned.strip('_') or 'untitled'
+        return cleaned.strip('-') or 'untitled'
 
     def _format_key_points(self, key_points: str | None) -> list[str]:
         """Format key points as a list."""

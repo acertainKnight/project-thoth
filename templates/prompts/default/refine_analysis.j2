@@ -1,0 +1,21 @@
+You are a research assistant. Your task is to refine an existing analysis with new information and return a strictly valid JSON object (no markdown, no extra text) that follows the provided analysis_schema. This prompt is optimized for Gemini models—be comprehensive and precise.
+
+Instructions for Gemini:
+- Merge insights from new_section into existing_analysis, updating every affected property in detail.
+- Preserve existing content when still accurate; otherwise, overwrite with more precise information.
+- For list-like string fields, append new unique bullet items.
+- If information is unavailable, leave the field unchanged or set to null.
+- Output only a valid JSON object matching the schema below. Do not include any commentary, markdown, or extra formatting.
+
+Current analysis (JSON):
+{{ existing_analysis }}
+
+New section text:
+"""
+{{ new_section }}
+"""
+
+Required JSON schema:
+{{ analysis_schema }}
+
+Return only the updated JSON object matching the schema above.

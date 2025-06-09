@@ -38,13 +38,13 @@ class EvaluateArticleTool(BaseThothTool):
         """Evaluate an article against a query."""
         try:
             # Get the query
-            query = self.adapter.get_query(query_name)
+            query = self.service_manager.query.get_query(query_name)
             if not query:
                 return f"❌ Query '{query_name}' not found. Use 'list_queries' to see available queries."
 
             # For now, we'll search for the article and use its abstract
             # In the future, this could use the full analysis from the citation graph
-            results = self.adapter.search_knowledge(
+            results = self.service_manager.rag.search(
                 query=article_title,
                 k=1,
             )
@@ -56,15 +56,11 @@ class EvaluateArticleTool(BaseThothTool):
             article = AnalysisResponse(
                 title=results[0]['title'],
                 abstract=results[0]['content'][:500],  # Use first 500 chars as abstract
-                key_findings=[],
-                methodology='',
-                implications='',
-                limitations='',
-                future_work='',
-                tags=[],
             )
 
-            evaluation = self.adapter.evaluate_article(article, query_name)
+            evaluation = self.service_manager.article.evaluate_against_query(
+                article, query
+            )
 
             if not evaluation:
                 return f"❌ Failed to evaluate article against query '{query_name}'"
@@ -117,7 +113,7 @@ class AnalyzeTopicTool(BaseThothTool):
             k = k_values.get(depth, 6)
 
             # Search for papers on this topic
-            search_results = self.adapter.search_knowledge(query=topic, k=k)
+            search_results = self.service_manager.rag.search(query=topic, k=k)
 
             if not search_results:
                 return f"No papers found on the topic: '{topic}'"
@@ -130,7 +126,7 @@ class AnalyzeTopicTool(BaseThothTool):
             }
 
             question = questions.get(depth, questions['medium'])
-            analysis = self.adapter.ask_knowledge(question=question, k=k)
+            analysis = self.service_manager.rag.ask_question(question=question, k=k)
 
             response = [f'📚 **Topic Analysis: {topic}**\n']
             response.append(f'🔍 Analysis depth: {depth}')
@@ -179,7 +175,7 @@ class FindRelatedTool(BaseThothTool):
         """Find related papers."""
         try:
             # First, find the target paper
-            target_results = self.adapter.search_knowledge(query=paper_title, k=1)
+            target_results = self.service_manager.rag.search(query=paper_title, k=1)
 
             if not target_results:
                 return f"❌ Could not find paper: '{paper_title}'"
@@ -191,7 +187,7 @@ class FindRelatedTool(BaseThothTool):
             search_query = f'{target_title} {target_content[:500]}'
 
             # Search for related papers (excluding the target itself)
-            related_results = self.adapter.search_knowledge(
+            related_results = self.service_manager.rag.search(
                 query=search_query,
                 k=max_results + 1,  # Get extra in case target is included
             )
@@ -216,7 +212,7 @@ class FindRelatedTool(BaseThothTool):
                 connections_question = (
                     f"How do these papers: {', '.join(titles)} relate to '{titles[0]}'"
                 )
-                connections = self.adapter.ask_knowledge(
+                connections = self.service_manager.rag.ask_question(
                     question=connections_question, k=3
                 )
                 response.append(f'💡 **Key Relationships:**\n{connections["answer"]}')

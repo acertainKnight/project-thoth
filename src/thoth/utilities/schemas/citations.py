@@ -121,6 +121,12 @@ class CitationExtraction(BaseModel):
     pages: str | None = Field(default=None)
 
 
+class Citations(BaseModel):
+    """Schema for a list of citations, used for batch processing."""
+
+    citations: list[Citation]
+
+
 class ReferencesSection(BaseModel):
     """Schema for the references section identification response."""
 

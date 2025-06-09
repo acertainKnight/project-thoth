@@ -10,6 +10,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from jinja2 import Environment, FileSystemLoader
+
 from thoth.services.base import BaseService, ServiceError
 from thoth.utilities import OpenRouterClient
 from thoth.utilities.schemas import QueryEvaluationResponse, ResearchQuery
@@ -38,6 +40,20 @@ class QueryService(BaseService):
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self._llm = None  # Lazy initialization
         self._queries: dict[str, ResearchQuery] = {}
+
+        # Set up prompts directory and Jinja environment
+        self.prompts_dir = Path(self.config.prompts_dir)
+
+        # Initialize Jinja environments for different providers
+        self.jinja_envs = {}
+        for provider in ['openai', 'google']:
+            provider_dir = self.prompts_dir / provider
+            if provider_dir.exists():
+                self.jinja_envs[provider] = Environment(
+                    loader=FileSystemLoader(provider_dir),
+                    trim_blocks=True,
+                    lstrip_blocks=True,
+                )
 
     @property
     def llm(self) -> OpenRouterClient:
@@ -212,33 +228,29 @@ class QueryService(BaseService):
         content: str | None = None,
     ) -> str:
         """Build the evaluation prompt for the LLM."""
-        prompt = f"""Evaluate how well this article matches the research query.
+        # Get model provider from config
+        model = self.config.research_agent_llm_config.model
+        if isinstance(model, list):
+            model = model[0]  # Use first model in list
+        provider = model.split('/')[0] if '/' in model else 'openai'
 
-Research Query: {query.name}
-Description: {query.description}
-Research Question: {query.research_question}
-Keywords: {', '.join(query.keywords)}
-Required Topics: {', '.join(query.required_topics)}
-Preferred Topics: {', '.join(query.preferred_topics)}
-Excluded Topics: {', '.join(query.excluded_topics)}
+        # Fall back to google templates if provider-specific templates don't exist
+        if provider not in self.jinja_envs:
+            provider = (
+                'google'
+                if 'google' in self.jinja_envs
+                else next(iter(self.jinja_envs.keys()))
+            )
 
-Article Title: {title}
-Article Abstract: {abstract}
-"""
-        if content:
-            prompt += f'\nArticle Content (excerpt): {content[:1000]}...'
+        # Load and render template
+        template = self.jinja_envs[provider].get_template('evaluate_article.j2')
+        prompt = template.render(
+            query=query,
+            title=title,
+            abstract=abstract,
+            content=content,
+        )
 
-        prompt += """
-
-Evaluate the article and provide:
-1. A relevance score from 0.0 to 1.0
-2. Whether it meets the criteria
-3. Matched keywords
-4. Topic analysis
-5. Detailed reasoning
-6. A recommendation: 'keep', 'reject', or 'review'
-7. Your confidence level (0.0 to 1.0)
-"""
         return prompt
 
     def get_all_queries(self) -> list[ResearchQuery]:

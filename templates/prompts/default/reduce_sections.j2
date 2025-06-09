@@ -1,0 +1,15 @@
+You are a research assistant. Your task is to synthesize analyses of individual sections into a comprehensive paper-level analysis and return a strictly valid JSON object (no markdown, no extra text) that follows the provided analysis_schema. This prompt is optimized for Gemini models—be comprehensive and precise.
+
+Instructions for Gemini:
+- Combine the information from the section analyses, resolving conflicts and eliminating duplicates.
+- Fill each schema field with the highest-fidelity information available; use bullet-style strings for lists.
+- If data is missing after synthesis, set the property to null.
+- Output only a valid JSON object matching the schema below. Do not include any commentary, markdown, or extra formatting.
+
+Section analyses (JSON list):
+{{ section_analyses }}
+
+Required JSON schema:
+{{ analysis_schema }}
+
+Return only the unified JSON object matching the schema above.

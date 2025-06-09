@@ -1,5 +1,7 @@
 import argparse
 
+from thoth.pipeline import ThothPipeline
+
 from . import agent, discovery, notes, rag, system
 
 
@@ -21,8 +23,11 @@ def main():
 
     args = parser.parse_args()
 
+    # Create a single pipeline instance to be used by all commands
+    pipeline = ThothPipeline()
+
     if hasattr(args, 'func'):
-        args.func(args)
+        args.func(args, pipeline)
     else:
         # This part should ideally not be reached if 'required=True' is set on
         # subparsers

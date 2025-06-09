@@ -13,9 +13,9 @@ from pydantic import BaseModel
 from thoth.services.base import BaseService, ServiceError
 from thoth.utilities import (
     OpenRouterClient,
-    OpenAIClient,
-    AnthropicClient,
 )
+from thoth.utilities.anthropic_client import AnthropicClient
+from thoth.utilities.openai_client import OpenAIClient
 
 
 class LLMService(BaseService):
@@ -95,29 +95,23 @@ class LLMService(BaseService):
             model_kwargs.pop('max_tokens', None)
             model_kwargs.pop('use_rate_limiter', None)
 
-            provider, model_name = (model.split('/', 1) if '/' in model else (None, model))
+            provider, model_name = (
+                model.split('/', 1) if '/' in model else (None, model)
+            )
 
-            if (
-                provider == 'openai'
-                and self.config.api_keys.openai_key
-                and not self.config.api_keys.openrouter_key
-            ):
+            if provider == 'openai' and self.config.api_keys.openai_key:
                 client = OpenAIClient(
                     api_key=self.config.api_keys.openai_key,
-                    model=model_name,
+                    model=model,
                     temperature=temperature,
                     max_tokens=max_tokens,
                     use_rate_limiter=use_rate_limiter,
                     **model_kwargs,
                 )
-            elif (
-                provider == 'anthropic'
-                and self.config.api_keys.anthropic_key
-                and not self.config.api_keys.openrouter_key
-            ):
+            elif provider == 'anthropic' and self.config.api_keys.anthropic_key:
                 client = AnthropicClient(
                     api_key=self.config.api_keys.anthropic_key,
-                    model=model_name,
+                    model=model,
                     temperature=temperature,
                     max_tokens=max_tokens,
                     use_rate_limiter=use_rate_limiter,
@@ -372,4 +366,5 @@ class LLMService(BaseService):
     def clear_cache(self) -> None:
         """Clear the client cache."""
         self._clients.clear()
+
         self.log_operation('cache_cleared', count=len(self._clients))

@@ -21,7 +21,7 @@ class ListDiscoverySourcesTool(BaseThothTool):
     def _run(self) -> str:
         """List discovery sources."""
         try:
-            sources = self.adapter.list_discovery_sources()
+            sources = self.service_manager.discovery.list_sources()
             if not sources:
                 return "No discovery sources configured. Use 'create_arxiv_source' or 'create_pubmed_source' to add one."
 
@@ -100,21 +100,19 @@ class CreateArxivSourceTool(BaseThothTool):
                 'query_filters': [],
             }
 
-            if self.adapter.create_discovery_source(source_config):
-                return (
-                    f'✅ **ArXiv Discovery Source Created Successfully!**\n\n'
-                    f'**Source Details:**\n'
-                    f'- Name: `{name}`\n'
-                    f'- Type: ArXiv API\n'
-                    f'- Categories: {", ".join(categories)}\n'
-                    f'- Keywords: {", ".join(keywords)}\n'
-                    f'- Schedule: Every {schedule_hours} hours, max {max_articles} articles\n\n'
-                    f'🚀 **Ready to use!** You can now:\n'
-                    f"- Run it: 'run_discovery' with source_name='{name}'\n"
-                    f"- View it: 'list_discovery_sources'\n"
-                )
-            else:
-                return f"❌ Failed to create ArXiv source '{name}'"
+            self.service_manager.discovery.create_source(source_config)
+            return (
+                f'✅ **ArXiv Discovery Source Created Successfully!**\n\n'
+                f'**Source Details:**\n'
+                f'- Name: `{name}`\n'
+                f'- Type: ArXiv API\n'
+                f'- Categories: {", ".join(categories)}\n'
+                f'- Keywords: {", ".join(keywords)}\n'
+                f'- Schedule: Every {schedule_hours} hours, max {max_articles} articles\n\n'
+                f'🚀 **Ready to use!** You can now:\n'
+                f"- Run it: 'run_discovery' with source_name='{name}'\n"
+                f"- View it: 'list_discovery_sources'\n"
+            )
 
         except Exception as e:
             return self.handle_error(e, 'creating ArXiv source')
@@ -167,18 +165,16 @@ class CreatePubmedSourceTool(BaseThothTool):
                 'query_filters': [],
             }
 
-            if self.adapter.create_discovery_source(source_config):
-                return (
-                    f'✅ **PubMed Discovery Source Created Successfully!**\n\n'
-                    f'**Source Details:**\n'
-                    f'- Name: `{name}`\n'
-                    f'- Type: PubMed API\n'
-                    f'- Keywords: {", ".join(keywords)}\n'
-                    f'- Schedule: Every {schedule_hours} hours, max {max_articles} articles\n\n'
-                    f'🚀 **Ready to use!**'
-                )
-            else:
-                return f"❌ Failed to create PubMed source '{name}'"
+            self.service_manager.discovery.create_source(source_config)
+            return (
+                f'✅ **PubMed Discovery Source Created Successfully!**\n\n'
+                f'**Source Details:**\n'
+                f'- Name: `{name}`\n'
+                f'- Type: PubMed API\n'
+                f'- Keywords: {", ".join(keywords)}\n'
+                f'- Schedule: Every {schedule_hours} hours, max {max_articles} articles\n\n'
+                f'🚀 **Ready to use!**'
+            )
 
         except Exception as e:
             return self.handle_error(e, 'creating PubMed source')
@@ -217,32 +213,34 @@ class RunDiscoveryTool(BaseThothTool):
             else:
                 message = '🚀 **Running discovery for all active sources**...\n\n'
 
-            result = self.adapter.run_discovery(source_name, max_articles)
+            result = self.service_manager.discovery.run_discovery(
+                source_name, max_articles
+            )
 
-            if result.get('success'):
+            if result.articles_found > 0:
                 message += '✅ **Discovery completed successfully!**\n\n'
                 message += '📊 **Results:**\n'
-                message += f'- Articles found: {result["articles_found"]}\n'
-                message += f'- Articles filtered: {result["articles_filtered"]}\n'
-                message += f'- Articles downloaded: {result["articles_downloaded"]}\n'
-                message += f'- Execution time: {result["execution_time"]:.2f}s\n'
+                message += f'- Articles found: {result.articles_found}\n'
+                message += f'- Articles filtered: {result.articles_filtered}\n'
+                message += f'- Articles downloaded: {result.articles_downloaded}\n'
+                message += f'- Execution time: {result.execution_time_seconds:.2f}s\n'
 
-                if result.get('errors'):
+                if result.errors:
                     message += '\n⚠️ **Warnings:**\n'
-                    for error in result['errors'][:3]:
+                    for error in result.errors[:3]:
                         message += f'- {error}\n'
 
-                if result['articles_downloaded'] > 0:
+                if result.articles_downloaded > 0:
                     message += '\n📁 **New articles saved to:** `knowledge/agent/pdfs/`'
                     message += (
                         '\n📋 **Detailed evaluations:** `knowledge/agent/evaluations/`'
                     )
-
-                return message
             else:
-                return (
-                    f'❌ **Discovery failed:** {result.get("error", "Unknown error")}'
+                message += (
+                    '✅ **Discovery completed successfully!** No new articles found.'
                 )
+
+            return message
 
         except Exception as e:
             return self.handle_error(e, 'running discovery')
@@ -264,9 +262,7 @@ class DeleteDiscoverySourceTool(BaseThothTool):
     def _run(self, source_name: str) -> str:
         """Delete a discovery source."""
         try:
-            if self.adapter.delete_discovery_source(source_name):
-                return f"✅ Successfully deleted discovery source '{source_name}'"
-            else:
-                return f"❌ Failed to delete source '{source_name}' (may not exist)"
+            self.service_manager.discovery.delete_source(source_name)
+            return f"✅ Successfully deleted discovery source '{source_name}'"
         except Exception as e:
             return self.handle_error(e, f"deleting source '{source_name}'")

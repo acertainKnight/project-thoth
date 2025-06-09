@@ -21,7 +21,7 @@ class ListQueriesTool(BaseThothTool):
     def _run(self) -> str:
         """List all queries."""
         try:
-            queries = self.adapter.list_queries()
+            queries = self.service_manager.query.get_all_queries()
             if not queries:
                 return '📋 No research queries found. Create one with create_query!'
 
@@ -101,7 +101,7 @@ class CreateQueryTool(BaseThothTool):
                 excluded_topics=excluded_topics or [],
             )
 
-            success = self.adapter.create_query(query)
+            success = self.service_manager.query.create_query(query)
             if success:
                 return f"✅ Successfully created query '{name}'"
             else:
@@ -120,7 +120,7 @@ class GetQueryTool(BaseThothTool):
     def _run(self, query_name: str) -> str:
         """Get query details."""
         try:
-            query = self.adapter.get_query(query_name)
+            query = self.service_manager.query.get_query(query_name)
             if not query:
                 return f"❌ Query '{query_name}' not found"
 
@@ -198,7 +198,7 @@ class EditQueryTool(BaseThothTool):
             if not updates:
                 return '❌ No updates provided'
 
-            success = self.adapter.update_query(query_name, updates)
+            success = self.service_manager.query.update_query(query_name, updates)
             if success:
                 return f"✅ Successfully updated query '{query_name}'"
             else:
@@ -217,7 +217,7 @@ class DeleteQueryTool(BaseThothTool):
     def _run(self, query_name: str) -> str:
         """Delete a query."""
         try:
-            success = self.adapter.delete_query(query_name)
+            success = self.service_manager.query.delete_query(query_name)
             if success:
                 return f"✅ Successfully deleted query '{query_name}'"
             else:

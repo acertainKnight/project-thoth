@@ -2,21 +2,18 @@ import time
 
 from loguru import logger
 
-from thoth.ingestion.agent_adapter import AgentAdapter
 from thoth.ingestion.agent_v2 import create_research_assistant
 from thoth.pipeline import ThothPipeline
 
 
-def run_agent_chat(_args):
+def run_agent_chat(_args, pipeline: ThothPipeline):
     """
     Start an interactive chat with the research assistant agent.
     """
     try:
         logger.info('Starting modern research assistant agent chat...')
-        pipeline = ThothPipeline()
-        adapter = AgentAdapter(pipeline.services)
         agent = create_research_assistant(
-            adapter=adapter,
+            service_manager=pipeline.services,
             enable_memory=True,
         )
 

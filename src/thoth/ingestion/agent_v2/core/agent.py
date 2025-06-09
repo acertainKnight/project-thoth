@@ -13,7 +13,6 @@ from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from loguru import logger
 
-from thoth.ingestion.agent_adapter import AgentAdapter
 from thoth.ingestion.agent_v2.core.state import ResearchAgentState
 from thoth.ingestion.agent_v2.core.token_tracker import TokenUsageTracker
 from thoth.ingestion.agent_v2.tools.analysis_tools import (
@@ -44,6 +43,7 @@ from thoth.ingestion.agent_v2.tools.rag_tools import (
     SearchKnowledgeTool,
 )
 from thoth.ingestion.agent_v2.tools.web_tools import WebSearchTool
+from thoth.services.service_manager import ServiceManager
 
 
 class ResearchAssistant:
@@ -56,7 +56,7 @@ class ResearchAssistant:
 
     def __init__(
         self,
-        adapter: AgentAdapter,
+        service_manager: ServiceManager,
         enable_memory: bool = True,
         system_prompt: str | None = None,
     ):
@@ -64,21 +64,21 @@ class ResearchAssistant:
         Initialize the research assistant.
 
         Args:
-            adapter: AgentAdapter instance for accessing services
+            service_manager: ServiceManager instance for accessing services
             enable_memory: Whether to enable conversation memory
             system_prompt: Custom system prompt (uses default if None)
         """
-        self.adapter = adapter
+        self.service_manager = service_manager
         self.enable_memory = enable_memory
 
-        # Get LLM from adapter
-        self.llm = adapter.get_llm()
+        # Get LLM from service manager
+        self.llm = self.service_manager.llm.get_client()
 
         # Token usage tracker
         self.usage_tracker = TokenUsageTracker()
 
         # Initialize tool registry and register all tools
-        self.tool_registry = ToolRegistry(adapter=adapter)
+        self.tool_registry = ToolRegistry(service_manager=self.service_manager)
         self._register_tools()
 
         # Get all tool instances
@@ -181,12 +181,15 @@ Remember: You have direct access to tools - use them immediately rather than jus
         else:
             return graph.compile()
 
-    def _agent_node(self, state: ResearchAgentState) -> dict[str, Any]:
+    def _agent_node(
+        self, state: ResearchAgentState, model_override: str | None = None
+    ) -> dict[str, Any]:
         """
         Main agent node that processes messages and decides on actions.
 
         Args:
             state: Current agent state
+            model_override: Optional model to use for this turn
 
         Returns:
             dict: Updated state with agent's response
@@ -196,8 +199,14 @@ Remember: You have direct access to tools - use them immediately rather than jus
         if not any(isinstance(m, SystemMessage) for m in messages):
             messages.insert(0, SystemMessage(content=self.system_prompt))
 
+        # Use the specified model or the default
+        if model_override:
+            llm_with_tools = self.llm.bind_tools(self.tools, model=model_override)
+        else:
+            llm_with_tools = self.llm_with_tools
+
         # Get response from LLM with tools
-        response = self.llm_with_tools.invoke(messages)
+        response = llm_with_tools.invoke(messages)
 
         # Return the response (LangGraph will handle adding it to messages)
         return {'messages': [response]}
@@ -208,6 +217,7 @@ Remember: You have direct access to tools - use them immediately rather than jus
         session_id: str | None = None,
         user_id: str | None = None,
         context: dict[str, Any] | None = None,
+        model_override: str | None = None,
     ) -> dict[str, Any]:
         """
         Process a user message and return the agent's response.
@@ -217,6 +227,7 @@ Remember: You have direct access to tools - use them immediately rather than jus
             session_id: Optional session ID for memory persistence
             user_id: Identifier for the current user
             context: Optional context to pass to the agent
+            model_override: Optional model to use for this turn
 
         Returns:
             dict: Response containing agent's message and any tool results
@@ -234,6 +245,17 @@ Remember: You have direct access to tools - use them immediately rather than jus
             config['configurable'] = {'thread_id': session_id}
 
         try:
+            # If a model override is provided, we need to inject it into the agent node
+            # One way to do this is to re-bind the node with the new model
+            if model_override:
+                # This is a simplified way to handle this. In a more complex graph,
+                # you might need a more sophisticated state management approach.
+                from functools import partial
+
+                self.app.graph.nodes['agent']['func'] = partial(
+                    self._agent_node, model_override=model_override
+                )
+
             # Run the agent
             result = self.app.invoke(initial_state, config)
 
@@ -319,7 +341,7 @@ Remember: You have direct access to tools - use them immediately rather than jus
 
 
 def create_research_assistant(
-    adapter: AgentAdapter,
+    service_manager: ServiceManager,
     enable_memory: bool = True,
     system_prompt: str | None = None,
 ) -> ResearchAssistant:
@@ -327,7 +349,7 @@ def create_research_assistant(
     Factory function to create a research assistant.
 
     Args:
-        adapter: AgentAdapter instance
+        service_manager: ServiceManager instance
         enable_memory: Whether to enable conversation memory
         system_prompt: Custom system prompt
 
@@ -335,7 +357,7 @@ def create_research_assistant(
         ResearchAssistant: Configured research assistant instance
     """
     return ResearchAssistant(
-        adapter=adapter,
+        service_manager=service_manager,
         enable_memory=enable_memory,
         system_prompt=system_prompt,
     )
