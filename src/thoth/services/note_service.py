@@ -299,32 +299,28 @@ class NoteService(BaseService):
     def _format_citations_for_note(
         self, citations: list[Citation]
     ) -> list[dict[str, Any]]:
-        """Format citations for display in the note."""
+        """
+        Format citations for display in the note.
+
+        This method prepares the full citation data for the template,
+        including finding links to existing Obsidian notes.
+        """
         formatted = []
 
         for i, citation in enumerate(citations, 1):
-            # Find existing note if available
+            # Convert citation to dict to pass all data to template
+            citation_data = (
+                citation.model_dump()
+                if hasattr(citation, 'model_dump')
+                else citation.__dict__
+            )
+
+            # Find existing note if available and add it to the data
             obsidian_link = self._find_citation_note(citation)
+            citation_data['obsidian_link'] = obsidian_link
+            citation_data['number'] = i
 
-            if not obsidian_link and citation.url:
-                link_text = citation.title or 'External Link'
-                obsidian_link = f'[{link_text}]({citation.url})'
-            elif not obsidian_link:
-                obsidian_link = citation.title or citation.text or 'Untitled'
-
-            formatted_citation = {
-                'number': i,
-                'text': citation.text or 'No citation text',
-                'title': citation.title or 'Untitled',
-                'authors': ', '.join(citation.authors)
-                if citation.authors
-                else 'Unknown',
-                'year': citation.year or 'Unknown',
-                'doi': citation.doi,
-                'url': citation.url,
-                'obsidian_link': obsidian_link,
-            }
-            formatted.append(formatted_citation)
+            formatted.append(citation_data)
 
         return formatted
 

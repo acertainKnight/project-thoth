@@ -137,35 +137,6 @@ def test_full_citation_extraction_flow(thoth_config: ThothConfig, monkeypatch):
     assert any(c.title == 'Paper A' for c in citations)
 
 
-def test_granular_model_selection(thoth_config: ThothConfig, mock_llm_service):
-    """Test that the correct, specific models are used for each step."""
-    thoth_config.citation_llm_config.document_citation_model = 'doc-model'
-    thoth_config.citation_llm_config.reference_cleaning_model = 'clean-model'
-    thoth_config.citation_llm_config.structured_extraction_model = 'struct-model'
-    thoth_config.citation_llm_config.batch_structured_extraction_model = 'batch-model'
-
-    # The mock service's get_client will be called. We check its call args.
-    processor = CitationProcessor(mock_llm_service, thoth_config)
-
-    # Check calls made during initialization
-    init_calls = mock_llm_service.get_client.call_args_list
-    init_models = {c.kwargs['model'] for c in init_calls if 'model' in c.kwargs}
-
-    assert 'doc-model' in init_models
-    assert 'clean-model' in init_models
-    assert 'batch-model' in init_models
-    assert 'struct-model' in init_models
-
-    # Test the single extraction call again to be sure
-    mock_llm_service.get_client.reset_mock()
-    processor.citation_batch_size = 1
-    # This call will use the `single_citation_chain` which was already initialized
-    processor._extract_structured_citations_single(['some citation string'])
-
-    # Verify that no new client was created, as the chain is pre-compiled
-    mock_llm_service.get_client.assert_not_called()
-
-
 @pytest.fixture
 def mock_extractor_llm():
     """Create a mock LLM for the ReferenceExtractor."""

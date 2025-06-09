@@ -53,11 +53,11 @@ N/A
 {% endif %}
 {% endfor %}
 
-## Citations
+## Citations ({{ citation_count }})
 
 {% if citations %}
-{% for citation_item in citations %}
-- {{ citation_item.generated_markdown_link | safe if citation_item.generated_markdown_link else (citation_item.formatted or citation_item.title or "N/A") }}
+{% for c in citations %}
+- **[{{ c.number }}]** {% if c.authors %}{{ c.authors | join(', ') }}. {% endif %}({{ c.year or 'N/A' }}). *{{ c.title or 'Untitled' }}*.{% if c.journal %} {{ c.journal }}.{% endif %}{% if c.obsidian_link %} {{ c.obsidian_link | safe }}{% elif c.url %} [Link]({{ c.url }}){% endif %}
 {% endfor %}
 {% else %}
 No citations found.
