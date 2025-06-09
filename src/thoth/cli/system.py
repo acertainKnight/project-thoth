@@ -9,7 +9,7 @@ from thoth.server.pdf_monitor import PDFMonitor
 from thoth.utilities.config import get_config
 
 
-def run_monitor(args):
+def run_monitor(args, pipeline: ThothPipeline):
     """
     Run the PDF monitor.
     """
@@ -33,6 +33,7 @@ def run_monitor(args):
 
     monitor = PDFMonitor(
         watch_dir=watch_dir,
+        pipeline=pipeline,
         polling_interval=args.polling_interval,
         recursive=args.recursive,
         track_file=track_file,
@@ -52,7 +53,7 @@ def run_monitor(args):
     return 0
 
 
-def process_pdf(args):
+def process_pdf(args, pipeline: ThothPipeline):
     """
     Process a single PDF file.
     """
@@ -60,12 +61,11 @@ def process_pdf(args):
     if not pdf_path.exists():
         logger.error(f'PDF file does not exist: {pdf_path}')
         return 1
-    pipeline = ThothPipeline()
     note_path, _, _ = pipeline.process_pdf(pdf_path)
     logger.info(f'Successfully processed: {pdf_path} -> {note_path}')
 
 
-def run_api_server(args):
+def run_api_server(args, pipeline: ThothPipeline):
     """
     Run the Obsidian API server.
     """
@@ -82,6 +82,7 @@ def run_api_server(args):
         start_obsidian_server(
             host=host,
             port=port,
+            pipeline=pipeline,
             pdf_directory=config.pdf_dir,
             notes_directory=config.notes_dir,
             api_base_url=base_url,
@@ -93,14 +94,13 @@ def run_api_server(args):
         return 1
 
 
-def run_scrape_filter_test(args):
+def run_scrape_filter_test(args, pipeline: ThothPipeline):
     """
     Test the filter with sample articles.
     """
     from thoth.utilities.schemas import ResearchQuery, ScrapedArticleMetadata
 
     logger.info('Testing filter functionality.')
-    pipeline = ThothPipeline()
 
     if args.create_sample_queries:
         sample_queries = [

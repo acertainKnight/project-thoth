@@ -21,24 +21,22 @@ class TestThothPipeline:
         # Create a minimal pipeline without needing all the config
         # We'll mock the services to avoid initialization issues
         with patch('thoth.pipeline.ServiceManager') as mock_service_manager:
-            with patch('thoth.pipeline.Filter') as mock_filter:
-                with patch('thoth.pipeline.CitationGraph') as mock_tracker:
-                    # Mock the service manager
-                    mock_services = MagicMock()
-                    mock_service_manager.return_value = mock_services
+            with patch('thoth.pipeline.CitationGraph') as mock_tracker:
+                # Mock the service manager
+                mock_services = MagicMock()
+                mock_service_manager.return_value = mock_services
 
-                    # Create pipeline
-                    pipeline = ThothPipeline(
-                        output_dir=temp_workspace / 'output',
-                        notes_dir=temp_workspace / 'notes',
-                    )
+                # Create pipeline
+                pipeline = ThothPipeline(
+                    output_dir=temp_workspace / 'output',
+                    notes_dir=temp_workspace / 'notes',
+                )
 
-                    # Replace with mocked components
-                    pipeline.services = mock_services
-                    pipeline.filter = mock_filter.return_value
-                    pipeline.citation_tracker = mock_tracker.return_value
+                # Replace with mocked components
+                pipeline.services = mock_services
+                pipeline.citation_tracker = mock_tracker.return_value
 
-                    return pipeline
+                return pipeline
 
     def test_process_pdf_success(
         self,
@@ -227,12 +225,6 @@ class TestThothPipeline:
             assert stats['articles_processed'] == 10
             assert stats['articles_updated'] == 8
             assert stats['tags_added'] == 15
-
-    def test_get_filter(self, pipeline):
-        """Test filter property access."""
-        assert pipeline.filter is not None
-        # The filter is stored directly, not as a private attribute
-        assert hasattr(pipeline, 'filter')
 
     def test_get_services(self, pipeline):
         """Test services property access."""

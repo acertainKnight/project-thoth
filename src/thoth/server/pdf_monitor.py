@@ -127,32 +127,68 @@ class PDFTracker:
         # Check if the file is in the tracked list
         return abs_path in self.processed_files
 
+    def get_note_path(self, file_path: Path) -> Path | None:
+        """
+        Get the note path for a processed file.
+        Args:
+            file_path: Path to the file.
+        Returns:
+            Path | None: The path to the note, or None if not found.
+        """
+        abs_path = str(file_path.resolve())
+        if abs_path in self.processed_files:
+            note_path_str = self.processed_files[abs_path].get('note_path')
+            if note_path_str:
+                return Path(note_path_str)
+        return None
+
     def mark_processed(self, file_path: Path, metadata: dict | None = None):
         """
         Mark a file as processed.
 
         Args:
-            file_path: Path to the file to mark as processed.
-            metadata: Optional metadata to store with the file.
+            file_path: Path to the original file to mark as processed.
+            metadata: Optional metadata to store with the file. Should include
+                'new_pdf_path' if renamed.
         """
-        # Use canonical absolute path for consistency
-        abs_path = str(file_path.resolve())
+        # Use canonical absolute path of the original file for the key
+        original_abs_path = str(file_path.resolve())
 
-        # Get file stats for verification
-        stats = file_path.stat()
+        # Determine which path to use for getting file stats
+        # If the file was renamed, the new path is in metadata
+        new_path_str = metadata.get('new_pdf_path') if metadata else None
+        path_for_stats = (
+            Path(new_path_str)
+            if new_path_str and Path(new_path_str).exists()
+            else file_path
+        )
 
-        # Store file with metadata
-        self.processed_files[abs_path] = {
+        try:
+            # Get file stats for verification from the path that currently exists
+            stats = path_for_stats.stat()
+        except FileNotFoundError:
+            logger.error(
+                f'Cannot get stats, file not found at {path_for_stats} or {file_path}. Cannot mark as processed.'
+            )
+            return
+
+        # Prepare all data to be stored in the tracker
+        processed_data = {
             'processed_time': time.time(),
             'size': stats.st_size,
             'mtime': stats.st_mtime,
-            'note_path': metadata.get('note_path') if metadata else None,
         }
+        if metadata:
+            # Merge all provided metadata
+            processed_data.update(metadata)
+
+        # Store file with metadata, using original path as the key
+        self.processed_files[original_abs_path] = processed_data
 
         # Save the updated tracking information
         self._save_tracked_files()
 
-        logger.debug(f'Marked file as processed: {file_path}')
+        logger.debug(f'Marked original file path as processed: {file_path}')
 
     def verify_file_unchanged(self, file_path: Path) -> bool:
         """
@@ -197,16 +233,14 @@ class PDFHandler(FileSystemEventHandler):
     the processing pipeline when new PDFs are detected.
     """
 
-    def __init__(self, pipeline: 'ThothPipeline', pdf_tracker: PDFTracker):
+    def __init__(self, pipeline: 'ThothPipeline'):
         """
         Initialize the PDF handler.
 
         Args:
             pipeline: The Thoth pipeline instance to process PDFs.
-            pdf_tracker: Tracker for processed PDF files.
         """
         self.pipeline = pipeline
-        self.pdf_tracker = pdf_tracker
 
     def on_created(self, event):
         """
@@ -224,37 +258,11 @@ class PDFHandler(FileSystemEventHandler):
         if file_path.suffix.lower() != '.pdf':
             return
 
-        # Skip if already processed and unchanged
-        if self.pdf_tracker.is_processed(file_path):
-            if self.pdf_tracker.verify_file_unchanged(file_path):
-                logger.info(
-                    f'File already processed and unchanged (skipping): {file_path}'
-                )
-                return
-            else:
-                logger.info(
-                    f'File previously processed but has changed, reprocessing: {file_path}'
-                )
-        # If not processed, or processed but changed, continue to processing below
-
         logger.info(f'New PDF detected: {file_path}')
 
         try:
-            # Process the file
-            note_path, new_pdf_path, new_markdown_path = self.pipeline.process_pdf(
-                file_path
-            )
-            logger.info(f'Successfully processed: {file_path} -> {note_path}')
-
-            # Mark as processed
-            self.pdf_tracker.mark_processed(
-                file_path,
-                {
-                    'note_path': str(note_path),
-                    'new_pdf_path': str(new_pdf_path),
-                    'new_markdown_path': str(new_markdown_path),
-                },
-            )
+            # The pipeline now handles tracking and reprocessing checks
+            self.pipeline.process_pdf(file_path)
         except Exception as e:
             logger.error(f'Error processing {file_path}: {e!s}')
 
@@ -273,7 +281,6 @@ class PDFMonitor:
         pipeline: Optional['ThothPipeline'] = None,
         polling_interval: float = 1.0,
         recursive: bool = False,
-        track_file: Path | None = None,
     ):
         """
         Initialize the PDF monitor.
@@ -283,8 +290,7 @@ class PDFMonitor:
             pipeline: ThothPipeline instance. If None, a new instance is created.
             polling_interval: Interval in seconds for polling the directory.
             recursive: Whether to watch subdirectories recursively.
-            track_file: Path to the file tracking database. If None, a default path is used.
-        """  # noqa: W505
+        """
         self.config = get_config()
         self.watch_dir = watch_dir or self.config.pdf_dir
 
@@ -304,9 +310,6 @@ class PDFMonitor:
         self.polling_interval = polling_interval
         self.recursive = recursive
 
-        # Initialize the file tracker
-        self.pdf_tracker = PDFTracker(track_file)
-
         logger.info(
             f'PDF monitor initialized to watch: {self.watch_dir} (recursive: {self.recursive})'
         )
@@ -322,7 +325,7 @@ class PDFMonitor:
         self._process_existing_files()
 
         # Set up and start the observer
-        event_handler = PDFHandler(self.pipeline, self.pdf_tracker)
+        event_handler = PDFHandler(self.pipeline)
         self.observer.schedule(
             event_handler, str(self.watch_dir), recursive=self.recursive
         )
@@ -373,32 +376,11 @@ class PDFMonitor:
                 if not pdf_file.is_file():
                     continue
 
-            # Skip if already processed and unchanged
-            if self.pdf_tracker.is_processed(
-                pdf_file
-            ) and self.pdf_tracker.verify_file_unchanged(pdf_file):
-                logger.info(f'Skipping already processed file: {pdf_file}')
-                continue
-
             logger.info(f'Processing existing PDF: {pdf_file}')
 
             try:
-                note_path, new_pdf_path, new_markdown_path = self.pipeline.process_pdf(
-                    pdf_file
-                )
-                logger.info(
-                    f'Successfully processed existing file: {pdf_file} -> {note_path}'
-                )
-
-                # Mark as processed
-                self.pdf_tracker.mark_processed(
-                    pdf_file,
-                    {
-                        'note_path': str(note_path),
-                        'new_pdf_path': str(new_pdf_path),
-                        'new_markdown_path': str(new_markdown_path),
-                    },
-                )
+                # The pipeline now handles tracking and reprocessing checks
+                self.pipeline.process_pdf(pdf_file)
             except Exception as e:
                 logger.error(f'Error processing existing file {pdf_file}: {e!s}')
 

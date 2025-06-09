@@ -3,7 +3,7 @@ from loguru import logger
 from thoth.pipeline import ThothPipeline
 
 
-def run_rag_index(args):
+def run_rag_index(args, pipeline: ThothPipeline):
     """
     Index all documents in the knowledge base.
     """
@@ -11,7 +11,6 @@ def run_rag_index(args):
         logger.warning('Force flag enabled - will reindex all documents')
     try:
         logger.info('Starting knowledge base indexing for RAG system...')
-        pipeline = ThothPipeline()
         stats = pipeline.index_knowledge_base()
         logger.info('Knowledge base indexing completed:')
         logger.info(f'  Total files indexed: {stats["total_files"]}')
@@ -32,13 +31,12 @@ def run_rag_index(args):
         return 1
 
 
-def run_rag_search(args):
+def run_rag_search(args, pipeline: ThothPipeline):
     """
     Search the knowledge base.
     """
     try:
         logger.info(f'Searching knowledge base for: {args.query}')
-        pipeline = ThothPipeline()
         filter_dict = None
         if args.filter_type != 'all':
             filter_dict = {'document_type': args.filter_type}
@@ -65,13 +63,12 @@ def run_rag_search(args):
         return 1
 
 
-def run_rag_ask(args):
+def run_rag_ask(args, pipeline: ThothPipeline):
     """
     Ask a question about the knowledge base.
     """
     try:
         logger.info(f'Asking question: {args.question}')
-        pipeline = ThothPipeline()
         response = pipeline.ask_knowledge_base(
             question=args.question,
             k=args.k,
@@ -92,7 +89,7 @@ def run_rag_ask(args):
         return 1
 
 
-def run_rag_stats(args):
+def run_rag_stats(args, pipeline: ThothPipeline):
     """
     Show RAG system statistics.
     """
@@ -100,7 +97,6 @@ def run_rag_stats(args):
         logger.info('Verbose mode enabled - showing detailed statistics')
     try:
         logger.info('RAG System Statistics:')
-        pipeline = ThothPipeline()
         stats = pipeline.get_rag_stats()
         logger.info(f'  Documents indexed: {stats.get("document_count", 0)}')
         logger.info(f'  Collection name: {stats.get("collection_name", "Unknown")}')
@@ -115,7 +111,7 @@ def run_rag_stats(args):
         return 1
 
 
-def run_rag_clear(args):
+def run_rag_clear(args, pipeline: ThothPipeline):
     """
     Clear the RAG vector index.
     """
@@ -130,7 +126,6 @@ def run_rag_clear(args):
                 logger.info('Clear operation cancelled.')
                 return 0
         logger.warning('Clearing RAG vector index...')
-        pipeline = ThothPipeline()
         pipeline.clear_rag_index()
         logger.info('RAG vector index cleared successfully.')
         logger.info('Run "thoth rag index" to re-index your knowledge base.')
@@ -140,22 +135,22 @@ def run_rag_clear(args):
         return 1
 
 
-def run_rag_command(args):
+def run_rag_command(args, pipeline: ThothPipeline):
     """Handle RAG commands."""
     if not hasattr(args, 'rag_command') or not args.rag_command:
         logger.error('No RAG subcommand specified')
         return 1
 
     if args.rag_command == 'index':
-        return run_rag_index(args)
+        return run_rag_index(args, pipeline)
     elif args.rag_command == 'search':
-        return run_rag_search(args)
+        return run_rag_search(args, pipeline)
     elif args.rag_command == 'ask':
-        return run_rag_ask(args)
+        return run_rag_ask(args, pipeline)
     elif args.rag_command == 'stats':
-        return run_rag_stats(args)
+        return run_rag_stats(args, pipeline)
     elif args.rag_command == 'clear':
-        return run_rag_clear(args)
+        return run_rag_clear(args, pipeline)
     else:
         logger.error(f'Unknown RAG command: {args.rag_command}')
         return 1

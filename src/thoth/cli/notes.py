@@ -1,26 +1,13 @@
-from pathlib import Path
-
 from loguru import logger
 
 from thoth.pipeline import ThothPipeline
-from thoth.utilities.config import get_config
 
 
-def run_reprocess_note(args):
+def run_reprocess_note(args, pipeline: ThothPipeline):
     """
     Regenerate the note for an existing article.
     """
     logger.info(f'Attempting to reprocess note for article_id: {args.article_id}')
-    config = get_config()
-    pipeline = ThothPipeline(
-        ocr_api_key=config.api_keys.mistral_key,
-        llm_api_key=config.api_keys.openrouter_key,
-        templates_dir=Path(config.templates_dir),
-        prompts_dir=Path(config.prompts_dir),
-        output_dir=Path(config.output_dir),
-        notes_dir=Path(config.notes_dir),
-        api_base_url=config.api_server_config.base_url,
-    )
     article_id = args.article_id
     regen_data = pipeline.citation_tracker.get_article_data_for_regeneration(article_id)
 
@@ -56,24 +43,14 @@ def run_reprocess_note(args):
         return 1
 
 
-def run_regenerate_all_notes(args):
+def run_regenerate_all_notes(args, pipeline: ThothPipeline):
     """
     Regenerate all notes for all articles in the citation graph.
     """
     if args.force:
         logger.warning('Force flag enabled - will overwrite existing notes')
     logger.info('Attempting to regenerate all notes for all articles.')
-    config = get_config()
     try:
-        pipeline = ThothPipeline(
-            ocr_api_key=config.api_keys.mistral_key,
-            llm_api_key=config.api_keys.openrouter_key,
-            templates_dir=Path(config.templates_dir),
-            prompts_dir=Path(config.prompts_dir),
-            output_dir=Path(config.output_dir),
-            notes_dir=Path(config.notes_dir),
-            api_base_url=config.api_server_config.base_url,
-        )
         successfully_regenerated_files = pipeline.regenerate_all_notes()
         logger.info(
             f'Regeneration process completed. {len(successfully_regenerated_files)} notes reported as successfully regenerated.'
@@ -85,24 +62,14 @@ def run_regenerate_all_notes(args):
         return 1
 
 
-def run_consolidate_tags(args):
+def run_consolidate_tags(args, pipeline: ThothPipeline):
     """
     Consolidate existing tags and suggest additional relevant tags for all articles.
     """
     if args.force:
         logger.warning('Force flag enabled - will overwrite existing tags')
     logger.info('Attempting to consolidate tags and retag all articles.')
-    config = get_config()
     try:
-        pipeline = ThothPipeline(
-            ocr_api_key=config.api_keys.mistral_key,
-            llm_api_key=config.api_keys.openrouter_key,
-            templates_dir=Path(config.templates_dir),
-            prompts_dir=Path(config.prompts_dir),
-            output_dir=Path(config.output_dir),
-            notes_dir=Path(config.notes_dir),
-            api_base_url=config.api_server_config.base_url,
-        )
         stats = pipeline.consolidate_and_retag_all_articles()
         logger.info('Tag consolidation and re-tagging process completed successfully.')
         logger.info('Summary statistics:')

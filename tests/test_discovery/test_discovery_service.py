@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from thoth.discovery.discovery_manager import DiscoveryManager
+from thoth.services.discovery_service import DiscoveryService
 from thoth.utilities.schemas import (
     BrowserRecording,
     DiscoverySource,
@@ -9,7 +9,7 @@ from thoth.utilities.schemas import (
 )
 
 
-def test_discovery_manager_emulator(tmp_path):
+def test_discovery_service_emulator(tmp_path):
     schedule = ScheduleConfig()
     source = DiscoverySource(
         name='demo',
@@ -27,11 +27,11 @@ def test_discovery_manager_emulator(tmp_path):
         ),
     )
 
-    manager = DiscoveryManager(filter=None, sources_config_dir=tmp_path)
+    service = DiscoveryService(sources_dir=tmp_path)
     with patch.object(
-        manager.emulator_scraper, 'scrape', return_value=[]
+        service.emulator_scraper, 'scrape', return_value=[]
     ) as mock_scrape:
-        manager.create_source(source)
-        result = manager.run_discovery(source_name='demo')
+        service.create_source(source)
+        result = service.run_discovery(source_name='demo')
         assert result.articles_found == 0
         mock_scrape.assert_called_once()

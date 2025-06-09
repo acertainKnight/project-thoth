@@ -8,13 +8,15 @@ This module contains the main pipeline that orchestrates the processing of PDF d
 4. Note generation for Obsidian
 """  # noqa: W505
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Any
 
 from loguru import logger
 
-from thoth.ingestion.filter import Filter
 from thoth.knowledge.graph import CitationGraph
+from thoth.server.pdf_monitor import PDFTracker
 from thoth.services.service_manager import ServiceManager
 from thoth.utilities.config import get_config
 from thoth.utilities.schemas import Citation, SearchResult
@@ -84,11 +86,8 @@ class ThothPipeline:
         self.services = ServiceManager(config=self.config)
         self.services.initialize()
 
-        # Initialize filter with service manager
-        self.filter = Filter(service_manager=self.services)
-
-        # Set filter function on discovery service
-        self.services.set_filter_function(self.filter.process_article)
+        # Initialize PDF tracker
+        self.pdf_tracker = PDFTracker()
 
         # Initialize components that aren't yet services
         # TODO: CitationGraph should eventually be converted to a service
@@ -122,6 +121,20 @@ class ThothPipeline:
         pdf_path = Path(pdf_path)
         logger.info(f'Processing PDF: {pdf_path}')
 
+        # Check if file has already been processed and is unchanged
+        if self.pdf_tracker.is_processed(
+            pdf_path
+        ) and self.pdf_tracker.verify_file_unchanged(pdf_path):
+            logger.info(f'Skipping already processed and unchanged file: {pdf_path}')
+            note_path = self.pdf_tracker.get_note_path(pdf_path)
+            if note_path:
+                return note_path
+            else:
+                # If note_path not found, we might need to re-process to get it
+                logger.warning(
+                    f'File {pdf_path} was processed, but note path not found in tracker. Reprocessing.'
+                )
+
         # Step 1: OCR conversion
         markdown_path, no_images_markdown = self._ocr_convert(pdf_path)
         logger.info(f'OCR conversion completed: {markdown_path}')
@@ -142,6 +155,16 @@ class ThothPipeline:
             citations=citations,
         )
         logger.info(f'Note generation completed: {note_path}')
+
+        # Mark as processed in the tracker
+        self.pdf_tracker.mark_processed(
+            pdf_path,
+            {
+                'note_path': str(note_path),
+                'new_pdf_path': str(new_pdf_path),
+                'new_markdown_path': str(new_markdown_path),
+            },
+        )
 
         # Step 5: Index markdown and note in RAG system (optional)
         # This is done asynchronously to not slow down the main pipeline

@@ -1,0 +1,51 @@
+You are helping to refine a research query based on analysis of articles and user feedback. Analyze the current query and suggest specific improvements.
+
+## Current Research Query:
+**Name:** {{ query.name }}
+**Description:** {{ query.description }}
+**Research Question:** {{ query.research_question }}
+**Keywords:** {{ query.keywords | join(', ') }}
+**Required Topics:** {{ query.required_topics | join(', ') }}
+**Preferred Topics:** {{ query.preferred_topics | join(', ') }}
+**Excluded Topics:** {{ query.excluded_topics | join(', ') }}
+**Methodology Preferences:** {{ query.methodology_preferences | join(', ') }}
+**Minimum Relevance Score:** {{ query.minimum_relevance_score }}
+
+{% if recent_evaluations %}
+## Recent Article Evaluations:
+{% for eval in recent_evaluations %}
+**Article:** {{ eval.article_title }}
+**Score:** {{ eval.relevance_score }}
+**Recommendation:** {{ eval.recommendation }}
+**Reasoning:** {{ eval.reasoning }}
+---
+{% endfor %}
+{% endif %}
+
+{% if user_feedback %}
+## User Feedback:
+{{ user_feedback }}
+{% endif %}
+
+## Analysis Context:
+{% if analysis_context %}
+{{ analysis_context }}
+{% endif %}
+
+## Refinement Instructions:
+Based on the current query, recent evaluations, and any user feedback, suggest specific improvements:
+
+1. **Keywords:** Identify missing keywords that appear frequently in relevant articles
+2. **Topics:** Suggest new required/preferred topics or refinements to existing ones
+3. **Exclusions:** Recommend additional topics to exclude if they're causing false positives
+4. **Methodology:** Suggest methodology preferences based on successful matches
+5. **Research Question:** Propose improvements to make the research question more specific or better targeted
+
+## Guidelines:
+- Be specific and actionable in your suggestions
+- Explain the reasoning behind each suggestion
+- Consider both precision (avoiding irrelevant articles) and recall (not missing relevant ones)
+- Base suggestions on patterns observed in the evaluations
+- Help balance specificity with breadth
+
+Provide your suggestions in the specified JSON schema format with clear reasoning for each recommendation.

@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from thoth.pipeline import ThothPipeline
 from thoth.server.pdf_monitor import PDFMonitor, PDFTracker
 
 
@@ -97,24 +98,24 @@ class TestPDFMonitor:
     @pytest.fixture
     def monitor(self, temp_workspace, mock_pipeline):
         """Create a PDFMonitor instance for testing."""
-        # Use a test-specific tracking file to avoid conflicts with global state
-        test_track_file = temp_workspace / 'test_track.json'
         return PDFMonitor(
             watch_dir=temp_workspace / 'pdf',
             pipeline=mock_pipeline,
             polling_interval=0.1,
             recursive=False,
-            track_file=test_track_file,
         )
 
     @pytest.fixture
-    def mock_pipeline(self):
+    def mock_pipeline(self, temp_workspace):
         """Create a mock pipeline."""
-        pipeline = MagicMock()
+        pipeline = MagicMock(spec=ThothPipeline)
         pipeline.process_pdf.return_value = (
             Path('/path/to/note.md'),
             Path('/path/to/pdf.pdf'),
             Path('/path/to/markdown.md'),
+        )
+        pipeline.pdf_tracker = PDFTracker(
+            track_file=temp_workspace / 'test_tracker.json'
         )
         return pipeline
 
@@ -171,15 +172,23 @@ class TestPDFMonitor:
         pdf_file = pdf_dir / 'test.pdf'
         pdf_file.write_bytes(b'Test PDF')
 
-        # Replace the pipeline
-        monitor.pipeline = mock_pipeline
+        # Mock the pipeline's process_pdf to mark files as processed in its tracker
+        def _mock_process_pdf(pdf_path):
+            monitor.pipeline.pdf_tracker.mark_processed(pdf_path)
+            return (
+                Path('/path/to/note.md'),
+                Path('/path/to/pdf.pdf'),
+                Path('/path/to/markdown.md'),
+            )
+
+        mock_pipeline.process_pdf.side_effect = _mock_process_pdf
 
         # Process existing files (what happens on start)
         monitor._process_existing_files()
 
         # Should have processed the file
-        assert monitor.pdf_tracker.is_processed(pdf_file)
         mock_pipeline.process_pdf.assert_called_once_with(pdf_file)
+        assert monitor.pipeline.pdf_tracker.is_processed(pdf_file)
 
     def test_process_error_handling(self, monitor, mock_pipeline, temp_workspace):
         """Test error handling during processing."""
@@ -189,13 +198,12 @@ class TestPDFMonitor:
 
         # Make processing fail
         mock_pipeline.process_pdf.side_effect = Exception('Processing failed')
-        monitor.pipeline = mock_pipeline
 
         # Should not crash
         monitor._process_existing_files()
 
         # File should not be marked as processed
-        assert not monitor.pdf_tracker.is_processed(pdf_file)
+        assert not monitor.pipeline.pdf_tracker.is_processed(pdf_file)
 
     def test_monitor_lifecycle(self, monitor):
         """Test starting and stopping the monitor."""
@@ -206,17 +214,17 @@ class TestPDFMonitor:
         # Can't easily test full start/stop without threading issues
         # Just verify the monitor was created correctly
         assert monitor.watch_dir.exists()
-        assert monitor.pdf_tracker is not None
+        assert monitor.pipeline.pdf_tracker is not None
 
     def test_monitor_with_custom_tracker(self, temp_workspace, mock_pipeline):
         """Test monitor with custom tracking file."""
         custom_track_file = temp_workspace / 'custom_tracker.json'
+        mock_pipeline.pdf_tracker = PDFTracker(track_file=custom_track_file)
 
         monitor = PDFMonitor(
             watch_dir=temp_workspace / 'pdf',
             pipeline=mock_pipeline,
-            track_file=custom_track_file,
         )
 
-        assert monitor.pdf_tracker.track_file == custom_track_file
+        assert monitor.pipeline.pdf_tracker.track_file == custom_track_file
         assert custom_track_file.exists()  # Should create the file

@@ -31,7 +31,7 @@ class ArxivClient:
 
     def __init__(
         self,
-        base_url: str = 'http://export.arxiv.org/api/query',
+        base_url: str = 'https://export.arxiv.org/api/query',
         timeout: int = 10,
         delay_seconds: float = 3.0,
         max_retries: int = 9,
@@ -50,7 +50,10 @@ class ArxivClient:
         self.delay_seconds = delay_seconds
         self.max_retries = max_retries
 
-        self.client = httpx.Client(timeout=timeout)
+        headers = {
+            'User-Agent': 'Thoth/1.0 (https://github.com/nick-ghafari/project-thoth)'
+        }
+        self.client = httpx.Client(timeout=timeout, headers=headers)
         self.last_request_time = 0
 
     def _make_request(
@@ -421,7 +424,7 @@ class ArxivAPISource(BaseAPISource):
         Args:
             rate_limit_delay: Delay between API requests in seconds.
         """
-        self.base_url = 'http://export.arxiv.org/api/query'
+        self.base_url = 'https://export.arxiv.org/api/query'
         self.rate_limit_delay = rate_limit_delay
         self.last_request_time = 0.0
 
@@ -495,7 +498,12 @@ class ArxivAPISource(BaseAPISource):
             self._rate_limit()
 
             # Make API request
-            response = requests.get(self.base_url, params=params, timeout=30)
+            headers = {
+                'User-Agent': 'Thoth/1.0 (https://github.com/nick-ghafari/project-thoth)'
+            }
+            response = requests.get(
+                self.base_url, params=params, timeout=30, headers=headers
+            )
             response.raise_for_status()
 
             # Parse RSS feed

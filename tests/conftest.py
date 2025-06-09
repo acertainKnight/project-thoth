@@ -108,6 +108,32 @@ def mock_config(temp_workspace):
 
 
 @pytest.fixture
+def thoth_config(mock_config, monkeypatch):
+    """
+    Create a ThothConfig object with mocked values for testing.
+    """
+    from thoth.utilities.config import ThothConfig
+
+    # Use monkeypatch to set environment variables from mock_config
+    # This is more robust for testing the real config loading
+    monkeypatch.setenv('API_MISTRAL_KEY', mock_config['api_keys']['mistral_key'])
+    monkeypatch.setenv('API_OPENROUTER_KEY', mock_config['api_keys']['openrouter_key'])
+    # ... set other env vars as needed ...
+
+    config = ThothConfig()
+
+    # Override any complex objects that need mocking
+    config.pdf_dir = Path(mock_config['pdf_dir'])
+    config.markdown_dir = Path(mock_config['markdown_dir'])
+    config.notes_dir = Path(mock_config['notes_dir'])
+    config.output_dir = Path(mock_config['output_dir'])
+    config.knowledge_base_dir = Path(mock_config['knowledge_dir'])
+    # ... and so on for other paths
+
+    return config
+
+
+@pytest.fixture
 def mock_llm_client():
     """
     Create a mock LLM client for testing.

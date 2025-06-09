@@ -20,6 +20,8 @@ from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 
 from thoth.ingestion.pdf_downloader import download_pdf
+from thoth.services.llm_router import LLMRouter
+from thoth.utilities.config import get_config
 
 app = FastAPI(
     title='Thoth Obsidian Integration',
@@ -46,6 +48,7 @@ current_config: dict[str, Any] = {}
 # Global agent instance - will be initialized when server starts
 research_agent = None
 agent_adapter = None
+llm_router = None
 
 
 # Request/Response Models
@@ -172,6 +175,11 @@ async def research_chat(request: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=503, detail='Research agent not initialized')
 
     try:
+        # Initialize router and select model based on query
+        config = get_config()
+        llm_router = LLMRouter(config)
+        selected_model = llm_router.select_model(request.message)
+
         # Generate session ID if not provided
         session_id = request.conversation_id or f'obsidian-{request.timestamp or 0}'
 
@@ -179,6 +187,7 @@ async def research_chat(request: ChatRequest) -> ChatResponse:
         response = research_agent.chat(
             message=request.message,
             session_id=session_id,
+            model_override=selected_model,
         )
 
         return ChatResponse(
@@ -296,8 +305,6 @@ def get_agent_config():
 
     try:
         # Get current config from the global config or reload it
-        from thoth.utilities.config import get_config
-
         config = get_config()
 
         # Return sanitized config (without sensitive data)
@@ -467,24 +474,27 @@ async def delayed_shutdown():
 
 async def reinitialize_agent():
     """Reinitialize the agent without restarting the process."""
-    global research_agent, agent_adapter
+    global research_agent, agent_adapter, llm_router
 
     try:
         logger.info('Reinitializing research agent...')
 
-        from thoth.ingestion.agent_adapter import AgentAdapter
         from thoth.ingestion.agent_v2 import create_research_assistant
         from thoth.pipeline import ThothPipeline
 
         # Create new pipeline with updated config
         pipeline = ThothPipeline()
-        agent_adapter = AgentAdapter(pipeline.services)
+        service_manager = pipeline.services
 
         # Create new research agent
         research_agent = create_research_assistant(
-            adapter=agent_adapter,
+            service_manager=service_manager,
             enable_memory=True,
         )
+
+        # Initialize router
+        config = get_config()
+        llm_router = LLMRouter(config)
 
         logger.info(
             f'Research agent reinitialized with {len(research_agent.get_available_tools())} tools'
@@ -565,7 +575,7 @@ def start_server(
         api_base_url (str): Base URL for the API.
         reload (bool): Whether to enable auto-reload for development.
     """
-    global pdf_dir, notes_dir, base_url, research_agent, agent_adapter
+    global pdf_dir, notes_dir, base_url, research_agent, agent_adapter, llm_router
 
     # Set module-level configuration
     pdf_dir = pdf_directory
@@ -580,19 +590,22 @@ def start_server(
     # Initialize the research agent
     try:
         logger.info('Initializing research agent...')
-        from thoth.ingestion.agent_adapter import AgentAdapter
         from thoth.ingestion.agent_v2 import create_research_assistant
         from thoth.pipeline import ThothPipeline
 
         # Initialize pipeline and adapter
         pipeline = ThothPipeline()
-        agent_adapter = AgentAdapter(pipeline.services)
+        service_manager = pipeline.services
 
         # Create the research agent
         research_agent = create_research_assistant(
-            adapter=agent_adapter,
+            service_manager=service_manager,
             enable_memory=True,
         )
+
+        # Initialize router
+        config = get_config()
+        llm_router = LLMRouter(config)
 
         logger.info(
             f'Research agent initialized with {len(research_agent.get_available_tools())} tools'

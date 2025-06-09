@@ -11,6 +11,7 @@ from typing import Any
 from thoth.analyze.citations.citations import CitationProcessor
 from thoth.analyze.citations.formatter import CitationFormatter, CitationStyle
 from thoth.services.base import BaseService, ServiceError
+from thoth.services.llm_service import LLMService
 from thoth.utilities.schemas import AnalysisResponse, Citation
 
 
@@ -45,13 +46,17 @@ class CitationService(BaseService):
     def citation_processor(self) -> CitationProcessor:
         """Get or create the citation processor."""
         if self._citation_processor is None:
-            self._citation_processor = CitationProcessor(
+            llm_service = LLMService(self.config)
+            llm = llm_service.get_client(
                 model=self.config.citation_llm_config.model,
-                openrouter_api_key=self.config.api_keys.openrouter_key,
-                prompts_dir=self.config.prompts_dir,
-                citation_batch_size=self.config.citation_config.citation_batch_size,
-                model_kwargs=self.config.citation_llm_config.model_settings.model_dump(),
+                **self.config.citation_llm_config.model_settings.model_dump(),
+            )
+            self._citation_processor = CitationProcessor(
+                llm=llm,
                 config=self.config,
+                prompts_dir=Path(self.config.prompts_dir)
+                if hasattr(self.config, 'prompts_dir')
+                else None,
             )
         return self._citation_processor
 
@@ -76,7 +81,11 @@ class CitationService(BaseService):
             self.validate_input(markdown_path=markdown_path)
 
             # Extract citations
-            citations = self.citation_processor.process_document(markdown_path)
+            citations = self.citation_processor.extract_citations(
+                markdown_path
+                if isinstance(markdown_path, Path)
+                else Path(markdown_path)
+            )
 
             # Format citations
             formatted_citations = self._citation_formatter.format_citations(citations)
