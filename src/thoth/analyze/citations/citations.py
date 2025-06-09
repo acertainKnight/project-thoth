@@ -97,34 +97,28 @@ class CitationProcessor:
         )
 
         # Initialize the chains using granular models
-        llm_config = self.config.citation_llm_config
-
-        def get_llm_for(model_name: str | None):
-            return self.llm.get_client(model=model_name or llm_config.model)
-
-        self.extract_document_citation_chain = document_citation_prompt | get_llm_for(
-            llm_config.document_citation_model
-        ).with_structured_output(Citation, include_raw=False, method='json_schema')
-        self.clean_references_section_chain = clean_references_prompt | get_llm_for(
-            llm_config.reference_cleaning_model
+        self.extract_document_citation_chain = (
+            document_citation_prompt
+            | self.llm.with_structured_output(
+                Citation, include_raw=False, method='json_schema'
+            )
         )
+        self.clean_references_section_chain = clean_references_prompt | self.llm
 
-        batch_llm = get_llm_for(llm_config.batch_structured_extraction_model)
         self.extract_citations_chain_json = (
             extract_citations_json_prompt
-            | batch_llm.bind(response_format={'type': 'json_object'})
+            | self.llm.bind(response_format={'type': 'json_object'})
         )
         self.extract_citations_chain = (
             extract_citations_prompt
-            | batch_llm.with_structured_output(
+            | self.llm.with_structured_output(
                 CitationExtractionResponse, include_raw=False, method='json_schema'
             )
         )
 
-        single_llm = get_llm_for(llm_config.structured_extraction_model)
         self.single_citation_chain = (
             single_citation_prompt
-            | single_llm.with_structured_output(
+            | self.llm.with_structured_output(
                 Citation, include_raw=False, method='json_schema'
             )
         )
