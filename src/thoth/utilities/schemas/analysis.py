@@ -15,6 +15,11 @@ class AnalysisResponse(BaseModel):
     propagate to note generation and other consumers.
 
     Args:
+        title: The title of the research paper.
+        authors: A list of the authors of the paper.
+        year: The publication year of the paper.
+        doi: The Digital Object Identifier (DOI) of the paper.
+        journal: The journal or venue where the paper was published.
         abstract: The abstract of the content as it appears in the document.
         key_points: 10-15 key points extracted from the content, provided as a
             newline-separated string.
@@ -42,6 +47,9 @@ class AnalysisResponse(BaseModel):
 
     Example:
         >>> analysis = AnalysisResponse(
+        ...     title='Attention Is All You Need',
+        ...     authors=['Ashish Vaswani', 'Noam Shazeer'],
+        ...     year=2017,
         ...     abstract='This paper explores...',
         ...     key_points='- Point one\n- Point two',
         ...     summary='A comprehensive summary...',
@@ -52,6 +60,21 @@ class AnalysisResponse(BaseModel):
         ... )
     """
 
+    title: str | None = Field(
+        description='The title of the research paper', default=None
+    )
+    authors: list[str] | None = Field(
+        description='A list of the authors of the paper', default=None
+    )
+    year: int | None = Field(
+        description='The publication year of the paper', default=None
+    )
+    doi: str | None = Field(
+        description='The Digital Object Identifier (DOI) of the paper', default=None
+    )
+    journal: str | None = Field(
+        description='The journal or venue where the paper was published', default=None
+    )
     abstract: str | None = Field(
         description='The abstract of the content as it appears in the document',
         default=None,
@@ -104,6 +127,10 @@ class AnalysisResponse(BaseModel):
     )
     strengths: str | None = Field(
         description='Strengths and positive aspects of the study, including the model architecture, data, and methodology',
+        default=None,
+    )
+    weaknesses: str | None = Field(
+        description='Weaknesses, shortcomings, or areas of concern',
         default=None,
     )
     limitations: str | None = Field(

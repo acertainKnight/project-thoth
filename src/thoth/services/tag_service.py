@@ -8,8 +8,9 @@ and related components.
 from typing import Any
 
 from thoth.analyze.tag_consolidator import TagConsolidator
-from thoth.knowledge.graph import CitationGraph
 from thoth.services.base import BaseService, ServiceError
+from thoth.services.llm_service import LLMService
+from thoth.utilities.config import ThothConfig
 
 
 class TagService(BaseService):
@@ -25,42 +26,41 @@ class TagService(BaseService):
 
     def __init__(
         self,
-        config=None,
-        tag_consolidator: TagConsolidator | None = None,
-        citation_tracker: CitationGraph = None,
-        llm_service=None,
+        config: ThothConfig | None = None,
+        llm_service: LLMService | None = None,
+        citation_tracker: Any | None = None,
     ):
         """
         Initialize the TagService.
 
         Args:
             config: Optional configuration object
-            tag_consolidator: Optional TagConsolidator instance
-            citation_tracker: Citation tracker instance for accessing graph
             llm_service: LLM service instance
+            citation_tracker: Citation tracker instance for accessing graph
         """
         super().__init__(config)
-        self._tag_consolidator = tag_consolidator
+        self.llm_service = llm_service
         self._citation_tracker = citation_tracker
-        self._consolidator: TagConsolidator | None = None
-        self._llm_service = llm_service
+        self.logger.info(f'Citation tracker in TagService: {citation_tracker}')
+        self._tag_consolidator = TagConsolidator(
+            llm_service=self.llm_service,
+            prompts_dir=self.config.prompts_dir,
+            config=self.config,
+            model_kwargs=self.config.tag_consolidator_llm_config.model_settings.model_dump(),
+        )
 
     def initialize(self) -> None:
         """Initialize the tag service."""
         self.logger.info('Tag service initialized')
 
     @property
+    def citation_tracker(self) -> Any:
+        """Get the citation tracker."""
+        return self._citation_tracker
+
+    @property
     def tag_consolidator(self) -> TagConsolidator:
         """Get or create the tag consolidator."""
-        if self._tag_consolidator is None:
-            self._tag_consolidator = TagConsolidator(
-                consolidate_model=self.config.tag_consolidator_llm_config.consolidate_model,
-                suggest_model=self.config.tag_consolidator_llm_config.suggest_model,
-                map_model=self.config.tag_consolidator_llm_config.map_model,
-                openrouter_api_key=self.config.api_keys.openrouter_key,
-                prompts_dir=self.config.prompts_dir,
-                model_kwargs=self.config.tag_consolidator_llm_config.model_settings.model_dump(),
-            )
         return self._tag_consolidator
 
     def extract_all_tags(self) -> list[str]:

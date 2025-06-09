@@ -84,7 +84,7 @@ class LLMConfig(BaseSettings):
         'auto', description='LLM document processing strategy hint'
     )
     max_output_tokens: int = Field(
-        500000, description='LLM max input tokens for direct processing strategy'
+        50000, description='LLM max input tokens for direct processing strategy'
     )
     max_context_length: int = Field(
         8000, description='LLM max context length for model'
@@ -102,6 +102,26 @@ class LLMConfig(BaseSettings):
     )
 
 
+class QueryBasedRoutingConfig(BaseSettings):
+    """Configuration for query-based model routing."""
+
+    model_config = SettingsConfigDict(
+        env_prefix='ROUTING_',
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='ignore',
+    )
+    enabled: bool = Field(False, description='Enable query-based routing')
+    routing_model: str = Field(
+        'openai/gpt-4o-mini',
+        description='The model used to select the best model for a query',
+    )
+    use_dynamic_prompt: bool = Field(
+        True, description='Use a dynamic Jinja2 template for the routing prompt'
+    )
+
+
 class CitationLLMConfig(BaseSettings):
     """Configuration for the LLM used specifically for citation processing."""
 
@@ -112,7 +132,19 @@ class CitationLLMConfig(BaseSettings):
         case_sensitive=False,
         extra='allow',
     )
-    model: str = Field(..., description='Citation LLM model')
+    model: str = Field(..., description='Default citation LLM model')
+    document_citation_model: str | None = Field(
+        None, description='Model for extracting the document citation'
+    )
+    reference_cleaning_model: str | None = Field(
+        None, description='Model for cleaning the references section'
+    )
+    structured_extraction_model: str | None = Field(
+        None, description='Model for extracting structured citations (single mode)'
+    )
+    batch_structured_extraction_model: str | None = Field(
+        None, description='Model for extracting structured citations (batch mode)'
+    )
     model_settings: ModelConfig = Field(
         default_factory=ModelConfig, description='Citation model configuration'
     )
@@ -173,17 +205,16 @@ class CitationConfig(BaseSettings):
         False, description='Whether to use Scholarly for Google Scholar search'
     )
     use_semanticscholar: bool = Field(
-        True, description='Whether to use Semantic Scholar API for metadata enrichment'
+        True, description='Enable Semantic Scholar lookups'
     )
-    use_arxiv: bool = Field(
-        False, description='Whether to use Arxiv API for metadata enrichment'
+    use_arxiv: bool = Field(True, description='Enable arXiv lookups')
+    processing_mode: str = Field(
+        'single',
+        description='Processing mode for citation extraction. "single" for one-by-one, "batch" for batching.',
     )
     citation_batch_size: int = Field(
-        10,
-        description='Batch size for processing citation strings with LLM. '
-        'Optimized default of 10 provides good balance of speed and accuracy. '
-        'Set to 1 for maximum accuracy but slower processing, '
-        'or up to 20 for faster processing with potentially lower accuracy.',
+        1,
+        description='Batch size for citation processing. A size of 1 uses single processing (more robust). Sizes > 1 use batch processing (faster).',
         ge=1,
         le=20,
     )
@@ -237,9 +268,18 @@ class ResearchAgentLLMConfig(BaseSettings):
         case_sensitive=False,
         extra='allow',
     )
-    model: str = Field(..., description='Research agent LLM model')
+    model: str | list[str] = Field(..., description='Research agent LLM model(s)')
     model_settings: ModelConfig = Field(
         default_factory=ModelConfig, description='Research agent model configuration'
+    )
+    use_auto_model_selection: bool = Field(
+        False, description='Whether to use auto model selection'
+    )
+    auto_model_require_tool_calling: bool = Field(
+        False, description='Auto-selected model must support tool calling'
+    )
+    auto_model_require_structured_output: bool = Field(
+        False, description='Auto-selected model must support structured output'
     )
     max_output_tokens: int = Field(
         50000,
@@ -417,9 +457,11 @@ class ThothConfig(BaseSettings):
     notes_dir: Path = Field(
         Path('data/notes'), description='Directory for Obsidian notes'
     )
-    prompts_dir: Path = Field(Path('data/prompts'), description='Directory for prompts')
+    prompts_dir: Path = Field(
+        Path('templates/prompts'), description='Directory for prompts'
+    )
     templates_dir: Path = Field(
-        Path('data/templates'), description='Directory for templates'
+        Path('templates'), description='Directory for templates'
     )
     output_dir: Path = Field(
         Path('data/output'), description='Directory for output files'
@@ -495,6 +537,10 @@ class ThothConfig(BaseSettings):
     )
     rag_config: RAGConfig = Field(
         default_factory=RAGConfig, description='RAG system configuration'
+    )
+    query_based_routing_config: QueryBasedRoutingConfig = Field(
+        default_factory=QueryBasedRoutingConfig,
+        description='Query-based routing configuration',
     )
 
     def setup_logging(self) -> None:

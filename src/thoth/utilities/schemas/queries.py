@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Literal, TypedDict
 
 from pydantic import BaseModel, Field, field_validator
@@ -31,7 +32,15 @@ class ResearchQuery(BaseModel):
     def validate_name(cls, name: str) -> str:  # noqa: N805
         import re
 
-        return re.sub(r'[^\w\-_.]', '_', name.lower())
+        return re.sub(r'[^\w\-._]', '_', name.lower())
+
+
+class Recommendation(str, Enum):
+    """Enum for recommendation decisions."""
+
+    KEEP = 'keep'
+    REJECT = 'reject'
+    REVIEW = 'review'
 
 
 class QueryEvaluationResponse(BaseModel):
@@ -43,7 +52,7 @@ class QueryEvaluationResponse(BaseModel):
     topic_analysis: str
     methodology_match: str | None = None
     reasoning: str
-    recommendation: Literal['keep', 'reject', 'review']
+    recommendation: Recommendation
     confidence: float = Field(default=0.8, ge=0.0, le=1.0)
 
 

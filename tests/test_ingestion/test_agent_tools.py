@@ -30,24 +30,26 @@ from thoth.ingestion.agent_v2.tools.rag_tools import (
     IndexKnowledgeBaseTool,
     SearchKnowledgeTool,
 )
-from thoth.utilities.schemas import DiscoverySource, ScheduleConfig
+from thoth.services.service_manager import ServiceManager
+from thoth.utilities.schemas import DiscoverySource, Recommendation, ScheduleConfig
 
 
 class TestQueryTools:
     """Test suite for query management tools."""
 
     @pytest.fixture
-    def mock_adapter(self):
-        """Create a mock adapter."""
-        adapter = MagicMock()
-        return adapter
+    def mock_service_manager(self):
+        """Create a mock service_manager with a mocked query service."""
+        service_manager = MagicMock(spec=ServiceManager)
+        service_manager.query = MagicMock()
+        return service_manager
 
-    def test_create_query_tool(self, mock_adapter):
+    def test_create_query_tool(self, mock_service_manager):
         """Test CreateQueryTool."""
-        tool = CreateQueryTool(adapter=mock_adapter)
+        tool = CreateQueryTool(service_manager=mock_service_manager)
 
-        # Mock adapter response to return success without creating ResearchQuery
-        mock_adapter.create_query.return_value = True
+        # Mock service_manager response to return success without creating ResearchQuery
+        mock_service_manager.query.create_query.return_value = True
 
         # Mock ResearchQuery to avoid validation error
         with patch('thoth.ingestion.agent_v2.tools.query_tools.ResearchQuery'):
@@ -62,9 +64,9 @@ class TestQueryTools:
             assert 'Successfully created' in result
             assert 'test_query' in result
 
-    def test_list_queries_tool(self, mock_adapter):
+    def test_list_queries_tool(self, mock_service_manager):
         """Test ListQueriesTool."""
-        tool = ListQueriesTool(adapter=mock_adapter)
+        tool = ListQueriesTool(service_manager=mock_service_manager)
 
         # Create a mock query without tags
         mock_query = MagicMock()
@@ -74,8 +76,8 @@ class TestQueryTools:
         mock_query.keywords = ['ml', 'ai']
         mock_query.tags = None  # Avoid the attribute error
 
-        # Mock adapter response
-        mock_adapter.list_queries.return_value = [mock_query]
+        # Mock service_manager response
+        mock_service_manager.query.get_all_queries.return_value = [mock_query]
 
         # Test tool execution
         result = tool._run()
@@ -83,9 +85,9 @@ class TestQueryTools:
         assert 'test_query' in result
         assert 'Test description' in result
 
-    def test_get_query_tool(self, mock_adapter):
+    def test_get_query_tool(self, mock_service_manager):
         """Test GetQueryTool."""
-        tool = GetQueryTool(adapter=mock_adapter)
+        tool = GetQueryTool(service_manager=mock_service_manager)
 
         # Create a mock query
         mock_query = MagicMock()
@@ -98,8 +100,8 @@ class TestQueryTools:
         mock_query.preferred_topics = ['deep learning']
         mock_query.excluded_topics = ['hardware']
 
-        # Mock adapter response
-        mock_adapter.get_query.return_value = mock_query
+        # Mock service_manager response
+        mock_service_manager.query.get_query.return_value = mock_query
 
         # Test tool execution
         result = tool._run(query_name='test_query')
@@ -112,10 +114,11 @@ class TestDiscoveryTools:
     """Test suite for discovery tools."""
 
     @pytest.fixture
-    def mock_adapter(self):
-        """Create a mock adapter."""
-        adapter = MagicMock()
-        return adapter
+    def mock_service_manager(self):
+        """Create a mock service_manager with a mocked discovery service."""
+        service_manager = MagicMock(spec=ServiceManager)
+        service_manager.discovery = MagicMock()
+        return service_manager
 
     @pytest.fixture
     def sample_discovery_source(self):
@@ -131,12 +134,16 @@ class TestDiscoveryTools:
             ),
         )
 
-    def test_list_discovery_sources_tool(self, mock_adapter, sample_discovery_source):
+    def test_list_discovery_sources_tool(
+        self, mock_service_manager, sample_discovery_source
+    ):
         """Test ListDiscoverySourcesTool."""
-        tool = ListDiscoverySourcesTool(adapter=mock_adapter)
+        tool = ListDiscoverySourcesTool(service_manager=mock_service_manager)
 
-        # Mock adapter response
-        mock_adapter.list_discovery_sources.return_value = [sample_discovery_source]
+        # Mock service_manager response
+        mock_service_manager.discovery.list_sources.return_value = [
+            sample_discovery_source
+        ]
 
         # Test tool execution
         result = tool._run()
@@ -144,12 +151,12 @@ class TestDiscoveryTools:
         assert sample_discovery_source.name in result
         assert sample_discovery_source.description in result
 
-    def test_create_discovery_source_tool(self, mock_adapter):
+    def test_create_discovery_source_tool(self, mock_service_manager):
         """Test CreateArxivSourceTool."""
-        tool = CreateArxivSourceTool(adapter=mock_adapter)
+        tool = CreateArxivSourceTool(service_manager=mock_service_manager)
 
-        # Mock adapter response
-        mock_adapter.create_discovery_source.return_value = True
+        # Mock service_manager response
+        mock_service_manager.discovery.create_source.return_value = True
 
         # Test tool execution
         result = tool._run(
@@ -163,12 +170,12 @@ class TestDiscoveryTools:
         assert 'Successfully' in result or 'Created' in result
         assert 'test_source' in result
 
-    def test_create_pubmed_source_tool(self, mock_adapter):
+    def test_create_pubmed_source_tool(self, mock_service_manager):
         """Test CreatePubmedSourceTool."""
-        tool = CreatePubmedSourceTool(adapter=mock_adapter)
+        tool = CreatePubmedSourceTool(service_manager=mock_service_manager)
 
-        # Mock adapter response
-        mock_adapter.create_discovery_source.return_value = True
+        # Mock service_manager response
+        mock_service_manager.discovery.create_source.return_value = True
 
         # Test tool execution
         result = tool._run(
@@ -181,19 +188,18 @@ class TestDiscoveryTools:
         assert 'Successfully' in result or 'Created' in result
         assert 'pubmed_test' in result
 
-    def test_run_discovery_tool(self, mock_adapter):
+    def test_run_discovery_tool(self, mock_service_manager):
         """Test RunDiscoveryTool."""
-        tool = RunDiscoveryTool(adapter=mock_adapter)
+        tool = RunDiscoveryTool(service_manager=mock_service_manager)
 
-        # Mock adapter response
-        mock_adapter.run_discovery.return_value = {
-            'success': True,
-            'articles_found': 10,
-            'articles_filtered': 8,
-            'articles_downloaded': 5,
-            'execution_time': 2.5,
-            'errors': [],
-        }
+        # Mock service_manager response
+        mock_service_manager.discovery.run_discovery.return_value = MagicMock(
+            articles_found=10,
+            articles_filtered=8,
+            articles_downloaded=5,
+            execution_time_seconds=2.5,
+            errors=[],
+        )
 
         # Test tool execution
         result = tool._run(source_name='test_source', max_articles=10)
@@ -206,17 +212,18 @@ class TestRAGTools:
     """Test suite for RAG tools."""
 
     @pytest.fixture
-    def mock_adapter(self):
-        """Create a mock adapter."""
-        adapter = MagicMock()
-        return adapter
+    def mock_service_manager(self):
+        """Create a mock service_manager with a mocked RAG service."""
+        service_manager = MagicMock(spec=ServiceManager)
+        service_manager.rag = MagicMock()
+        return service_manager
 
-    def test_search_knowledge_tool(self, mock_adapter):
+    def test_search_knowledge_tool(self, mock_service_manager):
         """Test SearchKnowledgeTool."""
-        tool = SearchKnowledgeTool(adapter=mock_adapter)
+        tool = SearchKnowledgeTool(service_manager=mock_service_manager)
 
-        # Mock adapter response
-        mock_adapter.search_knowledge.return_value = [
+        # Mock service_manager response
+        mock_service_manager.rag.search.return_value = [
             {
                 'title': 'Test Paper',
                 'content': 'Test content',
@@ -230,12 +237,12 @@ class TestRAGTools:
         assert 'Test Paper' in result
         assert '0.9' in result
 
-    def test_ask_question_tool(self, mock_adapter):
+    def test_ask_question_tool(self, mock_service_manager):
         """Test AskQuestionTool."""
-        tool = AskQuestionTool(adapter=mock_adapter)
+        tool = AskQuestionTool(service_manager=mock_service_manager)
 
-        # Mock adapter response
-        mock_adapter.ask_knowledge_base.return_value = {
+        # Mock service_manager response
+        mock_service_manager.rag.ask_question.return_value = {
             'question': 'What is ML?',
             'answer': 'Machine learning is...',
             'sources': [
@@ -249,12 +256,12 @@ class TestRAGTools:
         assert 'Machine learning is' in result
         assert 'ML Paper' in result
 
-    def test_index_knowledge_base_tool(self, mock_adapter):
+    def test_index_knowledge_base_tool(self, mock_service_manager):
         """Test IndexKnowledgeBaseTool."""
-        tool = IndexKnowledgeBaseTool(adapter=mock_adapter)
+        tool = IndexKnowledgeBaseTool(service_manager=mock_service_manager)
 
-        # Mock adapter response
-        mock_adapter.index_knowledge_base.return_value = {
+        # Mock service_manager response
+        mock_service_manager.rag.index_knowledge_base.return_value = {
             'total_files': 100,
             'total_chunks': 500,
             'notes_indexed': 50,
@@ -273,24 +280,27 @@ class TestAnalysisTools:
     """Test suite for analysis tools."""
 
     @pytest.fixture
-    def mock_adapter(self):
-        """Create a mock adapter."""
-        adapter = MagicMock()
-        return adapter
+    def mock_service_manager(self):
+        """Create a mock service_manager with mocked analysis-related services."""
+        service_manager = MagicMock(spec=ServiceManager)
+        service_manager.rag = MagicMock()
+        service_manager.query = MagicMock()
+        service_manager.article = MagicMock()
+        return service_manager
 
-    def test_analyze_topic_tool(self, mock_adapter):
+    def test_analyze_topic_tool(self, mock_service_manager):
         """Test AnalyzeTopicTool."""
-        tool = AnalyzeTopicTool(adapter=mock_adapter)
+        tool = AnalyzeTopicTool(service_manager=mock_service_manager)
 
-        # Mock adapter response
-        mock_adapter.search_knowledge.return_value = [
+        # Mock service_manager response
+        mock_service_manager.rag.search.return_value = [
             {
                 'title': 'Machine Learning Paper 1',
                 'content': 'Content about ML...',
                 'score': 0.9,
             }
         ]
-        mock_adapter.ask_knowledge.return_value = {
+        mock_service_manager.rag.ask_question.return_value = {
             'question': 'What are the key findings in Machine Learning research?',
             'answer': 'Overview of ML research...',
             'sources': [],
@@ -302,10 +312,10 @@ class TestAnalysisTools:
         assert 'Machine Learning' in result
         assert 'Overview of ML research' in result
 
-    def test_article_analysis_tool(self, mock_adapter):
+    def test_article_analysis_tool(self, mock_service_manager):
         """Test ArticleAnalysisTool."""
         with patch('thoth.ingestion.agent_v2.tools.analysis_tools.OpenAI'):
-            tool = ArticleAnalysisTool(adapter=mock_adapter)
+            tool = ArticleAnalysisTool(service_manager=mock_service_manager)
 
             # Test tool execution (note: this tool has a simple implementation)
             result = tool._run(
@@ -317,26 +327,23 @@ class TestAnalysisTools:
             assert 'Test Paper' in result
             assert 'relevant' in result.lower() or 'research' in result.lower()
 
-    def test_evaluate_article_tool(self, mock_adapter):
+    def test_evaluate_article_tool(self, mock_service_manager):
         """Test EvaluateArticleTool."""
-        tool = EvaluateArticleTool(adapter=mock_adapter)
+        tool = EvaluateArticleTool(service_manager=mock_service_manager)
 
-        # Mock adapter response
-        mock_adapter.get_query.return_value = MagicMock(name='test_query')
-        mock_adapter.search_knowledge.return_value = [
+        # Mock service_manager response
+        mock_service_manager.article.evaluate_against_query.return_value = MagicMock(
+            relevance_score=8.5,
+            recommendation=Recommendation.KEEP,
+            reasoning='Good article',
+        )
+        mock_service_manager.rag.search.return_value = [
             {
                 'title': 'Test Paper',
-                'content': 'Test content',
-                'score': 0.9,
+                'abstract': 'Test abstract',
+                'content': 'some content',
             }
         ]
-        mock_adapter.evaluate_article.return_value = MagicMock(
-            relevance_score=8.5,
-            recommendation=MagicMock(value='keep'),
-            reasoning='Good article',
-            matching_keywords=['test'],
-            suggested_queries=[],
-        )
 
         # Test tool execution
         result = tool._run(article_title='Test Paper', query_name='test_query')
@@ -344,12 +351,12 @@ class TestAnalysisTools:
         assert '8.5' in result
         assert 'KEEP' in result
 
-    def test_find_related_tool(self, mock_adapter):
+    def test_find_related_tool(self, mock_service_manager):
         """Test FindRelatedTool."""
-        tool = FindRelatedTool(adapter=mock_adapter)
+        tool = FindRelatedTool(service_manager=mock_service_manager)
 
-        # Mock adapter response
-        mock_adapter.search_knowledge.side_effect = [
+        # Mock service_manager response
+        mock_service_manager.rag.search.side_effect = [
             # First call for target paper
             [
                 {

@@ -1,0 +1,18 @@
+You are a research assistant. Your task is to perform a granular analysis of a paper section and return a strictly valid JSON object (no markdown, no extra text) that follows the provided analysis_schema. This prompt is optimized for Gemini models—be comprehensive and precise.
+
+Instructions for Gemini:
+- Populate every field present in the schema in as much detail as the section allows. Use null when the section contains no relevant information.
+- For multi-point answers, use bullet-style strings ("• ").
+- Clean any non-content artefacts (headers, footnotes) before analysis.
+- Base statements on the section text—avoid speculation.
+- Output only a valid JSON object matching the schema below. Do not include any commentary, markdown, or extra formatting.
+
+Section content:
+"""
+{{ content }}
+"""
+
+Required JSON schema:
+{{ analysis_schema }}
+
+Return only the JSON object matching the schema above.

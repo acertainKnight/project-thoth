@@ -14,6 +14,7 @@ from pypdf import PdfReader
 
 from thoth.analyze.llm_processor import LLMProcessor
 from thoth.services.base import BaseService, ServiceError
+from thoth.services.llm_service import LLMService
 from thoth.utilities.schemas import AnalysisResponse
 
 
@@ -32,7 +33,7 @@ class ProcessingService(BaseService):
         self,
         config=None,
         mistral_client: Mistral | None = None,
-        llm_processor: LLMProcessor | None = None,
+        llm_service: LLMService | None = None,
     ):
         """
         Initialize the ProcessingService.
@@ -40,11 +41,11 @@ class ProcessingService(BaseService):
         Args:
             config: Optional configuration object
             mistral_client: Optional Mistral client for OCR
-            llm_processor: Optional LLM processor
+            llm_service: Optional LLM service
         """
         super().__init__(config)
         self._mistral_client = mistral_client
-        self._llm_processor = llm_processor
+        self._llm_service = llm_service
         self._ocr_service = None
         self._citation_service = None
 
@@ -58,20 +59,11 @@ class ProcessingService(BaseService):
         return self._mistral_client
 
     @property
-    def llm_processor(self) -> LLMProcessor:
-        """Get or create the LLM processor."""
-        if self._llm_processor is None:
-            self._llm_processor = LLMProcessor(
-                model=self.config.llm_config.model,
-                max_output_tokens=self.config.llm_config.max_output_tokens,
-                max_context_length=self.config.llm_config.max_context_length,
-                chunk_size=self.config.llm_config.chunk_size,
-                chunk_overlap=self.config.llm_config.chunk_overlap,
-                openrouter_api_key=self.config.api_keys.openrouter_key,
-                prompts_dir=self.config.prompts_dir,
-                model_kwargs=self.config.llm_config.model_settings.model_dump(),
-            )
-        return self._llm_processor
+    def llm_service(self) -> LLMService:
+        """Get or create the LLM service."""
+        if self._llm_service is None:
+            self._llm_service = LLMService(self.config)
+        return self._llm_service
 
     def initialize(self) -> None:
         """Initialize the processing service."""
@@ -214,6 +206,16 @@ class ProcessingService(BaseService):
 
             # Analyze content
             self.logger.info('Analyzing content with LLM')
+            self.llm_processor = LLMProcessor(
+                llm_service=self.llm_service,
+                model=self.config.llm_config.model,
+                prompts_dir=self.config.prompts_dir,
+                max_output_tokens=self.config.llm_config.max_output_tokens,
+                max_context_length=self.config.llm_config.max_context_length,
+                chunk_size=self.config.llm_config.chunk_size,
+                chunk_overlap=self.config.llm_config.chunk_overlap,
+                model_kwargs=self.config.llm_config.model_settings.model_dump(),
+            )
             analysis = self.llm_processor.analyze_content(
                 content,
                 force_processing_strategy=force_strategy,

@@ -86,18 +86,19 @@ class TestProcessingService:
         sample_analysis_response,
     ):
         """Test content analysis with file path."""
-        # Create mock processor
-        mock_processor = MagicMock()
-        mock_processor.analyze_content.return_value = sample_analysis_response
+        with patch(
+            'thoth.services.processing_service.LLMProcessor'
+        ) as mock_processor_class:
+            mock_processor_instance = mock_processor_class.return_value
+            mock_processor_instance.analyze_content.return_value = (
+                sample_analysis_response
+            )
 
-        # Set the mock on the private attribute
-        processing_service._llm_processor = mock_processor
+            # Analyze content
+            analysis = processing_service.analyze_content(sample_markdown_path)
 
-        # Analyze content
-        analysis = processing_service.analyze_content(sample_markdown_path)
-
-        assert analysis == sample_analysis_response
-        mock_processor.analyze_content.assert_called_once()
+            assert analysis == sample_analysis_response
+            mock_processor_instance.analyze_content.assert_called_once()
 
     def test_analyze_content_with_string(
         self,
@@ -107,19 +108,20 @@ class TestProcessingService:
         """Test content analysis with string content."""
         content = 'Sample paper content for analysis'
 
-        # Create mock processor
-        mock_processor = MagicMock()
-        mock_processor.analyze_content.return_value = sample_analysis_response
+        with patch(
+            'thoth.services.processing_service.LLMProcessor'
+        ) as mock_processor_class:
+            mock_processor_instance = mock_processor_class.return_value
+            mock_processor_instance.analyze_content.return_value = (
+                sample_analysis_response
+            )
 
-        # Set the mock on the private attribute
-        processing_service._llm_processor = mock_processor
+            analysis = processing_service.analyze_content(content)
 
-        analysis = processing_service.analyze_content(content)
-
-        assert analysis == sample_analysis_response
-        mock_processor.analyze_content.assert_called_once_with(
-            content, force_processing_strategy=None
-        )
+            assert analysis == sample_analysis_response
+            mock_processor_instance.analyze_content.assert_called_once_with(
+                content, force_processing_strategy=None
+            )
 
     def test_extract_metadata_basic(self, processing_service):
         """Test basic metadata extraction."""

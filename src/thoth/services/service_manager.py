@@ -48,8 +48,12 @@ class ServiceManager:
 
         # Initialize core services first
         self._services['llm'] = LLMService(config=self.config)
-        self._services['processing'] = ProcessingService(config=self.config)
-        self._services['article'] = ArticleService(config=self.config)
+        self._services['processing'] = ProcessingService(
+            config=self.config, llm_service=self._services['llm']
+        )
+        self._services['article'] = ArticleService(
+            config=self.config, llm_service=self._services['llm']
+        )
         self._services['note'] = NoteService(config=self.config)
 
         # Initialize services that depend on paths
@@ -73,6 +77,7 @@ class ServiceManager:
 
         self._services['tag'] = TagService(
             config=self.config,
+            llm_service=self._services['llm'],
             citation_tracker=None,  # Will be set by pipeline
         )
 
