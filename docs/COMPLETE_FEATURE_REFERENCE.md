@@ -99,6 +99,27 @@ thoth rag search --query "transformer architecture" --k 5 --filter-type note
 thoth rag ask --question "What are the main contributions of attention mechanisms?" --k 4
 ```
 
+### **PDF Management Commands**
+
+```bash
+# Locate PDF for a specific article
+thoth pdf-locate 10.1038/nature12373
+thoth pdf-locate --arxiv-id 1706.03762
+
+# Batch process all articles missing PDFs
+thoth pdf-locate --all
+
+# Re-locate PDFs even if URL exists
+thoth pdf-locate --all --update-existing
+
+# Test PDF location sources
+thoth pdf-test crossref --doi 10.1038/nature12373
+thoth pdf-test all
+
+# Show PDF availability statistics
+thoth pdf-stats
+```
+
 ### **Tag Management Commands**
 
 ```bash
@@ -203,6 +224,22 @@ Thoth uses a service-oriented architecture with the following services:
   - `get_paper_metadata(url)` - Extract paper information
   - `validate_search_providers()` - Check provider availability
 
+#### **PdfLocatorService** (`pdf_locator_service.py`)
+- **Purpose**: Locate open-access PDFs from multiple sources
+- **Key Methods**:
+  - `locate(doi, arxiv_id)` - Find PDF URL for article
+  - `_from_crossref(doi)` - Try Crossref full-text links
+  - `_from_unpaywall(doi)` - Query Unpaywall OA database
+  - `_from_arxiv(doi, arxiv_id)` - Get arXiv PDF URLs
+  - `_from_semanticscholar(doi)` - Check Semantic Scholar
+  - `_from_doi_head(doi)` - DOI content negotiation fallback
+- **Features**:
+  - Multi-source chain with automatic fallback
+  - License detection (CC-BY, CC-BY-NC, etc.)
+  - Open Access status tracking
+  - Rate limiting and polite API usage
+  - Result caching to minimize API calls
+
 ### **Service Manager** (`service_manager.py`)
 - **Purpose**: Unified access point for all services
 - **Usage**: `pipeline.services.discovery.run_discovery()`
@@ -288,6 +325,44 @@ Thoth uses a service-oriented architecture with the following services:
 - **Configuration Export**: Save scraper configurations
 - **Preview Mode**: See extracted data before saving
 
+## 📄 **PDF Management Features**
+
+### **PDF Location Sources**
+- **Crossref**: Publisher-provided full-text links
+  - Direct PDF URLs from publishers
+  - License information extraction
+  - No authentication required
+- **Unpaywall**: Comprehensive OA database
+  - Best available open access version
+  - Repository and publisher PDFs
+  - License tracking
+- **arXiv**: Pre-print server
+  - Deterministic PDF URLs
+  - Always open access
+  - Version tracking support
+- **Semantic Scholar**: Academic search engine
+  - Open access PDF discovery
+  - Alternative sources
+  - S2 paper ID support
+- **DOI Content Negotiation**: Publisher redirect
+  - Direct DOI resolution
+  - May include paywalled content
+  - Fallback option
+
+### **PDF Location Features**
+- **Automatic Fallback Chain**: Try sources in optimal order
+- **License Detection**: Track CC-BY, CC-BY-NC, etc.
+- **Open Access Status**: Identify freely available papers
+- **Batch Processing**: Update entire library
+- **Result Caching**: Minimize API calls
+- **Rate Limiting**: Respectful API usage
+
+### **Integration with Discovery**
+- **Automatic PDF Location**: Find PDFs during discovery
+- **Missing PDF Recovery**: Locate PDFs for existing articles
+- **Metadata Enhancement**: Add license and OA status
+- **Source Attribution**: Track where PDFs were found
+
 ## 📊 **RAG (Knowledge Base) Features**
 
 ### **Document Types Supported**
@@ -363,6 +438,7 @@ Thoth uses a service-oriented architecture with the following services:
 - Mistral, OpenRouter, OpenAI, Anthropic
 - OpenCitations, Semantic Scholar
 - Google Search, Web Search providers
+- Unpaywall Email (required for OA PDF lookups)
 
 #### **LLM Configuration** (`LLM_*`)
 - Model selection and parameters

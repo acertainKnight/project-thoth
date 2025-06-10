@@ -44,6 +44,10 @@ class APIKeys(BaseSettings):
         description='Comma-separated list of enabled web search providers '
         '(serper, duckduckgo, scrape)',
     )
+    unpaywall_email: str | None = Field(
+        None,
+        description='Email address for Unpaywall API (required for OA PDF lookups)',
+    )
 
 
 class ModelConfig(BaseSettings):

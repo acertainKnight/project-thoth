@@ -14,6 +14,7 @@ from thoth.services.citation_service import CitationService
 from thoth.services.discovery_service import DiscoveryService
 from thoth.services.llm_service import LLMService
 from thoth.services.note_service import NoteService
+from thoth.services.pdf_locator_service import PdfLocatorService
 from thoth.services.processing_service import ProcessingService
 from thoth.services.query_service import QueryService
 from thoth.services.rag_service import RAGService
@@ -71,6 +72,8 @@ class ServiceManager:
         self._services['rag'] = RAGService(config=self.config)
 
         self._services['web_search'] = WebSearchService(config=self.config)
+
+        self._services['pdf_locator'] = PdfLocatorService(config=self.config)
 
         # Initialize services that need dependencies
         self._services['citation'] = CitationService(config=self.config)
@@ -142,6 +145,12 @@ class ServiceManager:
         """Get the tag service."""
         self._ensure_initialized()
         return self._services['tag']
+
+    @property
+    def pdf_locator(self) -> PdfLocatorService:
+        """Get the PDF locator service."""
+        self._ensure_initialized()
+        return self._services['pdf_locator']
 
     def get_service(self, name: str) -> BaseService:
         """

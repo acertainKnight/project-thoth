@@ -2,7 +2,7 @@ import argparse
 
 from thoth.pipeline import ThothPipeline
 
-from . import agent, discovery, notes, rag, system
+from . import agent, discovery, notes, pdf, rag, system
 
 
 def main():
@@ -18,6 +18,7 @@ def main():
     agent.configure_subparser(subparsers)
     discovery.configure_subparser(subparsers)
     notes.configure_subparser(subparsers)
+    pdf.configure_subparser(subparsers)
     rag.configure_subparser(subparsers)
     system.configure_subparser(subparsers)
 
