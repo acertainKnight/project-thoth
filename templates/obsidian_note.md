@@ -57,7 +57,8 @@ N/A
 
 {% if citations %}
 {% for c in citations %}
-- **[{{ c.number }}]** {% if c.authors %}{{ c.authors | join(', ') }}. {% endif %}({{ c.year or 'N/A' }}). *{{ c.title or 'Untitled' }}*.{% if c.journal %} {{ c.journal }}.{% endif %}{% if c.obsidian_link %} {{ c.obsidian_link | safe }}{% elif c.url %} [Link]({{ c.url }}){% endif %}
+- **[{{ c.number }}]** {{ c.formatted }}{% if c.obsidian_link %} (See Note: {{ c.obsidian_link }}){% elif c.url %} [Link]({{ c.url }}){% endif %}
+
 {% endfor %}
 {% else %}
 No citations found.

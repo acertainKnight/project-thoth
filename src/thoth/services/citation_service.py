@@ -64,12 +64,15 @@ class CitationService(BaseService):
         """Initialize the citation service."""
         self.logger.info('Citation service initialized')
 
-    def extract_citations(self, markdown_path: Path | str) -> list[Citation]:
+    def extract_citations(
+        self, markdown_path: Path | str, style: str = 'ieee'
+    ) -> list[Citation]:
         """
         Extract citations from a document.
 
         Args:
             markdown_path: Path to markdown file or content
+            style: Citation style to apply
 
         Returns:
             list[Citation]: Extracted and enriched citations
@@ -87,8 +90,22 @@ class CitationService(BaseService):
                 else Path(markdown_path)
             )
 
+            # Convert style string to enum
+            style_map = {
+                'ieee': CitationStyle.IEEE,
+                'apa': CitationStyle.APA,
+                'mla': CitationStyle.MLA,
+                'chicago': CitationStyle.CHICAGO,
+                'harvard': CitationStyle.HARVARD,
+            }
+            citation_style = style_map.get(style.lower())
+            if not citation_style:
+                raise ServiceError(f'Unsupported citation style: {style}')
+
             # Format citations
-            formatted_citations = self._citation_formatter.format_citations(citations)
+            formatted_citations = self._citation_formatter.format_citations(
+                citations, style=citation_style
+            )
 
             self.log_operation(
                 'citations_extracted',
