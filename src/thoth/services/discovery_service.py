@@ -19,6 +19,7 @@ from thoth.discovery.emulator_scraper import EmulatorScraper
 from thoth.discovery.web_scraper import WebScraper
 from thoth.services.article_service import ArticleService
 from thoth.services.base import BaseService, ServiceError
+from thoth.services.pdf_locator_service import PdfLocatorService
 from thoth.utilities.schemas import (
     DiscoveryResult,
     DiscoverySource,
@@ -80,6 +81,9 @@ class DiscoveryService(BaseService):
 
         # Reference to filter function (set externally)
         self.article_service = article_service or ArticleService(config=self.config)
+
+        # Initialize PDF locator service
+        self.pdf_locator = PdfLocatorService(config=self.config)
 
         self._discovery_manager = None
         self._scheduler = None
@@ -409,9 +413,42 @@ class DiscoveryService(BaseService):
 
     def _download_pdf(self, metadata: ScrapedArticleMetadata) -> str | None:
         """Download PDF for an article."""
-        if not metadata.pdf_url:
-            self.logger.warning(f'No PDF URL available for article: {metadata.title}')
-            return None
+        pdf_url = metadata.pdf_url
+        pdf_source = None
+        pdf_licence = None
+        is_oa = True
+
+        # If no PDF URL, try to locate one
+        if not pdf_url:
+            self.logger.info(
+                f'No PDF URL available for article: {metadata.title}, attempting to locate...'
+            )
+
+            pdf_location = self.pdf_locator.locate(
+                doi=metadata.doi, arxiv_id=metadata.arxiv_id
+            )
+
+            if pdf_location:
+                pdf_url = pdf_location.url
+                pdf_source = pdf_location.source
+                pdf_licence = pdf_location.licence
+                is_oa = pdf_location.is_oa
+
+                # Update metadata with located PDF info
+                metadata.pdf_url = pdf_url
+                if hasattr(metadata, 'oa_source'):
+                    metadata.oa_source = pdf_source
+                if hasattr(metadata, 'licence'):
+                    metadata.licence = pdf_licence
+                if hasattr(metadata, 'is_oa'):
+                    metadata.is_oa = is_oa
+
+                self.logger.info(f'PDF located via {pdf_source}: {pdf_url}')
+            else:
+                self.logger.warning(
+                    f'Could not locate PDF for article: {metadata.title}'
+                )
+                return None
 
         try:
             # Create safe filename
@@ -436,8 +473,8 @@ class DiscoveryService(BaseService):
                 counter += 1
 
             # Download the PDF
-            self.logger.info(f'Downloading PDF from: {metadata.pdf_url}')
-            response = requests.get(metadata.pdf_url, timeout=30, stream=True)
+            self.logger.info(f'Downloading PDF from: {pdf_url}')
+            response = requests.get(pdf_url, timeout=30, stream=True)
             response.raise_for_status()
 
             with open(pdf_path, 'wb') as f:

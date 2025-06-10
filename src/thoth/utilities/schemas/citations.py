@@ -27,6 +27,12 @@ class Citation(BaseModel):
     influential_citation_count: int | None = Field(default=None)
     is_open_access: bool | None = Field(default=None)
     s2_fields_of_study: list[str] | None = Field(default=None)
+    pdf_url: str | None = Field(default=None, description='Direct URL to PDF if found')
+    pdf_source: str | None = Field(
+        default=None,
+        description='Source that provided the PDF (crossref, unpaywall, arxiv, s2, doi-head)',
+    )
+    arxiv_id: str | None = Field(default=None, description='arXiv ID of the article')
 
     def update_from_opencitation(self, open_citation: 'OpenCitation') -> None:
         """Update this Citation with values from an OpenCitation model."""

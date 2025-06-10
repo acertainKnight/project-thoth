@@ -13,6 +13,7 @@ from loguru import logger
 
 from thoth.analyze.citations.enhancer import CitationEnhancer
 from thoth.analyze.citations.extractor import ReferenceExtractor
+from thoth.services.pdf_locator_service import PdfLocatorService
 from thoth.utilities.schemas import (
     Citation,
     CitationExtraction,
@@ -51,6 +52,7 @@ class CitationProcessor:
         self.config = config
         self.enhancer = CitationEnhancer(config)
         self.citation_batch_size = self.config.citation_config.citation_batch_size
+        self._pdf_locator = None
 
         # Set up prompts directory based on model provider
         if prompts_dir is None:
@@ -125,6 +127,14 @@ class CitationProcessor:
 
         # Store the identify heading prompt for the extractor
         self.identify_heading_prompt = identify_heading_prompt
+
+    @property
+    def pdf_locator(self) -> PdfLocatorService:
+        """Get or create the PDF locator service."""
+        if self._pdf_locator is None:
+            self._pdf_locator = PdfLocatorService(self.config)
+            self._pdf_locator.initialize()
+        return self._pdf_locator
 
     def _create_prompt_from_template(self, template_name: str) -> ChatPromptTemplate:
         """
@@ -471,9 +481,41 @@ class CitationProcessor:
     def _enhance_citations_with_external_services(
         self, citations: list[Citation]
     ) -> list[Citation]:
-        """Enhance citations with external services."""
+        """Enhance citations with external services including PDF location."""
         logger.debug('Enhancing citations with external services')
+
+        # First enhance with existing enhancer
         enhanced_citations = self.enhancer.enhance(citations)
+
+        # Then try to locate PDFs
+        logger.debug('Locating PDFs for citations')
+        pdf_found_count = 0
+
+        for citation in enhanced_citations:
+            if citation.doi or citation.arxiv_id:
+                try:
+                    location = self.pdf_locator.locate(
+                        doi=citation.doi, arxiv_id=citation.arxiv_id
+                    )
+
+                    if location:
+                        citation.pdf_url = location.url
+                        citation.pdf_source = location.source
+                        citation.is_open_access = location.is_oa
+                        pdf_found_count += 1
+                        logger.debug(
+                            f"Found PDF for '{citation.title[:50]}' from {location.source}"
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to locate PDF for citation '{citation.title[:50]}': {e}"
+                    )
+
+        if pdf_found_count > 0:
+            logger.info(
+                f'Located PDFs for {pdf_found_count}/{len(enhanced_citations)} citations'
+            )
+
         return enhanced_citations
 
     def _prepare_final_citations(self, state: CitationState) -> CitationState:
