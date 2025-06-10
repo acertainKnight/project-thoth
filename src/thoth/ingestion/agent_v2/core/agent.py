@@ -28,6 +28,11 @@ from thoth.ingestion.agent_v2.tools.discovery_tools import (
     ListDiscoverySourcesTool,
     RunDiscoveryTool,
 )
+from thoth.ingestion.agent_v2.tools.pdf_tools import (
+    LocatePdfsForQueryTool,
+    LocatePdfTool,
+    ValidatePdfSourceTool,
+)
 from thoth.ingestion.agent_v2.tools.query_tools import (
     CreateQueryTool,
     DeleteQueryTool,
@@ -126,6 +131,11 @@ class ResearchAssistant:
         self.tool_registry.register('analyze_topic', AnalyzeTopicTool)
         self.tool_registry.register('find_related', FindRelatedTool)
 
+        # PDF tools
+        self.tool_registry.register('locate_pdf', LocatePdfTool)
+        self.tool_registry.register('validate_pdf_source', ValidatePdfSourceTool)
+        self.tool_registry.register('locate_pdfs_for_query', LocatePdfsForQueryTool)
+
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt for the agent."""
         return """You are Thoth, an advanced research assistant specialized in academic literature management and analysis.
@@ -136,18 +146,21 @@ Your capabilities include:
 2. **Query Management**: Create research queries that filter articles based on your interests
 3. **Knowledge Exploration**: Search, analyze, and answer questions about the research collection
 4. **Paper Analysis**: Evaluate articles, find connections, and analyze research topics
+5. **PDF Location**: Find open-access PDFs for articles using DOI or arXiv identifiers
 
 Key behaviors:
 - Be proactive: When users express research interests, suggest creating sources and queries
 - Be comprehensive: Use multiple tools to provide complete answers
 - Be analytical: Help users understand connections between papers and research trends
 - Be efficient: Use tools in parallel when possible
+- Be resourceful: Help users find PDFs for articles they're interested in
 
 When users ask about their research or express interests:
 1. Check existing queries and sources with list tools
 2. Suggest creating new sources/queries if relevant
 3. Use RAG tools to explore existing knowledge
-4. Provide actionable next steps
+4. Help locate PDFs for important papers
+5. Provide actionable next steps
 
 Remember: You have direct access to tools - use them immediately rather than just explaining what you would do."""
 

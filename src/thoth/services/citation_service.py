@@ -12,6 +12,7 @@ from thoth.analyze.citations.citations import CitationProcessor
 from thoth.analyze.citations.formatter import CitationFormatter, CitationStyle
 from thoth.services.base import BaseService, ServiceError
 from thoth.services.llm_service import LLMService
+from thoth.services.pdf_locator_service import PdfLocatorService
 from thoth.utilities.schemas import AnalysisResponse, Citation
 
 
@@ -24,6 +25,7 @@ class CitationService(BaseService):
     - Citation formatting
     - Citation tracking and graph management
     - Citation metadata enrichment
+    - PDF location for citations
     """
 
     def __init__(
@@ -41,6 +43,7 @@ class CitationService(BaseService):
         super().__init__(config)
         self._citation_processor = citation_processor
         self._citation_formatter = CitationFormatter()
+        self._pdf_locator_service = None
 
     @property
     def citation_processor(self) -> CitationProcessor:
@@ -59,6 +62,14 @@ class CitationService(BaseService):
                 else None,
             )
         return self._citation_processor
+
+    @property
+    def pdf_locator(self) -> PdfLocatorService:
+        """Get or create the PDF locator service."""
+        if self._pdf_locator_service is None:
+            self._pdf_locator_service = PdfLocatorService(self.config)
+            self._pdf_locator_service.initialize()
+        return self._pdf_locator_service
 
     def initialize(self) -> None:
         """Initialize the citation service."""
@@ -371,3 +382,108 @@ class CitationService(BaseService):
                 self.handle_error(e, f'updating paths for article {article_id}')
             )
             return False
+
+    def locate_pdfs_for_citations(
+        self, citations: list[Citation], update_citations: bool = True
+    ) -> list[tuple[Citation, str | None]]:
+        """
+        Locate PDFs for a list of citations.
+
+        Args:
+            citations: List of citations to find PDFs for
+            update_citations: Whether to update citation objects with PDF URLs
+
+        Returns:
+            list[tuple[Citation, str | None]]: List of (citation, pdf_url) tuples
+
+        Raises:
+            ServiceError: If PDF location fails
+        """
+        try:
+            results = []
+
+            for citation in citations:
+                pdf_url = None
+
+                # Try to locate PDF using DOI or arXiv ID
+                if citation.doi or citation.arxiv_id:
+                    try:
+                        location = self.pdf_locator.locate(
+                            doi=citation.doi, arxiv_id=citation.arxiv_id
+                        )
+
+                        if location:
+                            pdf_url = location.url
+
+                            # Update citation if requested
+                            if update_citations:
+                                citation.pdf_url = pdf_url
+                                citation.pdf_source = location.source
+                                citation.is_open_access = location.is_oa
+
+                            self.log_operation(
+                                'pdf_located_for_citation',
+                                title=citation.title[:50],
+                                source=location.source,
+                                doi=citation.doi,
+                                arxiv_id=citation.arxiv_id,
+                            )
+                    except Exception as e:
+                        self.logger.warning(
+                            f"Failed to locate PDF for citation '{citation.title[:50]}': {e}"
+                        )
+
+                results.append((citation, pdf_url))
+
+            # Log summary
+            located_count = sum(1 for _, url in results if url is not None)
+            self.log_operation(
+                'pdfs_located_for_citations',
+                total=len(citations),
+                located=located_count,
+                success_rate=f'{(located_count / len(citations) * 100):.1f}%'
+                if citations
+                else '0%',
+            )
+
+            return results
+
+        except Exception as e:
+            raise ServiceError(
+                self.handle_error(e, 'locating PDFs for citations')
+            ) from e
+
+    def locate_pdf_for_citation(self, citation: Citation) -> str | None:
+        """
+        Locate PDF for a single citation.
+
+        Args:
+            citation: Citation to find PDF for
+
+        Returns:
+            str | None: PDF URL if found, None otherwise
+        """
+        try:
+            if not citation.doi and not citation.arxiv_id:
+                self.logger.debug(
+                    f"No DOI or arXiv ID for citation '{citation.title[:50]}'"
+                )
+                return None
+
+            location = self.pdf_locator.locate(
+                doi=citation.doi, arxiv_id=citation.arxiv_id
+            )
+
+            if location:
+                self.log_operation(
+                    'pdf_located', title=citation.title[:50], source=location.source
+                )
+                return location.url
+
+            return None
+
+        except Exception as e:
+            self.logger.error(
+                self.handle_error(e, f"locating PDF for '{citation.title[:50]}'")
+            )
+            return None
