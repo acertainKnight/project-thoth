@@ -539,7 +539,16 @@ class SemanticScholarAPI:
             's2FieldsOfStudy' in paper_data
             and getattr(citation, 's2_fields_of_study', None) is None
         ):
-            citation.s2_fields_of_study = paper_data['s2FieldsOfStudy']
+            s2_fields = paper_data['s2FieldsOfStudy']
+            if s2_fields and isinstance(s2_fields[0], dict):
+                citation.s2_fields_of_study = [
+                    field.get('category')
+                    for field in s2_fields
+                    if field.get('category')
+                ]
+            else:
+                # If it's already a list of strings, assign it directly
+                citation.s2_fields_of_study = s2_fields
 
     def semantic_scholar_lookup(self, citations: list[Citation]) -> list[Citation]:
         """

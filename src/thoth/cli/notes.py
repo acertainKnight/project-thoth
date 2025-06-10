@@ -9,6 +9,17 @@ def run_reprocess_note(args, pipeline: ThothPipeline):
     """
     logger.info(f'Attempting to reprocess note for article_id: {args.article_id}')
     article_id = args.article_id
+
+    # Get the path to the old note from the graph before regeneration
+    old_note_stub = pipeline.citation_tracker.graph.nodes[article_id].get(
+        'obsidian_path'
+    )
+    old_note_path = (
+        pipeline.services.note.notes_dir / old_note_stub
+        if pipeline.services.note.notes_dir and old_note_stub
+        else None
+    )
+
     regen_data = pipeline.citation_tracker.get_article_data_for_regeneration(article_id)
 
     if not regen_data:
@@ -26,6 +37,12 @@ def run_reprocess_note(args, pipeline: ThothPipeline):
             analysis=regen_data['analysis'],
             citations=regen_data['citations'],
         )
+
+        # After successful creation, delete the old note if the path has changed
+        if old_note_path and old_note_path.exists() and old_note_path != note_path:
+            old_note_path.unlink()
+            logger.info(f'Deleted old note file: {old_note_path}')
+
         logger.info(f'Successfully regenerated note for {article_id} at: {note_path}')
         logger.info(f'Associated PDF path: {new_pdf_path}')
         logger.info(f'Associated Markdown path: {new_markdown_path}')

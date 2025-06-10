@@ -835,6 +835,15 @@ class CitationGraph:
             )
             return None
 
+        # Pre-process s2_fields_of_study if it exists and is in the wrong format
+        if main_citation_data.get('s2_fields_of_study'):
+            if isinstance(main_citation_data['s2_fields_of_study'][0], dict):
+                main_citation_data['s2_fields_of_study'] = [
+                    field.get('category')
+                    for field in main_citation_data['s2_fields_of_study']
+                    if field.get('category')
+                ]
+
         # Remove 'is_document_citation' from the dictionary before splatting,
         # to avoid "multiple values for keyword argument" error, then explicitly set it.
         main_citation_data.pop('is_document_citation', None)
@@ -849,6 +858,16 @@ class CitationGraph:
         for cited_id in cited_article_ids:
             cited_node_data = self.graph.nodes.get(cited_id)
             if cited_node_data and 'metadata' in cited_node_data:
+                # Pre-process s2_fields_of_study for cited articles
+                cited_metadata = cited_node_data['metadata']
+                if cited_metadata.get('s2_fields_of_study'):
+                    if isinstance(cited_metadata['s2_fields_of_study'][0], dict):
+                        cited_metadata['s2_fields_of_study'] = [
+                            field.get('category')
+                            for field in cited_metadata['s2_fields_of_study']
+                            if field.get('category')
+                        ]
+
                 citation_obj = self.get_citation(
                     cited_id
                 )  # Use existing method to build Citation
@@ -946,6 +965,15 @@ class CitationGraph:
                 .get('title', article_id)
             )
             logger.info(f'Attempting to regenerate note for: {article_title}')
+
+            # Get the path to the old note before regeneration
+            old_note_stub = self.graph.nodes[article_id].get('obsidian_path')
+            old_note_path = (
+                self.notes_dir / old_note_stub
+                if self.notes_dir and old_note_stub
+                else None
+            )
+
             regeneration_data = self.get_article_data_for_regeneration(article_id)
 
             if regeneration_data:
@@ -975,6 +1003,16 @@ class CitationGraph:
                             citations=regeneration_data['citations'],
                         )
                         note_path = Path(note_path_str)
+
+                    # After successful creation, delete the old note if
+                    # the path has changed
+                    if (
+                        old_note_path
+                        and old_note_path.exists()
+                        and old_note_path != note_path
+                    ):
+                        old_note_path.unlink()
+                        logger.info(f'Deleted old note file: {old_note_path}')
 
                     logger.info(
                         f'Successfully regenerated note for: {article_title} at {note_path}'

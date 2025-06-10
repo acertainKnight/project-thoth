@@ -175,7 +175,7 @@ class NoteService(BaseService):
         try:
             # Prepare basic content
             content = {
-                'title': metadata.get('title', 'Untitled'),
+                'title': self._clean_title(metadata.get('title', 'Untitled')),
                 'abstract': metadata.get('abstract', 'No abstract available'),
                 'tags': metadata.get('tags', []),
                 'pdf_link': self._create_file_link(pdf_path, pdf_path.name),
@@ -221,45 +221,47 @@ class NoteService(BaseService):
         # Extract document citation
         document_citation = next((c for c in citations if c.is_document_citation), None)
 
-        # Prioritize analysis object for metadata, fallback to document_citation
+        # Prioritize document_citation for metadata, fallback to analysis object
         title = self._clean_title(
-            analysis.title
-            if analysis and analysis.title
-            else document_citation.title
-            if document_citation
-            else 'Untitled'
+            (
+                document_citation.title
+                if document_citation and document_citation.title
+                else None
+            )
+            or (analysis.title if analysis and analysis.title else None)
+            or 'Untitled'
         )
 
         authors_list = (
-            analysis.authors
-            if analysis and analysis.authors
-            else document_citation.authors
-            if document_citation
-            else []
+            (
+                document_citation.authors
+                if document_citation and document_citation.authors
+                else None
+            )
+            or (analysis.authors if analysis and analysis.authors else None)
+            or []
         )
         authors = ', '.join(authors_list) if authors_list else 'Unknown'
 
         year = (
-            analysis.year
-            if analysis and analysis.year
-            else document_citation.year
-            if document_citation
-            else 'Unknown'
+            (
+                document_citation.year
+                if document_citation and document_citation.year
+                else None
+            )
+            or (analysis.year if analysis and analysis.year else None)
+            or 'Unknown'
         )
         doi = (
-            analysis.doi
-            if analysis and analysis.doi
-            else document_citation.doi
-            if document_citation
+            document_citation.doi
+            if document_citation and document_citation.doi
             else None
-        )
+        ) or (analysis.doi if analysis and analysis.doi else None)
         journal = (
-            analysis.journal
-            if analysis and analysis.journal
-            else document_citation.journal
-            if document_citation
+            document_citation.journal
+            if document_citation and document_citation.journal
             else None
-        )
+        ) or (analysis.journal if analysis and analysis.journal else None)
 
         # Format citations
         reference_citations = [c for c in citations if not c.is_document_citation]
@@ -286,7 +288,7 @@ class NoteService(BaseService):
             'limitations': analysis.limitations,
             'future_work': analysis.future_work,
             'related_work': analysis.related_work,
-            'tags': [f'#{tag}' for tag in (analysis.tags or [])],
+            'tags': [f'{tag}' for tag in (analysis.tags or [])],
             'citations': formatted_citations,
             'citation_count': len(reference_citations),
             'analysis': analysis.model_dump()
@@ -369,6 +371,7 @@ class NoteService(BaseService):
         # Remove special characters but keep some punctuation
         cleaned = re.sub(r'[<>:"/\\|?*]', '', title)
         cleaned = cleaned.strip()
+        cleaned = cleaned.title()
 
         return cleaned if cleaned else 'Untitled'
 
