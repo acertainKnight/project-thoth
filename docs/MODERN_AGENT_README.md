@@ -59,6 +59,9 @@ agent_v2/
 - `list_discovery_sources` - Show all discovery sources
 - `create_arxiv_source` - Create an ArXiv source
 - `create_pubmed_source` - Create a PubMed source
+- `create_crossref_source` - Create a CrossRef source
+- `create_openalex_source` - Create an OpenAlex source
+- `create_biorxiv_source` - Create a bioRxiv source
 - `run_discovery` - Execute discovery for sources
 - `delete_discovery_source` - Remove a source
 
