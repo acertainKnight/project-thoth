@@ -511,3 +511,7 @@ class TagService(BaseService):
             'articles_updated': articles_updated,
             'tags_added': total_tags_added,
         }
+
+    def health_check(self) -> dict[str, str]:
+        """Basic health status for the TagService."""
+        return super().health_check()
