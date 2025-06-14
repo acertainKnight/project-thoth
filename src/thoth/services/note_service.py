@@ -443,3 +443,7 @@ class NoteService(BaseService):
         except Exception as e:
             self.logger.error(self.handle_error(e, 'getting note statistics'))
             return {}
+
+    def health_check(self) -> dict[str, str]:
+        """Basic health status for the NoteService."""
+        return super().health_check()

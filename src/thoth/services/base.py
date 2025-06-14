@@ -100,3 +100,10 @@ class BaseService(ABC):
             **details: Additional details to log
         """
         self.logger.info(f'{operation}', **details)
+
+    def health_check(self) -> dict[str, str]:
+        """Return basic health status for the service."""
+        return {
+            'service': self.__class__.__name__,
+            'status': 'healthy',
+        }
