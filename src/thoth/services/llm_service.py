@@ -11,11 +11,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
 
 from thoth.services.base import BaseService, ServiceError
-from thoth.utilities import (
-    OpenRouterClient,
-)
-from thoth.utilities.anthropic_client import AnthropicClient
-from thoth.utilities.openai_client import OpenAIClient
+from thoth.services.llm.factory import LLMFactory
+from thoth.services.llm.protocols import UnifiedLLMClient
 
 
 class LLMService(BaseService):
@@ -41,10 +38,24 @@ class LLMService(BaseService):
         self._clients = {}  # Cache for different model clients
         self._structured_clients: dict[str, Any] = {}
         self._prompt_templates: dict[str, ChatPromptTemplate] = {}
+        self.factory = LLMFactory()
 
     def initialize(self) -> None:
         """Initialize the LLM service."""
         self.logger.info('LLM service initialized')
+
+    def _get_client(
+        self,
+        provider: str,
+        **config: Any,
+    ) -> UnifiedLLMClient:
+        """Create a client using the LLM factory."""
+        try:
+            return self.factory.create_client(provider, config)
+        except Exception as e:
+            raise ServiceError(
+                self.handle_error(e, f"creating client for provider '{provider}'")
+            ) from e
 
     def get_client(
         self,
@@ -95,37 +106,25 @@ class LLMService(BaseService):
             model_kwargs.pop('max_tokens', None)
             model_kwargs.pop('use_rate_limiter', None)
 
-            provider, model_name = (
-                model.split('/', 1) if '/' in model else (None, model)
+            provider, _ = model.split('/', 1) if '/' in model else (None, model)
+
+            cfg = dict(
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                use_rate_limiter=use_rate_limiter,
+                **model_kwargs,
             )
 
             if provider == 'openai' and self.config.api_keys.openai_key:
-                client = OpenAIClient(
-                    api_key=self.config.api_keys.openai_key,
-                    model=model,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    use_rate_limiter=use_rate_limiter,
-                    **model_kwargs,
-                )
+                cfg['api_key'] = self.config.api_keys.openai_key
             elif provider == 'anthropic' and self.config.api_keys.anthropic_key:
-                client = AnthropicClient(
-                    api_key=self.config.api_keys.anthropic_key,
-                    model=model,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    use_rate_limiter=use_rate_limiter,
-                    **model_kwargs,
-                )
+                cfg['api_key'] = self.config.api_keys.anthropic_key
             else:
-                client = OpenRouterClient(
-                    api_key=self.config.api_keys.openrouter_key,
-                    model=model,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    use_rate_limiter=use_rate_limiter,
-                    **model_kwargs,
-                )
+                provider = 'openrouter'
+                cfg['api_key'] = self.config.api_keys.openrouter_key
+
+            client = self._get_client(provider, **cfg)
 
             # Cache and return
             self._clients[cache_key] = client
@@ -368,3 +367,7 @@ class LLMService(BaseService):
         self._clients.clear()
 
         self.log_operation('cache_cleared', count=len(self._clients))
+
+    def health_check(self) -> dict[str, str]:
+        """Basic health status for the LLMService."""
+        return super().health_check()

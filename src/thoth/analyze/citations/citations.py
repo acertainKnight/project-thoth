@@ -5,7 +5,7 @@ Citation processor for extracting and analyzing citations from academic document
 from pathlib import Path
 from typing import Any, TypedDict
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, ChoiceLoader
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable, RunnableConfig
 from langgraph.graph import END, StateGraph
@@ -46,7 +46,6 @@ class CitationProcessorError(Exception):
 
 class CitationProcessor:
     """Processes citations from a document."""
-
     def __init__(self, llm, config, prompts_dir: Path | None = None):
         self.llm = llm
         self.config = config
@@ -71,9 +70,14 @@ class CitationProcessor:
         if not self.prompts_dir.exists():
             self.prompts_dir = prompts_dir / 'google'
 
-        # Initialize Jinja environment
+        # Initialize Jinja environment with fallback to default prompts
         self.jinja_env = Environment(
-            loader=FileSystemLoader(self.prompts_dir),
+            loader=ChoiceLoader(
+                [
+                    FileSystemLoader(self.prompts_dir),
+                    FileSystemLoader(self.default_prompts_dir),
+                ]
+            ),
             trim_blocks=True,
             lstrip_blocks=True,
         )
