@@ -7,16 +7,19 @@ all services in a consistent way.
 
 from typing import Any
 
+from thoth.knowledge.graph import CitationGraph
 from thoth.services.article_service import ArticleService
 from thoth.services.base import BaseService
 from thoth.services.citation_service import CitationService
 from thoth.services.discovery_service import DiscoveryService
 from thoth.services.llm_service import LLMService
 from thoth.services.note_service import NoteService
+from thoth.services.pdf_locator_service import PdfLocatorService
 from thoth.services.processing_service import ProcessingService
 from thoth.services.query_service import QueryService
 from thoth.services.rag_service import RAGService
 from thoth.services.tag_service import TagService
+from thoth.services.web_search_service import WebSearchService
 from thoth.utilities.config import ThothConfig, get_config
 
 
@@ -46,8 +49,12 @@ class ServiceManager:
 
         # Initialize core services first
         self._services['llm'] = LLMService(config=self.config)
-        self._services['processing'] = ProcessingService(config=self.config)
-        self._services['article'] = ArticleService(config=self.config)
+        self._services['processing'] = ProcessingService(
+            config=self.config, llm_service=self._services['llm']
+        )
+        self._services['article'] = ArticleService(
+            config=self.config, llm_service=self._services['llm']
+        )
         self._services['note'] = NoteService(config=self.config)
 
         # Initialize services that depend on paths
@@ -64,11 +71,16 @@ class ServiceManager:
 
         self._services['rag'] = RAGService(config=self.config)
 
+        self._services['web_search'] = WebSearchService(config=self.config)
+
+        self._services['pdf_locator'] = PdfLocatorService(config=self.config)
+
         # Initialize services that need dependencies
         self._services['citation'] = CitationService(config=self.config)
 
         self._services['tag'] = TagService(
             config=self.config,
+            llm_service=self._services['llm'],
             citation_tracker=None,  # Will be set by pipeline
         )
 
@@ -117,6 +129,12 @@ class ServiceManager:
         return self._services['rag']
 
     @property
+    def web_search(self) -> WebSearchService:
+        """Get the web search service."""
+        self._ensure_initialized()
+        return self._services['web_search']
+
+    @property
     def citation(self) -> CitationService:
         """Get the citation service."""
         self._ensure_initialized()
@@ -127,6 +145,12 @@ class ServiceManager:
         """Get the tag service."""
         self._ensure_initialized()
         return self._services['tag']
+
+    @property
+    def pdf_locator(self) -> PdfLocatorService:
+        """Get the PDF locator service."""
+        self._ensure_initialized()
+        return self._services['pdf_locator']
 
     def get_service(self, name: str) -> BaseService:
         """
@@ -146,12 +170,12 @@ class ServiceManager:
             raise KeyError(f"Service '{name}' not found")
         return self._services[name]
 
-    def set_citation_tracker(self, citation_tracker: Any) -> None:
+    def set_citation_tracker(self, citation_tracker: CitationGraph) -> None:
         """
         Set the citation tracker for services that need it.
 
         Args:
-            citation_tracker: CitationTracker instance
+            citation_tracker: CitationGraph instance
         """
         self._ensure_initialized()
         self._services['tag']._citation_tracker = citation_tracker

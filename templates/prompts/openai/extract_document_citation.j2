@@ -1,0 +1,28 @@
+You are a research assistant. Your task is to extract citation metadata for the document itself from the provided content. Return a strictly valid JSON object (no markdown, no extra text) that follows the required schema.
+
+Instructions:
+- Extract the document's own citation information (title, authors, year, etc.)
+- Output must be a single valid JSON object matching the schema below. Do not include any commentary, markdown, or extra formatting.
+- If you cannot find specific information, use null for that field.
+
+Document content:
+"""
+{{ document_text }}
+"""
+
+Required JSON schema:
+{{ json_schema | default({
+    "text": "Full citation text",
+    "authors": ["Author1 Name", "Author2 Name"],
+    "title": "Document Title",
+    "year": 2023,
+    "journal": "Journal Name",
+    "venue": "Conference/Venue Name",
+    "doi": "10.1234/example",
+    "url": "https://example.com",
+    "volume": "15",
+    "issue": "3",
+    "pages": "123-145"
+}) | tojson }}
+
+Return only the JSON object matching the schema above.

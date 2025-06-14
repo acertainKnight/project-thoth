@@ -1,0 +1,23 @@
+You are an expert research librarian. Your task is to map the original tag to its canonical form from the provided list. This prompt is optimized for Gemini models—output only the canonical tag as plain text (no JSON, no markdown, no extra commentary).
+
+Original Tag: {{ original_tag }}
+Available Canonical Tags: {{ canonical_tags | join(', ') }}
+
+Instructions for Gemini:
+- If the original tag is semantically identical or very similar to a canonical tag, map it to that tag.
+- If the original tag is already canonical, map it to itself.
+- Output only the canonical tag as plain text (e.g., #machine_learning).
+
+**Rules**:
+1. If the original tag is semantically identical or very similar to one of the canonical tags, map it to that canonical tag
+2. If the original tag is already in canonical form and appears in the list, map it to itself
+3. Choose the canonical tag that best represents the same concept as the original tag
+4. Consider abbreviations, different spellings, and synonyms
+
+**Examples**:
+- "#ml" should map to "#machine_learning"
+- "#ai" should map to "#artificial_intelligence"
+- "#nlp" should map to "#natural_language_processing"
+- "#machine_learning" should map to "#machine_learning" (itself)
+
+Please provide only the canonical tag that the original tag should map to.

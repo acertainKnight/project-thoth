@@ -1,0 +1,24 @@
+Evaluate how well this article matches the research query.
+
+Research Query: {{ query.name }}
+Description: {{ query.description }}
+Research Question: {{ query.research_question }}
+Keywords: {{ query.keywords | join(', ') }}
+Required Topics: {{ query.required_topics | join(', ') }}
+Preferred Topics: {{ query.preferred_topics | join(', ') }}
+Excluded Topics: {{ query.excluded_topics | join(', ') }}
+
+Article Title: {{ title }}
+Article Abstract: {{ abstract }}
+{% if content %}
+Article Content (excerpt): {{ content[:1000] }}...
+{% endif %}
+
+Evaluate the article and provide:
+1. A relevance score from 0.0 to 1.0
+2. Whether it meets the criteria
+3. Matched keywords
+4. Topic analysis
+5. Detailed reasoning
+6. A recommendation: 'keep', 'reject', or 'review'
+7. Your confidence level (0.0 to 1.0)

@@ -13,8 +13,8 @@ from pathlib import Path
 # Add the src directory to the path so we can import thoth modules
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from thoth.ingestion.scrape_filter import ScrapeFilter
-from thoth.utilities.models import ScrapedArticleMetadata
+from thoth.ingestion.filter import Filter as ScrapeFilter
+from thoth.utilities.schemas import ScrapedArticleMetadata
 
 
 def simulate_arxiv_scraper():

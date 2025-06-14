@@ -18,8 +18,8 @@ from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition, create_react_agent
 from loguru import logger
 
-from thoth.ingestion.agent_adapter import AgentAdapter
 from thoth.ingestion.agent_v2.core.state import ResearchAgentState
+from thoth.ingestion.agent_v2.core.token_tracker import TokenUsageTracker
 from thoth.ingestion.agent_v2.tools.analysis_tools import (
     AnalyzeTopicTool,
     EvaluateArticleTool,
@@ -36,6 +36,11 @@ from thoth.ingestion.agent_v2.tools.discovery_tools import (
     ListDiscoverySourcesTool,
     RunDiscoveryTool,
 )
+from thoth.ingestion.agent_v2.tools.pdf_tools import (
+    LocatePdfsForQueryTool,
+    LocatePdfTool,
+    ValidatePdfSourceTool,
+)
 from thoth.ingestion.agent_v2.tools.query_tools import (
     CreateQueryTool,
     DeleteQueryTool,
@@ -50,6 +55,8 @@ from thoth.ingestion.agent_v2.tools.rag_tools import (
     IndexKnowledgeBaseTool,
     SearchKnowledgeTool,
 )
+from thoth.ingestion.agent_v2.tools.web_tools import WebSearchTool
+from thoth.services.service_manager import ServiceManager
 
 
 class ResearchAssistant:
@@ -62,7 +69,7 @@ class ResearchAssistant:
 
     def __init__(
         self,
-        adapter: AgentAdapter,
+        service_manager: ServiceManager,
         enable_memory: bool = True,
         system_prompt: str | None = None,
     ):
@@ -70,18 +77,21 @@ class ResearchAssistant:
         Initialize the research assistant.
 
         Args:
-            adapter: AgentAdapter instance for accessing services
+            service_manager: ServiceManager instance for accessing services
             enable_memory: Whether to enable conversation memory
             system_prompt: Custom system prompt (uses default if None)
         """
-        self.adapter = adapter
+        self.service_manager = service_manager
         self.enable_memory = enable_memory
 
-        # Get LLM from adapter
-        self.llm = adapter.get_llm()
+        # Get LLM from service manager
+        self.llm = self.service_manager.llm.get_client()
+
+        # Token usage tracker
+        self.usage_tracker = TokenUsageTracker()
 
         # Initialize tool registry and register all tools
-        self.tool_registry = ToolRegistry(adapter=adapter)
+        self.tool_registry = ToolRegistry(service_manager=self.service_manager)
         self._register_tools()
 
         # Get all tool instances
@@ -125,11 +135,17 @@ class ResearchAssistant:
         self.tool_registry.register('index_knowledge', IndexKnowledgeBaseTool)
         self.tool_registry.register('explain_connections', ExplainConnectionsTool)
         self.tool_registry.register('rag_stats', GetRAGStatsTool)
+        self.tool_registry.register('web_search', WebSearchTool)
 
         # Analysis tools
         self.tool_registry.register('evaluate_article', EvaluateArticleTool)
         self.tool_registry.register('analyze_topic', AnalyzeTopicTool)
         self.tool_registry.register('find_related', FindRelatedTool)
+
+        # PDF tools
+        self.tool_registry.register('locate_pdf', LocatePdfTool)
+        self.tool_registry.register('validate_pdf_source', ValidatePdfSourceTool)
+        self.tool_registry.register('locate_pdfs_for_query', LocatePdfsForQueryTool)
 
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt for the agent."""
@@ -141,18 +157,21 @@ Your capabilities include:
 2. **Query Management**: Create research queries that filter articles based on your interests
 3. **Knowledge Exploration**: Search, analyze, and answer questions about the research collection
 4. **Paper Analysis**: Evaluate articles, find connections, and analyze research topics
+5. **PDF Location**: Find open-access PDFs for articles using DOI or arXiv identifiers
 
 Key behaviors:
 - Be proactive: When users express research interests, suggest creating sources and queries
 - Be comprehensive: Use multiple tools to provide complete answers
 - Be analytical: Help users understand connections between papers and research trends
 - Be efficient: Use tools in parallel when possible
+- Be resourceful: Help users find PDFs for articles they're interested in
 
 When users ask about their research or express interests:
 1. Check existing queries and sources with list tools
 2. Suggest creating new sources/queries if relevant
 3. Use RAG tools to explore existing knowledge
-4. Provide actionable next steps
+4. Help locate PDFs for important papers
+5. Provide actionable next steps
 
 Remember: You have direct access to tools - use them immediately rather than just explaining what you would do."""
 
@@ -204,8 +223,15 @@ Remember: You have direct access to tools - use them immediately rather than jus
         if not any(isinstance(m, SystemMessage) for m in messages):
             messages.insert(0, SystemMessage(content=self.system_prompt))
 
+        # Use the specified model or the default
+        model_override = state.model_override
+        if model_override:
+            llm_with_tools = self.llm.bind_tools(self.tools, model=model_override)
+        else:
+            llm_with_tools = self.llm_with_tools
+
         # Get response from LLM with tools
-        response = self.llm_with_tools.invoke(messages)
+        response = llm_with_tools.invoke(messages)
 
         # Return the response (LangGraph will handle adding it to messages)
         return {'messages': [response]}
@@ -214,7 +240,9 @@ Remember: You have direct access to tools - use them immediately rather than jus
         self,
         message: str,
         session_id: str | None = None,
+        user_id: str | None = None,
         context: dict[str, Any] | None = None,
+        model_override: str | None = None,
     ) -> dict[str, Any]:
         """
         Process a user message and return the agent's response.
@@ -222,7 +250,9 @@ Remember: You have direct access to tools - use them immediately rather than jus
         Args:
             message: User's input message
             session_id: Optional session ID for memory persistence
+            user_id: Identifier for the current user
             context: Optional context to pass to the agent
+            model_override: Optional model to use for this turn
 
         Returns:
             dict: Response containing agent's message and any tool results
@@ -232,6 +262,7 @@ Remember: You have direct access to tools - use them immediately rather than jus
             messages=[HumanMessage(content=message)],
             session_id=session_id,
             user_context=context or {},
+            model_override=model_override,
         )
 
         # Configure thread ID for memory
@@ -261,6 +292,15 @@ Remember: You have direct access to tools - use them immediately rather than jus
                 'response': final_message.content,
                 'tool_calls': [],
             }
+
+            # Track token usage if available
+            if (
+                hasattr(final_message, 'usage_metadata')
+                and final_message.usage_metadata
+            ):
+                response['usage'] = final_message.usage_metadata
+                if user_id:
+                    self.usage_tracker.add_usage(user_id, final_message.usage_metadata)
 
             # Add tool call information if any
             if hasattr(final_message, 'tool_calls') and final_message.tool_calls:
@@ -383,9 +423,13 @@ Remember: You have direct access to tools - use them immediately rather than jus
                 self.app.checkpointer.put(config, ResearchAgentState())
             logger.info(f'Reset memory for session: {session_id}')
 
+    def get_token_usage(self, user_id: str) -> dict[str, int]:
+        """Return accumulated token usage for a user."""
+        return self.usage_tracker.get_usage(user_id)
+
 
 def create_research_assistant(
-    adapter: AgentAdapter,
+    service_manager: ServiceManager,
     enable_memory: bool = True,
     system_prompt: str | None = None,
 ) -> ResearchAssistant:
@@ -393,7 +437,7 @@ def create_research_assistant(
     Factory function to create a research assistant.
 
     Args:
-        adapter: AgentAdapter instance
+        service_manager: ServiceManager instance
         enable_memory: Whether to enable conversation memory
         system_prompt: Custom system prompt
 
@@ -401,7 +445,7 @@ def create_research_assistant(
         ResearchAssistant: Configured research assistant instance
     """
     return ResearchAssistant(
-        adapter=adapter,
+        service_manager=service_manager,
         enable_memory=enable_memory,
         system_prompt=system_prompt,
     )

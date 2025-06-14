@@ -11,6 +11,29 @@ from langchain_core.rate_limiters import InMemoryRateLimiter
 from langchain_openai import ChatOpenAI
 from loguru import logger
 
+_model_cache = None
+_cache_expiry = 3600  # 1 hour
+_last_cache_time = 0
+
+
+def get_openrouter_models() -> list[dict[str, Any]]:
+    """Fetch and cache the list of models from OpenRouter."""
+    global _model_cache, _last_cache_time
+    current_time = time.time()
+    if _model_cache and (current_time - _last_cache_time < _cache_expiry):
+        return _model_cache
+
+    try:
+        response = requests.get('https://openrouter.ai/api/v1/models')
+        response.raise_for_status()
+        _model_cache = response.json().get('data', [])
+        _last_cache_time = current_time
+        logger.info(f'Fetched and cached {len(_model_cache)} models from OpenRouter.')
+        return _model_cache
+    except requests.RequestException as e:
+        logger.error(f'Failed to fetch models from OpenRouter: {e}')
+        return _model_cache or []  # Return stale cache if available
+
 
 class OpenRouterError(Exception):
     """Exception raised for errors in the OpenRouter API."""
@@ -178,7 +201,7 @@ class OpenRouterClient(ChatOpenAI):
 
     Args:
         api_key (str, optional): OpenRouter API key for authentication. Defaults to OPENROUTER_API_KEY env var.
-        model (str): Model identifier (e.g. "openai/gpt-4", "anthropic/claude-2.1")
+        model (str or list of str): Model identifier(s) (e.g. "openai/gpt-4", "anthropic/claude-2.1")
         temperature (float, optional): Sampling temperature between 0 and 2. Defaults to 0.7
         max_tokens (int, optional): Maximum tokens to generate. Defaults to None.
         site_url (str, optional): Your site URL for rankings on openrouter.ai
@@ -237,7 +260,7 @@ class OpenRouterClient(ChatOpenAI):
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = 'openai/gpt-4',
+        model: str | list[str] = 'openai/gpt-4',
         temperature: float = 0.7,
         max_tokens: int | None = None,
         site_url: str | None = None,
@@ -275,7 +298,7 @@ class OpenRouterClient(ChatOpenAI):
         super().__init__(
             api_key=api_key,  # OpenRouter API key
             base_url='https://openrouter.ai/api/v1',  # OpenRouter API base URL
-            model=model,
+            model_name=model,  # Use model_name to pass model string or list
             temperature=temperature,
             max_tokens=max_tokens,
             streaming=streaming,

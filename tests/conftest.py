@@ -15,6 +15,8 @@ from unittest.mock import MagicMock
 import pytest
 from dotenv import load_dotenv
 
+from thoth.utilities.schemas import AnalysisResponse, Citation, ResearchQuery
+
 # Load test environment
 load_dotenv('.env.test', override=True)
 
@@ -86,6 +88,8 @@ def mock_config(temp_workspace):
         'api_keys': {
             'mistral_key': 'test_mistral_key',
             'openrouter_key': 'test_openrouter_key',
+            'openai_key': 'test_openai_key',
+            'anthropic_key': 'test_anthropic_key',
             'opencitations_key': 'test_opencitations_key',
             'semanticscholar_key': 'test_semanticscholar_key',
         },
@@ -107,6 +111,32 @@ def mock_config(temp_workspace):
             'auto_start': False,
         },
     }
+
+
+@pytest.fixture
+def thoth_config(mock_config, monkeypatch):
+    """
+    Create a ThothConfig object with mocked values for testing.
+    """
+    from thoth.utilities.config import ThothConfig
+
+    # Use monkeypatch to set environment variables from mock_config
+    # This is more robust for testing the real config loading
+    monkeypatch.setenv('API_MISTRAL_KEY', mock_config['api_keys']['mistral_key'])
+    monkeypatch.setenv('API_OPENROUTER_KEY', mock_config['api_keys']['openrouter_key'])
+    # ... set other env vars as needed ...
+
+    config = ThothConfig()
+
+    # Override any complex objects that need mocking
+    config.pdf_dir = Path(mock_config['pdf_dir'])
+    config.markdown_dir = Path(mock_config['markdown_dir'])
+    config.notes_dir = Path(mock_config['notes_dir'])
+    config.output_dir = Path(mock_config['output_dir'])
+    config.knowledge_base_dir = Path(mock_config['knowledge_dir'])
+    # ... and so on for other paths
+
+    return config
 
 
 @pytest.fixture
@@ -148,7 +178,14 @@ def sample_pdf_path(temp_workspace):
         Path: Path to the sample PDF file.
     """
     pdf_path = temp_workspace / 'pdf' / 'sample.pdf'
-    pdf_path.write_bytes(b'Sample PDF content for testing')
+
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+    with open(pdf_path, 'wb') as f:
+        writer.write(f)
+
     return pdf_path
 
 
@@ -194,8 +231,6 @@ def sample_analysis_response():
     Returns:
         dict: Sample analysis response.
     """
-    from thoth.utilities.models import AnalysisResponse
-
     return AnalysisResponse(
         title='Sample Paper Title',
         authors=['Author One', 'Author Two'],
@@ -224,8 +259,6 @@ def sample_research_query():
     Returns:
         ResearchQuery: Sample research query.
     """
-    from thoth.utilities.models import ResearchQuery
-
     return ResearchQuery(
         name='test_query',
         description='Test research query',
@@ -245,8 +278,6 @@ def sample_citations():
     Returns:
         list: List of sample citations.
     """
-    from thoth.utilities.models import Citation
-
     return [
         Citation(
             title='Citation One',
@@ -277,6 +308,8 @@ def mock_env_vars(monkeypatch):
     """
     monkeypatch.setenv('API_MISTRAL_KEY', 'test_mistral_key')
     monkeypatch.setenv('API_OPENROUTER_KEY', 'test_openrouter_key')
+    monkeypatch.setenv('API_OPENAI_KEY', 'test_openai_key')
+    monkeypatch.setenv('API_ANTHROPIC_KEY', 'test_anthropic_key')
     monkeypatch.setenv('LLM_MODEL', 'openai/gpt-4o-mini')
     monkeypatch.setenv('ENDPOINT_HOST', 'localhost')
     monkeypatch.setenv('ENDPOINT_PORT', '8000')

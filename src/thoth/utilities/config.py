@@ -20,8 +20,12 @@ class APIKeys(BaseSettings):
         case_sensitive=False,  # Make case-insensitive to handle env vars
         extra='allow',
     )
-    mistral_key: str = Field(..., description='Mistral API key for OCR')
-    openrouter_key: str = Field(..., description='OpenRouter API key for LLM')
+    mistral_key: str | None = Field(
+        None, description='Mistral API key for OCR (optional)'
+    )
+    openrouter_key: str | None = Field(None, description='OpenRouter API key for LLM')
+    openai_key: str | None = Field(None, description='OpenAI API key for LLM')
+    anthropic_key: str | None = Field(None, description='Anthropic API key for LLM')
     opencitations_key: str = Field(..., description='OpenCitations API key')
     google_api_key: str | None = Field(
         None, description='Google API key for web search (legacy)'
@@ -31,6 +35,18 @@ class APIKeys(BaseSettings):
     )
     semanticscholar_api_key: str | None = Field(
         None, description='Semantic Scholar API key'
+    )
+    web_search_key: str | None = Field(
+        None, description='Serper.dev API key for general web search'
+    )
+    web_search_providers: list[str] = Field(
+        default_factory=lambda: ['serper'],
+        description='Comma-separated list of enabled web search providers '
+        '(serper, duckduckgo, scrape)',
+    )
+    unpaywall_email: str | None = Field(
+        None,
+        description='Email address for Unpaywall API (required for OA PDF lookups)',
     )
 
 
@@ -72,7 +88,7 @@ class LLMConfig(BaseSettings):
         'auto', description='LLM document processing strategy hint'
     )
     max_output_tokens: int = Field(
-        500000, description='LLM max input tokens for direct processing strategy'
+        50000, description='LLM max input tokens for direct processing strategy'
     )
     max_context_length: int = Field(
         8000, description='LLM max context length for model'
@@ -90,6 +106,26 @@ class LLMConfig(BaseSettings):
     )
 
 
+class QueryBasedRoutingConfig(BaseSettings):
+    """Configuration for query-based model routing."""
+
+    model_config = SettingsConfigDict(
+        env_prefix='ROUTING_',
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='ignore',
+    )
+    enabled: bool = Field(False, description='Enable query-based routing')
+    routing_model: str = Field(
+        'openai/gpt-4o-mini',
+        description='The model used to select the best model for a query',
+    )
+    use_dynamic_prompt: bool = Field(
+        True, description='Use a dynamic Jinja2 template for the routing prompt'
+    )
+
+
 class CitationLLMConfig(BaseSettings):
     """Configuration for the LLM used specifically for citation processing."""
 
@@ -100,7 +136,19 @@ class CitationLLMConfig(BaseSettings):
         case_sensitive=False,
         extra='allow',
     )
-    model: str = Field(..., description='Citation LLM model')
+    model: str = Field(..., description='Default citation LLM model')
+    document_citation_model: str | None = Field(
+        None, description='Model for extracting the document citation'
+    )
+    reference_cleaning_model: str | None = Field(
+        None, description='Model for cleaning the references section'
+    )
+    structured_extraction_model: str | None = Field(
+        None, description='Model for extracting structured citations (single mode)'
+    )
+    batch_structured_extraction_model: str | None = Field(
+        None, description='Model for extracting structured citations (batch mode)'
+    )
     model_settings: ModelConfig = Field(
         default_factory=ModelConfig, description='Citation model configuration'
     )
@@ -161,17 +209,16 @@ class CitationConfig(BaseSettings):
         False, description='Whether to use Scholarly for Google Scholar search'
     )
     use_semanticscholar: bool = Field(
-        True, description='Whether to use Semantic Scholar API for metadata enrichment'
+        True, description='Enable Semantic Scholar lookups'
     )
-    use_arxiv: bool = Field(
-        False, description='Whether to use Arxiv API for metadata enrichment'
+    use_arxiv: bool = Field(True, description='Enable arXiv lookups')
+    processing_mode: str = Field(
+        'single',
+        description='Processing mode for citation extraction. "single" for one-by-one, "batch" for batching.',
     )
     citation_batch_size: int = Field(
-        10,
-        description='Batch size for processing citation strings with LLM. '
-        'Optimized default of 10 provides good balance of speed and accuracy. '
-        'Set to 1 for maximum accuracy but slower processing, '
-        'or up to 20 for faster processing with potentially lower accuracy.',
+        1,
+        description='Batch size for citation processing. A size of 1 uses single processing (more robust). Sizes > 1 use batch processing (faster).',
         ge=1,
         le=20,
     )
@@ -225,9 +272,18 @@ class ResearchAgentLLMConfig(BaseSettings):
         case_sensitive=False,
         extra='allow',
     )
-    model: str = Field(..., description='Research agent LLM model')
+    model: str | list[str] = Field(..., description='Research agent LLM model(s)')
     model_settings: ModelConfig = Field(
         default_factory=ModelConfig, description='Research agent model configuration'
+    )
+    use_auto_model_selection: bool = Field(
+        False, description='Whether to use auto model selection'
+    )
+    auto_model_require_tool_calling: bool = Field(
+        False, description='Auto-selected model must support tool calling'
+    )
+    auto_model_require_structured_output: bool = Field(
+        False, description='Auto-selected model must support structured output'
     )
     max_output_tokens: int = Field(
         50000,
@@ -323,8 +379,8 @@ class RAGConfig(BaseSettings):
     )
     # Embedding configuration
     embedding_model: str = Field(
-        'openai/text-embedding-3-small',
-        description='Model to use for generating embeddings',
+        'all-MiniLM-L6-v2',
+        description='Model to use for generating embeddings (local sentence-transformers model)',
     )
     embedding_batch_size: int = Field(
         100, description='Batch size for embedding generation'
@@ -341,9 +397,15 @@ class RAGConfig(BaseSettings):
 
     # Document processing configuration
     chunk_size: int = Field(
-        1000, description='Size of text chunks for splitting documents'
+        500, description='Size of text chunks in tokens for splitting documents'
     )
-    chunk_overlap: int = Field(200, description='Overlap between consecutive chunks')
+    chunk_overlap: int = Field(
+        50, description='Overlap between consecutive chunks in tokens'
+    )
+    chunk_encoding: str = Field(
+        'cl100k_base',
+        description='Encoding to use for token counting (cl100k_base for GPT-4, p50k_base for GPT-3.5)',
+    )
 
     # Question answering configuration
     qa_model: str = Field(
@@ -399,9 +461,11 @@ class ThothConfig(BaseSettings):
     notes_dir: Path = Field(
         Path('data/notes'), description='Directory for Obsidian notes'
     )
-    prompts_dir: Path = Field(Path('data/prompts'), description='Directory for prompts')
+    prompts_dir: Path = Field(
+        Path('templates/prompts'), description='Directory for prompts'
+    )
     templates_dir: Path = Field(
-        Path('data/templates'), description='Directory for templates'
+        Path('templates'), description='Directory for templates'
     )
     output_dir: Path = Field(
         Path('data/output'), description='Directory for output files'
@@ -480,6 +544,10 @@ class ThothConfig(BaseSettings):
     )
     rag_config: RAGConfig = Field(
         default_factory=RAGConfig, description='RAG system configuration'
+    )
+    query_based_routing_config: QueryBasedRoutingConfig = Field(
+        default_factory=QueryBasedRoutingConfig,
+        description='Query-based routing configuration',
     )
 
     def setup_logging(self) -> None:

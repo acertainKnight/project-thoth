@@ -44,13 +44,33 @@ The latest version includes comprehensive remote management capabilities to solv
 - **On Connect**: When connecting to remote server
 
 ### **What Gets Synced**
-- **API Keys**: Mistral, OpenRouter keys
+- **API Keys**: OpenRouter (Mistral optional) keys
 - **Directories**: Workspace and Obsidian paths
 - **Server Settings**: Host, port configuration
 - **Plugin Preferences**: Auto-start, status bar settings
 
 ### **Manual Sync**
 Force settings sync by clicking **"Test Connection"** button in settings.
+
+## 🩺 **System Health Check (Start Here)**
+
+**Before troubleshooting specific issues, run the comprehensive health check:**
+
+```bash
+# From your project-thoth directory
+uv run python health_check.py
+```
+
+This will validate:
+- ✅ Python environment and dependencies
+- ✅ Configuration files and API keys
+- ✅ Service layer and agent functionality
+- ✅ Directory permissions and structure
+- ✅ Optional components (Docker, API server)
+
+**Most connection and configuration issues are identified by the health check with specific solutions.**
+
+---
 
 ## 🐛 **Connection Error Solutions**
 
@@ -178,7 +198,7 @@ tail -f logs/thoth.log | grep "obsidian.py"
 ### **Settings Checklist**
 
 #### **Required Settings**
-- [ ] **Mistral API Key**: Must be valid
+- [ ] **Mistral API Key** (optional): Provide if using remote OCR
 - [ ] **OpenRouter API Key**: Must be valid
 - [ ] **Workspace Directory**: Must exist and contain `pyproject.toml`
 - [ ] **Remote URL**: Must be reachable (if using remote mode)
