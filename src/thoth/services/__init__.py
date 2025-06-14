@@ -11,6 +11,7 @@ from thoth.services.citation_service import CitationService
 from thoth.services.discovery_service import DiscoveryService
 from thoth.services.llm_service import LLMService
 from thoth.services.note_service import NoteService
+from thoth.services.api_gateway import ExternalAPIGateway
 from thoth.services.pdf_locator_service import PdfLocatorService
 from thoth.services.processing_service import ProcessingService
 from thoth.services.query_service import QueryService
@@ -26,6 +27,7 @@ __all__ = [
     'DiscoveryService',
     'LLMService',
     'NoteService',
+    'ExternalAPIGateway',
     'PdfLocatorService',
     'ProcessingService',
     'QueryService',
