@@ -123,11 +123,11 @@ def thoth_config(mock_config, monkeypatch):
     config = ThothConfig()
 
     # Override any complex objects that need mocking
-    config.pdf_dir = Path(mock_config['pdf_dir'])
-    config.markdown_dir = Path(mock_config['markdown_dir'])
-    config.notes_dir = Path(mock_config['notes_dir'])
-    config.output_dir = Path(mock_config['output_dir'])
-    config.knowledge_base_dir = Path(mock_config['knowledge_dir'])
+    config.core.pdf_dir = Path(mock_config['pdf_dir'])
+    config.core.markdown_dir = Path(mock_config['markdown_dir'])
+    config.core.notes_dir = Path(mock_config['notes_dir'])
+    config.core.output_dir = Path(mock_config['output_dir'])
+    config.core.knowledge_base_dir = Path(mock_config['knowledge_dir'])
     # ... and so on for other paths
 
     return config
