@@ -17,6 +17,7 @@ from loguru import logger
 
 from thoth.knowledge.graph import CitationGraph
 from thoth.pipelines.document_pipeline import DocumentPipeline
+from thoth.pipelines.knowledge_pipeline import KnowledgePipeline
 from thoth.server.pdf_monitor import PDFTracker
 from thoth.services.service_manager import ServiceManager
 from thoth.utilities.config import get_config
@@ -114,6 +115,16 @@ class ThothPipeline:
             markdown_dir=self.markdown_dir,
         )
 
+        # Initialize knowledge pipeline for RAG operations
+        self.knowledge_pipeline = KnowledgePipeline(
+            services=self.services,
+            citation_tracker=self.citation_tracker,
+            pdf_tracker=self.pdf_tracker,
+            output_dir=self.output_dir,
+            notes_dir=self.notes_dir,
+            markdown_dir=self.markdown_dir,
+        )
+
         logger.info('Thoth pipeline initialized with service layer')
 
     def process_pdf(self, pdf_path: str | Path):
@@ -123,20 +134,6 @@ class ThothPipeline:
             return self.document_pipeline.process_pdf(pdf_path)
         except Exception as e:  # pragma: no cover - should be rare
             raise PipelineError(str(e)) from e
-
-    def _index_to_rag(self, file_path: Path) -> None:
-        """
-        Index a file to the RAG system if available.
-
-        Args:
-            file_path: Path to the file to index.
-        """
-        try:
-            if file_path.exists() and file_path.suffix == '.md':
-                self.services.rag.index_file(file_path)
-                logger.debug(f'Indexed {file_path} to RAG system')
-        except Exception as e:
-            logger.debug(f'Failed to index {file_path} to RAG: {e}')
 
     def regenerate_all_notes(self) -> list[tuple[Path, Path]]:
         """
@@ -262,105 +259,6 @@ class ThothPipeline:
 
         return self.services.tag.consolidate_and_retag()
 
-    def index_knowledge_base(self) -> dict[str, Any]:
-        """
-        Index all markdown files in the knowledge base into the RAG system.
-
-        This method indexes:
-        - All markdown files in the markdown directory (OCR'd articles)
-        - All markdown files in the notes directory (generated notes)
-
-        Returns:
-            dict[str, Any]: Summary statistics of the indexing process,
-                           including counts of files indexed and any errors.
-
-        Example:
-            >>> pipeline = ThothPipeline()
-            >>> stats = pipeline.index_knowledge_base()
-            >>> print(f'Indexed {stats["total_files"]} files')
-        """
-        logger.info('Starting knowledge base indexing for RAG system')
-
-        try:
-            stats = self.services.rag.index_knowledge_base()
-
-            logger.info(
-                f'Knowledge base indexing completed. '
-                f'Indexed {stats["total_files"]} files '
-                f'({stats["total_chunks"]} chunks)'
-            )
-
-            return stats
-
-        except Exception as e:
-            logger.error(f'Knowledge base indexing failed: {e}')
-            raise PipelineError(f'Knowledge base indexing failed: {e}') from e
-
-    def search_knowledge_base(
-        self,
-        query: str,
-        k: int = 4,
-        filter: dict[str, Any] | None = None,
-    ) -> list[dict[str, Any]]:
-        """
-        Search the knowledge base for relevant documents.
-
-        Args:
-            query: Search query text.
-            k: Number of results to return.
-            filter: Optional metadata filter (e.g., {'document_type': 'note'}).
-
-        Returns:
-            list[dict[str, Any]]: List of search results with content and metadata.
-
-        Example:
-            >>> pipeline = ThothPipeline()
-            >>> results = pipeline.search_knowledge_base('transformer architecture')
-            >>> for result in results:
-            ...     print(f'Score: {result["score"]}, Title: {result["title"]}')
-        """
-        try:
-            logger.info(f'Searching knowledge base for: {query}')
-            return self.services.rag.search(query, k, filter)
-
-        except Exception as e:
-            logger.error(f'Knowledge base search failed: {e}')
-            raise PipelineError(f'Knowledge base search failed: {e}') from e
-
-    def ask_knowledge_base(
-        self,
-        question: str,
-        k: int = 4,
-        filter: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """
-        Ask a question and get an answer based on the knowledge base.
-
-        Args:
-            question: The question to ask.
-            k: Number of documents to retrieve for context.
-            filter: Optional metadata filter for retrieval.
-
-        Returns:
-            dict[str, Any]: Answer with sources and metadata.
-
-        Example:
-            >>> pipeline = ThothPipeline()
-            >>> response = pipeline.ask_knowledge_base(
-            ...     'What are the main contributions of the transformer paper?'
-            ... )
-            >>> print(response['answer'])
-            >>> for source in response['sources']:
-            ...     print(f'Source: {source["metadata"]["title"]}')
-        """
-        try:
-            logger.info(f'Answering question: {question}')
-            return self.services.rag.ask_question(question, k, filter)
-
-        except Exception as e:
-            logger.error(f'Failed to answer question: {e}')
-            raise PipelineError(f'Failed to answer question: {e}') from e
-
     def web_search(
         self, query: str, num_results: int = 5, provider: str | None = None
     ) -> list[SearchResult]:
@@ -374,43 +272,6 @@ class ThothPipeline:
             logger.error(f'Web search failed: {e}')
             raise PipelineError(f'Web search failed: {e}') from e
 
-    def clear_rag_index(self) -> None:
-        """
-        Clear the entire RAG vector index.
-
-        WARNING: This will delete all indexed documents and require re-indexing.
-
-        Example:
-            >>> pipeline = ThothPipeline()
-            >>> pipeline.clear_rag_index()
-            >>> # Now re-index
-            >>> pipeline.index_knowledge_base()
-        """
-        try:
-            logger.warning('Clearing RAG vector index')
-            self.services.rag.clear_index()
-            logger.info('RAG vector index cleared successfully')
-        except Exception as e:
-            logger.error(f'Failed to clear RAG index: {e}')
-            raise PipelineError(f'Failed to clear RAG index: {e}') from e
-
-    def get_rag_stats(self) -> dict[str, Any]:
-        """
-        Get statistics about the RAG system.
-
-        Returns:
-            dict[str, Any]: Statistics including document count, models used, etc.
-
-        Example:
-            >>> pipeline = ThothPipeline()
-            >>> stats = pipeline.get_rag_stats()
-            >>> print(f'Documents indexed: {stats["document_count"]}')
-        """
-        try:
-            return self.services.rag.get_stats()
-        except Exception as e:
-            logger.error(f'Failed to get RAG stats: {e}')
-            raise PipelineError(f'Failed to get RAG stats: {e}') from e
 
 
 # Example usage
