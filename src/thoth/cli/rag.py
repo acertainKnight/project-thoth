@@ -11,7 +11,7 @@ def run_rag_index(args, pipeline: ThothPipeline):
         logger.warning('Force flag enabled - will reindex all documents')
     try:
         logger.info('Starting knowledge base indexing for RAG system...')
-        stats = pipeline.index_knowledge_base()
+        stats = pipeline.knowledge_pipeline.index_knowledge_base()
         logger.info('Knowledge base indexing completed:')
         logger.info(f'  Total files indexed: {stats["total_files"]}')
         logger.info(f'  - Markdown files: {stats["markdown_files"]}')
@@ -40,7 +40,7 @@ def run_rag_search(args, pipeline: ThothPipeline):
         filter_dict = None
         if args.filter_type != 'all':
             filter_dict = {'document_type': args.filter_type}
-        results = pipeline.search_knowledge_base(
+        results = pipeline.knowledge_pipeline.search_knowledge_base(
             query=args.query,
             k=args.k,
             filter=filter_dict,
@@ -69,7 +69,7 @@ def run_rag_ask(args, pipeline: ThothPipeline):
     """
     try:
         logger.info(f'Asking question: {args.question}')
-        response = pipeline.ask_knowledge_base(
+        response = pipeline.knowledge_pipeline.ask_knowledge_base(
             question=args.question,
             k=args.k,
         )
@@ -97,7 +97,7 @@ def run_rag_stats(args, pipeline: ThothPipeline):
         logger.info('Verbose mode enabled - showing detailed statistics')
     try:
         logger.info('RAG System Statistics:')
-        stats = pipeline.get_rag_stats()
+        stats = pipeline.knowledge_pipeline.get_rag_stats()
         logger.info(f'  Documents indexed: {stats.get("document_count", 0)}')
         logger.info(f'  Collection name: {stats.get("collection_name", "Unknown")}')
         logger.info(f'  Embedding model: {stats.get("embedding_model", "Unknown")}')
@@ -126,7 +126,7 @@ def run_rag_clear(args, pipeline: ThothPipeline):
                 logger.info('Clear operation cancelled.')
                 return 0
         logger.warning('Clearing RAG vector index...')
-        pipeline.clear_rag_index()
+        pipeline.knowledge_pipeline.clear_rag_index()
         logger.info('RAG vector index cleared successfully.')
         logger.info('Run "thoth rag index" to re-index your knowledge base.')
         return 0
