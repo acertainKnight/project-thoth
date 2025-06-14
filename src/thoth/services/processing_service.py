@@ -10,10 +10,12 @@ from typing import Any
 
 from mistralai import DocumentURLChunk, Mistral
 from mistralai.models import OCRResponse, UploadFileOut
+from pypdf import PdfReader
 
 from thoth.analyze.llm_processor import LLMProcessor
 from thoth.services.base import BaseService, ServiceError
-from thoth.utilities.models import AnalysisResponse
+from thoth.services.llm_service import LLMService
+from thoth.utilities.schemas import AnalysisResponse
 
 
 class ProcessingService(BaseService):
@@ -31,7 +33,7 @@ class ProcessingService(BaseService):
         self,
         config=None,
         mistral_client: Mistral | None = None,
-        llm_processor: LLMProcessor | None = None,
+        llm_service: LLMService | None = None,
     ):
         """
         Initialize the ProcessingService.
@@ -39,11 +41,11 @@ class ProcessingService(BaseService):
         Args:
             config: Optional configuration object
             mistral_client: Optional Mistral client for OCR
-            llm_processor: Optional LLM processor
+            llm_service: Optional LLM service
         """
         super().__init__(config)
         self._mistral_client = mistral_client
-        self._llm_processor = llm_processor
+        self._llm_service = llm_service
         self._ocr_service = None
         self._citation_service = None
 
@@ -51,24 +53,17 @@ class ProcessingService(BaseService):
     def mistral_client(self) -> Mistral:
         """Get or create the Mistral client for OCR."""
         if self._mistral_client is None:
+            if not self.config.api_keys.mistral_key:
+                raise ServiceError('Mistral API key not configured')
             self._mistral_client = Mistral(api_key=self.config.api_keys.mistral_key)
         return self._mistral_client
 
     @property
-    def llm_processor(self) -> LLMProcessor:
-        """Get or create the LLM processor."""
-        if self._llm_processor is None:
-            self._llm_processor = LLMProcessor(
-                model=self.config.llm_config.model,
-                max_output_tokens=self.config.llm_config.max_output_tokens,
-                max_context_length=self.config.llm_config.max_context_length,
-                chunk_size=self.config.llm_config.chunk_size,
-                chunk_overlap=self.config.llm_config.chunk_overlap,
-                openrouter_api_key=self.config.api_keys.openrouter_key,
-                prompts_dir=self.config.prompts_dir,
-                model_kwargs=self.config.llm_config.model_settings.model_dump(),
-            )
-        return self._llm_processor
+    def llm_service(self) -> LLMService:
+        """Get or create the LLM service."""
+        if self._llm_service is None:
+            self._llm_service = LLMService(self.config)
+        return self._llm_service
 
     def initialize(self) -> None:
         """Initialize the processing service."""
@@ -98,26 +93,25 @@ class ProcessingService(BaseService):
             if not pdf_path.exists():
                 raise ServiceError(f'PDF file not found: {pdf_path}')
 
-            # Set output directory
             if output_dir is None:
                 output_dir = self.config.markdown_dir
             output_dir.mkdir(parents=True, exist_ok=True)
 
-            # Upload file to Mistral
+            if not self.config.api_keys.mistral_key:
+                self.logger.info('Using local PDF to markdown conversion')
+                return self._local_pdf_to_markdown(pdf_path, output_dir)
+
             self.logger.info(f'Uploading PDF for OCR: {pdf_path}')
             uploaded_file = self._upload_file_to_mistral(pdf_path)
 
-            # Get signed URL
             signed_url_obj = self.mistral_client.files.get_signed_url(
                 file_id=uploaded_file.id, expiry=1
             )
             signed_url = signed_url_obj.url
 
-            # Process with OCR
             self.logger.info('Processing with Mistral OCR')
             ocr_response = self._call_mistral_ocr(signed_url)
 
-            # Generate markdown files
             combined_markdown = self._get_combined_markdown(ocr_response)
             output_path = output_dir / f'{pdf_path.stem}.md'
             output_path.write_text(combined_markdown)
@@ -212,6 +206,16 @@ class ProcessingService(BaseService):
 
             # Analyze content
             self.logger.info('Analyzing content with LLM')
+            self.llm_processor = LLMProcessor(
+                llm_service=self.llm_service,
+                model=self.config.llm_config.model,
+                prompts_dir=self.config.prompts_dir,
+                max_output_tokens=self.config.llm_config.max_output_tokens,
+                max_context_length=self.config.llm_config.max_context_length,
+                chunk_size=self.config.llm_config.chunk_size,
+                chunk_overlap=self.config.llm_config.chunk_overlap,
+                model_kwargs=self.config.llm_config.model_settings.model_dump(),
+            )
             analysis = self.llm_processor.analyze_content(
                 content,
                 force_processing_strategy=force_strategy,
@@ -284,6 +288,25 @@ class ProcessingService(BaseService):
                 f'![{img_name}]({img_name})', f'![{img_name}]({base64_str})'
             )
         return markdown_str
+
+    def _local_pdf_to_markdown(
+        self, pdf_path: Path, output_dir: Path
+    ) -> tuple[Path, Path]:
+        """Fallback local PDF to markdown conversion using PyPDF."""
+        reader = PdfReader(str(pdf_path))
+        markdown_pages: list[str] = []
+        for i, page in enumerate(reader.pages, start=1):
+            text = page.extract_text() or ''
+            markdown_pages.append(f'## Page {i}\n\n{text.strip()}')
+
+        markdown_content = '\n\n'.join(markdown_pages).strip()
+        output_path = output_dir / f'{pdf_path.stem}.md'
+        output_path.write_text(markdown_content)
+
+        no_images_output_path = output_dir / f'{pdf_path.stem}_no_images.md'
+        no_images_output_path.write_text(markdown_content)
+
+        return output_path, no_images_output_path
 
     def extract_metadata(
         self,
@@ -407,7 +430,7 @@ class ProcessingService(BaseService):
         try:
             # This would aggregate stats from various sources
             stats = {
-                'ocr_available': self._mistral_client is not None,
+                'ocr_available': bool(self.config.api_keys.mistral_key),
                 'llm_model': self.config.llm_config.model,
                 'max_context_length': self.config.llm_config.max_context_length,
                 'chunk_size': self.config.llm_config.chunk_size,

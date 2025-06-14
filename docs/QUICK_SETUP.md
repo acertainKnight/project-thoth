@@ -1,5 +1,9 @@
 # 🚀 Quick Setup - Fix Connection & Chat Icon Issues
 
+> **📚 For comprehensive setup options, see: [Enhanced Quick Start Paths](QUICK_START_ENHANCED.md)**
+>
+> This guide is specifically for fixing connection and chat icon issues. For general setup, use the enhanced guide above.
+
 ## 📋 **Immediate Steps to Fix Your Issues**
 
 ### **Step 1: Install the Updated Plugin**
@@ -13,8 +17,10 @@ cp -r dist/* /path/to/your/vault/.obsidian/plugins/thoth-research-assistant/
 2. **Enable Remote Mode**: Toggle ON
 3. **Set Remote URL**: `http://localhost:8000`
 4. **Add API Keys**:
-   - Mistral API Key: `your_mistral_key`
    - OpenRouter API Key: `your_openrouter_key`
+   - Mistral API Key (optional): `your_mistral_key`
+   - Serper API Key (optional): `your_serper_key`
+   - Web Search Providers: `serper,duckduckgo`
 5. **Set Directories**:
    - Workspace Directory: `/home/nick/python/project-thoth`
    - Obsidian Directory: `/path/to/your/vault/thoth`

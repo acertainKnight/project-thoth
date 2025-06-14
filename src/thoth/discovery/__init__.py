@@ -5,9 +5,17 @@ This package contains components for discovering research articles from
 various sources like ArXiv, PubMed, and web scrapers.
 """
 
-# Export main components for convenience
-# Note: DiscoveryManager is not imported here to avoid circular imports
-# Import it directly when needed: from thoth.discovery.discovery_manager
-# import DiscoveryManager
+from .api_sources import ArxivAPISource, PubMedAPISource
+from .discovery_manager import DiscoveryManager
+from .emulator_scraper import EmulatorScraper
+from .scheduler import DiscoveryScheduler
+from .web_scraper import WebScraper
 
-__all__ = []
+__all__ = [
+    'ArxivAPISource',
+    'DiscoveryManager',
+    'DiscoveryScheduler',
+    'EmulatorScraper',
+    'PubMedAPISource',
+    'WebScraper',
+]

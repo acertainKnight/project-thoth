@@ -29,7 +29,7 @@ class SearchKnowledgeTool(BaseThothTool):
     def _run(self, query: str, k: int = 4, filter: dict[str, Any] | None = None) -> str:
         """Search the knowledge base."""
         try:
-            results = self.adapter.search_knowledge(query, k, filter)
+            results = self.service_manager.rag.search(query=query, k=k, filter=filter)
 
             if not results:
                 return '❌ No results found for your query.'
@@ -56,7 +56,9 @@ class AskQuestionTool(BaseThothTool):
     def _run(self, query: str, k: int = 4, filter: dict[str, Any] | None = None) -> str:
         """Ask a question."""
         try:
-            response = self.adapter.ask_knowledge_base(query, k, filter)
+            response = self.service_manager.rag.ask_question(
+                question=query, k=k, filter=filter
+            )
 
             if not response:
                 return '❌ Unable to generate an answer.'
@@ -92,7 +94,7 @@ class IndexKnowledgeBaseTool(BaseThothTool):
     def _run(self) -> str:
         """Index the knowledge base."""
         try:
-            stats = self.adapter.index_knowledge_base()
+            stats = self.service_manager.rag.index_knowledge_base()
 
             output = '📚 **Knowledge Base Indexing Complete!**\n\n'
             output += '📊 **Statistics:**\n'
@@ -121,11 +123,11 @@ class GetRAGStatsTool(BaseThothTool):
     def _run(self) -> str:
         """Get RAG statistics."""
         try:
-            stats = self.adapter.get_rag_stats()
+            stats = self.service_manager.rag.get_statistics()
 
             output = '📊 **RAG System Statistics**\n\n'
             output += '**Vector Store:**\n'
-            output += f'- Total documents: {stats.get("total_documents", 0)}\n'
+            output += f'- Total documents: {stats.get("document_count", 0)}\n'
             output += f'- Total chunks: {stats.get("total_chunks", 0)}\n'
             output += f'- Collection name: {stats.get("collection_name", "N/A")}\n'
 
@@ -153,7 +155,7 @@ class ClearRAGIndexTool(BaseThothTool):
     def _run(self) -> str:
         """Clear the RAG index."""
         try:
-            self.adapter.clear_rag_index()
+            self.service_manager.rag.clear_index()
             return '✅ RAG index cleared successfully. You will need to re-index your knowledge base.'
         except Exception as e:
             return self.handle_error(e, 'clearing RAG index')
@@ -181,7 +183,7 @@ class ExplainConnectionsTool(BaseThothTool):
         """Explain connections between papers."""
         try:
             # First, find the papers
-            results1 = self.adapter.search_knowledge(
+            results1 = self.service_manager.rag.search(
                 query=paper1,
                 k=1,
             )
@@ -189,7 +191,7 @@ class ExplainConnectionsTool(BaseThothTool):
             if not results1:
                 return f'❌ Could not find paper: "{paper1}"'
 
-            results2 = self.adapter.search_knowledge(
+            results2 = self.service_manager.rag.search(
                 query=paper2,
                 k=1,
             )
@@ -206,7 +208,7 @@ class ExplainConnectionsTool(BaseThothTool):
                 f'"{title1}" and "{title2}"? How do they relate to each other?'
             )
 
-            result = self.adapter.ask_knowledge(
+            result = self.service_manager.rag.ask_question(
                 question=question,
                 k=6,  # Get more context for connection analysis
             )

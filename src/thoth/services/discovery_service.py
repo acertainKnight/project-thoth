@@ -12,16 +12,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from thoth.discovery.api_sources import (
-    ArxivAPISource,
-    PubMedAPISource,
-    CrossRefAPISource,
-    OpenAlexAPISource,
-    BioRxivAPISource,
-)
+import requests
+
+from thoth.discovery.api_sources import ArxivAPISource, PubMedAPISource
+from thoth.discovery.emulator_scraper import EmulatorScraper
 from thoth.discovery.web_scraper import WebScraper
+from thoth.services.article_service import ArticleService
 from thoth.services.base import BaseService, ServiceError
-from thoth.utilities.models import (
+from thoth.services.pdf_locator_service import PdfLocatorService
+from thoth.utilities.schemas import (
     DiscoveryResult,
     DiscoverySource,
     ScheduleConfig,
@@ -46,6 +45,7 @@ class DiscoveryService(BaseService):
         config=None,
         sources_dir: Path | None = None,
         results_dir: Path | None = None,
+        article_service: ArticleService | None = None,
     ):
         """
         Initialize the DiscoveryService.
@@ -54,6 +54,7 @@ class DiscoveryService(BaseService):
             config: Optional configuration object
             sources_dir: Directory for storing source configurations
             results_dir: Directory for storing discovery results
+            article_service: Optional ArticleService instance
         """
         super().__init__(config)
         self.sources_dir = Path(sources_dir or self.config.discovery_sources_dir)
@@ -73,6 +74,7 @@ class DiscoveryService(BaseService):
 
         # Initialize web scraper
         self.web_scraper = WebScraper()
+        self.emulator_scraper = EmulatorScraper()
 
         # Scheduler state
         self.scheduler_running = False
@@ -81,7 +83,10 @@ class DiscoveryService(BaseService):
         self.schedule_state = self._load_schedule_state()
 
         # Reference to filter function (set externally)
-        self.filter_func = None
+        self.article_service = article_service or ArticleService(config=self.config)
+
+        # Initialize PDF locator service
+        self.pdf_locator = PdfLocatorService(config=self.config)
 
         self._discovery_manager = None
         self._scheduler = None
@@ -234,7 +239,6 @@ class DiscoveryService(BaseService):
         self,
         source_name: str | None = None,
         max_articles: int | None = None,
-        filter_func: Any | None = None,
     ) -> DiscoveryResult:
         """
         Run discovery for one or all sources.
@@ -242,7 +246,6 @@ class DiscoveryService(BaseService):
         Args:
             source_name: Specific source to run, or None for all active sources
             max_articles: Maximum articles to discover
-            filter_func: Optional function to filter articles
 
         Returns:
             DiscoveryResult: Results of the discovery run
@@ -287,9 +290,9 @@ class DiscoveryService(BaseService):
                     total_found += len(articles)
 
                     # Filter articles if function provided
-                    if filter_func and articles:
+                    if articles:
                         filtered, downloaded, errors = self._filter_articles(
-                            articles, filter_func, source.query_filters
+                            articles, source.query_filters
                         )
                         total_filtered += filtered
                         total_downloaded += downloaded
@@ -357,6 +360,17 @@ class DiscoveryService(BaseService):
                     max_articles or source.schedule_config.max_articles_per_run,
                 )
 
+            elif (
+                source.source_type == 'emulator'
+                and source.browser_recording
+                and source.scraper_config
+            ):
+                articles = self.emulator_scraper.scrape(
+                    recording=source.browser_recording,
+                    config=source.scraper_config,
+                    max_articles=max_articles
+                    or source.schedule_config.max_articles_per_run,
+                )
             else:
                 self.logger.warning(f'Invalid source configuration for {source.name}')
 
@@ -368,7 +382,6 @@ class DiscoveryService(BaseService):
     def _filter_articles(
         self,
         articles: list[ScrapedArticleMetadata],
-        filter_func: Any,
         query_filters: list[str],
     ) -> tuple[int, int, list[str]]:
         """Filter articles and process them."""
@@ -376,30 +389,107 @@ class DiscoveryService(BaseService):
         downloaded_count = 0
         errors = []
 
+        queries = []
+        for query_name in query_filters:
+            query = self.article_service.get_query(query_name)
+            if query:
+                queries.append(query)
+
         for article in articles:
             try:
-                # Apply filter function
-                result = filter_func(
-                    metadata=article,
-                    query_names=query_filters if query_filters else None,
-                    download_pdf=True,
+                evaluation = self.article_service.evaluate_for_download(
+                    article, queries
                 )
-
-                if result['decision'] == 'download':
+                if evaluation.should_download:
                     filtered_count += 1
-                    if result.get('pdf_downloaded'):
+                    pdf_path = self._download_pdf(article)
+                    if pdf_path:
                         downloaded_count += 1
-                    elif result.get('error_message'):
-                        errors.append(
-                            f"PDF download failed for '{article.title}': {result['error_message']}"
-                        )
-
+                    else:
+                        errors.append(f"PDF download failed for '{article.title}'")
             except Exception as e:
                 error_msg = f"Error processing article '{article.title}': {e}"
                 self.logger.error(error_msg)
                 errors.append(error_msg)
 
         return filtered_count, downloaded_count, errors
+
+    def _download_pdf(self, metadata: ScrapedArticleMetadata) -> str | None:
+        """Download PDF for an article."""
+        pdf_url = metadata.pdf_url
+        pdf_source = None
+        pdf_licence = None
+        is_oa = True
+
+        # If no PDF URL, try to locate one
+        if not pdf_url:
+            self.logger.info(
+                f'No PDF URL available for article: {metadata.title}, attempting to locate...'
+            )
+
+            pdf_location = self.pdf_locator.locate(
+                doi=metadata.doi, arxiv_id=metadata.arxiv_id
+            )
+
+            if pdf_location:
+                pdf_url = pdf_location.url
+                pdf_source = pdf_location.source
+                pdf_licence = pdf_location.licence
+                is_oa = pdf_location.is_oa
+
+                # Update metadata with located PDF info
+                metadata.pdf_url = pdf_url
+                if hasattr(metadata, 'oa_source'):
+                    metadata.oa_source = pdf_source
+                if hasattr(metadata, 'licence'):
+                    metadata.licence = pdf_licence
+                if hasattr(metadata, 'is_oa'):
+                    metadata.is_oa = is_oa
+
+                self.logger.info(f'PDF located via {pdf_source}: {pdf_url}')
+            else:
+                self.logger.warning(
+                    f'Could not locate PDF for article: {metadata.title}'
+                )
+                return None
+
+        try:
+            # Create safe filename
+            safe_title = ''.join(
+                c for c in metadata.title if c.isalnum() or c in ' -_.'
+            ).strip()
+            safe_title = safe_title.replace(' ', '_')[:100]
+
+            if metadata.doi:
+                safe_title += f'_doi_{metadata.doi.replace("/", "_")}'
+            elif metadata.arxiv_id:
+                safe_title += f'_arxiv_{metadata.arxiv_id}'
+
+            pdf_filename = f'{safe_title}.pdf'
+            pdf_path = self.config.pdf_dir / pdf_filename
+
+            # Ensure unique filename
+            counter = 1
+            while pdf_path.exists():
+                name_part = pdf_filename.rsplit('.', 1)[0]
+                pdf_path = self.config.pdf_dir / f'{name_part}_{counter}.pdf'
+                counter += 1
+
+            # Download the PDF
+            self.logger.info(f'Downloading PDF from: {pdf_url}')
+            response = requests.get(pdf_url, timeout=30, stream=True)
+            response.raise_for_status()
+
+            with open(pdf_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+
+            self.logger.info(f'PDF downloaded successfully: {pdf_path}')
+            return str(pdf_path)
+
+        except Exception as e:
+            self.logger.error(f'Failed to download PDF for {metadata.title}: {e}')
+            return None
 
     def _save_result(self, result: DiscoveryResult) -> None:
         """Save discovery result to file."""
@@ -598,9 +688,7 @@ class DiscoveryService(BaseService):
 
                     # Run the source
                     max_articles = schedule_info.get('max_articles_per_run')
-                    result = self.run_discovery(
-                        source_name, max_articles, self.filter_func
-                    )
+                    result = self.run_discovery(source_name, max_articles)
 
                     # Update schedule state
                     schedule_info['last_run'] = current_time.isoformat()

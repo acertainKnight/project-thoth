@@ -6,9 +6,13 @@ Welcome to the complete documentation for the Thoth Research Assistant system. T
 
 ### **🚀 Getting Started**
 
+- **[Quick Start Paths](QUICK_START_ENHANCED.md)** - ⚡ Choose your ideal 5-minute setup path
+- **[Command Reference Card](COMMAND_REFERENCE_CARD.md)** - 📋 Essential commands cheat sheet
 - **[Main README](../README.md)** - Project overview and quick start
-- **[Installation Guide](INSTALLATION.md)** - Complete installation instructions
-- **[Configuration Guide](CONFIGURATION.md)** - System configuration and setup
+- **[Installation Guide](INSTALLATION_GUIDE.md)** - Complete installation instructions
+- **[Configuration Guide](CONFIGURATION_GUIDE.md)** - System configuration and setup
+- **[Complete Feature Reference](COMPLETE_FEATURE_REFERENCE.md)** - Comprehensive feature list
+- **[API Reference](API_REFERENCE.md)** - FastAPI endpoint documentation
 
 ### **🔧 Core System**
 
@@ -16,6 +20,7 @@ Welcome to the complete documentation for the Thoth Research Assistant system. T
 - **[MCP Framework](MCP_FRAMEWORK_README.md)** - Model Context Protocol implementation
 - **[Research Assistant](RESEARCH_ASSISTANT_README.md)** - Core research assistant functionality
 - **[Research Assistant Integration](RESEARCH_ASSISTANT_INTEGRATION.md)** - Pipeline integration guide
+- **[Development Guide](DEVELOPMENT_GUIDE.md)** - Contributing and extending Thoth
 
 ### **🔍 Discovery & Analysis**
 

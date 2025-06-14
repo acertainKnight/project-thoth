@@ -260,6 +260,7 @@ OBSIDIAN_DIR=/home/username/obsidian-vault/thoth
 ## ✅ **Verification Checklist**
 
 ### **WSL Side**
+- [ ] Run comprehensive health check: `uv run python health_check.py`
 - [ ] Thoth installed and working: `uv run python -m thoth --help`
 - [ ] Server starts: `uv run python -m thoth api --host 0.0.0.0 --port 8000`
 - [ ] Health check works: `curl http://localhost:8000/health`

@@ -14,17 +14,11 @@ from typing import Any
 
 from loguru import logger
 
-from thoth.discovery.api_sources import (
-    ArxivAPISource,
-    PubMedAPISource,
-    CrossRefAPISource,
-    OpenAlexAPISource,
-    BioRxivAPISource,
-)
+from thoth.discovery.api_sources import ArxivAPISource, PubMedAPISource
+from thoth.discovery.emulator_scraper import EmulatorScraper
 from thoth.discovery.web_scraper import WebScraper
-from thoth.ingestion.filter import Filter
 from thoth.utilities.config import get_config
-from thoth.utilities.models import (
+from thoth.utilities.schemas import (
     DiscoveryResult,
     DiscoverySource,
     ScrapedArticleMetadata,
@@ -43,25 +37,22 @@ class DiscoveryManager:
 
     This class orchestrates the discovery process by:
     1. Managing discovery source configurations
-    2. Running discovery from APIs and web scrapers
+    2. Running discovery from APIs, web scrapers, and browser recordings
     3. Applying filtering through the Filter
     4. Coordinating with the scheduling system
     """
 
     def __init__(
         self,
-        filter: Filter | None = None,
         sources_config_dir: str | Path | None = None,
     ):
         """
         Initialize the Discovery Manager.
 
         Args:
-            filter: Filter instance for filtering articles.
             sources_config_dir: Directory containing discovery source configurations.
         """
         self.config = get_config()
-        self.filter = filter
 
         # Set up sources configuration directory
         self.sources_config_dir = Path(
@@ -80,6 +71,7 @@ class DiscoveryManager:
 
         # Initialize web scraper
         self.web_scraper = WebScraper()
+        self.emulator_scraper = EmulatorScraper()
 
         # Results storage
         self.results_dir = self.config.discovery_results_dir
@@ -300,7 +292,7 @@ class DiscoveryManager:
                     logger.info(f'Found {len(articles)} articles from {source.name}')
 
                     # Filter and process articles
-                    if self.filter and articles:
+                    if articles:
                         filtered_count, downloaded_count, errors = (
                             self._filter_and_process_articles(
                                 articles, source.query_filters
@@ -363,6 +355,16 @@ class DiscoveryManager:
             elif source.source_type == 'scraper' and source.scraper_config:
                 articles = self._discover_from_scraper(
                     source.scraper_config, max_articles
+                )
+            elif (
+                source.source_type == 'emulator'
+                and source.scraper_config
+                and source.browser_recording
+            ):
+                articles = self.emulator_scraper.scrape(
+                    source.browser_recording,
+                    source.scraper_config,
+                    max_articles or 50,
                 )
             else:
                 logger.warning(f'Invalid source configuration for {source.name}')

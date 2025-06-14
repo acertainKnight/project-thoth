@@ -16,7 +16,7 @@ from loguru import logger
 
 from thoth.discovery.web_scraper import WebScraper
 from thoth.utilities.config import get_config
-from thoth.utilities.models import ChromeExtensionConfig, ScrapeConfiguration
+from thoth.utilities.schemas import ChromeExtensionConfig, ScrapeConfiguration
 
 
 class ChromeExtensionServer:

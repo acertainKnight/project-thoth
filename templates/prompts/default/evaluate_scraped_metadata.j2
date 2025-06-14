@@ -1,0 +1,49 @@
+You are evaluating whether a scraped article should be downloaded based on its metadata (title, abstract, etc.) and research query criteria. This is a pre-download filter to decide if the article is worth downloading and processing.
+
+## Research Query Criteria:
+**Name:** {{ query.name }}
+**Description:** {{ query.description }}
+**Research Question:** {{ query.research_question }}
+
+**Keywords:** {{ query.keywords | join(', ') }}
+**Required Topics:** {{ query.required_topics | join(', ') }}
+**Preferred Topics:** {{ query.preferred_topics | join(', ') }}
+**Excluded Topics:** {{ query.excluded_topics | join(', ') }}
+**Methodology Preferences:** {{ query.methodology_preferences | join(', ') }}
+**Minimum Relevance Score:** {{ query.minimum_relevance_score }}
+
+## Scraped Article Metadata:
+**Title:** {{ metadata.title }}
+**Authors:** {{ metadata.authors | join(', ') if metadata.authors else 'Not available' }}
+**Abstract:** {{ metadata.abstract if metadata.abstract else 'Not available' }}
+**Journal:** {{ metadata.journal if metadata.journal else 'Not available' }}
+**Publication Date:** {{ metadata.publication_date if metadata.publication_date else 'Not available' }}
+**DOI:** {{ metadata.doi if metadata.doi else 'Not available' }}
+**ArXiv ID:** {{ metadata.arxiv_id if metadata.arxiv_id else 'Not available' }}
+**Keywords:** {{ metadata.keywords | join(', ') if metadata.keywords else 'Not available' }}
+**Source:** {{ metadata.source }}
+
+## Evaluation Instructions:
+Since this is a pre-download evaluation based on limited metadata, focus on:
+
+1. **Title Analysis:** Does the title indicate relevance to the research query?
+2. **Abstract Analysis:** Does the abstract suggest the article addresses the research question?
+3. **Keyword Matching:** How many query keywords appear in title/abstract?
+4. **Topic Alignment:** Does the content seem to match required/preferred topics?
+5. **Exclusion Check:** Does the article appear to focus on excluded topics?
+6. **Download Decision:** Should this article be downloaded for full analysis?
+
+## Decision Criteria:
+- **Download** if the article shows strong potential relevance (score ≥ minimum threshold)
+- **Skip** if the article clearly doesn't match or focuses on excluded topics
+- Be more permissive than post-download evaluation since you have limited information
+- Consider that abstracts may not capture all relevant content
+
+## Response Format:
+Provide your evaluation in the exact JSON schema format specified. Be clear about your reasoning and specific about which criteria led to your decision.
+
+Focus on:
+- Exact keyword matches in title and abstract (case-insensitive)
+- Conceptual topic alignment based on available text
+- Clear indicators of relevance or irrelevance
+- Potential for the full article to meet the research criteria

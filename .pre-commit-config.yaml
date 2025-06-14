@@ -11,23 +11,23 @@ repos:
       # Pytest
       - id: pytest
         name: pytest
-        entry: pytest # Reverted from bash -c 'pytest || ([ $? -eq 5 ] && exit 0 || exit $?)'
-        language: python
+        entry: uv run pytest
+        language: system
         pass_filenames: false
         types: [python]
 
       # Strip notebook output
       - id: nbstripout
         name: nbstripout
-        entry: nbstripout
-        language: python
+        entry: uv run nbstripout
+        language: system
         types: [jupyter]
 
       # Spell-checking
       - id: codespell
         name: codespell
-        entry: codespell
-        language: python
+        entry: uv run codespell
+        language: system
         types: [python]
         exclude: |
           (?x)(
@@ -39,15 +39,15 @@ repos:
       # SQL lint/auto-fix
       - id: sqlfluff-fix
         name: sqlfluff-fix
-        entry: sqlfluff fix --show-lint-violations --processes 0 --disable-progress-bar
-        language: python
+        entry: uv run sqlfluff fix --show-lint-violations --processes 0 --disable-progress-bar
+        language: system
         types: [sql]
 
       # Ruff lint (auto-fix) – runs every commit
       - id: ruff-lint
         name: ruff
-        entry: ruff check --force-exclude
-        language: python
+        entry: uv run ruff check --force-exclude
+        language: system
         types: [python]
         args: [--fix]
 
@@ -56,8 +56,8 @@ repos:
       #   pre-commit run --hook-stage manual ruff-add-noqa --all-files
       - id: ruff-add-noqa
         name: ruff (add-noqa)
-        entry: ruff check --force-exclude --add-noqa
-        language: python
+        entry: uv run ruff check --force-exclude --add-noqa
+        language: system
         pass_filenames: false
         stages: [manual]      # won't run unless you call it explicitly
 

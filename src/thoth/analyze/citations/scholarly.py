@@ -18,7 +18,7 @@ from scholarly._proxy_generator import (
     MaxTriesExceededException as ScholarlyMaxTriesExceededException,
 )
 
-from thoth.utilities.models import Citation, SearchResult
+from thoth.utilities.schemas import Citation, SearchResult
 
 # Define a generic type variable for the return type of the wrapped scholarly function
 R = TypeVar('R')
