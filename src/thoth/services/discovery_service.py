@@ -14,7 +14,9 @@ from typing import Any
 
 import requests
 
-from thoth.discovery.api_sources import ArxivAPISource, PubMedAPISource
+from thoth.discovery.api_sources import PubMedAPISource
+from thoth.discovery.plugins import ArxivPlugin, plugin_registry
+from thoth.discovery.plugins.base import DiscoveryPluginRegistry
 from thoth.discovery.emulator_scraper import EmulatorScraper
 from thoth.discovery.web_scraper import WebScraper
 from thoth.services.article_service import ArticleService
@@ -24,6 +26,7 @@ from thoth.utilities.schemas import (
     DiscoveryResult,
     DiscoverySource,
     ScheduleConfig,
+    ResearchQuery,
     ScrapedArticleMetadata,
 )
 
@@ -63,11 +66,16 @@ class DiscoveryService(BaseService):
         self.results_dir = Path(results_dir or self.config.discovery_results_dir)
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
-        # Initialize API sources
+        # Initialize API sources and plugin registry
         self.api_sources = {
-            'arxiv': ArxivAPISource(),
             'pubmed': PubMedAPISource(),
+            'crossref': CrossRefAPISource(),
+            'openalex': OpenAlexAPISource(),
+            'biorxiv': BioRxivAPISource(),
         }
+        self.plugin_registry: DiscoveryPluginRegistry = plugin_registry
+        if 'arxiv' not in self.plugin_registry.list_plugins():
+            self.plugin_registry.register('arxiv', ArxivPlugin)
 
         # Initialize web scraper
         self.web_scraper = WebScraper()
@@ -339,9 +347,20 @@ class DiscoveryService(BaseService):
 
         try:
             if source.source_type == 'api' and source.api_config:
-                # Use API source
                 source_type = source.api_config.get('source')
-                if source_type in self.api_sources:
+                if self.plugin_registry.get(source_type):
+                    plugin = self.plugin_registry.create(
+                        source_type, config=source.api_config
+                    )
+                    dummy_query = ResearchQuery(
+                        name=source.name,
+                        description=source.description,
+                        research_question=source.description,
+                        keywords=source.api_config.get('keywords', []),
+                    )
+                    default_max = source.schedule_config.max_articles_per_run
+                    articles = plugin.discover(dummy_query, max_articles or default_max)
+                elif source_type in self.api_sources:
                     api_source = self.api_sources[source_type]
                     default_max = source.schedule_config.max_articles_per_run
                     articles = api_source.search(
@@ -774,3 +793,7 @@ class DiscoveryService(BaseService):
                 json.dump(self.schedule_state, f, indent=2)
         except Exception as e:
             self.logger.error(f'Error saving schedule state: {e}')
+
+    def health_check(self) -> dict[str, str]:
+        """Basic health status for the DiscoveryService."""
+        return super().health_check()
