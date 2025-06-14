@@ -10,6 +10,7 @@ import urllib.parse
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
+import warnings
 
 import feedparser
 import httpx
@@ -410,11 +411,11 @@ class BaseAPISource(ABC):
 
 
 class ArxivAPISource(BaseAPISource):
-    """
-    ArXiv API source for discovering research papers.
+    """Deprecated ArXiv API source.
 
-    This class provides functionality to search ArXiv for papers based on
-    categories, keywords, and other criteria.
+    This class remains for backwards compatibility and will be removed in a
+    future release. Use :class:`thoth.discovery.plugins.arxiv_plugin.ArxivPlugin`
+    instead.
     """
 
     def __init__(self, rate_limit_delay: float = 3.0):
@@ -424,6 +425,12 @@ class ArxivAPISource(BaseAPISource):
         Args:
             rate_limit_delay: Delay between API requests in seconds.
         """
+        warnings.warn(
+            'ArxivAPISource is deprecated and will be removed in a future release. '
+            'Use ArxivPlugin instead.',
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.base_url = 'https://export.arxiv.org/api/query'
         self.rate_limit_delay = rate_limit_delay
         self.last_request_time = 0.0
