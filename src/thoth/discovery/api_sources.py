@@ -10,6 +10,7 @@ import urllib.parse
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
+import warnings
 
 import feedparser
 import httpx
@@ -410,11 +411,11 @@ class BaseAPISource(ABC):
 
 
 class ArxivAPISource(BaseAPISource):
-    """
-    ArXiv API source for discovering research papers.
+    """Deprecated ArXiv API source.
 
-    This class provides functionality to search ArXiv for papers based on
-    categories, keywords, and other criteria.
+    This class remains for backwards compatibility and will be removed in a
+    future release. Use :class:`thoth.discovery.plugins.arxiv_plugin.ArxivPlugin`
+    instead.
     """
 
     def __init__(self, rate_limit_delay: float = 3.0):
@@ -424,6 +425,12 @@ class ArxivAPISource(BaseAPISource):
         Args:
             rate_limit_delay: Delay between API requests in seconds.
         """
+        warnings.warn(
+            'ArxivAPISource is deprecated and will be removed in a future release. '
+            'Use ArxivPlugin instead.',
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.base_url = 'https://export.arxiv.org/api/query'
         self.rate_limit_delay = rate_limit_delay
         self.last_request_time = 0.0
@@ -938,4 +945,312 @@ class PubMedAPISource(BaseAPISource):
             sleep_time = self.rate_limit_delay - time_since_last
             time.sleep(sleep_time)
 
+        self.last_request_time = time.time()
+
+
+class CrossRefAPISource(BaseAPISource):
+    """CrossRef API source for discovering scholarly works."""
+
+    def __init__(self, rate_limit_delay: float = 1.0):
+        """Initialize the CrossRef API source."""
+        self.base_url = "https://api.crossref.org/works"
+        self.rate_limit_delay = rate_limit_delay
+        self.last_request_time = 0.0
+
+    def search(
+        self, config: dict[str, Any], max_results: int = 50
+    ) -> list[ScrapedArticleMetadata]:
+        """Search CrossRef for works."""
+        try:
+            params = {
+                "rows": min(max_results, 100),
+                "sort": config.get("sort_by", "relevance"),
+                "order": config.get("sort_order", "desc"),
+            }
+
+            # Build query string
+            keywords = config.get("keywords", [])
+            if keywords:
+                params["query"] = " ".join(keywords)
+
+            # Date filters
+            start_date = config.get("start_date")
+            end_date = config.get("end_date")
+            filters = []
+            if start_date:
+                filters.append(f"from-pub-date:{start_date}")
+            if end_date:
+                filters.append(f"until-pub-date:{end_date}")
+            if filters:
+                params["filter"] = ",".join(filters)
+
+            logger.info(f"Searching CrossRef with params: {params}")
+
+            self._rate_limit()
+            response = requests.get(self.base_url, params=params, timeout=30)
+            response.raise_for_status()
+
+            data = response.json()
+            items = data.get("message", {}).get("items", [])
+            articles: list[ScrapedArticleMetadata] = []
+
+            for item in items:
+                try:
+                    article = self._parse_item(item)
+                    if article:
+                        articles.append(article)
+                except Exception as e:  # pragma: no cover - log and continue
+                    logger.error(f"Error parsing CrossRef item: {e}")
+
+            logger.info(f"Found {len(articles)} articles from CrossRef")
+            return articles
+
+        except Exception as e:
+            raise APISourceError(f"CrossRef search failed: {e}") from e
+
+    def _parse_item(self, item: dict[str, Any]) -> ScrapedArticleMetadata | None:
+        """Parse a single CrossRef item."""
+        title_list = item.get("title", [])
+        title = title_list[0] if title_list else None
+        if not title:
+            return None
+
+        authors = []
+        for a in item.get("author", []):
+            given = a.get("given")
+            family = a.get("family")
+            if given and family:
+                authors.append(f"{family}, {given}")
+            elif family:
+                authors.append(family)
+
+        abstract = item.get("abstract")
+
+        pub_date_parts = item.get("published-print") or item.get("published-online")
+        pub_date = None
+        if pub_date_parts and "date-parts" in pub_date_parts:
+            parts = pub_date_parts["date-parts"][0]
+            pub_date = "-".join(str(p) for p in parts)
+
+        journal_list = item.get("container-title", [])
+        journal = journal_list[0] if journal_list else None
+
+        doi = item.get("DOI")
+        url = item.get("URL")
+
+        pdf_url = None
+        for link in item.get("link", []):
+            if link.get("content-type") == "application/pdf":
+                pdf_url = link.get("URL")
+                break
+
+        keywords = item.get("subject", [])
+
+        return ScrapedArticleMetadata(
+            title=title,
+            authors=authors,
+            abstract=abstract,
+            publication_date=pub_date,
+            journal=journal,
+            doi=doi,
+            url=url,
+            pdf_url=pdf_url,
+            keywords=keywords,
+            source="crossref",
+            scrape_timestamp=datetime.now().isoformat(),
+            additional_metadata={"type": item.get("type")},
+        )
+
+    def _rate_limit(self) -> None:
+        current_time = time.time()
+        time_since_last = current_time - self.last_request_time
+        if time_since_last < self.rate_limit_delay:
+            time.sleep(self.rate_limit_delay - time_since_last)
+        self.last_request_time = time.time()
+
+
+class OpenAlexAPISource(BaseAPISource):
+    """OpenAlex API source for discovering scholarly works."""
+
+    def __init__(self, rate_limit_delay: float = 1.0):
+        self.base_url = "https://api.openalex.org/works"
+        self.rate_limit_delay = rate_limit_delay
+        self.last_request_time = 0.0
+
+    def search(
+        self, config: dict[str, Any], max_results: int = 50
+    ) -> list[ScrapedArticleMetadata]:
+        """Search OpenAlex for works."""
+        try:
+            params = {
+                "per-page": min(max_results, 200),
+                "sort": config.get("sort_by", "relevance"),
+            }
+
+            keywords = config.get("keywords", [])
+            if keywords:
+                params["search"] = " ".join(keywords)
+
+            filters = []
+            start_date = config.get("start_date")
+            end_date = config.get("end_date")
+            if start_date:
+                filters.append(f"from_publication_date:{start_date}")
+            if end_date:
+                filters.append(f"to_publication_date:{end_date}")
+            if filters:
+                params["filter"] = ",".join(filters)
+
+            logger.info(f"Searching OpenAlex with params: {params}")
+
+            self._rate_limit()
+            response = requests.get(self.base_url, params=params, timeout=30)
+            response.raise_for_status()
+
+            data = response.json()
+            items = data.get("results", [])
+            articles: list[ScrapedArticleMetadata] = []
+
+            for item in items:
+                try:
+                    article = self._parse_item(item)
+                    if article:
+                        articles.append(article)
+                except Exception as e:  # pragma: no cover - log and continue
+                    logger.error(f"Error parsing OpenAlex item: {e}")
+
+            logger.info(f"Found {len(articles)} articles from OpenAlex")
+            return articles
+
+        except Exception as e:
+            raise APISourceError(f"OpenAlex search failed: {e}") from e
+
+    def _parse_item(self, item: dict[str, Any]) -> ScrapedArticleMetadata | None:
+        title = item.get("title") or item.get("display_name")
+        if not title:
+            return None
+
+        authors = []
+        for a in item.get("authorships", []):
+            name = a.get("author", {}).get("display_name")
+            if name:
+                authors.append(name)
+
+        abstract = item.get("abstract")
+        pub_date = item.get("publication_date")
+
+        journal = None
+        container = item.get("host_venue") or {}
+        if container:
+            journal = container.get("display_name")
+
+        doi = item.get("doi")
+        url = container.get("url") if container else None
+        pdf_url = container.get("pdf_url") if container else None
+
+        keywords = [c.get("display_name") for c in item.get("concepts", []) if c.get("display_name")]
+
+        return ScrapedArticleMetadata(
+            title=title,
+            authors=authors,
+            abstract=abstract,
+            publication_date=pub_date,
+            journal=journal,
+            doi=doi,
+            url=url,
+            pdf_url=pdf_url,
+            keywords=keywords,
+            source="openalex",
+            scrape_timestamp=datetime.now().isoformat(),
+            additional_metadata={"id": item.get("id")},
+        )
+
+    def _rate_limit(self) -> None:
+        current_time = time.time()
+        time_since_last = current_time - self.last_request_time
+        if time_since_last < self.rate_limit_delay:
+            time.sleep(self.rate_limit_delay - time_since_last)
+        self.last_request_time = time.time()
+
+
+class BioRxivAPISource(BaseAPISource):
+    """bioRxiv API source for preprint articles."""
+
+    def __init__(self, rate_limit_delay: float = 1.0):
+        self.base_url = "https://api.biorxiv.org/details/biorxiv"
+        self.rate_limit_delay = rate_limit_delay
+        self.last_request_time = 0.0
+
+    def search(
+        self, config: dict[str, Any], max_results: int = 50
+    ) -> list[ScrapedArticleMetadata]:
+        """Search bioRxiv for preprints."""
+        try:
+            start_date = config.get("start_date") or datetime.now().strftime("%Y-%m-%d")
+            end_date = config.get("end_date") or start_date
+
+            url = f"{self.base_url}/{start_date}/{end_date}"
+            params = {"cursor": 0}
+
+            logger.info(f"Searching bioRxiv with URL: {url}")
+
+            self._rate_limit()
+            response = requests.get(url, params=params, timeout=30)
+            response.raise_for_status()
+
+            data = response.json()
+            items = data.get("collection", [])[:max_results]
+            articles: list[ScrapedArticleMetadata] = []
+
+            for item in items:
+                try:
+                    article = self._parse_item(item)
+                    if article:
+                        articles.append(article)
+                except Exception as e:  # pragma: no cover - log and continue
+                    logger.error(f"Error parsing bioRxiv item: {e}")
+
+            logger.info(f"Found {len(articles)} articles from bioRxiv")
+            return articles
+
+        except Exception as e:
+            raise APISourceError(f"bioRxiv search failed: {e}") from e
+
+    def _parse_item(self, item: dict[str, Any]) -> ScrapedArticleMetadata | None:
+        title = item.get("title")
+        if not title:
+            return None
+
+        authors = []
+        author_str = item.get("authors")
+        if author_str:
+            authors = [a.strip() for a in author_str.split(";") if a.strip()]
+
+        abstract = item.get("abstract")
+        pub_date = item.get("date")
+        journal = item.get("journal")
+        doi = item.get("doi")
+        url = item.get("biorxiv_url")
+        pdf_url = item.get("biorxiv_pdf")
+
+        return ScrapedArticleMetadata(
+            title=title,
+            authors=authors,
+            abstract=abstract,
+            publication_date=pub_date,
+            journal=journal,
+            doi=doi,
+            url=url,
+            pdf_url=pdf_url,
+            keywords=[],
+            source="biorxiv",
+            scrape_timestamp=datetime.now().isoformat(),
+            additional_metadata={"version": item.get("version")},
+        )
+
+    def _rate_limit(self) -> None:
+        current_time = time.time()
+        time_since_last = current_time - self.last_request_time
+        if time_since_last < self.rate_limit_delay:
+            time.sleep(self.rate_limit_delay - time_since_last)
         self.last_request_time = time.time()

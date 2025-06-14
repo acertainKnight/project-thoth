@@ -349,3 +349,7 @@ class RAGService(BaseService):
 
         except Exception as e:
             raise ServiceError(self.handle_error(e, 'indexing knowledge base')) from e
+
+    def health_check(self) -> dict[str, str]:
+        """Basic health status for the RAGService."""
+        return super().health_check()
