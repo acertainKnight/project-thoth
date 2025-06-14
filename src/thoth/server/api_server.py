@@ -90,14 +90,16 @@ async def notify_progress(message: str | dict[str, Any]) -> None:
 # Request/Response Models
 class ChatRequest(BaseModel):
     message: str
-    conversation_id: str = None
-    timestamp: int = None
+    conversation_id: str | None = None
+    timestamp: int | None = None
+    id: str | None = None
 
 
 class ChatResponse(BaseModel):
     response: str
     tool_calls: list[dict[str, Any]] = []
-    error: str = None
+    error: str | None = None
+    id: str | None = None
 
 
 class ResearchRequest(BaseModel):
@@ -206,6 +208,7 @@ async def websocket_chat(websocket: WebSocket) -> None:
             message = data.get("message", "")
             conv_id = data.get("conversation_id")
             timestamp = data.get("timestamp")
+            msg_id = data.get("id")
 
             if research_agent is None:
                 await websocket.send_json({"error": "Research agent not initialized"})
@@ -223,6 +226,7 @@ async def websocket_chat(websocket: WebSocket) -> None:
             )
             await websocket.send_json(
                 {
+                    "id": msg_id,
                     "response": response.get("response", "No response generated"),
                     "tool_calls": response.get("tool_calls", []),
                 }
@@ -288,6 +292,7 @@ async def research_chat(request: ChatRequest) -> ChatResponse:
         return ChatResponse(
             response=response.get("response", "No response generated"),
             tool_calls=response.get("tool_calls", []),
+            id=request.id,
         )
 
     except Exception as e:
