@@ -309,3 +309,7 @@ class ArticleService(BaseService):
             return 0.0
         confidences = [eval.confidence for _, eval in evaluations]
         return sum(confidences) / len(confidences)
+
+    def health_check(self) -> dict[str, str]:
+        """Basic health status for the ArticleService."""
+        return super().health_check()

@@ -64,6 +64,9 @@ class DiscoveryManager:
         self.api_sources = {
             'arxiv': ArxivAPISource(),
             'pubmed': PubMedAPISource(),
+            'crossref': CrossRefAPISource(),
+            'openalex': OpenAlexAPISource(),
+            'biorxiv': BioRxivAPISource(),
         }
 
         # Initialize web scraper
