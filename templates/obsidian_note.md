@@ -1,6 +1,6 @@
 # {{ title }}
 
-**Authors**: {{ authors | join(", ") if authors else "N/A" }}
+**Authors**: {{ authors if authors else "N/A" }}
 **Year**: {{ year if year else "N/A" }}
 **DOI**: {{ doi if doi else "N/A" }}
 **Journal**: {{ journal if journal else "N/A" }}

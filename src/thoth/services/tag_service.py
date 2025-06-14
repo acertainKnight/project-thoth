@@ -190,7 +190,7 @@ class TagService(BaseService):
                 self.handle_error(e, f"suggesting tags for '{title}'")
             ) from e
 
-    def consolidate_and_retag_all(self) -> dict[str, Any]:
+    def consolidate_and_retag(self) -> dict[str, Any]:
         """
         Consolidate all tags and retag all articles.
 
@@ -304,7 +304,7 @@ class TagService(BaseService):
         except Exception as e:
             raise ServiceError(self.handle_error(e, 'consolidating tags only')) from e
 
-    def suggest_additional_tags_all(self) -> dict[str, Any]:
+    def suggest_additional(self) -> dict[str, Any]:
         """
         Suggest additional tags for all articles.
 

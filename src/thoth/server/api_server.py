@@ -562,6 +562,7 @@ def start_server(
     pdf_directory: Path,
     notes_directory: Path,
     api_base_url: str,
+    pipeline: Any | None = None,
     reload: bool = False,
 ):
     """
@@ -573,6 +574,7 @@ def start_server(
         pdf_directory (Path): Directory where PDFs will be stored.
         notes_directory (Path): Directory where notes are stored (Obsidian vault).
         api_base_url (str): Base URL for the API.
+        pipeline (ThothPipeline | None): Optional ThothPipeline instance.
         reload (bool): Whether to enable auto-reload for development.
     """
     global pdf_dir, notes_dir, base_url, research_agent, agent_adapter, llm_router
@@ -591,10 +593,13 @@ def start_server(
     try:
         logger.info('Initializing research agent...')
         from thoth.ingestion.agent_v2 import create_research_assistant
-        from thoth.pipeline import ThothPipeline
 
-        # Initialize pipeline and adapter
-        pipeline = ThothPipeline()
+        # Use provided pipeline or create a new one
+        if pipeline is None:
+            from thoth.pipeline import ThothPipeline
+
+            pipeline = ThothPipeline()
+
         service_manager = pipeline.services
 
         # Create the research agent
