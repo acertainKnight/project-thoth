@@ -12,6 +12,8 @@ from langchain.tools import BaseTool
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from thoth.services.service_manager import ServiceManager
+
 
 class BaseThothTool(BaseTool, ABC):
     """
@@ -22,11 +24,11 @@ class BaseThothTool(BaseTool, ABC):
     """
 
     # Common attributes that all tools might need
-    adapter: Any = Field(default=None, exclude=True)
+    service_manager: ServiceManager = Field(default=None, exclude=True)
     config: Any = Field(default=None, exclude=True)
 
     def __init__(self, **kwargs):
-        """Initialize the tool with optional adapter and config."""
+        """Initialize the tool with optional service_manager and config."""
         super().__init__(**kwargs)
 
     @abstractmethod
@@ -71,15 +73,15 @@ class ToolRegistry:
     with the required dependencies.
     """
 
-    def __init__(self, adapter=None, config=None):
+    def __init__(self, service_manager: ServiceManager, config=None):
         """
         Initialize the tool registry.
 
         Args:
-            adapter: AgentAdapter instance for accessing services
+            service_manager: ServiceManager instance for accessing services
             config: Configuration object
         """
-        self.adapter = adapter
+        self.service_manager = service_manager
         self.config = config
         self._tools: dict[str, type[BaseThothTool]] = {}
 
@@ -106,7 +108,9 @@ class ToolRegistry:
             raise ValueError(f"Tool '{name}' not registered")
 
         tool_class = self._tools[name]
-        return tool_class(adapter=self.adapter, config=self.config, **kwargs)
+        return tool_class(
+            service_manager=self.service_manager, config=self.config, **kwargs
+        )
 
     def create_all_tools(self) -> list[BaseThothTool]:
         """

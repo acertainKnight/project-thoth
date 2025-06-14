@@ -8,16 +8,18 @@ This module contains the main pipeline that orchestrates the processing of PDF d
 4. Note generation for Obsidian
 """  # noqa: W505
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Any
 
 from loguru import logger
 
-from thoth.ingestion.filter import Filter
-from thoth.monitor.tracker import CitationTracker
+from thoth.knowledge.graph import CitationGraph
+from thoth.server.pdf_monitor import PDFTracker
 from thoth.services.service_manager import ServiceManager
 from thoth.utilities.config import get_config
-from thoth.utilities.models import Citation
+from thoth.utilities.schemas import Citation, SearchResult
 
 
 class PipelineError(Exception):
@@ -84,18 +86,14 @@ class ThothPipeline:
         self.services = ServiceManager(config=self.config)
         self.services.initialize()
 
-        # Initialize filter with service manager
-        self.filter = Filter(service_manager=self.services)
-
-        # Set filter function on discovery service
-        self.services.set_filter_function(self.filter.process_article)
+        # Initialize PDF tracker
+        self.pdf_tracker = PDFTracker()
 
         # Initialize components that aren't yet services
-        # TODO: CitationTracker should eventually be converted to a service
-        self.citation_tracker = CitationTracker(
+        # TODO: CitationGraph should eventually be converted to a service
+        self.citation_tracker = CitationGraph(
             knowledge_base_dir=self.config.knowledge_base_dir,
             graph_storage_path=self.config.graph_storage_path,
-            note_generator=None,  # Deprecated - using ServiceManager
             pdf_dir=self.config.pdf_dir,
             markdown_dir=self.config.markdown_dir,
             notes_dir=self.config.notes_dir,
@@ -123,6 +121,20 @@ class ThothPipeline:
         pdf_path = Path(pdf_path)
         logger.info(f'Processing PDF: {pdf_path}')
 
+        # Check if file has already been processed and is unchanged
+        if self.pdf_tracker.is_processed(
+            pdf_path
+        ) and self.pdf_tracker.verify_file_unchanged(pdf_path):
+            logger.info(f'Skipping already processed and unchanged file: {pdf_path}')
+            note_path = self.pdf_tracker.get_note_path(pdf_path)
+            if note_path:
+                return note_path
+            else:
+                # If note_path not found, we might need to re-process to get it
+                logger.warning(
+                    f'File {pdf_path} was processed, but note path not found in tracker. Reprocessing.'
+                )
+
         # Step 1: OCR conversion
         markdown_path, no_images_markdown = self._ocr_convert(pdf_path)
         logger.info(f'OCR conversion completed: {markdown_path}')
@@ -143,6 +155,16 @@ class ThothPipeline:
             citations=citations,
         )
         logger.info(f'Note generation completed: {note_path}')
+
+        # Mark as processed in the tracker
+        self.pdf_tracker.mark_processed(
+            pdf_path,
+            {
+                'note_path': str(note_path),
+                'new_pdf_path': str(new_pdf_path),
+                'new_markdown_path': str(new_markdown_path),
+            },
+        )
 
         # Step 5: Index markdown and note in RAG system (optional)
         # This is done asynchronously to not slow down the main pipeline
@@ -200,7 +222,7 @@ class ThothPipeline:
         Returns:
             list[Citation]: The extracted citations.
         """
-        return self.services.citation.extract_from_document(markdown_path)
+        return self.services.citation.extract_citations(markdown_path)
 
     def _generate_note(
         self,
@@ -269,7 +291,7 @@ class ThothPipeline:
         """
         Regenerate all markdown notes for all articles in the citation graph.
 
-        This method delegates to the CitationTracker's regenerate_all_notes method
+        This method delegates to the CitationGraph's regenerate_all_notes method
         and returns a list of (final_pdf_path, final_note_path) for successfully
         regenerated notes.
 
@@ -278,12 +300,7 @@ class ThothPipeline:
         """  # noqa: W505
         if not self.citation_tracker:
             logger.error(
-                'CitationTracker is not initialized. Cannot regenerate all notes.'
-            )
-            return []
-        if not self.citation_tracker.note_generator:
-            logger.error(
-                'NoteGenerator not configured in CitationTracker. Cannot regenerate all notes.'
+                'CitationGraph is not initialized. Cannot regenerate all notes.'
             )
             return []
 
@@ -314,7 +331,7 @@ class ThothPipeline:
             >>> print(f'Consolidated {stats["tags_consolidated"]} tags')
         """
         if not self.citation_tracker:
-            logger.error('CitationTracker is not initialized. Cannot consolidate tags.')
+            logger.error('CitationGraph is not initialized. Cannot consolidate tags.')
             return {
                 'articles_processed': 0,
                 'articles_updated': 0,
@@ -346,7 +363,7 @@ class ThothPipeline:
         """
         if not self.citation_tracker:
             logger.error(
-                'CitationTracker is not initialized. Cannot suggest additional tags.'
+                'CitationGraph is not initialized. Cannot suggest additional tags.'
             )
             return {
                 'articles_processed': 0,
@@ -382,7 +399,7 @@ class ThothPipeline:
         """
         if not self.citation_tracker:
             logger.error(
-                'CitationTracker is not initialized. Cannot consolidate and retag articles.'
+                'CitationGraph is not initialized. Cannot consolidate and retag articles.'
             )
             return {
                 'articles_processed': 0,
@@ -492,6 +509,19 @@ class ThothPipeline:
         except Exception as e:
             logger.error(f'Failed to answer question: {e}')
             raise PipelineError(f'Failed to answer question: {e}') from e
+
+    def web_search(
+        self, query: str, num_results: int = 5, provider: str | None = None
+    ) -> list[SearchResult]:
+        """Perform a general web search."""
+        try:
+            logger.info(f'Performing web search for: {query}')
+            return self.services.web_search.search(
+                query, num_results, provider=provider
+            )
+        except Exception as e:
+            logger.error(f'Web search failed: {e}')
+            raise PipelineError(f'Web search failed: {e}') from e
 
     def clear_rag_index(self) -> None:
         """

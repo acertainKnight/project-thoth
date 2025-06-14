@@ -9,7 +9,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from thoth.services.article_service import ArticleService
-from thoth.utilities.models import (
+from thoth.utilities.schemas import (
+    PreDownloadEvaluationResponse,
     QueryEvaluationResponse,
     ResearchQuery,
     ScrapedArticleMetadata,
@@ -58,17 +59,18 @@ class TestArticleService:
         mock_structured.invoke.return_value = mock_response
         mock_llm.with_structured_output.return_value = mock_structured
 
-        # Mock the private _llm attribute
-        article_service._llm = mock_llm
+        # Mock the llm_service to return the mocked LLM
+        with patch.object(
+            article_service.llm_service, 'get_client', return_value=mock_llm
+        ):
+            evaluation = article_service.evaluate_against_query(
+                article=sample_article,
+                query=sample_research_query,
+            )
 
-        evaluation = article_service.evaluate_against_query(
-            article=sample_article,
-            query=sample_research_query,
-        )
-
-        assert evaluation.relevance_score == 0.9
-        assert evaluation.meets_criteria is True
-        assert evaluation.recommendation == 'keep'
+            assert evaluation.relevance_score == 0.9
+            assert evaluation.meets_criteria is True
+            assert evaluation.recommendation == 'keep'
 
     def test_evaluate_against_query_low_score(
         self, article_service, sample_article, sample_research_query
@@ -90,17 +92,18 @@ class TestArticleService:
         mock_structured.invoke.return_value = mock_response
         mock_llm.with_structured_output.return_value = mock_structured
 
-        # Mock the private _llm attribute
-        article_service._llm = mock_llm
+        # Mock the llm_service to return the mocked LLM
+        with patch.object(
+            article_service.llm_service, 'get_client', return_value=mock_llm
+        ):
+            evaluation = article_service.evaluate_against_query(
+                article=sample_article,
+                query=sample_research_query,
+            )
 
-        evaluation = article_service.evaluate_against_query(
-            article=sample_article,
-            query=sample_research_query,
-        )
-
-        assert evaluation.relevance_score == 0.3
-        assert evaluation.meets_criteria is False
-        assert evaluation.recommendation == 'reject'
+            assert evaluation.relevance_score == 0.3
+            assert evaluation.meets_criteria is False
+            assert evaluation.recommendation == 'reject'
 
     def test_evaluate_for_download_with_queries(self, article_service, sample_article):
         """Test evaluating article for download with multiple queries."""
@@ -149,16 +152,26 @@ class TestArticleService:
                     confidence=0.8,
                 ),
             ]
+            with patch(
+                'thoth.services.article_service.PreDownloadEvaluationResponse'
+            ) as mock_pre_download:
+                mock_pre_download.return_value = PreDownloadEvaluationResponse(
+                    relevance_score=0.9,
+                    should_download=True,
+                    matching_queries=['nlp_query'],
+                    topic_analysis='Great match for NLP',
+                    reasoning='Highly relevant',
+                    confidence=0.9,
+                )
+                result = article_service.evaluate_for_download(
+                    metadata=sample_article,
+                    queries=queries,
+                )
 
-            result = article_service.evaluate_for_download(
-                metadata=sample_article,
-                queries=queries,
-            )
-
-            assert result.relevance_score == 0.9  # Best score
-            assert result.should_download is True
-            assert 'nlp_query' in result.matching_queries
-            assert 'ml_query' not in result.matching_queries
+                assert result.relevance_score == 0.9  # Best score
+                assert result.should_download is True
+                assert 'nlp_query' in result.matching_queries
+                assert 'ml_query' not in result.matching_queries
 
     def test_evaluate_for_download_no_queries(self, article_service, sample_article):
         """Test evaluating article when no queries are configured."""

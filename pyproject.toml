@@ -31,6 +31,7 @@ dependencies = [
     "langchain-core>=0.3.45",
     "langchain-text-splitters>=0.3.7", # For text splitting capabilities
     "langchain-openai>=0.3.9",
+    "langchain-anthropic>=0.1.8",
     "langgraph>=0.4.7",
     "langgraph-checkpoint>=2.0.26",
     "langgraph-sdk>=0.1.70",
@@ -39,6 +40,8 @@ dependencies = [
     # Vector Store and RAG Dependencies
     "chromadb>=0.5.0", # For vector database
     "langchain-chroma>=0.1.0", # For ChromaDB integration with LangChain
+    "langchain-huggingface>=0.1.0", # For local embeddings with sentence-transformers
+    "sentence-transformers>=3.0.0", # For local embedding models
     # Data Processing Dependencies
     "networkx>=3.4.2",
     "scholarly>=1.7.11",
@@ -58,14 +61,15 @@ dependencies = [
     "sqlalchemy>=2.0.39",
     "deprecated>=1.2.18",
     "httpx>=0.27.0",
+    "duckduckgo-search>=5.2",
     "jsonpatch>=1.33",
     "roman-numerals-py>=3.1.0",
     "feedparser>=6.0.11",
     "pre-commit>=4.2.0",
-    "ruff>=0.11.11",
+    "ruff[dev]>=0.11.11",
     "black>=25.1.0",
-    "codespell>=2.4.1",
-    "pytest>=8.3.5",
+    "codespell[dev]>=2.4.1",
+    "pytest[dev]>=8.3.5",
     "instructor>=1.8.3",
     "pytest-cov>=6.1.1",
 ]

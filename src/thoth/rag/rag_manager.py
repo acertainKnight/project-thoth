@@ -15,8 +15,8 @@ from loguru import logger
 
 from thoth.rag.embeddings import EmbeddingManager
 from thoth.rag.vector_store import VectorStoreManager
+from thoth.utilities import OpenRouterClient
 from thoth.utilities.config import get_config
-from thoth.utilities.openrouter import OpenRouterClient
 
 
 class RAGManager:
@@ -24,7 +24,7 @@ class RAGManager:
     Main manager for the RAG system.
 
     This class coordinates:
-    - Document processing and chunking
+    - Document processing and token-based chunking
     - Embedding generation
     - Vector storage and retrieval
     - Question answering with context
@@ -38,6 +38,7 @@ class RAGManager:
         vector_db_path: str | Path | None = None,
         chunk_size: int | None = None,
         chunk_overlap: int | None = None,
+        chunk_encoding: str | None = None,
         openrouter_api_key: str | None = None,
     ):
         """
@@ -48,8 +49,9 @@ class RAGManager:
             llm_model: Model to use for question answering (defaults to config).
             collection_name: Name of the vector DB collection (defaults to config).
             vector_db_path: Path to persist vector DB (defaults to config).
-            chunk_size: Size of text chunks (defaults to config).
-            chunk_overlap: Overlap between chunks (defaults to config).
+            chunk_size: Size of text chunks in tokens (defaults to config).
+            chunk_overlap: Overlap between chunks in tokens (defaults to config).
+            chunk_encoding: Encoding for token counting (defaults to config).
             openrouter_api_key: API key for OpenRouter (defaults to config).
         """
         self.config = get_config()
@@ -63,6 +65,7 @@ class RAGManager:
         )
         self.chunk_size = chunk_size or self.config.rag_config.chunk_size
         self.chunk_overlap = chunk_overlap or self.config.rag_config.chunk_overlap
+        self.chunk_encoding = chunk_encoding or self.config.rag_config.chunk_encoding
         self.api_key = openrouter_api_key or self.config.api_keys.openrouter_key
 
         # Initialize components
@@ -85,11 +88,11 @@ class RAGManager:
             embedding_function=self.embedding_manager.get_embedding_model(),
         )
 
-        # Initialize text splitter
-        self.text_splitter = RecursiveCharacterTextSplitter(
+        # Initialize text splitter (token-based)
+        self.text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+            encoding_name=self.chunk_encoding,
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
-            length_function=len,
             separators=['\n\n', '\n', ' ', ''],
         )
 
@@ -125,7 +128,7 @@ class RAGManager:
 
             # Split into chunks
             chunks = self.text_splitter.split_text(content)
-            logger.debug(f'Split document into {len(chunks)} chunks')
+            logger.debug(f'Split document into {len(chunks)} token-based chunks')
 
             # Create documents with metadata
             documents = []
@@ -310,6 +313,7 @@ class RAGManager:
                 'qa_model': self.llm_model,
                 'chunk_size': self.chunk_size,
                 'chunk_overlap': self.chunk_overlap,
+                'chunk_encoding': self.chunk_encoding,
                 **vector_stats,
             }
 

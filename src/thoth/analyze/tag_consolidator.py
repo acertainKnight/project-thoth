@@ -12,13 +12,15 @@ from jinja2 import Environment, FileSystemLoader, ChoiceLoader
 from langchain_core.prompts import ChatPromptTemplate
 from loguru import logger
 
-from thoth.utilities.models import (
+from thoth.knowledge.graph import CitationGraph
+from thoth.services.llm_service import LLMService
+from thoth.utilities.config import ThothConfig
+from thoth.utilities.schemas import (
     ConsolidatedTagsResponse,
     SingleTagMappingResponse,
     TagConsolidationResponse,
     TagSuggestionResponse,
 )
-from thoth.utilities.openrouter import OpenRouterClient
 
 
 class TagConsolidatorError(Exception):
@@ -38,59 +40,56 @@ class TagConsolidator:
 
     def __init__(
         self,
-        consolidate_model: str = 'openai/gpt-4o-mini',
-        map_model: str = 'openai/gpt-4o-mini',
-        suggest_model: str = 'openai/gpt-4o-mini',
-        openrouter_api_key: str | None = None,
-        prompts_dir: str | Path = 'templates/prompts',
+        llm_service: LLMService,
+        prompts_dir: str | Path,
+        config: ThothConfig,
         model_kwargs: dict[str, Any] | None = None,
     ):
         """
-        Initialize the TagConsolidator.
+        Initializes the TagConsolidator.
 
         Args:
-            model: The model to use for API calls (e.g., 'openai/gpt-4o-mini').
-            openrouter_api_key: The OpenRouter API key (optional, uses env var if not
-            provided).
+            llm_service: The LLM service for creating clients.
             prompts_dir: Directory containing Jinja2 prompt templates.
+            config: The main Thoth configuration object.
             model_kwargs: Additional keyword arguments for the model.
         """
-        self.consolidate_model = consolidate_model
-        self.map_model = map_model
-        self.suggest_model = suggest_model
-        self.consolidate_prompts_dir = (
-            Path(prompts_dir) / self.consolidate_model.split('/')[0]
-        )
-        self.map_prompts_dir = Path(prompts_dir) / self.map_model.split('/')[0]
-        self.suggest_prompts_dir = Path(prompts_dir) / self.suggest_model.split('/')[0]
-        # Default prompts packaged with Thoth
-        root_dir = Path(__file__).resolve().parents[3]
-        self.default_consolidate_prompts_dir = (
-            root_dir / 'templates' / 'prompts' / self.consolidate_model.split('/')[0]
-        )
-        self.default_map_prompts_dir = (
-            root_dir / 'templates' / 'prompts' / self.map_model.split('/')[0]
-        )
-        self.default_suggest_prompts_dir = (
-            root_dir / 'templates' / 'prompts' / self.suggest_model.split('/')[0]
-        )
+        self.llm_service = llm_service
+        self.config = config
+        self.prompts_dir = Path(prompts_dir)
         self.model_kwargs = model_kwargs if model_kwargs else {}
 
-        # Initialize the LLM
-        self.consolidate_llm = OpenRouterClient(
-            api_key=openrouter_api_key,
-            model=consolidate_model,
-            **self.model_kwargs,
+        # Get models from config
+        self.consolidate_model = (
+            self.config.tag_consolidator_llm_config.consolidate_model
         )
-        self.map_llm = OpenRouterClient(
-            api_key=openrouter_api_key,
-            model=map_model,
-            **self.model_kwargs,
+        self.map_model = self.config.tag_consolidator_llm_config.map_model
+        self.suggest_model = self.config.tag_consolidator_llm_config.suggest_model
+
+        # Set up prompt directories based on model provider
+        self.consolidate_prompts_dir = (
+            self.prompts_dir / self.consolidate_model.split('/')[0]
         )
-        self.suggest_llm = OpenRouterClient(
-            api_key=openrouter_api_key,
-            model=suggest_model,
-            **self.model_kwargs,
+        if not self.consolidate_prompts_dir.exists():
+            self.consolidate_prompts_dir = self.prompts_dir / 'google'
+
+        self.map_prompts_dir = self.prompts_dir / self.map_model.split('/')[0]
+        if not self.map_prompts_dir.exists():
+            self.map_prompts_dir = self.prompts_dir / 'google'
+
+        self.suggest_prompts_dir = self.prompts_dir / self.suggest_model.split('/')[0]
+        if not self.suggest_prompts_dir.exists():
+            self.suggest_prompts_dir = self.prompts_dir / 'google'
+
+        # Initialize LLM clients
+        self.consolidate_llm = self.llm_service.get_client(
+            model=self.consolidate_model, **self.model_kwargs
+        )
+        self.map_llm = self.llm_service.get_client(
+            model=self.map_model, **self.model_kwargs
+        )
+        self.suggest_llm = self.llm_service.get_client(
+            model=self.suggest_model, **self.model_kwargs
         )
 
         # Create structured LLMs for different response types
@@ -186,12 +185,12 @@ class TagConsolidator:
             template_source, template_format='jinja2'
         )
 
-    def extract_all_tags_from_graph(self, citation_tracker) -> list[str]:
+    def extract_all_tags_from_graph(self, citation_tracker: CitationGraph) -> list[str]:
         """
         Extract all unique tags from all articles in the citation graph.
 
         Args:
-            citation_tracker: The CitationTracker instance containing the graph.
+            citation_tracker: The CitationGraph instance containing the graph.
 
         Returns:
             list[str]: A list of all unique tags found across all articles.
@@ -393,7 +392,9 @@ class TagConsolidator:
                 f'Failed to suggest tags for "{title}": {e}'
             ) from e
 
-    def consolidate_and_retag_all_articles(self, citation_tracker) -> dict[str, Any]:
+    def consolidate_and_retag_all_articles(
+        self, citation_tracker: CitationGraph
+    ) -> dict[str, Any]:
         """
         Perform complete tag consolidation and re-tagging for all articles in the graph.
 
@@ -405,7 +406,7 @@ class TagConsolidator:
         5. Updates the citation graph with the new tags
 
         Args:
-            citation_tracker: The CitationTracker instance containing the graph.
+            citation_tracker: The CitationGraph instance containing the graph.
 
         Returns:
             dict[str, Any]: Summary statistics of the consolidation and re-tagging

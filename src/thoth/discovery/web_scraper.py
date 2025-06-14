@@ -15,7 +15,7 @@ import requests
 from bs4 import BeautifulSoup
 from loguru import logger
 
-from thoth.utilities.models import ScrapeConfiguration, ScrapedArticleMetadata
+from thoth.utilities.schemas import ScrapeConfiguration, ScrapedArticleMetadata
 
 
 class WebScraperError(Exception):
@@ -529,3 +529,16 @@ class WebScraper:
                 'extraction_fields': [],
                 'errors': [str(e)],
             }
+
+    def parse_html(
+        self, html: str, base_url: str, config: ScrapeConfiguration
+    ) -> list[ScrapedArticleMetadata]:
+        """Parse HTML content using existing extraction rules."""
+        soup = BeautifulSoup(html, 'html.parser')
+        containers = self._find_article_containers(soup, config)
+        articles = []
+        for container in containers:
+            article = self._extract_article_metadata(container, config, base_url)
+            if article:
+                articles.append(article)
+        return articles

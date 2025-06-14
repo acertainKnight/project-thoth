@@ -15,7 +15,7 @@ from loguru import logger
 
 from thoth.analyze.citations.citations import CitationProcessor
 from thoth.analyze.citations.semanticscholar import SemanticScholarAPI
-from thoth.utilities.models import Citation
+from thoth.utilities.schemas import Citation
 
 # Sample citations for testing
 SAMPLE_CITATIONS_TEXT = """

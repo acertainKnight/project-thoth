@@ -16,7 +16,7 @@ from loguru import logger
 
 from thoth.discovery.discovery_manager import DiscoveryManager
 from thoth.utilities.config import get_config
-from thoth.utilities.models import DiscoverySource, ScheduleConfig
+from thoth.utilities.schemas import DiscoverySource, ScheduleConfig
 
 
 class DiscoverySchedulerError(Exception):

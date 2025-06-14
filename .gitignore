@@ -165,5 +165,4 @@ logs/
 node_modules/
 
 # Data
-knowledge/
-data/
+/knowledge/

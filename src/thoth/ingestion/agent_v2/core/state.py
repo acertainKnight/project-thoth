@@ -64,6 +64,11 @@ class ResearchAgentState(BaseModel):
         default_factory=list, description='Steps taken during processing'
     )
 
+    # Allow dynamic model override for a single turn
+    model_override: str | None = Field(
+        default=None, description='Model to use for the current turn, if any'
+    )
+
     class Config:
         """Pydantic configuration."""
 

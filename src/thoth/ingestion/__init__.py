@@ -5,8 +5,11 @@ This package contains components for ingesting and processing research articles,
 including the research assistant agent and filtering capabilities.
 """
 
-# Export main components for convenience
-# Note: Some imports are not included here to avoid circular imports
-# Import them directly when needed
+from .agent_v2 import ResearchAssistant, create_research_assistant
+from .pdf_downloader import download_pdf
 
-__all__ = []
+__all__ = [
+    'ResearchAssistant',
+    'create_research_assistant',
+    'download_pdf',
+]

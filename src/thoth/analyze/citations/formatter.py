@@ -8,7 +8,7 @@ from enum import Enum
 
 from loguru import logger
 
-from thoth.utilities.models import Citation
+from thoth.utilities.schemas import Citation
 
 
 class CitationStyle(Enum):
@@ -90,7 +90,7 @@ class CitationFormatter:
 
     def format_citations(
         self, citations: list[Citation], style: CitationStyle = CitationStyle.IEEE
-    ) -> list[str]:
+    ) -> list[Citation]:
         """
         Format a list of citations according to the specified style.
         """
@@ -651,14 +651,15 @@ def format_citation(citation: Citation, style: str = 'ieee') -> str:
         CitationFormatError: If the formatting fails or the style is not supported.
 
     Example:
+        >>> from thoth.utilities.schemas import Citation
         >>> citation = Citation(
         ...     title='Sample Paper',
-        ...     authors=['J. Smith', 'A. Jones'],
+        ...     authors=['Smith, J.', 'Jones, A.'],
         ...     year=2023,
         ...     journal='Journal of Research',
         ... )
         >>> format_citation(citation, 'apa')
-        'Smith, J., & Jones, A. (2023). Sample Paper. Journal of Research.'
+        'Smith, J., & Jones, A. (2023). Sample paper. _Journal of Research_.'
     """
     style_map = {
         'ieee': CitationStyle.IEEE,
@@ -672,7 +673,10 @@ def format_citation(citation: Citation, style: str = 'ieee') -> str:
         citation_style = style_map.get(style.lower())
         if citation_style is None:
             raise CitationFormatError(f'Unsupported citation style: {style}')
-        return CitationFormatter.format_citation(citation, citation_style)
+        formatted_citation = CitationFormatter.format_citation(citation, citation_style)
+        if formatted_citation.formatted is None:
+            raise CitationFormatError('Failed to produce formatted string.')
+        return formatted_citation.formatted
     except Exception as e:
         if isinstance(e, CitationFormatError):
             raise

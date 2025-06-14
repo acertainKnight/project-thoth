@@ -17,6 +17,8 @@ interface ThothSettings {
   googleApiKey: string;
   googleSearchEngineId: string;
   semanticScholarKey: string;
+  webSearchKey: string;
+  webSearchProviders: string;
 
   // === DIRECTORY CONFIGURATION ===
   workspaceDirectory: string;
@@ -106,6 +108,8 @@ const DEFAULT_SETTINGS: ThothSettings = {
   googleApiKey: '',
   googleSearchEngineId: '',
   semanticScholarKey: '',
+  webSearchKey: '',
+  webSearchProviders: 'serper',
 
   // === DIRECTORY CONFIGURATION ===
   workspaceDirectory: '',
@@ -614,6 +618,8 @@ export default class ThothPlugin extends Plugin {
       API_GOOGLE_API_KEY: this.settings.googleApiKey,
       API_GOOGLE_SEARCH_ENGINE_ID: this.settings.googleSearchEngineId,
       API_SEMANTIC_SCHOLAR_KEY: this.settings.semanticScholarKey,
+      API_WEB_SEARCH_KEY: this.settings.webSearchKey,
+      API_WEB_SEARCH_PROVIDERS: this.settings.webSearchProviders,
 
       // Directories
       WORKSPACE_DIR: this.settings.workspaceDirectory,
@@ -695,6 +701,8 @@ export default class ThothPlugin extends Plugin {
         `API_GOOGLE_API_KEY=${this.settings.googleApiKey}`,
         `API_GOOGLE_SEARCH_ENGINE_ID=${this.settings.googleSearchEngineId}`,
         `API_SEMANTIC_SCHOLAR_KEY=${this.settings.semanticScholarKey}`,
+        `API_WEB_SEARCH_KEY=${this.settings.webSearchKey}`,
+        `API_WEB_SEARCH_PROVIDERS=${this.settings.webSearchProviders}`,
         '',
         '# ----------------------------------------------------------------------------------',
         '# --- 2. Directory Configuration ---',
@@ -1138,6 +1146,33 @@ class ThothSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.semanticScholarKey)
           .onChange(async (value) => {
             this.plugin.settings.semanticScholarKey = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(optionalApiSection)
+      .setName('Serper API Key')
+      .setDesc('For general web search integration')
+      .addText((text) => {
+        text.inputEl.type = 'password';
+        text
+          .setPlaceholder('Enter your Serper API key')
+          .setValue(this.plugin.settings.webSearchKey)
+          .onChange(async (value) => {
+            this.plugin.settings.webSearchKey = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(optionalApiSection)
+      .setName('Web Search Providers')
+      .setDesc('Comma-separated providers e.g. "serper,duckduckgo"')
+      .addText((text) => {
+        text
+          .setPlaceholder('serper,duckduckgo')
+          .setValue(this.plugin.settings.webSearchProviders)
+          .onChange(async (value) => {
+            this.plugin.settings.webSearchProviders = value;
             await this.plugin.saveSettings();
           });
       });
