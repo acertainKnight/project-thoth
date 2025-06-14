@@ -7,7 +7,7 @@ This module handles the analysis of content using LLM.
 from pathlib import Path
 from typing import Any, Literal
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, ChoiceLoader
 from langchain.schema import Document
 from langchain.text_splitter import MarkdownTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
@@ -71,6 +71,13 @@ class LLMProcessor:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.prompts_dir = Path(prompts_dir) / model.split('/')[0]
+        # Default prompts packaged with Thoth
+        self.default_prompts_dir = (
+            Path(__file__).resolve().parents[3]
+            / 'templates'
+            / 'prompts'
+            / model.split('/')[0]
+        )
         self.model_kwargs = model_kwargs if model_kwargs else {}
         self.refine_threshold = int(max_context_length * refine_threshold_multiplier)
         self.map_reduce_threshold = int(
@@ -98,9 +105,14 @@ class LLMProcessor:
             method='json_schema',  # Must be json_schema for openrouter
         )
 
-        # Initialize Jinja environment
+        # Initialize Jinja environment with fallback to default prompts
         self.jinja_env = Environment(
-            loader=FileSystemLoader(self.prompts_dir),
+            loader=ChoiceLoader(
+                [
+                    FileSystemLoader(self.prompts_dir),
+                    FileSystemLoader(self.default_prompts_dir),
+                ]
+            ),
             trim_blocks=True,
             lstrip_blocks=True,
         )
