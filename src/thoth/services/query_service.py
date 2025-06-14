@@ -298,3 +298,7 @@ class QueryService(BaseService):
     def initialize(self) -> None:
         """Initialize the query service."""
         self.logger.info('Query service initialized')
+
+    def health_check(self) -> dict[str, str]:
+        """Basic health status for the QueryService."""
+        return super().health_check()
