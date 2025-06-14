@@ -10,6 +10,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from thoth.ingestion.agent_v2.tools.base_tool import BaseThothTool
+from thoth.ingestion.agent_v2.tools.decorators import tool
 
 
 class SearchInput(BaseModel):
@@ -19,6 +20,7 @@ class SearchInput(BaseModel):
     k: int = Field(default=4, description='Number of results to return')
 
 
+@tool
 class SearchKnowledgeTool(BaseThothTool):
     """Tool for searching the knowledge base."""
 
@@ -46,6 +48,7 @@ class SearchKnowledgeTool(BaseThothTool):
             return self.handle_error(e, 'searching knowledge base')
 
 
+@tool
 class AskQuestionTool(BaseThothTool):
     """Tool for asking questions about the knowledge base."""
 
@@ -83,6 +86,7 @@ class AskQuestionTool(BaseThothTool):
             return self.handle_error(e, 'asking knowledge base')
 
 
+@tool
 class IndexKnowledgeBaseTool(BaseThothTool):
     """Tool for indexing the knowledge base."""
 
@@ -112,6 +116,7 @@ class IndexKnowledgeBaseTool(BaseThothTool):
             return self.handle_error(e, 'indexing knowledge base')
 
 
+@tool
 class GetRAGStatsTool(BaseThothTool):
     """Tool for getting RAG system statistics."""
 
@@ -146,6 +151,7 @@ class GetRAGStatsTool(BaseThothTool):
             return self.handle_error(e, 'getting RAG statistics')
 
 
+@tool
 class ClearRAGIndexTool(BaseThothTool):
     """Tool for clearing the RAG index."""
 
@@ -168,6 +174,7 @@ class ExplainConnectionsInput(BaseModel):
     paper2: str = Field(description='Title or ID of the second paper')
 
 
+@tool
 class ExplainConnectionsTool(BaseThothTool):
     """Explain connections between papers."""
 
