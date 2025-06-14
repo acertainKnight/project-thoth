@@ -443,6 +443,30 @@ class LoggingConfig(BaseSettings):
     filemode: str = Field('a', description='Logging file mode')
     file_level: str = Field('INFO', description='Logging file level')
 
+class APIGatewayConfig(BaseSettings):
+    """Configuration for the external API gateway."""
+
+    model_config = SettingsConfigDict(
+        env_prefix='API_GATEWAY_',
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='ignore',
+    )
+
+    rate_limit: float = Field(
+        5.0, description='Requests per second allowed for external APIs'
+    )
+    cache_expiry: int = Field(
+        3600, description='Cache expiry time for API responses in seconds'
+    )
+    default_timeout: int = Field(
+        15, description='Default timeout for API requests in seconds'
+    )
+    endpoints: dict[str, str] = Field(
+        default_factory=dict,
+        description='Mapping of service name to base URL',
+    )
 
 # Resolve forward references on simplified config classes
 CoreConfig.model_rebuild()
@@ -477,6 +501,10 @@ class ThothConfig(BaseSettings):
     )
     logging_config: LoggingConfig = Field(
         default_factory=LoggingConfig, description='Logging configuration'
+    )
+    api_gateway_config: APIGatewayConfig = Field(
+        default_factory=APIGatewayConfig,
+        description='External API gateway configuration',
     )
     # ------------------------------------------------------------------
     # Backwards compatibility helpers
