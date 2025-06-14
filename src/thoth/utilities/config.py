@@ -522,6 +522,9 @@ class ThothConfig(BaseSettings):
     api_server_config: EndpointConfig = Field(
         default_factory=EndpointConfig, description='API server configuration'
     )
+    mcp_server_config: EndpointConfig = Field(
+        default_factory=EndpointConfig, description='MCP server configuration'
+    )
     monitor_config: MonitorConfig = Field(
         default_factory=MonitorConfig, description='Monitor configuration'
     )
