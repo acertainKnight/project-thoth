@@ -16,10 +16,11 @@ from typing import Any
 from loguru import logger
 
 from thoth.knowledge.graph import CitationGraph
+from thoth.pipelines.document_pipeline import DocumentPipeline
 from thoth.server.pdf_monitor import PDFTracker
 from thoth.services.service_manager import ServiceManager
 from thoth.utilities.config import get_config
-from thoth.utilities.schemas import Citation, SearchResult
+from thoth.utilities.schemas import SearchResult
 
 
 class PipelineError(Exception):
@@ -103,175 +104,25 @@ class ThothPipeline:
         # Set citation tracker in services that need it
         self.services.set_citation_tracker(self.citation_tracker)
 
+        # Initialize document pipeline for handling PDF processing
+        self.document_pipeline = DocumentPipeline(
+            services=self.services,
+            citation_tracker=self.citation_tracker,
+            pdf_tracker=self.pdf_tracker,
+            output_dir=self.output_dir,
+            notes_dir=self.notes_dir,
+            markdown_dir=self.markdown_dir,
+        )
+
         logger.info('Thoth pipeline initialized with service layer')
 
-    def process_pdf(self, pdf_path: str | Path) -> Path:
-        """
-        Process a PDF file through the complete pipeline.
+    def process_pdf(self, pdf_path: str | Path):
+        """Process a PDF using the internal :class:`DocumentPipeline`."""
 
-        Args:
-            pdf_path: Path to the PDF file.
-
-        Returns:
-            Path: Path to the generated note.
-
-        Raises:
-            PipelineError: If any step in the pipeline fails.
-        """
-        pdf_path = Path(pdf_path)
-        logger.info(f'Processing PDF: {pdf_path}')
-
-        # Check if file has already been processed and is unchanged
-        if self.pdf_tracker.is_processed(
-            pdf_path
-        ) and self.pdf_tracker.verify_file_unchanged(pdf_path):
-            logger.info(f'Skipping already processed and unchanged file: {pdf_path}')
-            note_path = self.pdf_tracker.get_note_path(pdf_path)
-            if note_path:
-                return note_path
-            else:
-                # If note_path not found, we might need to re-process to get it
-                logger.warning(
-                    f'File {pdf_path} was processed, but note path not found in tracker. Reprocessing.'
-                )
-
-        # Step 1: OCR conversion
-        markdown_path, no_images_markdown = self._ocr_convert(pdf_path)
-        logger.info(f'OCR conversion completed: {markdown_path}')
-
-        # Step 2: LLM analysis
-        analysis = self._analyze_content(no_images_markdown)
-        logger.info('Content analysis completed')
-
-        # Step 3: Citation extraction
-        citations = self._extract_citations(no_images_markdown)
-        logger.info(f'Citation extraction completed: {len(citations)} citations found')
-
-        # Step 4: Generate note
-        note_path, new_pdf_path, new_markdown_path = self._generate_note(
-            pdf_path=pdf_path,
-            markdown_path=markdown_path,
-            analysis=analysis,
-            citations=citations,
-        )
-        logger.info(f'Note generation completed: {note_path}')
-
-        # Mark as processed in the tracker
-        self.pdf_tracker.mark_processed(
-            pdf_path,
-            {
-                'note_path': str(note_path),
-                'new_pdf_path': str(new_pdf_path),
-                'new_markdown_path': str(new_markdown_path),
-            },
-        )
-
-        # Step 5: Index markdown and note in RAG system (optional)
-        # This is done asynchronously to not slow down the main pipeline
         try:
-            self._index_to_rag(new_markdown_path)
-            self._index_to_rag(Path(note_path))
-        except Exception as e:
-            logger.warning(f'Failed to index documents to RAG system: {e}')
-            # Don't fail the pipeline if RAG indexing fails
-
-        return Path(note_path), Path(new_pdf_path), Path(new_markdown_path)
-
-    def _ocr_convert(self, pdf_path: Path) -> tuple[Path, Path]:
-        """
-        Convert PDF to Markdown using OCR.
-
-        Args:
-            pdf_path: Path to the PDF file.
-
-        Returns:
-            tuple[Path, Path]: Path to the generated Markdown file and the path to the generated Markdown file without images.
-
-        Raises:
-            OCRError: If OCR conversion fails.
-        """  # noqa: W505
-        try:
-            return self.services.processing.ocr_convert(
-                pdf_path=pdf_path, output_dir=self.markdown_dir
-            )
-        except Exception as e:
-            raise PipelineError(f'OCR conversion failed for {pdf_path}: {e!s}') from e
-
-    def _analyze_content(self, markdown_path: Path):
-        """
-        Analyze content with LLM.
-
-        Args:
-            markdown_path: The path to the markdown file to analyze.
-
-        Returns:
-            AnalysisResponse: The analysis result.
-
-        Raises:
-            LLMError: If LLM analysis fails.
-        """
-        return self.services.processing.analyze_document(markdown_path)
-
-    def _extract_citations(self, markdown_path: Path) -> list[Citation]:
-        """
-        Extract citations from content.
-
-        Args:
-            markdown_path: The path to the markdown file to extract citations from.
-
-        Returns:
-            list[Citation]: The extracted citations.
-        """
-        return self.services.citation.extract_citations(markdown_path)
-
-    def _generate_note(
-        self,
-        pdf_path: Path,
-        markdown_path: Path,
-        analysis,
-        citations: list[Citation],
-    ) -> tuple[str, str, str]:
-        """
-        Generate an Obsidian note and update file paths in the citation tracker.
-
-        Args:
-            pdf_path: Path to the PDF file.
-            markdown_path: Path to the Markdown file.
-            analysis: Analysis results.
-            citations: Extracted citations.
-
-        Returns:
-            str: Path to the generated note.
-        """
-        # Use NoteService to create the note
-        note_path, new_pdf_path, new_markdown_path = self.services.note.create_note(
-            pdf_path=pdf_path,
-            markdown_path=markdown_path,
-            analysis=analysis,
-            citations=citations,
-        )
-
-        # Process citations in the citation tracker
-        article_id = self.citation_tracker.process_citations(
-            pdf_path=new_pdf_path,
-            markdown_path=new_markdown_path,
-            analysis=analysis,
-            citations=citations,
-        )
-
-        if article_id:
-            self.citation_tracker.update_article_file_paths(
-                article_id=article_id,
-                new_pdf_path=new_pdf_path,
-                new_markdown_path=new_markdown_path,
-            )
-        else:
-            logger.warning(
-                'Could not obtain article_id from process_citations. '
-                'File paths in citation tracker may not be updated for the renamed files.'
-            )
-
-        return str(note_path), str(new_pdf_path), str(new_markdown_path)
+            return self.document_pipeline.process_pdf(pdf_path)
+        except Exception as e:  # pragma: no cover - should be rare
+            raise PipelineError(str(e)) from e
 
     def _index_to_rag(self, file_path: Path) -> None:
         """
