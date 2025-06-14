@@ -8,8 +8,10 @@ that automatically find and filter research articles.
 from pydantic import BaseModel, Field
 
 from thoth.ingestion.agent_v2.tools.base_tool import BaseThothTool
+from thoth.ingestion.agent_v2.tools.decorators import tool
 
 
+@tool
 class ListDiscoverySourcesTool(BaseThothTool):
     """List all configured discovery sources."""
 
@@ -58,6 +60,7 @@ class CreateDiscoverySourceInput(BaseModel):
     schedule_hours: int = Field(default=24, description='Run interval in hours')
 
 
+@tool
 class CreateArxivSourceTool(BaseThothTool):
     """Create an ArXiv discovery source."""
 
@@ -127,6 +130,7 @@ class CreatePubmedSourceInput(BaseModel):
     schedule_hours: int = Field(default=48, description='Run interval in hours')
 
 
+@tool
 class CreatePubmedSourceTool(BaseThothTool):
     """Create a PubMed discovery source."""
 
@@ -180,6 +184,200 @@ class CreatePubmedSourceTool(BaseThothTool):
             return self.handle_error(e, 'creating PubMed source')
 
 
+class CreateCrossrefSourceInput(BaseModel):
+    """Input schema for creating a CrossRef source."""
+
+    name: str = Field(description='Unique name for the source')
+    keywords: list[str] = Field(description='Keywords to search for in CrossRef')
+    max_articles: int = Field(default=50, description='Maximum articles per run')
+    schedule_hours: int = Field(default=24, description='Run interval in hours')
+
+
+class CreateCrossrefSourceTool(BaseThothTool):
+    """Create a CrossRef discovery source."""
+
+    name: str = 'create_crossref_source'
+    description: str = (
+        'Create a CrossRef discovery source to automatically find papers. '
+        'Specify name and keywords.'
+    )
+    args_schema: type[BaseModel] = CreateCrossrefSourceInput
+
+    def _run(
+        self,
+        name: str,
+        keywords: list[str],
+        max_articles: int = 50,
+        schedule_hours: int = 24,
+    ) -> str:
+        """Create CrossRef source."""
+        try:
+            source_config = {
+                'name': name,
+                'source_type': 'api',
+                'description': f'CrossRef source for {", ".join(keywords)} research',
+                'is_active': True,
+                'api_config': {
+                    'source': 'crossref',
+                    'keywords': keywords,
+                    'sort_by': 'relevance',
+                    'sort_order': 'desc',
+                },
+                'schedule_config': {
+                    'interval_minutes': schedule_hours * 60,
+                    'max_articles_per_run': max_articles,
+                    'enabled': True,
+                },
+                'query_filters': [],
+            }
+
+            if self.adapter.create_discovery_source(source_config):
+                return (
+                    f'✅ **CrossRef Discovery Source Created Successfully!**\n\n'
+                    f'**Source Details:**\n'
+                    f'- Name: `{name}`\n'
+                    f'- Type: CrossRef API\n'
+                    f'- Keywords: {", ".join(keywords)}\n'
+                    f'- Schedule: Every {schedule_hours} hours, max {max_articles} articles\n\n'
+                    f'🚀 **Ready to use!**'
+                )
+            else:
+                return f"❌ Failed to create CrossRef source '{name}'"
+
+        except Exception as e:
+            return self.handle_error(e, 'creating CrossRef source')
+
+
+class CreateOpenalexSourceInput(BaseModel):
+    """Input schema for creating an OpenAlex source."""
+
+    name: str = Field(description='Unique name for the source')
+    keywords: list[str] = Field(description='Keywords to search for in OpenAlex')
+    max_articles: int = Field(default=50, description='Maximum articles per run')
+    schedule_hours: int = Field(default=24, description='Run interval in hours')
+
+
+class CreateOpenalexSourceTool(BaseThothTool):
+    """Create an OpenAlex discovery source."""
+
+    name: str = 'create_openalex_source'
+    description: str = (
+        'Create an OpenAlex discovery source to automatically find papers. '
+        'Specify name and keywords.'
+    )
+    args_schema: type[BaseModel] = CreateOpenalexSourceInput
+
+    def _run(
+        self,
+        name: str,
+        keywords: list[str],
+        max_articles: int = 50,
+        schedule_hours: int = 24,
+    ) -> str:
+        """Create OpenAlex source."""
+        try:
+            source_config = {
+                'name': name,
+                'source_type': 'api',
+                'description': f'OpenAlex source for {", ".join(keywords)} research',
+                'is_active': True,
+                'api_config': {
+                    'source': 'openalex',
+                    'keywords': keywords,
+                    'sort_by': 'relevance',
+                },
+                'schedule_config': {
+                    'interval_minutes': schedule_hours * 60,
+                    'max_articles_per_run': max_articles,
+                    'enabled': True,
+                },
+                'query_filters': [],
+            }
+
+            if self.adapter.create_discovery_source(source_config):
+                return (
+                    f'✅ **OpenAlex Discovery Source Created Successfully!**\n\n'
+                    f'**Source Details:**\n'
+                    f'- Name: `{name}`\n'
+                    f'- Type: OpenAlex API\n'
+                    f'- Keywords: {", ".join(keywords)}\n'
+                    f'- Schedule: Every {schedule_hours} hours, max {max_articles} articles\n\n'
+                    f'🚀 **Ready to use!**'
+                )
+            else:
+                return f"❌ Failed to create OpenAlex source '{name}'"
+
+        except Exception as e:
+            return self.handle_error(e, 'creating OpenAlex source')
+
+
+class CreateBiorxivSourceInput(BaseModel):
+    """Input schema for creating a bioRxiv source."""
+
+    name: str = Field(description='Unique name for the source')
+    start_date: str | None = Field(default=None, description='Start date YYYY-MM-DD')
+    end_date: str | None = Field(default=None, description='End date YYYY-MM-DD')
+    max_articles: int = Field(default=50, description='Maximum articles per run')
+    schedule_hours: int = Field(default=24, description='Run interval in hours')
+
+
+class CreateBiorxivSourceTool(BaseThothTool):
+    """Create a bioRxiv discovery source."""
+
+    name: str = 'create_biorxiv_source'
+    description: str = (
+        'Create a bioRxiv discovery source to automatically find preprints.'
+    )
+    args_schema: type[BaseModel] = CreateBiorxivSourceInput
+
+    def _run(
+        self,
+        name: str,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        max_articles: int = 50,
+        schedule_hours: int = 24,
+    ) -> str:
+        """Create bioRxiv source."""
+        try:
+            api_config = {
+                'source': 'biorxiv',
+            }
+            if start_date:
+                api_config['start_date'] = start_date
+            if end_date:
+                api_config['end_date'] = end_date
+
+            source_config = {
+                'name': name,
+                'source_type': 'api',
+                'description': 'bioRxiv preprint source',
+                'is_active': True,
+                'api_config': api_config,
+                'schedule_config': {
+                    'interval_minutes': schedule_hours * 60,
+                    'max_articles_per_run': max_articles,
+                    'enabled': True,
+                },
+                'query_filters': [],
+            }
+
+            if self.adapter.create_discovery_source(source_config):
+                return (
+                    f'✅ **bioRxiv Discovery Source Created Successfully!**\n\n'
+                    f'**Source Details:**\n'
+                    f'- Name: `{name}`\n'
+                    f'- Type: bioRxiv API\n'
+                    f'- Schedule: Every {schedule_hours} hours, max {max_articles} articles\n\n'
+                    f'🚀 **Ready to use!**'
+                )
+            else:
+                return f"❌ Failed to create bioRxiv source '{name}'"
+
+        except Exception as e:
+            return self.handle_error(e, 'creating bioRxiv source')
+
+
 class RunDiscoveryInput(BaseModel):
     """Input schema for running discovery."""
 
@@ -191,6 +389,7 @@ class RunDiscoveryInput(BaseModel):
     )
 
 
+@tool
 class RunDiscoveryTool(BaseThothTool):
     """Run article discovery."""
 
@@ -252,6 +451,7 @@ class DeleteSourceInput(BaseModel):
     source_name: str = Field(description='Name of the source to delete')
 
 
+@tool
 class DeleteDiscoverySourceTool(BaseThothTool):
     """Delete a discovery source."""
 

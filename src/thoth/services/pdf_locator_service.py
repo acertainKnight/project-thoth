@@ -416,3 +416,7 @@ class PdfLocatorService(BaseService):
                     return 'cc-by-nd'
 
         return None
+
+    def health_check(self) -> dict[str, str]:
+        """Basic health status for the PdfLocatorService."""
+        return super().health_check()

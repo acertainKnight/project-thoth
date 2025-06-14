@@ -11,7 +11,7 @@ Thoth is a production-ready AI-powered research assistant that automates the col
 - **Note Generation**: Creates structured Obsidian-compatible notes automatically
 
 ### 🔍 **Research Discovery & Filtering**
-- **Multi-Source Discovery**: Automated paper discovery from ArXiv, PubMed, and custom sources
+- **Multi-Source Discovery**: Automated paper discovery from ArXiv, PubMed, CrossRef, OpenAlex, bioRxiv, and custom sources
 - **Smart Filtering**: AI-powered evaluation of papers against research queries
 - **Scheduled Discovery**: Automated periodic searches for new relevant papers
 - **Web Scraping**: Support for custom journal scraping with Chrome extension
@@ -174,6 +174,24 @@ For a detailed visual representation of the system architecture, please see the 
 ### Agent & API
 - `thoth agent` - Start interactive agent chat
 - `thoth api` - Start the API server
+- `thoth mcp-server` - Start the MCP agent server
+
+### MCP Server Usage
+
+Start the server locally:
+
+```bash
+thoth mcp-server
+```
+
+Endpoints:
+
+- `POST /chat` – send a chat message. Accepts either a simple `message` field or
+  a `messages` array following Anthropic's Model Context Protocol format.
+- `GET /tools` – list all available tools with descriptions and schemas.
+- `GET /health` – health check endpoint.
+
+See the [Anthropic MCP documentation](https://docs.anthropic.com/claude/docs/model-context-protocol-mcp) for details on the expected request and response schema. For a detailed explanation of the local MCP server, see [docs/MCP_SERVER_USAGE.md](docs/MCP_SERVER_USAGE.md).
 
 ## 📂 Directory Structure
 

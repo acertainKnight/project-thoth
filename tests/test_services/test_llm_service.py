@@ -30,7 +30,7 @@ def test_get_client_openai_native(thoth_config: ThothConfig, monkeypatch):
     thoth_config.api_keys.openai_key = 'fake-key'
     llm_service = LLMService(config=thoth_config)
 
-    with patch('thoth.services.llm_service.OpenAIClient') as mock_openai:
+    with patch('thoth.services.llm.factory.OpenAIClient') as mock_openai:
         llm_service.get_client(model='openai/gpt-4o')
         mock_openai.assert_called_once()
 
@@ -41,7 +41,7 @@ def test_get_client_anthropic_native(thoth_config: ThothConfig, monkeypatch):
     thoth_config.api_keys.anthropic_key = 'fake-key'
     llm_service = LLMService(config=thoth_config)
 
-    with patch('thoth.services.llm_service.AnthropicClient') as mock_anthropic:
+    with patch('thoth.services.llm.factory.AnthropicClient') as mock_anthropic:
         llm_service.get_client(model='anthropic/claude-3-haiku')
         mock_anthropic.assert_called_once()
 
@@ -49,7 +49,7 @@ def test_get_client_anthropic_native(thoth_config: ThothConfig, monkeypatch):
 def test_get_client_openrouter_fallback(thoth_config: ThothConfig):
     """Test that OpenRouter is used as a fallback."""
     llm_service = LLMService(config=thoth_config)
-    with patch('thoth.services.llm_service.OpenRouterClient') as mock_openrouter:
+    with patch('thoth.services.llm.factory.OpenRouterClient') as mock_openrouter:
         llm_service.get_client(model='some/other-model')
         mock_openrouter.assert_called_once()
 

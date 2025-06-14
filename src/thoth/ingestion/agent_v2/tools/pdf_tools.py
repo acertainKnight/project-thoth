@@ -8,6 +8,7 @@ using the PDF Locator Service.
 from pydantic import BaseModel, Field
 
 from thoth.ingestion.agent_v2.tools.base_tool import BaseThothTool
+from thoth.ingestion.agent_v2.tools.decorators import tool
 
 
 class LocatePdfInput(BaseModel):
@@ -23,6 +24,7 @@ class LocatePdfInput(BaseModel):
     )
 
 
+@tool
 class LocatePdfTool(BaseThothTool):
     """Locate open-access PDFs for academic articles."""
 
@@ -119,6 +121,7 @@ class TestPdfSourceInput(BaseModel):
     )
 
 
+@tool
 class ValidatePdfSourceTool(BaseThothTool):
     """Test PDF location sources."""
 
@@ -190,6 +193,7 @@ class LocatePdfsForQueryInput(BaseModel):
     limit: int = Field(default=10, description='Maximum number of articles to process')
 
 
+@tool
 class LocatePdfsForQueryTool(BaseThothTool):
     """Locate PDFs for articles matching a research query."""
 
