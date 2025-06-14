@@ -10,9 +10,11 @@ from thoth.ingestion.agent_v2.core.agent import (
     create_research_assistant,
 )
 from thoth.ingestion.agent_v2.core.state import ResearchAgentState
+from thoth.ingestion.agent_v2.server import start_mcp_server
 
 __all__ = [
     'ResearchAgentState',
     'ResearchAssistant',
     'create_research_assistant',
+    'start_mcp_server',
 ]

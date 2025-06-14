@@ -6,6 +6,7 @@ various sources like ArXiv, PubMed, and web scrapers.
 """
 
 from .api_sources import ArxivAPISource, PubMedAPISource
+from .plugins import ArxivPlugin, plugin_registry
 from .discovery_manager import DiscoveryManager
 from .emulator_scraper import EmulatorScraper
 from .scheduler import DiscoveryScheduler
@@ -13,6 +14,8 @@ from .web_scraper import WebScraper
 
 __all__ = [
     'ArxivAPISource',
+    'ArxivPlugin',
+    'plugin_registry',
     'DiscoveryManager',
     'DiscoveryScheduler',
     'EmulatorScraper',

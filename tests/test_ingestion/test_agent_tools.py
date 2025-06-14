@@ -17,6 +17,9 @@ from thoth.ingestion.agent_v2.tools.analysis_tools import (
 from thoth.ingestion.agent_v2.tools.discovery_tools import (
     CreateArxivSourceTool,
     CreatePubmedSourceTool,
+    CreateCrossrefSourceTool,
+    CreateOpenalexSourceTool,
+    CreateBiorxivSourceTool,
     ListDiscoverySourcesTool,
     RunDiscoveryTool,
 )
