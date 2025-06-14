@@ -24,7 +24,14 @@ def run_monitor(args, pipeline: ThothPipeline):
 
         api_thread = threading.Thread(
             target=start_obsidian_server,
-            args=(api_host, api_port, config.pdf_dir, config.notes_dir, api_base_url),
+            kwargs={
+                'host': api_host,
+                'port': api_port,
+                'pdf_directory': Path(config.pdf_dir),
+                'notes_directory': Path(config.notes_dir),
+                'api_base_url': api_base_url,
+                'pipeline': pipeline,
+            },
             daemon=True,
         )
         logger.info(f'Starting Obsidian API server on {api_host}:{api_port}')

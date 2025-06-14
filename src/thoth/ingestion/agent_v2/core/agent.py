@@ -194,15 +194,12 @@ Remember: You have direct access to tools - use them immediately rather than jus
         else:
             return graph.compile()
 
-    def _agent_node(
-        self, state: ResearchAgentState, model_override: str | None = None
-    ) -> dict[str, Any]:
+    def _agent_node(self, state: ResearchAgentState) -> dict[str, Any]:
         """
         Main agent node that processes messages and decides on actions.
 
         Args:
             state: Current agent state
-            model_override: Optional model to use for this turn
 
         Returns:
             dict: Updated state with agent's response
@@ -213,6 +210,7 @@ Remember: You have direct access to tools - use them immediately rather than jus
             messages.insert(0, SystemMessage(content=self.system_prompt))
 
         # Use the specified model or the default
+        model_override = state.model_override
         if model_override:
             llm_with_tools = self.llm.bind_tools(self.tools, model=model_override)
         else:
@@ -250,6 +248,7 @@ Remember: You have direct access to tools - use them immediately rather than jus
             messages=[HumanMessage(content=message)],
             session_id=session_id,
             user_context=context or {},
+            model_override=model_override,
         )
 
         # Configure thread ID for memory
@@ -258,17 +257,6 @@ Remember: You have direct access to tools - use them immediately rather than jus
             config['configurable'] = {'thread_id': session_id}
 
         try:
-            # If a model override is provided, we need to inject it into the agent node
-            # One way to do this is to re-bind the node with the new model
-            if model_override:
-                # This is a simplified way to handle this. In a more complex graph,
-                # you might need a more sophisticated state management approach.
-                from functools import partial
-
-                self.app.graph.nodes['agent']['func'] = partial(
-                    self._agent_node, model_override=model_override
-                )
-
             # Run the agent
             result = self.app.invoke(initial_state, config)
 

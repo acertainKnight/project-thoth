@@ -113,6 +113,10 @@ thoth rag ask --question "What are the main contributions of the transformer arc
 
 ## 🏗️ Architecture
 
+For a detailed visual representation of the system architecture, please see the full diagram:
+
+📖 **[Architecture Diagram](docs/architecture.md)**
+
 ### Service Layer Architecture
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
