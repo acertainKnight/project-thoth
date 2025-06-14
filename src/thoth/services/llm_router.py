@@ -176,3 +176,7 @@ class LLMRouter(BaseService):
     def get_models(self) -> list[dict]:
         """Gets the list of available models from OpenRouter."""
         return get_openrouter_models()
+
+    def health_check(self) -> dict[str, str]:
+        """Basic health status for the LLMRouter."""
+        return super().health_check()

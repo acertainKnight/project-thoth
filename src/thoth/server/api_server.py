@@ -23,6 +23,7 @@ from starlette.middleware.cors import CORSMiddleware
 from thoth.ingestion.pdf_downloader import download_pdf
 from thoth.services.llm_router import LLMRouter
 from thoth.utilities.config import get_config
+from thoth.monitoring import HealthMonitor
 
 app = FastAPI(
     title="Thoth Obsidian Integration",
@@ -45,6 +46,9 @@ pdf_dir: Path = None
 notes_dir: Path = None
 base_url: str = None
 current_config: dict[str, Any] = {}
+
+# Service manager initialized when the server starts
+service_manager = None
 
 # Global agent instance - will be initialized when server starts
 research_agent = None
@@ -132,8 +136,13 @@ class AgentRestartRequest(BaseModel):
 
 @app.get("/health")
 def health_check():
-    """Health check endpoint."""
-    return JSONResponse({"status": "healthy", "service": "thoth-obsidian-api"})
+    """Health check endpoint returning service statuses."""
+    global service_manager
+    if service_manager is None:
+        return JSONResponse({'status': 'uninitialized'})
+
+    monitor = HealthMonitor(service_manager)
+    return JSONResponse(monitor.overall_status())
 
 
 @app.get("/download-pdf")
@@ -574,7 +583,7 @@ async def delayed_shutdown():
 
 async def reinitialize_agent():
     """Reinitialize the agent without restarting the process."""
-    global research_agent, agent_adapter, llm_router
+    global research_agent, agent_adapter, llm_router, service_manager
 
     try:
         logger.info("Reinitializing research agent...")
@@ -677,7 +686,7 @@ def start_server(
         pipeline (ThothPipeline | None): Optional ThothPipeline instance.
         reload (bool): Whether to enable auto-reload for development.
     """
-    global pdf_dir, notes_dir, base_url, research_agent, agent_adapter, llm_router
+    global pdf_dir, notes_dir, base_url, research_agent, agent_adapter, llm_router, service_manager
 
     # Set module-level configuration
     pdf_dir = pdf_directory
