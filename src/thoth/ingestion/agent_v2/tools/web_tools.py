@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from thoth.ingestion.agent_v2.tools.base_tool import BaseThothTool
+from thoth.ingestion.agent_v2.tools.decorators import tool
 
 
 class WebSearchInput(BaseModel):
@@ -18,6 +19,7 @@ class WebSearchInput(BaseModel):
     )
 
 
+@tool
 class WebSearchTool(BaseThothTool):
     """Tool that performs a general web search."""
 

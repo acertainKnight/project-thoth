@@ -10,6 +10,7 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from thoth.ingestion.agent_v2.tools.base_tool import BaseThothTool
+from thoth.ingestion.agent_v2.tools.decorators import tool
 from thoth.utilities.schemas import AnalysisResponse
 
 
@@ -20,6 +21,7 @@ class EvaluateArticleInput(BaseModel):
     query_name: str = Field(description='Name of the query to use for evaluation')
 
 
+@tool
 class EvaluateArticleTool(BaseThothTool):
     """Evaluate an article against a research query."""
 
@@ -95,6 +97,7 @@ class AnalyzeTopicInput(BaseModel):
     )
 
 
+@tool
 class AnalyzeTopicTool(BaseThothTool):
     """Analyze a research topic in your knowledge base."""
 
@@ -159,6 +162,7 @@ class FindRelatedInput(BaseModel):
     )
 
 
+@tool
 class FindRelatedTool(BaseThothTool):
     """Find papers related to a specific paper."""
 
@@ -239,6 +243,7 @@ class ArticleAnalysisInput(BaseModel):
     )
 
 
+@tool
 class ArticleAnalysisTool(BaseThothTool):
     name: str = 'analyze_article'
     description: str = (
