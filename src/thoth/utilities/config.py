@@ -442,6 +442,32 @@ class LoggingConfig(BaseSettings):
     file_level: str = Field('INFO', description='Logging file level')
 
 
+class APIGatewayConfig(BaseSettings):
+    """Configuration for the external API gateway."""
+
+    model_config = SettingsConfigDict(
+        env_prefix='API_GATEWAY_',
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='ignore',
+    )
+
+    rate_limit: float = Field(
+        5.0, description='Requests per second allowed for external APIs'
+    )
+    cache_expiry: int = Field(
+        3600, description='Cache expiry time for API responses in seconds'
+    )
+    default_timeout: int = Field(
+        15, description='Default timeout for API requests in seconds'
+    )
+    endpoints: dict[str, str] = Field(
+        default_factory=dict,
+        description='Mapping of service name to base URL',
+    )
+
+
 class ThothConfig(BaseSettings):
     """Configuration for Thoth."""
 
@@ -521,6 +547,10 @@ class ThothConfig(BaseSettings):
     )
     api_server_config: EndpointConfig = Field(
         default_factory=EndpointConfig, description='API server configuration'
+    )
+    api_gateway_config: APIGatewayConfig = Field(
+        default_factory=APIGatewayConfig,
+        description='External API gateway configuration',
     )
     monitor_config: MonitorConfig = Field(
         default_factory=MonitorConfig, description='Monitor configuration'
