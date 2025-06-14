@@ -190,6 +190,7 @@ export default class ThothPlugin extends Plugin {
   isAgentRunning: boolean = false;
   isRestarting: boolean = false;
   socket: WebSocket | null = null;
+  wsResolvers: Map<string, { resolve: (v: string) => void; reject: (e: Error) => void }> = new Map();
 
   async onload() {
     await this.loadSettings();
@@ -625,6 +626,23 @@ export default class ThothPlugin extends Plugin {
             ws.onclose = () => {
               this.socket = null;
             };
+            ws.onmessage = (event: MessageEvent) => {
+              let id: string | undefined;
+              let text = event.data;
+              try {
+                const data = JSON.parse(event.data);
+                id = data.id;
+                text = data.response || event.data;
+              } catch (e) {}
+              if (id && this.wsResolvers.has(id)) {
+                this.wsResolvers.get(id)!.resolve(text);
+                this.wsResolvers.delete(id);
+              }
+            };
+            ws.onerror = () => {
+              this.wsResolvers.forEach(({ reject }) => reject(new Error('WebSocket error')));
+              this.wsResolvers.clear();
+            };
             resolve();
           };
           ws.onerror = () => {
@@ -646,6 +664,8 @@ export default class ThothPlugin extends Plugin {
     if (this.socket) {
       this.socket.close();
       this.socket = null;
+      this.wsResolvers.forEach(({ reject }) => reject(new Error('WebSocket disconnected')));
+      this.wsResolvers.clear();
     }
   }
 
@@ -1020,21 +1040,16 @@ class ChatModal extends Modal {
         reject(new Error('WebSocket not connected'));
         return;
       }
-      const ws = this.plugin.socket;
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          resolve(data.response || event.data);
-        } catch (e) {
-          resolve(event.data);
-        }
-      };
-      ws.onerror = () => reject(new Error('WebSocket error'));
-      ws.send(JSON.stringify({
-        message: message,
-        conversation_id: 'obsidian-chat',
-        timestamp: Date.now()
-      }));
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
+      this.plugin.wsResolvers.set(id, { resolve, reject });
+      this.plugin.socket!.send(
+        JSON.stringify({
+          id,
+          message,
+          conversation_id: 'obsidian-chat',
+          timestamp: Date.now()
+        })
+      );
     });
   }
 

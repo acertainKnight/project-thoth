@@ -31,19 +31,21 @@ def client(monkeypatch):
 
 def test_websocket_chat(client):
     with client.websocket_connect("/ws/chat") as ws:
-        ws.send_json({"message": "hi"})
+        ws.send_json({"message": "hi", "id": "msg1"})
         data = ws.receive_json()
         assert data["response"] == "echo:hi"
+        assert data["id"] == "msg1"
 
 
 def test_websocket_reconnect(client):
     with client.websocket_connect("/ws/chat") as ws:
-        ws.send_json({"message": "one"})
+        ws.send_json({"message": "one", "id": "one"})
         ws.receive_json()
     with client.websocket_connect("/ws/chat") as ws2:
-        ws2.send_json({"message": "two"})
+        ws2.send_json({"message": "two", "id": "two"})
         data = ws2.receive_json()
         assert data["response"] == "echo:two"
+        assert data["id"] == "two"
 
 
 def test_websocket_status(client):
@@ -53,6 +55,16 @@ def test_websocket_status(client):
 
 
 def test_http_fallback(client):
-    resp = client.post("/research/chat", json={"message": "hi"})
+    resp = client.post("/research/chat", json={"message": "hi", "id": "http"})
     assert resp.status_code == 200
-    assert resp.json()["response"] == "echo:hi"
+    data = resp.json()
+    assert data["response"] == "echo:hi"
+    assert data["id"] == "http"
+
+
+def test_websocket_id_echo(client):
+    with client.websocket_connect("/ws/chat") as ws:
+        ws.send_json({"message": "idtest", "id": "123"})
+        data = ws.receive_json()
+        assert data["response"] == "echo:idtest"
+        assert data["id"] == "123"
