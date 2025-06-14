@@ -487,3 +487,7 @@ class CitationService(BaseService):
                 self.handle_error(e, f"locating PDF for '{citation.title[:50]}'")
             )
             return None
+
+    def health_check(self) -> dict[str, str]:
+        """Basic health status for the CitationService."""
+        return super().health_check()

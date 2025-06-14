@@ -8,10 +8,15 @@ while leveraging the consolidated business logic.
 
 from pydantic import BaseModel, Field
 
-from thoth.ingestion.agent_v2.tools.base_tool import BaseThothTool, QueryNameInput
+from thoth.ingestion.agent_v2.tools.base_tool import (
+    BaseThothTool,
+    QueryNameInput,
+)
+from thoth.ingestion.agent_v2.tools.decorators import tool
 from thoth.utilities.schemas import ResearchQuery
 
 
+@tool
 class ListQueriesTool(BaseThothTool):
     """Tool for listing all research queries."""
 
@@ -72,6 +77,7 @@ class CreateQueryInput(BaseModel):
     )
 
 
+@tool
 class CreateQueryTool(BaseThothTool):
     """Tool for creating a new research query."""
 
@@ -110,6 +116,7 @@ class CreateQueryTool(BaseThothTool):
             return self.handle_error(e, f"creating query '{name}'")
 
 
+@tool
 class GetQueryTool(BaseThothTool):
     """Tool for getting details of a specific query."""
 
@@ -161,6 +168,7 @@ class EditQueryInput(BaseModel):
     )
 
 
+@tool
 class EditQueryTool(BaseThothTool):
     """Tool for editing an existing research query."""
 
@@ -207,6 +215,7 @@ class EditQueryTool(BaseThothTool):
             return self.handle_error(e, f"updating query '{query_name}'")
 
 
+@tool
 class DeleteQueryTool(BaseThothTool):
     """Tool for deleting a research query."""
 

@@ -80,3 +80,7 @@ class WebSearchService(BaseService):
             raise ServiceError('No available web search providers')
         except Exception as e:
             raise ServiceError(self.handle_error(e, 'web searching')) from e
+
+    def health_check(self) -> dict[str, str]:
+        """Basic health status for the WebSearchService."""
+        return super().health_check()
