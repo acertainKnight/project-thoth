@@ -478,7 +478,6 @@ class ThothConfig(BaseSettings):
     logging_config: LoggingConfig = Field(
         default_factory=LoggingConfig, description='Logging configuration'
     )
-
     # ------------------------------------------------------------------
     # Backwards compatibility helpers
     # ------------------------------------------------------------------
@@ -580,7 +579,7 @@ class ThothConfig(BaseSettings):
     @property
     def query_based_routing_config(self) -> QueryBasedRoutingConfig:  # pragma: no cover
         return self.features.query_based_routing
-
+      
     def setup_logging(self) -> None:
         """Set up logging configuration using loguru."""
         setup_logging(self)
