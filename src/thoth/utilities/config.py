@@ -9,6 +9,8 @@ from loguru import logger
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from thoth.config.simplified import CoreConfig, FeatureConfig
+
 
 class APIKeys(BaseSettings):
     """API keys for external services."""
@@ -442,6 +444,10 @@ class LoggingConfig(BaseSettings):
     file_level: str = Field('INFO', description='Logging file level')
 
 
+# Resolve forward references on simplified config classes
+CoreConfig.model_rebuild()
+FeatureConfig.model_rebuild()
+
 class ThothConfig(BaseSettings):
     """Configuration for Thoth."""
 
@@ -452,60 +458,13 @@ class ThothConfig(BaseSettings):
         extra='ignore',  # Ignore extra inputs
     )
 
-    # Base paths
-    workspace_dir: Path = Field(Path('.'), description='Base workspace directory')
-    pdf_dir: Path = Field(Path('data/pdf'), description='Directory for PDF files')
-    markdown_dir: Path = Field(
-        Path('data/markdown'), description='Directory for Markdown files'
+    core: CoreConfig = Field(
+        default_factory=CoreConfig, description='Core configuration settings'
     )
-    notes_dir: Path = Field(
-        Path('data/notes'), description='Directory for Obsidian notes'
-    )
-    prompts_dir: Path = Field(
-        Path('templates/prompts'), description='Directory for prompts'
-    )
-    templates_dir: Path = Field(
-        Path('templates'), description='Directory for templates'
-    )
-    output_dir: Path = Field(
-        Path('data/output'), description='Directory for output files'
-    )
-    knowledge_base_dir: Path = Field(
-        Path('data/knowledge'), description='Directory for knowledge base'
-    )
-    graph_storage_path: Path = Field(
-        Path('data/graph/citations.graphml'),
-        description='Path for citation graph storage',
+    features: FeatureConfig = Field(
+        default_factory=FeatureConfig, description='Optional feature settings'
     )
 
-    # Research agent directories
-    queries_dir: Path = Field(
-        Path('data/queries'), description='Directory for research query files'
-    )
-    agent_storage_dir: Path = Field(
-        Path('data/agent'), description='Directory for agent-managed articles'
-    )
-
-    # Discovery directories
-    discovery_sources_dir: Path = Field(
-        Path('data/discovery/sources'),
-        description='Directory for discovery source configurations',
-    )
-    discovery_results_dir: Path = Field(
-        Path('data/discovery/results'), description='Directory for discovery results'
-    )
-    chrome_extension_configs_dir: Path = Field(
-        Path('data/discovery/chrome_configs'),
-        description='Directory for Chrome extension configurations',
-    )
-
-    # Configuration objects
-    api_keys: APIKeys = Field(
-        default_factory=APIKeys, description='API keys for external services'
-    )
-    llm_config: LLMConfig = Field(
-        default_factory=LLMConfig, description='LLM configuration'
-    )
     citation_llm_config: CitationLLMConfig = Field(
         default_factory=CitationLLMConfig, description='Citation LLM configuration'
     )
@@ -519,37 +478,108 @@ class ThothConfig(BaseSettings):
     logging_config: LoggingConfig = Field(
         default_factory=LoggingConfig, description='Logging configuration'
     )
-    api_server_config: EndpointConfig = Field(
-        default_factory=EndpointConfig, description='API server configuration'
-    )
-    mcp_server_config: EndpointConfig = Field(
-        default_factory=EndpointConfig, description='MCP server configuration'
-    )
-    monitor_config: MonitorConfig = Field(
-        default_factory=MonitorConfig, description='Monitor configuration'
-    )
-    research_agent_config: ResearchAgentConfig = Field(
-        default_factory=ResearchAgentConfig, description='Research agent configuration'
-    )
-    research_agent_llm_config: ResearchAgentLLMConfig = Field(
-        default_factory=ResearchAgentLLMConfig,
-        description='Research agent LLM configuration',
-    )
-    scrape_filter_llm_config: ScrapeFilterLLMConfig = Field(
-        default_factory=ScrapeFilterLLMConfig,
-        description='Scrape filter LLM configuration',
-    )
-    discovery_config: DiscoveryConfig = Field(
-        default_factory=DiscoveryConfig, description='Discovery system configuration'
-    )
-    rag_config: RAGConfig = Field(
-        default_factory=RAGConfig, description='RAG system configuration'
-    )
-    query_based_routing_config: QueryBasedRoutingConfig = Field(
-        default_factory=QueryBasedRoutingConfig,
-        description='Query-based routing configuration',
-    )
+    # ------------------------------------------------------------------
+    # Backwards compatibility helpers
+    # ------------------------------------------------------------------
 
+    @property
+    def api_keys(self) -> APIKeys:  # pragma: no cover - simple passthrough
+        """Return API keys from the core configuration."""
+        return self.core.api_keys
+
+    @property
+    def llm_config(self) -> LLMConfig:  # pragma: no cover - simple passthrough
+        """Return LLM configuration from the core settings."""
+        return self.core.llm_config
+
+    @property
+    def workspace_dir(self) -> Path:  # pragma: no cover
+        return self.core.workspace_dir
+
+    @property
+    def pdf_dir(self) -> Path:  # pragma: no cover
+        return self.core.pdf_dir
+
+    @property
+    def markdown_dir(self) -> Path:  # pragma: no cover
+        return self.core.markdown_dir
+
+    @property
+    def notes_dir(self) -> Path:  # pragma: no cover
+        return self.core.notes_dir
+
+    @property
+    def prompts_dir(self) -> Path:  # pragma: no cover
+        return self.core.prompts_dir
+
+    @property
+    def templates_dir(self) -> Path:  # pragma: no cover
+        return self.core.templates_dir
+
+    @property
+    def output_dir(self) -> Path:  # pragma: no cover
+        return self.core.output_dir
+
+    @property
+    def knowledge_base_dir(self) -> Path:  # pragma: no cover
+        return self.core.knowledge_base_dir
+
+    @property
+    def graph_storage_path(self) -> Path:  # pragma: no cover
+        return self.core.graph_storage_path
+
+    @property
+    def queries_dir(self) -> Path:  # pragma: no cover
+        return self.core.queries_dir
+
+    @property
+    def agent_storage_dir(self) -> Path:  # pragma: no cover
+        return self.core.agent_storage_dir
+
+    @property
+    def discovery_sources_dir(self) -> Path:  # pragma: no cover
+        return self.core.discovery_sources_dir
+
+    @property
+    def discovery_results_dir(self) -> Path:  # pragma: no cover
+        return self.core.discovery_results_dir
+
+    @property
+    def chrome_extension_configs_dir(self) -> Path:  # pragma: no cover
+        return self.core.chrome_extension_configs_dir
+
+    @property
+    def api_server_config(self) -> EndpointConfig:  # pragma: no cover
+        return self.features.api_server
+
+    @property
+    def monitor_config(self) -> MonitorConfig:  # pragma: no cover
+        return self.features.monitor
+
+    @property
+    def research_agent_config(self) -> ResearchAgentConfig:  # pragma: no cover
+        return self.features.research_agent
+
+    @property
+    def research_agent_llm_config(self) -> ResearchAgentLLMConfig:  # pragma: no cover
+        return self.features.research_agent_llm
+
+    @property
+    def scrape_filter_llm_config(self) -> ScrapeFilterLLMConfig:  # pragma: no cover
+        return self.features.scrape_filter_llm
+
+    @property
+    def discovery_config(self) -> DiscoveryConfig:  # pragma: no cover
+        return self.features.discovery
+
+    @property
+    def rag_config(self) -> RAGConfig:  # pragma: no cover
+        return self.features.rag
+
+    @property
+    def query_based_routing_config(self) -> QueryBasedRoutingConfig:  # pragma: no cover
+        return self.features.query_based_routing
+      
     def setup_logging(self) -> None:
         """Set up logging configuration using loguru."""
         setup_logging(self)
