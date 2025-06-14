@@ -793,3 +793,7 @@ class DiscoveryService(BaseService):
                 json.dump(self.schedule_state, f, indent=2)
         except Exception as e:
             self.logger.error(f'Error saving schedule state: {e}')
+
+    def health_check(self) -> dict[str, str]:
+        """Basic health status for the DiscoveryService."""
+        return super().health_check()

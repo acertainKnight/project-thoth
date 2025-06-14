@@ -368,3 +368,7 @@ class LLMService(BaseService):
         self._clients.clear()
 
         self.log_operation('cache_cleared', count=len(self._clients))
+
+    def health_check(self) -> dict[str, str]:
+        """Basic health status for the LLMService."""
+        return super().health_check()
