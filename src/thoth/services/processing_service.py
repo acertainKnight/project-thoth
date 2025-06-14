@@ -441,3 +441,7 @@ class ProcessingService(BaseService):
         except Exception as e:
             self.logger.error(self.handle_error(e, 'getting processing stats'))
             return {}
+
+    def health_check(self) -> dict[str, str]:
+        """Basic health status for the ProcessingService."""
+        return super().health_check()

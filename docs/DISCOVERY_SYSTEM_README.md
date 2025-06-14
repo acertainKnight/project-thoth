@@ -5,7 +5,7 @@ The Thoth Discovery System is a comprehensive article discovery and scraping fra
 ## Features
 
 ### 🔍 **Multi-Source Discovery**
-- **API Sources**: ArXiv and PubMed integration with configurable search parameters
+- **API Sources**: ArXiv, PubMed, CrossRef, OpenAlex, and bioRxiv integration with configurable search parameters
 - **Web Scraping**: Flexible scraper that works with any website using CSS selectors
 - **Chrome Extension**: Point-and-click interface for configuring scrapers without coding
 
@@ -63,6 +63,88 @@ Create `arxiv_ml_config.json`:
     "days_of_week": [0, 1, 2, 3, 4]
   },
   "query_filters": ["machine_learning", "nlp_research"]
+}
+```
+
+#### CrossRef Source Example
+```bash
+# Create a CrossRef source for AI papers
+python -m thoth discovery create \
+  --name "crossref_ai" \
+  --type "api" \
+  --description "CrossRef AI papers" \
+  --config-file crossref_ai_config.json
+```
+
+Create `crossref_ai_config.json`:
+```json
+{
+  "api_config": {
+    "source": "crossref",
+    "keywords": ["artificial intelligence", "machine learning"],
+    "sort_by": "relevance",
+    "sort_order": "desc"
+  },
+  "schedule_config": {
+    "interval_minutes": 720,
+    "max_articles_per_run": 20,
+    "enabled": true
+  },
+  "query_filters": ["ai_research"]
+}
+```
+
+#### OpenAlex Source Example
+```bash
+# Create an OpenAlex source for AI papers
+python -m thoth discovery create \
+  --name "openalex_ai" \
+  --type "api" \
+  --description "OpenAlex AI papers" \
+  --config-file openalex_ai_config.json
+```
+
+Create `openalex_ai_config.json`:
+```json
+{
+  "api_config": {
+    "source": "openalex",
+    "keywords": ["artificial intelligence", "machine learning"],
+    "sort_by": "relevance"
+  },
+  "schedule_config": {
+    "interval_minutes": 720,
+    "max_articles_per_run": 20,
+    "enabled": true
+  },
+  "query_filters": ["ai_research"]
+}
+```
+
+#### bioRxiv Source Example
+```bash
+# Create a bioRxiv source for the past week
+python -m thoth discovery create \
+  --name "biorxiv_recent" \
+  --type "api" \
+  --description "Recent bioRxiv preprints" \
+  --config-file biorxiv_recent_config.json
+```
+
+Create `biorxiv_recent_config.json`:
+```json
+{
+  "api_config": {
+    "source": "biorxiv",
+    "start_date": "2024-01-01",
+    "end_date": "2024-01-07"
+  },
+  "schedule_config": {
+    "interval_minutes": 1440,
+    "max_articles_per_run": 50,
+    "enabled": true
+  },
+  "query_filters": []
 }
 ```
 
@@ -246,6 +328,45 @@ Define how to extract data from web pages using CSS selectors:
       "selector": "[data-doi]",
       "attribute": "data-doi"
     }
+  }
+}
+```
+
+### CrossRef Configuration Options
+
+```json
+{
+  "api_config": {
+    "source": "crossref",
+    "keywords": ["deep learning", "neural networks"],
+    "start_date": "2023-01-01",
+    "end_date": "2023-12-31",
+    "sort_by": "relevance",
+    "sort_order": "desc"
+  }
+}
+```
+
+### OpenAlex Configuration Options
+```json
+{
+  "api_config": {
+    "source": "openalex",
+    "keywords": ["deep learning"],
+    "start_date": "2023-01-01",
+    "end_date": "2023-12-31",
+    "sort_by": "relevance"
+  }
+}
+```
+
+### bioRxiv Configuration Options
+```json
+{
+  "api_config": {
+    "source": "biorxiv",
+    "start_date": "2024-01-01",
+    "end_date": "2024-01-07"
   }
 }
 ```
