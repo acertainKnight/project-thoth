@@ -137,7 +137,7 @@ class TestThothPipeline:
                 'errors': [],
             }
 
-            stats = pipeline.index_knowledge_base()
+            stats = pipeline.knowledge_pipeline.index_knowledge_base()
 
             assert stats['total_files'] == 2
             assert stats['markdown_files'] == 1
@@ -157,7 +157,7 @@ class TestThothPipeline:
                 }
             ]
 
-            results = pipeline.search_knowledge_base(query, k=5)
+            results = pipeline.knowledge_pipeline.search_knowledge_base(query, k=5)
 
             assert len(results) == 1
             assert results[0]['title'] == 'Test Document'
@@ -179,7 +179,7 @@ class TestThothPipeline:
                 ],
             }
 
-            response = pipeline.ask_knowledge_base(question)
+            response = pipeline.knowledge_pipeline.ask_knowledge_base(question)
 
             assert response['question'] == question
             assert 'Machine learning is' in response['answer']
