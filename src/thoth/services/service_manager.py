@@ -8,6 +8,7 @@ all services in a consistent way.
 from typing import Any
 
 from thoth.knowledge.graph import CitationGraph
+from thoth.services.api_gateway import ExternalAPIGateway
 from thoth.services.article_service import ArticleService
 from thoth.services.base import BaseService
 from thoth.services.citation_service import CitationService
@@ -74,6 +75,8 @@ class ServiceManager:
         self._services['web_search'] = WebSearchService(config=self.config)
 
         self._services['pdf_locator'] = PdfLocatorService(config=self.config)
+
+        self._services['api_gateway'] = ExternalAPIGateway(config=self.config)
 
         # Initialize services that need dependencies
         self._services['citation'] = CitationService(config=self.config)
@@ -151,6 +154,12 @@ class ServiceManager:
         """Get the PDF locator service."""
         self._ensure_initialized()
         return self._services['pdf_locator']
+
+    @property
+    def api_gateway(self) -> ExternalAPIGateway:
+        """Get the External API Gateway service."""
+        self._ensure_initialized()
+        return self._services['api_gateway']
 
     def get_service(self, name: str) -> BaseService:
         """

@@ -2,10 +2,11 @@
 Citation processor for extracting and analyzing citations from academic documents.
 """
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, TypedDict
 
-from jinja2 import Environment, FileSystemLoader, ChoiceLoader
+from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable, RunnableConfig
 from langgraph.graph import END, StateGraph
@@ -46,6 +47,7 @@ class CitationProcessorError(Exception):
 
 class CitationProcessor:
     """Processes citations from a document."""
+
     def __init__(self, llm, config, prompts_dir: Path | None = None):
         self.llm = llm
         self.config = config
@@ -65,10 +67,23 @@ class CitationProcessor:
             model_provider = config.llm_config.provider.lower()
 
         self.prompts_dir = prompts_dir / model_provider
+        # Default prompts packaged with Thoth
+        self.default_prompts_dir = (
+            Path(__file__).resolve().parents[3]
+            / 'templates'
+            / 'prompts'
+            / model_provider
+        )
 
         # Fall back to google templates if provider-specific templates don't exist
         if not self.prompts_dir.exists():
             self.prompts_dir = prompts_dir / 'google'
+
+        # Fall back to default google templates if provider templates don't exist
+        if not self.default_prompts_dir.exists():
+            self.default_prompts_dir = (
+                Path(__file__).resolve().parents[3] / 'templates' / 'prompts' / 'google'
+            )
 
         # Initialize Jinja environment with fallback to default prompts
         self.jinja_env = Environment(
@@ -178,10 +193,8 @@ class CitationProcessor:
         raw_citations = self._split_references_to_raw_citations(
             cleaned_references_section
         )
-        if self.citation_batch_size > 1:
-            citations = self._extract_structured_citations_batch(raw_citations)
-        else:  # defaults to single
-            citations = self._extract_structured_citations_single(raw_citations)
+        # Always use parallel single-citation processing for reliability
+        citations = self._extract_structured_citations_parallel(raw_citations)
 
         enhanced_citations = self._enhance_citations_with_external_services(
             citations + ([document_citation] if document_citation else [])
@@ -287,6 +300,91 @@ class CitationProcessor:
 
         logger.info(
             f'Successfully extracted {len(results)} out of {len(raw_citations)} citations.'
+        )
+        return results
+
+    def _extract_structured_citations_parallel(
+        self, raw_citations: list[str]
+    ) -> list[Citation]:
+        """
+        Extract structured citations using parallel processing.
+
+        This method combines the reliability of single-citation processing with
+        the performance benefits of parallelization. Each citation is processed
+        individually in parallel threads, avoiding batch processing issues.
+        """
+        if not raw_citations:
+            return []
+
+        logger.debug(
+            f'Extracting structured citations for {len(raw_citations)} raw strings in parallel.'
+        )
+
+        # Create a schema that excludes the 'is_document_citation' field
+        reference_schema = Citation.model_json_schema()
+        if 'is_document_citation' in reference_schema.get('properties', {}):
+            del reference_schema['properties']['is_document_citation']
+        if (
+            'required' in reference_schema
+            and 'is_document_citation' in reference_schema.get('required', [])
+        ):
+            reference_schema['required'].remove('is_document_citation')
+
+        def process_single_citation(raw_citation: str) -> Citation | None:
+            """Process a single raw citation string. Returns Citation or None."""
+            try:
+                # Invoke the chain for a single citation
+                result = self.single_citation_chain.invoke(
+                    {
+                        'raw_citation': raw_citation,
+                        'json_schema': reference_schema,
+                    }
+                )
+
+                # Ensure the result is a valid Citation object
+                if isinstance(result, Citation):
+                    # Explicitly set to False as a safeguard
+                    result.is_document_citation = False
+                    return result
+                else:
+                    logger.warning(
+                        f"LLM did not return a valid Citation object for: '{raw_citation}'"
+                    )
+                    return None
+            except Exception as e:
+                # This will catch Pydantic validation errors and other exceptions
+                logger.warning(
+                    f"Failed to parse structured citation for: '{raw_citation}'. Error: {e}"
+                )
+                return None
+
+        # Process citations in parallel with configurable concurrency
+        max_workers = getattr(self.config, 'performance_config', None)
+        if max_workers:
+            max_workers = max_workers.citation_extraction_workers
+        else:
+            max_workers = 4  # Fallback default
+
+        results = []
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_citation = {
+                executor.submit(process_single_citation, raw_citation): raw_citation
+                for raw_citation in raw_citations
+            }
+
+            for future in as_completed(future_to_citation):
+                try:
+                    result = future.result()
+                    if result is not None:
+                        results.append(result)
+                except Exception as e:
+                    raw_citation = future_to_citation[future]
+                    logger.error(
+                        f'Unexpected error processing citation "{raw_citation}": {e}'
+                    )
+
+        logger.info(
+            f'Successfully extracted {len(results)} out of {len(raw_citations)} citations using parallel processing.'
         )
         return results
 
@@ -488,32 +586,12 @@ class CitationProcessor:
         """Enhance citations with external services including PDF location."""
         logger.debug('Enhancing citations with external services')
 
-        # First enhance with existing enhancer
-        enhanced_citations = self.enhancer.enhance(citations)
+        # First enhance with parallel enhancer for better performance
+        enhanced_citations = self.enhancer.enhance_parallel(citations)
 
-        # Then try to locate PDFs
+        # Then try to locate PDFs in parallel
         logger.debug('Locating PDFs for citations')
-        pdf_found_count = 0
-
-        for citation in enhanced_citations:
-            if citation.doi or citation.arxiv_id:
-                try:
-                    location = self.pdf_locator.locate(
-                        doi=citation.doi, arxiv_id=citation.arxiv_id
-                    )
-
-                    if location:
-                        citation.pdf_url = location.url
-                        citation.pdf_source = location.source
-                        citation.is_open_access = location.is_oa
-                        pdf_found_count += 1
-                        logger.debug(
-                            f"Found PDF for '{citation.title[:50]}' from {location.source}"
-                        )
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to locate PDF for citation '{citation.title[:50]}': {e}"
-                    )
+        pdf_found_count = self._locate_pdfs_parallel(enhanced_citations)
 
         if pdf_found_count > 0:
             logger.info(
@@ -521,6 +599,61 @@ class CitationProcessor:
             )
 
         return enhanced_citations
+
+    def _locate_pdfs_parallel(self, citations: list[Citation]) -> int:
+        """Locate PDFs for citations in parallel."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        # Filter citations that need PDF location
+        citations_needing_pdfs = [
+            citation
+            for citation in citations
+            if (citation.doi or citation.arxiv_id) and not citation.pdf_url
+        ]
+
+        if not citations_needing_pdfs:
+            return 0
+
+        pdf_found_count = 0
+
+        def locate_single_pdf(citation: Citation) -> bool:
+            """Locate PDF for a single citation. Returns True if found."""
+            try:
+                location = self.pdf_locator.locate(
+                    doi=citation.doi, arxiv_id=citation.arxiv_id
+                )
+
+                if location:
+                    citation.pdf_url = location.url
+                    citation.pdf_source = location.source
+                    citation.is_open_access = location.is_oa
+                    logger.debug(
+                        f"Found PDF for '{citation.title[:50]}' from {location.source}"
+                    )
+                    return True
+            except Exception as e:
+                logger.warning(
+                    f"Failed to locate PDF for citation '{citation.title[:50]}': {e}"
+                )
+            return False
+
+        # Process PDF location in parallel with configurable concurrency
+        max_workers = getattr(self.config, 'performance_config', None)
+        if max_workers:
+            max_workers = max_workers.citation_pdf_workers
+        else:
+            max_workers = 5  # Fallback default
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_citation = {
+                executor.submit(locate_single_pdf, citation): citation
+                for citation in citations_needing_pdfs
+            }
+
+            for future in as_completed(future_to_citation):
+                if future.result():  # True if PDF was found
+                    pdf_found_count += 1
+
+        return pdf_found_count
 
     def _prepare_final_citations(self, state: CitationState) -> CitationState:
         """Prepare the final list of citations for return."""

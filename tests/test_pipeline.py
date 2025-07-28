@@ -119,13 +119,15 @@ class TestThothPipeline:
 
             assert 'OCR conversion failed' in str(exc_info.value)
 
-    def test_index_knowledge_base(self, pipeline, temp_workspace):
+    def test_index_knowledge_base(self, pipeline):
         """Test knowledge base indexing."""
         # Create some test files
-        md_file = temp_workspace / 'markdown' / 'test.md'
+        (pipeline.markdown_dir).mkdir(parents=True, exist_ok=True)
+        (pipeline.notes_dir).mkdir(parents=True, exist_ok=True)
+        md_file = pipeline.markdown_dir / 'test.md'
         md_file.write_text('Test markdown content')
 
-        note_file = temp_workspace / 'notes' / 'test_note.md'
+        note_file = pipeline.notes_dir / 'test_note.md'
         note_file.write_text('Test note content')
 
         with patch.object(pipeline.services.rag, 'index_knowledge_base') as mock_index:

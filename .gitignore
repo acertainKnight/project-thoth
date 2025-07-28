@@ -166,3 +166,8 @@ node_modules/
 
 # Data
 /knowledge/
+
+# Generated reports
+*_report.json
+*_results.json
+*_diagnostic.json

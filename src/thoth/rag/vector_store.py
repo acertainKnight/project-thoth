@@ -1,15 +1,15 @@
 """
 Vector store manager for Thoth RAG system.
 
-This module handles the storage and retrieval of document embeddings
-using ChromaDB as the vector database.
+This module provides a wrapper around ChromaDB for document storage and retrieval
+using vector embeddings for similarity search.
 """
 
+import os
 from pathlib import Path
 from typing import Any
 
 import chromadb
-from chromadb.config import Settings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from loguru import logger
@@ -19,12 +19,12 @@ from thoth.utilities.config import get_config
 
 class VectorStoreManager:
     """
-    Manages the vector store for document embeddings.
+    Manages vector storage and retrieval for the RAG system.
 
     This class provides functionality to:
     - Store document embeddings in ChromaDB
     - Perform similarity searches
-    - Manage collections and indices
+    - Manage persistent storage
     """
 
     def __init__(
@@ -37,25 +37,32 @@ class VectorStoreManager:
         Initialize the vector store manager.
 
         Args:
-            collection_name: Name of the ChromaDB collection (defaults to config).
-            persist_directory: Directory to persist the vector DB (defaults to config).
+            collection_name: Name of the collection (defaults to config).
+            persist_directory: Directory for persistent storage (defaults to config).
             embedding_function: Embedding function to use (required).
         """
         self.config = get_config()
 
-        # Set collection name and persist directory
+        # Set collection name
         self.collection_name = collection_name or self.config.rag_config.collection_name
-        self.persist_directory = Path(
-            persist_directory or self.config.rag_config.vector_db_path
-        )
 
-        # Create persist directory if it doesn't exist
+        # Set persist directory
+        if persist_directory:
+            self.persist_directory = Path(persist_directory)
+        else:
+            self.persist_directory = Path(self.config.rag_config.vector_db_path)
+
+        # Create directory if it doesn't exist
         self.persist_directory.mkdir(parents=True, exist_ok=True)
 
         # Store embedding function
         if embedding_function is None:
-            raise ValueError('Embedding function is required')
+            msg = 'Embedding function is required for VectorStoreManager'
+            raise ValueError(msg)
         self.embedding_function = embedding_function
+
+        # Configure safe environment for ChromaDB
+        self._configure_safe_environment()
 
         # Initialize ChromaDB client
         self._init_client()
@@ -67,17 +74,36 @@ class VectorStoreManager:
             f'VectorStoreManager initialized with collection: {self.collection_name}'
         )
 
+    def _configure_safe_environment(self) -> None:
+        """Configure environment variables to prevent segmentation faults."""
+        # Disable problematic multiprocessing features
+        os.environ['CHROMA_MAX_BATCH_SIZE'] = '100'
+        os.environ['CHROMA_SUBMIT_BATCH_SIZE'] = '100'
+
+        # Set SQLite to be safer
+        os.environ['SQLITE_ENABLE_PREUPDATE_HOOK'] = '0'
+        os.environ['SQLITE_ENABLE_FTS5'] = '0'
+
+        logger.debug('Configured safe environment variables for ChromaDB')
+
     def _init_client(self) -> None:
-        """Initialize the ChromaDB client."""
+        """Initialize the ChromaDB client with safe settings."""
         try:
+            # Use safer client settings to prevent segfaults
+            client_settings = chromadb.config.Settings(
+                persist_directory=str(self.persist_directory),
+                anonymized_telemetry=False,
+                is_persistent=True,
+                # Use safer SQLite settings
+                chroma_db_impl='duckdb+parquet',
+                chroma_collection_embedding_api_impl='chromadb.utils.embedding_functions.SentenceTransformerEmbeddingFunction',
+            )
+
             self.client = chromadb.PersistentClient(
                 path=str(self.persist_directory),
-                settings=Settings(
-                    anonymized_telemetry=False,
-                    allow_reset=True,
-                ),
+                settings=client_settings,
             )
-            logger.debug('ChromaDB client initialized')
+            logger.debug(f'ChromaDB client initialized at: {self.persist_directory}')
         except Exception as e:
             logger.error(f'Failed to initialize ChromaDB client: {e}')
             raise
@@ -86,10 +112,10 @@ class VectorStoreManager:
         """Initialize the vector store."""
         try:
             self.vector_store = Chroma(
-                client=self.client,
                 collection_name=self.collection_name,
                 embedding_function=self.embedding_function,
                 persist_directory=str(self.persist_directory),
+                client=self.client,
             )
             logger.debug(
                 f'Vector store initialized for collection: {self.collection_name}'
@@ -104,7 +130,7 @@ class VectorStoreManager:
         ids: list[str] | None = None,
     ) -> list[str]:
         """
-        Add documents to the vector store.
+        Add documents to the vector store with safe batch processing.
 
         Args:
             documents: List of LangChain Document objects to add.
@@ -116,14 +142,38 @@ class VectorStoreManager:
         try:
             logger.info(f'Adding {len(documents)} documents to vector store')
 
-            # Add documents with progress tracking
-            doc_ids = self.vector_store.add_documents(
-                documents=documents,
-                ids=ids,
-            )
+            # Process documents in smaller batches to prevent segfaults
+            batch_size = 50  # Smaller batch size to prevent memory issues
+            all_doc_ids = []
 
-            logger.info(f'Successfully added {len(doc_ids)} documents')
-            return doc_ids
+            for i in range(0, len(documents), batch_size):
+                batch_docs = documents[i : i + batch_size]
+                batch_ids = ids[i : i + batch_size] if ids else None
+
+                logger.debug(
+                    f'Processing batch {i // batch_size + 1} with {len(batch_docs)} documents'
+                )
+
+                try:
+                    # Add documents with progress tracking
+                    doc_ids = self.vector_store.add_documents(
+                        documents=batch_docs,
+                        ids=batch_ids,
+                    )
+                    all_doc_ids.extend(doc_ids)
+
+                    # Force a small delay to prevent overwhelming the system
+                    import time
+
+                    time.sleep(0.1)
+
+                except Exception as batch_e:
+                    logger.error(f'Error in batch {i // batch_size + 1}: {batch_e}')
+                    # Continue with next batch rather than failing completely
+                    continue
+
+            logger.info(f'Successfully added {len(all_doc_ids)} documents')
+            return all_doc_ids
 
         except Exception as e:
             logger.error(f'Error adding documents to vector store: {e}')

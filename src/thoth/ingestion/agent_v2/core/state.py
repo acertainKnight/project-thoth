@@ -25,6 +25,11 @@ class ResearchAgentState(BaseModel):
         default_factory=list, description='Conversation history as LangChain messages'
     )
 
+    # Required by LangGraph's create_react_agent for step limiting
+    remaining_steps: int = Field(
+        default=25, description='Number of remaining steps the agent can take'
+    )
+
     # Current context and metadata
     current_task: str | None = Field(
         default=None, description='Description of the current task being performed'

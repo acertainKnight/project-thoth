@@ -4,6 +4,8 @@ Smoke tests for Thoth.
 Basic tests to verify the system can be imported and initialized.
 """
 
+from thoth.utilities.config import ThothConfig
+
 
 def test_imports():
     """Test that all major modules can be imported."""
@@ -21,21 +23,18 @@ def test_imports():
     assert True
 
 
-def test_config_loading():
+def test_config_loading(thoth_config: ThothConfig):
     """Test that configuration can be loaded."""
-    from thoth.utilities.config import get_config
-
     # Should not raise an exception
-    config = get_config()
-    assert config is not None
+    assert thoth_config is not None
 
 
-def test_service_manager_initialization():
+def test_service_manager_initialization(thoth_config: ThothConfig):
     """Test that ServiceManager can be initialized with test config."""
     from thoth.services.service_manager import ServiceManager
 
     # Initialize with default configuration
-    manager = ServiceManager()
+    manager = ServiceManager(config=thoth_config)
     manager.initialize()
 
     # Verify services are available

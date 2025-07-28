@@ -5,14 +5,14 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any, Protocol, TypeVar, runtime_checkable
 
-T = TypeVar("T")
+T = TypeVar('T')
 
 
 @runtime_checkable
 class UnifiedLLMClient(Protocol):
     """Protocol for unified LLM client interface."""
 
-    def invoke(self, prompt: str, **kwargs: Any) -> str:
+    def invoke_text(self, input, config=None, **kwargs: Any) -> str:
         """Invoke the model with a prompt and return the response text."""
         ...
 
@@ -20,6 +20,6 @@ class UnifiedLLMClient(Protocol):
         """Invoke the model and parse the response as the given schema."""
         ...
 
-    def stream(self, prompt: str, **kwargs: Any) -> Iterator[str]:
+    def stream_text(self, input, config=None, **kwargs: Any) -> Iterator[str]:
         """Stream the response text from the model."""
         ...

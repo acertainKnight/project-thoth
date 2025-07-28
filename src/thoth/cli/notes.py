@@ -96,7 +96,6 @@ def run_consolidate_tags(args, pipeline: ThothPipeline):
         logger.info(f'  - Tags added: {stats["tags_added"]}')
         logger.info(f'  - Original tag count: {stats["original_tag_count"]}')
         logger.info(f'  - Final tag count: {stats["final_tag_count"]}')
-        logger.info(f'  - Total vocabulary size: {stats["total_vocabulary_size"]}')
         return 0
     except Exception as e:
         logger.error(f'Error during tag consolidation and re-tagging: {e}')

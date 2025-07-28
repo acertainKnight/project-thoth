@@ -2,6 +2,45 @@
 
 This document provides comprehensive documentation for all API endpoints available in the Thoth Research Assistant FastAPI server.
 
+## 🔗 **External API Gateway Service**
+
+The `ExternalAPIGateway` service provides a centralized interface for making external API calls with built-in rate limiting, caching, and retry logic.
+
+### **Features**
+- **Rate Limiting**: Configurable requests per second throttling
+- **Response Caching**: Time-based caching with SHA256 cache keys
+- **Retry Logic**: Exponential backoff for failed requests (0s, 1s, 3s delays)
+- **Service Endpoints**: Configurable mapping of service names to base URLs
+- **Error Handling**: Comprehensive error handling with service-specific exceptions
+
+### **Configuration**
+Configure the API gateway through environment variables with `API_GATEWAY_` prefix:
+
+```bash
+API_GATEWAY_RATE_LIMIT=5.0              # Requests per second
+API_GATEWAY_CACHE_EXPIRY=3600           # Cache expiry in seconds
+API_GATEWAY_DEFAULT_TIMEOUT=15          # Request timeout in seconds
+API_GATEWAY_ENDPOINTS='{"service1": "https://api.example.com", "service2": "https://api2.example.com"}'
+```
+
+### **Usage Example**
+```python
+from thoth.services import ExternalAPIGateway
+
+# Initialize gateway
+gateway = ExternalAPIGateway(config=config)
+gateway.initialize()
+
+# Make GET request
+response = gateway.get("service1", path="/users", params={"limit": 10})
+
+# Make POST request
+response = gateway.post("service1", path="/data", data={"key": "value"})
+
+# Clear cache
+gateway.clear_cache()
+```
+
 ## 🎯 **Base URL and Authentication**
 
 ### **Base URL**

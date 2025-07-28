@@ -21,9 +21,11 @@ class SemanticScholarAPI:
         api_key: str | None = None,
         timeout: int = 10,
         delay_seconds: float = 1.0,
-        max_retries: int = 9,
+        max_retries: int = 3,  # Reduced from 9 to 3 for faster failures
         batch_size: int = 100,
         enable_caching: bool = True,
+        max_backoff_seconds: float = 30.0,  # Cap backoff at 30 seconds
+        backoff_multiplier: float = 1.5,  # Gentler than 2.0
     ):
         """
         Initialize Semantic Scholar API client.
@@ -36,6 +38,8 @@ class SemanticScholarAPI:
             max_retries: Maximum number of retry attempts for failed requests.
             batch_size: Number of citations to process in each batch.
             enable_caching: Whether to enable caching of API responses.
+            max_backoff_seconds: Maximum backoff time to prevent excessive delays.
+            backoff_multiplier: Multiplier for exponential backoff (gentler than 2.0).
         """  # noqa: W505
         self.base_url = base_url
         self.api_key = api_key
@@ -44,12 +48,17 @@ class SemanticScholarAPI:
         self.max_retries = max_retries
         self.batch_size = batch_size
         self.enable_caching = enable_caching
+        self.max_backoff_seconds = max_backoff_seconds
+        self.backoff_multiplier = backoff_multiplier
         self._doi_cache: dict[str, Any] = {}
         self._arxiv_cache: dict[str, Any] = {}
         self._cache_size = 1000  # Maximum number of items to cache
 
         self.client = httpx.Client(timeout=timeout)
         self.last_request_time = 0
+        self._consecutive_failures = (
+            0  # Track consecutive failures for circuit breaking
+        )
 
         if not api_key:
             logger.warning(
@@ -78,6 +87,15 @@ class SemanticScholarAPI:
         Raises:
             httpx.HTTPError: If the request fails after retries.
         """
+        # Simple circuit breaker: if we've had too many consecutive failures,
+        # temporarily avoid making requests
+        if self._consecutive_failures >= 10:
+            logger.warning(
+                f'Circuit breaker: {self._consecutive_failures} consecutive failures. '
+                'Skipping Semantic Scholar request to avoid further delays.'
+            )
+            return None
+
         # Implement rate limiting with adaptive delay based on API key status
         current_time = time.time()
         time_since_last_request = current_time - self.last_request_time
@@ -121,6 +139,8 @@ class SemanticScholarAPI:
 
                 self.last_request_time = time.time()
                 response.raise_for_status()
+                # Reset failure counter on success
+                self._consecutive_failures = 0
                 return response.json()
             except httpx.HTTPStatusError as e:
                 logger.warning(
@@ -133,32 +153,43 @@ class SemanticScholarAPI:
                         retry_after_str = e.response.headers.get('Retry-After')
                         if retry_after_str:
                             try:
-                                sleep_duration = int(retry_after_str)
+                                sleep_duration = min(
+                                    int(retry_after_str), self.max_backoff_seconds
+                                )
                                 logger.info(
                                     f'Rate limit hit (429). Retrying after {sleep_duration} seconds (from Retry-After header).'
                                 )
                             except ValueError:
-                                # Default to exponential backoff if Retry-After is not an int  # noqa: W505
-                                sleep_duration = effective_delay * (2**attempt)
+                                # Use optimized exponential backoff
+                                sleep_duration = min(
+                                    effective_delay
+                                    * (self.backoff_multiplier**attempt),
+                                    self.max_backoff_seconds,
+                                )
                                 logger.info(
-                                    f'Rate limit hit (429). Retrying after {sleep_duration:.2f} seconds (exponential backoff).'
+                                    f'Rate limit hit (429). Retrying after {sleep_duration:.2f} seconds (capped backoff).'
                                 )
                         else:
-                            sleep_duration = effective_delay * (
-                                2**attempt
-                            )  # Exponential backoff
+                            # Use optimized exponential backoff with cap
+                            sleep_duration = min(
+                                effective_delay * (self.backoff_multiplier**attempt),
+                                self.max_backoff_seconds,
+                            )
                             logger.info(
-                                f'Rate limit hit (429). Retrying after {sleep_duration:.2f} seconds (exponential backoff).'
+                                f'Rate limit hit (429). Retrying after {sleep_duration:.2f} seconds (capped backoff).'
                             )
                         time.sleep(sleep_duration)
+                        self._consecutive_failures += 1
                     elif e.response.status_code >= 500:  # Server-side errors
-                        sleep_duration = effective_delay * (
-                            2**attempt
-                        )  # Exponential backoff
+                        sleep_duration = min(
+                            effective_delay * (self.backoff_multiplier**attempt),
+                            self.max_backoff_seconds,
+                        )
                         logger.warning(
                             f'Server error ({e.response.status_code}). Retrying after {sleep_duration:.2f} seconds.'
                         )
                         time.sleep(sleep_duration)
+                        self._consecutive_failures += 1
                     else:  # Other client-side errors that might not be worth retrying or need different strategy
                         raise  # Re-raise immediately for other client errors
                 else:
@@ -171,11 +202,13 @@ class SemanticScholarAPI:
                     f'Semantic Scholar API request failed due to network/request error (Attempt {attempt + 1}/{self.max_retries + 1}): {e}'
                 )
                 if attempt < self.max_retries:
-                    sleep_duration = effective_delay * (
-                        2**attempt
-                    )  # Exponential backoff
+                    sleep_duration = min(
+                        effective_delay * (self.backoff_multiplier**attempt),
+                        self.max_backoff_seconds,
+                    )
                     logger.info(f'Retrying after {sleep_duration:.2f} seconds.')
                     time.sleep(sleep_duration)
+                    self._consecutive_failures += 1
                 else:
                     logger.error(
                         f'Failed to make Semantic Scholar API request after {self.max_retries + 1} attempts due to network/request error: {e}'
@@ -187,12 +220,16 @@ class SemanticScholarAPI:
                 )
                 if attempt == self.max_retries:  # if it's the last attempt
                     raise  # Re-raise the caught exception
-                # For unexpected errors, a simple delay might be enough before retry
-                sleep_duration = effective_delay * (2**attempt)
+                # For unexpected errors, use capped backoff
+                sleep_duration = min(
+                    effective_delay * (self.backoff_multiplier**attempt),
+                    self.max_backoff_seconds,
+                )
                 logger.info(
                     f'Retrying after {sleep_duration:.2f} seconds due to unexpected error.'
                 )
                 time.sleep(sleep_duration)
+                self._consecutive_failures += 1
         return None  # Should be unreachable if max_retries is handled correctly
 
     def _cached_paper_lookup_by_doi(

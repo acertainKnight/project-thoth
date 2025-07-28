@@ -14,10 +14,15 @@ from typing import Any
 
 import requests
 
-from thoth.discovery.api_sources import PubMedAPISource
+from thoth.discovery.api_sources import (
+    BioRxivAPISource,
+    CrossRefAPISource,
+    OpenAlexAPISource,
+    PubMedAPISource,
+)
+from thoth.discovery.emulator_scraper import EmulatorScraper
 from thoth.discovery.plugins import ArxivPlugin, plugin_registry
 from thoth.discovery.plugins.base import DiscoveryPluginRegistry
-from thoth.discovery.emulator_scraper import EmulatorScraper
 from thoth.discovery.web_scraper import WebScraper
 from thoth.services.article_service import ArticleService
 from thoth.services.base import BaseService, ServiceError
@@ -25,8 +30,8 @@ from thoth.services.pdf_locator_service import PdfLocatorService
 from thoth.utilities.schemas import (
     DiscoveryResult,
     DiscoverySource,
-    ScheduleConfig,
     ResearchQuery,
+    ScheduleConfig,
     ScrapedArticleMetadata,
 )
 

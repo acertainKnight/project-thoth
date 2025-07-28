@@ -7,7 +7,7 @@ This module handles the analysis of content using LLM.
 from pathlib import Path
 from typing import Any, Literal
 
-from jinja2 import Environment, FileSystemLoader, ChoiceLoader
+from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from langchain.schema import Document
 from langchain.text_splitter import MarkdownTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
@@ -133,7 +133,8 @@ class LLMProcessor:
         # Build analysis chains (simple prompt | llm structure)
         self.direct_chain = self.direct_prompt | self.structured_llm
         self.map_chain = self.map_prompt | self.structured_llm
-        # Note: Reduce and Refine need specific inputs, handled within graph nodes
+        self.reduce_chain = self.reduce_prompt | self.structured_llm
+        self.refine_chain = self.refine_prompt | self.structured_llm
 
         # Build the LangGraph workflow
         self.app = self._build_graph()
@@ -272,13 +273,11 @@ class LLMProcessor:
         # Reduce phase
         logger.info('Reduce phase: Combining chunk analyses...')
         # Pass the list of AnalysisResponse models directly
-        final_result = self.structured_llm.invoke(
-            self.reduce_prompt.invoke(
-                {
-                    'section_analyses': chunk_results,
-                    'analysis_schema': AnalysisResponse.model_json_schema(),
-                }
-            )
+        final_result = self.reduce_chain.invoke(
+            {
+                'section_analyses': chunk_results,
+                'analysis_schema': AnalysisResponse.model_json_schema(),
+            }
         )
         logger.debug(f'Reduce phase result: {final_result}')
         state['final_analysis'] = final_result
@@ -323,14 +322,12 @@ class LLMProcessor:
 
                 logger.debug(f'Refining with chunk {i + 1}...')
                 # Pass the existing AnalysisResponse and the new content
-                refined_analysis = self.structured_llm.invoke(
-                    self.refine_prompt.invoke(
-                        {
-                            'existing_analysis': current_analysis.model_dump(),  # Pass as dict
-                            'new_section': chunk.page_content,
-                            'analysis_schema': AnalysisResponse.model_json_schema(),
-                        }
-                    )
+                refined_analysis = self.refine_chain.invoke(
+                    {
+                        'existing_analysis': current_analysis.model_dump(),  # Pass as dict
+                        'new_section': chunk.page_content,
+                        'analysis_schema': AnalysisResponse.model_json_schema(),
+                    }
                 )
                 current_analysis = refined_analysis  # Update for next iteration
                 logger.debug(
