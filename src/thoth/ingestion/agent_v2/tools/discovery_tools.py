@@ -8,8 +8,10 @@ that automatically find and filter research articles.
 from pydantic import BaseModel, Field
 
 from thoth.ingestion.agent_v2.tools.base_tool import BaseThothTool
+from thoth.ingestion.agent_v2.tools.decorators import tool
 
 
+@tool
 class ListDiscoverySourcesTool(BaseThothTool):
     """List all configured discovery sources."""
 
@@ -58,6 +60,7 @@ class CreateDiscoverySourceInput(BaseModel):
     schedule_hours: int = Field(default=24, description='Run interval in hours')
 
 
+@tool
 class CreateArxivSourceTool(BaseThothTool):
     """Create an ArXiv discovery source."""
 
@@ -127,6 +130,7 @@ class CreatePubmedSourceInput(BaseModel):
     schedule_hours: int = Field(default=48, description='Run interval in hours')
 
 
+@tool
 class CreatePubmedSourceTool(BaseThothTool):
     """Create a PubMed discovery source."""
 
@@ -385,6 +389,7 @@ class RunDiscoveryInput(BaseModel):
     )
 
 
+@tool
 class RunDiscoveryTool(BaseThothTool):
     """Run article discovery."""
 
@@ -446,6 +451,7 @@ class DeleteSourceInput(BaseModel):
     source_name: str = Field(description='Name of the source to delete')
 
 
+@tool
 class DeleteDiscoverySourceTool(BaseThothTool):
     """Delete a discovery source."""
 
