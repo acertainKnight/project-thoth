@@ -1,7 +1,3 @@
-from typing import List
-
-import pytest
-
 from thoth.discovery.plugins.base import (
     BaseDiscoveryPlugin,
     DiscoveryPluginRegistry,
@@ -11,8 +7,8 @@ from thoth.utilities.schemas import ResearchQuery, ScrapedArticleMetadata
 
 class MockPlugin(BaseDiscoveryPlugin):
     def discover(
-        self, query: ResearchQuery, max_results: int
-    ) -> List[ScrapedArticleMetadata]:
+        self, _query: ResearchQuery, _max_results: int
+    ) -> list[ScrapedArticleMetadata]:
         return [
             ScrapedArticleMetadata(
                 title='Test Article',
@@ -46,6 +42,6 @@ def test_base_plugin_functionality():
         keywords=['k'],
     )
 
-    results = plugin.discover(query, max_results=1)
+    results = plugin.discover(query, _max_results=1)
     assert len(results) == 1
     assert results[0].source == 'MockPlugin'

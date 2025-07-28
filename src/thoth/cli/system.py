@@ -8,14 +8,46 @@ from thoth.server.api_server import start_server as start_obsidian_server
 from thoth.server.pdf_monitor import PDFMonitor
 from thoth.utilities.config import get_config
 
+# Optional optimized pipeline import
+try:
+    from thoth.pipelines.optimized_document_pipeline import OptimizedDocumentPipeline
+    from thoth.services.service_manager import ServiceManager
+
+    OPTIMIZED_PIPELINE_AVAILABLE = True
+except ImportError:
+    OPTIMIZED_PIPELINE_AVAILABLE = False
+
 
 def run_monitor(args, pipeline: ThothPipeline):
     """
-    Run the PDF monitor.
+    Run the PDF monitor with optional performance optimizations.
     """
     config = get_config()
     watch_dir = Path(args.watch_dir) if args.watch_dir else config.pdf_dir
     watch_dir.mkdir(parents=True, exist_ok=True)
+
+    # Use optimized pipeline if available and requested
+    monitor_pipeline = pipeline
+    if args.optimized and OPTIMIZED_PIPELINE_AVAILABLE:
+        logger.info('Initializing optimized pipeline for monitor')
+        service_manager = ServiceManager(config)
+        service_manager.initialize()
+
+        monitor_pipeline = OptimizedDocumentPipeline(
+            services=service_manager,
+            citation_tracker=pipeline.citation_tracker,
+            pdf_tracker=pipeline.pdf_tracker,
+            output_dir=config.output_dir,
+            notes_dir=config.notes_dir,
+            markdown_dir=config.markdown_dir,
+        )
+        logger.info('✅ Monitor using optimized processing pipeline')
+    elif args.optimized and not OPTIMIZED_PIPELINE_AVAILABLE:
+        logger.warning(
+            'Optimized pipeline requested but not available, using standard pipeline'
+        )
+    else:
+        logger.info('Monitor using standard processing pipeline')
 
     if args.api_server or config.api_server_config.auto_start:
         api_host = args.api_host or config.api_server_config.host
@@ -39,7 +71,7 @@ def run_monitor(args, pipeline: ThothPipeline):
 
     monitor = PDFMonitor(
         watch_dir=watch_dir,
-        pipeline=pipeline,
+        pipeline=monitor_pipeline,  # Use the selected pipeline (optimized or standard)
         polling_interval=args.polling_interval,
         recursive=args.recursive,
     )
@@ -191,6 +223,11 @@ def configure_subparser(subparsers):
     monitor_parser.add_argument('--api-port', type=int, help='Port for the API server.')
     monitor_parser.add_argument(
         '--api-base-url', type=str, help='Base URL for the API server.'
+    )
+    monitor_parser.add_argument(
+        '--optimized',
+        action='store_true',
+        help='Use optimized processing pipeline for better performance',
     )
     monitor_parser.set_defaults(func=run_monitor)
 

@@ -72,6 +72,8 @@ dependencies = [
     "pytest[dev]>=8.3.5",
     "instructor>=1.8.3",
     "pytest-cov>=6.1.1",
+    "aiofiles>=24.1.0",
+    "psutil>=7.0.0",
 ]
 
 [project.optional-dependencies]
