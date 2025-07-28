@@ -17,45 +17,15 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition, create_react_agent
 from loguru import logger
+from importlib import import_module
+from pkgutil import iter_modules
+
+from thoth.ingestion.agent_v2.tools import __path__ as _tools_path
+from thoth.ingestion.agent_v2.tools.decorators import get_registered_tools
 
 from thoth.ingestion.agent_v2.core.state import ResearchAgentState
 from thoth.ingestion.agent_v2.core.token_tracker import TokenUsageTracker
-from thoth.ingestion.agent_v2.tools.analysis_tools import (
-    AnalyzeTopicTool,
-    EvaluateArticleTool,
-    FindRelatedTool,
-)
 from thoth.ingestion.agent_v2.tools.base_tool import ToolRegistry
-from thoth.ingestion.agent_v2.tools.discovery_tools import (
-    CreateArxivSourceTool,
-    CreatePubmedSourceTool,
-    CreateCrossrefSourceTool,
-    CreateOpenalexSourceTool,
-    CreateBiorxivSourceTool,
-    DeleteDiscoverySourceTool,
-    ListDiscoverySourcesTool,
-    RunDiscoveryTool,
-)
-from thoth.ingestion.agent_v2.tools.pdf_tools import (
-    LocatePdfsForQueryTool,
-    LocatePdfTool,
-    ValidatePdfSourceTool,
-)
-from thoth.ingestion.agent_v2.tools.query_tools import (
-    CreateQueryTool,
-    DeleteQueryTool,
-    EditQueryTool,
-    GetQueryTool,
-    ListQueriesTool,
-)
-from thoth.ingestion.agent_v2.tools.rag_tools import (
-    AskQuestionTool,
-    ExplainConnectionsTool,
-    GetRAGStatsTool,
-    IndexKnowledgeBaseTool,
-    SearchKnowledgeTool,
-)
-from thoth.ingestion.agent_v2.tools.web_tools import WebSearchTool
 from thoth.services.service_manager import ServiceManager
 
 
@@ -109,43 +79,14 @@ class ResearchAssistant:
         logger.info(f'Research Assistant initialized with {len(self.tools)} tools')
 
     def _register_tools(self) -> None:
-        """Register all available tools with the registry."""
-        # Query management tools
-        self.tool_registry.register('list_queries', ListQueriesTool)
-        self.tool_registry.register('create_query', CreateQueryTool)
-        self.tool_registry.register('get_query', GetQueryTool)
-        self.tool_registry.register('edit_query', EditQueryTool)
-        self.tool_registry.register('delete_query', DeleteQueryTool)
+        """Register all available tools discovered via decorators."""
+        # Import all tool modules to trigger decorator registration
+        for module in iter_modules(_tools_path):
+            import_module(f'thoth.ingestion.agent_v2.tools.{module.name}')
 
-        # Discovery tools
-        self.tool_registry.register('list_discovery_sources', ListDiscoverySourcesTool)
-        self.tool_registry.register('create_arxiv_source', CreateArxivSourceTool)
-        self.tool_registry.register('create_pubmed_source', CreatePubmedSourceTool)
-        self.tool_registry.register('create_crossref_source', CreateCrossrefSourceTool)
-        self.tool_registry.register('create_openalex_source', CreateOpenalexSourceTool)
-        self.tool_registry.register('create_biorxiv_source', CreateBiorxivSourceTool)
-        self.tool_registry.register('run_discovery', RunDiscoveryTool)
-        self.tool_registry.register(
-            'delete_discovery_source', DeleteDiscoverySourceTool
-        )
-
-        # RAG tools
-        self.tool_registry.register('search_knowledge', SearchKnowledgeTool)
-        self.tool_registry.register('ask_knowledge', AskQuestionTool)
-        self.tool_registry.register('index_knowledge', IndexKnowledgeBaseTool)
-        self.tool_registry.register('explain_connections', ExplainConnectionsTool)
-        self.tool_registry.register('rag_stats', GetRAGStatsTool)
-        self.tool_registry.register('web_search', WebSearchTool)
-
-        # Analysis tools
-        self.tool_registry.register('evaluate_article', EvaluateArticleTool)
-        self.tool_registry.register('analyze_topic', AnalyzeTopicTool)
-        self.tool_registry.register('find_related', FindRelatedTool)
-
-        # PDF tools
-        self.tool_registry.register('locate_pdf', LocatePdfTool)
-        self.tool_registry.register('validate_pdf_source', ValidatePdfSourceTool)
-        self.tool_registry.register('locate_pdfs_for_query', LocatePdfsForQueryTool)
+        # Register each discovered tool class
+        for name, cls in get_registered_tools().items():
+            self.tool_registry.register(name, cls)
 
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt for the agent."""
@@ -408,6 +349,11 @@ Remember: You have direct access to tools - use them immediately rather than jus
             }
             for tool in self.tools
         ]
+
+    def list_tools(self) -> list[str]:
+        """Return the names of all available tools."""
+
+        return self.tool_registry.get_tool_names()
 
     def reset_memory(self, session_id: str | None = None) -> None:
         """
