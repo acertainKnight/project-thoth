@@ -23,6 +23,15 @@ from thoth.services.tag_service import TagService
 from thoth.services.web_search_service import WebSearchService
 from thoth.utilities.config import ThothConfig, get_config
 
+# Optional optimized services
+try:
+    from thoth.services.async_processing_service import AsyncProcessingService
+    from thoth.services.cache_service import CacheService
+
+    OPTIMIZED_SERVICES_AVAILABLE = True
+except ImportError:
+    OPTIMIZED_SERVICES_AVAILABLE = False
+
 
 class ServiceManager:
     """
@@ -86,6 +95,15 @@ class ServiceManager:
             llm_service=self._services['llm'],
             citation_tracker=None,  # Will be set by pipeline
         )
+
+        # Initialize optimized services if available
+        if OPTIMIZED_SERVICES_AVAILABLE:
+            self._services['cache'] = CacheService(config=self.config)
+            self._services['cache'].initialize()
+
+            self._services['async_processing'] = AsyncProcessingService(
+                config=self.config, llm_service=self._services['llm']
+            )
 
         self._initialized = True
 
@@ -160,6 +178,26 @@ class ServiceManager:
         """Get the External API Gateway service."""
         self._ensure_initialized()
         return self._services['api_gateway']
+
+    @property
+    def cache(self) -> 'CacheService':
+        """Get the cache service (if available)."""
+        self._ensure_initialized()
+        if 'cache' not in self._services:
+            raise RuntimeError(
+                'Cache service not available - optimized services not installed'
+            )
+        return self._services['cache']
+
+    @property
+    def async_processing(self) -> 'AsyncProcessingService':
+        """Get the async processing service (if available)."""
+        self._ensure_initialized()
+        if 'async_processing' not in self._services:
+            raise RuntimeError(
+                'Async processing service not available - optimized services not installed'
+            )
+        return self._services['async_processing']
 
     def get_service(self, name: str) -> BaseService:
         """

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -11,7 +12,39 @@ from .base import BasePipeline
 
 
 class DocumentPipeline(BasePipeline):
-    """Pipeline for processing individual documents."""
+    """
+    Pipeline for processing individual documents.
+
+    This pipeline has been enhanced with:
+    - Dynamic worker scaling based on CPU cores
+    - Improved error handling and fallbacks
+    - Better resource utilization
+    """
+
+    def _get_optimal_worker_count(self) -> int:
+        """Calculate optimal worker count based on CPU cores and configuration."""
+        try:
+            performance_config = getattr(
+                self.services.config, 'performance_config', None
+            )
+
+            if performance_config and hasattr(
+                performance_config, 'content_analysis_workers'
+            ):
+                configured_workers = performance_config.content_analysis_workers
+                if isinstance(configured_workers, int) and configured_workers > 0:
+                    return configured_workers
+
+            # Auto-scale based on available CPU cores
+            cpu_count = os.cpu_count() or 4
+            available_cores = max(1, cpu_count - 1)  # Reserve 1 core for system
+
+            # For content analysis, limit to avoid memory pressure
+            return min(available_cores, 4)
+
+        except (AttributeError, TypeError):
+            # Fallback to conservative default
+            return 2
 
     def process_pdf(self, pdf_path: str | Path) -> tuple[Path, Path, Path]:
         """Process a PDF through OCR, analysis, citation extraction and note
@@ -35,22 +68,13 @@ class DocumentPipeline(BasePipeline):
         markdown_path, no_images_markdown = self._ocr_convert(pdf_path)
         self.logger.info(f'OCR conversion completed: {markdown_path}')
 
-        # Run content analysis and citation extraction in parallel
-        self.logger.info('Starting parallel content analysis and citation extraction')
-        max_workers = 2  # Default value
-        try:
-            performance_config = getattr(
-                self.services.config, 'performance_config', None
-            )
-            if performance_config and hasattr(
-                performance_config, 'content_analysis_workers'
-            ):
-                workers = performance_config.content_analysis_workers
-                if isinstance(workers, int) and workers > 0:
-                    max_workers = workers
-        except (AttributeError, TypeError):
-            # Handle cases where config is mocked or misconfigured
-            pass
+        # Run content analysis and citation extraction in parallel with optimized
+        # workers
+        self.logger.info(
+            'Starting optimized parallel content analysis and citation extraction'
+        )
+        max_workers = self._get_optimal_worker_count()
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit both tasks to run in parallel
             analysis_future = executor.submit(self._analyze_content, no_images_markdown)

@@ -25,7 +25,7 @@ _configure_safe_environment()
 
 from thoth.pipeline import ThothPipeline  # noqa: E402
 
-from . import agent, discovery, notes, pdf, rag, system  # noqa: E402
+from . import agent, discovery, notes, pdf, performance, rag, system  # noqa: E402
 
 
 def main():
@@ -42,6 +42,7 @@ def main():
     discovery.configure_subparser(subparsers)
     notes.configure_subparser(subparsers)
     pdf.configure_subparser(subparsers)
+    performance.configure_subparser(subparsers)
     rag.configure_subparser(subparsers)
     system.configure_subparser(subparsers)
 

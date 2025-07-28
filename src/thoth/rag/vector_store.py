@@ -96,7 +96,6 @@ class VectorStoreManager:
                 is_persistent=True,
                 # Use safer SQLite settings
                 chroma_db_impl='duckdb+parquet',
-                chroma_collection_embedding_api_impl='chromadb.utils.embedding_functions.SentenceTransformerEmbeddingFunction',
             )
 
             self.client = chromadb.PersistentClient(

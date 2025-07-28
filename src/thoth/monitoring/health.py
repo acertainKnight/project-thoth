@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-"""Simple health monitoring utilities."""
-
-from typing import Any, Dict
+from typing import Any
 
 from thoth.services.service_manager import ServiceManager
+
+"""Simple health monitoring utilities."""
 
 
 class HealthMonitor:
@@ -13,9 +13,9 @@ class HealthMonitor:
     def __init__(self, service_manager: ServiceManager) -> None:
         self.service_manager = service_manager
 
-    def check_services(self) -> Dict[str, Dict[str, Any]]:
+    def check_services(self) -> dict[str, dict[str, Any]]:
         """Run ``health_check`` on all managed services."""
-        statuses: Dict[str, Dict[str, Any]] = {}
+        statuses: dict[str, dict[str, Any]] = {}
         for name, service in self.service_manager.get_all_services().items():
             try:
                 statuses[name] = service.health_check()
@@ -27,7 +27,7 @@ class HealthMonitor:
                 }
         return statuses
 
-    def overall_status(self) -> Dict[str, Any]:
+    def overall_status(self) -> dict[str, Any]:
         """Return aggregated health information."""
         services = self.check_services()
         healthy = all(info.get('status') == 'healthy' for info in services.values())

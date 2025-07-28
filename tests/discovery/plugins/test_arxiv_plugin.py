@@ -1,10 +1,8 @@
 from unittest.mock import patch
 
-import pytest
-
 from thoth.discovery.plugins.arxiv_plugin import ArxivPlugin
 from thoth.discovery.plugins.base import DiscoveryPluginRegistry
-from thoth.utilities.schemas import ResearchQuery, ScrapedArticleMetadata
+from thoth.utilities.schemas import ResearchQuery
 from thoth.utilities.schemas.citations import ArxivPaper
 
 
@@ -33,8 +31,8 @@ def make_paper():
 def test_arxiv_plugin_discover():
     query = sample_query()
     paper = make_paper()
-    with patch('thoth.discovery.plugins.arxiv_plugin.ArxivClient') as MockClient:
-        instance = MockClient.return_value
+    with patch('thoth.discovery.plugins.arxiv_plugin.ArxivClient') as mock_client:
+        instance = mock_client.return_value
         instance.search.return_value = [paper]
 
         plugin = ArxivPlugin(config={'categories': ['cs.LG']})
