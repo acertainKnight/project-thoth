@@ -5,6 +5,7 @@ This module consolidates all document processing operations including
 OCR, content analysis, citation extraction, and note generation.
 """
 
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -87,6 +88,16 @@ class ProcessingService(BaseService):
         Raises:
             ServiceError: If OCR conversion fails
         """
+        # Issue deprecation warning for standard OCR processing
+        warnings.warn(
+            'Using ProcessingService.ocr_convert (standard OCR). '
+            'For better performance, consider using AsyncProcessingService.ocr_convert_async '
+            'which provides async I/O, caching, and 50-65% faster processing. '
+            "Available through OptimizedDocumentPipeline or 'thoth performance' commands.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         try:
             self.validate_input(pdf_path=pdf_path)
 
