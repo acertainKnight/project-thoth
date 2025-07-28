@@ -208,6 +208,7 @@ class OpenCitationsAPI:
             >>> api.lookup_metadata_sync(['doi:10.1007/s11192-022-04367-w'])
             [{"id": "...", "title": "...", "author": "...", ...}]
         """
+        ids = [i for i in ids if 'arxiv' not in i]
         try:
             # Join IDs with double underscore as per API spec
             id_str = '__'.join(ids)

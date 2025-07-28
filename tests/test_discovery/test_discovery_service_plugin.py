@@ -1,6 +1,7 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from thoth.services.discovery_service import DiscoveryService
+from thoth.utilities.config import ThothConfig
 from thoth.utilities.schemas import (
     DiscoverySource,
     ScheduleConfig,
@@ -8,7 +9,7 @@ from thoth.utilities.schemas import (
 )
 
 
-def test_discovery_service_arxiv_plugin(tmp_path):
+def test_discovery_service_arxiv_plugin(thoth_config: ThothConfig, tmp_path):
     schedule = ScheduleConfig()
     source = DiscoverySource(
         name='arxiv_test',
@@ -27,7 +28,8 @@ def test_discovery_service_arxiv_plugin(tmp_path):
         pdf_url='http://x',
     )
 
-    service = DiscoveryService(sources_dir=tmp_path)
+    thoth_config.core.discovery_sources_dir = tmp_path
+    service = DiscoveryService(config=thoth_config)
     with patch.object(
         service.plugin_registry,
         'create',

@@ -15,14 +15,14 @@ class DummySchema(BaseModel):
 
 
 def test_clients_implement_protocol(monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "x")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
-    monkeypatch.setenv("OPENROUTER_API_KEY", "x")
+    monkeypatch.setenv('OPENAI_API_KEY', 'x')
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'x')
+    monkeypatch.setenv('OPENROUTER_API_KEY', 'x')
 
     clients: list[UnifiedLLMClient] = [
-        OpenAIClient(api_key="x"),
-        AnthropicClient(api_key="x", max_tokens=1),
-        OpenRouterClient(api_key="x"),
+        OpenAIClient(api_key='x'),
+        AnthropicClient(api_key='x', max_tokens=1),
+        OpenRouterClient(api_key='x'),
     ]
 
     for client in clients:
@@ -30,18 +30,18 @@ def test_clients_implement_protocol(monkeypatch):
 
 
 def test_base_client_methods(monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    monkeypatch.setenv('OPENAI_API_KEY', 'x')
 
     monkeypatch.setattr(
         ChatOpenAI,
-        "invoke",
-        lambda *_args, **_kwargs: AIMessage(content="hello"),
+        'invoke',
+        lambda *_args, **_kwargs: AIMessage(content='hello'),
     )
     monkeypatch.setattr(
         ChatOpenAI,
-        "stream",
+        'stream',
         lambda *_args, **_kwargs: iter(
-            [AIMessage(content="a"), AIMessage(content="b")]
+            [AIMessage(content='a'), AIMessage(content='b')]
         ),
     )
 
@@ -50,14 +50,14 @@ def test_base_client_methods(monkeypatch):
     ) -> UnifiedLLMClient:
         class _Struct(OpenAIClient):
             def invoke(self, _prompt: str, **_: Any) -> DummySchema:  # type: ignore[override]
-                return schema(result="done")
+                return schema(result='done')
 
-        return _Struct(api_key="x")
+        return _Struct(api_key='x')
 
-    monkeypatch.setattr(ChatOpenAI, "with_structured_output", _with_structured_output)
+    monkeypatch.setattr(ChatOpenAI, 'with_structured_output', _with_structured_output)
 
-    client = OpenAIClient(api_key="x")
+    client = OpenAIClient(api_key='x')
 
-    assert client.invoke("hi") == "hello"
-    assert list(client.stream("hi")) == ["a", "b"]
-    assert client.invoke_structured("hi", DummySchema) == DummySchema(result="done")
+    assert client.invoke_text('hi') == 'hello'
+    assert list(client.stream_text('hi')) == ['a', 'b']
+    assert client.invoke_structured('hi', DummySchema) == DummySchema(result='done')

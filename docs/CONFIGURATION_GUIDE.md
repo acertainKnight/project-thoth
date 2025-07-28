@@ -227,7 +227,57 @@ ENDPOINT_PORT="8000"
 ENDPOINT_BASE_URL="https://thoth.yourdomain.com"
 ```
 
-### **5. RAG System Configuration** (`RAG_*`)
+### **5. API Gateway Configuration** (`API_GATEWAY_*`)
+
+The External API Gateway provides centralized management for external API calls with built-in rate limiting, caching, and retry logic.
+
+```bash
+# Rate limiting
+API_GATEWAY_RATE_LIMIT="5.0"                    # Requests per second allowed
+API_GATEWAY_CACHE_EXPIRY="3600"                 # Cache expiry time in seconds (1 hour)
+API_GATEWAY_DEFAULT_TIMEOUT="15"                # Request timeout in seconds
+
+# Service endpoints (JSON format)
+API_GATEWAY_ENDPOINTS='{
+  "semantic_scholar": "https://api.semanticscholar.org",
+  "opencitations": "https://opencitations.net/index/coci/api/v1",
+  "arxiv": "http://export.arxiv.org",
+  "crossref": "https://api.crossref.org"
+}'
+```
+
+#### **API Gateway Features**
+- **Rate Limiting**: Prevents API quota exhaustion with configurable throttling
+- **Response Caching**: SHA256-based caching reduces redundant requests
+- **Retry Logic**: Exponential backoff for transient failures (0s, 1s, 3s delays)
+- **Service Mapping**: Configure multiple external services with friendly names
+- **Error Handling**: Comprehensive error tracking and logging
+
+#### **Usage Examples**
+```python
+from thoth.services import ExternalAPIGateway
+
+# Initialize with config
+gateway = ExternalAPIGateway(config=config)
+
+# Make requests to configured services
+papers = gateway.get("semantic_scholar", path="/graph/v1/paper/search",
+                    params={"query": "transformers", "limit": 10})
+
+citations = gateway.get("opencitations", path="/citations",
+                       params={"doi": "10.1038/nature12373"})
+```
+
+#### **Rate Limiting Guidelines**
+| Service | Recommended Rate | Notes |
+|---------|-----------------|-------|
+| **Semantic Scholar** | 100/minute (1.67/s) | Has generous limits |
+| **OpenCitations** | 60/minute (1.0/s) | Conservative approach |
+| **ArXiv** | 3/second | Bulk download limits |
+| **CrossRef** | 50/second | High-volume API |
+| **General External APIs** | 5.0/second | Default safe rate |
+
+### **6. RAG System Configuration** (`RAG_*`)
 
 Controls the knowledge base and search functionality.
 

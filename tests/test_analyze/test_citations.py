@@ -39,43 +39,45 @@ def mock_prompt_template():
 
 
 def test_single_mode_processing(thoth_config: ThothConfig, mock_llm_service):
-    """Test that single processing mode calls the correct method."""
+    """Test that citation processing calls the parallel method."""
     thoth_config.citation_config.citation_batch_size = 1
     processor = CitationProcessor(mock_llm_service, thoth_config)
 
     with (
         patch.object(
-            processor, '_extract_structured_citations_single', return_value=[]
-        ) as mock_single,
+            processor, '_extract_structured_citations_parallel', return_value=[]
+        ) as mock_parallel,
         patch.object(
-            processor, '_extract_structured_citations_batch', return_value=[]
-        ) as mock_batch,
+            processor, '_enhance_citations_with_external_services', return_value=[]
+        ) as mock_enhance,
     ):
         mock_path = MagicMock(spec=Path)
         mock_path.read_text.return_value = 'some content'
         processor.extract_citations(mock_path)
-        mock_single.assert_called_once()
-        mock_batch.assert_not_called()
+        mock_parallel.assert_called_once()
+        mock_enhance.assert_called_once()
 
 
 def test_batch_mode_processing(thoth_config: ThothConfig, mock_llm_service):
-    """Test that batch processing mode calls the correct method."""
+    """
+    Test that citation processing calls the parallel method regardless of batch size.
+    """
     thoth_config.citation_config.citation_batch_size = 10
     processor = CitationProcessor(mock_llm_service, thoth_config)
 
     with (
         patch.object(
-            processor, '_extract_structured_citations_single', return_value=[]
-        ) as mock_single,
+            processor, '_extract_structured_citations_parallel', return_value=[]
+        ) as mock_parallel,
         patch.object(
-            processor, '_extract_structured_citations_batch', return_value=[]
-        ) as mock_batch,
+            processor, '_enhance_citations_with_external_services', return_value=[]
+        ) as mock_enhance,
     ):
         mock_path = MagicMock(spec=Path)
         mock_path.read_text.return_value = 'some content'
         processor.extract_citations(mock_path)
-        mock_single.assert_not_called()
-        mock_batch.assert_called_once()
+        mock_parallel.assert_called_once()
+        mock_enhance.assert_called_once()
 
 
 def test_full_citation_extraction_flow(mock_citation_processor):

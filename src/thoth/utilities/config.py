@@ -56,10 +56,7 @@ class ModelConfig(BaseSettings):
     """Configuration for models."""
 
     model_config = SettingsConfigDict(
-        env_prefix='MODEL_',
-        env_file='.env',
-        env_file_encoding='utf-8',
-        case_sensitive=False,  # Make case-insensitive to handle env vars
+        case_sensitive=False,
         extra='ignore',
     )
     temperature: float = Field(0.9, description='Model temperature')
@@ -161,6 +158,75 @@ class CitationLLMConfig(BaseSettings):
     max_context_length: int = Field(
         4000,
         description='Citation LLM max context length for model (can be smaller if inputs are focused e.g. reference strings)',
+    )
+
+
+class PerformanceConfig(BaseSettings):
+    """Configuration for performance and concurrency settings."""
+
+    model_config = SettingsConfigDict(
+        env_prefix='PERFORMANCE_',
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='ignore',
+    )
+    # Tag processing workers
+    tag_mapping_workers: int = Field(
+        5,
+        description='Number of parallel workers for tag mapping operations',
+        ge=1,
+        le=20,
+    )
+    article_processing_workers: int = Field(
+        3,
+        description='Number of parallel workers for article tag processing',
+        ge=1,
+        le=10,
+    )
+
+    # Document pipeline workers
+    content_analysis_workers: int = Field(
+        2,
+        description='Number of parallel workers for content analysis and citation extraction',
+        ge=1,
+        le=5,
+    )
+
+    # Citation enhancement workers
+    citation_enhancement_workers: int = Field(
+        3,
+        description='Number of parallel workers for citation enhancement APIs',
+        ge=1,
+        le=10,
+    )
+    citation_pdf_workers: int = Field(
+        5, description='Number of parallel workers for PDF location', ge=1, le=15
+    )
+
+    # Citation extraction workers
+    citation_extraction_workers: int = Field(
+        4,
+        description='Number of parallel workers for citation extraction from raw strings',
+        ge=1,
+        le=12,
+    )
+
+    # Semantic Scholar API optimization
+    semanticscholar_max_retries: int = Field(
+        3, description='Maximum retries for Semantic Scholar API requests', ge=1, le=10
+    )
+    semanticscholar_max_backoff_seconds: float = Field(
+        30.0,
+        description='Maximum backoff time for Semantic Scholar API',
+        ge=5.0,
+        le=300.0,
+    )
+    semanticscholar_backoff_multiplier: float = Field(
+        1.5,
+        description='Backoff multiplier for Semantic Scholar exponential backoff',
+        ge=1.1,
+        le=3.0,
     )
 
 
@@ -443,6 +509,7 @@ class LoggingConfig(BaseSettings):
     filemode: str = Field('a', description='Logging file mode')
     file_level: str = Field('INFO', description='Logging file level')
 
+
 class APIGatewayConfig(BaseSettings):
     """Configuration for the external API gateway."""
 
@@ -468,9 +535,11 @@ class APIGatewayConfig(BaseSettings):
         description='Mapping of service name to base URL',
     )
 
+
 # Resolve forward references on simplified config classes
 CoreConfig.model_rebuild()
 FeatureConfig.model_rebuild()
+
 
 class ThothConfig(BaseSettings):
     """Configuration for Thoth."""
@@ -498,6 +567,10 @@ class ThothConfig(BaseSettings):
     )
     citation_config: CitationConfig = Field(
         default_factory=CitationConfig, description='Citation configuration'
+    )
+    performance_config: PerformanceConfig = Field(
+        default_factory=PerformanceConfig,
+        description='Performance and concurrency configuration',
     )
     logging_config: LoggingConfig = Field(
         default_factory=LoggingConfig, description='Logging configuration'
@@ -607,7 +680,7 @@ class ThothConfig(BaseSettings):
     @property
     def query_based_routing_config(self) -> QueryBasedRoutingConfig:  # pragma: no cover
         return self.features.query_based_routing
-      
+
     def setup_logging(self) -> None:
         """Set up logging configuration using loguru."""
         setup_logging(self)

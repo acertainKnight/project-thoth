@@ -5,6 +5,7 @@ This module consolidates tag-related operations from TagConsolidator
 and related components.
 """
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from thoth.analyze.tag_consolidator import TagConsolidator
@@ -356,15 +357,23 @@ class TagService(BaseService):
         articles_updated = 0
         tags_added = 0
 
-        for _article_id, node_data in self._citation_tracker.graph.nodes(data=True):
+        # Collect all articles that need processing
+        articles_to_process = []
+        for article_id, node_data in self._citation_tracker.graph.nodes(data=True):
             analysis_dict = node_data.get('analysis')
             metadata = node_data.get('metadata', {})
 
             if not analysis_dict:
                 continue
 
+            articles_to_process.append((article_id, node_data, analysis_dict, metadata))
+
+        def process_single_article(article_data):
+            """Process a single article for tag suggestions."""
+            article_id, node_data, analysis_dict, metadata = article_data
+
             # Get article info
-            title = metadata.get('title', _article_id)
+            title = metadata.get('title', article_id)
             abstract = analysis_dict.get('abstract', '')
             current_tags = analysis_dict.get('tags', [])
 
@@ -385,25 +394,57 @@ class TagService(BaseService):
                         available_tags=available_tags,
                     )
                     additional_tags = suggestion_result['suggested_tags']
-                    tags_added += len(additional_tags)
                 except Exception as e:
                     self.logger.warning(
-                        f'Failed to suggest tags for article {_article_id}: {e}'
+                        f'Failed to suggest tags for article {article_id}: {e}'
                     )
 
             # Combine and deduplicate tags
             final_tags = list(set(updated_tags + additional_tags))
 
-            # Update if changed
-            if final_tags != current_tags:
-                analysis_dict['tags'] = final_tags
-                articles_updated += 1
+            return (
+                article_id,
+                analysis_dict,
+                current_tags,
+                final_tags,
+                len(additional_tags),
+            )
 
-            articles_processed += 1
+        # Process articles in parallel with configurable concurrency
+        updated_articles = []
+        max_workers = self._config.performance_config.article_processing_workers
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_article = {
+                executor.submit(process_single_article, article_data): article_data[0]
+                for article_data in articles_to_process
+            }
 
-        # Save the updated graph
-        if articles_updated > 0:
+            for future in as_completed(future_to_article):
+                try:
+                    article_id, analysis_dict, current_tags, final_tags, added_count = (
+                        future.result()
+                    )
+
+                    # Update if changed
+                    if final_tags != current_tags:
+                        analysis_dict['tags'] = final_tags
+                        updated_articles.append(article_id)
+                        articles_updated += 1
+
+                    tags_added += added_count
+                    articles_processed += 1
+
+                except Exception as e:
+                    article_id = future_to_article[future]
+                    self.logger.error(f'Error processing article {article_id}: {e}')
+                    articles_processed += 1
+
+        # Save the updated graph only once at the end
+        if updated_articles:
             self._citation_tracker._save_graph()
+            self.logger.info(
+                f'Updated {len(updated_articles)} articles, saved graph once'
+            )
 
         return {
             'articles_processed': articles_processed,

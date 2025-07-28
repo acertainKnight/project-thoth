@@ -1,20 +1,20 @@
 """Tests for the simplified configuration structures."""
 
-from thoth.config.simplified import CoreConfig, FeatureConfig, migrate_from_old_config
+from thoth.config.simplified import migrate_from_old_config
 from thoth.utilities.config import ThothConfig
 
 
-def test_core_config_loading():
+def test_core_config_loading(thoth_config: ThothConfig):
     """CoreConfig should load with default values."""
-    core = CoreConfig()
+    core = thoth_config.core
     assert core.workspace_dir
     assert core.api_keys is not None
     assert core.llm_config.model
 
 
-def test_feature_config_loading():
+def test_feature_config_loading(thoth_config: ThothConfig):
     """FeatureConfig should load with defaults."""
-    features = FeatureConfig()
+    features = thoth_config.features
     assert features.api_server
     assert features.discovery
 

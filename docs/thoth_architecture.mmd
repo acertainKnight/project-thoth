@@ -2402,6 +2402,7 @@ graph TD
         thoth_services["Thoth Services Layer"]
         thoth_data_processing["Data Processing & Analysis"]
         knowledge_graph["Knowledge Graph & Citations"]
+        api_gateway["API Gateway Service"]
         external_apis["External APIs (arXiv, Semantic Scholar, etc.)"]
 
         obsidian_user --> obsidian_plugin_ui
@@ -2409,5 +2410,39 @@ graph TD
         thoth_backend_api --> thoth_services
         thoth_services --> thoth_data_processing
         thoth_data_processing --> knowledge_graph
-        thoth_services --> external_apis
+        thoth_services --> api_gateway
+        api_gateway --> external_apis
     end
+
+    %% API Gateway Service Integration
+    subgraph "External API Gateway: src/thoth/services/api_gateway.py"
+        api_gateway_service_class["Class: ExternalAPIGateway (extends BaseService)<br/>Centralized external API request handler with rate limiting, caching, and retry logic"]
+        api_gateway_service_init["Method: __init__(config) -> None<br/>Initialize with InMemoryRateLimiter, cache dict, and configured endpoints"]
+        api_gateway_service_initialize["Method: initialize() -> None<br/>Initialize the gateway service and log startup"]
+        api_gateway_service_request["Method: request(method, service, path, params, data, headers) -> Any<br/>Core request method with caching, rate limiting, and 3-step retry logic"]
+        api_gateway_service_get["Method: get(service, path, params, headers) -> Any<br/>Convenience method for GET requests"]
+        api_gateway_service_post["Method: post(service, path, data, headers) -> Any<br/>Convenience method for POST requests"]
+        api_gateway_service_clear_cache["Method: clear_cache() -> None<br/>Clear response cache and log count"]
+        api_gateway_service_build_url["Method: _build_url(service, path) -> str<br/>Build full URL from service mapping and path"]
+        api_gateway_service_cache_key["Method: _cache_key(method, url, params, data) -> str<br/>Generate SHA256 cache key from request parameters"]
+
+        api_gateway_service_class --> api_gateway_service_init
+        api_gateway_service_class --> api_gateway_service_initialize
+        api_gateway_service_class --> api_gateway_service_request
+        api_gateway_service_class --> api_gateway_service_get
+        api_gateway_service_class --> api_gateway_service_post
+        api_gateway_service_class --> api_gateway_service_clear_cache
+        api_gateway_service_class --> api_gateway_service_build_url
+        api_gateway_service_class --> api_gateway_service_cache_key
+    end
+
+    %% API Gateway Configuration Integration
+    api_gateway_service_init -.->|"uses"| api_gateway_config_class
+    api_gateway_service_request -.->|"uses"| api_gateway_service_cache_key
+    api_gateway_service_request -.->|"uses"| api_gateway_service_build_url
+    api_gateway_service_get -.->|"calls"| api_gateway_service_request
+    api_gateway_service_post -.->|"calls"| api_gateway_service_request
+
+    %% Service Manager Integration
+    service_manager_register_service -.->|"registers"| api_gateway_service_class
+    service_manager_initialize_all -.->|"initializes"| api_gateway_service_initialize

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import time
-from typing import Any, Dict
+from typing import Any
 
 import requests
 from langchain_core.rate_limiters import InMemoryRateLimiter
@@ -19,37 +19,44 @@ class ExternalAPIGateway(BaseService):
         super().__init__(config)
         self.session = requests.Session()
         gateway_conf = self.config.api_gateway_config
-        self.rate_limiter = InMemoryRateLimiter(
-            requests_per_second=gateway_conf.rate_limit
-        )
-        self.cache_expiry = gateway_conf.cache_expiry
-        self.default_timeout = gateway_conf.default_timeout
-        self.endpoints: Dict[str, str] = gateway_conf.endpoints
+        if gateway_conf:
+            self.rate_limiter = InMemoryRateLimiter(
+                requests_per_second=gateway_conf.rate_limit
+            )
+            self.cache_expiry = gateway_conf.cache_expiry
+            self.default_timeout = gateway_conf.default_timeout
+            self.endpoints: dict[str, str] = gateway_conf.endpoints
+        else:
+            # Fallback for when config is not provided, e.g. during tests
+            self.rate_limiter = InMemoryRateLimiter(requests_per_second=5.0)
+            self.cache_expiry = 3600
+            self.default_timeout = 15
+            self.endpoints = {}
         self._cache: dict[str, tuple[float, Any]] = {}
 
     def initialize(self) -> None:
-        self.logger.info("External API gateway initialized")
+        self.logger.info('External API gateway initialized')
 
     def _build_url(self, service: str, path: str) -> str:
         if service not in self.endpoints:
             raise ServiceError(f"Unknown service '{service}'")
-        base = self.endpoints[service].rstrip("/")
+        base = self.endpoints[service].rstrip('/')
         if path:
-            path = path.lstrip("/")
-            return f"{base}/{path}"
+            path = path.lstrip('/')
+            return f'{base}/{path}'
         return base
 
     def _cache_key(
         self, method: str, url: str, params: dict | None, data: Any | None
     ) -> str:
-        key_str = f"{method}:{url}:{params}:{data}"
+        key_str = f'{method}:{url}:{params}:{data}'
         return hashlib.sha256(key_str.encode()).hexdigest()
 
     def request(
         self,
         method: str,
         service: str,
-        path: str = "",
+        path: str = '',
         params: dict | None = None,
         data: Any | None = None,
         headers: dict[str, str] | None = None,
@@ -81,16 +88,14 @@ class ExternalAPIGateway(BaseService):
                         result = response.json()
                         self._cache[cache_key] = (now, result)
                         self.log_operation(
-                            "api_request",
+                            'api_request',
                             service=service,
                             url=url,
                             status=200,
                         )
                         return result
                     if response.status_code >= 500:
-                        last_err = ServiceError(
-                            f"Server error {response.status_code}"
-                        )
+                        last_err = ServiceError(f'Server error {response.status_code}')
                         continue
                     response.raise_for_status()
                     result = response.json()
@@ -101,38 +106,37 @@ class ExternalAPIGateway(BaseService):
                     continue
 
             raise ServiceError(
-                self.handle_error(last_err or Exception("Unknown error"), "request")
+                self.handle_error(last_err or Exception('Unknown error'), 'request')
             )
         except Exception as e:
-            raise ServiceError(self.handle_error(e, "request")) from e
+            raise ServiceError(self.handle_error(e, 'request')) from e
 
     def get(
         self,
         service: str,
-        path: str = "",
+        path: str = '',
         params: dict | None = None,
         headers: dict[str, str] | None = None,
     ) -> Any:
         """Convenience method for GET requests."""
         return self.request(
-            "GET", service=service, path=path, params=params, headers=headers
+            'GET', service=service, path=path, params=params, headers=headers
         )
 
     def post(
         self,
         service: str,
-        path: str = "",
+        path: str = '',
         data: Any | None = None,
         headers: dict[str, str] | None = None,
     ) -> Any:
         """Convenience method for POST requests."""
         return self.request(
-            "POST", service=service, path=path, data=data, headers=headers
+            'POST', service=service, path=path, data=data, headers=headers
         )
 
     def clear_cache(self) -> None:
         """Clear the response cache."""
         count = len(self._cache)
         self._cache.clear()
-        self.log_operation("cache_cleared", count=count)
-
+        self.log_operation('cache_cleared', count=count)
