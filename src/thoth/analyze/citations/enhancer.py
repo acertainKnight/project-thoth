@@ -1,3 +1,4 @@
+import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from thoth.analyze.citations.opencitation import OpenCitationsAPI
@@ -46,6 +47,16 @@ class CitationEnhancer:
         """
         Enhances a list of citations by fetching additional data from external APIs.
         """
+        # Issue deprecation warning for standard citation enhancement
+        warnings.warn(
+            'Using CitationEnhancer (standard synchronous enhancement). '
+            'For better performance, consider using AsyncCitationEnhancer '
+            'which provides async I/O, intelligent caching, and concurrent API calls. '
+            'Available through OptimizedDocumentPipeline or async processing workflows.',
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         if not citations:
             return []
 
