@@ -124,12 +124,14 @@ def test_api_gateway_retry_logic(mock_request, thoth_config: ThothConfig):
     gateway = ExternalAPIGateway(config=thoth_config)
     gateway.initialize()
 
-    # Patch sleep specifically for this gateway instance
-    with patch('thoth.services.api_gateway.time.sleep'):
+    # Patch sleep and rate limiter to avoid any timing issues
+    with (
+        patch('thoth.services.api_gateway.time.sleep'),
+        patch.object(gateway.rate_limiter, 'acquire'),
+    ):
         result = gateway.get('test_service', '/retry-test')
         assert result == {'retry': 'success'}
         assert mock_request.call_count == 2
-        # assert mock_sleep.call_count == 1  # One retry delay
 
 
 def test_api_gateway_cache_management(thoth_config: ThothConfig):

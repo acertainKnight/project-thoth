@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List
 
-from .base import BaseDiscoveryPlugin
-from ..api_sources import ArxivClient
 from thoth.utilities.schemas import ResearchQuery, ScrapedArticleMetadata
+
+from ..api_sources import ArxivClient
+from .base import BaseDiscoveryPlugin
 
 
 class ArxivPlugin(BaseDiscoveryPlugin):
@@ -18,7 +18,7 @@ class ArxivPlugin(BaseDiscoveryPlugin):
 
     def discover(
         self, query: ResearchQuery, max_results: int
-    ) -> List[ScrapedArticleMetadata]:
+    ) -> list[ScrapedArticleMetadata]:
         """Discover articles on arXiv for the given query."""
         keywords = query.keywords or []
         categories = self.config.get('categories', [])
@@ -42,7 +42,7 @@ class ArxivPlugin(BaseDiscoveryPlugin):
             sort_order=sort_order,
         )
 
-        results: List[ScrapedArticleMetadata] = []
+        results: list[ScrapedArticleMetadata] = []
         for paper in papers:
             metadata = ScrapedArticleMetadata(
                 title=paper.title,

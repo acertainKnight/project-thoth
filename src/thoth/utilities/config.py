@@ -2,6 +2,7 @@
 Configuration utilities for Thoth.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -162,7 +163,10 @@ class CitationLLMConfig(BaseSettings):
 
 
 class PerformanceConfig(BaseSettings):
-    """Configuration for performance and concurrency settings."""
+    """
+    Configuration for performance and concurrency settings optimized for local
+    servers.
+    """
 
     model_config = SettingsConfigDict(
         env_prefix='PERFORMANCE_',
@@ -171,45 +175,107 @@ class PerformanceConfig(BaseSettings):
         case_sensitive=False,
         extra='ignore',
     )
-    # Tag processing workers
+
+    # Auto-scaling settings
+    auto_scale_workers: bool = Field(
+        True,
+        description='Automatically scale workers based on available CPU cores',
+    )
+    cpu_utilization_target: float = Field(
+        0.8,
+        description='Target CPU utilization for auto-scaling (0.0-1.0)',
+        ge=0.1,
+        le=1.0,
+    )
+
+    # Tag processing workers - optimized for local processing
     tag_mapping_workers: int = Field(
-        5,
+        default_factory=lambda: min(max(1, (os.cpu_count() or 4) - 1), 8),
         description='Number of parallel workers for tag mapping operations',
         ge=1,
         le=20,
     )
     article_processing_workers: int = Field(
-        3,
+        default_factory=lambda: min(max(1, (os.cpu_count() or 4) // 2), 6),
         description='Number of parallel workers for article tag processing',
         ge=1,
         le=10,
     )
 
-    # Document pipeline workers
+    # Document pipeline workers - CPU-aware defaults
     content_analysis_workers: int = Field(
-        2,
+        default_factory=lambda: min(max(1, (os.cpu_count() or 4) - 1), 4),
         description='Number of parallel workers for content analysis and citation extraction',
         ge=1,
-        le=5,
+        le=8,
     )
 
-    # Citation enhancement workers
+    # Citation enhancement workers - I/O bound, can handle more
     citation_enhancement_workers: int = Field(
-        3,
+        default_factory=lambda: min(max(2, (os.cpu_count() or 4) - 1), 8),
         description='Number of parallel workers for citation enhancement APIs',
         ge=1,
-        le=10,
+        le=15,
     )
     citation_pdf_workers: int = Field(
-        5, description='Number of parallel workers for PDF location', ge=1, le=15
+        default_factory=lambda: min(max(2, (os.cpu_count() or 4) - 1), 10),
+        description='Number of parallel workers for PDF location',
+        ge=1,
+        le=20,
     )
 
-    # Citation extraction workers
+    # Citation extraction workers - parallel processing friendly
     citation_extraction_workers: int = Field(
-        4,
+        default_factory=lambda: min(max(2, (os.cpu_count() or 4) - 1), 8),
         description='Number of parallel workers for citation extraction from raw strings',
         ge=1,
-        le=12,
+        le=16,
+    )
+
+    # OCR processing settings
+    ocr_max_concurrent: int = Field(
+        3,
+        description='Maximum concurrent OCR operations (API rate limited)',
+        ge=1,
+        le=6,
+    )
+    ocr_enable_caching: bool = Field(
+        True,
+        description='Enable OCR result caching for improved performance',
+    )
+    ocr_cache_ttl_hours: int = Field(
+        24,
+        description='OCR cache time-to-live in hours',
+        ge=1,
+        le=168,  # 1 week max
+    )
+
+    # Async processing settings
+    async_enabled: bool = Field(
+        True,
+        description='Enable async I/O processing for better performance',
+    )
+    async_timeout_seconds: int = Field(
+        300,
+        description='Timeout for async operations in seconds',
+        ge=30,
+        le=1800,
+    )
+
+    # Memory management
+    memory_optimization_enabled: bool = Field(
+        True,
+        description='Enable memory optimization techniques',
+    )
+    chunk_processing_enabled: bool = Field(
+        True,
+        description='Enable chunk-based processing for large documents',
+    )
+    max_document_size_mb: int = Field(
+        50,
+        description='Maximum document size in MB before switching to streaming',
+        ge=5,
+        le=500,
     )
 
     # Semantic Scholar API optimization
