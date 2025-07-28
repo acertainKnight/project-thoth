@@ -191,6 +191,8 @@ export default class ThothPlugin extends Plugin {
   process: ChildProcess | null = null;
   isAgentRunning: boolean = false;
   isRestarting: boolean = false;
+  socket: WebSocket | null = null;
+  wsResolvers: Map<string, { resolve: (v: string) => void; reject: (e: Error) => void }> = new Map();
 
   async onload() {
     await this.loadSettings();
@@ -370,6 +372,7 @@ export default class ThothPlugin extends Plugin {
           this.isAgentRunning = true;
           this.updateStatusBar();
           new Notice('Connected to remote Thoth server successfully!');
+          await this.connectWebSocket();
 
           // Sync settings to remote server
           await this.syncSettingsToBackend();
@@ -458,11 +461,12 @@ export default class ThothPlugin extends Plugin {
           // Test if the server is responding
           try {
             const response = await fetch(`${this.settings.endpointBaseUrl}/health`);
-            if (response.ok) {
-              this.isAgentRunning = true;
-              this.updateStatusBar();
+              if (response.ok) {
+                this.isAgentRunning = true;
+                this.updateStatusBar();
               new Notice('Thoth agent started successfully!');
-            }
+              await this.connectWebSocket();
+              }
           } catch (error) {
             console.warn('Agent process started but server not yet responding');
             // Give it more time
@@ -473,6 +477,7 @@ export default class ThothPlugin extends Plugin {
                   this.isAgentRunning = true;
                   this.updateStatusBar();
                   new Notice('Thoth agent started successfully!');
+                  await this.connectWebSocket();
                 } else {
                   new Notice('Thoth agent started but not responding to requests');
                 }
@@ -493,6 +498,7 @@ export default class ThothPlugin extends Plugin {
   stopAgent(): void {
     if (this.settings.remoteMode) {
       // In remote mode, we just disconnect
+      this.disconnectWebSocket();
       this.isAgentRunning = false;
       this.updateStatusBar();
       new Notice('Disconnected from remote Thoth server');
@@ -513,6 +519,7 @@ export default class ThothPlugin extends Plugin {
 
     this.process = null;
     this.isAgentRunning = false;
+    this.disconnectWebSocket();
     this.updateStatusBar();
     new Notice('Thoth agent stopped');
   }
@@ -607,6 +614,61 @@ export default class ThothPlugin extends Plugin {
     }
 
     throw new Error('Agent did not become available after restart');
+  }
+
+  async connectWebSocket(retries = 3): Promise<void> {
+    const wsUrl = this.getEndpointUrl().replace(/^http/, 'ws') + '/ws/chat';
+
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const ws = new WebSocket(wsUrl);
+          ws.onopen = () => {
+            this.socket = ws;
+            ws.onclose = () => {
+              this.socket = null;
+            };
+            ws.onmessage = (event: MessageEvent) => {
+              let id: string | undefined;
+              let text = event.data;
+              try {
+                const data = JSON.parse(event.data);
+                id = data.id;
+                text = data.response || event.data;
+              } catch (e) {}
+              if (id && this.wsResolvers.has(id)) {
+                this.wsResolvers.get(id)!.resolve(text);
+                this.wsResolvers.delete(id);
+              }
+            };
+            ws.onerror = () => {
+              this.wsResolvers.forEach(({ reject }) => reject(new Error('WebSocket error')));
+              this.wsResolvers.clear();
+            };
+            resolve();
+          };
+          ws.onerror = () => {
+            ws.close();
+            reject(new Error('WebSocket error'));
+          };
+        });
+        console.log('WebSocket connected');
+        return;
+      } catch (e) {
+        console.warn(`WebSocket connection failed (attempt ${attempt + 1})`);
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+    console.warn('Unable to establish WebSocket connection');
+  }
+
+  disconnectWebSocket(): void {
+    if (this.socket) {
+      this.socket.close();
+      this.socket = null;
+      this.wsResolvers.forEach(({ reject }) => reject(new Error('WebSocket disconnected')));
+      this.wsResolvers.clear();
+    }
   }
 
   private getEnvironmentVariables() {
@@ -919,40 +981,30 @@ class ChatModal extends Modal {
     this.sendButton.textContent = 'Sending...';
 
     try {
-      const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/research/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: message,
-          conversation_id: 'obsidian-chat',
-          timestamp: Date.now()
-        }),
-      });
+      let reply: string | null = null;
 
-      if (response.ok) {
-        const result = await response.json();
+      if (this.plugin.socket && this.plugin.socket.readyState === WebSocket.OPEN) {
+        reply = await this.sendViaWebSocket(message);
+      } else {
+        await this.plugin.connectWebSocket();
+        if (this.plugin.socket && this.plugin.socket.readyState === WebSocket.OPEN) {
+          reply = await this.sendViaWebSocket(message);
+        } else {
+          reply = await this.sendViaHttp(message);
+        }
+      }
 
-        // Add assistant response to chat
-        this.addMessageToChat('assistant', result.response);
+      if (reply !== null) {
+        this.addMessageToChat('assistant', reply);
 
-        // Save to chat history
         this.plugin.settings.chatHistory.push(
           { role: 'user', content: message, timestamp: Date.now() },
-          { role: 'assistant', content: result.response, timestamp: Date.now() }
+          { role: 'assistant', content: reply, timestamp: Date.now() }
         );
-
-        // Keep only last 20 messages
-        if (this.plugin.settings.chatHistory.length > 20) {
-          this.plugin.settings.chatHistory = this.plugin.settings.chatHistory.slice(-20);
+        if (this.plugin.settings.chatHistory.length > this.plugin.settings.chatHistoryLimit) {
+          this.plugin.settings.chatHistory = this.plugin.settings.chatHistory.slice(-this.plugin.settings.chatHistoryLimit);
         }
-
         await this.plugin.saveSettings();
-
-      } else {
-        throw new Error(`Chat request failed: ${response.statusText}`);
       }
     } catch (error) {
       console.error('Chat error:', error);
@@ -962,6 +1014,47 @@ class ChatModal extends Modal {
       this.sendButton.textContent = 'Send';
       this.scrollToBottom();
     }
+  }
+
+  private async sendViaHttp(message: string): Promise<string> {
+    const endpoint = this.plugin.getEndpointUrl();
+    const response = await fetch(`${endpoint}/research/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: message,
+        conversation_id: 'obsidian-chat',
+        timestamp: Date.now()
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Chat request failed: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    return result.response;
+  }
+
+  private async sendViaWebSocket(message: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      if (!this.plugin.socket) {
+        reject(new Error('WebSocket not connected'));
+        return;
+      }
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
+      this.plugin.wsResolvers.set(id, { resolve, reject });
+      this.plugin.socket!.send(
+        JSON.stringify({
+          id,
+          message,
+          conversation_id: 'obsidian-chat',
+          timestamp: Date.now()
+        })
+      );
+    });
   }
 
   scrollToBottom() {
