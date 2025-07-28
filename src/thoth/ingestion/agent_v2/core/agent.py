@@ -5,6 +5,8 @@ This module provides the core agent that orchestrates all research activities
 using a modern LangGraph architecture with MCP framework.
 """
 
+from importlib import import_module
+from pkgutil import iter_modules
 from typing import Any
 
 from langchain_core.messages import (
@@ -15,17 +17,14 @@ from langchain_core.messages import (
 )
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
-from langgraph.prebuilt import ToolNode, tools_condition, create_react_agent
+from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from loguru import logger
-from importlib import import_module
-from pkgutil import iter_modules
-
-from thoth.ingestion.agent_v2.tools import __path__ as _tools_path
-from thoth.ingestion.agent_v2.tools.decorators import get_registered_tools
 
 from thoth.ingestion.agent_v2.core.state import ResearchAgentState
 from thoth.ingestion.agent_v2.core.token_tracker import TokenUsageTracker
+from thoth.ingestion.agent_v2.tools import __path__ as _tools_path
 from thoth.ingestion.agent_v2.tools.base_tool import ToolRegistry
+from thoth.ingestion.agent_v2.tools.decorators import get_registered_tools
 from thoth.services.service_manager import ServiceManager
 
 
@@ -130,7 +129,7 @@ Remember: You have direct access to tools - use them immediately rather than jus
                 checkpointer=memory,
             )
         except Exception as e:  # pragma: no cover - fallback rarely triggered
-            logger.warning(f"Falling back to legacy graph: {e}")
+            logger.warning(f'Falling back to legacy graph: {e}')
 
         # Legacy graph construction for maximum compatibility
         graph = StateGraph(ResearchAgentState)
@@ -375,7 +374,8 @@ Remember: You have direct access to tools - use them immediately rather than jus
 
 
 def create_research_assistant(
-    service_manager: ServiceManager,
+    service_manager: ServiceManager | None = None,
+    adapter=None,
     enable_memory: bool = True,
     system_prompt: str | None = None,
 ) -> ResearchAssistant:
@@ -383,13 +383,25 @@ def create_research_assistant(
     Factory function to create a research assistant.
 
     Args:
-        service_manager: ServiceManager instance
+        service_manager: ServiceManager instance (preferred method)
+        adapter: AgentAdapter instance (legacy compatibility)
         enable_memory: Whether to enable conversation memory
         system_prompt: Custom system prompt
 
     Returns:
         ResearchAssistant: Configured research assistant instance
+
+    Note:
+        Either service_manager or adapter must be provided.
+        If both are provided, service_manager takes precedence.
     """
+    if service_manager is None and adapter is None:
+        raise ValueError('Either service_manager or adapter must be provided')
+
+    # Use service_manager if provided, otherwise extract from adapter
+    if service_manager is None:
+        service_manager = adapter.service_manager
+
     return ResearchAssistant(
         service_manager=service_manager,
         enable_memory=enable_memory,

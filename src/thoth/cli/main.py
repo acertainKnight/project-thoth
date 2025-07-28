@@ -1,8 +1,31 @@
 import argparse
+import os
 
-from thoth.pipeline import ThothPipeline
 
-from . import agent, discovery, notes, pdf, rag, system
+# Configure environment variables early to prevent segmentation faults
+# with sentence-transformers and ChromaDB
+def _configure_safe_environment() -> None:
+    """Configure environment variables to prevent segmentation faults."""
+    # Prevent threading issues that can cause segfaults
+    os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+    os.environ['OMP_NUM_THREADS'] = '1'
+    os.environ['MKL_NUM_THREADS'] = '1'
+    os.environ['NUMEXPR_NUM_THREADS'] = '1'
+    os.environ['TORCH_NUM_THREADS'] = '1'
+
+    # Configure ChromaDB to be safer
+    os.environ['CHROMA_MAX_BATCH_SIZE'] = '100'
+    os.environ['CHROMA_SUBMIT_BATCH_SIZE'] = '100'
+    os.environ['SQLITE_ENABLE_PREUPDATE_HOOK'] = '0'
+    os.environ['SQLITE_ENABLE_FTS5'] = '0'
+
+
+# Configure environment variables before importing any ML libraries
+_configure_safe_environment()
+
+from thoth.pipeline import ThothPipeline  # noqa: E402
+
+from . import agent, discovery, notes, pdf, rag, system  # noqa: E402
 
 
 def main():

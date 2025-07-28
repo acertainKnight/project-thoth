@@ -5,22 +5,19 @@ from thoth.utilities.config import ThothConfig
 from thoth.utilities.schemas import SearchResult
 
 
-def test_missing_api_key(monkeypatch):
-    monkeypatch.setenv('WEB_SEARCH_KEY', '')
-    config = ThothConfig()
-    config.api_keys.web_search_key = None
-    config.api_keys.web_search_providers = ['serper']
-    service = WebSearchService(config=config)
+def test_missing_api_key(thoth_config: ThothConfig):
+    thoth_config.core.api_keys.web_search_key = None
+    thoth_config.core.api_keys.web_search_providers = ['serper']
+    service = WebSearchService(config=thoth_config)
     with pytest.raises(ServiceError):
         service.search('test')
 
 
-def test_fallback_to_duckduckgo(monkeypatch):
-    config = ThothConfig()
-    config.api_keys.web_search_key = None
-    config.api_keys.web_search_providers = ['serper', 'duckduckgo']
+def test_fallback_to_duckduckgo(monkeypatch, thoth_config: ThothConfig):
+    thoth_config.core.api_keys.web_search_key = None
+    thoth_config.core.api_keys.web_search_providers = ['serper', 'duckduckgo']
 
-    service = WebSearchService(config=config)
+    service = WebSearchService(config=thoth_config)
 
     def mock_search(_client, query: str, num_results: int):
         assert query == 'test'
@@ -35,9 +32,8 @@ def test_fallback_to_duckduckgo(monkeypatch):
     assert len(results) == 1
 
 
-def test_invalid_provider():
-    config = ThothConfig()
-    config.api_keys.web_search_providers = ['bad']
-    service = WebSearchService(config=config)
+def test_invalid_provider(thoth_config: ThothConfig):
+    thoth_config.core.api_keys.web_search_providers = ['bad']
+    service = WebSearchService(config=thoth_config)
     with pytest.raises(ServiceError):
         service.search('test')

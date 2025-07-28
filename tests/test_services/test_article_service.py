@@ -184,18 +184,22 @@ class TestArticleService:
         assert result.should_download is True
         assert 'No queries configured' in result.topic_analysis
 
-    def test_check_relevance(
-        self, article_service, sample_article, sample_research_query
-    ):
+    def test_check_relevance(self, article_service, sample_article):
         """Test quick relevance check based on keywords."""
+        query = ResearchQuery(
+            name='nlp_query',
+            description='A query for NLP papers.',
+            research_question='What are the latest techniques in NLP?',
+            keywords=['natural language processing', 'deep learning', 'transformer'],
+        )
         score = article_service.check_relevance(
             title=sample_article.title,
             abstract=sample_article.abstract,
-            query=sample_research_query,
+            query=query,
         )
 
-        # Should have some score since 'machine learning' and 'neural networks'
-        # are in the query keywords
+        # Should have some score since 'natural language processing' and 'deep learning'
+        # are in the query keywords and the sample article
         assert score > 0.0
         assert score <= 1.0
 

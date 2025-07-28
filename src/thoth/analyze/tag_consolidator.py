@@ -5,10 +5,11 @@ This module handles the consolidation of existing tags across the citation graph
 and the suggestion of additional relevant tags for articles based on their abstracts.
 """
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from jinja2 import Environment, FileSystemLoader, ChoiceLoader
+from jinja2 import Environment, FileSystemLoader
 from langchain_core.prompts import ChatPromptTemplate
 from loguru import logger
 
@@ -85,9 +86,13 @@ class TagConsolidator:
         self.consolidate_llm = self.llm_service.get_client(
             model=self.consolidate_model, **self.model_kwargs
         )
+
+        # Create model kwargs for mapping with limited output tokens
+        map_model_kwargs = {**self.model_kwargs, 'max_tokens': 50}
         self.map_llm = self.llm_service.get_client(
-            model=self.map_model, **self.model_kwargs
+            model=self.map_model, **map_model_kwargs
         )
+
         self.suggest_llm = self.llm_service.get_client(
             model=self.suggest_model, **self.model_kwargs
         )
@@ -111,34 +116,21 @@ class TagConsolidator:
             method='json_schema',
         )
 
-        # Initialize Jinja environments with fallback to default prompts
+        # Initialize Jinja environments for each model type
         self.consolidate_jinja_env = Environment(
-            loader=ChoiceLoader(
-                [
-                    FileSystemLoader(self.consolidate_prompts_dir),
-                    FileSystemLoader(self.default_consolidate_prompts_dir),
-                ]
-            ),
+            loader=FileSystemLoader(self.consolidate_prompts_dir),
             trim_blocks=True,
             lstrip_blocks=True,
         )
+
         self.map_jinja_env = Environment(
-            loader=ChoiceLoader(
-                [
-                    FileSystemLoader(self.map_prompts_dir),
-                    FileSystemLoader(self.default_map_prompts_dir),
-                ]
-            ),
+            loader=FileSystemLoader(self.map_prompts_dir),
             trim_blocks=True,
             lstrip_blocks=True,
         )
+
         self.suggest_jinja_env = Environment(
-            loader=ChoiceLoader(
-                [
-                    FileSystemLoader(self.suggest_prompts_dir),
-                    FileSystemLoader(self.default_suggest_prompts_dir),
-                ]
-            ),
+            loader=FileSystemLoader(self.suggest_prompts_dir),
             trim_blocks=True,
             lstrip_blocks=True,
         )
@@ -281,32 +273,49 @@ class TagConsolidator:
                 f'  - Total consolidated vocabulary: {len(final_consolidated_tags)} tags'
             )
 
-            # Step 2: Map each original tag to a canonical tag
+            # Step 2: Map each original tag to a canonical tag (parallel processing)
             logger.info('Step 2: Mapping each original tag to canonical form...')
             tag_mappings = {}
 
-            for original_tag in existing_tags:
+            def map_single_tag(original_tag: str) -> tuple[str, str]:
+                """Map a single tag to canonical form. Returns (original, canonical)."""
                 try:
                     mapping_response = self.single_mapping_chain.invoke(
                         {'original_tag': original_tag, 'canonical_tags': canonical_tags}
                     )
-                    tag_mappings[original_tag] = mapping_response.canonical_tag
-                    logger.debug(
-                        f'Mapped: {original_tag} -> {mapping_response.canonical_tag}'
-                    )
-
+                    canonical_tag = mapping_response.canonical_tag
+                    logger.debug(f'Mapped: {original_tag} -> {canonical_tag}')
+                    return original_tag, canonical_tag
                 except Exception as e:
                     logger.warning(f'Failed to map tag {original_tag}: {e}')
                     # Fallback: if mapping fails, see if the tag exists in canonical
                     # list, otherwise keep as-is
                     if original_tag in canonical_tags:
-                        tag_mappings[original_tag] = original_tag
+                        fallback_tag = original_tag
                     else:
                         # Find closest match or keep original
-                        tag_mappings[original_tag] = original_tag
+                        fallback_tag = original_tag
                         logger.warning(
                             f'Using original tag as fallback: {original_tag}'
                         )
+                    return original_tag, fallback_tag
+
+            # Process tags in parallel with configurable concurrency
+            max_workers = self.config.performance_config.tag_mapping_workers
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_tag = {
+                    executor.submit(map_single_tag, tag): tag for tag in existing_tags
+                }
+
+                for future in as_completed(future_to_tag):
+                    try:
+                        original_tag, canonical_tag = future.result()
+                        tag_mappings[original_tag] = canonical_tag
+                    except Exception as e:
+                        # This shouldn't happen since we handle exceptions
+                        tag = future_to_tag[future]
+                        logger.error(f'Unexpected error mapping tag {tag}: {e}')
+                        tag_mappings[tag] = tag  # Fallback to original
 
             logger.info(f'Step 2 completed: Mapped {len(tag_mappings)} tags')
 

@@ -1,18 +1,16 @@
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import Literal
 from loguru import logger
+from pydantic import BaseModel
 
-from thoth.ingestion.agent_v2 import create_research_assistant
 from thoth.ingestion.agent_adapter import AgentAdapter
-from thoth.pipeline import ThothPipeline
+from thoth.ingestion.agent_v2 import create_research_assistant
 
 app = FastAPI(
-    title="Thoth MCP Server",
-    description="Local server exposing the research assistant via MCP style endpoints",
-    version="0.1.0",
+    title='Thoth MCP Server',
+    description='Local server exposing the research assistant via MCP style endpoints',
+    version='0.1.0',
 )
 
 agent: Any | None = None
@@ -36,20 +34,23 @@ class ChatRequest(BaseModel):
     context: dict[str, Any] | None = None
 
 
-@app.on_event("startup")
+@app.on_event('startup')
 def startup_event() -> None:
     """Initialize pipeline and research assistant when the server starts."""
     global agent
+    # Import here to avoid circular import
+    from thoth.pipeline import ThothPipeline
+
     pipeline = ThothPipeline()
     adapter = AgentAdapter(pipeline.services)
     agent = create_research_assistant(adapter=adapter, enable_memory=True)
-    logger.info("MCP server initialized")
+    logger.info('MCP server initialized successfully')
 
 
-@app.post("/chat")
+@app.post('/chat')
 def chat(request: ChatRequest) -> dict[str, Any]:
     """Chat with the research assistant."""
-    assert agent is not None, "Agent not initialized"
+    assert agent is not None, 'Agent not initialized'
     if request.messages:
         return agent.chat_messages(
             messages=[msg.model_dump() for msg in request.messages],
@@ -62,20 +63,20 @@ def chat(request: ChatRequest) -> dict[str, Any]:
             session_id=request.session_id,
             context=request.context,
         )
-    raise HTTPException(status_code=400, detail="No message provided")
+    raise HTTPException(status_code=400, detail='No message provided')
 
 
-@app.get("/tools")
+@app.get('/tools')
 def list_tools() -> list[dict[str, str]]:
     """Return information about available tools."""
-    assert agent is not None, "Agent not initialized"
+    assert agent is not None, 'Agent not initialized'
     return agent.get_available_tools()
 
 
-@app.get("/health")
+@app.get('/health')
 def health() -> dict[str, str]:
     """Health check endpoint."""
-    return {"status": "ok"}
+    return {'status': 'ok'}
 
 
 def start_mcp_server(host: str, port: int) -> None:

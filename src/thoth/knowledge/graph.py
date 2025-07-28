@@ -805,8 +805,16 @@ class CitationGraph:
         obsidian_stub = node_data.get('obsidian_path')  # This is the note stub
 
         if not all([pdf_stub, markdown_stub, analysis_dict]):
+            missing_items = []
+            if not pdf_stub:
+                missing_items.append('PDF path stub')
+            if not markdown_stub:
+                missing_items.append('Markdown path stub')
+            if not analysis_dict:
+                missing_items.append('analysis')
+
             logger.warning(
-                f'Missing essential data (PDF path stub, Markdown path stub, or analysis) for article {article_id}.'
+                f'Missing essential data ({", ".join(missing_items)}) for article {article_id}. '
                 'Cannot regenerate note.'
             )
             return None

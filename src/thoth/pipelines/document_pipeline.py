@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from loguru import logger
@@ -34,13 +35,42 @@ class DocumentPipeline(BasePipeline):
         markdown_path, no_images_markdown = self._ocr_convert(pdf_path)
         self.logger.info(f'OCR conversion completed: {markdown_path}')
 
-        analysis = self._analyze_content(no_images_markdown)
-        self.logger.info('Content analysis completed')
+        # Run content analysis and citation extraction in parallel
+        self.logger.info('Starting parallel content analysis and citation extraction')
+        max_workers = 2  # Default value
+        try:
+            performance_config = getattr(
+                self.services.config, 'performance_config', None
+            )
+            if performance_config and hasattr(
+                performance_config, 'content_analysis_workers'
+            ):
+                workers = performance_config.content_analysis_workers
+                if isinstance(workers, int) and workers > 0:
+                    max_workers = workers
+        except (AttributeError, TypeError):
+            # Handle cases where config is mocked or misconfigured
+            pass
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit both tasks to run in parallel
+            analysis_future = executor.submit(self._analyze_content, no_images_markdown)
+            citations_future = executor.submit(
+                self._extract_citations, no_images_markdown
+            )
 
-        citations = self._extract_citations(no_images_markdown)
-        self.logger.info(
-            f'Citation extraction completed: {len(citations)} citations found'
-        )
+            # Collect results as they complete
+            analysis = None
+            citations = None
+
+            for future in as_completed([analysis_future, citations_future]):
+                if future == analysis_future:
+                    analysis = future.result()
+                    self.logger.info('Content analysis completed')
+                elif future == citations_future:
+                    citations = future.result()
+                    self.logger.info(
+                        f'Citation extraction completed: {len(citations)} citations found'
+                    )
 
         note_path, new_pdf_path, new_markdown_path = self._generate_note(
             pdf_path=pdf_path,
@@ -59,11 +89,18 @@ class DocumentPipeline(BasePipeline):
             },
         )
 
-        try:
-            self._index_to_rag(new_markdown_path)
-            self._index_to_rag(Path(note_path))
-        except Exception as e:  # pragma: no cover - optional integration
-            self.logger.warning(f'Failed to index documents to RAG system: {e}')
+        # Run RAG indexing in background to avoid blocking main pipeline
+        def _background_rag_indexing():
+            try:
+                self._index_to_rag(Path(new_markdown_path))
+                self._index_to_rag(Path(note_path))
+                self.logger.debug('Background RAG indexing completed')
+            except Exception as e:  # pragma: no cover - optional integration
+                self.logger.warning(f'Failed to index documents to RAG system: {e}')
+
+        # Submit to background processing (fire and forget)
+        with ThreadPoolExecutor(max_workers=1) as rag_executor:
+            rag_executor.submit(_background_rag_indexing)
 
         return Path(note_path), Path(new_pdf_path), Path(new_markdown_path)
 
