@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -51,6 +52,16 @@ class DocumentPipeline(BasePipeline):
         generation."""
         pdf_path = Path(pdf_path)
         self.logger.info(f'Processing PDF: {pdf_path}')
+
+        # Issue deprecation warning for standard pipeline usage
+        warnings.warn(
+            'Using DocumentPipeline (standard pipeline). '
+            'For 50-65% faster processing, consider upgrading to OptimizedDocumentPipeline '
+            'which provides async I/O, intelligent caching, and CPU-aware scaling. '
+            "Use 'thoth monitor --optimized' or 'thoth performance batch --optimized'.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
         if self.pdf_tracker.is_processed(
             pdf_path
