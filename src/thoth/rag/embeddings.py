@@ -148,7 +148,6 @@ class EmbeddingManager:
                     'normalize_embeddings': True,
                     'batch_size': 4,  # Even smaller batch size to prevent memory issues
                     'convert_to_numpy': True,  # Convert to numpy to free torch memory
-                    'show_progress_bar': False,  # Disable progress bar
                 },
                 show_progress=False,  # Disable progress display
             )
@@ -170,7 +169,6 @@ class EmbeddingManager:
                         'normalize_embeddings': True,
                         'batch_size': 4,
                         'convert_to_numpy': True,
-                        'show_progress_bar': False,
                     },
                     show_progress=False,
                 )

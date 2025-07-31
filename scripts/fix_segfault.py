@@ -107,18 +107,9 @@ def test_chromadb() -> bool:
 
         # Create temporary directory for testing
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Use safer client settings
-            client_settings = chromadb.config.Settings(
-                persist_directory=temp_dir,
-                anonymized_telemetry=False,
-                is_persistent=True,
-                chroma_db_impl='duckdb+parquet',
-            )
-
-            client = chromadb.PersistentClient(
-                path=temp_dir,
-                settings=client_settings,
-            )
+            # Use the new ChromaDB client initialization format (v0.5.0+)
+            # No longer need chromadb.config.Settings - it's deprecated
+            client = chromadb.PersistentClient(path=temp_dir)
 
             # Create a test collection
             collection = client.get_or_create_collection(

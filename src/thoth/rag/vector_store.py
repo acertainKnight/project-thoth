@@ -89,19 +89,9 @@ class VectorStoreManager:
     def _init_client(self) -> None:
         """Initialize the ChromaDB client with safe settings."""
         try:
-            # Use safer client settings to prevent segfaults
-            client_settings = chromadb.config.Settings(
-                persist_directory=str(self.persist_directory),
-                anonymized_telemetry=False,
-                is_persistent=True,
-                # Use safer SQLite settings
-                chroma_db_impl='duckdb+parquet',
-            )
-
-            self.client = chromadb.PersistentClient(
-                path=str(self.persist_directory),
-                settings=client_settings,
-            )
+            # Use the new ChromaDB client initialization format (v0.5.0+)
+            # No longer need chromadb.config.Settings - it's deprecated
+            self.client = chromadb.PersistentClient(path=str(self.persist_directory))
             logger.debug(f'ChromaDB client initialized at: {self.persist_directory}')
         except Exception as e:
             logger.error(f'Failed to initialize ChromaDB client: {e}')
