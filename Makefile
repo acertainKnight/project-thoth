@@ -13,7 +13,7 @@
 # - Linux/WSL: /mnt/c/Users/$(USER)/Documents/Obsidian Vault
 # - macOS: /Users/$(USER)/Documents/Obsidian Vault
 # - Windows: C:/Users/$(USER)/Documents/Obsidian Vault
-OBSIDIAN_VAULT ?= $(HOME)/Documents/Obsidian Vault
+OBSIDIAN_VAULT ?= /mnt/c/Users/nghal/Documents/Obsidian Vault
 
 # Plugin directories
 PLUGIN_SRC_DIR = obsidian-plugin/thoth-obsidian

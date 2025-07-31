@@ -5,6 +5,7 @@ Configuration utilities for Thoth.
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 from pydantic import Field
@@ -750,6 +751,317 @@ class ThothConfig(BaseSettings):
     def setup_logging(self) -> None:
         """Set up logging configuration using loguru."""
         setup_logging(self)
+
+    def export_for_obsidian(self) -> dict[str, Any]:
+        """Export configuration in Obsidian plugin format.
+
+        This method converts the internal Thoth configuration to the format
+        expected by the Obsidian plugin, maintaining compatibility while
+        providing a unified interface.
+        """
+        return {
+            # API Keys
+            'mistralKey': self.api_keys.mistral_key or '',
+            'openrouterKey': self.api_keys.openrouter_key or '',
+            'opencitationsKey': self.api_keys.opencitations_key or '',
+            'googleApiKey': self.api_keys.google_api_key or '',
+            'googleSearchEngineId': self.api_keys.google_search_engine_id or '',
+            'semanticScholarKey': self.api_keys.semanticscholar_api_key or '',
+            'webSearchKey': self.api_keys.web_search_key or '',
+            'webSearchProviders': ','.join(self.api_keys.web_search_providers),
+            # Directories
+            'workspaceDirectory': str(self.workspace_dir),
+            'obsidianDirectory': str(self.notes_dir),
+            'dataDirectory': str(self.core.workspace_dir / 'data'),
+            'knowledgeDirectory': str(self.core.knowledge_base_dir),
+            'logsDirectory': str(self.logging_config.logdir),
+            'queriesDirectory': str(self.queries_dir),
+            'agentStorageDirectory': str(self.agent_storage_dir),
+            'pdfDirectory': str(self.pdf_dir),
+            'promptsDirectory': str(self.prompts_dir),
+            # Connection Settings
+            'remoteMode': False,  # Default to local mode
+            'remoteEndpointUrl': '',
+            'endpointHost': self.api_server_config.host,
+            'endpointPort': self.api_server_config.port,
+            'endpointBaseUrl': self.api_server_config.base_url,
+            'corsOrigins': ['http://localhost:3000', 'http://127.0.0.1:8080'],
+            # LLM Configuration
+            'primaryLlmModel': self.llm_config.model,
+            'analysisLlmModel': self.citation_llm_config.model,
+            'researchAgentModel': self.research_agent_llm_config.model,
+            'llmTemperature': self.llm_config.model_settings.temperature,
+            'analysisLlmTemperature': self.citation_llm_config.model_settings.temperature,
+            'llmMaxOutputTokens': self.llm_config.max_output_tokens,
+            'analysisLlmMaxOutputTokens': self.citation_llm_config.max_output_tokens,
+            # Agent Behavior
+            'researchAgentAutoStart': self.research_agent_config.auto_start,
+            'researchAgentDefaultQueries': True,  # Default value
+            'researchAgentMemoryEnabled': self.research_agent_config.enable_memory,
+            'agentMaxToolCalls': self.research_agent_config.max_tool_calls,
+            'agentTimeoutSeconds': self.research_agent_config.timeout_seconds,
+            # Discovery System
+            'discoveryAutoStartScheduler': self.discovery_config.auto_start_scheduler,
+            'discoveryDefaultMaxArticles': self.discovery_config.default_max_articles,
+            'discoveryDefaultIntervalMinutes': self.discovery_config.default_interval_minutes,
+            'discoveryRateLimitDelay': self.discovery_config.rate_limit_delay,
+            'discoveryChromeExtensionEnabled': True,  # Default value
+            'discoveryChromeExtensionPort': 8765,  # Default value
+            # Logging Configuration
+            'logLevel': self.logging_config.level,
+            'logFormat': self.logging_config.logformat,
+            'logRotation': '10 MB',  # Default value
+            'logRetention': '30 days',  # Default value
+            'enablePerformanceMonitoring': False,  # Default value
+            'metricsInterval': 60,  # Default value
+            # Security & Performance
+            'encryptionKey': '',  # Not stored in config
+            'sessionTimeout': 3600,  # Default value
+            'apiRateLimit': self.api_gateway_config.rate_limit,
+            'healthCheckTimeout': 30,  # Default value
+            'developmentMode': False,  # Default value
+            # Plugin Behavior (defaults for now)
+            'autoStartAgent': False,
+            'showStatusBar': True,
+            'showRibbonIcon': True,
+            'autoSaveSettings': True,
+            'chatHistoryLimit': 20,
+            'chatHistory': [],
+            # UI Preferences (defaults for now)
+            'theme': 'auto',
+            'compactMode': False,
+            'showAdvancedSettings': False,
+            'enableNotifications': True,
+            'notificationDuration': 5000,
+        }
+
+    @classmethod
+    def import_from_obsidian(cls, obsidian_settings: dict[str, Any]) -> 'ThothConfig':
+        """Import configuration from Obsidian plugin format.
+
+        This method creates a ThothConfig instance from Obsidian plugin settings,
+        allowing seamless integration between the plugin and backend.
+        """
+        import os
+
+        # Set environment variables from Obsidian settings
+        env_vars = {}
+
+        # API Keys
+        if obsidian_settings.get('mistralKey'):
+            env_vars['API_MISTRAL_KEY'] = obsidian_settings['mistralKey']
+        if obsidian_settings.get('openrouterKey'):
+            env_vars['API_OPENROUTER_KEY'] = obsidian_settings['openrouterKey']
+        if obsidian_settings.get('opencitationsKey'):
+            env_vars['API_OPENCITATIONS_KEY'] = obsidian_settings['opencitationsKey']
+        if obsidian_settings.get('googleApiKey'):
+            env_vars['API_GOOGLE_API_KEY'] = obsidian_settings['googleApiKey']
+        if obsidian_settings.get('googleSearchEngineId'):
+            env_vars['API_GOOGLE_SEARCH_ENGINE_ID'] = obsidian_settings[
+                'googleSearchEngineId'
+            ]
+        if obsidian_settings.get('semanticScholarKey'):
+            env_vars['API_SEMANTICSCHOLAR_API_KEY'] = obsidian_settings[
+                'semanticScholarKey'
+            ]
+        if obsidian_settings.get('webSearchKey'):
+            env_vars['API_WEB_SEARCH_KEY'] = obsidian_settings['webSearchKey']
+        if obsidian_settings.get('webSearchProviders'):
+            env_vars['API_WEB_SEARCH_PROVIDERS'] = obsidian_settings[
+                'webSearchProviders'
+            ]
+
+        # Directories
+        if obsidian_settings.get('workspaceDirectory'):
+            env_vars['WORKSPACE_DIR'] = obsidian_settings['workspaceDirectory']
+        if obsidian_settings.get('obsidianDirectory'):
+            env_vars['NOTES_DIR'] = obsidian_settings['obsidianDirectory']
+        if obsidian_settings.get('pdfDirectory'):
+            env_vars['PDF_DIR'] = obsidian_settings['pdfDirectory']
+        if obsidian_settings.get('promptsDirectory'):
+            env_vars['PROMPTS_DIR'] = obsidian_settings['promptsDirectory']
+
+        # LLM Configuration
+        if obsidian_settings.get('primaryLlmModel'):
+            env_vars['LLM_MODEL'] = obsidian_settings['primaryLlmModel']
+        if obsidian_settings.get('llmTemperature') is not None:
+            env_vars['LLM_MODEL_SETTINGS_TEMPERATURE'] = str(
+                obsidian_settings['llmTemperature']
+            )
+        if obsidian_settings.get('llmMaxOutputTokens'):
+            env_vars['LLM_MAX_OUTPUT_TOKENS'] = str(
+                obsidian_settings['llmMaxOutputTokens']
+            )
+
+        # Research Agent Configuration
+        if obsidian_settings.get('researchAgentModel'):
+            env_vars['RESEARCH_AGENT_LLM_MODEL'] = obsidian_settings[
+                'researchAgentModel'
+            ]
+        if obsidian_settings.get('agentMaxToolCalls'):
+            env_vars['RESEARCH_AGENT_MAX_TOOL_CALLS'] = str(
+                obsidian_settings['agentMaxToolCalls']
+            )
+        if obsidian_settings.get('agentTimeoutSeconds'):
+            env_vars['RESEARCH_AGENT_TIMEOUT_SECONDS'] = str(
+                obsidian_settings['agentTimeoutSeconds']
+            )
+
+        # Citation LLM Configuration (for analysis)
+        if obsidian_settings.get('analysisLlmModel'):
+            env_vars['CITATION_LLM_MODEL'] = obsidian_settings['analysisLlmModel']
+        if obsidian_settings.get('analysisLlmTemperature') is not None:
+            env_vars['CITATION_LLM_MODEL_SETTINGS_TEMPERATURE'] = str(
+                obsidian_settings['analysisLlmTemperature']
+            )
+        if obsidian_settings.get('analysisLlmMaxOutputTokens'):
+            env_vars['CITATION_LLM_MAX_OUTPUT_TOKENS'] = str(
+                obsidian_settings['analysisLlmMaxOutputTokens']
+            )
+
+        # Discovery Configuration
+        if obsidian_settings.get('discoveryDefaultMaxArticles'):
+            env_vars['DISCOVERY_DEFAULT_MAX_ARTICLES'] = str(
+                obsidian_settings['discoveryDefaultMaxArticles']
+            )
+        if obsidian_settings.get('discoveryDefaultIntervalMinutes'):
+            env_vars['DISCOVERY_DEFAULT_INTERVAL_MINUTES'] = str(
+                obsidian_settings['discoveryDefaultIntervalMinutes']
+            )
+        if obsidian_settings.get('discoveryRateLimitDelay'):
+            env_vars['DISCOVERY_RATE_LIMIT_DELAY'] = str(
+                obsidian_settings['discoveryRateLimitDelay']
+            )
+
+        # Server Configuration
+        if obsidian_settings.get('endpointHost'):
+            env_vars['ENDPOINT_HOST'] = obsidian_settings['endpointHost']
+        if obsidian_settings.get('endpointPort'):
+            env_vars['ENDPOINT_PORT'] = str(obsidian_settings['endpointPort'])
+
+        # Logging Configuration
+        if obsidian_settings.get('logLevel'):
+            env_vars['LOG_LEVEL'] = obsidian_settings['logLevel']
+
+        # Set environment variables temporarily
+        original_env = {}
+        for key, value in env_vars.items():
+            original_env[key] = os.environ.get(key)
+            os.environ[key] = value
+
+        try:
+            # Create config with updated environment
+            config = cls()
+            return config
+        finally:
+            # Restore original environment variables
+            for key, original_value in original_env.items():
+                if original_value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = original_value
+
+    def validate_for_obsidian(self) -> dict[str, list[str]]:
+        """Validate configuration for Obsidian integration and return any issues.
+
+        Returns:
+            Dict with 'errors' and 'warnings' keys containing lists of validation
+            messages.
+        """
+        errors = []
+        warnings = []
+
+        # Check required API keys
+        if not self.api_keys.mistral_key and not self.api_keys.openrouter_key:
+            errors.append('At least one of Mistral or OpenRouter API key is required')
+
+        if not self.api_keys.opencitations_key:
+            warnings.append(
+                'OpenCitations API key is recommended for citation functionality'
+            )
+
+        # Check directory accessibility
+        if not self.workspace_dir.exists():
+            warnings.append(f'Workspace directory does not exist: {self.workspace_dir}')
+
+        if not self.pdf_dir.exists():
+            warnings.append(f'PDF directory does not exist: {self.pdf_dir}')
+
+        # Check server configuration
+        if not (1024 <= self.api_server_config.port <= 65535):
+            errors.append('Server port must be between 1024 and 65535')
+
+        # Check LLM parameters
+        if not (0.0 <= self.llm_config.model_settings.temperature <= 1.0):
+            errors.append('LLM temperature must be between 0.0 and 1.0')
+
+        if self.llm_config.max_output_tokens < 1:
+            errors.append('LLM max output tokens must be positive')
+
+        # Check agent configuration
+        if (
+            hasattr(self.research_agent_config, 'max_tool_calls')
+            and self.research_agent_config.max_tool_calls < 1
+        ):
+            errors.append('Agent max tool calls must be positive')
+
+        if (
+            hasattr(self.research_agent_config, 'timeout_seconds')
+            and self.research_agent_config.timeout_seconds < 30
+        ):
+            warnings.append('Agent timeout less than 30 seconds may cause issues')
+
+        # Check discovery configuration
+        if self.discovery_config.default_max_articles < 1:
+            errors.append('Discovery max articles must be positive')
+
+        if self.discovery_config.default_interval_minutes < 15:
+            warnings.append(
+                'Discovery interval less than 15 minutes may cause rate limiting'
+            )
+
+        return {'errors': errors, 'warnings': warnings}
+
+    def sync_to_environment(self) -> dict[str, str]:
+        """Sync current configuration to environment variables.
+
+        Returns:
+            Dict of environment variables that were set.
+        """
+        import os
+
+        env_vars = {}
+
+        # API Keys
+        if self.api_keys.mistral_key:
+            env_vars['API_MISTRAL_KEY'] = self.api_keys.mistral_key
+        if self.api_keys.openrouter_key:
+            env_vars['API_OPENROUTER_KEY'] = self.api_keys.openrouter_key
+        if self.api_keys.opencitations_key:
+            env_vars['API_OPENCITATIONS_KEY'] = self.api_keys.opencitations_key
+
+        # Directories
+        env_vars['WORKSPACE_DIR'] = str(self.workspace_dir)
+        env_vars['NOTES_DIR'] = str(self.notes_dir)
+        env_vars['PDF_DIR'] = str(self.pdf_dir)
+        env_vars['PROMPTS_DIR'] = str(self.prompts_dir)
+
+        # LLM Configuration
+        env_vars['LLM_MODEL'] = self.llm_config.model
+        env_vars['LLM_MODEL_SETTINGS_TEMPERATURE'] = str(
+            self.llm_config.model_settings.temperature
+        )
+        env_vars['LLM_MAX_OUTPUT_TOKENS'] = str(self.llm_config.max_output_tokens)
+
+        # Server Configuration
+        env_vars['ENDPOINT_HOST'] = self.api_server_config.host
+        env_vars['ENDPOINT_PORT'] = str(self.api_server_config.port)
+
+        # Set all environment variables
+        for key, value in env_vars.items():
+            os.environ[key] = value
+
+        return env_vars
 
 
 def load_config() -> ThothConfig:

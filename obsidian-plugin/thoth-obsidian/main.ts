@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
 import { exec, spawn, ChildProcess } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
@@ -86,6 +86,12 @@ interface ThothSettings {
   chatHistoryLimit: number;
   chatHistory: ChatMessage[];
 
+  // === MULTI-CHAT CONFIGURATION ===
+  enableMultipleChats: boolean;
+  maxChatWindows: number;
+  chatWindowStates: ChatWindowState[];
+  activeChatSessionId: string | null;
+
   // === UI PREFERENCES ===
   theme: string;
   compactMode: boolean;
@@ -98,6 +104,33 @@ interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  id?: string;
+}
+
+interface ChatSession {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  is_active: boolean;
+  metadata: Record<string, any>;
+  message_count: number;
+  last_message_preview: string;
+}
+
+interface ChatWindowState {
+  sessionId: string;
+  title: string;
+  messages: ChatMessage[];
+  isActive: boolean;
+}
+
+interface NotificationProgress {
+  notice: Notice;
+  updateProgress: (progress: number, message?: string) => void;
+  updateMessage: (message: string) => void;
+  close: () => void;
+  setType: (type: 'info' | 'success' | 'warning' | 'error') => void;
 }
 
 const DEFAULT_SETTINGS: ThothSettings = {
@@ -177,6 +210,12 @@ const DEFAULT_SETTINGS: ThothSettings = {
   chatHistoryLimit: 20,
   chatHistory: [],
 
+  // Multi-chat defaults
+  enableMultipleChats: true,
+  maxChatWindows: 5,
+  chatWindowStates: [],
+  activeChatSessionId: null,
+
   // === UI PREFERENCES ===
   theme: 'auto',
   compactMode: false,
@@ -193,6 +232,14 @@ export default class ThothPlugin extends Plugin {
   isRestarting: boolean = false;
   socket: WebSocket | null = null;
   wsResolvers: Map<string, { resolve: (v: string) => void; reject: (e: Error) => void }> = new Map();
+
+  // Performance and caching
+  private requestCache: Map<string, { data: any; timestamp: number; expires: number }> = new Map();
+  private requestQueue: Array<{ request: () => Promise<any>; resolve: (value: any) => void; reject: (error: any) => void }> = [];
+  private isProcessingQueue: boolean = false;
+  private maxConcurrentRequests: number = 3;
+  private activeRequests: number = 0;
+  private cacheDefaultTTL: number = 300000; // 5 minutes
 
   async onload() {
     await this.loadSettings();
@@ -236,6 +283,9 @@ export default class ThothPlugin extends Plugin {
       }
     });
 
+    // Add comprehensive command palette integration
+    this.registerCommands();
+
     this.addCommand({
       id: 'insert-research-query',
       name: 'Insert Research Query',
@@ -278,10 +328,6 @@ export default class ThothPlugin extends Plugin {
         this.startAgent();
       }, 2000); // Wait 2 seconds for Obsidian to fully load
     }
-  }
-
-  onunload() {
-    this.stopAgent();
   }
 
   async loadSettings() {
@@ -876,62 +922,2297 @@ export default class ThothPlugin extends Plugin {
   }
 
   openChatModal() {
-    new ChatModal(this.app, this).open();
+    if (this.settings.enableMultipleChats) {
+      new MultiChatModal(this.app, this).open();
+    } else {
+      new EnhancedThothModal(this.app, this).open();
+    }
+  }
+
+  registerCommands() {
+    // Discovery Commands
+    this.addCommand({
+      id: 'thoth-discovery-list',
+      name: 'Thoth: List Discovery Sources',
+      callback: () => {
+        this.executeQuickCommand('discovery', ['list']);
+      }
+    });
+
+    this.addCommand({
+      id: 'thoth-discovery-run',
+      name: 'Thoth: Run Discovery',
+      callback: () => {
+        this.promptAndExecuteCommand('discovery', ['run'], 'Enter source name (optional):');
+      }
+    });
+
+    this.addCommand({
+      id: 'thoth-discovery-create',
+      name: 'Thoth: Create Discovery Source',
+      callback: () => {
+        this.openDiscoverySourceCreator();
+      }
+    });
+
+    // PDF Commands
+    this.addCommand({
+      id: 'thoth-pdf-locate',
+      name: 'Thoth: Locate PDF',
+      callback: () => {
+        this.promptAndExecuteCommand('pdf-locate', [], 'Enter DOI or paper identifier:');
+      }
+    });
+
+    this.addCommand({
+      id: 'thoth-pdf-stats',
+      name: 'Thoth: PDF Statistics',
+      callback: () => {
+        this.executeQuickCommand('pdf-stats', []);
+      }
+    });
+
+    this.addCommand({
+      id: 'thoth-pdf-process-current',
+      name: 'Thoth: Process Current PDF',
+      callback: () => {
+        this.processCurrentFile();
+      }
+    });
+
+    // RAG Commands
+    this.addCommand({
+      id: 'thoth-rag-index',
+      name: 'Thoth: Index Knowledge Base',
+      callback: () => {
+        this.executeQuickCommand('rag', ['index']);
+      }
+    });
+
+    this.addCommand({
+      id: 'thoth-rag-search',
+      name: 'Thoth: Search Knowledge Base',
+      callback: () => {
+        this.promptAndExecuteCommand('rag', ['search'], 'Enter search query:');
+      }
+    });
+
+    this.addCommand({
+      id: 'thoth-rag-ask',
+      name: 'Thoth: Ask Knowledge Base',
+      callback: () => {
+        this.promptAndExecuteCommand('rag', ['ask'], 'Enter your question:');
+      }
+    });
+
+    this.addCommand({
+      id: 'thoth-rag-stats',
+      name: 'Thoth: RAG Statistics',
+      callback: () => {
+        this.executeQuickCommand('rag', ['stats']);
+      }
+    });
+
+    // Notes Commands
+    this.addCommand({
+      id: 'thoth-notes-regenerate',
+      name: 'Thoth: Regenerate All Notes',
+      callback: () => {
+        this.confirmAndExecuteCommand('notes', ['regenerate-all-notes'], 'This will regenerate all notes. Continue?');
+      }
+    });
+
+    this.addCommand({
+      id: 'thoth-notes-consolidate-tags',
+      name: 'Thoth: Consolidate Tags',
+      callback: () => {
+        this.executeQuickCommand('notes', ['consolidate-tags']);
+      }
+    });
+
+    this.addCommand({
+      id: 'thoth-notes-reprocess',
+      name: 'Thoth: Reprocess Current Note',
+      callback: () => {
+        this.reprocessCurrentNote();
+      }
+    });
+
+    // Quick Actions
+    this.addCommand({
+      id: 'thoth-quick-research',
+      name: 'Thoth: Quick Research (Selected Text)',
+      editorCallback: (editor: Editor, view: MarkdownView) => {
+        const selectedText = editor.getSelection();
+        if (selectedText) {
+          this.performQuickResearch(selectedText, editor);
+        } else {
+          new Notice('Please select text to research');
+        }
+      }
+    });
+
+    this.addCommand({
+      id: 'thoth-insert-citation',
+      name: 'Thoth: Insert Citation',
+      editorCallback: (editor: Editor, view: MarkdownView) => {
+        this.openCitationInserter(editor);
+      }
+    });
+
+    this.addCommand({
+      id: 'thoth-open-tools-tab',
+      name: 'Thoth: Open Tools Tab',
+      callback: () => {
+        const modal = new EnhancedThothModal(this.app, this);
+        modal.open();
+        setTimeout(() => modal.switchTab('tools'), 100);
+      }
+    });
+
+    this.addCommand({
+      id: 'thoth-open-status-tab',
+      name: 'Thoth: Open Status Tab',
+      callback: () => {
+        const modal = new EnhancedThothModal(this.app, this);
+        modal.open();
+        setTimeout(() => modal.switchTab('status'), 100);
+      }
+    });
+
+    // Agent Management
+    this.addCommand({
+      id: 'thoth-toggle-agent',
+      name: 'Thoth: Toggle Agent (Start/Stop)',
+      callback: () => {
+        if (this.isAgentRunning) {
+          this.stopAgent();
+        } else {
+          this.startAgent();
+        }
+      }
+    });
+
+    this.addCommand({
+      id: 'thoth-agent-health-check',
+      name: 'Thoth: Agent Health Check',
+      callback: () => {
+        this.performHealthCheck();
+      }
+    });
+
+    // Configuration
+    this.addCommand({
+      id: 'thoth-validate-config',
+      name: 'Thoth: Validate Configuration',
+      callback: () => {
+        this.validateConfiguration();
+      }
+    });
+
+    this.addCommand({
+      id: 'thoth-sync-config',
+      name: 'Thoth: Sync Configuration to Backend',
+      callback: () => {
+        this.syncSettingsToBackend();
+      }
+    });
+  }
+
+  async executeQuickCommand(command: string, args: string[]) {
+    if (!this.isAgentRunning) {
+      this.smartNotice('Thoth agent is not running. Please start it first.', 'warning', 2);
+      return;
+    }
+
+    const commandId = `cmd-${command}-${Date.now()}`;
+    const progressNotification = this.createProgressNotification(
+      commandId,
+      `Executing ${command}...`,
+      {
+        type: 'info',
+        canCancel: true,
+        onCancel: () => {
+          // TODO: Implement command cancellation
+          this.smartNotice(`${command} operation cancelled`, 'warning');
+        }
+      }
+    );
+
+    try {
+      progressNotification.updateProgress(10, `Sending ${command} request...`);
+
+      const endpoint = this.getEndpointUrl();
+      const response = await fetch(`${endpoint}/execute/command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: command,
+          args: args,
+          stream_output: true
+        })
+      });
+
+      progressNotification.updateProgress(30, 'Processing request...');
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.streaming) {
+          progressNotification.updateProgress(60, `${command} running...`);
+
+          // Simulate progress for long-running operations
+          setTimeout(() => {
+            progressNotification.updateProgress(80, 'Finalizing...');
+            setTimeout(() => {
+              progressNotification.updateProgress(100, `${command} completed!`);
+              progressNotification.setType('success');
+
+              setTimeout(() => {
+                progressNotification.close();
+                this.smartNotice(`${command} completed successfully`, 'success');
+              }, 1500);
+            }, 1000);
+          }, 2000);
+        } else {
+          progressNotification.updateProgress(100, `${command} completed!`);
+          progressNotification.setType('success');
+
+          setTimeout(() => {
+            progressNotification.close();
+            this.smartNotice(`${command} completed successfully`, 'success');
+          }, 1500);
+        }
+      } else {
+        throw new Error(`Command failed: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('Command execution error:', error);
+      progressNotification.setType('error');
+      progressNotification.updateMessage(`${command} failed: ${error.message}`);
+
+      setTimeout(() => {
+        progressNotification.close();
+        this.smartNotice(`${command} execution failed`, 'error', 3);
+      }, 3000);
+    }
+  }
+
+  async promptAndExecuteCommand(command: string, baseArgs: string[], promptText: string) {
+    const input = await this.showInputPrompt(promptText);
+    if (input) {
+      const args = input ? [...baseArgs, ...input.split(' ')] : baseArgs;
+      this.executeQuickCommand(command, args);
+    }
+  }
+
+  async confirmAndExecuteCommand(command: string, args: string[], confirmText: string) {
+    const confirmed = await this.showConfirmDialog(confirmText);
+    if (confirmed) {
+      this.executeQuickCommand(command, args);
+    }
+  }
+
+  async showInputPrompt(promptText: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      const modal = new InputModal(this.app, promptText, resolve);
+      modal.open();
+    });
+  }
+
+  async showConfirmDialog(message: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const modal = new ConfirmModal(this.app, message, resolve);
+      modal.open();
+    });
+  }
+
+  async processCurrentFile() {
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!activeFile) {
+      new Notice('No active file');
+      return;
+    }
+
+    if (!activeFile.path.endsWith('.pdf')) {
+      new Notice('Current file is not a PDF');
+      return;
+    }
+
+    try {
+      const endpoint = this.getEndpointUrl();
+      const response = await fetch(`${endpoint}/stream/operation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          operation_type: 'pdf_process',
+          parameters: {
+            pdf_paths: [activeFile.path]
+          }
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        new Notice(`Processing ${activeFile.name}. Check Thoth status for progress.`);
+      } else {
+        throw new Error(`PDF processing failed: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('PDF processing error:', error);
+      new Notice(`PDF processing failed: ${error.message}`);
+    }
+  }
+
+  async reprocessCurrentNote() {
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!activeFile) {
+      new Notice('No active file');
+      return;
+    }
+
+    // Extract article ID from filename or metadata
+    const articleId = this.extractArticleId(activeFile);
+    if (!articleId) {
+      new Notice('Could not determine article ID from current note');
+      return;
+    }
+
+    this.executeQuickCommand('notes', ['reprocess-note', '--article-id', articleId]);
+  }
+
+  extractArticleId(file: TFile): string | null {
+    // Try to extract article ID from filename or frontmatter
+    const basename = file.basename;
+
+    // Check if filename contains DOI pattern
+    const doiMatch = basename.match(/10\.\d{4,}\/[^\s]+/);
+    if (doiMatch) {
+      return doiMatch[0];
+    }
+
+    // Check if filename contains arXiv pattern
+    const arxivMatch = basename.match(/(\d{4}\.\d{4,5})/);
+    if (arxivMatch) {
+      return `arxiv:${arxivMatch[1]}`;
+    }
+
+    // Fallback to using filename
+    return basename;
+  }
+
+  async performQuickResearch(query: string, editor: Editor) {
+    if (!this.isAgentRunning) {
+      new Notice('Thoth agent is not running. Please start it first.');
+      return;
+    }
+
+    try {
+      new Notice('Researching... This may take a moment.');
+
+      const endpoint = this.getEndpointUrl();
+      const response = await fetch(`${endpoint}/research/query`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: query,
+          type: 'quick_research',
+          max_results: 5,
+          include_citations: true
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+
+        // Insert the research results at the cursor position
+        const cursor = editor.getCursor();
+        const researchText = `\n\n## 🔍 Research: ${query}\n*Generated on ${new Date().toLocaleString()} by Thoth Research Assistant*\n\n${result.response || result.results}\n\n---\n`;
+
+        editor.replaceRange(researchText, cursor);
+        new Notice('Research completed and inserted!');
+      } else {
+        throw new Error(`Research request failed: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('Research error:', error);
+      new Notice(`Research failed: ${error.message}`);
+    }
+  }
+
+  async openCitationInserter(editor: Editor) {
+    const modal = new CitationInserterModal(this.app, this, editor);
+    modal.open();
+  }
+
+  async openDiscoverySourceCreator() {
+    const modal = new DiscoverySourceModal(this.app, this);
+    modal.open();
+  }
+
+  async performHealthCheck() {
+    try {
+      const endpoint = this.getEndpointUrl();
+      const response = await fetch(`${endpoint}/health`);
+
+      if (response.ok) {
+        const health = await response.json();
+        new Notice(`Health Check: ${health.status || 'OK'}`);
+      } else {
+        new Notice(`Health Check Failed: ${response.statusText}`);
+      }
+    } catch (error) {
+      new Notice(`Health Check Failed: ${error.message}`);
+    }
+  }
+
+  async validateConfiguration() {
+    try {
+      const endpoint = this.getEndpointUrl();
+      const response = await fetch(`${endpoint}/config/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.settings)
+      });
+
+      if (response.ok) {
+        const validation = await response.json();
+        if (validation.is_valid) {
+          new Notice('✅ Configuration is valid');
+        } else {
+          new Notice(`❌ Configuration errors: ${validation.error_count}`);
+          console.log('Validation errors:', validation.errors);
+        }
+      } else {
+        new Notice('Configuration validation failed');
+      }
+    } catch (error) {
+      new Notice(`Validation failed: ${error.message}`);
+    }
+  }
+
+  // ============================================================================
+  // PERFORMANCE & CACHING SYSTEM
+  // ============================================================================
+
+  /**
+   * Cached HTTP request with automatic cache management
+   */
+  async cachedRequest(url: string, options: RequestInit = {}, ttl: number = this.cacheDefaultTTL): Promise<any> {
+    const cacheKey = this.generateCacheKey(url, options);
+
+    // Check cache first
+    const cached = this.requestCache.get(cacheKey);
+    if (cached && Date.now() < cached.expires) {
+      return cached.data;
+    }
+
+    // Queue the request to avoid overwhelming the server
+    return this.queueRequest(async () => {
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        throw new Error(`Request failed: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      // Cache the result
+      this.requestCache.set(cacheKey, {
+        data,
+        timestamp: Date.now(),
+        expires: Date.now() + ttl
+      });
+
+      return data;
+    });
+  }
+
+  /**
+   * Queue requests to prevent overwhelming the backend
+   */
+  private async queueRequest<T>(request: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.requestQueue.push({ request, resolve, reject });
+      this.processQueue();
+    });
+  }
+
+  /**
+   * Process the request queue with concurrency control
+   */
+  private async processQueue(): Promise<void> {
+    if (this.isProcessingQueue || this.activeRequests >= this.maxConcurrentRequests) {
+      return;
+    }
+
+    this.isProcessingQueue = true;
+
+    while (this.requestQueue.length > 0 && this.activeRequests < this.maxConcurrentRequests) {
+      const { request, resolve, reject } = this.requestQueue.shift()!;
+
+      this.activeRequests++;
+
+      request()
+        .then(resolve)
+        .catch(reject)
+        .finally(() => {
+          this.activeRequests--;
+          this.processQueue(); // Process next items in queue
+        });
+    }
+
+    this.isProcessingQueue = false;
+  }
+
+  /**
+   * Generate cache key from URL and options
+   */
+  private generateCacheKey(url: string, options: RequestInit): string {
+    const method = options.method || 'GET';
+    const body = options.body ? JSON.stringify(options.body) : '';
+    return `${method}:${url}:${body}`;
+  }
+
+  /**
+   * Clear expired cache entries
+   */
+  private cleanupCache(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.requestCache.entries()) {
+      if (now > entry.expires) {
+        this.requestCache.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Enhanced fetch with intelligent caching and retries
+   */
+  async enhancedFetch(url: string, options: RequestInit = {}, config: {
+    cache?: boolean;
+    cacheTTL?: number;
+    retries?: number;
+    retryDelay?: number;
+  } = {}): Promise<Response> {
+    const {
+      cache = true,
+      cacheTTL = this.cacheDefaultTTL,
+      retries = 2,
+      retryDelay = 1000
+    } = config;
+
+    if (cache && options.method === 'GET') {
+      try {
+        return await this.cachedRequest(url, options, cacheTTL);
+      } catch (error) {
+        // Fall through to regular fetch with retries
+      }
+    }
+
+    // Implement retry logic
+    let lastError: Error;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const response = await this.queueRequest(() => fetch(url, options));
+        if (response.ok) {
+          return response;
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      } catch (error) {
+        lastError = error as Error;
+        if (attempt < retries) {
+          await new Promise(resolve => setTimeout(resolve, retryDelay * Math.pow(2, attempt)));
+        }
+      }
+    }
+
+    throw lastError!;
+  }
+
+  /**
+   * Batch multiple operations for efficiency
+   */
+  async batchExecute<T>(operations: Array<() => Promise<T>>, maxConcurrent: number = 3): Promise<T[]> {
+    const results: T[] = [];
+    const errors: Error[] = [];
+
+    for (let i = 0; i < operations.length; i += maxConcurrent) {
+      const batch = operations.slice(i, i + maxConcurrent);
+      const batchPromises = batch.map(async (op, index) => {
+        try {
+          return await op();
+        } catch (error) {
+          errors.push(error as Error);
+          return null;
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      const validResults = batchResults.filter(result => result !== null) as T[];
+      results.push(...validResults);
+    }
+
+    if (errors.length > 0) {
+      console.warn(`Batch execution completed with ${errors.length} errors:`, errors);
+    }
+
+    return results;
+  }
+
+  /**
+   * Enhanced notification system with progress indicators and deduplication
+   */
+  private notificationHistory: Map<string, number> = new Map();
+  private activeProgressNotifications: Map<string, NotificationProgress> = new Map();
+  private readonly NOTIFICATION_COOLDOWN = 5000; // 5 seconds
+
+  smartNotice(message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info', priority: number = 1): void {
+    const notificationKey = `${type}:${message}`;
+    const lastShown = this.notificationHistory.get(notificationKey) || 0;
+    const now = Date.now();
+
+    // Deduplicate notifications within cooldown period
+    if (now - lastShown < this.NOTIFICATION_COOLDOWN && priority <= 1) {
+      return;
+    }
+
+    this.notificationHistory.set(notificationKey, now);
+
+    // Create styled notice based on type
+    const notice = new Notice('', this.settings.notificationDuration);
+    const noticeEl = notice.noticeEl;
+
+    // Apply custom styling
+    noticeEl.empty();
+    const content = noticeEl.createDiv();
+
+    const iconMap = {
+      info: 'ℹ️',
+      success: '✅',
+      warning: '⚠️',
+      error: '❌'
+    };
+
+    const colorMap = {
+      info: 'var(--text-accent)',
+      success: 'var(--color-green)',
+      warning: 'var(--color-orange)',
+      error: 'var(--color-red)'
+    };
+
+    content.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 16px;">${iconMap[type]}</span>
+        <span style="color: ${colorMap[type]}; font-weight: 500;">Thoth:</span>
+        <span>${message}</span>
+      </div>
+    `;
+
+    // Auto-cleanup old notifications from history
+    if (this.notificationHistory.size > 100) {
+      const cutoff = now - this.NOTIFICATION_COOLDOWN * 2;
+      for (const [key, timestamp] of this.notificationHistory.entries()) {
+        if (timestamp < cutoff) {
+          this.notificationHistory.delete(key);
+        }
+      }
+    }
+  }
+
+  /**
+   * Get notification icon based on type
+   */
+  private getNotificationIcon(type: 'info' | 'success' | 'warning' | 'error'): string {
+    const iconMap = {
+      info: '🔵',
+      success: '✅',
+      warning: '⚠️',
+      error: '❌'
+    };
+    return iconMap[type];
+  }
+
+  /**
+   * Create a progress notification that can be updated
+   */
+  createProgressNotification(
+    id: string,
+    initialMessage: string,
+    options: {
+      type?: 'info' | 'success' | 'warning' | 'error';
+      canCancel?: boolean;
+      onCancel?: () => void;
+      duration?: number;
+    } = {}
+  ): NotificationProgress {
+    const { type = 'info', canCancel = false, onCancel, duration = 0 } = options;
+
+    // Close existing progress notification with same ID
+    if (this.activeProgressNotifications.has(id)) {
+      this.activeProgressNotifications.get(id)!.close();
+    }
+
+    // Ensure enhanced notification styles are loaded
+    this.loadEnhancedNotificationStyles();
+
+    const notice = new Notice('', duration);
+    const noticeEl = notice.noticeEl;
+
+    noticeEl.addClass(`thoth-notice-${type}`);
+    noticeEl.addClass('thoth-progress-notification');
+
+    // Create progress notification HTML
+    noticeEl.innerHTML = `
+      <div class="thoth-notice-content">
+        <span class="thoth-notice-icon">${this.getNotificationIcon(type)}</span>
+        <span class="thoth-progress-message">${initialMessage}</span>
+      </div>
+      <div class="thoth-progress-container">
+        <div class="thoth-progress-bar" style="width: 0%"></div>
+      </div>
+      ${canCancel ? `
+        <div class="thoth-notice-actions">
+          <button class="thoth-notice-btn thoth-cancel-btn">🚫 Cancel</button>
+        </div>
+      ` : ''}
+    `;
+
+    // Set up cancel functionality
+    if (canCancel && onCancel) {
+      const cancelBtn = noticeEl.querySelector('.thoth-cancel-btn') as HTMLButtonElement;
+      if (cancelBtn) {
+        cancelBtn.onclick = () => {
+          onCancel();
+          this.closeProgressNotification(id);
+        };
+      }
+    }
+
+    const progressNotification: NotificationProgress = {
+      notice,
+      updateProgress: (progress: number, message?: string) => {
+        const progressBar = noticeEl.querySelector('.thoth-progress-bar') as HTMLElement;
+        const messageEl = noticeEl.querySelector('.thoth-progress-message') as HTMLElement;
+
+        if (progressBar) {
+          progressBar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+        }
+
+        if (message && messageEl) {
+          messageEl.textContent = message;
+        }
+      },
+      updateMessage: (message: string) => {
+        const messageEl = noticeEl.querySelector('.thoth-progress-message') as HTMLElement;
+        if (messageEl) {
+          messageEl.textContent = message;
+        }
+      },
+      close: () => {
+        notice.hide();
+        this.activeProgressNotifications.delete(id);
+      },
+      setType: (newType: 'info' | 'success' | 'warning' | 'error') => {
+        noticeEl.removeClass(`thoth-notice-${type}`);
+        noticeEl.addClass(`thoth-notice-${newType}`);
+
+        const iconEl = noticeEl.querySelector('.thoth-notice-icon') as HTMLElement;
+        if (iconEl) {
+          iconEl.textContent = this.getNotificationIcon(newType);
+        }
+      }
+    };
+
+    this.activeProgressNotifications.set(id, progressNotification);
+    return progressNotification;
+  }
+
+  /**
+   * Update an existing progress notification
+   */
+  updateProgressNotification(id: string, progress: number, message?: string): boolean {
+    const notification = this.activeProgressNotifications.get(id);
+    if (notification) {
+      notification.updateProgress(progress, message);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Close a progress notification
+   */
+  closeProgressNotification(id: string): void {
+    const notification = this.activeProgressNotifications.get(id);
+    if (notification) {
+      notification.close();
+    }
+  }
+
+  /**
+   * Create a notification with action buttons
+   */
+  createActionNotification(
+    message: string,
+    actions: Array<{label: string, action: () => void, style?: 'primary' | 'secondary'}>,
+    type: 'info' | 'success' | 'warning' | 'error' = 'info',
+    duration: number = 0
+  ): void {
+    this.loadEnhancedNotificationStyles();
+
+    const notice = new Notice('', duration);
+    const noticeEl = notice.noticeEl;
+
+    noticeEl.addClass(`thoth-notice-${type}`);
+
+    noticeEl.innerHTML = `
+      <div class="thoth-notice-content">
+        <span class="thoth-notice-icon">${this.getNotificationIcon(type)}</span>
+        ${message}
+      </div>
+      <div class="thoth-notice-actions">
+        ${actions.map(action => `
+          <button class="thoth-notice-btn ${action.style === 'primary' ? 'primary' : ''}">${action.label}</button>
+        `).join('')}
+      </div>
+    `;
+
+    // Set up action handlers
+    const actionButtons = noticeEl.querySelectorAll('.thoth-notice-btn');
+    actionButtons.forEach((btn, index) => {
+      btn.addEventListener('click', () => {
+        actions[index].action();
+        notice.hide();
+      });
+    });
+  }
+
+  /**
+   * Load enhanced notification styles
+   */
+  private loadEnhancedNotificationStyles(): void {
+    if (document.getElementById('thoth-notification-styles')) {
+      return; // Styles already loaded
+    }
+
+    const style = document.createElement('style');
+    style.id = 'thoth-notification-styles';
+    style.textContent = `
+      .thoth-notice-success {
+        background: linear-gradient(135deg, var(--color-green), #4CAF50);
+        color: white;
+        border-left: 4px solid #2E7D32;
+        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+      }
+      .thoth-notice-warning {
+        background: linear-gradient(135deg, var(--color-orange), #FF9800);
+        color: white;
+        border-left: 4px solid #F57F17;
+        box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+      }
+      .thoth-notice-error {
+        background: linear-gradient(135deg, var(--color-red), #F44336);
+        color: white;
+        border-left: 4px solid #C62828;
+        box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+      }
+      .thoth-notice-info {
+        background: linear-gradient(135deg, var(--interactive-accent), #2196F3);
+        color: var(--text-on-accent);
+        border-left: 4px solid #1565C0;
+        box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+      }
+      .thoth-notice-content {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
+      }
+      .thoth-notice-icon {
+        font-size: 1.2em;
+        filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+      }
+      .thoth-progress-container {
+        margin-top: 8px;
+        background: rgba(255,255,255,0.2);
+        border-radius: 10px;
+        height: 6px;
+        overflow: hidden;
+      }
+      .thoth-progress-bar {
+        height: 100%;
+        background: rgba(255,255,255,0.8);
+        border-radius: 10px;
+        transition: width 0.3s ease;
+        box-shadow: 0 0 10px rgba(255,255,255,0.3);
+      }
+      .thoth-notice-actions {
+        margin-top: 8px;
+        display: flex;
+        gap: 8px;
+      }
+      .thoth-notice-btn {
+        padding: 4px 8px;
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.3);
+        border-radius: 4px;
+        color: inherit;
+        cursor: pointer;
+        font-size: 0.8em;
+        transition: all 0.2s ease;
+      }
+      .thoth-notice-btn:hover {
+        background: rgba(255,255,255,0.3);
+        transform: translateY(-1px);
+      }
+      .thoth-notice-btn.primary {
+        background: rgba(255,255,255,0.9);
+        color: var(--text-normal);
+        font-weight: 600;
+      }
+      .thoth-progress-notification {
+        min-width: 300px;
+        animation: slideInRight 0.3s ease;
+      }
+      @keyframes slideInRight {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  /**
+   * Optimized settings save with debouncing
+   */
+  private saveSettingsTimeout: NodeJS.Timeout | null = null;
+
+  async debouncedSaveSettings(delay: number = 1000): Promise<void> {
+    if (this.saveSettingsTimeout) {
+      clearTimeout(this.saveSettingsTimeout);
+    }
+
+    return new Promise((resolve) => {
+      this.saveSettingsTimeout = setTimeout(async () => {
+        await this.saveSettings();
+        resolve();
+      }, delay);
+    });
+  }
+
+  /**
+   * Performance monitoring and reporting
+   */
+  private performanceMetrics: {
+    requestCount: number;
+    averageResponseTime: number;
+    cacheHitRate: number;
+    errorRate: number;
+    startTime: number;
+  } = {
+    requestCount: 0,
+    averageResponseTime: 0,
+    cacheHitRate: 0,
+    errorRate: 0,
+    startTime: Date.now()
+  };
+
+  getPerformanceReport(): any {
+    const uptime = Date.now() - this.performanceMetrics.startTime;
+    const cacheSize = this.requestCache.size;
+    const queueLength = this.requestQueue.length;
+
+    return {
+      uptime: Math.round(uptime / 1000), // seconds
+      cacheSize,
+      queueLength,
+      activeRequests: this.activeRequests,
+      ...this.performanceMetrics
+    };
+  }
+
+  /**
+   * Cleanup resources on plugin unload
+   */
+  onunload() {
+    // Clear cache
+    this.requestCache.clear();
+
+    // Clear queue
+    this.requestQueue.length = 0;
+
+    // Clear timeouts
+    if (this.saveSettingsTimeout) {
+      clearTimeout(this.saveSettingsTimeout);
+    }
+
+    // Stop agent
+    this.stopAgent();
   }
 }
 
-class ChatModal extends Modal {
+// Enhanced modal with tabbed interface
+class MultiChatModal extends Modal {
   plugin: ThothPlugin;
-  chatContainer: HTMLElement;
-  inputElement: HTMLTextAreaElement;
-  sendButton: HTMLButtonElement;
+  chatSessions: ChatSession[] = [];
+  activeSessionId: string | null = null;
+  chatWindows: Map<string, HTMLElement> = new Map();
+  sessionListContainer: HTMLElement;
+  chatContentContainer: HTMLElement;
+  sessionTabsContainer: HTMLElement;
+  sessionSelector: HTMLSelectElement;
+  sidebar: HTMLElement;
 
   constructor(app: App, plugin: ThothPlugin) {
     super(app);
     this.plugin = plugin;
   }
 
+  async onOpen() {
+    const { contentEl, modalEl } = this;
+    contentEl.empty();
+
+    // Position modal in bottom right
+    this.setupModalPosition();
+
+    // Set modal title
+    this.titleEl.setText('🧠 Thoth Chat');
+
+    // Load existing sessions
+    await this.loadChatSessions();
+
+    // Create main layout
+    this.createLayout();
+
+    // Load session list
+    this.renderSessionList();
+
+    // Load active session or create new one
+    if (this.plugin.settings.activeChatSessionId) {
+      await this.switchToSession(this.plugin.settings.activeChatSessionId);
+    } else {
+      await this.createNewSession();
+    }
+
+    // Make draggable
+    this.makeDraggable();
+  }
+
+  setupModalPosition() {
+    const modalEl = this.modalEl;
+    modalEl.addClass('thoth-chat-popup');
+
+    // Position in bottom right
+    modalEl.style.position = 'fixed';
+    modalEl.style.bottom = '20px';
+    modalEl.style.right = '20px';
+    modalEl.style.top = 'unset';
+    modalEl.style.left = 'unset';
+    modalEl.style.transform = 'none';
+    modalEl.style.width = '450px';
+    modalEl.style.height = '600px';
+    modalEl.style.maxWidth = '90vw';
+    modalEl.style.maxHeight = '80vh';
+    modalEl.style.zIndex = '1000';
+    modalEl.style.borderRadius = '12px';
+    modalEl.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.3)';
+    modalEl.style.resize = 'both';
+    modalEl.style.overflow = 'hidden';
+  }
+
+  makeDraggable() {
+    const modalEl = this.modalEl;
+    const titleEl = this.titleEl;
+
+    let isDragging = false;
+    let currentX = 0;
+    let currentY = 0;
+    let initialX = 0;
+    let initialY = 0;
+    let xOffset = 0;
+    let yOffset = 0;
+
+    // Make title bar the drag handle
+    titleEl.style.cursor = 'move';
+    titleEl.style.userSelect = 'none';
+    titleEl.style.padding = '10px 15px';
+    titleEl.style.background = 'var(--background-secondary)';
+    titleEl.style.borderBottom = '1px solid var(--background-modifier-border)';
+    titleEl.style.borderRadius = '12px 12px 0 0';
+
+    titleEl.addEventListener('mousedown', dragStart);
+    document.addEventListener('mousemove', drag);
+    document.addEventListener('mouseup', dragEnd);
+
+    function dragStart(e: MouseEvent) {
+      if (e.target !== titleEl) return;
+
+      initialX = e.clientX - xOffset;
+      initialY = e.clientY - yOffset;
+
+      if (e.target === titleEl) {
+        isDragging = true;
+        modalEl.style.cursor = 'grabbing';
+      }
+    }
+
+    function drag(e: MouseEvent) {
+      if (isDragging) {
+        e.preventDefault();
+
+        currentX = e.clientX - initialX;
+        currentY = e.clientY - initialY;
+
+        xOffset = currentX;
+        yOffset = currentY;
+
+        // Keep modal within viewport bounds
+        const rect = modalEl.getBoundingClientRect();
+        const maxX = window.innerWidth - rect.width;
+        const maxY = window.innerHeight - rect.height;
+
+        currentX = Math.max(0, Math.min(currentX, maxX));
+        currentY = Math.max(0, Math.min(currentY, maxY));
+
+        modalEl.style.right = 'unset';
+        modalEl.style.bottom = 'unset';
+        modalEl.style.left = currentX + 'px';
+        modalEl.style.top = currentY + 'px';
+      }
+    }
+
+    function dragEnd() {
+      initialX = currentX;
+      initialY = currentY;
+      isDragging = false;
+      modalEl.style.cursor = 'auto';
+    }
+  }
+
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+
+  createLayout() {
+    const { contentEl } = this;
+
+    // Add styles
+    this.addStyles();
+
+    // Main container with toggle layout
+    const mainContainer = contentEl.createEl('div', { cls: 'multi-chat-container compact' });
+
+    // Top bar with session selector and new chat
+    const topBar = mainContainer.createEl('div', { cls: 'chat-top-bar' });
+
+    // Session selector dropdown
+    const sessionSelector = topBar.createEl('select', { cls: 'session-selector' });
+    this.sessionSelector = sessionSelector;
+    sessionSelector.onchange = () => {
+      const selectedId = sessionSelector.value;
+      if (selectedId && selectedId !== 'new') {
+        this.switchToSession(selectedId);
+      } else if (selectedId === 'new') {
+        this.createNewSession();
+      }
+    };
+
+    // New chat button
+    const newChatBtn = topBar.createEl('button', {
+      text: '+',
+      cls: 'new-chat-btn compact',
+      title: 'New Chat'
+    });
+    newChatBtn.onclick = () => this.createNewSession();
+
+    // Toggle sidebar button
+    const toggleBtn = topBar.createEl('button', {
+      text: '☰',
+      cls: 'toggle-sidebar-btn',
+      title: 'Toggle Sessions'
+    });
+    toggleBtn.onclick = () => this.toggleSidebar();
+
+    // Collapsible sidebar for session list
+    const sidebar = mainContainer.createEl('div', { cls: 'chat-sidebar collapsed' });
+    this.sidebar = sidebar;
+
+    // Session list container (simplified)
+    this.sessionListContainer = sidebar.createEl('div', { cls: 'session-list compact' });
+
+    // Main chat area
+    const chatArea = mainContainer.createEl('div', { cls: 'chat-area' });
+
+    // Chat content area (no tabs for compact mode)
+    this.chatContentContainer = chatArea.createEl('div', { cls: 'chat-content' });
+  }
+
+  toggleSidebar() {
+    if (!this.sidebar) return;
+
+    const isCollapsed = this.sidebar.hasClass('collapsed');
+    if (isCollapsed) {
+      this.sidebar.removeClass('collapsed');
+      this.renderSessionList();
+    } else {
+      this.sidebar.addClass('collapsed');
+    }
+  }
+
+  addStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+      .thoth-chat-popup {
+        border-radius: 12px !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+      }
+
+      .multi-chat-container.compact {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        gap: 0;
+        padding: 0;
+      }
+
+      .chat-top-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--background-modifier-border);
+        background: var(--background-secondary);
+        border-radius: 0 0 8px 8px;
+        min-height: 40px;
+      }
+
+      .session-selector {
+        flex: 1;
+        padding: 4px 8px;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        background: var(--background-primary);
+        color: var(--text-normal);
+        font-size: 12px;
+        min-width: 0;
+      }
+
+      .new-chat-btn.compact {
+        padding: 6px 10px;
+        background: var(--interactive-accent);
+        color: var(--text-on-accent);
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        min-width: 32px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .toggle-sidebar-btn {
+        padding: 6px 8px;
+        background: var(--background-modifier-hover);
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        color: var(--text-muted);
+        min-width: 32px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .toggle-sidebar-btn:hover {
+        background: var(--background-modifier-hover-hover);
+        color: var(--text-normal);
+      }
+
+      .chat-sidebar {
+        position: absolute;
+        top: 60px;
+        left: 8px;
+        right: 8px;
+        background: var(--background-primary);
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 8px;
+        z-index: 10;
+        max-height: 300px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        transition: all 0.2s ease;
+      }
+
+      .chat-sidebar.collapsed {
+        display: none;
+      }
+
+      .session-list.compact {
+        padding: 8px;
+        max-height: 280px;
+        overflow-y: auto;
+      }
+
+      .session-item {
+        padding: 6px 8px;
+        margin-bottom: 2px;
+        border-radius: 4px;
+        cursor: pointer;
+        border: 1px solid transparent;
+        position: relative;
+        font-size: 12px;
+      }
+
+      .session-item:hover {
+        background: var(--background-modifier-hover);
+      }
+
+      .session-item.active {
+        background: var(--interactive-accent-hover);
+        border-color: var(--interactive-accent);
+      }
+
+      .session-title {
+        font-weight: 500;
+        font-size: 12px;
+        margin-bottom: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .session-preview {
+        font-size: 10px;
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 80%;
+      }
+
+      .session-meta {
+        font-size: 9px;
+        color: var(--text-faint);
+        margin-top: 2px;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .session-actions {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        opacity: 0;
+        transition: opacity 0.2s;
+        display: flex;
+        gap: 2px;
+      }
+
+      .session-item:hover .session-actions {
+        opacity: 1;
+      }
+
+      .session-action-btn {
+        padding: 2px 4px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--text-muted);
+        font-size: 10px;
+        border-radius: 2px;
+      }
+
+      .session-action-btn:hover {
+        color: var(--text-normal);
+        background: var(--background-modifier-hover);
+      }
+
+      .chat-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      .chat-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 8px;
+        gap: 8px;
+        min-height: 0;
+      }
+
+      .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 8px;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 6px;
+        background: var(--background-primary);
+        min-height: 200px;
+        max-height: none;
+      }
+
+      .chat-message {
+        margin-bottom: 8px;
+        padding: 6px 8px;
+        border-radius: 6px;
+        max-width: 85%;
+        word-wrap: break-word;
+      }
+
+      .chat-message.user {
+        background: var(--interactive-accent-hover);
+        margin-left: auto;
+        text-align: right;
+      }
+
+      .chat-message.assistant {
+        background: var(--background-secondary);
+        margin-right: auto;
+      }
+
+      .message-role {
+        font-weight: 600;
+        font-size: 10px;
+        margin-bottom: 3px;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .message-content {
+        line-height: 1.3;
+        font-size: 12px;
+      }
+
+      .chat-input-area {
+        display: flex;
+        gap: 6px;
+        align-items: flex-end;
+      }
+
+      .chat-input {
+        flex: 1;
+        min-height: 36px;
+        max-height: 80px;
+        resize: vertical;
+        padding: 6px 8px;
+        border-radius: 6px;
+        border: 1px solid var(--background-modifier-border);
+        background: var(--background-primary);
+        font-size: 12px;
+        line-height: 1.3;
+      }
+
+      .chat-input:focus {
+        outline: none;
+        border-color: var(--interactive-accent);
+        box-shadow: 0 0 0 1px var(--interactive-accent);
+      }
+
+      .chat-send-btn {
+        padding: 6px 12px;
+        background: var(--interactive-accent);
+        color: var(--text-on-accent);
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        height: fit-content;
+        font-size: 12px;
+        font-weight: 500;
+        min-height: 36px;
+      }
+
+      .chat-send-btn:hover {
+        background: var(--interactive-accent-hover);
+      }
+
+      .chat-send-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        background: var(--text-muted);
+      }
+
+      .empty-chat {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: var(--text-muted);
+        text-align: center;
+        padding: 20px;
+      }
+
+      .empty-chat div:first-child {
+        font-size: 32px;
+        margin-bottom: 8px;
+      }
+
+      .empty-chat h3 {
+        margin: 0 0 4px 0;
+        font-size: 14px;
+      }
+
+      .empty-chat p {
+        margin: 0;
+        font-size: 11px;
+        color: var(--text-faint);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  async loadChatSessions() {
+    try {
+      const endpoint = this.plugin.getEndpointUrl();
+      const response = await fetch(`${endpoint}/chat/sessions?active_only=true&limit=50`);
+
+      if (response.ok) {
+        const data = await response.json();
+        this.chatSessions = data.sessions || [];
+      } else {
+        console.warn('Could not load chat sessions from server');
+        this.chatSessions = [];
+      }
+    } catch (error) {
+      console.warn('Failed to load chat sessions:', error);
+      this.chatSessions = [];
+    }
+  }
+
+  renderSessionList() {
+    // Update dropdown selector
+    this.updateSessionSelector();
+
+    // Update sidebar if open
+    if (!this.sidebar?.hasClass('collapsed')) {
+      this.sessionListContainer.empty();
+
+      if (this.chatSessions.length === 0) {
+        const emptyEl = this.sessionListContainer.createEl('div', {
+          text: 'No chat sessions yet',
+          cls: 'session-list-empty'
+        });
+        emptyEl.style.cssText = 'text-align: center; color: var(--text-muted); padding: 20px; font-size: 11px;';
+        return;
+      }
+
+      this.chatSessions.forEach(session => {
+        const sessionEl = this.sessionListContainer.createEl('div', {
+          cls: `session-item ${session.id === this.activeSessionId ? 'active' : ''}`
+        });
+
+        sessionEl.onclick = () => this.switchToSession(session.id);
+
+        // Session actions
+        const actionsEl = sessionEl.createEl('div', { cls: 'session-actions' });
+
+        const editBtn = actionsEl.createEl('button', {
+          text: '✏️',
+          cls: 'session-action-btn',
+          title: 'Rename session'
+        });
+        editBtn.onclick = (e) => {
+          e.stopPropagation();
+          this.renameSession(session.id);
+        };
+
+        const deleteBtn = actionsEl.createEl('button', {
+          text: '🗑️',
+          cls: 'session-action-btn',
+          title: 'Delete session'
+        });
+        deleteBtn.onclick = (e) => {
+          e.stopPropagation();
+          this.deleteSession(session.id);
+        };
+
+        // Session content
+        sessionEl.createEl('div', {
+          text: session.title,
+          cls: 'session-title'
+        });
+
+        if (session.last_message_preview) {
+          sessionEl.createEl('div', {
+            text: session.last_message_preview,
+            cls: 'session-preview'
+          });
+        }
+
+        const metaEl = sessionEl.createEl('div', { cls: 'session-meta' });
+        metaEl.createEl('span', { text: `${session.message_count} msgs` });
+
+        const date = new Date(session.updated_at);
+        metaEl.createEl('span', { text: date.toLocaleDateString() });
+      });
+    }
+  }
+
+  updateSessionSelector() {
+    if (!this.sessionSelector) return;
+
+    // Clear existing options
+    this.sessionSelector.empty();
+
+    // Add default option
+    const defaultOption = this.sessionSelector.createEl('option', {
+      value: '',
+      text: 'Select a chat...'
+    });
+
+    // Add sessions
+    this.chatSessions.forEach(session => {
+      const option = this.sessionSelector.createEl('option', {
+        value: session.id,
+        text: session.title
+      });
+
+      if (session.id === this.activeSessionId) {
+        option.selected = true;
+      }
+    });
+
+    // Add "New Chat" option
+    this.sessionSelector.createEl('option', {
+      value: 'new',
+      text: '+ New Chat'
+    });
+  }
+
+  async createNewSession(title?: string) {
+    try {
+      const sessionTitle = title || `Chat ${this.chatSessions.length + 1}`;
+      const endpoint = this.plugin.getEndpointUrl();
+
+      const response = await fetch(`${endpoint}/chat/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: sessionTitle,
+          metadata: { source: 'obsidian-multi-chat' }
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const newSession = result.session;
+
+        this.chatSessions.unshift(newSession);
+        this.renderSessionList();
+        await this.switchToSession(newSession.id);
+
+        new Notice(`Created new chat: ${sessionTitle}`);
+      } else {
+        throw new Error('Failed to create session');
+      }
+    } catch (error) {
+      console.error('Error creating session:', error);
+      new Notice('Failed to create new chat session');
+    }
+  }
+
+  async switchToSession(sessionId: string) {
+    this.activeSessionId = sessionId;
+    this.plugin.settings.activeChatSessionId = sessionId;
+    await this.plugin.saveSettings();
+
+    // Update session list and selector
+    this.renderSessionList();
+
+    // Load and render chat messages
+    await this.loadChatMessages(sessionId);
+  }
+
+
+  async loadChatMessages(sessionId: string) {
+    this.chatContentContainer.empty();
+
+    try {
+      const endpoint = this.plugin.getEndpointUrl();
+      const response = await fetch(`${endpoint}/chat/sessions/${sessionId}/messages?limit=100`);
+
+      if (response.ok) {
+        const data = await response.json();
+        this.renderChatInterface(sessionId, data.messages || []);
+      } else {
+        throw new Error('Failed to load messages');
+      }
+    } catch (error) {
+      console.error('Error loading messages:', error);
+      this.renderChatInterface(sessionId, []);
+    }
+  }
+
+  renderChatInterface(sessionId: string, messages: any[]) {
+    this.chatContentContainer.empty();
+
+    // Messages container
+    const messagesContainer = this.chatContentContainer.createEl('div', {
+      cls: 'chat-messages'
+    });
+
+    // Load existing messages
+    messages.forEach(msg => {
+      this.addMessageToChat(messagesContainer, msg.role, msg.content);
+    });
+
+    // Input area
+    const inputArea = this.chatContentContainer.createEl('div', {
+      cls: 'chat-input-area'
+    });
+
+    const inputEl = inputArea.createEl('textarea', {
+      cls: 'chat-input',
+      placeholder: 'Type your message...'
+    }) as HTMLTextAreaElement;
+
+    const sendBtn = inputArea.createEl('button', {
+      text: 'Send',
+      cls: 'chat-send-btn'
+    });
+
+    // Event handlers
+    const sendMessage = async () => {
+      const message = inputEl.value.trim();
+      if (!message || sendBtn.disabled) return;
+
+      // Add user message to UI
+      this.addMessageToChat(messagesContainer, 'user', message);
+      inputEl.value = '';
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+      // Disable send button
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Sending...';
+
+      try {
+        // Send to server
+        const endpoint = this.plugin.getEndpointUrl();
+        const response = await fetch(`${endpoint}/research/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: message,
+            conversation_id: sessionId,
+            timestamp: Date.now(),
+            id: crypto.randomUUID()
+          })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          this.addMessageToChat(messagesContainer, 'assistant', result.response);
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+          // Update session list to reflect new message
+          await this.loadChatSessions();
+          this.renderSessionList();
+        } else {
+          throw new Error('Failed to send message');
+        }
+      } catch (error) {
+        console.error('Chat error:', error);
+        this.addMessageToChat(messagesContainer, 'assistant', `Error: ${error.message}`);
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send';
+        inputEl.focus();
+      }
+    };
+
+    sendBtn.onclick = sendMessage;
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // Focus input
+    setTimeout(() => inputEl.focus(), 100);
+  }
+
+  addMessageToChat(container: HTMLElement, role: string, content: string) {
+    const messageEl = container.createEl('div', {
+      cls: `chat-message ${role}`
+    });
+
+    messageEl.createEl('div', {
+      text: role === 'user' ? 'You' : 'Assistant',
+      cls: 'message-role'
+    });
+
+    messageEl.createEl('div', {
+      text: content,
+      cls: 'message-content'
+    });
+  }
+
+  renderEmptyState() {
+    this.chatContentContainer.empty();
+
+    const emptyEl = this.chatContentContainer.createEl('div', {
+      cls: 'empty-chat'
+    });
+
+    emptyEl.createEl('div', { text: '💬' });
+    emptyEl.createEl('h3', { text: 'No chat selected' });
+    emptyEl.createEl('p', { text: 'Select a chat from the dropdown or create a new one' });
+  }
+
+  async renameSession(sessionId: string) {
+    const session = this.chatSessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    const newTitle = prompt('Enter new title:', session.title);
+    if (!newTitle || newTitle === session.title) return;
+
+    try {
+      const endpoint = this.plugin.getEndpointUrl();
+      const response = await fetch(`${endpoint}/chat/sessions/${sessionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTitle })
+      });
+
+      if (response.ok) {
+        session.title = newTitle;
+        this.renderSessionList();
+        new Notice('Session renamed');
+      } else {
+        throw new Error('Failed to rename session');
+      }
+    } catch (error) {
+      console.error('Error renaming session:', error);
+      new Notice('Failed to rename session');
+    }
+  }
+
+  async deleteSession(sessionId: string) {
+    const session = this.chatSessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    if (!confirm(`Delete "${session.title}"? This cannot be undone.`)) return;
+
+    try {
+      const endpoint = this.plugin.getEndpointUrl();
+      const response = await fetch(`${endpoint}/chat/sessions/${sessionId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        this.chatSessions = this.chatSessions.filter(s => s.id !== sessionId);
+
+        if (this.activeSessionId === sessionId) {
+          this.activeSessionId = null;
+          this.plugin.settings.activeChatSessionId = null;
+          await this.plugin.saveSettings();
+          this.renderEmptyState();
+        }
+
+        this.renderSessionList();
+        new Notice('Session deleted');
+      } else {
+        throw new Error('Failed to delete session');
+      }
+    } catch (error) {
+      console.error('Error deleting session:', error);
+      new Notice('Failed to delete session');
+    }
+  }
+}
+
+class EnhancedThothModal extends Modal {
+  plugin: ThothPlugin;
+  currentTab: string = 'chat';
+  tabContainer: HTMLElement;
+  contentContainer: HTMLElement;
+
+  // Chat-specific elements
+  chatContainer: HTMLElement;
+  inputElement: HTMLTextAreaElement;
+  sendButton: HTMLButtonElement;
+
+  // Command execution elements
+  commandContainer: HTMLElement;
+  operationsContainer: HTMLElement;
+
+  // Status elements
+  statusContainer: HTMLElement;
+
+  constructor(app: App, plugin: ThothPlugin) {
+    super(app);
+    this.plugin = plugin;
+    this.modalEl.addClass('thoth-enhanced-modal');
+  }
+
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
 
-    // Set modal title
-    contentEl.createEl('h2', { text: 'Thoth Research Assistant' });
+    // Apply custom styling
+    this.applyCustomStyles();
 
+    // Set modal title and header
+    this.createHeader(contentEl);
+
+    // Create tab navigation
+    this.createTabNavigation(contentEl);
+
+    // Create content container
+    this.contentContainer = contentEl.createEl('div', { cls: 'thoth-content-container' });
+
+    // Initialize with default tab
+    this.switchTab('chat');
+  }
+
+  applyCustomStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+      .thoth-enhanced-modal {
+        width: 80vw !important;
+        max-width: 1000px !important;
+        height: 80vh !important;
+        max-height: 700px !important;
+      }
+
+      .thoth-tab-navigation {
+        display: flex;
+        border-bottom: 2px solid var(--background-modifier-border);
+        margin-bottom: 15px;
+        gap: 5px;
+      }
+
+      .thoth-tab-button {
+        padding: 8px 16px;
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        border-radius: 4px 4px 0 0;
+        transition: all 0.2s ease;
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .thoth-tab-button:hover {
+        background: var(--background-modifier-hover);
+        color: var(--text-normal);
+      }
+
+      .thoth-tab-button.active {
+        background: var(--interactive-accent);
+        color: var(--text-on-accent);
+        border-bottom: 2px solid var(--interactive-accent);
+      }
+
+      .thoth-content-container {
+        height: calc(100% - 120px);
+        overflow: hidden;
+      }
+
+      .thoth-tab-content {
+        height: 100%;
+        display: none;
+      }
+
+      .thoth-tab-content.active {
+        display: block;
+      }
+
+      .thoth-chat-container {
+        height: calc(100% - 80px);
+        overflow-y: auto;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        padding: 10px;
+        margin-bottom: 10px;
+      }
+
+      .thoth-input-container {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+      }
+
+      .thoth-input-container textarea {
+        flex: 1;
+        min-height: 40px;
+        max-height: 120px;
+        resize: vertical;
+        border-radius: 4px;
+        border: 1px solid var(--background-modifier-border);
+        padding: 8px;
+      }
+
+      .thoth-message {
+        margin: 10px 0;
+        padding: 8px 12px;
+        border-radius: 8px;
+        max-width: 80%;
+      }
+
+      .thoth-user {
+        background: var(--interactive-accent);
+        color: var(--text-on-accent);
+        margin-left: auto;
+        text-align: right;
+      }
+
+      .thoth-assistant {
+        background: var(--background-secondary);
+        color: var(--text-normal);
+        margin-right: auto;
+      }
+
+      .thoth-message-role {
+        font-weight: bold;
+        font-size: 0.85em;
+        margin-bottom: 4px;
+        opacity: 0.8;
+      }
+
+      .thoth-command-section {
+        margin-bottom: 20px;
+        padding: 15px;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 8px;
+      }
+
+      .thoth-command-section h3 {
+        margin: 0 0 10px 0;
+        color: var(--text-accent);
+      }
+
+      .thoth-command-buttons {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .thoth-command-button {
+        padding: 8px 12px;
+        border: 1px solid var(--background-modifier-border);
+        background: var(--background-secondary);
+        color: var(--text-normal);
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .thoth-command-button:hover {
+        background: var(--background-modifier-hover);
+        border-color: var(--interactive-accent);
+      }
+
+      .thoth-status-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 15px;
+      }
+
+      .thoth-status-card {
+        padding: 15px;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 8px;
+        background: var(--background-secondary);
+      }
+
+      .thoth-status-card h4 {
+        margin: 0 0 10px 0;
+        color: var(--text-accent);
+      }
+
+      .thoth-status-indicator {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.85em;
+        font-weight: 500;
+      }
+
+      .thoth-status-success {
+        background: var(--color-green);
+        color: white;
+      }
+
+      .thoth-status-error {
+        background: var(--color-red);
+        color: white;
+      }
+
+      .thoth-status-warning {
+        background: var(--color-orange);
+        color: white;
+      }
+
+      .thoth-progress-bar {
+        width: 100%;
+        height: 8px;
+        background: var(--background-modifier-border);
+        border-radius: 4px;
+        overflow: hidden;
+        margin: 10px 0;
+      }
+
+      .thoth-progress-fill {
+        height: 100%;
+        background: var(--interactive-accent);
+        transition: width 0.3s ease;
+      }
+
+      .thoth-operation-log {
+        height: 300px;
+        overflow-y: auto;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        padding: 10px;
+        font-family: var(--font-monospace);
+        font-size: 0.9em;
+        background: var(--background-primary);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  createHeader(contentEl: HTMLElement) {
+    const header = contentEl.createEl('div', { cls: 'thoth-header' });
+    header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid var(--background-modifier-border);';
+
+    const titleEl = header.createEl('h2', { text: '🧠 Thoth Research Assistant' });
+    titleEl.style.cssText = 'margin: 0; color: var(--text-accent);';
+
+    const statusEl = header.createEl('div', { cls: 'thoth-header-status' });
+    this.updateHeaderStatus(statusEl);
+  }
+
+  updateHeaderStatus(statusEl: HTMLElement) {
+    statusEl.empty();
+
+    const status = this.plugin.isAgentRunning ? 'Running' : 'Stopped';
+    const statusClass = this.plugin.isAgentRunning ? 'thoth-status-success' : 'thoth-status-error';
+
+    const statusSpan = statusEl.createEl('span', {
+      text: `Agent: ${status}`,
+      cls: `thoth-status-indicator ${statusClass}`
+    });
+  }
+
+  createTabNavigation(contentEl: HTMLElement) {
+    this.tabContainer = contentEl.createEl('div', { cls: 'thoth-tab-navigation' });
+
+    const tabs = [
+      { id: 'chat', label: '💬 Chat', icon: 'message-circle' },
+      { id: 'commands', label: '⚡ Commands', icon: 'terminal' },
+      { id: 'tools', label: '🔧 Tools', icon: 'wrench' },
+      { id: 'status', label: '📊 Status', icon: 'activity' }
+    ];
+
+    tabs.forEach(tab => {
+      const button = this.tabContainer.createEl('button', {
+        text: tab.label,
+        cls: 'thoth-tab-button'
+      });
+
+      if (tab.id === this.currentTab) {
+        button.addClass('active');
+      }
+
+      button.onclick = () => this.switchTab(tab.id);
+    });
+  }
+
+  switchTab(tabId: string) {
+    // Update tab buttons
+    this.tabContainer.querySelectorAll('.thoth-tab-button').forEach((btn, index) => {
+      if (index === ['chat', 'commands', 'tools', 'status'].indexOf(tabId)) {
+        btn.addClass('active');
+      } else {
+        btn.removeClass('active');
+      }
+    });
+
+    // Update content
+    this.currentTab = tabId;
+    this.renderTabContent();
+  }
+
+  renderTabContent() {
+    this.contentContainer.empty();
+
+    const tabContent = this.contentContainer.createEl('div', {
+      cls: `thoth-tab-content active thoth-${this.currentTab}-tab`
+    });
+
+    switch (this.currentTab) {
+      case 'chat':
+        this.renderChatTab(tabContent);
+        break;
+      case 'commands':
+        this.renderCommandsTab(tabContent);
+        break;
+      case 'tools':
+        this.renderToolsTab(tabContent);
+        break;
+      case 'status':
+        this.renderStatusTab(tabContent);
+        break;
+    }
+  }
+
+  renderChatTab(container: HTMLElement) {
     // Check if agent is running
     if (!this.plugin.isAgentRunning) {
-      const warningEl = contentEl.createEl('div', {
+      const warningEl = container.createEl('div', {
         cls: 'thoth-warning',
         text: '⚠️ Thoth agent is not running. Please start it first.'
       });
-      warningEl.style.cssText = 'color: orange; margin-bottom: 10px; padding: 10px; border: 1px solid orange; border-radius: 4px;';
+      warningEl.style.cssText = 'color: orange; margin-bottom: 10px; padding: 15px; border: 1px solid orange; border-radius: 4px; text-align: center;';
 
       const startButton = warningEl.createEl('button', { text: 'Start Agent' });
+      startButton.style.cssText = 'margin-top: 10px; padding: 8px 16px; background: var(--interactive-accent); color: var(--text-on-accent); border: none; border-radius: 4px; cursor: pointer;';
       startButton.onclick = () => {
         this.plugin.startAgent();
-        this.close();
+        setTimeout(() => this.renderTabContent(), 2000); // Refresh after 2 seconds
       };
       return;
     }
 
+    // Add quick action buttons at the top
+    this.createQuickActionButtons(container, 'chat');
+
     // Create chat container
-    this.chatContainer = contentEl.createEl('div', { cls: 'thoth-chat-container' });
-    this.chatContainer.style.cssText = 'height: 400px; overflow-y: auto; border: 1px solid var(--background-modifier-border); margin-bottom: 10px; padding: 10px;';
+    this.chatContainer = container.createEl('div', { cls: 'thoth-chat-container' });
 
     // Load chat history
     this.loadChatHistory();
 
     // Create input area
-    const inputContainer = contentEl.createEl('div', { cls: 'thoth-input-container' });
-    inputContainer.style.cssText = 'display: flex; gap: 10px;';
+    const inputContainer = container.createEl('div', { cls: 'thoth-input-container' });
 
     this.inputElement = inputContainer.createEl('textarea', {
       placeholder: 'Ask me about your research...'
     });
-    this.inputElement.style.cssText = 'flex: 1; min-height: 60px; resize: vertical;';
 
     this.sendButton = inputContainer.createEl('button', { text: 'Send' });
-    this.sendButton.style.cssText = 'align-self: flex-end;';
+    this.sendButton.style.cssText = 'padding: 8px 16px; background: var(--interactive-accent); color: var(--text-on-accent); border: none; border-radius: 4px; cursor: pointer;';
 
     // Add event listeners
     this.sendButton.onclick = () => this.sendMessage();
@@ -943,10 +3224,393 @@ class ChatModal extends Modal {
     });
 
     // Focus input
-    this.inputElement.focus();
+    setTimeout(() => this.inputElement.focus(), 100);
   }
 
+  renderCommandsTab(container: HTMLElement) {
+    // Add quick action buttons at the top
+    this.createQuickActionButtons(container, 'commands');
+
+    const sections = [
+      {
+        title: 'Discovery Commands',
+        commands: [
+          { name: 'List Sources', command: 'discovery', args: ['list'], description: 'View all discovery sources' },
+          { name: 'Run Discovery', command: 'discovery', args: ['run'], description: 'Execute discovery for sources' },
+          { name: 'Create Source', command: 'discovery', args: ['create'], description: 'Add new discovery source' }
+        ]
+      },
+      {
+        title: 'PDF Management',
+        commands: [
+          { name: 'Locate PDF', command: 'pdf-locate', args: [], description: 'Find open-access PDFs' },
+          { name: 'PDF Statistics', command: 'pdf-stats', args: [], description: 'Show PDF availability stats' }
+        ]
+      },
+      {
+        title: 'RAG System',
+        commands: [
+          { name: 'Index Knowledge', command: 'rag', args: ['index'], description: 'Build RAG index' },
+          { name: 'Search Knowledge', command: 'rag', args: ['search'], description: 'Query knowledge base' },
+          { name: 'RAG Statistics', command: 'rag', args: ['stats'], description: 'Show RAG system stats' }
+        ]
+      },
+      {
+        title: 'Notes Management',
+        commands: [
+          { name: 'Regenerate Notes', command: 'notes', args: ['regenerate-all-notes'], description: 'Rebuild all notes' },
+          { name: 'Consolidate Tags', command: 'notes', args: ['consolidate-tags'], description: 'Organize tags' }
+        ]
+      }
+    ];
+
+    sections.forEach(section => {
+      const sectionEl = container.createEl('div', { cls: 'thoth-command-section' });
+      sectionEl.createEl('h3', { text: section.title });
+
+      const buttonsContainer = sectionEl.createEl('div', { cls: 'thoth-command-buttons' });
+
+      section.commands.forEach(cmd => {
+        const button = buttonsContainer.createEl('div', { cls: 'thoth-command-button' });
+
+        const nameEl = button.createEl('div', { text: cmd.name });
+        nameEl.style.fontWeight = 'bold';
+
+        const descEl = button.createEl('div', { text: cmd.description });
+        descEl.style.fontSize = '0.9em';
+        descEl.style.color = 'var(--text-muted)';
+        descEl.style.marginTop = '4px';
+
+        button.onclick = () => this.executeCommand(cmd.command, cmd.args);
+      });
+    });
+  }
+
+  renderToolsTab(container: HTMLElement) {
+    if (!this.plugin.isAgentRunning) {
+      container.createEl('div', {
+        text: 'Agent must be running to access tools',
+        cls: 'thoth-warning'
+      }).style.cssText = 'text-align: center; padding: 20px; color: var(--text-muted);';
+      return;
+    }
+
+    // Add quick action buttons at the top
+    this.createQuickActionButtons(container, 'tools');
+
+    // Tools will be loaded dynamically
+    container.createEl('div', { text: 'Loading available tools...' });
+    this.loadAvailableTools(container);
+  }
+
+  renderStatusTab(container: HTMLElement) {
+    // Add quick action buttons at the top
+    this.createQuickActionButtons(container, 'status');
+
+    const statusGrid = container.createEl('div', { cls: 'thoth-status-grid' });
+
+    // Agent Status Card
+    const agentCard = statusGrid.createEl('div', { cls: 'thoth-status-card' });
+    agentCard.createEl('h4', { text: 'Agent Status' });
+
+    const agentStatus = this.plugin.isAgentRunning ? 'Running' : 'Stopped';
+    const agentClass = this.plugin.isAgentRunning ? 'thoth-status-success' : 'thoth-status-error';
+    agentCard.createEl('div', {
+      text: agentStatus,
+      cls: `thoth-status-indicator ${agentClass}`
+    });
+
+    // Connection Status Card
+    const connectionCard = statusGrid.createEl('div', { cls: 'thoth-status-card' });
+    connectionCard.createEl('h4', { text: 'Connection' });
+    connectionCard.createEl('div', { text: `Mode: ${this.plugin.settings.remoteMode ? 'Remote' : 'Local'}` });
+    connectionCard.createEl('div', { text: `Endpoint: ${this.plugin.getEndpointUrl()}` });
+
+    // Configuration Status Card
+    const configCard = statusGrid.createEl('div', { cls: 'thoth-status-card' });
+    configCard.createEl('h4', { text: 'Configuration' });
+
+    const hasKeys = this.plugin.settings.mistralKey || this.plugin.settings.openrouterKey;
+    const keyStatus = hasKeys ? 'Configured' : 'Missing Keys';
+    const keyClass = hasKeys ? 'thoth-status-success' : 'thoth-status-error';
+    configCard.createEl('div', {
+      text: `API Keys: ${keyStatus}`,
+      cls: `thoth-status-indicator ${keyClass}`
+    });
+
+    // Operations Status (if any running)
+    this.addOperationsStatus(statusGrid);
+  }
+
+  createQuickActionButtons(container: HTMLElement, tabType: string) {
+    const quickActionsContainer = container.createEl('div', { cls: 'thoth-quick-actions' });
+    quickActionsContainer.style.cssText = `
+      display: flex;
+      gap: 8px;
+      margin-bottom: 15px;
+      padding: 10px;
+      background: var(--background-secondary);
+      border-radius: 8px;
+      flex-wrap: wrap;
+    `;
+
+    // Define quick actions for each tab type
+    const quickActions = {
+      chat: [
+        { label: '💡 Quick Research', action: () => this.triggerQuickResearch() },
+        { label: '📄 Process Current PDF', action: () => this.plugin.processCurrentFile() },
+        { label: '🔄 Clear Chat', action: () => this.clearChatHistory() },
+        { label: '💾 Save Chat', action: () => this.saveChatHistory() }
+      ],
+      commands: [
+        { label: '🚀 Run Discovery', action: () => this.executeCommand('discovery', ['run']) },
+        { label: '📑 Index Knowledge', action: () => this.executeCommand('rag', ['index']) },
+        { label: '🔍 PDF Locate', action: () => this.promptPdfLocate() },
+        { label: '📊 System Stats', action: () => this.showSystemStats() }
+      ],
+      tools: [
+        { label: '🔧 Refresh Tools', action: () => this.loadAvailableTools(container) },
+        { label: '⚡ Health Check', action: () => this.plugin.performHealthCheck() },
+        { label: '🔄 Restart Agent', action: () => this.plugin.restartAgent() },
+        { label: '⚙️ Validate Config', action: () => this.plugin.validateConfiguration() }
+      ],
+      status: [
+        { label: '🔄 Refresh Status', action: () => this.renderTabContent() },
+        { label: '🧪 Health Check', action: () => this.plugin.performHealthCheck() },
+        { label: '📋 Export Config', action: () => this.exportConfiguration() },
+        { label: '🔧 System Diagnostics', action: () => this.runSystemDiagnostics() }
+      ]
+    };
+
+    const actions = quickActions[tabType] || [];
+
+    actions.forEach(action => {
+      const button = quickActionsContainer.createEl('button', {
+        text: action.label,
+        cls: 'thoth-quick-action-btn'
+      });
+      button.style.cssText = `
+        padding: 6px 12px;
+        background: var(--interactive-normal);
+        color: var(--text-normal);
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.85em;
+        transition: all 0.2s ease;
+      `;
+
+      button.onmouseenter = () => {
+        button.style.background = 'var(--interactive-hover)';
+      };
+
+      button.onmouseleave = () => {
+        button.style.background = 'var(--interactive-normal)';
+      };
+
+      button.onclick = action.action;
+    });
+  }
+
+  async triggerQuickResearch() {
+    const query = await this.plugin.showInputPrompt('Enter your research query:');
+    if (query && this.inputElement) {
+      this.inputElement.value = query;
+      this.sendMessage();
+    }
+  }
+
+  clearChatHistory() {
+    this.plugin.settings.chatHistory = [];
+    this.plugin.saveSettings();
+    this.chatContainer?.empty();
+    new Notice('Chat history cleared');
+  }
+
+  saveChatHistory() {
+    const historyText = this.plugin.settings.chatHistory
+      .map(msg => `**${msg.role}**: ${msg.content}`)
+      .join('\n\n');
+
+    const activeFile = this.app.workspace.getActiveFile();
+    const fileName = activeFile ? activeFile.basename : 'chat-history';
+
+    this.app.vault.create(`${fileName}-chat-${Date.now()}.md`, historyText)
+      .then(() => new Notice('Chat history saved to file'))
+      .catch(err => new Notice(`Failed to save chat history: ${err.message}`));
+  }
+
+  async promptPdfLocate() {
+    const doi = await this.plugin.showInputPrompt('Enter DOI or identifier:');
+    if (doi) {
+      this.executeCommand('pdf-locate', [doi]);
+    }
+  }
+
+  async showSystemStats() {
+    // Show combined stats from multiple commands
+    this.executeCommand('rag', ['stats']);
+    this.executeCommand('pdf-stats', []);
+    this.executeCommand('discovery', ['list']);
+  }
+
+  exportConfiguration() {
+    const config = {
+      timestamp: new Date().toISOString(),
+      settings: { ...this.plugin.settings }
+    };
+
+    // Remove sensitive data
+    delete (config.settings as any).mistralKey;
+    delete (config.settings as any).openrouterKey;
+    delete (config.settings as any).encryptionKey;
+
+    const configText = JSON.stringify(config, null, 2);
+    this.app.vault.create(`thoth-config-export-${Date.now()}.json`, configText)
+      .then(() => new Notice('Configuration exported'))
+      .catch(err => new Notice(`Export failed: ${err.message}`));
+  }
+
+  async runSystemDiagnostics() {
+    new Notice('Running system diagnostics...');
+
+    // Run multiple diagnostic commands
+    const diagnostics = [
+      { name: 'Health Check', command: () => this.plugin.performHealthCheck() },
+      { name: 'Config Validation', command: () => this.plugin.validateConfiguration() },
+      { name: 'Agent Status', command: () => this.updateHeaderStatus(this.modalEl.querySelector('.thoth-header-status') as HTMLElement) }
+    ];
+
+    for (const diagnostic of diagnostics) {
+      try {
+        await diagnostic.command();
+      } catch (error) {
+        console.warn(`${diagnostic.name} failed:`, error);
+      }
+    }
+
+    new Notice('System diagnostics completed. Check console for details.');
+  }
+
+  async executeCommand(command: string, args: string[]) {
+    if (!this.plugin.isAgentRunning) {
+      new Notice('Agent must be running to execute commands');
+      return;
+    }
+
+    try {
+      const endpoint = this.plugin.getEndpointUrl();
+      const response = await fetch(`${endpoint}/execute/command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: command,
+          args: args,
+          stream_output: true
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.streaming) {
+          this.trackOperation(result.operation_id);
+          new Notice(`${command} command started. Check Status tab for progress.`);
+        } else {
+          new Notice(`${command} command completed`);
+        }
+      } else {
+        throw new Error(`Command failed: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('Command execution error:', error);
+      new Notice(`Command failed: ${error.message}`);
+    }
+  }
+
+  async loadAvailableTools(container: HTMLElement) {
+    try {
+      const endpoint = this.plugin.getEndpointUrl();
+      const response = await fetch(`${endpoint}/agent/tools`);
+
+      if (response.ok) {
+        const result = await response.json();
+        this.renderToolsList(container, result.tools);
+      } else {
+        container.createEl('div', { text: 'Failed to load tools' });
+      }
+    } catch (error) {
+      container.createEl('div', { text: `Error loading tools: ${error.message}` });
+    }
+  }
+
+  renderToolsList(container: HTMLElement, tools: any[]) {
+    container.empty();
+
+    if (!tools || tools.length === 0) {
+      container.createEl('div', { text: 'No tools available' });
+      return;
+    }
+
+    const toolsGrid = container.createEl('div', { cls: 'thoth-command-buttons' });
+
+    tools.forEach(tool => {
+      const toolButton = toolsGrid.createEl('div', { cls: 'thoth-command-button' });
+
+      const nameEl = toolButton.createEl('div', { text: tool.name || tool.tool || 'Unknown Tool' });
+      nameEl.style.fontWeight = 'bold';
+
+      if (tool.description) {
+        const descEl = toolButton.createEl('div', { text: tool.description });
+        descEl.style.fontSize = '0.9em';
+        descEl.style.color = 'var(--text-muted)';
+        descEl.style.marginTop = '4px';
+      }
+
+      toolButton.onclick = () => this.executeTool(tool.name || tool.tool);
+    });
+  }
+
+  async executeTool(toolName: string) {
+    try {
+      const endpoint = this.plugin.getEndpointUrl();
+      const response = await fetch(`${endpoint}/tools/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool_name: toolName,
+          parameters: {},
+          bypass_agent: true
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        new Notice(`Tool ${toolName} executed successfully`);
+        console.log('Tool result:', result);
+      } else {
+        throw new Error(`Tool execution failed: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('Tool execution error:', error);
+      new Notice(`Tool execution failed: ${error.message}`);
+    }
+  }
+
+  trackOperation(operationId: string) {
+    // This would track the operation progress
+    // Implementation would depend on WebSocket integration
+    console.log('Tracking operation:', operationId);
+  }
+
+  addOperationsStatus(container: HTMLElement) {
+    // Placeholder for operation tracking
+    // Would show currently running operations
+  }
+
+  // Chat-related methods (from original ChatModal)
   loadChatHistory() {
+    if (!this.chatContainer) return;
+
     const history = this.plugin.settings.chatHistory || [];
     history.forEach(message => {
       this.addMessageToChat(message.role, message.content);
@@ -955,19 +3619,17 @@ class ChatModal extends Modal {
   }
 
   addMessageToChat(role: 'user' | 'assistant', content: string) {
+    if (!this.chatContainer) return;
+
     const messageEl = this.chatContainer.createEl('div', { cls: `thoth-message thoth-${role}` });
 
-    if (role === 'user') {
-      messageEl.style.cssText = 'text-align: right; margin: 10px 0; padding: 8px; background-color: var(--interactive-accent); color: white; border-radius: 8px;';
-    } else {
-      messageEl.style.cssText = 'text-align: left; margin: 10px 0; padding: 8px; background-color: var(--background-secondary); border-radius: 8px;';
-    }
-
-    messageEl.createEl('div', { text: role === 'user' ? 'You' : 'Assistant', cls: 'thoth-message-role' }).style.cssText = 'font-weight: bold; margin-bottom: 4px; font-size: 0.9em;';
+    messageEl.createEl('div', { text: role === 'user' ? 'You' : 'Assistant', cls: 'thoth-message-role' });
     messageEl.createEl('div', { text: content, cls: 'thoth-message-content' });
   }
 
   async sendMessage() {
+    if (!this.inputElement || !this.sendButton) return;
+
     const message = this.inputElement.value.trim();
     if (!message) return;
 
@@ -1058,7 +3720,9 @@ class ChatModal extends Modal {
   }
 
   scrollToBottom() {
-    this.chatContainer.scrollTop = this.chatContainer.scrollHeight;
+    if (this.chatContainer) {
+      this.chatContainer.scrollTop = this.chatContainer.scrollHeight;
+    }
   }
 
   onClose() {
@@ -1790,5 +4454,298 @@ class ThothSettingTab extends PluginSettingTab {
       cls: 'thoth-control-button thoth-button-chat'
     });
     chatButton.onclick = () => this.plugin.openChatModal();
+  }
+}
+
+// ============================================================================
+// ADDITIONAL MODAL CLASSES FOR ENHANCED UX
+// ============================================================================
+
+class InputModal extends Modal {
+  private promptText: string;
+  private resolve: (value: string | null) => void;
+  private inputEl: HTMLInputElement;
+
+  constructor(app: App, promptText: string, resolve: (value: string | null) => void) {
+    super(app);
+    this.promptText = promptText;
+    this.resolve = resolve;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+
+    contentEl.createEl('h3', { text: this.promptText });
+
+    this.inputEl = contentEl.createEl('input', { type: 'text' });
+    this.inputEl.style.cssText = 'width: 100%; padding: 8px; margin: 10px 0; border: 1px solid var(--background-modifier-border); border-radius: 4px;';
+    this.inputEl.focus();
+
+    const buttonContainer = contentEl.createEl('div');
+    buttonContainer.style.cssText = 'display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;';
+
+    const cancelButton = buttonContainer.createEl('button', { text: 'Cancel' });
+    cancelButton.style.cssText = 'padding: 8px 16px; border: 1px solid var(--background-modifier-border); background: var(--background-secondary); border-radius: 4px;';
+    cancelButton.onclick = () => {
+      this.resolve(null);
+      this.close();
+    };
+
+    const okButton = buttonContainer.createEl('button', { text: 'OK' });
+    okButton.style.cssText = 'padding: 8px 16px; background: var(--interactive-accent); color: var(--text-on-accent); border: none; border-radius: 4px;';
+    okButton.onclick = () => {
+      this.resolve(this.inputEl.value.trim() || null);
+      this.close();
+    };
+
+    this.inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        this.resolve(this.inputEl.value.trim() || null);
+        this.close();
+      } else if (e.key === 'Escape') {
+        this.resolve(null);
+        this.close();
+      }
+    });
+  }
+
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+}
+
+class ConfirmModal extends Modal {
+  private message: string;
+  private resolve: (value: boolean) => void;
+
+  constructor(app: App, message: string, resolve: (value: boolean) => void) {
+    super(app);
+    this.message = message;
+    this.resolve = resolve;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+
+    contentEl.createEl('h3', { text: 'Confirmation' });
+    contentEl.createEl('p', { text: this.message });
+
+    const buttonContainer = contentEl.createEl('div');
+    buttonContainer.style.cssText = 'display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;';
+
+    const cancelButton = buttonContainer.createEl('button', { text: 'Cancel' });
+    cancelButton.style.cssText = 'padding: 8px 16px; border: 1px solid var(--background-modifier-border); background: var(--background-secondary); border-radius: 4px;';
+    cancelButton.onclick = () => {
+      this.resolve(false);
+      this.close();
+    };
+
+    const confirmButton = buttonContainer.createEl('button', { text: 'Confirm' });
+    confirmButton.style.cssText = 'padding: 8px 16px; background: var(--interactive-accent); color: var(--text-on-accent); border: none; border-radius: 4px;';
+    confirmButton.onclick = () => {
+      this.resolve(true);
+      this.close();
+    };
+  }
+
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+}
+
+class CitationInserterModal extends Modal {
+  private plugin: ThothPlugin;
+  private editor: Editor;
+  private searchInput: HTMLInputElement;
+  private resultsContainer: HTMLElement;
+
+  constructor(app: App, plugin: ThothPlugin, editor: Editor) {
+    super(app);
+    this.plugin = plugin;
+    this.editor = editor;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+
+    contentEl.createEl('h2', { text: '📖 Insert Citation' });
+
+    const searchContainer = contentEl.createEl('div');
+    searchContainer.style.cssText = 'margin-bottom: 15px;';
+
+    this.searchInput = searchContainer.createEl('input', {
+      type: 'text',
+      placeholder: 'Search for papers by title, author, or DOI...'
+    });
+    this.searchInput.style.cssText = 'width: 100%; padding: 8px; border: 1px solid var(--background-modifier-border); border-radius: 4px;';
+
+    const searchButton = searchContainer.createEl('button', { text: 'Search' });
+    searchButton.style.cssText = 'margin-left: 10px; padding: 8px 16px; background: var(--interactive-accent); color: var(--text-on-accent); border: none; border-radius: 4px;';
+
+    this.resultsContainer = contentEl.createEl('div');
+    this.resultsContainer.style.cssText = 'max-height: 400px; overflow-y: auto; border: 1px solid var(--background-modifier-border); border-radius: 4px; padding: 10px;';
+
+    searchButton.onclick = () => this.searchCitations();
+    this.searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        this.searchCitations();
+      }
+    });
+
+    this.searchInput.focus();
+  }
+
+  async searchCitations() {
+    const query = this.searchInput.value.trim();
+    if (!query) return;
+
+    this.resultsContainer.empty();
+    this.resultsContainer.createEl('div', { text: 'Searching...' });
+
+    try {
+      // This would integrate with a citation search API
+      // For now, show a placeholder
+      this.resultsContainer.empty();
+
+      const placeholder = this.resultsContainer.createEl('div');
+      placeholder.innerHTML = `
+        <div style="padding: 10px; border: 1px solid var(--background-modifier-border); border-radius: 4px; margin-bottom: 10px; cursor: pointer;" onclick="this.insertCitation('${query}')">
+          <div style="font-weight: bold;">${query} - Sample Paper</div>
+          <div style="color: var(--text-muted); font-size: 0.9em;">Authors: Sample Author et al.</div>
+          <div style="color: var(--text-muted); font-size: 0.9em;">Year: 2024</div>
+        </div>
+      `;
+
+      // Add click handler for citation insertion
+      placeholder.querySelector('div')?.addEventListener('click', () => {
+        this.insertCitation(query);
+      });
+
+    } catch (error) {
+      this.resultsContainer.empty();
+      this.resultsContainer.createEl('div', { text: `Search failed: ${error.message}` });
+    }
+  }
+
+  insertCitation(title: string) {
+    const cursor = this.editor.getCursor();
+    const citation = `[@${title.toLowerCase().replace(/\s+/g, '_')}]`;
+    this.editor.replaceRange(citation, cursor);
+    new Notice('Citation inserted');
+    this.close();
+  }
+
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+}
+
+class DiscoverySourceModal extends Modal {
+  private plugin: ThothPlugin;
+  private nameInput: HTMLInputElement;
+  private typeSelect: HTMLSelectElement;
+  private configArea: HTMLTextAreaElement;
+
+  constructor(app: App, plugin: ThothPlugin) {
+    super(app);
+    this.plugin = plugin;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+
+    contentEl.createEl('h2', { text: '🔍 Create Discovery Source' });
+
+    // Name input
+    const nameContainer = contentEl.createEl('div');
+    nameContainer.style.cssText = 'margin-bottom: 15px;';
+    nameContainer.createEl('label', { text: 'Source Name:' });
+    this.nameInput = nameContainer.createEl('input', { type: 'text' });
+    this.nameInput.style.cssText = 'width: 100%; padding: 8px; margin-top: 5px; border: 1px solid var(--background-modifier-border); border-radius: 4px;';
+
+    // Type select
+    const typeContainer = contentEl.createEl('div');
+    typeContainer.style.cssText = 'margin-bottom: 15px;';
+    typeContainer.createEl('label', { text: 'Source Type:' });
+    this.typeSelect = typeContainer.createEl('select');
+    this.typeSelect.style.cssText = 'width: 100%; padding: 8px; margin-top: 5px; border: 1px solid var(--background-modifier-border); border-radius: 4px;';
+
+    ['arxiv', 'pubmed', 'semantic_scholar', 'custom'].forEach(type => {
+      const option = this.typeSelect.createEl('option', { value: type, text: type.charAt(0).toUpperCase() + type.slice(1) });
+    });
+
+    // Configuration area
+    const configContainer = contentEl.createEl('div');
+    configContainer.style.cssText = 'margin-bottom: 15px;';
+    configContainer.createEl('label', { text: 'Configuration (JSON):' });
+    this.configArea = configContainer.createEl('textarea');
+    this.configArea.style.cssText = 'width: 100%; height: 150px; padding: 8px; margin-top: 5px; border: 1px solid var(--background-modifier-border); border-radius: 4px; font-family: monospace;';
+    this.configArea.placeholder = '{\n  "query": "machine learning",\n  "max_results": 50\n}';
+
+    // Buttons
+    const buttonContainer = contentEl.createEl('div');
+    buttonContainer.style.cssText = 'display: flex; justify-content: flex-end; gap: 10px;';
+
+    const cancelButton = buttonContainer.createEl('button', { text: 'Cancel' });
+    cancelButton.style.cssText = 'padding: 8px 16px; border: 1px solid var(--background-modifier-border); background: var(--background-secondary); border-radius: 4px;';
+    cancelButton.onclick = () => this.close();
+
+    const createButton = buttonContainer.createEl('button', { text: 'Create' });
+    createButton.style.cssText = 'padding: 8px 16px; background: var(--interactive-accent); color: var(--text-on-accent); border: none; border-radius: 4px;';
+    createButton.onclick = () => this.createSource();
+  }
+
+  async createSource() {
+    const name = this.nameInput.value.trim();
+    const type = this.typeSelect.value;
+    const configText = this.configArea.value.trim();
+
+    if (!name) {
+      new Notice('Please enter a source name');
+      return;
+    }
+
+    let config;
+    try {
+      config = configText ? JSON.parse(configText) : {};
+    } catch (error) {
+      new Notice('Invalid JSON configuration');
+      return;
+    }
+
+    try {
+      const endpoint = this.plugin.getEndpointUrl();
+      const response = await fetch(`${endpoint}/execute/command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: 'discovery',
+          args: ['create', '--name', name, '--type', type],
+          options: { config: JSON.stringify(config) }
+        })
+      });
+
+      if (response.ok) {
+        new Notice(`Discovery source "${name}" created successfully`);
+        this.close();
+      } else {
+        throw new Error(`Creation failed: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('Source creation error:', error);
+      new Notice(`Failed to create source: ${error.message}`);
+    }
+  }
+
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
   }
 }
