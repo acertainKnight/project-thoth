@@ -1,0 +1,11 @@
+{
+  "id": "thoth-obsidian",
+  "name": "Thoth Research Assistant",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "Advanced research assistant with AI-powered analysis, PDF processing, and knowledge management.",
+  "author": "Thoth Project",
+  "authorUrl": "https://github.com/acertainKnight/project-thoth",
+  "fundingUrl": "https://github.com/sponsors/acertainKnight",
+  "isDesktopOnly": false
+}
