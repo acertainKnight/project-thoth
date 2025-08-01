@@ -454,6 +454,24 @@ class ScrapeFilterLLMConfig(BaseSettings):
     )
 
 
+class MCPConfig(BaseSettings):
+    """Configuration for the MCP (Model Context Protocol) server."""
+
+    model_config = SettingsConfigDict(
+        env_prefix='MCP_',
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='ignore',
+    )
+    host: str = Field('localhost', description='MCP server host')
+    port: int = Field(8001, description='MCP server port')
+    enabled: bool = Field(True, description='Whether MCP server is enabled')
+    auto_start: bool = Field(
+        True, description='Whether to auto-start MCP server with main server'
+    )
+
+
 class DiscoveryConfig(BaseSettings):
     """Configuration for the discovery system."""
 
@@ -478,6 +496,9 @@ class DiscoveryConfig(BaseSettings):
     )
     chrome_extension_enabled: bool = Field(
         True, description='Whether Chrome extension integration is enabled'
+    )
+    chrome_extension_host: str = Field(
+        'localhost', description='Host for Chrome extension WebSocket communication'
     )
     chrome_extension_port: int = Field(
         8765, description='Port for Chrome extension WebSocket communication'
@@ -748,6 +769,19 @@ class ThothConfig(BaseSettings):
     def query_based_routing_config(self) -> QueryBasedRoutingConfig:  # pragma: no cover
         return self.features.query_based_routing
 
+    @property
+    def mcp_config(self) -> MCPConfig:  # pragma: no cover
+        return self.features.mcp
+
+    # Convenience properties for common MCP settings
+    @property
+    def mcp_port(self) -> int:  # pragma: no cover
+        return self.mcp_config.port
+
+    @property
+    def mcp_host(self) -> str:  # pragma: no cover
+        return self.mcp_config.host
+
     def setup_logging(self) -> None:
         """Set up logging configuration using loguru."""
         setup_logging(self)
@@ -774,7 +808,7 @@ class ThothConfig(BaseSettings):
             'obsidianDirectory': str(self.notes_dir),
             'dataDirectory': str(self.core.workspace_dir / 'data'),
             'knowledgeDirectory': str(self.core.knowledge_base_dir),
-            'logsDirectory': str(self.logging_config.logdir),
+            'logsDirectory': str(Path(self.logging_config.filename).parent),
             'queriesDirectory': str(self.queries_dir),
             'agentStorageDirectory': str(self.agent_storage_dir),
             'pdfDirectory': str(self.pdf_dir),
@@ -796,17 +830,23 @@ class ThothConfig(BaseSettings):
             'analysisLlmMaxOutputTokens': self.citation_llm_config.max_output_tokens,
             # Agent Behavior
             'researchAgentAutoStart': self.research_agent_config.auto_start,
-            'researchAgentDefaultQueries': True,  # Default value
-            'researchAgentMemoryEnabled': self.research_agent_config.enable_memory,
-            'agentMaxToolCalls': self.research_agent_config.max_tool_calls,
-            'agentTimeoutSeconds': self.research_agent_config.timeout_seconds,
+            'researchAgentDefaultQueries': self.research_agent_config.default_queries,
+            'researchAgentMemoryEnabled': True,  # Default value
+            'agentMaxToolCalls': 50,  # Default value
+            'agentTimeoutSeconds': 300,  # Default value
             # Discovery System
             'discoveryAutoStartScheduler': self.discovery_config.auto_start_scheduler,
             'discoveryDefaultMaxArticles': self.discovery_config.default_max_articles,
             'discoveryDefaultIntervalMinutes': self.discovery_config.default_interval_minutes,
             'discoveryRateLimitDelay': self.discovery_config.rate_limit_delay,
-            'discoveryChromeExtensionEnabled': True,  # Default value
-            'discoveryChromeExtensionPort': 8765,  # Default value
+            'discoveryChromeExtensionEnabled': self.discovery_config.chrome_extension_enabled,
+            'discoveryChromeExtensionHost': self.discovery_config.chrome_extension_host,
+            'discoveryChromeExtensionPort': self.discovery_config.chrome_extension_port,
+            # MCP Server Configuration
+            'mcpServerEnabled': self.mcp_config.enabled,
+            'mcpServerHost': self.mcp_config.host,
+            'mcpServerPort': self.mcp_config.port,
+            'mcpServerAutoStart': self.mcp_config.auto_start,
             # Logging Configuration
             'logLevel': self.logging_config.level,
             'logFormat': self.logging_config.logformat,
@@ -932,6 +972,28 @@ class ThothConfig(BaseSettings):
             env_vars['DISCOVERY_RATE_LIMIT_DELAY'] = str(
                 obsidian_settings['discoveryRateLimitDelay']
             )
+        if obsidian_settings.get('discoveryChromeExtensionEnabled') is not None:
+            env_vars['DISCOVERY_CHROME_EXTENSION_ENABLED'] = str(
+                obsidian_settings['discoveryChromeExtensionEnabled']
+            )
+        if obsidian_settings.get('discoveryChromeExtensionHost'):
+            env_vars['DISCOVERY_CHROME_EXTENSION_HOST'] = obsidian_settings[
+                'discoveryChromeExtensionHost'
+            ]
+        if obsidian_settings.get('discoveryChromeExtensionPort'):
+            env_vars['DISCOVERY_CHROME_EXTENSION_PORT'] = str(
+                obsidian_settings['discoveryChromeExtensionPort']
+            )
+
+        # MCP Server Configuration
+        if obsidian_settings.get('mcpServerEnabled') is not None:
+            env_vars['MCP_ENABLED'] = str(obsidian_settings['mcpServerEnabled'])
+        if obsidian_settings.get('mcpServerHost'):
+            env_vars['MCP_HOST'] = obsidian_settings['mcpServerHost']
+        if obsidian_settings.get('mcpServerPort'):
+            env_vars['MCP_PORT'] = str(obsidian_settings['mcpServerPort'])
+        if obsidian_settings.get('mcpServerAutoStart') is not None:
+            env_vars['MCP_AUTO_START'] = str(obsidian_settings['mcpServerAutoStart'])
 
         # Server Configuration
         if obsidian_settings.get('endpointHost'):
@@ -989,7 +1051,25 @@ class ThothConfig(BaseSettings):
 
         # Check server configuration
         if not (1024 <= self.api_server_config.port <= 65535):
-            errors.append('Server port must be between 1024 and 65535')
+            errors.append('Main API server port must be between 1024 and 65535')
+
+        if not (1024 <= self.mcp_config.port <= 65535):
+            errors.append('MCP server port must be between 1024 and 65535')
+
+        if self.api_server_config.port == self.mcp_config.port:
+            errors.append('Main API server and MCP server cannot use the same port')
+
+        if not (1024 <= self.discovery_config.chrome_extension_port <= 65535):
+            errors.append('Chrome Extension server port must be between 1024 and 65535')
+
+        # Check for port conflicts
+        ports = [
+            self.api_server_config.port,
+            self.mcp_config.port,
+            self.discovery_config.chrome_extension_port,
+        ]
+        if len(ports) != len(set(ports)):
+            errors.append('All server ports must be unique to avoid conflicts')
 
         # Check LLM parameters
         if not (0.0 <= self.llm_config.model_settings.temperature <= 1.0):
@@ -999,17 +1079,8 @@ class ThothConfig(BaseSettings):
             errors.append('LLM max output tokens must be positive')
 
         # Check agent configuration
-        if (
-            hasattr(self.research_agent_config, 'max_tool_calls')
-            and self.research_agent_config.max_tool_calls < 1
-        ):
-            errors.append('Agent max tool calls must be positive')
-
-        if (
-            hasattr(self.research_agent_config, 'timeout_seconds')
-            and self.research_agent_config.timeout_seconds < 30
-        ):
-            warnings.append('Agent timeout less than 30 seconds may cause issues')
+        # Note: max_tool_calls and timeout_seconds are handled at runtime level,
+        # not in the config object itself
 
         # Check discovery configuration
         if self.discovery_config.default_max_articles < 1:
@@ -1056,6 +1127,12 @@ class ThothConfig(BaseSettings):
         # Server Configuration
         env_vars['ENDPOINT_HOST'] = self.api_server_config.host
         env_vars['ENDPOINT_PORT'] = str(self.api_server_config.port)
+
+        # MCP Server Configuration
+        env_vars['MCP_HOST'] = self.mcp_config.host
+        env_vars['MCP_PORT'] = str(self.mcp_config.port)
+        env_vars['MCP_ENABLED'] = str(self.mcp_config.enabled)
+        env_vars['MCP_AUTO_START'] = str(self.mcp_config.auto_start)
 
         # Set all environment variables
         for key, value in env_vars.items():
