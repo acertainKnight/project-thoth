@@ -40,7 +40,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=['*'],  # Allow requests from any origin (including Obsidian)
     allow_credentials=True,
-    allow_methods=['GET', 'POST', 'PUT'],
+    allow_methods=['GET', 'POST', 'PUT', 'DELETE'],
     allow_headers=['*'],
 )
 
@@ -1985,7 +1985,7 @@ def get_config_defaults():
         ) from e
 
 
-def start_server(
+async def start_server(
     host: str,
     port: int,
     pdf_directory: Path,
@@ -2037,10 +2037,10 @@ def start_server(
         logger.error(f'Failed to initialize chat persistence: {e}')
         logger.warning('Server will start without chat persistence functionality')
 
-    # Initialize the research agent
+    # Initialize the research agent and MCP server
     try:
         logger.info('Initializing research agent...')
-        from thoth.ingestion.agent_v2 import create_research_assistant
+        from thoth.ingestion.agent_v2 import create_research_assistant_async
 
         # Use provided pipeline or create a new one
         if pipeline is None:
@@ -2050,8 +2050,12 @@ def start_server(
 
         service_manager = pipeline.services
 
-        # Create the research agent
-        research_agent = create_research_assistant(
+        # Start MCP server in background
+        logger.info('Starting MCP server...')
+        await _start_mcp_server_background()
+
+        # Create the research agent with async initialization
+        research_agent = await create_research_assistant_async(
             service_manager=service_manager,
             enable_memory=True,
         )
@@ -2061,24 +2065,144 @@ def start_server(
         llm_router = LLMRouter(config)
 
         logger.info(
-            f'Research agent initialized with {len(research_agent.get_available_tools())} tools'
+            f'Research agent initialized with {len(research_agent.tools)} tools'
         )
 
     except Exception as e:
         logger.error(f'Failed to initialize research agent: {e}')
         logger.warning('Server will start without research agent functionality')
 
-    uvicorn.run(app, host=host, port=port, reload=reload)
+    # Start the uvicorn server with proper signal handling
+    config = uvicorn.Config(app, host=host, port=port, reload=reload)
+    server = uvicorn.Server(config)
+
+    # Set up signal handlers for graceful shutdown
+    import asyncio
+    import signal
+
+    shutdown_event = asyncio.Event()
+
+    def signal_handler(signum, _frame):
+        logger.info(f'Received signal {signum}, initiating graceful shutdown...')
+        shutdown_event.set()
+
+    # Register signal handlers
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    try:
+        # Start server in background
+        server_task = asyncio.create_task(server.serve())
+
+        # Wait for either server completion or shutdown signal
+        done, pending = await asyncio.wait(
+            [server_task, asyncio.create_task(shutdown_event.wait())],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        # If shutdown was requested, gracefully stop the server
+        if shutdown_event.is_set():
+            logger.info('Shutting down server gracefully...')
+            server.should_exit = True
+            await server_task
+
+        # Cancel any remaining tasks
+        for task in pending:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    except KeyboardInterrupt:
+        logger.info('KeyboardInterrupt received, shutting down gracefully...')
+        server.should_exit = True
+
+
+async def _start_mcp_server_background() -> None:
+    """Start the MCP server in the background."""
+    import asyncio
+
+    from thoth.mcp.launcher import launch_mcp_server
+
+    # Start MCP server using configured port from settings
+    config = get_config()
+    mcp_port = config.mcp_port
+    mcp_host = config.mcp_host
+
+    # Start MCP server as a background task
+    async def _mcp_task_wrapper():
+        """Wrapper to handle MCP server task exceptions."""
+        try:
+            await launch_mcp_server(
+                stdio=False,
+                http=True,
+                http_host=mcp_host,
+                http_port=mcp_port,
+                sse=False,
+            )
+        except Exception as e:
+            logger.error(f'MCP server failed: {e}')
+
+    # Create and start the background task
+    mcp_task = asyncio.create_task(_mcp_task_wrapper())
+
+    # Add the task to a global set to prevent it from being garbage collected
+    # and to suppress the "unawaited coroutine" warning
+    if not hasattr(_start_mcp_server_background, '_background_tasks'):
+        _start_mcp_server_background._background_tasks = set()
+    _start_mcp_server_background._background_tasks.add(mcp_task)
+
+    # Remove completed tasks from the set
+    mcp_task.add_done_callback(_start_mcp_server_background._background_tasks.discard)
+
+    # Give the MCP server a moment to start
+    await asyncio.sleep(1)
+    logger.info(f'MCP server started on http://{mcp_host}:{mcp_port}/mcp')
+
+
+def start_obsidian_server(
+    host: str,
+    port: int,
+    pdf_directory: Path,
+    notes_directory: Path,
+    api_base_url: str,
+    pipeline: Any | None = None,
+    reload: bool = False,
+):
+    """
+    Synchronous wrapper for starting the server.
+
+    This function handles the async initialization and then starts the server.
+    """
+    import asyncio
+
+    async def _async_start():
+        await start_server(
+            host=host,
+            port=port,
+            pdf_directory=pdf_directory,
+            notes_directory=notes_directory,
+            api_base_url=api_base_url,
+            pipeline=pipeline,
+            reload=reload,
+        )
+
+    # Run the async initialization
+    asyncio.run(_async_start())
 
 
 if __name__ == '__main__':
     # This is for development purposes only
+    import asyncio
     from pathlib import Path
 
-    start_server(
-        '127.0.0.1',
-        8000,
-        Path('./data/pdf'),
-        Path('./data/notes'),
-        'http://127.0.0.1:8000',
+    asyncio.run(
+        start_server(
+            '127.0.0.1',
+            8000,
+            Path('./data/pdf'),
+            Path('./data/notes'),
+            'http://127.0.0.1:8000',
+        )
     )
