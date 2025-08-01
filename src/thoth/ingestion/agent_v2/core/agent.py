@@ -27,6 +27,17 @@ from thoth.ingestion.agent_v2.tools.base_tool import ToolRegistry
 from thoth.ingestion.agent_v2.tools.decorators import get_registered_tools
 from thoth.services.service_manager import ServiceManager
 
+# Import MCP components
+try:
+    # MCP imports for availability check only
+    import thoth.mcp.base_tools
+    import thoth.mcp.tools  # noqa: F401
+
+    MCP_AVAILABLE = True
+except ImportError:
+    MCP_AVAILABLE = False
+    logger.warning('MCP tools not available, falling back to legacy tools')
+
 
 class ResearchAssistant:
     """
@@ -41,6 +52,7 @@ class ResearchAssistant:
         service_manager: ServiceManager,
         enable_memory: bool = True,
         system_prompt: str | None = None,
+        use_mcp_tools: bool = True,
     ):
         """
         Initialize the research assistant.
@@ -49,9 +61,11 @@ class ResearchAssistant:
             service_manager: ServiceManager instance for accessing services
             enable_memory: Whether to enable conversation memory
             system_prompt: Custom system prompt (uses default if None)
+            use_mcp_tools: Whether to use MCP tools (defaults to True if available)
         """
         self.service_manager = service_manager
         self.enable_memory = enable_memory
+        self.use_mcp_tools = use_mcp_tools and MCP_AVAILABLE
 
         # Get LLM from service manager
         self.llm = self.service_manager.llm.get_client()
@@ -59,23 +73,69 @@ class ResearchAssistant:
         # Token usage tracker
         self.usage_tracker = TokenUsageTracker()
 
-        # Initialize tool registry and register all tools
-        self.tool_registry = ToolRegistry(service_manager=self.service_manager)
-        self._register_tools()
+        # Initialize tools - will be loaded asynchronously
+        self.tools = []
+        self.mcp_client = None
+        self.tool_registry = None
+        self._initialized = False
 
-        # Get all tool instances
-        self.tools = self.tool_registry.create_all_tools()
+        # Initialize tool registry for non-MCP tools immediately if needed
+        if not self.use_mcp_tools:
+            from thoth.ingestion.agent_v2.tools.base_tool import ToolRegistry
 
-        # Bind tools to LLM
-        self.llm_with_tools = self.llm.bind_tools(self.tools)
+            self.tool_registry = ToolRegistry(service_manager=self.service_manager)
 
         # Set up system prompt
         self.system_prompt = system_prompt or self._get_default_system_prompt()
 
+        # Agent graph will be built after async initialization
+        self.app = None
+        self.llm_with_tools = None
+
+        logger.info(
+            'Research Assistant created - call async_initialize() to complete setup'
+        )
+
+    async def async_initialize(self) -> None:
+        """
+        Complete async initialization of the research assistant.
+
+        This method must be called after creating the ResearchAssistant instance
+        to properly load MCP tools and build the agent graph.
+        """
+        if self._initialized:
+            return
+
+        # Initialize tool registry (MCP or legacy)
+        if self.use_mcp_tools:
+            try:
+                # Use the new MCP adapter approach
+                self.tools = await self._get_mcp_tools_via_adapter()
+                logger.info(
+                    f'Using MCP tools via adapter - loaded {len(self.tools)} tools'
+                )
+            except Exception as e:
+                logger.error(f'Failed to initialize MCP tools: {e}')
+                logger.info('Falling back to legacy tools')
+                self.use_mcp_tools = False
+
+        if not self.use_mcp_tools:
+            # Fall back to legacy tools
+            self.tool_registry = ToolRegistry(service_manager=self.service_manager)
+            self._register_tools()
+            self.tools = self.tool_registry.create_all_tools()
+            logger.info(f'Using legacy tools - loaded {len(self.tools)} tools')
+
+        # Bind tools to LLM
+        self.llm_with_tools = self.llm.bind_tools(self.tools)
+
         # Build the agent graph
         self.app = self._build_graph()
 
-        logger.info(f'Research Assistant initialized with {len(self.tools)} tools')
+        self._initialized = True
+        logger.info(
+            f'Research Assistant fully initialized with {len(self.tools)} tools'
+        )
 
     def _register_tools(self) -> None:
         """Register all available tools discovered via decorators."""
@@ -86,6 +146,48 @@ class ResearchAssistant:
         # Register each discovered tool class
         for name, cls in get_registered_tools().items():
             self.tool_registry.register(name, cls)
+
+    async def _get_mcp_tools_via_adapter(self) -> list[Any]:
+        """Get MCP tools using official LangChain MCP adapter."""
+        if not self.use_mcp_tools:
+            return []
+
+        try:
+            from langchain_mcp_adapters.client import MultiServerMCPClient
+
+            # Connect to local Thoth MCP server
+            # Get the MCP connection details from configuration
+            mcp_port = self.service_manager.config.mcp_port
+            mcp_host = self.service_manager.config.mcp_host
+
+            self.mcp_client = MultiServerMCPClient(
+                {
+                    'thoth': {
+                        'url': f'http://{mcp_host}:{mcp_port}/mcp',
+                        'transport': 'streamable_http',
+                    }
+                }
+            )
+
+            # Get tools directly from MCP server - no manual conversion needed
+            logger.info('Connecting to local MCP server for tools...')
+            tools = await self.mcp_client.get_tools()
+            logger.info(f'Successfully loaded {len(tools)} tools from MCP server')
+            return tools
+
+        except ImportError:
+            logger.error(
+                'langchain-mcp-adapters not installed. Install with: pip install langchain-mcp-adapters'
+            )
+            return []
+        except Exception as e:
+            logger.error(f'Failed to connect to MCP server: {e}')
+            logger.warning('Falling back to legacy tools')
+            # Fall back to legacy tools if MCP connection fails
+            self.use_mcp_tools = False
+            self.tool_registry = ToolRegistry(service_manager=self.service_manager)
+            self._register_tools()
+            return self.tool_registry.create_all_tools()
 
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt for the agent."""
@@ -351,8 +453,11 @@ Remember: You have direct access to tools - use them immediately rather than jus
 
     def list_tools(self) -> list[str]:
         """Return the names of all available tools."""
-
-        return self.tool_registry.get_tool_names()
+        if self.use_mcp_tools:
+            # For MCP tools, extract names from the tools list
+            return [tool.name for tool in self.tools] if self.tools else []
+        else:
+            return self.tool_registry.get_tool_names() if self.tool_registry else []
 
     def reset_memory(self, session_id: str | None = None) -> None:
         """
@@ -378,6 +483,7 @@ def create_research_assistant(
     adapter=None,
     enable_memory: bool = True,
     system_prompt: str | None = None,
+    use_mcp_tools: bool = True,
 ) -> ResearchAssistant:
     """
     Factory function to create a research assistant.
@@ -387,6 +493,7 @@ def create_research_assistant(
         adapter: AgentAdapter instance (legacy compatibility)
         enable_memory: Whether to enable conversation memory
         system_prompt: Custom system prompt
+        use_mcp_tools: Whether to use MCP tools (defaults to True)
 
     Returns:
         ResearchAssistant: Configured research assistant instance
@@ -406,4 +513,47 @@ def create_research_assistant(
         service_manager=service_manager,
         enable_memory=enable_memory,
         system_prompt=system_prompt,
+        use_mcp_tools=use_mcp_tools,
     )
+
+
+async def create_research_assistant_async(
+    service_manager: ServiceManager | None = None,
+    adapter=None,
+    enable_memory: bool = True,
+    system_prompt: str | None = None,
+    use_mcp_tools: bool = True,
+) -> ResearchAssistant:
+    """
+    Async factory function to create and fully initialize a research assistant.
+
+    This function creates a ResearchAssistant and completes its async initialization,
+    including loading MCP tools and building the agent graph.
+
+    Args:
+        service_manager: ServiceManager instance (preferred method)
+        adapter: AgentAdapter instance (legacy compatibility)
+        enable_memory: Whether to enable conversation memory
+        system_prompt: Custom system prompt
+        use_mcp_tools: Whether to use MCP tools (defaults to True)
+
+    Returns:
+        ResearchAssistant: Fully initialized research assistant instance
+
+    Note:
+        Either service_manager or adapter must be provided.
+        If both are provided, service_manager takes precedence.
+    """
+    # Create the assistant using the sync factory
+    assistant = create_research_assistant(
+        service_manager=service_manager,
+        adapter=adapter,
+        enable_memory=enable_memory,
+        system_prompt=system_prompt,
+        use_mcp_tools=use_mcp_tools,
+    )
+
+    # Complete async initialization
+    await assistant.async_initialize()
+
+    return assistant

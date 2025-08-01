@@ -43,7 +43,9 @@ def startup_event() -> None:
 
     pipeline = ThothPipeline()
     adapter = AgentAdapter(pipeline.services)
-    agent = create_research_assistant(adapter=adapter, enable_memory=True)
+    agent = create_research_assistant(
+        adapter=adapter, enable_memory=True, use_mcp_tools=True
+    )
     logger.info('MCP server initialized successfully')
 
 

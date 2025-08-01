@@ -5,7 +5,7 @@ from pathlib import Path
 from loguru import logger
 
 from thoth.pipeline import ThothPipeline
-from thoth.server.api_server import start_server as start_obsidian_server
+from thoth.server.api_server import start_obsidian_server
 from thoth.server.pdf_monitor import PDFMonitor
 from thoth.utilities.config import get_config
 
