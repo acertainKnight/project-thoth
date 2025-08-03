@@ -1,4 +1,6 @@
 import argparse
+import asyncio
+import inspect
 import os
 
 
@@ -25,7 +27,7 @@ _configure_safe_environment()
 
 from thoth.pipeline import ThothPipeline  # noqa: E402
 
-from . import agent, discovery, notes, pdf, performance, rag, system  # noqa: E402
+from . import agent, discovery, mcp, notes, pdf, performance, rag, system  # noqa: E402
 
 
 def main():
@@ -40,6 +42,7 @@ def main():
     # Register sub-commands from modules
     agent.configure_subparser(subparsers)
     discovery.configure_subparser(subparsers)
+    mcp.configure_subparser(subparsers)
     notes.configure_subparser(subparsers)
     pdf.configure_subparser(subparsers)
     performance.configure_subparser(subparsers)
@@ -52,7 +55,11 @@ def main():
     pipeline = ThothPipeline()
 
     if hasattr(args, 'func'):
-        args.func(args, pipeline)
+        # Check if the function is async and handle accordingly
+        if inspect.iscoroutinefunction(args.func):
+            asyncio.run(args.func(args, pipeline))
+        else:
+            args.func(args, pipeline)
     else:
         # This part should ideally not be reached if 'required=True' is set on
         # subparsers

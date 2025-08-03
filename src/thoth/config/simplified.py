@@ -14,6 +14,7 @@ if TYPE_CHECKING:  # pragma: no cover - for type hints only
         DiscoveryConfig,
         EndpointConfig,
         LLMConfig,
+        MCPConfig,
         MonitorConfig,
         QueryBasedRoutingConfig,
         RAGConfig,
@@ -122,6 +123,12 @@ class FeatureConfig(BaseSettings):
         ).ResearchAgentLLMConfig(),
         description='Research agent LLM configuration',
     )
+    mcp: MCPConfig = Field(
+        default_factory=lambda: __import__(
+            'thoth.utilities.config', fromlist=['MCPConfig']
+        ).MCPConfig(),
+        description='MCP server configuration',
+    )
     scrape_filter_llm: ScrapeFilterLLMConfig = Field(
         default_factory=lambda: __import__(
             'thoth.utilities.config', fromlist=['ScrapeFilterLLMConfig']
@@ -186,6 +193,7 @@ def migrate_from_old_config(old_config: ThothConfig) -> ThothConfig:
         discovery=old_config.discovery_config,
         rag=old_config.rag_config,
         query_based_routing=old_config.query_based_routing_config,
+        mcp=old_config.mcp_config,
     )
 
     return NewThothConfig(

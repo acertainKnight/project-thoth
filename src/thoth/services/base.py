@@ -4,9 +4,10 @@ Base service class for Thoth services.
 This module provides the base class and common functionality for all services.
 """
 
-from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any
 
+from jinja2 import Environment, FileSystemLoader
 from loguru import logger
 
 from thoth.utilities.config import ThothConfig, get_config
@@ -18,7 +19,51 @@ class ServiceError(Exception):
     pass
 
 
-class BaseService(ABC):
+class TemplateServiceMixin:
+    """Mixin for services that use Jinja templates."""
+
+    def setup_template_environment(self, prompts_dir: Path | None = None):
+        """Set up Jinja template environments for different providers."""
+        if not hasattr(self, 'config'):
+            raise RuntimeError('TemplateServiceMixin requires config attribute')
+
+        self.prompts_dir = prompts_dir or Path(self.config.prompts_dir)
+        self.jinja_envs = {}
+
+        # Common providers that services use
+        for provider in ['openai', 'google', 'anthropic']:
+            provider_dir = self.prompts_dir / provider
+            if provider_dir.exists():
+                self.jinja_envs[provider] = Environment(
+                    loader=FileSystemLoader(provider_dir)
+                )
+
+    def get_template_env(self, provider: str) -> Environment:
+        """Get Jinja environment for a specific provider."""
+        if not hasattr(self, 'jinja_envs'):
+            self.setup_template_environment()
+        return self.jinja_envs.get(provider)
+
+
+class ClientManagerMixin:
+    """Mixin for services that manage multiple client instances."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._clients: dict[str, Any] = {}
+
+    def get_or_create_client(self, key: str, factory_func):
+        """Get existing client or create new one using factory function."""
+        if key not in self._clients:
+            self._clients[key] = factory_func()
+        return self._clients[key]
+
+    def clear_clients(self):
+        """Clear all cached clients."""
+        self._clients.clear()
+
+
+class BaseService:
     """
     Base class for all Thoth services.
 
@@ -47,15 +92,17 @@ class BaseService(ABC):
         """Get the logger instance for this service."""
         return self._logger
 
-    @abstractmethod
     def initialize(self) -> None:
         """
-        Initialize the service. Must be implemented by subclasses.
+        Initialize the service.
 
-        This method should be called after instantiation to set up any
-        required resources or connections.
+        Default implementation logs initialization. Services can override
+        this method to perform additional setup.
         """
-        pass
+        service_name = self.__class__.__name__.replace('Service', '').lower()
+        self.logger.info(
+            f'{service_name.replace("_", " ").title()} service initialized'
+        )
 
     def handle_error(self, error: Exception, context: str = '') -> str:
         """

@@ -43,22 +43,24 @@ def startup_event() -> None:
 
     pipeline = ThothPipeline()
     adapter = AgentAdapter(pipeline.services)
-    agent = create_research_assistant(adapter=adapter, enable_memory=True)
+    agent = create_research_assistant(
+        adapter=adapter, enable_memory=True, use_mcp_tools=True
+    )
     logger.info('MCP server initialized successfully')
 
 
 @app.post('/chat')
-def chat(request: ChatRequest) -> dict[str, Any]:
+async def chat(request: ChatRequest) -> dict[str, Any]:
     """Chat with the research assistant."""
     assert agent is not None, 'Agent not initialized'
     if request.messages:
-        return agent.chat_messages(
+        return await agent.chat_messages(
             messages=[msg.model_dump() for msg in request.messages],
             session_id=request.session_id,
             context=request.context,
         )
     if request.message:
-        return agent.chat(
+        return await agent.chat(
             message=request.message,
             session_id=request.session_id,
             context=request.context,
