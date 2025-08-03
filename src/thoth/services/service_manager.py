@@ -107,97 +107,25 @@ class ServiceManager:
 
         self._initialized = True
 
-    @property
-    def llm(self) -> LLMService:
-        """Get the LLM service."""
+    def __getattr__(self, name: str):
+        """Dynamically access services by name."""
         self._ensure_initialized()
-        return self._services['llm']
 
-    @property
-    def processing(self) -> ProcessingService:
-        """Get the processing service."""
-        self._ensure_initialized()
-        return self._services['processing']
+        # Handle special cases for optional services
+        if name in ('cache', 'async_processing'):
+            if name not in self._services:
+                raise RuntimeError(
+                    f'{name.replace("_", " ").title()} service not available - optimized services not installed'
+                )
 
-    @property
-    def article(self) -> ArticleService:
-        """Get the article service."""
-        self._ensure_initialized()
-        return self._services['article']
+        # Try to get the service
+        if name in self._services:
+            return self._services[name]
 
-    @property
-    def note(self) -> NoteService:
-        """Get the note service."""
-        self._ensure_initialized()
-        return self._services['note']
-
-    @property
-    def query(self) -> QueryService:
-        """Get the query service."""
-        self._ensure_initialized()
-        return self._services['query']
-
-    @property
-    def discovery(self) -> DiscoveryService:
-        """Get the discovery service."""
-        self._ensure_initialized()
-        return self._services['discovery']
-
-    @property
-    def rag(self) -> RAGService:
-        """Get the RAG service."""
-        self._ensure_initialized()
-        return self._services['rag']
-
-    @property
-    def web_search(self) -> WebSearchService:
-        """Get the web search service."""
-        self._ensure_initialized()
-        return self._services['web_search']
-
-    @property
-    def citation(self) -> CitationService:
-        """Get the citation service."""
-        self._ensure_initialized()
-        return self._services['citation']
-
-    @property
-    def tag(self) -> TagService:
-        """Get the tag service."""
-        self._ensure_initialized()
-        return self._services['tag']
-
-    @property
-    def pdf_locator(self) -> PdfLocatorService:
-        """Get the PDF locator service."""
-        self._ensure_initialized()
-        return self._services['pdf_locator']
-
-    @property
-    def api_gateway(self) -> ExternalAPIGateway:
-        """Get the External API Gateway service."""
-        self._ensure_initialized()
-        return self._services['api_gateway']
-
-    @property
-    def cache(self) -> 'CacheService':
-        """Get the cache service (if available)."""
-        self._ensure_initialized()
-        if 'cache' not in self._services:
-            raise RuntimeError(
-                'Cache service not available - optimized services not installed'
-            )
-        return self._services['cache']
-
-    @property
-    def async_processing(self) -> 'AsyncProcessingService':
-        """Get the async processing service (if available)."""
-        self._ensure_initialized()
-        if 'async_processing' not in self._services:
-            raise RuntimeError(
-                'Async processing service not available - optimized services not installed'
-            )
-        return self._services['async_processing']
+        # If not found, raise AttributeError
+        raise AttributeError(
+            f"'{self.__class__.__name__}' object has no attribute '{name}'"
+        )
 
     def get_service(self, name: str) -> BaseService:
         """

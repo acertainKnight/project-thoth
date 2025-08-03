@@ -37,6 +37,7 @@ dependencies = [
     "langgraph-sdk>=0.1.70",
     "langgraph-prebuilt>=0.2.1",
     "langsmith>=0.3.16",
+    "langchain-mcp-adapters", # For official MCP integration
     # Vector Store and RAG Dependencies
     "chromadb>=0.5.0", # For vector database
     "langchain-chroma>=0.1.0", # For ChromaDB integration with LangChain
@@ -176,3 +177,8 @@ extended_capitalisation_policy = "upper"
 ### codespell ########################################################################
 [tool.codespell]
 exclude-file = ".codespellignore"
+
+[dependency-groups]
+dev = [
+    "nbstripout>=0.8.1",
+]
