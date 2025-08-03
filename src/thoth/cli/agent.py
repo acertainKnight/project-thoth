@@ -6,7 +6,7 @@ from thoth.ingestion.agent_v2 import create_research_assistant
 from thoth.pipeline import ThothPipeline
 
 
-def run_agent_chat(_args, pipeline: ThothPipeline):
+async def run_agent_chat(_args, pipeline: ThothPipeline):
     """
     Start an interactive chat with the research assistant agent.
     """
@@ -58,7 +58,7 @@ def run_agent_chat(_args, pipeline: ThothPipeline):
                 if not user_message:
                     continue
 
-                response = agent.chat(
+                response = await agent.chat(
                     message=user_message,
                     session_id=session_id,
                 )

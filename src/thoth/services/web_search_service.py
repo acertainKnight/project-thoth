@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
-
-from thoth.services.base import BaseService, ServiceError
+from thoth.services.base import BaseService, ClientManagerMixin, ServiceError
 from thoth.utilities.schemas import SearchResult
 from thoth.utilities.web_search import (
     DuckDuckGoClient,
@@ -13,36 +11,33 @@ from thoth.utilities.web_search import (
 )
 
 
-class WebSearchService(BaseService):
+class WebSearchService(ClientManagerMixin, BaseService):
     """Service wrapping search clients for agent use."""
 
     def __init__(self, config=None):
         super().__init__(config)
-        self._clients: dict[str, Any] = {}
 
-    def _get_client(self, provider: str):
-        if provider in self._clients:
-            return self._clients[provider]
-
+    def _create_client(self, provider: str):
+        """Factory function to create clients."""
         if provider == 'serper':
             api_key = self.config.api_keys.web_search_key
             if not api_key:
                 raise ServiceError(
                     'Web search API key is not configured. Set API_WEB_SEARCH_KEY.'
                 )
-            client = SerperClient(api_key=api_key)
+            return SerperClient(api_key=api_key)
         elif provider == 'duckduckgo':
-            client = DuckDuckGoClient()
+            return DuckDuckGoClient()
         elif provider == 'scrape':
-            client = ScrapeSearchClient()
+            return ScrapeSearchClient()
         else:
             raise ServiceError(f"Unknown web search provider '{provider}'")
 
-        self._clients[provider] = client
-        return client
-
-    def initialize(self) -> None:
-        self.logger.info('Web search service initialized')
+    def _get_client(self, provider: str):
+        """Get or create client for provider."""
+        return self.get_or_create_client(
+            provider, lambda: self._create_client(provider)
+        )
 
     def search(
         self, query: str, num_results: int = 5, provider: str | None = None

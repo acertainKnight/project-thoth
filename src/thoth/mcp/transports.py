@@ -1,22 +1,21 @@
 """
-MCP Transport Layer Implementation
+MCP Transport implementations with proper notification handling.
 
-This module provides transport implementations for MCP including stdio, HTTP, and SSE.
+This module provides transport implementations for the Model Context Protocol
+including stdio, HTTP, and Server-Sent Events transports.
 """
 
 import asyncio
 import json
 import sys
-from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Callable
-from typing import Any
+from collections.abc import Callable
 
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import StreamingResponse
 from loguru import logger
 
-from .protocol import (
+from thoth.mcp.protocol import (
     JSONRPCNotification,
     JSONRPCRequest,
     JSONRPCResponse,
@@ -24,79 +23,70 @@ from .protocol import (
 )
 
 
-class MCPTransport(ABC):
-    """Abstract base class for MCP transport implementations."""
+class MCPTransport:
+    """Base class for MCP transports."""
 
     def __init__(self, protocol_handler: MCPProtocolHandler):
         self.protocol_handler = protocol_handler
-        self.message_handler: Callable | None = None
+        self.message_handler: Callable[[JSONRPCRequest], JSONRPCResponse] | None = None
+        self.running = False
 
     def set_message_handler(self, handler: Callable[[JSONRPCRequest], JSONRPCResponse]):
-        """Set the handler function for incoming messages."""
+        """Set the message handler for this transport."""
         self.message_handler = handler
 
-    @abstractmethod
     async def start(self):
         """Start the transport."""
-        pass
+        self.running = True
 
-    @abstractmethod
     async def stop(self):
         """Stop the transport."""
-        pass
+        self.running = False
 
-    @abstractmethod
     async def send_message(self, message: JSONRPCResponse):
         """Send a message through the transport."""
-        pass
+        raise NotImplementedError
 
 
 class StdioTransport(MCPTransport):
     """
-    Standard input/output transport for MCP.
+    Stdio transport for MCP.
 
-    This transport communicates via stdin/stdout, making it suitable
-    for CLI applications and process-based integrations.
+    This transport uses stdin/stdout for communication,
+    suitable for CLI integration and local tools.
     """
 
     def __init__(self, protocol_handler: MCPProtocolHandler):
         super().__init__(protocol_handler)
-        self.running = False
         self.reader: asyncio.StreamReader | None = None
         self.writer: asyncio.StreamWriter | None = None
 
     async def start(self):
-        """Start reading from stdin and writing to stdout."""
-        self.running = True
+        """Start the stdio transport."""
+        await super().start()
 
-        # Set up stdin/stdout streams
-        loop = asyncio.get_event_loop()
+        # Setup stdin/stdout streams
         self.reader = asyncio.StreamReader()
         protocol = asyncio.StreamReaderProtocol(self.reader)
-        await loop.connect_read_pipe(lambda: protocol, sys.stdin)
+        await asyncio.get_event_loop().connect_read_pipe(lambda: protocol, sys.stdin)
 
-        transport, protocol = await loop.connect_write_pipe(
+        transport, protocol = await asyncio.get_event_loop().connect_write_pipe(
             asyncio.streams.FlowControlMixin, sys.stdout
         )
-        self.writer = asyncio.StreamWriter(transport, protocol, self.reader, loop)
+        self.writer = asyncio.StreamWriter(
+            transport, protocol, self.reader, asyncio.get_event_loop()
+        )
 
-        # Start message processing loop
-        await self._message_loop()
-
-    async def stop(self):
-        """Stop the stdio transport."""
-        self.running = False
-        if self.writer:
-            self.writer.close()
-            await self.writer.wait_closed()
+        # Start message loop
+        self.message_loop_task = asyncio.create_task(self._message_loop())
 
     async def send_message(self, message: JSONRPCResponse):
-        """Send a message via stdout."""
+        """Send a JSON-RPC message via stdout."""
         if not self.writer:
-            raise RuntimeError('Transport not started')
+            return
 
         message_str = self.protocol_handler.serialize_message(message)
-        self.writer.write(message_str.encode() + b'\n')
+        self.writer.write(f'{message_str}\n'.encode())
         await self.writer.drain()
 
     async def _message_loop(self):
@@ -163,15 +153,21 @@ class HTTPTransport(MCPTransport):
         """Set up HTTP routes for MCP."""
 
         @self.app.post('/mcp')
-        async def handle_mcp_request(request: Request) -> dict[str, Any]:
-            """Handle MCP JSON-RPC requests."""
+        async def handle_mcp_request(request: Request):
+            """Handle MCP JSON-RPC requests and notifications."""
             try:
                 body = await request.json()
                 message = self.protocol_handler.parse_message(json.dumps(body))
 
                 if isinstance(message, JSONRPCRequest) and self.message_handler:
+                    # Handle requests - expect a response
                     response = await self.message_handler(message)
                     return json.loads(self.protocol_handler.serialize_message(response))
+                elif isinstance(message, JSONRPCNotification) and self.message_handler:
+                    # Handle notifications - no JSON-RPC response expected
+                    await self._handle_notification(message)
+                    # For HTTP notifications, return 204 No Content (no body)
+                    return Response(status_code=204)
                 else:
                     error_response = self.protocol_handler.create_error_response(
                         None, -32600, 'Invalid request'
@@ -185,9 +181,9 @@ class HTTPTransport(MCPTransport):
                 error_response = self.protocol_handler.create_error_response(
                     None, -32603, f'Internal error: {e}'
                 )
-                return json.loads(
-                    self.protocol_handler.serialize_message(error_response)
-                )
+                serialized = self.protocol_handler.serialize_message(error_response)
+                logger.debug(f'MCP Exception Response: {serialized}')
+                return json.loads(serialized)
 
         @self.app.get('/health')
         async def health_check():
@@ -210,6 +206,28 @@ class HTTPTransport(MCPTransport):
     async def send_message(self, message: JSONRPCResponse):
         """HTTP transport doesn't send unsolicited messages."""
         pass  # HTTP is request-response only
+
+    async def _handle_notification(self, notification: JSONRPCNotification):
+        """Handle JSON-RPC notifications that don't require responses."""
+        try:
+            method = notification.method
+            logger.debug(f'Handling MCP notification: {method}')
+
+            # Call the message handler but don't expect a response
+            # Since it's a notification, we just execute the handler
+            if method == 'initialized':
+                # Handle the initialized notification specifically
+                if hasattr(self.message_handler, '__self__'):
+                    server = self.message_handler.__self__
+                    if hasattr(server, 'protocol_handler'):
+                        server.protocol_handler.initialized = True
+                        logger.debug('MCP protocol marked as initialized')
+            else:
+                # For other notifications, we could handle them here if needed
+                logger.debug(f'Received notification: {method}')
+
+        except Exception as e:
+            logger.error(f'Error handling notification {notification.method}: {e}')
 
 
 class SSETransport(MCPTransport):
@@ -241,7 +259,7 @@ class SSETransport(MCPTransport):
         """Set up SSE routes for MCP."""
 
         @self.app.post('/mcp')
-        async def handle_mcp_request(request: Request) -> dict[str, Any]:
+        async def handle_mcp_request(request: Request):
             """Handle MCP JSON-RPC requests."""
             try:
                 body = await request.json()
@@ -250,6 +268,10 @@ class SSETransport(MCPTransport):
                 if isinstance(message, JSONRPCRequest) and self.message_handler:
                     response = await self.message_handler(message)
                     return json.loads(self.protocol_handler.serialize_message(response))
+                elif isinstance(message, JSONRPCNotification) and self.message_handler:
+                    # Handle notifications - no JSON-RPC response expected
+                    await self._handle_notification(message)
+                    return Response(status_code=204)
                 else:
                     error_response = self.protocol_handler.create_error_response(
                         None, -32600, 'Invalid request'
@@ -269,14 +291,33 @@ class SSETransport(MCPTransport):
 
         @self.app.get('/events/{client_id}')
         async def sse_endpoint(client_id: str):
-            """Server-Sent Events endpoint for real-time communication."""
+            """Server-Sent Events endpoint for real-time updates."""
+
+            async def event_stream():
+                # Create client queue
+                queue = asyncio.Queue()
+                self.clients[client_id] = queue
+
+                try:
+                    while True:
+                        # Wait for messages
+                        message = await queue.get()
+                        yield f'data: {json.dumps(message)}\n\n'
+                except asyncio.CancelledError:
+                    pass
+                finally:
+                    # Clean up client
+                    if client_id in self.clients:
+                        del self.clients[client_id]
+
             return StreamingResponse(
-                self._event_stream(client_id),
+                event_stream(),
                 media_type='text/event-stream',
                 headers={
                     'Cache-Control': 'no-cache',
                     'Connection': 'keep-alive',
                     'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Cache-Control',
                 },
             )
 
@@ -284,25 +325,6 @@ class SSETransport(MCPTransport):
         async def health_check():
             """Health check endpoint."""
             return {'status': 'ok', 'protocol': 'MCP-SSE', 'version': '2025-06-18'}
-
-    async def _event_stream(self, client_id: str) -> AsyncIterator[str]:
-        """Generate Server-Sent Events stream for a client."""
-        # Create a queue for this client
-        queue = asyncio.Queue()
-        self.clients[client_id] = queue
-
-        try:
-            while True:
-                # Wait for messages to send to this client
-                message = await queue.get()
-                yield f'data: {message}\n\n'
-        except asyncio.CancelledError:
-            # Client disconnected
-            pass
-        finally:
-            # Clean up client queue
-            if client_id in self.clients:
-                del self.clients[client_id]
 
     async def start(self):
         """Start the SSE server."""
@@ -316,75 +338,83 @@ class SSETransport(MCPTransport):
         """Stop the SSE server."""
         if self.server:
             self.server.should_exit = True
-        # Clear all client queues
-        self.clients.clear()
 
     async def send_message(
         self, message: JSONRPCResponse, client_id: str | None = None
     ):
         """Send a message via SSE to specific client or all clients."""
-        message_str = self.protocol_handler.serialize_message(message)
+        message_data = json.loads(self.protocol_handler.serialize_message(message))
 
         if client_id and client_id in self.clients:
-            await self.clients[client_id].put(message_str)
+            # Send to specific client
+            await self.clients[client_id].put(message_data)
         else:
             # Broadcast to all clients
             for queue in self.clients.values():
                 try:
-                    await queue.put(message_str)
+                    await queue.put(message_data)
                 except Exception as e:
-                    logger.error(f'Error sending message to client: {e}')
+                    logger.error(f'Error sending SSE message: {e}')
+
+    async def _handle_notification(self, notification: JSONRPCNotification):
+        """Handle JSON-RPC notifications for SSE transport."""
+        try:
+            method = notification.method
+            logger.debug(f'Handling SSE notification: {method}')
+
+            # For SSE, we might want to broadcast notifications to connected clients
+            notification_data = {
+                'type': 'notification',
+                'method': method,
+                'params': notification.params,
+            }
+
+            # Broadcast to all connected clients
+            for queue in self.clients.values():
+                try:
+                    await queue.put(notification_data)
+                except Exception as e:
+                    logger.error(f'Error broadcasting notification: {e}')
+
+        except Exception as e:
+            logger.error(f'Error handling SSE notification {notification.method}: {e}')
 
 
 class TransportManager:
-    """
-    Manager for multiple MCP transports.
-
-    Allows running multiple transport types simultaneously.
-    """
+    """Manages multiple MCP transports."""
 
     def __init__(self, protocol_handler: MCPProtocolHandler):
         self.protocol_handler = protocol_handler
         self.transports: dict[str, MCPTransport] = {}
-        self.running = False
+        self._handle_message: Callable[[JSONRPCRequest], JSONRPCResponse] | None = None
 
     def add_transport(self, name: str, transport: MCPTransport):
         """Add a transport to the manager."""
         transport.set_message_handler(self._handle_message)
         self.transports[name] = transport
 
+    def set_message_handler(self, handler: Callable[[JSONRPCRequest], JSONRPCResponse]):
+        """Set the message handler for all transports."""
+        self._handle_message = handler
+        for transport in self.transports.values():
+            transport.set_message_handler(handler)
+
+    async def start_transport(self, name: str):
+        """Start a specific transport."""
+        if name in self.transports:
+            await self.transports[name].start()
+
+    async def stop_transport(self, name: str):
+        """Stop a specific transport."""
+        if name in self.transports:
+            await self.transports[name].stop()
+
     async def start_all(self):
-        """Start all registered transports."""
-        self.running = True
-        tasks = []
-
-        for name, transport in self.transports.items():
-            logger.info(f'Starting transport: {name}')
-            task = asyncio.create_task(transport.start())
-            tasks.append(task)
-
-        # Wait for all transports to start
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+        """Start all transports."""
+        for transport in self.transports.values():
+            await transport.start()
 
     async def stop_all(self):
-        """Stop all registered transports."""
-        self.running = False
-        tasks = []
-
-        for name, transport in self.transports.items():
-            logger.info(f'Stopping transport: {name}')
-            task = asyncio.create_task(transport.stop())
-            tasks.append(task)
-
-        # Wait for all transports to stop
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
-
-    async def _handle_message(self, message: JSONRPCRequest) -> JSONRPCResponse:
-        """Handle incoming messages from any transport."""
-        # This will be implemented by the MCP server
-        # For now, return a method not found error
-        return self.protocol_handler.create_error_response(
-            message.id, -32601, 'Method not found'
-        )
+        """Stop all transports."""
+        for transport in self.transports.values():
+            await transport.stop()

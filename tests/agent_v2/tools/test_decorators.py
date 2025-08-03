@@ -44,9 +44,15 @@ def test_tool_decorator_validation() -> None:
 
 def _mock_service_manager() -> ServiceManager:
     sm = MagicMock(spec=ServiceManager)
-    mock_llm = MagicMock()
-    mock_llm.bind_tools.return_value.invoke = MagicMock(return_value='ok')
-    sm.llm.get_client.return_value = mock_llm
+
+    # Mock LLM service
+    mock_llm_service = MagicMock()
+    mock_llm_client = MagicMock()
+    mock_llm_client.bind_tools.return_value.invoke = MagicMock(return_value='ok')
+    mock_llm_service.get_client.return_value = mock_llm_client
+    sm.llm = mock_llm_service
+
+    # Mock other services
     sm.query = MagicMock()
     sm.discovery = MagicMock()
     sm.rag = MagicMock()
