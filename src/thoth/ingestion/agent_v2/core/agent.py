@@ -250,7 +250,7 @@ Remember: You have direct access to tools - use them immediately rather than jus
 
         return graph.compile(checkpointer=memory) if memory else graph.compile()
 
-    def _agent_node(self, state: ResearchAgentState) -> dict[str, Any]:
+    async def _agent_node(self, state: ResearchAgentState) -> dict[str, Any]:
         """
         Main agent node that processes messages and decides on actions.
 
@@ -272,13 +272,13 @@ Remember: You have direct access to tools - use them immediately rather than jus
         else:
             llm_with_tools = self.llm_with_tools
 
-        # Get response from LLM with tools
-        response = llm_with_tools.invoke(messages)
+        # Get response from LLM with tools (use async invocation for MCP tools)
+        response = await llm_with_tools.ainvoke(messages)
 
         # Return the response (LangGraph will handle adding it to messages)
         return {'messages': [response]}
 
-    def chat(
+    async def chat(
         self,
         message: str,
         session_id: str | None = None,
@@ -313,8 +313,8 @@ Remember: You have direct access to tools - use them immediately rather than jus
             config['configurable'] = {'thread_id': session_id}
 
         try:
-            # Run the agent
-            result = self.app.invoke(initial_state, config)
+            # Run the agent (use async invocation for MCP tools)
+            result = await self.app.ainvoke(initial_state, config)
 
             # Extract the final AI message
             final_message = None
@@ -363,7 +363,7 @@ Remember: You have direct access to tools - use them immediately rather than jus
                 'error': str(e),
             }
 
-    def chat_messages(
+    async def chat_messages(
         self,
         messages: list[dict[str, Any]],
         session_id: str | None = None,
@@ -400,7 +400,8 @@ Remember: You have direct access to tools - use them immediately rather than jus
             config['configurable'] = {'thread_id': session_id}
 
         try:
-            result = self.app.invoke(initial_state, config)
+            # Use async invocation for MCP tools
+            result = await self.app.ainvoke(initial_state, config)
             final_message = None
             for m in reversed(result['messages']):
                 if isinstance(m, AIMessage):

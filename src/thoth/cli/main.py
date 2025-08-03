@@ -1,4 +1,6 @@
 import argparse
+import asyncio
+import inspect
 import os
 
 
@@ -53,7 +55,11 @@ def main():
     pipeline = ThothPipeline()
 
     if hasattr(args, 'func'):
-        args.func(args, pipeline)
+        # Check if the function is async and handle accordingly
+        if inspect.iscoroutinefunction(args.func):
+            asyncio.run(args.func(args, pipeline))
+        else:
+            args.func(args, pipeline)
     else:
         # This part should ideally not be reached if 'required=True' is set on
         # subparsers

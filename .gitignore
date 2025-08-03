@@ -158,6 +158,12 @@ Thumbs.db
 # Pytest
 .pytest_cache/
 
+# Code agents
+.claude/
+.cursor/
+.cursorrules
+.cursorignore
+
 # Logs
 logs/
 

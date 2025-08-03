@@ -68,10 +68,6 @@ class NoteService(BaseService):
 
         self._notes_cache: dict[str, Path] = {}
 
-    def initialize(self) -> None:
-        """Initialize the note service."""
-        self.logger.info('Note service initialized')
-
     def create_note(
         self,
         pdf_path: Path,

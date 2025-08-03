@@ -177,3 +177,8 @@ extended_capitalisation_policy = "upper"
 ### codespell ########################################################################
 [tool.codespell]
 exclude-file = ".codespellignore"
+
+[dependency-groups]
+dev = [
+    "nbstripout>=0.8.1",
+]

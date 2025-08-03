@@ -5,11 +5,7 @@ This module consolidates all article-related operations that were previously
 scattered across Filter, agent tools, and other components.
 """
 
-from pathlib import Path
-
-from jinja2 import Environment, FileSystemLoader
-
-from thoth.services.base import BaseService, ServiceError
+from thoth.services.base import BaseService, ServiceError, TemplateServiceMixin
 from thoth.services.llm_service import LLMService
 from thoth.utilities.schemas import (
     AnalysisResponse,
@@ -20,7 +16,7 @@ from thoth.utilities.schemas import (
 )
 
 
-class ArticleService(BaseService):
+class ArticleService(TemplateServiceMixin, BaseService):
     """
     Service for managing article evaluation and scoring.
 
@@ -43,19 +39,8 @@ class ArticleService(BaseService):
         self._llm_service = llm_service
         self.query_service = None
 
-        # Set up prompts directory and Jinja environment
-        self.prompts_dir = Path(self.config.prompts_dir)
-
-        # Initialize Jinja environments for different providers
-        self.jinja_envs = {}
-        for provider in ['openai', 'google']:
-            provider_dir = self.prompts_dir / provider
-            if provider_dir.exists():
-                self.jinja_envs[provider] = Environment(
-                    loader=FileSystemLoader(provider_dir),
-                    trim_blocks=True,
-                    lstrip_blocks=True,
-                )
+        # Set up template environment
+        self.setup_template_environment()
 
     @property
     def llm_service(self) -> LLMService:
@@ -63,10 +48,6 @@ class ArticleService(BaseService):
         if self._llm_service is None:
             self._llm_service = LLMService(self.config)
         return self._llm_service
-
-    def initialize(self) -> None:
-        """Initialize the article service."""
-        self.logger.info('Article service initialized')
 
     def evaluate_against_query(
         self,
