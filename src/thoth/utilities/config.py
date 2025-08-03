@@ -55,7 +55,7 @@ class APIKeys(BaseSettings):
 
 
 class ModelConfig(BaseSettings):
-    """Configuration for models."""
+    """Configuration for model parameters."""
 
     model_config = SettingsConfigDict(
         case_sensitive=False,
@@ -64,40 +64,46 @@ class ModelConfig(BaseSettings):
     temperature: float = Field(0.9, description='Model temperature')
     max_tokens: int = Field(500000, description='Model max tokens for generation')
     top_p: float = Field(1.0, description='Model top p')
-    frequency_penalty: float = Field(0.0, description='Model frequency penalty')
-    presence_penalty: float = Field(0.0, description='Model presence penalty')
     streaming: bool = Field(False, description='Model streaming')
     use_rate_limiter: bool = Field(True, description='Model use rate limiter')
 
 
-class LLMConfig(BaseSettings):
-    """Configuration for LLM."""
+class BaseLLMConfig(BaseSettings):
+    """Base configuration class for LLM models."""
+
+    model_config = SettingsConfigDict(
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='allow',
+        env_nested_delimiter='_',
+    )
+
+    model: str = Field('', description='LLM model identifier')
+    model_settings: ModelConfig = Field(
+        default_factory=ModelConfig, description='Model parameters'
+    )
+    max_output_tokens: int = Field(50000, description='Max tokens for generation')
+    max_context_length: int = Field(8000, description='Max context length for model')
+
+
+class LLMConfig(BaseLLMConfig):
+    """Configuration for primary LLM."""
 
     model_config = SettingsConfigDict(
         env_prefix='LLM_',
         env_file='.env',
         env_file_encoding='utf-8',
-        case_sensitive=False,  # Make case-insensitive to handle env vars
+        case_sensitive=False,
         extra='allow',
-        env_nested_delimiter='_',  # Explicitly set single underscore for nesting
+        env_nested_delimiter='_',
     )
-    model: str = Field(..., description='LLM model')
-    model_settings: ModelConfig = Field(
-        default_factory=ModelConfig, description='Model configuration'
-    )
-    doc_processing: str = Field(
-        'auto', description='LLM document processing strategy hint'
-    )
-    max_output_tokens: int = Field(
-        50000, description='LLM max input tokens for direct processing strategy'
-    )
-    max_context_length: int = Field(
-        8000, description='LLM max context length for model'
-    )
-    chunk_size: int = Field(4000, description='LLM chunk size for splitting documents')
-    chunk_overlap: int = Field(
-        200, description='LLM chunk overlap for splitting documents'
-    )
+
+    # Primary LLM requires model field
+    model: str = Field(..., description='Primary LLM model identifier')
+
+    chunk_size: int = Field(4000, description='Chunk size for splitting documents')
+    chunk_overlap: int = Field(200, description='Chunk overlap for splitting documents')
     refine_threshold_multiplier: float = Field(
         1.2, description='Multiplier for max_context_length to choose refine strategy'
     )
@@ -127,8 +133,8 @@ class QueryBasedRoutingConfig(BaseSettings):
     )
 
 
-class CitationLLMConfig(BaseSettings):
-    """Configuration for the LLM used specifically for citation processing."""
+class CitationLLMConfig(BaseLLMConfig):
+    """Configuration for citation processing LLM."""
 
     model_config = SettingsConfigDict(
         env_prefix='CITATION_LLM_',
@@ -137,29 +143,30 @@ class CitationLLMConfig(BaseSettings):
         case_sensitive=False,
         extra='allow',
     )
+
+    # Citation LLM requires model field
     model: str = Field(..., description='Default citation LLM model')
-    document_citation_model: str | None = Field(
-        None, description='Model for extracting the document citation'
-    )
-    reference_cleaning_model: str | None = Field(
-        None, description='Model for cleaning the references section'
-    )
-    structured_extraction_model: str | None = Field(
-        None, description='Model for extracting structured citations (single mode)'
-    )
-    batch_structured_extraction_model: str | None = Field(
-        None, description='Model for extracting structured citations (batch mode)'
-    )
-    model_settings: ModelConfig = Field(
-        default_factory=ModelConfig, description='Citation model configuration'
-    )
+
+    # Override defaults for citation-specific use case
     max_output_tokens: int = Field(
-        10000,
-        description='Citation LLM max tokens for generation (typically for smaller, focused outputs)',
+        10000, description='Max tokens for citation processing (focused outputs)'
     )
     max_context_length: int = Field(
-        4000,
-        description='Citation LLM max context length for model (can be smaller if inputs are focused e.g. reference strings)',
+        4000, description='Max context length (smaller for focused citation inputs)'
+    )
+
+    # Citation-specific models
+    document_citation_model: str | None = Field(
+        None, description='Model for extracting document citations'
+    )
+    reference_cleaning_model: str | None = Field(
+        None, description='Model for cleaning references section'
+    )
+    structured_extraction_model: str | None = Field(
+        None, description='Model for structured citation extraction (single mode)'
+    )
+    batch_structured_extraction_model: str | None = Field(
+        None, description='Model for structured citation extraction (batch mode)'
     )
 
 
@@ -181,12 +188,6 @@ class PerformanceConfig(BaseSettings):
     auto_scale_workers: bool = Field(
         True,
         description='Automatically scale workers based on available CPU cores',
-    )
-    cpu_utilization_target: float = Field(
-        0.8,
-        description='Target CPU utilization for auto-scaling (0.0-1.0)',
-        ge=0.1,
-        le=1.0,
     )
 
     # Tag processing workers - optimized for local processing
@@ -297,8 +298,8 @@ class PerformanceConfig(BaseSettings):
     )
 
 
-class TagConsolidatorLLMConfig(BaseSettings):
-    """Configuration for the LLM used specifically for tag consolidation."""
+class TagConsolidatorLLMConfig(BaseLLMConfig):
+    """Configuration for tag consolidation LLM."""
 
     model_config = SettingsConfigDict(
         env_prefix='TAG_LLM_',
@@ -307,20 +308,16 @@ class TagConsolidatorLLMConfig(BaseSettings):
         case_sensitive=False,
         extra='allow',
     )
+
+    # Override defaults for tag processing
+    max_output_tokens: int = Field(
+        10000, description='Max tokens for tag processing (focused outputs)'
+    )
+
+    # Tag-specific models (base model field is optional for this config)
     consolidate_model: str = Field(..., description='Tag consolidator LLM model')
     suggest_model: str = Field(..., description='Tag suggestor LLM model')
     map_model: str = Field(..., description='Tag mapper LLM model')
-    model_settings: ModelConfig = Field(
-        default_factory=ModelConfig, description='Tag consolidator model configuration'
-    )
-    max_output_tokens: int = Field(
-        10000,
-        description='Tag consolidator LLM max tokens for generation (typically for smaller, focused outputs)',
-    )
-    max_context_length: int = Field(
-        8000,
-        description='Tag consolidator LLM max context length for model',
-    )
 
 
 class CitationConfig(BaseSettings):
@@ -359,23 +356,33 @@ class CitationConfig(BaseSettings):
     )
 
 
-class EndpointConfig(BaseSettings):
-    """Configuration for endpoints."""
+class BaseServerConfig(BaseSettings):
+    """Base configuration for server endpoints."""
+
+    model_config = SettingsConfigDict(
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='ignore',
+    )
+
+    host: str = Field(..., description='Host to bind to')
+    port: int = Field(..., description='Port to bind to')
+    auto_start: bool = Field(False, description='Whether to auto-start')
+
+
+class EndpointConfig(BaseServerConfig):
+    """Configuration for API endpoints."""
 
     model_config = SettingsConfigDict(
         env_prefix='ENDPOINT_',
         env_file='.env',
         env_file_encoding='utf-8',
-        case_sensitive=False,  # Make case-insensitive to handle env vars
-        extra='ignore',  # Ignore extra inputs
+        case_sensitive=False,
+        extra='ignore',
     )
-    host: str = Field(..., description='Host to bind the endpoint to')
-    port: int = Field(..., description='Port to bind the endpoint to')
+
     base_url: str = Field(..., description='Base URL for the endpoint')
-    auto_start: bool = Field(
-        False,
-        description='Whether to automatically start the endpoint with the monitor',
-    )
 
 
 class MonitorConfig(BaseSettings):
@@ -394,11 +401,10 @@ class MonitorConfig(BaseSettings):
     watch_interval: int = Field(
         10, description='Interval to check for new files in the watch directory'
     )
-    bulk_process_size: int = Field(10, description='Number of files to process in bulk')
 
 
-class ResearchAgentLLMConfig(BaseSettings):
-    """Configuration for the LLM used specifically for research agent tasks."""
+class ResearchAgentLLMConfig(BaseLLMConfig):
+    """Configuration for research agent LLM."""
 
     model_config = SettingsConfigDict(
         env_prefix='RESEARCH_AGENT_LLM_',
@@ -407,10 +413,16 @@ class ResearchAgentLLMConfig(BaseSettings):
         case_sensitive=False,
         extra='allow',
     )
+
+    # Override model field to support multiple models
     model: str | list[str] = Field(..., description='Research agent LLM model(s)')
-    model_settings: ModelConfig = Field(
-        default_factory=ModelConfig, description='Research agent model configuration'
+
+    # Override defaults for research agent (needs larger context)
+    max_context_length: int = Field(
+        100000, description='Max context length for research tasks'
     )
+
+    # Research agent specific features
     use_auto_model_selection: bool = Field(
         False, description='Whether to use auto model selection'
     )
@@ -420,18 +432,10 @@ class ResearchAgentLLMConfig(BaseSettings):
     auto_model_require_structured_output: bool = Field(
         False, description='Auto-selected model must support structured output'
     )
-    max_output_tokens: int = Field(
-        50000,
-        description='Research agent LLM max tokens for generation',
-    )
-    max_context_length: int = Field(
-        100000,
-        description='Research agent LLM max context length for model',
-    )
 
 
-class ScrapeFilterLLMConfig(BaseSettings):
-    """Configuration for the LLM used specifically for scrape filtering tasks."""
+class ScrapeFilterLLMConfig(BaseLLMConfig):
+    """Configuration for scrape filtering LLM."""
 
     model_config = SettingsConfigDict(
         env_prefix='SCRAPE_FILTER_LLM_',
@@ -440,22 +444,19 @@ class ScrapeFilterLLMConfig(BaseSettings):
         case_sensitive=False,
         extra='allow',
     )
+
+    # Scrape filter LLM requires model field
     model: str = Field(..., description='Scrape filter LLM model')
-    model_settings: ModelConfig = Field(
-        default_factory=ModelConfig, description='Scrape filter model configuration'
-    )
-    max_output_tokens: int = Field(
-        10000,
-        description='Scrape filter LLM max tokens for generation',
-    )
+
+    # Override defaults for scrape filtering (needs larger context for web content)
+    max_output_tokens: int = Field(10000, description='Max tokens for scrape filtering')
     max_context_length: int = Field(
-        50000,
-        description='Scrape filter LLM max context length for model',
+        50000, description='Max context length for web content filtering'
     )
 
 
-class MCPConfig(BaseSettings):
-    """Configuration for the MCP (Model Context Protocol) server."""
+class MCPConfig(BaseServerConfig):
+    """Configuration for MCP (Model Context Protocol) server."""
 
     model_config = SettingsConfigDict(
         env_prefix='MCP_',
@@ -464,12 +465,13 @@ class MCPConfig(BaseSettings):
         case_sensitive=False,
         extra='ignore',
     )
+
+    # Override defaults
     host: str = Field('localhost', description='MCP server host')
     port: int = Field(8001, description='MCP server port')
+    auto_start: bool = Field(True, description='Auto-start MCP server with main server')
+
     enabled: bool = Field(True, description='Whether MCP server is enabled')
-    auto_start: bool = Field(
-        True, description='Whether to auto-start MCP server with main server'
-    )
 
 
 class DiscoveryConfig(BaseSettings):
@@ -540,6 +542,12 @@ class RAGConfig(BaseSettings):
     )
     embedding_batch_size: int = Field(
         100, description='Batch size for embedding generation'
+    )
+
+    # Content filtering configuration
+    skip_files_with_images: bool = Field(
+        True,
+        description='Skip indexing markdown files that contain images to reduce noise',
     )
 
     # Vector store configuration

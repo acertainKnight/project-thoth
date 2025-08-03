@@ -13,6 +13,7 @@ from loguru import logger
 from thoth.services.service_manager import ServiceManager
 
 from .protocol import (
+    JSONRPCNotification,
     JSONRPCRequest,
     JSONRPCResponse,
     MCPCapabilities,
@@ -100,7 +101,9 @@ class MCPServer:
         await self.transport_manager.stop_all()
         logger.info('MCP server stopped')
 
-    async def _handle_message(self, message: JSONRPCRequest) -> JSONRPCResponse:
+    async def _handle_message(
+        self, message: JSONRPCRequest | JSONRPCNotification
+    ) -> JSONRPCResponse | None:
         """
         Handle incoming MCP messages.
 
@@ -113,39 +116,55 @@ class MCPServer:
 
             logger.debug(f'Handling MCP method: {method}')
 
+            # Check if this is a notification (no response expected)
+            is_notification = isinstance(message, JSONRPCNotification)
+            message_id = getattr(message, 'id', None)
+
             # Route to appropriate handler
             if method == 'initialize':
-                return await self._handle_initialize(message.id, params)
+                return await self._handle_initialize(message_id, params)
             elif method == 'initialized':
-                return await self._handle_initialized(message.id)
+                # This is a notification - no response expected
+                await self._handle_initialized_notification()
+                return None  # No response for notifications
             elif method == 'tools/list':
-                return await self._handle_tools_list(message.id)
+                return await self._handle_tools_list(message_id)
             elif method == 'tools/call':
-                return await self._handle_tools_call(message.id, params)
+                return await self._handle_tools_call(message_id, params)
             elif method == 'resources/list':
-                return await self._handle_resources_list(message.id)
+                return await self._handle_resources_list(message_id)
             elif method == 'resources/read':
-                return await self._handle_resources_read(message.id, params)
+                return await self._handle_resources_read(message_id, params)
             elif method == 'resources/templates':
-                return await self._handle_resources_templates(message.id)
+                return await self._handle_resources_templates(message_id)
             elif method == 'prompts/list':
-                return await self._handle_prompts_list(message.id)
+                return await self._handle_prompts_list(message_id)
             elif method == 'prompts/get':
-                return await self._handle_prompts_get(message.id, params)
+                return await self._handle_prompts_get(message_id, params)
             elif method == 'logging/setLevel':
-                return await self._handle_logging_set_level(message.id, params)
+                return await self._handle_logging_set_level(message_id, params)
             else:
-                return self.protocol_handler.create_error_response(
-                    message.id,
-                    MCPErrorCodes.METHOD_NOT_FOUND,
-                    f'Method not found: {method}',
-                )
+                if is_notification:
+                    # Unknown notification - just log and ignore
+                    logger.warning(f'Unknown notification method: {method}')
+                    return None
+                else:
+                    return self.protocol_handler.create_error_response(
+                        message_id,
+                        MCPErrorCodes.METHOD_NOT_FOUND,
+                        f'Method not found: {method}',
+                    )
 
         except Exception as e:
             logger.error(f'Error handling message: {e}')
-            return self.protocol_handler.create_error_response(
-                message.id, MCPErrorCodes.INTERNAL_ERROR, f'Internal error: {e}'
-            )
+            # Only return error response for requests, not notifications
+            if not isinstance(message, JSONRPCNotification):
+                return self.protocol_handler.create_error_response(
+                    getattr(message, 'id', None),
+                    MCPErrorCodes.INTERNAL_ERROR,
+                    f'Internal error: {e}',
+                )
+            return None
 
     async def _handle_initialize(
         self, request_id: Any, params: dict[str, Any]
@@ -167,15 +186,13 @@ class MCPServer:
                 request_id, MCPErrorCodes.INVALID_PARAMS, str(e)
             )
 
-    async def _handle_initialized(self, request_id: Any) -> JSONRPCResponse:
-        """Handle MCP initialized notification."""
+    async def _handle_initialized_notification(self) -> None:
+        """Handle MCP initialized notification (no response expected)."""
         try:
-            self.protocol_handler.handle_initialized()
-            return self.protocol_handler.create_response(request_id, {})
-        except ValueError as e:
-            return self.protocol_handler.create_error_response(
-                request_id, MCPErrorCodes.INVALID_REQUEST, str(e)
-            )
+            self.protocol_handler.initialized = True
+            logger.debug('MCP protocol marked as initialized')
+        except Exception as e:
+            logger.error(f'Error handling initialized notification: {e}')
 
     async def _handle_tools_list(self, request_id: Any) -> JSONRPCResponse:
         """Handle tools/list request."""

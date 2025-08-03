@@ -14,7 +14,13 @@ from typing import Any
 
 from loguru import logger
 
-from thoth.discovery.api_sources import ArxivAPISource, PubMedAPISource
+from thoth.discovery.api_sources import (
+    ArxivAPISource,
+    BioRxivAPISource,
+    CrossRefAPISource,
+    OpenAlexAPISource,
+    PubMedAPISource,
+)
 from thoth.discovery.emulator_scraper import EmulatorScraper
 from thoth.discovery.web_scraper import WebScraper
 from thoth.utilities.config import get_config

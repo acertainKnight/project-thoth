@@ -2796,6 +2796,18 @@ wheels = [
 ]
 
 [[package]]
+name = "nbstripout"
+version = "0.8.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "nbformat" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/92/6e/05d7e0e35598bd0d423167295f978005912a2dcd137c88ebf36e34047dc7/nbstripout-0.8.1.tar.gz", hash = "sha256:eaac8b6b4e729e8dfe1e5df2c0f8ba44abc5a17a65448f0480141f80be230bb1", size = 26399 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cf/91/93b459c456b0e4389b2b3ddb3b82cd401d022691334a0f06e92c2046e780/nbstripout-0.8.1-py2.py3-none-any.whl", hash = "sha256:79a8c8da488d98c54c112fa87185045f0271a97d84f1d46918d6a3ee561b30e7", size = 16329 },
+]
+
+[[package]]
 name = "nest-asyncio"
 version = "1.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4974,6 +4986,11 @@ test = [
     { name = "pytest-timeout" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "nbstripout" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "aiofiles", specifier = ">=24.1.0" },
@@ -5059,6 +5076,9 @@ requires-dist = [
     { name = "watchdog", specifier = ">=6.0.0" },
     { name = "websockets", specifier = ">=15.0.1" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "nbstripout", specifier = ">=0.8.1" }]
 
 [[package]]
 name = "threadpoolctl"

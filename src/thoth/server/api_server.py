@@ -12,6 +12,7 @@ import subprocess
 import sys
 import threading
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -29,10 +30,34 @@ from thoth.server.chat_models import ChatMessage, ChatPersistenceManager
 from thoth.services.llm_router import LLMRouter
 from thoth.utilities.config import get_config
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Handle FastAPI application lifespan events."""
+    # Startup
+    logger.info('Starting Thoth server application...')
+    try:
+        yield
+    except asyncio.CancelledError:
+        # Handle graceful cancellation during shutdown
+        logger.info('Application lifespan cancelled, proceeding with shutdown...')
+    finally:
+        # Shutdown
+        logger.info('Shutting down Thoth server application...')
+        try:
+            await shutdown_background_tasks(timeout=5.0)
+            await shutdown_mcp_server(timeout=5.0)
+        except asyncio.CancelledError:
+            logger.info('Shutdown tasks cancelled, forcing cleanup...')
+        except Exception as e:
+            logger.error(f'Error during application shutdown: {e}')
+
+
 app = FastAPI(
     title='Thoth Obsidian Integration',
     description='API for integrating Thoth with Obsidian',
     version='0.1.0',
+    lifespan=lifespan,
 )
 
 # Add CORS middleware to allow requests from Obsidian
@@ -105,6 +130,85 @@ def create_background_task(coro) -> None:
     task = asyncio.create_task(coro)
     background_tasks.add(task)
     task.add_done_callback(background_tasks.discard)
+
+
+async def shutdown_background_tasks(timeout: float = 10.0) -> None:
+    """Gracefully shutdown all background tasks."""
+    if not background_tasks:
+        logger.info('No background tasks to shutdown')
+        return
+
+    logger.info(f'Shutting down {len(background_tasks)} background tasks...')
+
+    # Cancel all background tasks
+    for task in background_tasks.copy():
+        if not task.done():
+            task.cancel()
+
+    # Wait for tasks to complete with timeout, handling cancellation properly
+    if background_tasks:
+        try:
+            results = await asyncio.wait_for(
+                asyncio.gather(*background_tasks, return_exceptions=True),
+                timeout=timeout,
+            )
+            # Check results for any non-CancelledError exceptions
+            for result in results:
+                if isinstance(result, Exception) and not isinstance(
+                    result, asyncio.CancelledError
+                ):
+                    logger.warning(f'Background task shutdown with exception: {result}')
+            logger.info('All background tasks shutdown gracefully')
+        except TimeoutError:
+            logger.warning(f'Some background tasks did not shutdown within {timeout}s')
+        except asyncio.CancelledError:
+            logger.info('Background task shutdown was cancelled')
+        except Exception as e:
+            logger.error(f'Error shutting down background tasks: {e}')
+
+    # Clear the set
+    background_tasks.clear()
+
+
+async def shutdown_mcp_server(timeout: float = 10.0) -> None:
+    """Gracefully shutdown the MCP server background task."""
+    if not hasattr(_start_mcp_server_background, '_background_tasks'):
+        logger.info('No MCP server tasks to shutdown')
+        return
+
+    mcp_tasks = _start_mcp_server_background._background_tasks.copy()
+    if not mcp_tasks:
+        logger.info('No MCP server tasks running')
+        return
+
+    logger.info(f'Shutting down {len(mcp_tasks)} MCP server tasks...')
+
+    # Cancel all MCP tasks gracefully
+    for task in mcp_tasks:
+        if not task.done():
+            task.cancel()
+
+    # Wait for tasks to complete with timeout, handling cancellation properly
+    try:
+        results = await asyncio.wait_for(
+            asyncio.gather(*mcp_tasks, return_exceptions=True), timeout=timeout
+        )
+        # Check results for any non-CancelledError exceptions
+        for result in results:
+            if isinstance(result, Exception) and not isinstance(
+                result, asyncio.CancelledError
+            ):
+                logger.warning(f'MCP task shutdown with exception: {result}')
+        logger.info('MCP server tasks shutdown gracefully')
+    except TimeoutError:
+        logger.warning(f'MCP server tasks did not shutdown within {timeout}s')
+    except asyncio.CancelledError:
+        logger.info('MCP server shutdown was cancelled')
+    except Exception as e:
+        logger.error(f'Error shutting down MCP server tasks: {e}')
+
+    # Clear the set
+    _start_mcp_server_background._background_tasks.clear()
 
 
 async def notify_progress(message: str | dict[str, Any]) -> None:
@@ -367,7 +471,7 @@ async def websocket_chat(websocket: WebSocket) -> None:
                 except Exception as e:
                     logger.warning(f'Failed to store WebSocket user message: {e}')
 
-            response = research_agent.chat(
+            response = await research_agent.chat(
                 message=message,
                 session_id=session_id,
                 model_override=model,
@@ -774,7 +878,7 @@ async def research_chat(request: ChatRequest) -> ChatResponse:
                 logger.warning(f'Failed to store user message: {e}')
 
         # Get response from the agent
-        response = research_agent.chat(
+        response = await research_agent.chat(
             message=request.message,
             session_id=session_id,
             model_override=selected_model,
@@ -839,7 +943,7 @@ async def research_query(request: ResearchRequest) -> ResearchResponse:
         """
 
         # Get response from the agent
-        response = research_agent.chat(
+        response = await research_agent.chat(
             message=research_message,
             session_id=f'research-{request.query[:20]}-{hash(request.query)}',
         )
@@ -1658,7 +1762,7 @@ async def execute_tool_direct(request: ToolExecutionRequest):
         else:
             # Execute through agent
             message = f'Please use the {request.tool_name} tool with these parameters: {request.parameters}'
-            response = research_agent.chat(
+            response = await research_agent.chat(
                 message=message, session_id=f'tool-execution-{int(time.time())}'
             )
 
@@ -2095,28 +2199,96 @@ async def start_server(
         server_task = asyncio.create_task(server.serve())
 
         # Wait for either server completion or shutdown signal
+        shutdown_task = asyncio.create_task(shutdown_event.wait())
+
         done, pending = await asyncio.wait(
-            [server_task, asyncio.create_task(shutdown_event.wait())],
+            [server_task, shutdown_task],
             return_when=asyncio.FIRST_COMPLETED,
         )
 
         # If shutdown was requested, gracefully stop the server
         if shutdown_event.is_set():
             logger.info('Shutting down server gracefully...')
-            server.should_exit = True
-            await server_task
 
-        # Cancel any remaining tasks
-        for task in pending:
-            task.cancel()
+            # First shutdown background tasks and MCP server
+            await shutdown_background_tasks(timeout=5.0)
+            await shutdown_mcp_server(timeout=5.0)
+
+            # Then shutdown the main server
+            server.should_exit = True
+
+            # Wait for server to complete shutdown gracefully
             try:
-                await task
-            except asyncio.CancelledError:
-                pass
+                await asyncio.wait_for(server_task, timeout=30.0)
+            except TimeoutError:
+                logger.warning('Server shutdown timeout, forcing termination')
+                server_task.cancel()
+                try:
+                    await server_task
+                except asyncio.CancelledError:
+                    logger.info('Server task cancelled during forced shutdown')
+
+        # Cancel any remaining tasks (shutdown_task if server completed first)
+        for task in pending:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    logger.debug('Pending task cancelled during shutdown')
+                except Exception as e:
+                    logger.warning(f'Error cancelling pending task: {e}')
 
     except KeyboardInterrupt:
         logger.info('KeyboardInterrupt received, shutting down gracefully...')
+
+        # First shutdown background tasks and MCP server
+        await shutdown_background_tasks(timeout=3.0)
+        await shutdown_mcp_server(timeout=3.0)
+
+        # Then shutdown the main server
         server.should_exit = True
+
+        # Give server time to shutdown gracefully
+        try:
+            await asyncio.wait_for(server_task, timeout=10.0)
+        except TimeoutError:
+            logger.warning('Server shutdown timeout after KeyboardInterrupt')
+            server_task.cancel()
+            try:
+                await server_task
+            except asyncio.CancelledError:
+                logger.info('Server task cancelled after KeyboardInterrupt')
+        except Exception as e:
+            logger.error(f'Error during shutdown: {e}')
+
+    except Exception as e:
+        logger.error(f'Unexpected error in server main loop: {e}', exc_info=True)
+
+        # Emergency shutdown with proper error handling
+        try:
+            await shutdown_background_tasks(timeout=2.0)
+        except Exception as shutdown_error:
+            logger.error(
+                f'Error during emergency background task shutdown: {shutdown_error}'
+            )
+
+        try:
+            await shutdown_mcp_server(timeout=2.0)
+        except Exception as shutdown_error:
+            logger.error(
+                f'Error during emergency MCP server shutdown: {shutdown_error}'
+            )
+
+        # Force shutdown the main server
+        server.should_exit = True
+        server_task.cancel()
+        try:
+            await server_task
+        except asyncio.CancelledError:
+            logger.info('Server task cancelled during emergency shutdown')
+        except Exception as server_error:
+            logger.error(f'Error during emergency server shutdown: {server_error}')
 
 
 async def _start_mcp_server_background() -> None:
@@ -2141,8 +2313,12 @@ async def _start_mcp_server_background() -> None:
                 http_port=mcp_port,
                 sse=False,
             )
+        except asyncio.CancelledError:
+            logger.info('MCP server task cancelled gracefully')
+            raise  # Re-raise to ensure proper cancellation handling
         except Exception as e:
             logger.error(f'MCP server failed: {e}')
+            raise  # Re-raise to prevent silent failures
 
     # Create and start the background task
     mcp_task = asyncio.create_task(_mcp_task_wrapper())

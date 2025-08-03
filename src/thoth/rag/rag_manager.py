@@ -106,6 +106,22 @@ class RAGManager:
 
         logger.debug('All RAG components initialized')
 
+    def _has_images(self, content: str) -> bool:
+        """
+        Check if markdown content contains images.
+
+        Args:
+            content: Markdown content to check.
+
+        Returns:
+            bool: True if content contains images, False otherwise.
+        """
+        import re
+
+        # Check for markdown image syntax: ![alt text](url) or ![alt text][ref]
+        image_pattern = r'!\[[^\]]*\]\([^)]+\)|!\[[^\]]*\]\[[^\]]*\]'
+        return bool(re.search(image_pattern, content))
+
     def index_markdown_file(self, file_path: Path) -> list[str]:
         """
         Index a markdown file into the vector store.
@@ -122,6 +138,13 @@ class RAGManager:
             # Read the file
             with open(file_path, encoding='utf-8') as f:
                 content = f.read()
+
+            # Skip files with images if configured to do so
+            if self.config.rag_config.skip_files_with_images and self._has_images(
+                content
+            ):
+                logger.info(f'Skipping {file_path} - contains images')
+                return []
 
             # Extract metadata from file
             metadata = self._extract_metadata_from_path(file_path)

@@ -11,7 +11,7 @@ from enum import Enum
 from typing import Any
 
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class MCPProtocolVersion(str, Enum):
@@ -38,12 +38,21 @@ class JSONRPCRequest(BaseModel):
 
 
 class JSONRPCResponse(BaseModel):
-    """JSON-RCP 2.0 response message."""
+    """JSON-RPC 2.0 response message."""
 
     jsonrpc: str = '2.0'
     id: str | int | None
     result: Any | None = None
     error: JSONRPCError | None = None
+
+    @model_validator(mode='after')
+    def validate_response_structure(self):
+        """Validate that exactly one of result or error is present."""
+        if self.result is not None and self.error is not None:
+            raise ValueError('Response cannot have both result and error')
+        if self.result is None and self.error is None:
+            raise ValueError('Response must have either result or error')
+        return self
 
 
 class JSONRPCNotification(BaseModel):
@@ -204,7 +213,12 @@ class MCPProtocolHandler:
         error: JSONRPCError = None,
     ) -> JSONRPCResponse:
         """Create a JSON-RPC response message."""
-        return JSONRPCResponse(id=request_id, result=result, error=error)
+        if error is not None:
+            # For error responses, don't include result field
+            return JSONRPCResponse(id=request_id, error=error)
+        else:
+            # For success responses, don't include error field
+            return JSONRPCResponse(id=request_id, result=result)
 
     def create_error_response(
         self,
