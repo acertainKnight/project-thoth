@@ -159,8 +159,8 @@ Thumbs.db
 .pytest_cache/
 
 # Code agents
-.claude/
-.cursor/
+/.claude/
+/.cursor/
 .cursorrules
 .cursorignore
 
@@ -172,6 +172,7 @@ node_modules/
 
 # Data
 /knowledge/
+/cache/
 
 # Generated reports
 *_report.json
