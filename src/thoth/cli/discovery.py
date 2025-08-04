@@ -4,6 +4,7 @@ from pathlib import Path
 from loguru import logger
 
 from thoth.pipeline import ThothPipeline
+from thoth.services.discovery_server import DiscoveryServer
 from thoth.utilities.schemas import DiscoverySource, ScheduleConfig
 
 
@@ -257,13 +258,78 @@ def run_discovery_scheduler_stop(_args, pipeline: ThothPipeline):
         return 1
 
 
+def run_discovery_server(args, pipeline: ThothPipeline):  # noqa: ARG001
+    """Run the discovery server."""
+    try:
+        server = DiscoveryServer(
+            config=pipeline.config, discovery_service=pipeline.services.discovery
+        )
+        server.initialize()
+
+        logger.info('Starting discovery server...')
+        server.run_server_blocking()
+        return 0
+
+    except KeyboardInterrupt:
+        logger.info('Discovery server stopped by user')
+        return 0
+    except Exception as e:
+        logger.error(f'Error running discovery server: {e}')
+        return 1
+
+
+def run_discovery_server_status(args, pipeline: ThothPipeline):  # noqa: ARG001
+    """Show discovery server status."""
+    try:
+        # For now, show discovery service status
+        # In the future, this could connect to a running server instance
+        status = pipeline.services.discovery.get_schedule_status()
+
+        logger.info('Discovery Server Status:')
+        logger.info(f'  Scheduler running: {status["running"]}')
+        logger.info(f'  Total sources: {status["total_sources"]}')
+        logger.info(f'  Enabled sources: {status["enabled_sources"]}')
+        logger.info('')
+
+        if status['sources']:
+            logger.info('Active Sources:')
+            for source in status['sources']:
+                logger.info(f'  {source["name"]}:')
+                logger.info(f'    Type: {source["source_type"]}')
+                logger.info(f'    Enabled: {source["enabled"]}')
+                logger.info(f'    Last run: {source["last_run"] or "Never"}')
+                logger.info(f'    Next run: {source["next_run"] or "Not scheduled"}')
+                logger.info('')
+
+        return 0
+    except Exception as e:
+        logger.error(f'Error getting server status: {e}')
+        return 1
+
+
+def run_discovery_server_command(args, pipeline: ThothPipeline):
+    """Handle discovery server commands."""
+    if not hasattr(args, 'server_command') or not args.server_command:
+        # Default to starting the server
+        return run_discovery_server(args, pipeline)
+
+    if args.server_command == 'start':
+        return run_discovery_server(args, pipeline)
+    elif args.server_command == 'status':
+        return run_discovery_server_status(args, pipeline)
+    else:
+        logger.error(f'Unknown server command: {args.server_command}')
+        return 1
+
+
 def run_discovery_command(args, pipeline: ThothPipeline):
     """
     Handle discovery commands.
     """
     if not hasattr(args, 'discovery_command') or not args.discovery_command:
-        logger.error('No discovery subcommand specified')
-        return 1
+        # Default to starting the server if no subcommand specified
+        return run_discovery_server(args, pipeline)
+
     if args.discovery_command == 'run':
         return run_discovery_run(args, pipeline)
     elif args.discovery_command == 'list':
@@ -278,6 +344,8 @@ def run_discovery_command(args, pipeline: ThothPipeline):
         return run_discovery_scheduler(args, pipeline)
     elif args.discovery_command == 'show':
         return run_discovery_show(args, pipeline)
+    elif args.discovery_command == 'server':
+        return run_discovery_server_command(args, pipeline)
     else:
         logger.error(f'Unknown discovery command: {args.discovery_command}')
         return 1
@@ -381,4 +449,24 @@ def configure_subparser(subparsers):
         'status', help='Show scheduler status'
     )
     scheduler_status_parser.set_defaults(func=run_discovery_scheduler)
+
+    # Server command
+    server_parser = subparsers.add_parser(
+        'server', help='Run discovery server (default if no subcommand)'
+    )
+    server_subparsers = server_parser.add_subparsers(
+        dest='server_command', help='Server command to run'
+    )
+
+    server_start_parser = server_subparsers.add_parser(
+        'start', help='Start the discovery server (default)'
+    )
+    server_start_parser.set_defaults(func=run_discovery_server_command)
+
+    server_status_parser = server_subparsers.add_parser(
+        'status', help='Show discovery server status'
+    )
+    server_status_parser.set_defaults(func=run_discovery_server_command)
+
+    server_parser.set_defaults(func=run_discovery_server_command)
     parser.set_defaults(func=run_discovery_command)
