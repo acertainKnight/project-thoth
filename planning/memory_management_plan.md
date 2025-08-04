@@ -21,6 +21,72 @@
 - **Letta Adapter**: A thin abstraction translating Thoth events (conversation turns, tool calls, file edits) into Letta’s memory APIs.
 - **Memory Storage**: Pluggable (SQLite initially, later Postgres / vector DB) – exposes vector & relational queries.
 
+### 2.5 Letta Memory Deep Dive
+Letta’s architecture follows the *Memory Hierarchy* proposed in the MemGPT paper. Understanding these layers is critical for an efficient integration:
+
+| Layer | Purpose | Volatility | Where it Lives |
+|-------|---------|------------|----------------|
+| **Context Window** | Tokens currently supplied to the LLM. Managed by Letta’s `ContextManager`. | Ephemeral (per prompt) | In-memory list of messages |
+| **Short-Term/Core Memory** | Recent interactions maintained across prompts to preserve discourse coherence. | Session-scoped | `core_memory` table (JSONB) |
+| **Episodic Memory** | Compact summaries of completed tasks/threads. | Weeks–Months | `episodic_memory` table + vector index |
+| **Archival Memory** | Long-term facts, docs, and user preferences. | Months–Years | `archival_memory` table + vector index |
+
+Key operations performed by Letta:
+1. **Write**  → every new observation is *scored* (salience & novelty) before insertion.
+2. **Retrieve**  → vector + metadata filters fetch top-K memories to hydrate the prompt.
+3. **Summarise**  → scheduled job converts low-salience Core memories into Episodic summaries.
+4. **Prune**  → TTL or size pressure removes oldest Archival entries after cascading summarisation.
+
+> **Why it matters for Thoth**: By plugging into these lifecycle hooks we gain transparent, automatic memory management while retaining the ability to override any policy via custom scorer/retriever functions.
+
+#### In-Process Integration Strategy (No Docker, Single Process)
+- Use `pip install letta` and import `from letta.agent import Agent, Memory`.
+- Instantiate one *shared* `Memory` object backed by SQLite/pgvector. Pass it to each `Agent` representing a Thoth sub-task.
+- Avoid the Letta REST server until we migrate to a micro-service/cloud model; the code stays *inside* Thoth’s Python runtime.
+
+```python
+from letta.memory import MemoryStore
+shared_store = MemoryStore("sqlite:///thoth_memory.db", vector_backend="chromadb")
+
+def make_agent(name):
+    return Agent(name=name, memory=shared_store)
+```
+
+#### Multi-Agent, Multi-User Namespacing
+| Namespace | Description | Isolation Mechanism |
+|-----------|-------------|---------------------|
+| `tenant_id` | Top-level isolation (e.g., organisation) | Separate database file or schema |
+| `user_id`   | End-user profile & preferences | Column in every memory row |
+| `agent_id`  | Individual agent instance | Column + composite index |
+| `scope`     | `core` / `episodic` / `archival` | Enum column |
+
+*Queries* always filter by `tenant_id` and may join on `user_id`/`agent_id` depending on desired sharing semantics.
+
+#### Letta Hooks We Will Extend
+1. `before_write(memory_item)` – inject custom salience logic for Thoth-specific entities (e.g., code patches).
+2. `after_retrieve(memory_items)` – log retrieval quality and feed metrics dashboard.
+3. `on_task_complete(agent, task)` – auto-summarise and store to Episodic layer.
+
+#### Minimal Storage Schema (SQLite)
+```sql
+CREATE TABLE memory (
+  id INTEGER PRIMARY KEY,
+  tenant_id TEXT,
+  user_id TEXT,
+  agent_id TEXT,
+  scope TEXT,
+  role TEXT,
+  content TEXT,
+  embedding BLOB,
+  created_at DATETIME,
+  metadata JSON
+);
+CREATE VIRTUAL TABLE memory_fts USING fts5(content, content="memory", tokenize="porter");
+```
+FTS5 provides full-text fallback when vector retrieval fails.
+
+---
+
 ### 3. Memory Data Model
 | Memory Type | Key Fields | TTL / Retention | Notes |
 |-------------|-----------|-----------------|-------|
