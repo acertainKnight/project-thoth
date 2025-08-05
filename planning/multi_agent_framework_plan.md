@@ -273,3 +273,12 @@ All file-system debouncing, heuristics, and safety checks stay in `PDFTracker`; 
 ---
 
 This section clarifies how the **new orchestration layer coexists with—and capitalises on—the concurrency and tool ecosystem Thoth already possesses.**
+
+#### 15.5 Procedural Methods & Back-Compatibility Snapshot
+1. **First-class Task Objects** – The orchestrator wraps today’s implicit method calls (e.g., `process_pdf`) into explicit `Task` envelopes, adding IDs, metadata, retries, and tracing.
+2. **Planner & Critic Roles** – New Executive/Critic agents reason *about* tasks (ordering, quality gates) rather than doing the work themselves, complementing but not altering existing service logic.
+3. **Toggleable Distributed Execution** – All services still default to in-process calls, but the orchestrator can promote any agent to a Ray actor or container **without touching service code**.
+4. **Hot-pluggable Agents** – To add a `GraphAnalyticsAgent` you just register an entry-point; no edits to `pipeline.py` or `ServiceManager` required.
+5. **Elevated Observability** – Because every unit of work is now a `Task`, it carries a correlation ID through logs, Prometheus metrics, and Jaeger traces, giving you per-agent insights the current pipeline can’t surface.
+
+These points distil the conceptual difference between the existing *parallel functions inside one process* and the proposed *coordinated micro-agents* model, reaffirming that legacy workflows (PDF monitoring, discovery, etc.) remain fully operational.
