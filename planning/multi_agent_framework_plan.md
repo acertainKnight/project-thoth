@@ -221,3 +221,55 @@ class Orchestrator:
 5. **Services** – No changes required; agents import them, leveraging existing configuration & dependency injection via `ServiceManager`.
 
 > This detailed roadmap provides a clear, incremental path toward a powerful multi-agent Thoth while safeguarding stability and developer experience.
+
+### 15. Existing Parallelism & MCP Tool Integration
+
+#### 15.1 What Already Runs in Parallel
+* **ProcessingService** – Uses a multiprocessing pool to OCR pages concurrently.
+* **Citation extraction** – `CitationService` schedules asynchronous extraction tasks per reference.
+* **Optimized AsyncProcessingService** – When installed, network-bound calls (LLM, OCR API) run concurrently via `asyncio.gather()`.
+* **Monitoring Scheduler** – Background threads trigger discovery crawls, note regeneration, and PDF health checks on independent schedules.
+
+> **Take-away:** The multi-agent layer _does not_ replace these optimisations; it _organises_ them under a common orchestration and observability umbrella.
+
+#### 15.2 Leveraging MCP Tools inside Agents
+Thoth’s **MCP (Modular Command Protocol)** already exposes almost every service as a tool—complete with transport abstraction, schema metadata, and centralised auth. Worker/Specialist agents therefore _wrap_ MCP calls rather than duplicating logic.
+
+```python
+class DocumentProcessorAgent(BaseAgent):
+    async def process(self, task: Task):
+        from thoth.mcp.client import MCPClient
+        client = MCPClient()  # re-uses global connection pool
+        return await client.processing.ocr_to_markdown(
+            pdf_path=task.payload["pdf_path"],
+            output_dir=self.config.output_dir,
+        )
+```
+
+Advantages:
+1. **Retry semantics & idempotency** are baked into MCP transports.
+2. **Remote vs. local execution** becomes a config flag (`agent_backend = "mcp" | "service"`).
+3. **Auto-generated docs & schemas** let the Planner introspect tool signatures when building task graphs.
+
+#### 15.3 Best-Practice Guidelines
+| Scenario | Recommended Backend | Rationale |
+|----------|--------------------|-----------|
+| I/O-bound, API-heavy, or retry-prone work | **MCP tool** | Unified transport, error handling, easy distribution |
+| Ultra-low latency, tight Python object coupling | **Direct service call** | Avoids serialisation overhead |
+| Unit tests / CI | **Service** (in-process) | Fast, no external deps |
+| Distributed cluster | **MCP** | Enables Ray / container scaling |
+
+*Worker agents should accept a constructor arg `backend_mode` and instantiate either a `ServiceManager` reference or an `MCPClient` accordingly.*
+
+#### 15.4 PDF Monitoring Pathway Mapping
+| Legacy Flow (single-agent) | Multi-Agent Flow |
+|----------------------------|------------------|
+| `PDFTracker` → `DocumentPipeline.process_pdf()` | `PDFTracker` → enqueue **PROCESS_PDF** task on orchestrator |
+| Inline OCR, citation, tag steps | Orchestrator fans out to `DocumentProcessorAgent`, `CitationMinerAgent`, etc. |
+| Sequential result handling | Agents publish results to event bus; Planner merges outcomes |
+
+All file-system debouncing, heuristics, and safety checks stay in `PDFTracker`; only the callback changes.
+
+---
+
+This section clarifies how the **new orchestration layer coexists with—and capitalises on—the concurrency and tool ecosystem Thoth already possesses.**
