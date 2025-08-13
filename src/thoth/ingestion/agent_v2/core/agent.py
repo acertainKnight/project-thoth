@@ -27,6 +27,15 @@ from thoth.ingestion.agent_v2.tools.base_tool import ToolRegistry
 from thoth.ingestion.agent_v2.tools.decorators import get_registered_tools
 from thoth.services.service_manager import ServiceManager
 
+# Import memory system (optional dependency)
+try:
+    from thoth.memory import ThothMemoryStore, get_shared_checkpointer
+
+    MEMORY_AVAILABLE = True
+except ImportError:
+    MEMORY_AVAILABLE = False
+    logger.warning('Thoth memory system not available, using basic MemorySaver')
+
 # Import MCP components
 try:
     # MCP imports for availability check only
@@ -53,6 +62,7 @@ class ResearchAssistant:
         enable_memory: bool = True,
         system_prompt: str | None = None,
         use_mcp_tools: bool = True,
+        memory_store: ThothMemoryStore | None = None,
     ):
         """
         Initialize the research assistant.
@@ -62,10 +72,12 @@ class ResearchAssistant:
             enable_memory: Whether to enable conversation memory
             system_prompt: Custom system prompt (uses default if None)
             use_mcp_tools: Whether to use MCP tools (defaults to True if available)
+            memory_store: Optional ThothMemoryStore for persistent memory
         """
         self.service_manager = service_manager
         self.enable_memory = enable_memory
         self.use_mcp_tools = use_mcp_tools and MCP_AVAILABLE
+        self.memory_store = memory_store
 
         # Get LLM from service manager
         self.llm = self.service_manager.llm.get_client()
@@ -217,9 +229,34 @@ When users ask about their research or express interests:
 
 Remember: You have direct access to tools - use them immediately rather than just explaining what you would do."""
 
+    def _get_memory_checkpointer(self) -> Any:
+        """
+        Get the appropriate memory checkpointer.
+
+        Returns:
+            LettaCheckpointer if Thoth memory is available and configured,
+            otherwise fallback to MemorySaver.
+        """
+        if MEMORY_AVAILABLE and self.memory_store:
+            # Use Thoth's Letta-based checkpointer
+            from thoth.memory import LettaCheckpointer
+
+            checkpointer = LettaCheckpointer(self.memory_store)
+            logger.info('Using Letta-based persistent memory checkpointer')
+            return checkpointer
+        elif MEMORY_AVAILABLE and not self.memory_store:
+            # Use shared checkpointer if no specific store provided
+            checkpointer = get_shared_checkpointer()
+            logger.info('Using shared Letta checkpointer')
+            return checkpointer
+        else:
+            # Fallback to basic in-memory checkpointer
+            logger.info('Using basic MemorySaver (no persistence)')
+            return MemorySaver()
+
     def _build_graph(self) -> Any:
         """Build the LangGraph agent graph using MCP tooling."""
-        memory = MemorySaver() if self.enable_memory else None
+        memory = self._get_memory_checkpointer() if self.enable_memory else None
 
         try:
             # Attempt to use the modern prebuilt agent from LangGraph
@@ -485,6 +522,7 @@ def create_research_assistant(
     enable_memory: bool = True,
     system_prompt: str | None = None,
     use_mcp_tools: bool = True,
+    memory_store: ThothMemoryStore | None = None,
 ) -> ResearchAssistant:
     """
     Factory function to create a research assistant.
@@ -495,6 +533,7 @@ def create_research_assistant(
         enable_memory: Whether to enable conversation memory
         system_prompt: Custom system prompt
         use_mcp_tools: Whether to use MCP tools (defaults to True)
+        memory_store: Optional ThothMemoryStore for persistent memory
 
     Returns:
         ResearchAssistant: Configured research assistant instance
@@ -515,6 +554,7 @@ def create_research_assistant(
         enable_memory=enable_memory,
         system_prompt=system_prompt,
         use_mcp_tools=use_mcp_tools,
+        memory_store=memory_store,
     )
 
 
@@ -524,6 +564,7 @@ async def create_research_assistant_async(
     enable_memory: bool = True,
     system_prompt: str | None = None,
     use_mcp_tools: bool = True,
+    memory_store: ThothMemoryStore | None = None,
 ) -> ResearchAssistant:
     """
     Async factory function to create and fully initialize a research assistant.
@@ -537,6 +578,7 @@ async def create_research_assistant_async(
         enable_memory: Whether to enable conversation memory
         system_prompt: Custom system prompt
         use_mcp_tools: Whether to use MCP tools (defaults to True)
+        memory_store: Optional ThothMemoryStore for persistent memory
 
     Returns:
         ResearchAssistant: Fully initialized research assistant instance
@@ -552,6 +594,7 @@ async def create_research_assistant_async(
         enable_memory=enable_memory,
         system_prompt=system_prompt,
         use_mcp_tools=use_mcp_tools,
+        memory_store=memory_store,
     )
 
     # Complete async initialization
