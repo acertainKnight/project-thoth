@@ -106,3 +106,45 @@ class ScrapedArticleMetadata(BaseModel):
             summary=self.abstract,
             tags=self.keywords if self.keywords else None,
         )
+
+
+class DiscoveryServerConfig(BaseModel):
+    """Schema for discovery server configuration."""
+
+    # Server settings
+    auto_start_scheduler: bool = Field(
+        default=True, description='Auto-start scheduler on server start'
+    )
+    file_monitoring_enabled: bool = Field(
+        default=True, description='Enable file system monitoring'
+    )
+    maintenance_interval_seconds: int = Field(
+        default=3600, description='Maintenance check interval'
+    )
+
+    # Health monitoring
+    health_check_enabled: bool = Field(default=True, description='Enable health checks')
+    max_errors_threshold: int = Field(
+        default=10, description='Max errors before health degradation'
+    )
+
+    # Logging and status
+    status_log_interval_seconds: int = Field(
+        default=3600, description='Status logging interval'
+    )
+    detailed_logging: bool = Field(
+        default=False, description='Enable detailed debug logging'
+    )
+
+
+class DiscoveryServerStatus(BaseModel):
+    """Schema for discovery server status information."""
+
+    server_running: bool
+    start_time: str | None = None
+    uptime_seconds: float = Field(default=0.0)
+    sources_loaded: int = Field(default=0)
+    errors_count: int = Field(default=0)
+    file_monitoring: bool = Field(default=False)
+    discovery_service: dict[str, Any] = Field(default_factory=dict)
+    configuration: dict[str, str] = Field(default_factory=dict)
