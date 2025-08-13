@@ -11,6 +11,15 @@ from typing import Any
 
 from loguru import logger
 
+# Import memory pipeline components
+try:
+    from .pipeline import MemoryWritePipeline
+
+    PIPELINE_AVAILABLE = True
+except ImportError:
+    PIPELINE_AVAILABLE = False
+    logger.warning('Memory pipeline not available')
+
 try:
     from letta.memory import MemoryStore as _LettaStore
 except ImportError:
@@ -47,6 +56,8 @@ class ThothMemoryStore(_LettaStore):
         database_url: str | None = None,
         vector_backend: str = 'chromadb',
         namespace: str = 'thoth',
+        enable_pipeline: bool = True,
+        min_salience: float = 0.1,
     ):
         """
         Initialize ThothMemoryStore.
@@ -55,6 +66,8 @@ class ThothMemoryStore(_LettaStore):
             database_url: SQLite database URL (defaults to local file)
             vector_backend: Vector store backend to use
             namespace: Namespace prefix for all memory entries
+            enable_pipeline: Enable memory processing pipeline
+            min_salience: Minimum salience score for memory storage
         """
         # Set default database path
         if database_url is None:
@@ -73,6 +86,17 @@ class ThothMemoryStore(_LettaStore):
         self.namespace = namespace
         self.database_url = database_url
         self.vector_backend = vector_backend
+        self.enable_pipeline = enable_pipeline
+
+        # Initialize memory processing pipeline
+        self.pipeline = None
+        if enable_pipeline and PIPELINE_AVAILABLE:
+            self.pipeline = MemoryWritePipeline(
+                min_salience=min_salience, enable_filtering=True, enable_enrichment=True
+            )
+            logger.info('Memory processing pipeline enabled')
+        elif enable_pipeline:
+            logger.warning('Memory pipeline requested but not available')
 
         logger.info(f'ThothMemoryStore initialized with {database_url}')
 
@@ -89,7 +113,8 @@ class ThothMemoryStore(_LettaStore):
         agent_id: str | None = None,
         metadata: dict[str, Any] | None = None,
         salience_score: float | None = None,
-    ) -> str:
+        user_context: dict[str, Any] | None = None,
+    ) -> str | None:
         """
         Write a memory entry with Thoth-specific metadata.
 
@@ -101,30 +126,64 @@ class ThothMemoryStore(_LettaStore):
             agent_id: Agent identifier
             metadata: Additional metadata
             salience_score: Importance score for memory retention
+            user_context: User context and preferences for pipeline processing
 
         Returns:
-            str: Unique memory ID
+            str: Unique memory ID, or None if filtered out by pipeline
         """
-        memory_id = str(uuid.uuid4())
-        key = self._namespaced_key(memory_id, user_id, scope)
+        # Process through pipeline if enabled
+        if self.pipeline:
+            processed_memory = self.pipeline.process_memory(
+                user_id=user_id,
+                content=content,
+                role=role,
+                scope=scope,
+                agent_id=agent_id,
+                metadata=metadata,
+                user_context=user_context,
+            )
 
-        memory_entry = {
-            'id': memory_id,
-            'user_id': user_id,
-            'agent_id': agent_id,
-            'scope': scope,
-            'role': role,
-            'content': content,
-            'metadata': metadata or {},
-            'salience_score': salience_score,
-            'created_at': datetime.now().isoformat(),
-            'updated_at': datetime.now().isoformat(),
-        }
+            # Return None if filtered out by pipeline
+            if processed_memory is None:
+                logger.debug(f'Memory filtered out by pipeline for user {user_id}')
+                return None
+
+            # Use processed data
+            memory_entry = {
+                'id': str(uuid.uuid4()),
+                'user_id': processed_memory['user_id'],
+                'agent_id': processed_memory['agent_id'],
+                'scope': processed_memory['scope'],
+                'role': processed_memory['role'],
+                'content': processed_memory['content'],
+                'metadata': processed_memory['metadata'],
+                'salience_score': processed_memory['salience_score'],
+                'created_at': datetime.now().isoformat(),
+                'updated_at': datetime.now().isoformat(),
+            }
+        else:
+            # Fallback: direct memory creation without pipeline
+            memory_entry = {
+                'id': str(uuid.uuid4()),
+                'user_id': user_id,
+                'agent_id': agent_id,
+                'scope': scope,
+                'role': role,
+                'content': content,
+                'metadata': metadata or {},
+                'salience_score': salience_score,
+                'created_at': datetime.now().isoformat(),
+                'updated_at': datetime.now().isoformat(),
+            }
+
+        memory_id = memory_entry['id']
+        key = self._namespaced_key(memory_id, user_id, scope)
 
         try:
             self.put(key, memory_entry)
             logger.debug(
-                f'Wrote memory {memory_id} for user {user_id} in scope {scope}'
+                f'Wrote memory {memory_id} for user {user_id} in scope {scope} '
+                f'(salience: {memory_entry.get("salience_score", "N/A")})'
             )
             return memory_id
         except Exception as e:
