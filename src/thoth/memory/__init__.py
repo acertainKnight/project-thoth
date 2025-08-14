@@ -7,10 +7,13 @@ for research conversations and discoveries.
 """
 
 from .checkpointer import LettaCheckpointer
+from .scheduler import MemoryJobConfig, MemoryScheduler
 from .store import ThothMemoryStore
+from .summarization import EpisodicSummarizer, MemorySummarizationJob
 
-# Shared store singleton for easy import
+# Shared instances for easy import
 shared_store: ThothMemoryStore | None = None
+shared_scheduler: MemoryScheduler | None = None
 
 
 def get_shared_store() -> ThothMemoryStore:
@@ -27,10 +30,27 @@ def get_shared_checkpointer() -> LettaCheckpointer:
     return LettaCheckpointer(store)
 
 
+def get_shared_scheduler() -> MemoryScheduler:
+    """Get or create the shared memory scheduler instance."""
+    global shared_scheduler
+    if shared_scheduler is None:
+        store = get_shared_store()
+        shared_scheduler = MemoryScheduler(store)
+        # Initialize default jobs
+        shared_scheduler.initialize_default_jobs()
+    return shared_scheduler
+
+
 __all__ = [
+    'EpisodicSummarizer',
     'LettaCheckpointer',
+    'MemoryJobConfig',
+    'MemoryScheduler',
+    'MemorySummarizationJob',
     'ThothMemoryStore',
     'get_shared_checkpointer',
+    'get_shared_scheduler',
     'get_shared_store',
+    'shared_scheduler',
     'shared_store',
 ]
