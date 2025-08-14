@@ -5,6 +5,8 @@ This module provides ThothMemoryStore, a wrapper around Letta's MemoryStore
 that adds Thoth-specific functionality and enforces proper namespacing.
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 from typing import Any
@@ -58,6 +60,8 @@ class ThothMemoryStore(_LettaStore):
         namespace: str = 'thoth',
         enable_pipeline: bool = True,
         min_salience: float = 0.1,
+        enable_retrieval_pipeline: bool = True,
+        rag_service=None,
     ):
         """
         Initialize ThothMemoryStore.
@@ -87,6 +91,8 @@ class ThothMemoryStore(_LettaStore):
         self.database_url = database_url
         self.vector_backend = vector_backend
         self.enable_pipeline = enable_pipeline
+        self.enable_retrieval_pipeline = enable_retrieval_pipeline
+        self.rag_service = rag_service
 
         # Initialize memory processing pipeline
         self.pipeline = None
@@ -97,6 +103,22 @@ class ThothMemoryStore(_LettaStore):
             logger.info('Memory processing pipeline enabled')
         elif enable_pipeline:
             logger.warning('Memory pipeline requested but not available')
+
+        # Initialize retrieval pipeline
+        self.retrieval_pipeline = None
+        if enable_retrieval_pipeline and PIPELINE_AVAILABLE:
+            from thoth.memory.pipeline import MemoryRetrievalPipeline
+
+            self.retrieval_pipeline = MemoryRetrievalPipeline(
+                rag_service=self.rag_service,
+                enable_semantic_search=bool(self.rag_service),
+                enable_caching=True,
+                cache_ttl=300,
+                max_results=20,
+            )
+            logger.info('Memory retrieval pipeline enabled')
+        elif enable_retrieval_pipeline:
+            logger.warning('Memory retrieval pipeline requested but not available')
 
         logger.info(f'ThothMemoryStore initialized with {database_url}')
 
@@ -282,43 +304,147 @@ class ThothMemoryStore(_LettaStore):
         query: str,
         scope: str = 'core',
         limit: int = 10,
+        user_context: dict[str, Any] | None = None,
+        user_preferences: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """
-        Search memories using semantic similarity.
+        Search memories using semantic similarity and intelligent ranking.
 
         Args:
             user_id: User identifier
             query: Search query
             scope: Memory scope to search
             limit: Maximum results to return
+            user_context: Context about the query
+            user_preferences: User-specific preferences
 
         Returns:
             List of matching memory entries
         """
         try:
-            # Get all memories for basic text search (fallback)
+            # Get all memories for the scope
             memories = self.read_memories(user_id, scope)
 
-            # Simple text-based search for now
-            # TODO: Implement proper vector search when Letta integration is complete
-            query_lower = query.lower()
-            matching = []
+            if not memories:
+                return []
 
-            for memory in memories:
-                content = memory.get('content', '').lower()
-                if query_lower in content:
-                    # Simple relevance scoring
-                    relevance = content.count(query_lower) / len(content.split())
-                    memory['_search_score'] = relevance
-                    matching.append(memory)
+            # Use retrieval pipeline if available
+            if self.retrieval_pipeline:
+                result = self.retrieval_pipeline.search_memories(
+                    query=query,
+                    user_id=user_id,
+                    memories=memories,
+                    scope=scope,
+                    user_context=user_context,
+                    user_preferences=user_preferences,
+                )
 
-            # Sort by relevance
-            matching.sort(key=lambda x: x.get('_search_score', 0), reverse=True)
+                # Apply limit and return results
+                return result.get('results', [])[:limit]
 
-            return matching[:limit]
+            # Fallback to basic text search
+            return self._basic_text_search(query, memories, limit)
 
         except Exception as e:
             logger.error(f'Failed to search memories: {e}')
+            return []
+
+    def _basic_text_search(
+        self, query: str, memories: list[dict[str, Any]], limit: int
+    ) -> list[dict[str, Any]]:
+        """Basic text-based search fallback."""
+        query_lower = query.lower()
+        matching = []
+
+        for memory in memories:
+            content = memory.get('content', '').lower()
+            if query_lower in content:
+                # Simple relevance scoring
+                relevance = (
+                    content.count(query_lower) / len(content.split()) if content else 0
+                )
+                memory['_search_score'] = relevance
+                matching.append(memory)
+
+        # Sort by relevance
+        matching.sort(key=lambda x: x.get('_search_score', 0), reverse=True)
+
+        return matching[:limit]
+
+    def retrieve_relevant_memories(
+        self,
+        user_id: str,
+        conversation_context: str,
+        scope: str = 'core',
+        max_memories: int = 5,
+        include_related_scopes: bool = True,
+    ) -> list[dict[str, Any]]:
+        """
+        Retrieve contextually relevant memories for conversation continuity.
+
+        Args:
+            user_id: User identifier
+            conversation_context: Current conversation context or recent messages
+            scope: Primary memory scope to search
+            max_memories: Maximum number of memories to return
+            include_related_scopes: Whether to search related memory scopes
+
+        Returns:
+            List of contextually relevant memories
+        """
+        try:
+            relevant_memories = []
+
+            # Search primary scope
+            primary_results = self.search_memories(
+                user_id=user_id,
+                query=conversation_context,
+                scope=scope,
+                limit=max_memories,
+                user_context={'context_type': 'conversation'},
+            )
+            relevant_memories.extend(primary_results)
+
+            # Search related scopes if enabled
+            if include_related_scopes and len(relevant_memories) < max_memories:
+                remaining_slots = max_memories - len(relevant_memories)
+
+                # Check episodic memories for recent context
+                if scope != 'episodic':
+                    episodic_results = self.search_memories(
+                        user_id=user_id,
+                        query=conversation_context,
+                        scope='episodic',
+                        limit=remaining_slots // 2,
+                        user_context={'context_type': 'conversation'},
+                    )
+                    relevant_memories.extend(episodic_results)
+
+                # Check archival memories for historical context
+                if scope != 'archival' and len(relevant_memories) < max_memories:
+                    archival_limit = max_memories - len(relevant_memories)
+                    archival_results = self.search_memories(
+                        user_id=user_id,
+                        query=conversation_context,
+                        scope='archival',
+                        limit=archival_limit,
+                        user_context={'context_type': 'conversation'},
+                    )
+                    relevant_memories.extend(archival_results)
+
+            # Remove duplicates and ensure unique memories
+            seen_ids = set()
+            unique_memories = []
+            for memory in relevant_memories:
+                memory_id = memory.get('id')
+                if memory_id and memory_id not in seen_ids:
+                    seen_ids.add(memory_id)
+                    unique_memories.append(memory)
+
+            return unique_memories[:max_memories]
+
+        except Exception as e:
+            logger.error(f'Failed to retrieve relevant memories: {e}')
             return []
 
     def get_memory_stats(self, user_id: str) -> dict[str, Any]:
@@ -372,11 +498,64 @@ class ThothMemoryStore(_LettaStore):
                 if all_salience:
                     stats['avg_salience'] = sum(all_salience) / len(all_salience)
 
+            # Add retrieval pipeline metrics if available
+            if self.retrieval_pipeline:
+                retrieval_stats = self.retrieval_pipeline.get_user_insights(user_id)
+                if retrieval_stats.get('status') != 'no_data':
+                    stats['retrieval_metrics'] = retrieval_stats
+
             return stats
 
         except Exception as e:
             logger.error(f'Failed to get memory stats: {e}')
             return {'error': str(e)}
+
+    def get_retrieval_performance(self) -> dict[str, Any]:
+        """
+        Get system-wide retrieval performance metrics.
+
+        Returns:
+            Dictionary with retrieval performance statistics
+        """
+        try:
+            if not self.retrieval_pipeline:
+                return {'status': 'retrieval_pipeline_not_available'}
+
+            # Get overall performance summary
+            performance_summary = self.retrieval_pipeline.get_metrics_summary()
+
+            # Add pipeline configuration info
+            performance_summary['pipeline_config'] = {
+                'semantic_search_enabled': self.retrieval_pipeline.enable_semantic_search,
+                'caching_enabled': self.retrieval_pipeline.enable_caching,
+                'cache_ttl': self.retrieval_pipeline.cache_ttl,
+                'max_results': self.retrieval_pipeline.max_results,
+            }
+
+            return performance_summary
+
+        except Exception as e:
+            logger.error(f'Failed to get retrieval performance: {e}')
+            return {'status': 'error', 'message': str(e)}
+
+    def clear_retrieval_cache(self) -> bool:
+        """
+        Clear the retrieval pipeline cache.
+
+        Returns:
+            bool: True if cache was cleared successfully
+        """
+        try:
+            if self.retrieval_pipeline:
+                self.retrieval_pipeline.clear_cache()
+                logger.info('Retrieval cache cleared successfully')
+                return True
+            else:
+                logger.warning('No retrieval pipeline available to clear cache')
+                return False
+        except Exception as e:
+            logger.error(f'Failed to clear retrieval cache: {e}')
+            return False
 
     def clear_user_memories(self, user_id: str, scope: str | None = None) -> int:
         """
