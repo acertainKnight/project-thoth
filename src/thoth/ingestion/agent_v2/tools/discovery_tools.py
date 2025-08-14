@@ -103,7 +103,10 @@ class CreateArxivSourceTool(BaseThothTool):
                 'query_filters': [],
             }
 
-            self.service_manager.discovery.create_source(source_config)
+            from thoth.utilities.schemas import DiscoverySource
+
+            source = DiscoverySource(**source_config)
+            self.service_manager.discovery.create_source(source)
             return (
                 f'✅ **ArXiv Discovery Source Created Successfully!**\n\n'
                 f'**Source Details:**\n'
@@ -169,7 +172,10 @@ class CreatePubmedSourceTool(BaseThothTool):
                 'query_filters': [],
             }
 
-            self.service_manager.discovery.create_source(source_config)
+            from thoth.utilities.schemas import DiscoverySource
+
+            source = DiscoverySource(**source_config)
+            self.service_manager.discovery.create_source(source)
             return (
                 f'✅ **PubMed Discovery Source Created Successfully!**\n\n'
                 f'**Source Details:**\n'
