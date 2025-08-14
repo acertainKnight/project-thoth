@@ -5,6 +5,8 @@ This module provides LettaCheckpointer, which implements LangGraph's BaseSaver
 interface to bridge Letta's memory system with LangGraph's checkpoint mechanism.
 """
 
+from __future__ import annotations
+
 import json
 import uuid
 from typing import Any
@@ -36,6 +38,7 @@ class LettaCheckpointer(BaseCheckpointSaver):
             store: ThothMemoryStore instance for persistence
         """
         self.store = store
+        self._conversation_contexts: dict[str, str] = {}  # Track conversation context
         logger.info('LettaCheckpointer initialized with ThothMemoryStore')
 
     def put(
@@ -410,3 +413,103 @@ class LettaCheckpointer(BaseCheckpointSaver):
                 'error': str(e),
                 'component': 'LettaCheckpointer',
             }
+
+    def load_context_memories(
+        self, config: RunnableConfig, conversation_context: str, max_memories: int = 5
+    ) -> list[dict[str, Any]]:
+        """
+        Load contextually relevant memories for conversation continuity.
+
+        Args:
+            config: Runnable configuration with thread information
+            conversation_context: Recent conversation context
+            max_memories: Maximum number of memories to load
+
+        Returns:
+            List of relevant memories for context
+        """
+        try:
+            # Extract thread ID (user ID)
+            thread_id = config.get('configurable', {}).get('thread_id', 'default')
+
+            # Store conversation context for future use
+            self._conversation_contexts[thread_id] = conversation_context
+
+            # Use the enhanced retrieval method from the memory store
+            relevant_memories = self.store.retrieve_relevant_memories(
+                user_id=thread_id,
+                conversation_context=conversation_context,
+                scope='core',  # Start with core memories
+                max_memories=max_memories,
+                include_related_scopes=True,
+            )
+
+            logger.debug(
+                f'Loaded {len(relevant_memories)} context memories for thread {thread_id}'
+            )
+
+            return relevant_memories
+
+        except Exception as e:
+            logger.error(f'Failed to load context memories: {e}')
+            return []
+
+    def get_memory_context(self, thread_id: str) -> str:
+        """
+        Get stored conversation context for a thread.
+
+        Args:
+            thread_id: Thread identifier
+
+        Returns:
+            Stored conversation context or empty string
+        """
+        return self._conversation_contexts.get(thread_id, '')
+
+    def update_conversation_context(
+        self, thread_id: str, new_context: str, max_context_length: int = 1000
+    ) -> None:
+        """
+        Update the conversation context for a thread.
+
+        Args:
+            thread_id: Thread identifier
+            new_context: New context to add
+            max_context_length: Maximum context length to maintain
+        """
+        try:
+            current_context = self._conversation_contexts.get(thread_id, '')
+
+            # Combine contexts
+            combined_context = f'{current_context} {new_context}'.strip()
+
+            # Truncate if too long
+            if len(combined_context) > max_context_length:
+                # Keep the most recent context
+                combined_context = combined_context[-max_context_length:]
+                # Try to cut at word boundary
+                first_space = combined_context.find(' ')
+                if first_space > 0:
+                    combined_context = combined_context[first_space:].strip()
+
+            self._conversation_contexts[thread_id] = combined_context
+            logger.debug(f'Updated conversation context for thread {thread_id}')
+
+        except Exception as e:
+            logger.error(f'Failed to update conversation context: {e}')
+
+    def get_retrieval_metrics(self) -> dict[str, Any]:
+        """
+        Get retrieval performance metrics from the memory store.
+
+        Returns:
+            Dictionary with retrieval metrics and performance data
+        """
+        try:
+            if hasattr(self.store, 'get_retrieval_performance'):
+                return self.store.get_retrieval_performance()
+            else:
+                return {'status': 'metrics_not_available'}
+        except Exception as e:
+            logger.error(f'Failed to get retrieval metrics: {e}')
+            return {'status': 'error', 'message': str(e)}
