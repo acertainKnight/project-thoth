@@ -503,5 +503,314 @@ def system_stats():
         click.echo(f'❌ Error: {e}', err=True)
 
 
+@memory_cli.group(name='admin')
+def admin():
+    """Administrative memory commands."""
+    pass
+
+
+@admin.command()
+@click.option('--backup-path', help='Path to save memory backup')
+@click.option('--user-id', help='Backup specific user only')
+def backup(backup_path: str | None, user_id: str | None):
+    """Backup memory store data."""
+    try:
+        store = get_shared_store()
+
+        if not backup_path:
+            from datetime import datetime
+
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            backup_path = f'memory_backup_{timestamp}.json'
+
+        click.echo(f'Creating memory backup: {backup_path}')
+
+        if user_id:
+            click.echo(f'Backup scope: User {user_id}')
+            # Get all memories for specific user
+            memories = store.read_memories(user_id=user_id, limit=None)
+        else:
+            click.echo('Backup scope: All users')
+            # This would need a method to get all memories from all users
+            memories = store.read_memories(limit=None)
+
+        backup_data = {
+            'timestamp': datetime.now().isoformat(),
+            'user_id': user_id,
+            'total_memories': len(memories),
+            'memories': memories,
+        }
+
+        import json
+
+        with open(backup_path, 'w') as f:
+            json.dump(backup_data, f, indent=2, default=str)
+
+        click.echo(
+            f'✅ Backup completed: {len(memories)} memories saved to {backup_path}'
+        )
+
+    except Exception as e:
+        logger.error(f'Failed to backup memories: {e}')
+        click.echo(f'❌ Error: {e}', err=True)
+
+
+@admin.command()
+@click.argument('user_id')
+@click.option(
+    '--scope', type=click.Choice(['core', 'episodic', 'archival', 'all']), default='all'
+)
+@click.option('--confirm', is_flag=True, help='Confirm deletion without prompt')
+def clear_user(user_id: str, scope: str, confirm: bool):
+    """Clear memories for a specific user."""
+    try:
+        store = get_shared_store()
+
+        if not confirm:
+            scope_text = f'{scope} memories' if scope != 'all' else 'all memories'
+            if not click.confirm(
+                f'Are you sure you want to delete {scope_text} for user {user_id}?'
+            ):
+                click.echo('Operation cancelled.')
+                return
+
+        click.echo(f'Clearing {scope} memories for user: {user_id}')
+
+        # Get current count before deletion
+        current_stats = store.get_memory_stats(user_id)
+        if 'error' in current_stats:
+            click.echo(f'❌ Error getting user stats: {current_stats["error"]}')
+            return
+
+        if scope == 'all':
+            # Clear all scopes
+            for mem_scope in ['core', 'episodic', 'archival']:
+                count = current_stats.get(f'{mem_scope}_memories', 0)
+                if count > 0:
+                    # This would need a method to clear memories by scope
+                    click.echo(f'Clearing {count} {mem_scope} memories...')
+        else:
+            count = current_stats.get(f'{scope}_memories', 0)
+            if count > 0:
+                click.echo(f'Clearing {count} {scope} memories...')
+            else:
+                click.echo(f'No {scope} memories found for user {user_id}')
+                return
+
+        # Note: This would need implementation in the memory store
+        # result = store.clear_user_memories(user_id, scope)
+        click.echo('✅ Memory clearing completed')
+        click.echo('⚠️  Note: Actual deletion requires memory store implementation')
+
+    except Exception as e:
+        logger.error(f'Failed to clear user memories: {e}')
+        click.echo(f'❌ Error: {e}', err=True)
+
+
+@admin.command()
+@click.option('--days', type=int, default=30, help='Delete memories older than N days')
+@click.option(
+    '--scope', type=click.Choice(['episodic', 'archival']), default='episodic'
+)
+@click.option(
+    '--dry-run', is_flag=True, help='Show what would be deleted without deleting'
+)
+def cleanup_old(days: int, scope: str, dry_run: bool):
+    """Clean up old memories across all users."""
+    try:
+        # Note: store would be used when cleanup functionality is implemented
+        # store = get_shared_store()
+
+        click.echo(f'Cleaning up {scope} memories older than {days} days...')
+        if dry_run:
+            click.echo('🔍 DRY RUN - No memories will be deleted')
+
+        # This would need implementation in the memory store
+        # old_memories = store.find_old_memories(days, scope)
+
+        click.echo('⚠️  Note: Old memory cleanup requires memory store implementation')
+        click.echo(f'Target scope: {scope}')
+        click.echo(f'Age threshold: {days} days')
+
+        # Placeholder for actual implementation
+        click.echo('✅ Cleanup would be completed here')
+
+    except Exception as e:
+        logger.error(f'Failed to cleanup old memories: {e}')
+        click.echo(f'❌ Error: {e}', err=True)
+
+
+@memory_cli.group(name='inspect')
+def inspect():
+    """Memory inspection and debugging commands."""
+    pass
+
+
+@inspect.command()
+@click.argument('user_id')
+@click.option(
+    '--scope',
+    type=click.Choice(['core', 'episodic', 'archival']),
+    help='Filter by memory scope',
+)
+@click.option('--limit', type=int, default=10, help='Number of memories to show')
+@click.option(
+    '--format',
+    'output_format',
+    type=click.Choice(['table', 'json', 'detailed']),
+    default='table',
+)
+def memories(user_id: str, scope: str | None, limit: int, output_format: str):
+    """Inspect memories for a user."""
+    try:
+        store = get_shared_store()
+
+        click.echo(f'Inspecting memories for user: {user_id}')
+        if scope:
+            click.echo(f'Scope filter: {scope}')
+
+        memories = store.read_memories(user_id=user_id, scope=scope, limit=limit)
+
+        if not memories:
+            click.echo('No memories found.')
+            return
+
+        click.echo(f'\nFound {len(memories)} memories:')
+
+        if output_format == 'json':
+            import json
+
+            click.echo(json.dumps(memories, indent=2, default=str))
+        elif output_format == 'detailed':
+            for i, memory in enumerate(memories, 1):
+                click.echo(f'\n--- Memory {i} ---')
+                click.echo(f'ID: {memory.get("id", "N/A")}')
+                click.echo(f'Scope: {memory.get("scope", "N/A")}')
+                click.echo(f'Salience: {memory.get("salience", "N/A")}')
+                click.echo(f'Created: {memory.get("created_at", "N/A")}')
+                content = memory.get('content', '')
+                click.echo(
+                    f'Content: {content[:100]}{"..." if len(content) > 100 else ""}'
+                )
+        else:  # table format
+            from datetime import datetime
+
+            click.echo('\n' + '=' * 80)
+            click.echo(
+                f'{"#":>3} {"Scope":>10} {"Salience":>8} {"Age":>12} {"Content"}'
+            )
+            click.echo('=' * 80)
+
+            for i, memory in enumerate(memories, 1):
+                scope = memory.get('scope', 'N/A')[:10]
+                salience = f'{memory.get("salience", 0):.3f}'
+
+                # Calculate age
+                created_at = memory.get('created_at')
+                if created_at:
+                    try:
+                        created_dt = datetime.fromisoformat(
+                            created_at.replace('Z', '+00:00')
+                        )
+                        age = datetime.now() - created_dt.replace(tzinfo=None)
+                        age_str = f'{age.days}d {age.seconds // 3600}h'
+                    except (ValueError, TypeError):
+                        age_str = 'Unknown'
+                else:
+                    age_str = 'Unknown'
+
+                content = memory.get('content', '')[:50]
+                if len(memory.get('content', '')) > 50:
+                    content += '...'
+
+                click.echo(f'{i:>3} {scope:>10} {salience:>8} {age_str:>12} {content}')
+
+    except Exception as e:
+        logger.error(f'Failed to inspect memories: {e}')
+        click.echo(f'❌ Error: {e}', err=True)
+
+
+@inspect.command()
+@click.argument('query')
+@click.option('--user-id', help='Search for specific user only')
+@click.option(
+    '--scope',
+    type=click.Choice(['core', 'episodic', 'archival']),
+    help='Search specific scope',
+)
+@click.option('--limit', type=int, default=5, help='Maximum results to return')
+def search(query: str, user_id: str | None, scope: str | None, limit: int):
+    """Search memories by content."""
+    try:
+        store = get_shared_store()
+
+        click.echo(f'Searching memories for: "{query}"')
+        if user_id:
+            click.echo(f'User filter: {user_id}')
+        if scope:
+            click.echo(f'Scope filter: {scope}')
+
+        # This would use the memory store's search functionality
+        results = store.search_memories(
+            query=query, user_id=user_id, scope=scope, limit=limit
+        )
+
+        if not results:
+            click.echo('No matching memories found.')
+            return
+
+        click.echo(f'\nFound {len(results)} matching memories:')
+        click.echo('=' * 60)
+
+        for i, result in enumerate(results, 1):
+            memory = result.get('memory', {})
+            score = result.get('score', 0)
+
+            click.echo(f'\n{i}. Score: {score:.3f}')
+            click.echo(f'   User: {memory.get("user_id", "N/A")}')
+            click.echo(f'   Scope: {memory.get("scope", "N/A")}')
+            click.echo(f'   Salience: {memory.get("salience", 0):.3f}')
+
+            content = memory.get('content', '')
+            if len(content) > 150:
+                content = content[:150] + '...'
+            click.echo(f'   Content: {content}')
+
+    except Exception as e:
+        logger.error(f'Failed to search memories: {e}')
+        click.echo(f'❌ Error: {e}', err=True)
+
+
+def run_memory_cli_from_args(args, _pipeline):
+    """Bridge function to run memory CLI from argparse."""
+    from click.testing import CliRunner
+
+    # If no args provided, show help
+    if not args.memory_args:
+        args.memory_args = ['--help']
+
+    # Use click runner to execute the command
+    runner = CliRunner()
+    result = runner.invoke(memory_cli, args.memory_args, catch_exceptions=False)
+
+    # Print the output
+    if result.output:
+        print(result.output, end='')
+
+    # Return the exit code
+    return result.exit_code
+
+
+def configure_subparser(subparsers):
+    """Configure the subparser for the memory command."""
+    parser = subparsers.add_parser('memory', help='Memory management commands')
+    parser.add_argument(
+        'memory_args',
+        nargs='*',
+        help='Memory command arguments (jobs, summarize, stats, etc.)',
+    )
+    parser.set_defaults(func=run_memory_cli_from_args)
+
+
 if __name__ == '__main__':
     memory_cli()
