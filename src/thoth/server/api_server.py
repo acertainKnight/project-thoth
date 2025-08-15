@@ -1222,72 +1222,46 @@ async def reinitialize_agent():
 async def sync_obsidian_settings(settings: dict[str, Any]):
     """Sync settings from Obsidian plugin to backend."""
     try:
-        from thoth.config import ThothConfig, reset_config
-        
-        # Create a new config from Obsidian settings
-        new_config = ThothConfig.from_obsidian_settings(settings)
-        
-        # Map to environment variables for persistence
+        # Map Obsidian settings to environment variables
         env_updates = {}
-        
+
         # API Keys
         if settings.get('mistralKey'):
             env_updates['API_MISTRAL_KEY'] = settings['mistralKey']
             os.environ['API_MISTRAL_KEY'] = settings['mistralKey']
-        
+
         if settings.get('openrouterKey'):
             env_updates['API_OPENROUTER_KEY'] = settings['openrouterKey']
             os.environ['API_OPENROUTER_KEY'] = settings['openrouterKey']
-        
-        if settings.get('opencitationsKey'):
-            env_updates['API_OPENCITATIONS_KEY'] = settings['opencitationsKey']
-            os.environ['API_OPENCITATIONS_KEY'] = settings['opencitationsKey']
-        
+
         # Directories
         if settings.get('workspaceDirectory'):
-            env_updates['DIR_WORKSPACE_DIR'] = settings['workspaceDirectory']
-            os.environ['DIR_WORKSPACE_DIR'] = settings['workspaceDirectory']
-        
+            env_updates['WORKSPACE_DIR'] = settings['workspaceDirectory']
+            os.environ['WORKSPACE_DIR'] = settings['workspaceDirectory']
+
         if settings.get('obsidianDirectory'):
-            env_updates['DIR_OBSIDIAN_DIR'] = settings['obsidianDirectory']
-            os.environ['DIR_OBSIDIAN_DIR'] = settings['obsidianDirectory']
-        
-        if settings.get('dataDirectory'):
-            env_updates['DIR_DATA_DIR'] = settings['dataDirectory']
-            os.environ['DIR_DATA_DIR'] = settings['dataDirectory']
-        
+            env_updates['NOTES_DIR'] = settings['obsidianDirectory']
+            os.environ['NOTES_DIR'] = settings['obsidianDirectory']
+
         # Server settings
         if settings.get('endpointHost'):
-            env_updates['SERVER_API_HOST'] = settings['endpointHost']
-            os.environ['SERVER_API_HOST'] = settings['endpointHost']
-        
+            env_updates['ENDPOINT_HOST'] = settings['endpointHost']
+            os.environ['ENDPOINT_HOST'] = settings['endpointHost']
+
         if settings.get('endpointPort'):
-            env_updates['SERVER_API_PORT'] = str(settings['endpointPort'])
-            os.environ['SERVER_API_PORT'] = str(settings['endpointPort'])
-        
-        # LLM settings
-        if settings.get('primaryLlmModel'):
-            env_updates['LLM_MODEL'] = settings['primaryLlmModel']
-            os.environ['LLM_MODEL'] = settings['primaryLlmModel']
-        
-        if settings.get('researchAgentModel'):
-            env_updates['LLM_AGENT_MODEL'] = settings['researchAgentModel']
-            os.environ['LLM_AGENT_MODEL'] = settings['researchAgentModel']
-        
-        # Reset the global config to pick up new environment variables
-        reset_config()
-        
+            env_updates['ENDPOINT_PORT'] = str(settings['endpointPort'])
+            os.environ['ENDPOINT_PORT'] = str(settings['endpointPort'])
+
         logger.info(f'Synced settings from Obsidian: {list(env_updates.keys())}')
-        
+
         return JSONResponse(
             {
                 'status': 'success',
                 'message': 'Settings synced successfully',
                 'synced_keys': list(env_updates.keys()),
-                'config_updated': True,
             }
         )
-    
+
     except Exception as e:
         logger.error(f'Error syncing Obsidian settings: {e}')
         raise HTTPException(
@@ -1833,13 +1807,13 @@ def export_config_for_obsidian():
     """Export current configuration in Obsidian plugin format."""
     try:
         config = get_config()
-        obsidian_config = config.to_obsidian_settings()
+        obsidian_config = config.export_for_obsidian()
 
         return JSONResponse(
             {
                 'status': 'success',
                 'config': obsidian_config,
-                'config_version': '2.0.0',
+                'config_version': '1.0.0',
                 'exported_at': time.time(),
             }
         )
@@ -1855,51 +1829,34 @@ def export_config_for_obsidian():
 async def import_config_from_obsidian(obsidian_config: dict[str, Any]):
     """Import configuration from Obsidian plugin format and validate it."""
     try:
-        from thoth.config import ThothConfig, reset_config
+        from thoth.utilities.config import ThothConfig
 
         # Import configuration from Obsidian format
-        imported_config = ThothConfig.from_obsidian_settings(obsidian_config)
+        imported_config = ThothConfig.import_from_obsidian(obsidian_config)
 
-        # Basic validation
-        errors = []
-        warnings = []
-        
-        # Check required API keys
-        if not imported_config.api.opencitations_key:
-            errors.append('OpenCitations API key is required')
-        
-        if not (imported_config.api.openrouter_key or imported_config.api.openai_key or imported_config.api.anthropic_key):
-            warnings.append('No LLM API key configured (OpenRouter, OpenAI, or Anthropic)')
-        
-        if errors:
+        # Validate the imported configuration
+        validation_result = imported_config.validate_for_obsidian()
+
+        if validation_result['errors']:
             return JSONResponse(
                 {
                     'status': 'validation_failed',
-                    'errors': errors,
-                    'warnings': warnings,
+                    'errors': validation_result['errors'],
+                    'warnings': validation_result['warnings'],
                     'message': 'Configuration validation failed',
                 },
                 status_code=400,
             )
 
-        # Update environment variables
-        env_updates = {}
-        for key, value in obsidian_config.items():
-            if key and value:
-                # Map Obsidian keys to env vars
-                env_key = f'OBSIDIAN_{key.upper()}'
-                env_updates[env_key] = str(value)
-                os.environ[env_key] = str(value)
-        
-        # Reset config to pick up changes
-        reset_config()
+        # If validation passed, sync to environment
+        synced_vars = imported_config.sync_to_environment()
 
         return JSONResponse(
             {
                 'status': 'success',
                 'message': 'Configuration imported and validated successfully',
-                'synced_environment_vars': list(env_updates.keys()),
-                'warnings': warnings,
+                'synced_environment_vars': list(synced_vars.keys()),
+                'warnings': validation_result['warnings'],
                 'imported_at': time.time(),
             }
         )
