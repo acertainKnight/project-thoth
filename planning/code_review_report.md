@@ -109,24 +109,154 @@ This report provides a comprehensive analysis of the Thoth codebase, identifying
 - **Architectural Issue**: CLI commands directly instantiate services instead of using a consistent pattern
 
 ### config/ Module
-*Review pending*
+
+#### Structure
+- simplified.py: Attempt to simplify configuration
+- Main config in utilities/config.py (1195 lines!)
+
+#### Major Issues
+1. **Configuration Explosion**:
+   - 20+ configuration classes (ModelConfig, LLMConfig, CitationLLMConfig, etc.)
+   - Multiple inheritance chains (BaseLLMConfig -> LLMConfig variations)
+   - Separate configs for each feature/service
+   
+2. **Migration Complexity**:
+   - simplified.py contains migration functions from old to new config
+   - Indicates configuration system has been redesigned but old code remains
+   
+3. **Duplication**:
+   - Multiple LLM configs with similar structure
+   - Each service has its own config class with overlapping fields
 
 ### discovery/ Module
-*Review pending*
+
+#### Structure
+- discovery_manager.py: Main orchestrator
+- api_sources.py: Multiple API clients (ArXiv, PubMed, CrossRef, etc.)
+- web_scraper.py, emulator_scraper.py: Web scraping implementations
+- scheduler.py: Discovery scheduling
+
+#### Issues
+1. **API Client Duplication**:
+   - ArxivClient in api_sources.py (1261 lines)
+   - Similar patterns repeated for each API source
+   - Could use a base API client class
+   
+2. **Multiple Scraping Approaches**:
+   - WebScraper
+   - EmulatorScraper
+   - Chrome extension integration
+   - Each implements similar functionality differently
 
 ### errors/ Module
-*Review pending*
 
-### ingestion/ Module
+#### Error Handling Patterns
+- base.py: Structured error handling with ThothError base class
+- ErrorHandler class for centralized error management
+
+#### Issues
+1. **Inconsistent Error Usage**:
+   - Some modules define custom exceptions (14+ different Error classes)
+   - Others use generic exceptions
+   - Base error system (ThothError) not consistently used
+   
+2. **Duplicate Error Classes**:
+   - ServiceError in both errors/base.py and services/base.py
+   - LLMError in both errors/base.py and analyze/llm_processor.py
+
+### utilities/ Module
+
+#### LLM Client Duplication
+1. **Multiple LLM Client Implementations**:
+   - openrouter.py (345 lines): OpenRouterClient
+   - anthropic_client.py: AnthropicClient
+   - openai_client.py: OpenAIClient
+   - All inherit from BaseLLMClient but implement similar patterns
+   
+2. **Rate Limiting Duplication**:
+   - OpenRouterRateLimiter in openrouter.py
+   - Each client implements its own rate limiting
+   - Could be centralized
+
+#### Schema Organization
+- schemas/ subdirectory with multiple schema files
+- Good separation but some overlap with models defined elsewhere
+
+### server/ Module
+
+#### api_server.py (2385 lines!)
+- **Massive File**: Contains entire FastAPI application
+- **Mixed Responsibilities**:
+  - WebSocket handling
+  - Background task management
+  - MCP server integration
+  - Health monitoring
+  - Chat functionality
+  
+#### pdf_monitor.py
+- PDFTracker class duplicates functionality that could be in a service
+- PDFHandler could be merged with document processing pipeline
+
+### memory/ Module
+
+#### Structure
+- store.py: Wrapper around Letta's MemoryStore
+- pipeline.py: Memory write pipeline
+- scheduler.py: Memory scheduling
+- checkpointer.py: State checkpointing
+
+#### Issues
+1. **External Dependency Wrapper**:
+   - Wraps Letta library with fallback implementation
+   - Adds complexity for unclear benefit
+   - Could be simplified or removed if not essential
+
+### monitoring/ Module
+
+#### health.py
+- HealthMonitor class for system health checks
+- Overlaps with monitoring in api_server.py
+- Could be consolidated with server monitoring
+
+### rag/ Module
+
+#### Structure
+- rag_manager.py: Main RAG coordinator
+- embeddings.py: Embedding management
+- vector_store.py: Vector storage management
+
+#### Issues
+1. **Yet Another Manager Pattern**:
+   - RAGManager coordinates other managers
+   - Similar to ServiceManager pattern
+   - Adds another layer of abstraction
+
+2. **Direct LLM Client Usage**:
+   - Uses OpenRouterClient directly
+   - Should use LLMService for consistency
+
+### ingestion/ Module (Detailed)
 
 #### agent_v2 Subsystem
-- Another complete implementation of tools
-- BaseThothTool creates yet another tool abstraction
-- Tools in agent_v2/tools/ duplicate both MCP tools and services
+- Complete reimplementation of agent with its own:
+  - core/agent.py: Agent implementation
+  - core/state.py: State management
+  - core/token_tracker.py: Token tracking
+  - server.py: Separate server implementation
+  - tools/: Another complete set of tools
 
-#### Duplication Pattern
-- Three parallel tool systems: Services, MCP tools, Agent v2 tools
-- Each system implements similar functionality independently
+#### Major Duplication
+1. **Tool Implementations**:
+   - analysis_tools.py duplicates analyze module
+   - discovery_tools.py duplicates discovery service
+   - pdf_tools.py duplicates processing service
+   - query_tools.py duplicates query service
+   - rag_tools.py duplicates RAG service
+   - web_tools.py duplicates web search service
+
+2. **Server Implementation**:
+   - agent_v2/server.py duplicates functionality in server/api_server.py
+   - Another FastAPI application instance
 
 ### knowledge/ Module
 
@@ -393,3 +523,137 @@ To make this codebase production-ready and suitable for open-sourcing:
 - **Document decisions** to help future contributors
 
 The codebase has good functionality but needs significant refactoring to reduce maintenance burden and improve code quality. Following the recommended refactoring strategy will result in a cleaner, more maintainable codebase that better showcases software engineering skills.
+
+## Additional Architectural Concerns
+
+### 1. Manager Anti-Pattern
+- ServiceManager manages services
+- RAGManager manages RAG components  
+- DiscoveryManager manages discovery sources
+- Too many "manager" classes that just coordinate other components
+
+### 2. Configuration Complexity
+- 20+ configuration classes
+- Environment variable handling in multiple places
+- Configuration migration indicates past redesign debt
+
+### 3. File Size Issues
+- api_server.py: 2385 lines
+- config.py: 1195 lines
+- graph.py: 1135 lines
+- api_sources.py: 1261 lines
+- Many files > 500 lines indicating poor separation of concerns
+
+### 4. Inconsistent Async Patterns
+- Some modules use async/await properly
+- Others have sync wrappers around async code
+- Mixed patterns within same modules
+
+### 5. External Dependencies
+- Heavy reliance on LangChain/LangGraph
+- Letta for memory management
+- Could these be simplified or removed?
+
+## Updated Recommendations
+
+### Immediate Actions (Week 1)
+
+1. **Stop the Bleeding**:
+   - Freeze new tool implementations
+   - Document which implementation is canonical
+   - Add deprecation warnings to duplicate code
+
+2. **Create Migration Plan**:
+   - Map all duplications
+   - Identify canonical implementations
+   - Plan removal order to avoid breaking changes
+
+### High Priority Refactoring
+
+1. **Tool System Consolidation**:
+   - Keep ONLY the service layer as the canonical implementation
+   - Create thin MCP/Agent adapters that call services
+   - Remove all duplicate tool implementations
+   - Expected reduction: ~10,000+ lines of code
+
+2. **Configuration Overhaul**:
+   - Reduce to 3-5 configuration classes max
+   - Use composition over inheritance
+   - Single source of truth for each setting
+   - Expected reduction: ~800 lines
+
+3. **File Size Reduction**:
+   - Break api_server.py into multiple modules
+   - Split large files into logical components
+   - No file should exceed 500 lines
+   - Expected improvement: Better maintainability
+
+4. **Remove Manager Anti-Pattern**:
+   - Flatten architecture where possible
+   - Services should be self-contained
+   - Remove unnecessary coordination layers
+   - Expected reduction: 3-4 abstraction layers
+
+### Architecture Simplification
+
+1. **Core Flow**:
+   ```
+   CLI -> Services -> Core Logic
+   ```
+   Instead of current:
+   ```
+   CLI -> Pipeline -> Services -> Managers -> Components -> Core Logic
+   ```
+
+2. **Tool Adapters**:
+   ```python
+   # Instead of reimplementing, adapt:
+   class MCPToolAdapter:
+       def __init__(self, service):
+           self.service = service
+       
+       def execute(self, *args):
+           return self.service.method(*args)
+   ```
+
+3. **Single Entry Point**:
+   - One API server
+   - One CLI entry
+   - One configuration system
+   - One error handling pattern
+
+### Code Quality Improvements
+
+1. **Consistent Patterns**:
+   - All async or all sync with async wrappers
+   - One error handling pattern
+   - One logging approach
+   - One configuration loading method
+
+2. **Dependency Reduction**:
+   - Evaluate if LangGraph complexity is needed
+   - Consider removing Letta if not essential
+   - Reduce external dependencies where possible
+
+3. **Testing Strategy**:
+   - Add tests before refactoring
+   - Use tests to ensure functionality preserved
+   - Aim for 80%+ coverage on core modules
+
+## Final Assessment
+
+The codebase shows classic signs of organic growth without architectural governance:
+
+1. **Feature Addition Pattern**: Each new feature (MCP, Agent v2) reimplemented existing functionality instead of reusing it
+2. **Abstraction Addiction**: Too many layers that don't add value
+3. **Configuration Sprawl**: Settings scattered across 20+ classes
+4. **File Bloat**: Many files too large to easily understand
+
+To make this production-ready for open-sourcing:
+
+1. **Reduce by 40-50%**: Remove duplicate implementations
+2. **Simplify by 60%**: Flatten architecture, remove unnecessary abstractions  
+3. **Standardize**: One way to do each thing
+4. **Document**: Clear architectural decisions and patterns
+
+The good news is that the core functionality is solid. The refactoring is mainly removing duplication and simplifying architecture, not rewriting core logic. With focused effort following the recommended plan, this can become an exemplary codebase that effectively showcases your engineering skills.
