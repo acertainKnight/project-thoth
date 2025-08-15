@@ -71,23 +71,29 @@ def get_config() -> ThothConfig:
     # These provide backward compatibility for old code
     if not hasattr(config, 'citation_llm_config'):
         config.citation_llm_config = type('CitationLLMConfig', (), {
-            'model': config.llm.model,
+            'model': config.llm.citation_model or config.llm.model,
             'temperature': config.llm.temperature,
-            'max_output_tokens': config.llm.max_output_tokens,
+            'max_output_tokens': 10000,  # Citation-specific default
+            'max_context_length': 4000,  # Citation-specific default
+            'document_citation_model': config.llm.document_citation_model,
+            'reference_cleaning_model': config.llm.reference_cleaning_model,
+            'structured_extraction_model': config.llm.structured_extraction_model,
+            'batch_structured_extraction_model': config.llm.batch_structured_extraction_model,
         })()
     
     if not hasattr(config, 'tag_consolidator_llm_config'):
         config.tag_consolidator_llm_config = type('TagConsolidatorLLMConfig', (), {
-            'model': config.llm.model,
+            'model': config.llm.tag_consolidator_model or config.llm.model,
             'temperature': config.llm.temperature,
             'max_output_tokens': config.llm.max_output_tokens,
         })()
     
     if not hasattr(config, 'citation_config'):
         config.citation_config = type('CitationConfig', (), {
-            'include_all_citations': True,
-            'min_citation_length': 10,
-            'max_citations_per_paper': 100,
+            'include_all_citations': config.api.citation_include_all,
+            'min_citation_length': config.api.citation_min_length,
+            'max_citations_per_paper': config.api.citation_max_per_paper,
+            'opencitations_email': config.api.opencitations_email,
         })()
     
     if not hasattr(config, 'logging_config'):
@@ -104,13 +110,21 @@ def get_config() -> ThothConfig:
             'query_delay_seconds': 2.0,
             'max_retries': 3,
             'cache_results': True,
+            'auto_start_scheduler': config.features.discovery_auto_start_scheduler,
+            'default_max_articles': config.features.discovery_default_max_articles,
+            'default_interval_minutes': config.features.discovery_default_interval_minutes,
+            'rate_limit_delay': config.features.discovery_rate_limit_delay,
+            'chrome_extension_enabled': config.server.chrome_extension_enabled,
+            'chrome_extension_host': config.server.chrome_extension_host,
+            'chrome_extension_port': config.server.chrome_extension_port,
         })()
     
     if not hasattr(config, 'monitor_config'):
         config.monitor_config = type('MonitorConfig', (), {
-            'watch_interval': 5,
+            'watch_interval': config.features.monitor_watch_interval,
             'process_interval': 10,
             'enabled': config.features.auto_process_pdfs,
+            'auto_start': config.features.monitor_auto_start,
         })()
     
     if not hasattr(config, 'endpoint_config'):
@@ -123,9 +137,16 @@ def get_config() -> ThothConfig:
     if not hasattr(config, 'rag_config'):
         config.rag_config = type('RAGConfig', (), {
             'enabled': config.features.enable_rag,
-            'chunk_size': config.llm.chunk_size,
-            'chunk_overlap': config.llm.chunk_overlap,
+            'chunk_size': config.features.rag_chunk_size,
+            'chunk_overlap': config.features.rag_chunk_overlap,
             'use_local_embeddings': config.features.use_local_embeddings,
+            'embedding_model': config.features.rag_embedding_model,
+            'embedding_batch_size': config.features.rag_embedding_batch_size,
+            'skip_files_with_images': config.features.rag_skip_files_with_images,
+            'vector_db_path': config.directories.vector_db_path,
+            'collection_name': config.features.rag_collection_name,
+            'qa_model': config.llm.qa_model,
+            'qa_temperature': config.llm.qa_temperature,
         })()
     
     if not hasattr(config, 'research_agent_config'):
@@ -133,6 +154,52 @@ def get_config() -> ThothConfig:
             'enable_memory': config.features.enable_memory,
             'max_iterations': config.llm.agent_max_iterations,
             'agent_model': config.llm.agent_model,
+            'auto_start': config.features.auto_start_agent,
+            'default_queries': config.features.research_agent_default_queries,
+        })()
+    
+    if not hasattr(config, 'research_agent_llm_config'):
+        config.research_agent_llm_config = type('ResearchAgentLLMConfig', (), {
+            'model': config.llm.agent_model,
+            'temperature': config.llm.agent_temperature,
+            'max_output_tokens': config.llm.max_output_tokens,
+            'max_context_length': config.llm.max_context_length,
+        })()
+    
+    if not hasattr(config, 'scrape_filter_llm_config'):
+        config.scrape_filter_llm_config = type('ScrapeFilterLLMConfig', (), {
+            'model': config.llm.scrape_filter_model or config.llm.model,
+            'temperature': config.llm.temperature,
+            'max_output_tokens': 10000,
+            'max_context_length': config.llm.scrape_filter_max_context,
+        })()
+    
+    if not hasattr(config, 'mcp_config'):
+        config.mcp_config = type('MCPConfig', (), {
+            'host': config.server.mcp_host,
+            'port': config.server.mcp_port,
+            'enabled': config.server.mcp_enabled,
+            'auto_start': config.server.mcp_auto_start,
+        })()
+    
+    if not hasattr(config, 'query_based_routing_config'):
+        config.query_based_routing_config = type('QueryBasedRoutingConfig', (), {
+            'enabled': config.llm.routing_enabled,
+            'routing_model': config.llm.routing_model,
+            'use_dynamic_prompt': True,
+        })()
+    
+    if not hasattr(config, 'performance_config'):
+        config.performance_config = type('PerformanceConfig', (), {
+            'max_workers': config.performance.max_workers,
+            'batch_size': config.performance.batch_size,
+            'max_concurrent_api_calls': config.performance.max_concurrent_api_calls,
+            'api_retry_count': config.performance.api_retry_count,
+            'api_timeout_seconds': config.performance.api_timeout_seconds,
+            'max_single_call_size': config.performance.max_single_call_size,
+            'batch_processing_threshold': config.performance.batch_processing_threshold,
+            'memory_limit_percentage': config.performance.memory_limit_percentage,
+            'enable_memory_profiling': config.performance.enable_memory_profiling,
         })()
     
     return config
