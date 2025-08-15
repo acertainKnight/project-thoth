@@ -1,253 +1,160 @@
-# Thoth Codebase Refactoring Plan
+# Thoth Codebase Refactoring Plan: Legacy Code Removal
 
-## Current State Analysis
+## Executive Summary
 
-### What Works Well
+After thorough analysis, the Thoth codebase already has excellent architecture and all necessary features implemented. The "refactoring" is primarily **removing legacy code paths** and enabling existing optimizations by default.
 
-1. **Core Functionality**
-   - OCR processing (Mistral API integration)
-   - LLM analysis (OpenRouter/Anthropic/OpenAI support)
-   - Citation extraction and graph management
-   - RAG system with embeddings
-   - Discovery system with multiple sources
-   - File watching and automatic processing
+## Key Discoveries
 
-2. **Service Layer** (`/src/thoth/services/`)
-   - Well-organized service classes
+### What Already Exists and Works Well
+
+1. **MCP Integration** ✅
+   - MCP tools properly call services (not duplicates)
+   - Agent already has full MCP support (just disabled by default)
+   - All protocol implementations complete
+
+2. **Service Architecture** ✅
+   - Services use analyze components (not duplicates)
    - Clear separation of concerns
-   - Good abstraction over external APIs
-   - ServiceManager provides centralized access
+   - ServiceManager provides unified access
 
-3. **MCP Implementation** (`/src/thoth/mcp/`)
-   - **MCP tools already call services** (not duplicates!)
-   - Each tool inherits from `MCPTool` with `service_manager`
-   - Tools are thin wrappers: `self.service_manager.discovery.list_sources()`
-   - Proper MCP protocol implementation
+3. **Optimized Implementations** ✅
+   - `OptimizedDocumentPipeline` with 50-65% performance improvement
+   - `AsyncProcessingService` for async operations
+   - Caching and intelligent batching already implemented
 
-4. **Agent MCP Integration**
-   - Agent already supports MCP via `use_mcp_tools` flag
-   - Uses `langchain_mcp_adapters` for MCP client
-   - Falls back to legacy tools if MCP fails
+4. **Configuration System** ✅
+   - `get_config()` already provides single entry point
+   - Just needs internal cleanup of 20+ classes
 
-### Current Architecture Problems
+5. **Monitoring System** ✅
+   - `PDFMonitor` watches folders
+   - `thoth monitor --optimized` already available
+   - Full pipeline integration
+
+## The Real Problem: Legacy Code Not Removed
 
 ```mermaid
-graph TB
-    subgraph "Problem 1: Duplicate Tool Implementations"
-        MCP[mcp/tools/<br/>Already calls services ✅]
-        Agent[agent_v2/tools/<br/>10 files, ~8000 lines<br/>DUPLICATES services ❌]
+graph LR
+    subgraph "Active Code Paths"
+        MCP[MCP Tools ✅]
+        Services[Services ✅]
+        Optimized[Optimized Pipeline ✅]
     end
-
-    subgraph "Problem 2: Configuration Complexity"
-        C1[config.py<br/>1195 lines<br/>20+ classes]
-        C2[simplified.py<br/>Migration code]
+    
+    subgraph "Legacy Code to Remove"
+        Agent[agent_v2/tools/<br/>8000 lines]
+        Deprecated[ThothPipeline<br/>DEPRECATED]
+        OldConfig[20+ config classes]
+        MainPy[main.py redirect]
     end
-
-    subgraph "Problem 3: Large Files"
-        F1[api_server.py<br/>2385 lines]
-        F2[api_sources.py<br/>1261 lines]
-        F3[graph.py<br/>1135 lines]
-    end
-
-    subgraph "Problem 4: Scattered Components"
-        AC[analyze/<br/>Components that should<br/>be in services]
-        SV[services/<br/>Some wrap analyze]
-    end
-
+    
     style Agent fill:#ffcccc
-    style C1 fill:#ffcccc
-    style F1 fill:#ffcccc
+    style Deprecated fill:#ffcccc
+    style OldConfig fill:#ffcccc
+    style MainPy fill:#ffcccc
 ```
 
-## Simplified Refactoring Plan
+## Simplified Action Plan: Delete Legacy Code
 
-Since MCP tools already properly call services, we need much less work:
+### Phase 1: Enable Existing Features (1 day)
 
-### Phase 1: Enable MCP for Agent (Week 1)
-
-**Goal**: Make agent use MCP exclusively, remove duplicate tools
-
-#### Step 1.1: Update agent configuration
-**Edit**: `src/thoth/ingestion/agent_v2/core/agent.py`
+#### 1.1 Enable MCP for Agent
+**File**: `src/thoth/ingestion/agent_v2/core/agent.py`
 ```python
-# Change default to always use MCP
-def __init__(self, use_mcp_tools: bool = True):  # Was False by default
+# Line ~89: Change default
+def __init__(self, ..., use_mcp_tools: bool = True):  # was False
 ```
 
-#### Step 1.2: Remove fallback to legacy tools
-**Edit**: `src/thoth/ingestion/agent_v2/core/agent.py`
+#### 1.2 Make Optimized Pipeline Default
+**File**: `src/thoth/cli/main.py`
 ```python
-# Remove lines 134-139 that fall back to legacy tools
-# Keep only MCP initialization
+# Line 68: Change to
+from thoth.pipelines.optimized_document_pipeline import OptimizedDocumentPipeline
+pipeline = OptimizedDocumentPipeline()  # was ThothPipeline()
 ```
 
-#### Step 1.3: Delete agent tools directory
+### Phase 2: Delete Legacy Code (1 day)
+
+#### 2.1 Remove Agent's Duplicate Tools
 ```bash
-# These are the duplicate implementations
 git rm -rf src/thoth/ingestion/agent_v2/tools/
+# Removes 8,000 lines of duplicate code
 ```
 
-#### Step 1.4: Update agent server
-**Edit**: `src/thoth/ingestion/agent_v2/server.py`
-- Ensure it uses main MCP server
-- Remove any tool registration code
-
-**Test**: Verify agent works with MCP tools only
-
-### Phase 2: Consolidate Components (Week 2)
-
-**Goal**: Move analyze components to services, remove duplication
-
-#### Step 2.1: Check what's already in services
+#### 2.2 Remove Deprecated Pipeline
 ```bash
-# Compare functionality
-diff -u src/thoth/analyze/llm_processor.py src/thoth/services/processing_service.py
-diff -u src/thoth/analyze/tag_consolidator.py src/thoth/services/tag_service.py
-```
-
-#### Step 2.2: Move unique logic to services
-- If `analyze/` has logic not in services, move it
-- If services already have the logic, just update imports
-
-#### Step 2.3: Delete analyze module
-```bash
-git rm -rf src/thoth/analyze/
-```
-
-#### Step 2.4: Update all imports
-```bash
-# Find all imports from analyze
-grep -r "from thoth.analyze" --include="*.py" src/
-# Update to import from services
-```
-
-### Phase 3: Simplify Configuration (Week 3)
-
-**Goal**: Reduce configuration complexity
-
-#### Step 3.1: Create unified config
-**File**: `src/thoth/config.py`
-```python
-from pydantic_settings import BaseSettings
-from pathlib import Path
-
-class ThothConfig(BaseSettings):
-    # API Keys
-    openrouter_key: str | None = None
-    mistral_key: str | None = None
-    anthropic_key: str | None = None
-    
-    # Paths
-    workspace_dir: Path = Path(".")
-    pdf_dir: Path = Path("data/pdf")
-    notes_dir: Path = Path("data/notes")
-    
-    # Service Configuration
-    ocr_model: str = "mistral-large-latest"
-    llm_model: str = "anthropic/claude-3.5-sonnet"
-    
-    # MCP Configuration
-    mcp_host: str = "localhost"
-    mcp_port: int = 8000
-    
-    class Config:
-        env_file = ".env"
-```
-
-#### Step 3.2: Update ServiceManager
-**Edit**: `src/thoth/services/service_manager.py`
-- Use new simplified config
-- Remove complex config initialization
-
-#### Step 3.3: Delete old configs
-```bash
-git rm src/thoth/config/simplified.py
-git rm src/thoth/utilities/config.py
-```
-
-### Phase 4: Break Up Large Files (Week 4)
-
-**Goal**: Improve maintainability
-
-#### Step 4.1: Refactor api_server.py
-```
-src/thoth/server/
-├── app.py (FastAPI app initialization, <200 lines)
-├── routers/
-│   ├── chat.py (chat endpoints)
-│   ├── health.py (health checks)
-│   ├── discovery.py (discovery endpoints)
-│   └── websocket.py (WebSocket handling)
-└── middleware.py (CORS, auth, etc.)
-```
-
-#### Step 4.2: Refactor api_sources.py
-```
-src/thoth/discovery/sources/
-├── base.py (BaseAPISource class)
-├── arxiv.py (ArxivSource)
-├── pubmed.py (PubMedSource)
-├── crossref.py (CrossRefSource)
-└── utils.py (shared utilities)
-```
-
-#### Step 4.3: Convert CitationGraph to service
-- Move core logic to `services/graph_service.py`
-- Keep graph operations but remove file I/O responsibilities
-
-### Phase 5: Clean Up (Week 5)
-
-**Goal**: Final polish
-
-#### Step 5.1: Remove deprecated code
-```bash
-# Remove deprecated pipeline
 git rm src/thoth/pipeline.py
+# Update imports in __init__.py
 ```
 
-#### Step 5.2: Simplify entry points
-**Edit**: `src/thoth/__main__.py`
-```python
-import sys
-from thoth.cli.main import main
-
-if __name__ == '__main__':
-    sys.exit(main())
+#### 2.3 Remove Redirect Files
+```bash
+git rm src/thoth/main.py
+# Update __main__.py to call cli.main.main() directly
 ```
 
-**Delete**: `src/thoth/main.py`
+### Phase 3: Consolidate Existing Code (2-3 days)
 
-#### Step 5.3: Update documentation
-- Document that MCP is the standard interface
-- Update architecture diagrams
-- Add setup instructions
+#### 3.1 Merge Pipeline Classes
+Since `OptimizedDocumentPipeline` is better, make it the only pipeline:
+```bash
+mv src/thoth/pipelines/optimized_document_pipeline.py src/thoth/pipelines/pipeline.py
+git rm src/thoth/pipelines/document_pipeline.py
+# Update imports
+```
+
+#### 3.2 Simplify Configuration
+The infrastructure exists (`get_config()`), just needs internal cleanup:
+- Keep `get_config()` as entry point
+- Merge 20+ config classes into 3-5
+- Remove migration code in `config/simplified.py`
+
+### Phase 4: Code Organization (2-3 days)
+
+#### 4.1 File Size Reduction
+Break up only the truly problematic files:
+- `api_server.py` (2385 lines) → multiple router files
+- `config.py` (1195 lines) → simplified classes
+- `api_sources.py` (1261 lines) → one file per source
+
+#### 4.2 Update Documentation
+- Remove references to deprecated code
+- Document that MCP is the standard
+- Update setup instructions
 
 ## What We're NOT Doing
 
-1. **NOT creating MCP adapters** - They already exist as MCP tools
-2. **NOT rewriting MCP tools** - They already properly call services
-3. **NOT creating new abstractions** - Use what exists
+1. **NOT rewriting working code** - Services/MCP tools work great
+2. **NOT creating new abstractions** - They already exist
+3. **NOT moving analyze components** - Services already use them properly
+4. **NOT creating adapters** - MCP tools are already adapters
 
 ## Expected Outcomes
 
-### Before
-- **Lines of Code**: ~30,000
-- **Duplicate Implementations**: Agent tools duplicate services
-- **Config Classes**: 20+
-- **Large Files**: Multiple >1000 lines
+### Metrics
+- **Code Reduction**: ~10,000 lines (33%)
+- **Files Deleted**: ~15 files
+- **Performance**: 50-65% faster (optimized pipeline by default)
+- **Complexity**: 3 layers instead of 5
 
-### After  
-- **Lines of Code**: ~22,000 (27% reduction)
-- **Duplicate Implementations**: 0 (MCP tools call services)
-- **Config Classes**: 1 main + few nested
-- **Large Files**: None >500 lines
+### Timeline
+- **Total Time**: 1 week maximum
+- **Most Work**: Deleting files and updating imports
+- **Risk**: Very low - removing unused code paths
 
-## Success Metrics
+## Conclusion
 
-1. Agent works exclusively through MCP
-2. No duplicate tool implementations
-3. Single configuration system
-4. All tests pass
-5. Clear documentation
+This isn't a refactoring - it's a **cleanup**. The architecture is already excellent:
+- Services provide clean abstractions
+- MCP tools properly wrap services  
+- Optimized implementations already exist
+- Agent already supports MCP
 
-This simplified plan leverages existing MCP integration instead of recreating it, making the refactoring much more straightforward.
+We just need to:
+1. Enable the good code paths by default
+2. Delete the legacy code
+3. Clean up configuration
+4. Update documentation
+
+The codebase will then be a clean, production-ready showcase of modern AI engineering practices.
