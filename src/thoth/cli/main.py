@@ -65,6 +65,7 @@ def main():
     args = parser.parse_args()
 
     # Create a single pipeline instance to be used by all commands
+    # ThothPipeline will internally use OptimizedDocumentPipeline after our changes
     pipeline = ThothPipeline()
 
     if hasattr(args, 'func'):
