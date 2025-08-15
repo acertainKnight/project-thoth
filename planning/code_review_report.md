@@ -18,285 +18,196 @@
    - Good abstraction over external APIs
    - ServiceManager provides centralized access
 
-3. **Knowledge Management**
-   - CitationGraph tracks relationships
-   - Letta integration for agent memory
-   - Vector store for RAG queries
-   - Markdown note generation
+3. **MCP Implementation** (`/src/thoth/mcp/`)
+   - **MCP tools already call services** (not duplicates!)
+   - Each tool inherits from `MCPTool` with `service_manager`
+   - Tools are thin wrappers: `self.service_manager.discovery.list_sources()`
+   - Proper MCP protocol implementation
+
+4. **Agent MCP Integration**
+   - Agent already supports MCP via `use_mcp_tools` flag
+   - Uses `langchain_mcp_adapters` for MCP client
+   - Falls back to legacy tools if MCP fails
 
 ### Current Architecture Problems
 
 ```mermaid
 graph TB
-    subgraph "Problem 1: Triple Implementation"
-        S1[services/discovery_service.py<br/>500 lines]
-        M1[mcp/tools/discovery_tools.py<br/>800 lines]
-        A1[agent_v2/tools/discovery_tools.py<br/>600 lines]
-        S1 -.duplicate logic.-> M1
-        S1 -.duplicate logic.-> A1
+    subgraph "Problem 1: Duplicate Tool Implementations"
+        MCP[mcp/tools/<br/>Already calls services ✅]
+        Agent[agent_v2/tools/<br/>10 files, ~8000 lines<br/>DUPLICATES services ❌]
     end
 
-    subgraph "Problem 2: Multiple Entry Points"
-        E1[__main__.py] --> E2[main.py] --> E3[cli/main.py]
-        E4[api_server.py<br/>2385 lines!]
-        E5[agent_v2/server.py]
+    subgraph "Problem 2: Configuration Complexity"
+        C1[config.py<br/>1195 lines<br/>20+ classes]
+        C2[simplified.py<br/>Migration code]
     end
 
-    subgraph "Problem 3: Scattered Components"
-        AC1[analyze/citations/]
-        AC2[analyze/llm_processor.py]
-        AC3[analyze/tag_consolidator.py]
-        SV1[services/citation_service.py]
-        SV2[services/processing_service.py]
-        SV3[services/tag_service.py]
-        AC1 --> SV1
-        AC2 --> SV2
-        AC3 --> SV3
+    subgraph "Problem 3: Large Files"
+        F1[api_server.py<br/>2385 lines]
+        F2[api_sources.py<br/>1261 lines]
+        F3[graph.py<br/>1135 lines]
     end
 
-    style M1 fill:#ffcccc
-    style A1 fill:#ffcccc
-    style E2 fill:#ffcccc
-    style E5 fill:#ffcccc
-```
-
-### File Structure Overview
-
-```
-src/thoth/
-├── __main__.py (15 lines) - Calls main.py
-├── main.py (15 lines) - Calls cli/main.py
-├── pipeline.py (306 lines) - DEPRECATED, but still imported
-├── analyze/
-│   ├── citations/ (6 files, ~3000 lines total)
-│   ├── llm_processor.py (490 lines)
-│   └── tag_consolidator.py (537 lines)
-├── cli/ (10 command modules)
-├── config/
-│   └── simplified.py (207 lines) - Migration code
-├── discovery/
-│   ├── api_sources.py (1261 lines) - Multiple API clients
-│   └── [other discovery files]
-├── ingestion/
-│   └── agent_v2/
-│       ├── server.py - Duplicate FastAPI server
-│       └── tools/ (10 files, ~8000 lines) - Duplicate implementations
-├── mcp/
-│   ├── server.py
-│   └── tools/ (13 files, ~10000 lines) - Duplicate implementations
-├── services/ - GOOD! Keep these
-│   ├── service_manager.py
-│   └── [all service implementations]
-├── server/
-│   └── api_server.py (2385 lines) - Monolithic
-└── utilities/
-    └── config.py (1195 lines) - 20+ config classes
-```
-
-## Target Architecture
-
-```mermaid
-graph TB
-    subgraph "Clean Architecture"
-        subgraph "Interfaces"
-            CLI[CLI]
-            API[REST API]
-            MCP[MCP Server]
-            Agent[Agent<br/>MCP Client]
-        end
-
-        subgraph "Core Services"
-            SM[ServiceManager]
-            FS[FileService]
-            KS[KnowledgeService]
-            DS[DiscoveryService]
-            MS[MemoryService]
-        end
-
-        subgraph "MCP Layer"
-            MA[MCP Adapters<br/>500 lines total]
-        end
-
-        subgraph "Storage"
-            DB[(Unified Storage)]
-        end
-
-        CLI --> SM
-        API --> SM
-        MCP --> MA --> SM
-        Agent -.MCP Protocol.-> MCP
-        SM --> FS & KS & DS & MS
-        KS & MS --> DB
+    subgraph "Problem 4: Scattered Components"
+        AC[analyze/<br/>Components that should<br/>be in services]
+        SV[services/<br/>Some wrap analyze]
     end
 
-    style MA fill:#90EE90
-    style SM fill:#90EE90
+    style Agent fill:#ffcccc
+    style C1 fill:#ffcccc
+    style F1 fill:#ffcccc
 ```
 
-## Phase-by-Phase Implementation Plan
+## Simplified Refactoring Plan
 
-### Phase 1: Create MCP Adapter Layer (Week 1)
+Since MCP tools already properly call services, we need much less work:
 
-**Goal**: Create thin MCP adapters without breaking existing code
+### Phase 1: Enable MCP for Agent (Week 1)
 
-#### Step 1.1: Create adapter structure
-```bash
-mkdir -p src/thoth/adapters/mcp
-touch src/thoth/adapters/__init__.py
-touch src/thoth/adapters/mcp/__init__.py
-touch src/thoth/adapters/mcp/base.py
-touch src/thoth/adapters/mcp/discovery.py
-touch src/thoth/adapters/mcp/processing.py
-touch src/thoth/adapters/mcp/knowledge.py
-```
+**Goal**: Make agent use MCP exclusively, remove duplicate tools
 
-#### Step 1.2: Implement base adapter
-**File**: `src/thoth/adapters/mcp/base.py`
-```python
-from typing import Any, Dict, List
-from thoth.services.service_manager import ServiceManager
-
-class MCPAdapter:
-    """Base adapter for exposing services via MCP protocol"""
-    
-    def __init__(self, service_manager: ServiceManager):
-        self.services = service_manager
-    
-    def get_tools(self) -> List[Dict[str, Any]]:
-        """Return MCP tool definitions"""
-        raise NotImplementedError
-```
-
-#### Step 1.3: Implement service adapters
-**File**: `src/thoth/adapters/mcp/discovery.py`
-```python
-class DiscoveryMCPAdapter(MCPAdapter):
-    def get_tools(self):
-        return [{
-            "name": "create_discovery_job",
-            "handler": lambda args: self.services.discovery.create_job(**args),
-            # ... other tool definitions
-        }]
-```
-
-#### Step 1.4: Update MCP server to use adapters
-**Edit**: `src/thoth/mcp/server.py`
-```python
-# Add imports
-from thoth.adapters.mcp import get_all_adapters
-
-# Replace tool registration
-def register_tools(self):
-    # OLD: self.tools.extend(all_mcp_tools)
-    # NEW:
-    adapters = get_all_adapters(self.service_manager)
-    for adapter in adapters:
-        self.tools.extend(adapter.get_tools())
-```
-
-**Test**: Verify MCP tools still work through adapters
-
-### Phase 2: Convert Agent to MCP Client (Week 2)
-
-**Goal**: Make agent use MCP instead of its own tools
-
-#### Step 2.1: Create MCP client wrapper
-**File**: `src/thoth/ingestion/agent_v2/mcp_client.py`
-```python
-from typing import Any, Dict, List
-import httpx
-
-class AgentMCPClient:
-    def __init__(self, mcp_url: str = "http://localhost:8000/mcp"):
-        self.mcp_url = mcp_url
-        self.client = httpx.AsyncClient()
-    
-    async def list_tools(self) -> List[Dict[str, Any]]:
-        response = await self.client.get(f"{self.mcp_url}/tools")
-        return response.json()
-    
-    async def call_tool(self, tool_name: str, args: Dict[str, Any]):
-        response = await self.client.post(
-            f"{self.mcp_url}/tools/{tool_name}",
-            json=args
-        )
-        return response.json()
-```
-
-#### Step 2.2: Update agent to use MCP client
+#### Step 1.1: Update agent configuration
 **Edit**: `src/thoth/ingestion/agent_v2/core/agent.py`
 ```python
-# Replace tool imports
-# OLD: from ..tools import *
-# NEW:
-from ..mcp_client import AgentMCPClient
-
-class Agent:
-    def __init__(self):
-        # OLD: self.tools = [AnalysisTool(), DiscoveryTool(), ...]
-        # NEW:
-        self.mcp_client = AgentMCPClient()
-        self.tools = None  # Loaded dynamically
-    
-    async def initialize(self):
-        self.tools = await self.mcp_client.list_tools()
+# Change default to always use MCP
+def __init__(self, use_mcp_tools: bool = True):  # Was False by default
 ```
 
-#### Step 2.3: Update agent server
-**Edit**: `src/thoth/ingestion/agent_v2/server.py`
-- Remove duplicate FastAPI app
-- Make it a simple agent runner that connects to main API
-
-**Test**: Verify agent can use all tools via MCP
-
-### Phase 3: Remove Duplicate Implementations (Week 3)
-
-**Goal**: Delete duplicate code, consolidate components
-
-#### Step 3.1: Remove MCP tool implementations
-```bash
-# Keep only the adapter-related files
-rm -rf src/thoth/mcp/tools/*.py
-# Keep base_tools.py if needed for protocol
-git rm src/thoth/mcp/tools/discovery_tools.py
-git rm src/thoth/mcp/tools/processing_tools.py
-# ... remove all 13 tool files
+#### Step 1.2: Remove fallback to legacy tools
+**Edit**: `src/thoth/ingestion/agent_v2/core/agent.py`
+```python
+# Remove lines 134-139 that fall back to legacy tools
+# Keep only MCP initialization
 ```
 
-#### Step 3.2: Remove agent tool implementations
+#### Step 1.3: Delete agent tools directory
 ```bash
-rm -rf src/thoth/ingestion/agent_v2/tools/
+# These are the duplicate implementations
 git rm -rf src/thoth/ingestion/agent_v2/tools/
 ```
 
-#### Step 3.3: Consolidate analyze components into services
-**Move logic from**:
-- `analyze/llm_processor.py` → `services/processing_service.py`
-- `analyze/tag_consolidator.py` → `services/tag_service.py`
-- `analyze/citations/*` → `services/citation_service.py`
+#### Step 1.4: Update agent server
+**Edit**: `src/thoth/ingestion/agent_v2/server.py`
+- Ensure it uses main MCP server
+- Remove any tool registration code
 
-**Delete analyze module**:
+**Test**: Verify agent works with MCP tools only
+
+### Phase 2: Consolidate Components (Week 2)
+
+**Goal**: Move analyze components to services, remove duplication
+
+#### Step 2.1: Check what's already in services
+```bash
+# Compare functionality
+diff -u src/thoth/analyze/llm_processor.py src/thoth/services/processing_service.py
+diff -u src/thoth/analyze/tag_consolidator.py src/thoth/services/tag_service.py
+```
+
+#### Step 2.2: Move unique logic to services
+- If `analyze/` has logic not in services, move it
+- If services already have the logic, just update imports
+
+#### Step 2.3: Delete analyze module
 ```bash
 git rm -rf src/thoth/analyze/
 ```
 
-#### Step 3.4: Update imports across codebase
+#### Step 2.4: Update all imports
 ```bash
-# Find and replace all imports
+# Find all imports from analyze
 grep -r "from thoth.analyze" --include="*.py" src/
-# Update each file to import from services instead
+# Update to import from services
 ```
 
-**Test**: Run full test suite, fix any broken imports
+### Phase 3: Simplify Configuration (Week 3)
 
-### Phase 4: Simplify Entry Points (Week 4)
+**Goal**: Reduce configuration complexity
 
-**Goal**: Clean up entry points and pipeline classes
+#### Step 3.1: Create unified config
+**File**: `src/thoth/config.py`
+```python
+from pydantic_settings import BaseSettings
+from pathlib import Path
 
-#### Step 4.1: Consolidate entry points
+class ThothConfig(BaseSettings):
+    # API Keys
+    openrouter_key: str | None = None
+    mistral_key: str | None = None
+    anthropic_key: str | None = None
+    
+    # Paths
+    workspace_dir: Path = Path(".")
+    pdf_dir: Path = Path("data/pdf")
+    notes_dir: Path = Path("data/notes")
+    
+    # Service Configuration
+    ocr_model: str = "mistral-large-latest"
+    llm_model: str = "anthropic/claude-3.5-sonnet"
+    
+    # MCP Configuration
+    mcp_host: str = "localhost"
+    mcp_port: int = 8000
+    
+    class Config:
+        env_file = ".env"
+```
+
+#### Step 3.2: Update ServiceManager
+**Edit**: `src/thoth/services/service_manager.py`
+- Use new simplified config
+- Remove complex config initialization
+
+#### Step 3.3: Delete old configs
+```bash
+git rm src/thoth/config/simplified.py
+git rm src/thoth/utilities/config.py
+```
+
+### Phase 4: Break Up Large Files (Week 4)
+
+**Goal**: Improve maintainability
+
+#### Step 4.1: Refactor api_server.py
+```
+src/thoth/server/
+├── app.py (FastAPI app initialization, <200 lines)
+├── routers/
+│   ├── chat.py (chat endpoints)
+│   ├── health.py (health checks)
+│   ├── discovery.py (discovery endpoints)
+│   └── websocket.py (WebSocket handling)
+└── middleware.py (CORS, auth, etc.)
+```
+
+#### Step 4.2: Refactor api_sources.py
+```
+src/thoth/discovery/sources/
+├── base.py (BaseAPISource class)
+├── arxiv.py (ArxivSource)
+├── pubmed.py (PubMedSource)
+├── crossref.py (CrossRefSource)
+└── utils.py (shared utilities)
+```
+
+#### Step 4.3: Convert CitationGraph to service
+- Move core logic to `services/graph_service.py`
+- Keep graph operations but remove file I/O responsibilities
+
+### Phase 5: Clean Up (Week 5)
+
+**Goal**: Final polish
+
+#### Step 5.1: Remove deprecated code
+```bash
+# Remove deprecated pipeline
+git rm src/thoth/pipeline.py
+```
+
+#### Step 5.2: Simplify entry points
 **Edit**: `src/thoth/__main__.py`
 ```python
-#!/usr/bin/env python3
 import sys
 from thoth.cli.main import main
 
@@ -305,157 +216,38 @@ if __name__ == '__main__':
 ```
 
 **Delete**: `src/thoth/main.py`
-```bash
-git rm src/thoth/main.py
-```
 
-#### Step 4.2: Consolidate pipeline classes
-**Create**: `src/thoth/pipelines/unified_pipeline.py`
-- Merge logic from ThothPipeline, DocumentPipeline, OptimizedDocumentPipeline
-- Make optimizations configuration-based
+#### Step 5.3: Update documentation
+- Document that MCP is the standard interface
+- Update architecture diagrams
+- Add setup instructions
 
-**Update**: `src/thoth/__init__.py`
-```python
-# OLD: from thoth.pipeline import ThothPipeline
-# NEW: from thoth.pipelines.unified_pipeline import Pipeline
-```
+## What We're NOT Doing
 
-#### Step 4.3: Update CLI to use new pipeline
-**Edit**: `src/thoth/cli/main.py`
-```python
-# OLD: pipeline = ThothPipeline()
-# NEW: pipeline = Pipeline()
-```
+1. **NOT creating MCP adapters** - They already exist as MCP tools
+2. **NOT rewriting MCP tools** - They already properly call services
+3. **NOT creating new abstractions** - Use what exists
 
-**Test**: Verify all CLI commands work
+## Expected Outcomes
 
-### Phase 5: Refactor Large Files (Week 5)
+### Before
+- **Lines of Code**: ~30,000
+- **Duplicate Implementations**: Agent tools duplicate services
+- **Config Classes**: 20+
+- **Large Files**: Multiple >1000 lines
 
-**Goal**: Break up monolithic files
-
-#### Step 5.1: Break up api_server.py
-**Create structure**:
-```
-src/thoth/server/
-├── __init__.py
-├── app.py (main FastAPI app, <200 lines)
-├── routers/
-│   ├── __init__.py
-│   ├── chat.py
-│   ├── discovery.py
-│   ├── health.py
-│   └── websocket.py
-├── middleware.py
-└── dependencies.py
-```
-
-#### Step 5.2: Simplify configuration
-**Create**: `src/thoth/config.py`
-```python
-from pydantic_settings import BaseSettings
-
-class ThothConfig(BaseSettings):
-    # Core settings
-    workspace_dir: Path = Path(".")
-    
-    # API Keys
-    openrouter_key: str | None = None
-    mistral_key: str | None = None
-    
-    # Service settings
-    class ServiceConfig(BaseSettings):
-        ocr_model: str = "mistral-large-latest"
-        llm_model: str = "anthropic/claude-3.5-sonnet"
-    
-    services: ServiceConfig = ServiceConfig()
-```
-
-**Delete old config**:
-```bash
-git rm src/thoth/config/simplified.py
-git rm src/thoth/utilities/config.py
-```
-
-#### Step 5.3: Convert CitationGraph to service
-**Create**: `src/thoth/services/graph_service.py`
-- Move core logic from knowledge/graph.py
-- Make it follow service pattern
-
-**Test**: Full integration test
-
-### Phase 6: Polish and Documentation (Week 6)
-
-**Goal**: Final cleanup and documentation
-
-#### Step 6.1: Add comprehensive tests
-```bash
-# Create test structure
-tests/
-├── unit/
-│   ├── test_services/
-│   ├── test_adapters/
-│   └── test_pipelines/
-├── integration/
-│   ├── test_mcp_flow.py
-│   ├── test_agent_flow.py
-│   └── test_discovery_flow.py
-└── e2e/
-    └── test_full_pipeline.py
-```
-
-#### Step 6.2: Update documentation
-**Create**: `docs/architecture.md`
-- Explain service layer
-- Document MCP protocol usage
-- Show data flow diagrams
-
-**Update**: `README.md`
-- Clear setup instructions
-- Architecture overview
-- Example usage
-
-#### Step 6.3: Add deployment configurations
-**Create**: `deployment/`
-```
-deployment/
-├── docker/
-│   ├── Dockerfile
-│   └── docker-compose.yml
-├── kubernetes/
-│   └── thoth-deployment.yaml
-└── scripts/
-    ├── setup.sh
-    └── start.sh
-```
+### After  
+- **Lines of Code**: ~22,000 (27% reduction)
+- **Duplicate Implementations**: 0 (MCP tools call services)
+- **Config Classes**: 1 main + few nested
+- **Large Files**: None >500 lines
 
 ## Success Metrics
 
-### Before Refactoring
-- **Lines of Code**: ~30,000
-- **Duplicate Implementations**: 3x for each feature
-- **Test Coverage**: Unknown
-- **Setup Time**: Complex, many steps
-- **File Sizes**: Multiple files >1000 lines
+1. Agent works exclusively through MCP
+2. No duplicate tool implementations
+3. Single configuration system
+4. All tests pass
+5. Clear documentation
 
-### After Refactoring
-- **Lines of Code**: ~15,000 (50% reduction)
-- **Duplicate Implementations**: 0 (single source of truth)
-- **Test Coverage**: >80%
-- **Setup Time**: `./setup.sh && thoth start`
-- **File Sizes**: No file >500 lines
-
-## Risk Mitigation
-
-1. **Keep old code during transition**
-   - Use feature flags to switch between old/new
-   - Delete only after thorough testing
-
-2. **Test at each phase**
-   - Integration tests before moving to next phase
-   - Keep CI/CD green throughout
-
-3. **Document changes**
-   - Update docs as you go
-   - Keep changelog of what moved where
-
-This plan transforms the codebase from a working but complex system into a clean, production-ready showcase of engineering excellence.
+This simplified plan leverages existing MCP integration instead of recreating it, making the refactoring much more straightforward.
