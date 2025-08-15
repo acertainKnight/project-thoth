@@ -554,106 +554,318 @@ The codebase has good functionality but needs significant refactoring to reduce 
 - Letta for memory management
 - Could these be simplified or removed?
 
-## Updated Recommendations
+## Critical Requirements to Preserve
 
-### Immediate Actions (Week 1)
+Based on the system requirements, the following functionality MUST be maintained during refactoring:
 
-1. **Stop the Bleeding**:
-   - Freeze new tool implementations
-   - Document which implementation is canonical
-   - Add deprecation warnings to duplicate code
+### 1. File Watch Pipeline
+- **Current**: PDF monitor watches folders and triggers processing
+- **Preserve**: Full pipeline functionality (OCR → Analysis → Citations → Tagging → Knowledge Base → Indexing)
+- **Refactor**: Consolidate PDFMonitor and PDFTracker into a single service
 
-2. **Create Migration Plan**:
-   - Map all duplications
-   - Identify canonical implementations
-   - Plan removal order to avoid breaking changes
+### 2. Discovery System
+- **Current**: Multiple discovery sources (APIs, web scraping, Chrome extension)
+- **Preserve**: All discovery capabilities and scheduling
+- **Refactor**: Keep discovery service but simplify API client implementations
 
-### High Priority Refactoring
+### 3. Tool Availability
+- **Current**: Triple implementation (Services, MCP tools, Agent tools)
+- **Preserve**: Both MCP and Agent interfaces
+- **Refactor**: Services as single source of truth with thin adapters:
+  ```python
+  # Service (canonical implementation)
+  class DiscoveryService:
+      def create_job(self, ...): ...
+  
+  # MCP Adapter (thin wrapper)
+  class DiscoveryMCPTool:
+      def __init__(self, service: DiscoveryService):
+          self.service = service
+      def execute(self, ...):
+          return self.service.create_job(...)
+  
+  # Agent Adapter (thin wrapper)  
+  class DiscoveryAgentTool:
+      def __init__(self, service: DiscoveryService):
+          self.service = service
+      def _run(self, ...):
+          return self.service.create_job(...)
+  ```
 
-1. **Tool System Consolidation**:
-   - Keep ONLY the service layer as the canonical implementation
-   - Create thin MCP/Agent adapters that call services
-   - Remove all duplicate tool implementations
-   - Expected reduction: ~10,000+ lines of code
+### 4. Memory Management
+- **Current**: Letta integration + Knowledge base
+- **Preserve**: Both systems for agent memory and context
+- **Refactor**: Keep as-is but improve interfaces
 
-2. **Configuration Overhaul**:
-   - Reduce to 3-5 configuration classes max
-   - Use composition over inheritance
-   - Single source of truth for each setting
-   - Expected reduction: ~800 lines
+### 5. Knowledge Base Search
+- **Current**: RAG system with embeddings and vector search
+- **Preserve**: Full search and contextualization capabilities
+- **Refactor**: Consolidate RAGManager to use services consistently
 
-3. **File Size Reduction**:
-   - Break api_server.py into multiple modules
-   - Split large files into logical components
-   - No file should exceed 500 lines
-   - Expected improvement: Better maintainability
+### 6. Deployment Flexibility
+- **Current**: Can run on single machine or distributed
+- **Preserve**: Both deployment modes
+- **Refactor**: Simplify configuration and startup scripts
 
-4. **Remove Manager Anti-Pattern**:
-   - Flatten architecture where possible
-   - Services should be self-contained
-   - Remove unnecessary coordination layers
-   - Expected reduction: 3-4 abstraction layers
+## Revised Refactoring Strategy
 
-### Architecture Simplification
+### Phase 1: Consolidate Without Breaking (Weeks 1-2)
+1. **Create Adapter Pattern**:
+   - Keep all existing interfaces working
+   - Route MCP/Agent tools through services
+   - Mark old implementations as deprecated
+   
+2. **Unify File Processing**:
+   - Create single FileProcessingService
+   - Consolidate PDFMonitor, PDFTracker, and pipeline logic
+   - Maintain watch folder functionality
 
-1. **Core Flow**:
+### Phase 2: Simplify Architecture (Weeks 3-4)
+1. **Service Layer as Truth**:
    ```
-   CLI -> Services -> Core Logic
-   ```
-   Instead of current:
-   ```
-   CLI -> Pipeline -> Services -> Managers -> Components -> Core Logic
+   Services/
+   ├── FileProcessingService (OCR, analysis, citations, tagging)
+   ├── DiscoveryService (all discovery sources)
+   ├── KnowledgeService (graph + search)
+   ├── MemoryService (Letta wrapper)
+   └── AgentService (coordinates other services)
    ```
 
-2. **Tool Adapters**:
+2. **Thin Adapters**:
+   ```
+   Adapters/
+   ├── mcp/
+   │   └── (Thin wrappers calling services)
+   └── agent/
+       └── (Thin wrappers calling services)
+   ```
+
+### Phase 3: Configuration & Deployment (Weeks 5-6)
+1. **Unified Configuration**:
    ```python
-   # Instead of reimplementing, adapt:
-   class MCPToolAdapter:
-       def __init__(self, service):
-           self.service = service
-       
-       def execute(self, *args):
-           return self.service.method(*args)
+   class ThothConfig:
+       core: CoreSettings
+       services: ServiceSettings
+       deployment: DeploymentSettings
    ```
 
-3. **Single Entry Point**:
-   - One API server
-   - One CLI entry
-   - One configuration system
-   - One error handling pattern
+2. **Simple Startup**:
+   ```bash
+   # Single machine
+   thoth start --local
+   
+   # Distributed
+   thoth start --distributed --config=servers.yaml
+   ```
 
-### Code Quality Improvements
+## Updated High Priority Recommendations
 
-1. **Consistent Patterns**:
-   - All async or all sync with async wrappers
-   - One error handling pattern
-   - One logging approach
-   - One configuration loading method
+### 1. Adapter Pattern Implementation
+Instead of removing duplicate tools, create a proper adapter pattern:
 
-2. **Dependency Reduction**:
-   - Evaluate if LangGraph complexity is needed
-   - Consider removing Letta if not essential
-   - Reduce external dependencies where possible
+```python
+# services/base_adapter.py
+class ServiceAdapter:
+    """Base adapter for exposing services to different interfaces"""
+    def __init__(self, service_manager: ServiceManager):
+        self.services = service_manager
 
-3. **Testing Strategy**:
-   - Add tests before refactoring
-   - Use tests to ensure functionality preserved
-   - Aim for 80%+ coverage on core modules
+# mcp/adapters.py
+class MCPServiceAdapter(ServiceAdapter):
+    """Adapts services for MCP protocol"""
+    def get_tools(self):
+        return [
+            self._wrap_for_mcp(self.services.discovery),
+            self._wrap_for_mcp(self.services.processing),
+            # ... etc
+        ]
 
-## Final Assessment
+# agent/adapters.py  
+class AgentServiceAdapter(ServiceAdapter):
+    """Adapts services for agent tools"""
+    def get_tools(self):
+        return [
+            self._wrap_for_agent(self.services.discovery),
+            self._wrap_for_agent(self.services.processing),
+            # ... etc
+        ]
+```
 
-The codebase shows classic signs of organic growth without architectural governance:
+### 2. Maintain Critical Paths
+Ensure these workflows remain intact:
+1. **Watch → Process**: `FileWatcher → FileProcessingService → KnowledgeService`
+2. **Discover → Process**: `DiscoveryService → FileProcessingService → KnowledgeService`
+3. **Query → Context**: `User/Agent → KnowledgeService → RAG → Response`
+4. **Memory**: `Agent → MemoryService (Letta) → Persistence`
 
-1. **Feature Addition Pattern**: Each new feature (MCP, Agent v2) reimplemented existing functionality instead of reusing it
-2. **Abstraction Addiction**: Too many layers that don't add value
-3. **Configuration Sprawl**: Settings scattered across 20+ classes
-4. **File Bloat**: Many files too large to easily understand
+### 3. Progressive Migration
+1. **Week 1**: Create adapters, test all paths work
+2. **Week 2**: Move logic from duplicates to services
+3. **Week 3**: Simplify configuration
+4. **Week 4**: Improve deployment scripts
+5. **Weeks 5-8**: Clean up, document, test
 
-To make this production-ready for open-sourcing:
+## Architecture After Refactoring
 
-1. **Reduce by 40-50%**: Remove duplicate implementations
-2. **Simplify by 60%**: Flatten architecture, remove unnecessary abstractions  
-3. **Standardize**: One way to do each thing
-4. **Document**: Clear architectural decisions and patterns
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   CLI/Watch     │     │   MCP Server    │     │     Agent       │
+└────────┬────────┘     └────────┬────────┘     └────────┬────────┘
+         │                       │                         │
+         │              ┌────────┴────────┐                │
+         │              │  MCP Adapters   │                │
+         │              └────────┬────────┘                │
+         │                       │               ┌─────────┴────────┐
+         │                       │               │  Agent Adapters  │
+         │                       │               └─────────┬────────┘
+         │                       │                         │
+         └───────────────────────┴─────────────────────────┘
+                                 │
+                     ┌───────────┴───────────┐
+                     │   Service Layer       │
+                     │  (Single Source of    │
+                     │      Truth)           │
+                     └───────────┬───────────┘
+                                 │
+         ┌───────────────────────┼───────────────────────┐
+         │                       │                       │
+    ┌────┴────┐          ┌──────┴──────┐       ┌───────┴───────┐
+    │Knowledge│          │   Memory    │       │  External APIs │
+    │  Base   │          │   (Letta)   │       │               │
+    └─────────┘          └─────────────┘       └───────────────┘
+```
 
-The good news is that the core functionality is solid. The refactoring is mainly removing duplication and simplifying architecture, not rewriting core logic. With focused effort following the recommended plan, this can become an exemplary codebase that effectively showcases your engineering skills.
+This approach maintains all critical functionality while achieving:
+- 50% code reduction through adapter pattern
+- Single source of truth for business logic
+- Clear separation of concerns
+- Easy testing and maintenance
+- Preserved deployment flexibility
+
+## Concrete Implementation Example
+
+Here's how the adapter pattern would work in practice for the discovery functionality:
+
+### Current State (Triple Implementation)
+```python
+# 1. services/discovery_service.py (500+ lines)
+class DiscoveryService:
+    def create_discovery_job(self, source, query, filters):
+        # Full implementation
+        ...
+
+# 2. mcp/tools/discovery_tools.py (800+ lines)
+class CreateDiscoveryJobMCPTool:
+    def execute(self, source, query, filters):
+        # Duplicate implementation
+        ...
+
+# 3. ingestion/agent_v2/tools/discovery_tools.py (600+ lines)
+class DiscoveryAgentTool:
+    def _run(self, source, query, filters):
+        # Another duplicate implementation
+        ...
+```
+
+### After Refactoring (Single Implementation + Adapters)
+```python
+# services/discovery_service.py (500+ lines - unchanged)
+class DiscoveryService:
+    def create_discovery_job(self, source, query, filters):
+        # Single source of truth
+        ...
+
+# adapters/mcp_adapter.py (50 lines)
+class DiscoveryMCPAdapter:
+    def __init__(self, discovery_service: DiscoveryService):
+        self.service = discovery_service
+    
+    def to_mcp_tool(self):
+        return {
+            "name": "create_discovery_job",
+            "description": "Create a new discovery job",
+            "input_schema": {...},
+            "handler": lambda args: self.service.create_discovery_job(**args)
+        }
+
+# adapters/agent_adapter.py (50 lines)  
+class DiscoveryAgentAdapter(BaseTool):
+    name = "create_discovery_job"
+    description = "Create a new discovery job"
+    
+    def __init__(self, discovery_service: DiscoveryService):
+        super().__init__()
+        self.service = discovery_service
+    
+    def _run(self, source, query, filters):
+        return self.service.create_discovery_job(source, query, filters)
+```
+
+### Result
+- **Before**: 1900+ lines across 3 files
+- **After**: 600 lines (500 service + 100 adapters)
+- **Reduction**: 68% less code
+- **Functionality**: 100% preserved
+
+## Implementation Checklist
+
+### Week 1: Foundation
+- [ ] Create `adapters/` directory structure
+- [ ] Implement base adapter classes
+- [ ] Create adapter for one service (proof of concept)
+- [ ] Test all three interfaces work identically
+- [ ] Document adapter pattern for team
+
+### Week 2: Migration
+- [ ] Create adapters for all services
+- [ ] Update MCP server to use adapters
+- [ ] Update Agent to use adapters
+- [ ] Deprecation warnings on old implementations
+- [ ] Integration tests for all paths
+
+### Week 3: Consolidation
+- [ ] Move shared logic to services
+- [ ] Remove duplicate implementations
+- [ ] Consolidate configuration classes
+- [ ] Update documentation
+
+### Week 4: Optimization
+- [ ] Break up large files (api_server.py, config.py)
+- [ ] Standardize error handling
+- [ ] Improve async patterns
+- [ ] Performance testing
+
+## Testing Strategy
+
+Ensure nothing breaks during refactoring:
+
+```python
+# tests/test_adapter_parity.py
+def test_all_interfaces_identical():
+    """Ensure service, MCP, and Agent produce identical results"""
+    
+    # Direct service call
+    service = DiscoveryService()
+    service_result = service.create_job("arxiv", "quantum", {})
+    
+    # Through MCP adapter
+    mcp_tool = DiscoveryMCPAdapter(service).to_mcp_tool()
+    mcp_result = mcp_tool["handler"]({"source": "arxiv", "query": "quantum", "filters": {}})
+    
+    # Through Agent adapter
+    agent_tool = DiscoveryAgentAdapter(service)
+    agent_result = agent_tool._run("arxiv", "quantum", {})
+    
+    assert service_result == mcp_result == agent_result
+```
+
+## Benefits Summary
+
+1. **Code Reduction**: ~10,000 lines removed (50%+)
+2. **Maintenance**: Single place to fix bugs/add features
+3. **Testing**: Test once, works everywhere
+4. **Flexibility**: Easy to add new interfaces (REST API, GraphQL, etc.)
+5. **Performance**: Less code = faster startup, less memory
+6. **Clarity**: Clear architecture, easy onboarding
+
+The adapter pattern preserves 100% of functionality while dramatically simplifying the codebase.
