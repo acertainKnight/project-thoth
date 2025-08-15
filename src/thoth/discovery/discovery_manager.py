@@ -15,7 +15,6 @@ from typing import Any
 from loguru import logger
 
 from thoth.discovery.sources import (
-    ArxivAPISource,
     BioRxivAPISource,
     CrossRefAPISource,
     OpenAlexAPISource,
@@ -68,12 +67,15 @@ class DiscoveryManager:
 
         # Initialize API sources
         self.api_sources = {
-            'arxiv': ArxivAPISource(),
             'pubmed': PubMedAPISource(),
             'crossref': CrossRefAPISource(),
             'openalex': OpenAlexAPISource(),
             'biorxiv': BioRxivAPISource(),
         }
+        
+        # ArXiv now uses the plugin system
+        from thoth.discovery.plugins import plugin_registry
+        self.arxiv_plugin = plugin_registry.get('arxiv')
 
         # Initialize web scraper
         self.web_scraper = WebScraper()
@@ -395,6 +397,14 @@ class DiscoveryManager:
         """
         source_type = api_config.get('source')
 
+        # Handle arxiv through plugin system
+        if source_type == 'arxiv':
+            if self.arxiv_plugin:
+                return self.arxiv_plugin.search(api_config, max_articles)
+            else:
+                logger.error('ArXiv plugin not available')
+                return []
+        
         if source_type not in self.api_sources:
             logger.error(f'Unknown API source type: {source_type}')
             return []

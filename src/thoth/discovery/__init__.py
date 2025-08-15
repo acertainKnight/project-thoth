@@ -6,7 +6,7 @@ various sources like ArXiv, PubMed, and web scrapers, with intelligent
 context-aware auto-discovery based on conversation analysis.
 """
 
-from .api_sources import ArxivAPISource, PubMedAPISource
+from .sources import PubMedAPISource
 from .auto_discovery_hook import AutoDiscoveryHook, AutoDiscoveryManager
 from .context_analyzer import (
     ChatContextAnalyzer,
@@ -20,7 +20,6 @@ from .scheduler import DiscoveryScheduler
 from .web_scraper import WebScraper
 
 __all__ = [
-    'ArxivAPISource',
     'ArxivPlugin',
     'AutoDiscoveryHook',
     'AutoDiscoveryManager',

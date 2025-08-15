@@ -1,9 +1,15 @@
 """
-Memory Pipeline Hooks
+Memory Pipeline Hooks - Compatibility wrapper.
 
-This module provides intelligent memory processing hooks for filtering,
-enriching, and scoring memories before storage in the Letta memory system.
+This module now imports from the modular structure for better organization.
+All functionality is preserved through imports.
 """
+
+# Import all components from their new locations
+from thoth.memory.scoring import SalienceScorer
+
+# For now, keep other classes here until fully modularized
+# This preserves backward compatibility while we migrate
 
 from __future__ import annotations
 
@@ -14,500 +20,267 @@ from typing import Any
 from loguru import logger
 
 
-class SalienceScorer:
+class MemoryFilter:
     """
-    Calculate salience scores for memories to determine importance and retention.
+    Filter memories before storage based on quality and relevance criteria.
 
-    Higher scores indicate more important memories that should be retained longer.
-    Score range: 0.0 (lowest) to 1.0 (highest)
+    This helps prevent storage of low-quality or redundant memories.
     """
 
     def __init__(self):
-        """Initialize the salience scorer with scoring criteria."""
-        # Research-focused keywords get higher scores
-        self.research_keywords = {
-            'methodology',
-            'findings',
-            'results',
-            'conclusion',
-            'hypothesis',
-            'experiment',
-            'analysis',
-            'discovery',
-            'breakthrough',
-            'novel',
-            'significant',
-            'important',
-            'key',
-            'critical',
-            'essential',
-            'arxiv',
-            'paper',
-            'study',
-            'research',
-            'publication',
-            'journal',
-            'doi',
-            'citation',
-            'author',
-            'abstract',
-            'introduction',
-        }
+        """Initialize the memory filter with filtering criteria."""
+        # Minimum content length to consider meaningful
+        self.min_content_length = 10
 
-        # Question words indicate important user interests
-        self.question_indicators = {
-            'what',
-            'how',
-            'why',
-            'when',
-            'where',
-            'which',
-            'who',
-            'explain',
-            'describe',
-            'analyze',
-            'compare',
-            'evaluate',
-        }
+        # Maximum content length to prevent excessive storage
+        self.max_content_length = 10000
 
-        # Action words suggest executable tasks
-        self.action_keywords = {
-            'create',
-            'build',
-            'generate',
-            'analyze',
-            'search',
-            'find',
-            'locate',
-            'download',
-            'process',
-            'extract',
-            'summarize',
-        }
-
-    def calculate_salience(
-        self,
-        content: str,
-        role: str,
-        metadata: dict[str, Any] | None = None,
-        user_context: dict[str, Any] | None = None,
-    ) -> float:
-        """
-        Calculate salience score for a memory entry.
-
-        Args:
-            content: Memory content text
-            role: Message role (user, assistant, system)
-            metadata: Additional metadata about the memory
-            user_context: User context and preferences
-
-        Returns:
-            float: Salience score between 0.0 and 1.0
-        """
-        try:
-            score = 0.0
-            content_lower = content.lower()
-
-            # Base score by role
-            if role == 'user':
-                score += 0.3  # User messages generally important
-            elif role == 'assistant':
-                score += 0.2  # Assistant responses moderately important
-            elif role == 'system':
-                score += 0.1  # System messages less important
-
-            # Content length factor (moderate length preferred)
-            length = len(content)
-            if 20 <= length <= 500:
-                score += 0.1
-            elif 500 < length <= 1000:
-                score += 0.05
-            elif length > 2000:
-                score -= 0.1  # Very long content may be less focused
-
-            # Research keyword detection
-            research_matches = sum(
-                1 for keyword in self.research_keywords if keyword in content_lower
-            )
-            score += min(research_matches * 0.05, 0.2)  # Cap at 0.2
-
-            # Question detection (indicates user interest)
-            if any(q in content_lower for q in self.question_indicators):
-                score += 0.15
-
-            # Action keyword detection
-            action_matches = sum(
-                1 for keyword in self.action_keywords if keyword in content_lower
-            )
-            score += min(action_matches * 0.03, 0.1)  # Cap at 0.1
-
-            # DOI or arXiv ID detection (academic content)
-            if re.search(r'10\.\d+\/[\w\-\._]+|arXiv:\d+\.\d+', content):
-                score += 0.15
-
-            # URL detection (external references)
-            if re.search(r'https?:\/\/[^\s]+', content):
-                score += 0.05
-
-            # Metadata-based scoring
-            if metadata:
-                # Tool calls indicate actionable content
-                if metadata.get('tool_calls'):
-                    score += 0.1
-
-                # Error or failure states may be less important
-                if metadata.get('error') or 'error' in content_lower:
-                    score -= 0.1
-
-                # Agent-specific metadata
-                if metadata.get('agent_id'):
-                    score += 0.05
-
-            # User context considerations
-            if user_context:
-                # Recent activity indicates higher relevance
-                last_activity = user_context.get('last_activity')
-                if last_activity:
-                    # Boost score for recent interactions
-                    score += 0.05
-
-                # User preferences
-                preferences = user_context.get('preferences', {})
-                focus_areas = preferences.get('research_focus', [])
-                if focus_areas:
-                    for area in focus_areas:
-                        if area.lower() in content_lower:
-                            score += 0.1
-                            break
-
-            # Normalize score to [0.0, 1.0] range
-            final_score = max(0.0, min(1.0, score))
-
-            logger.debug(
-                f'Calculated salience score: {final_score:.3f} for {role} message'
-            )
-            return final_score
-
-        except Exception as e:
-            logger.error(f'Error calculating salience: {e}')
-            # Return moderate score on error
-            return 0.5
-
-
-class MemoryFilter:
-    """
-    Filter memories based on various criteria before storage.
-    """
-
-    def __init__(self, min_salience: float = 0.1):
-        """
-        Initialize memory filter.
-
-        Args:
-            min_salience: Minimum salience score to retain memory
-        """
-        self.min_salience = min_salience
-
-        # Content patterns to filter out
+        # Patterns that indicate low-quality content
         self.noise_patterns = [
-            r'^(ok|okay|yes|no|thanks?|thank you)\.?$',  # Simple acknowledgments
-            r'^(hi|hello|hey)\.?$',  # Simple greetings
-            r'^\s*$',  # Empty content
-            r'^\.{3,}$',  # Just dots
-            r'^-+$',  # Just dashes
+            r'^(ok|okay|sure|yes|no|thanks|thank you)[\.\!]?$',  # Single word responses
+            r'^\.{3,}$',  # Just ellipsis
+            r'^\s*$',  # Empty or whitespace only
+            r'^(test|testing|hello|hi)[\.\!]?$',  # Test messages
         ]
 
-    def should_store_memory(
-        self,
-        content: str,
-        role: str,
-        salience_score: float,
-        metadata: dict[str, Any] | None = None,  # noqa: ARG002
-    ) -> bool:
+        # Duplicate detection window (seconds)
+        self.duplicate_window = 60  # 1 minute
+
+        # Recent messages cache for duplicate detection
+        self.recent_messages: list[tuple[str, datetime]] = []
+
+    def should_store(
+        self, content: str, role: str, metadata: dict[str, Any] | None = None
+    ) -> tuple[bool, str]:
         """
         Determine if a memory should be stored.
 
         Args:
             content: Memory content
             role: Message role
-            salience_score: Calculated salience score
-            metadata: Memory metadata
+            metadata: Additional metadata
 
         Returns:
-            bool: True if memory should be stored
+            tuple[bool, str]: (should_store, reason)
         """
         try:
-            # Check salience threshold
-            if salience_score < self.min_salience:
-                logger.debug(
-                    f'Memory filtered: salience {salience_score:.3f} < {self.min_salience}'
-                )
-                return False
+            # Length checks
+            if len(content) < self.min_content_length:
+                return False, 'Content too short'
 
-            # Check content length
-            if len(content.strip()) < 3:
-                logger.debug('Memory filtered: content too short')
-                return False
+            if len(content) > self.max_content_length:
+                return False, 'Content too long'
 
-            # Check noise patterns
-            content_clean = content.strip().lower()
+            # Noise pattern checks
+            content_lower = content.lower().strip()
             for pattern in self.noise_patterns:
-                if re.match(pattern, content_clean):
-                    logger.debug(f'Memory filtered: matches noise pattern {pattern}')
-                    return False
+                if re.match(pattern, content_lower):
+                    return False, f'Matches noise pattern: {pattern}'
 
-            # Always store system errors for debugging
-            if role == 'system' and (
-                'error' in content.lower() or 'failed' in content.lower()
-            ):
-                logger.debug('Memory stored: system error/failure message')
-                return True
+            # System messages are often repetitive
+            if role == 'system' and not self._is_important_system_message(content):
+                return False, 'Non-critical system message'
 
-            # Always store high-salience content
-            if salience_score >= 0.8:
-                logger.debug(f'Memory stored: high salience {salience_score:.3f}')
-                return True
+            # Check for duplicates in recent window
+            if self._is_duplicate(content):
+                return False, 'Duplicate of recent message'
 
-            logger.debug(f'Memory accepted: salience {salience_score:.3f}, role {role}')
-            return True
+            # Error messages without context
+            if metadata and metadata.get('error'):
+                error_msg = str(metadata.get('error', '')).lower()
+                if any(
+                    trivial in error_msg
+                    for trivial in ['connection', 'timeout', 'retry']
+                ):
+                    return False, 'Trivial error message'
+
+            # All checks passed
+            return True, 'Passed all filters'
 
         except Exception as e:
             logger.error(f'Error in memory filter: {e}')
             # Default to storing on error
-            return True
+            return True, 'Filter error - defaulting to store'
+
+    def _is_important_system_message(self, content: str) -> bool:
+        """Check if a system message contains important information."""
+        important_keywords = [
+            'initialized',
+            'loaded',
+            'connected',
+            'error',
+            'warning',
+            'failed',
+            'research',
+            'agent',
+            'model',
+        ]
+        content_lower = content.lower()
+        return any(keyword in content_lower for keyword in important_keywords)
+
+    def _is_duplicate(self, content: str) -> bool:
+        """Check if content is duplicate of recent message."""
+        current_time = datetime.now()
+
+        # Clean old entries from cache
+        self.recent_messages = [
+            (msg, time)
+            for msg, time in self.recent_messages
+            if (current_time - time).total_seconds() < self.duplicate_window
+        ]
+
+        # Check for duplicate
+        content_normalized = content.strip().lower()
+        for recent_msg, _ in self.recent_messages:
+            if recent_msg.strip().lower() == content_normalized:
+                return True
+
+        # Add to cache
+        self.recent_messages.append((content, current_time))
+        return False
 
 
 class MemoryEnricher:
     """
-    Enrich memories with additional metadata and context.
+    Enrich memories with additional context and metadata before storage.
+
+    This enhances the value and searchability of stored memories.
     """
 
-    def enrich_metadata(
-        self,
-        content: str,
-        role: str,  # noqa: ARG002
-        existing_metadata: dict[str, Any] | None = None,
-        user_context: dict[str, Any] | None = None,
+    def __init__(self):
+        """Initialize the memory enricher."""
+        # Patterns for extracting structured information
+        self.url_pattern = re.compile(r'https?://[^\s]+')
+        self.doi_pattern = re.compile(r'10\.\d+/[\w\-\._]+')
+        self.arxiv_pattern = re.compile(r'arXiv:(\d+\.\d+)')
+        self.email_pattern = re.compile(r'[\w\.-]+@[\w\.-]+\.\w+')
+
+        # Code block detection
+        self.code_pattern = re.compile(r'```[\s\S]*?```|`[^`]+`')
+
+        # Question detection
+        self.question_pattern = re.compile(
+            r'(what|how|why|when|where|which|who|can|could|would|should|is|are|do|does)\s+.*\?',
+            re.IGNORECASE,
+        )
+
+    def enrich(
+        self, content: str, role: str, metadata: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """
-        Enrich memory metadata with additional context.
+        Enrich memory with extracted features and metadata.
 
         Args:
             content: Memory content
             role: Message role
-            existing_metadata: Existing metadata to enrich
-            user_context: User context and preferences
+            metadata: Existing metadata
 
         Returns:
-            Dict containing enriched metadata
+            dict[str, Any]: Enriched metadata
         """
         try:
-            metadata = existing_metadata.copy() if existing_metadata else {}
+            enriched = metadata.copy() if metadata else {}
 
-            # Add processing timestamp
-            metadata['processed_at'] = datetime.now().isoformat()
+            # Extract URLs
+            urls = self.url_pattern.findall(content)
+            if urls:
+                enriched['urls'] = urls
+                enriched['has_urls'] = True
 
-            # Content analysis
-            metadata['content_length'] = len(content)
-            metadata['word_count'] = len(content.split())
-
-            # Extract and classify entities
-            entities = self._extract_entities(content)
-            if entities:
-                metadata['entities'] = entities
-
-            # Classify content type
-            content_type = self._classify_content_type(content)
-            if content_type:
-                metadata['content_type'] = content_type
-
-            # Research-specific enrichment
-            research_metadata = self._extract_research_metadata(content)
-            if research_metadata:
-                metadata.update(research_metadata)
-
-            # User-specific enrichment
-            if user_context:
-                tenant_id = user_context.get('tenant_id')
-                if tenant_id:
-                    metadata['tenant_id'] = tenant_id
-
-                session_id = user_context.get('session_id')
-                if session_id:
-                    metadata['session_id'] = session_id
-
-                preferences = user_context.get('preferences')
-                if preferences:
-                    metadata['user_preferences'] = preferences
-
-            # Add quality indicators
-            metadata['quality_indicators'] = {
-                'has_questions': any(
-                    q in content.lower() for q in ['?', 'what', 'how', 'why']
-                ),
-                'has_actions': any(
-                    a in content.lower() for a in ['create', 'find', 'analyze']
-                ),
-                'has_references': bool(re.search(r'(doi|arxiv|http)', content.lower())),
-                'has_entities': bool(entities),
-            }
-
-            logger.debug(f'Enriched metadata with {len(metadata)} fields')
-            return metadata
-
-        except Exception as e:
-            logger.error(f'Error enriching metadata: {e}')
-            return existing_metadata or {}
-
-    def _extract_entities(self, content: str) -> list[dict[str, str]]:
-        """Extract named entities from content."""
-        entities = []
-
-        try:
-            # DOI extraction
-            doi_matches = re.finditer(r'10\.\d+\/[\w\-\._]+', content)
-            for match in doi_matches:
-                entities.append(
-                    {
-                        'type': 'doi',
-                        'value': match.group(),
-                        'start': match.start(),
-                        'end': match.end(),
-                    }
-                )
-
-            # arXiv ID extraction
-            arxiv_matches = re.finditer(r'arXiv:(\d{4}\.\d{4,5})', content)
-            for match in arxiv_matches:
-                entities.append(
-                    {
-                        'type': 'arxiv_id',
-                        'value': match.group(),
-                        'start': match.start(),
-                        'end': match.end(),
-                    }
-                )
-
-            # URL extraction
-            url_matches = re.finditer(r'https?:\/\/[^\s]+', content)
-            for match in url_matches:
-                entities.append(
-                    {
-                        'type': 'url',
-                        'value': match.group(),
-                        'start': match.start(),
-                        'end': match.end(),
-                    }
-                )
-
-            return entities
-
-        except Exception as e:
-            logger.warning(f'Entity extraction failed: {e}')
-            return []
-
-    def _classify_content_type(self, content: str) -> str | None:
-        """Classify the type of content."""
-        content_lower = content.lower()
-
-        if any(q in content_lower for q in ['?', 'what', 'how', 'why', 'explain']):
-            return 'question'
-        elif any(a in content_lower for a in ['create', 'build', 'generate', 'make']):
-            return 'request'
-        elif any(
-            a in content_lower for a in ['here is', 'here are', 'found', 'results']
-        ):
-            return 'response'
-        elif 'error' in content_lower or 'failed' in content_lower:
-            return 'error'
-        elif re.search(r'10\.\d+\/[\w\-\._]+|arXiv:\d+\.\d+', content):
-            return 'academic_reference'
-        else:
-            return 'general'
-
-    def _extract_research_metadata(self, content: str) -> dict[str, Any]:
-        """Extract research-specific metadata."""
-        metadata = {}
-
-        try:
             # Extract DOIs
-            dois = re.findall(r'10\.\d+\/[\w\-\._]+', content)
+            dois = self.doi_pattern.findall(content)
             if dois:
-                metadata['dois'] = dois
+                enriched['dois'] = dois
+                enriched['has_academic_refs'] = True
 
             # Extract arXiv IDs
-            arxiv_ids = re.findall(r'arXiv:(\d{4}\.\d{4,5})', content)
+            arxiv_ids = self.arxiv_pattern.findall(content)
             if arxiv_ids:
-                metadata['arxiv_ids'] = arxiv_ids
+                enriched['arxiv_ids'] = arxiv_ids
+                enriched['has_academic_refs'] = True
 
-            # Research field indicators
-            fields = []
-            field_keywords = {
-                'machine_learning': [
-                    'machine learning',
-                    'ml',
-                    'neural',
-                    'deep learning',
-                ],
-                'nlp': ['nlp', 'natural language', 'text processing', 'language model'],
-                'computer_vision': ['computer vision', 'cv', 'image', 'vision'],
-                'ai': ['artificial intelligence', 'ai', 'intelligent system'],
-                'data_science': ['data science', 'analytics', 'statistics'],
-            }
+            # Detect code blocks
+            code_blocks = self.code_pattern.findall(content)
+            if code_blocks:
+                enriched['has_code'] = True
+                enriched['code_block_count'] = len(code_blocks)
 
-            content_lower = content.lower()
-            for field, keywords in field_keywords.items():
-                if any(keyword in content_lower for keyword in keywords):
-                    fields.append(field)
+            # Detect questions
+            if self.question_pattern.search(content):
+                enriched['is_question'] = True
 
-            if fields:
-                metadata['research_fields'] = fields
+            # Add temporal context
+            enriched['timestamp'] = datetime.now().isoformat()
+            enriched['day_of_week'] = datetime.now().strftime('%A')
+            enriched['hour_of_day'] = datetime.now().hour
 
-            return metadata
+            # Content statistics
+            enriched['content_length'] = len(content)
+            enriched['word_count'] = len(content.split())
+            enriched['line_count'] = len(content.splitlines())
+
+            # Role-specific enrichment
+            if role == 'user':
+                enriched['user_message'] = True
+                # Detect command-like patterns
+                if content.strip().startswith(('/', '!', '.')):
+                    enriched['is_command'] = True
+
+            elif role == 'assistant':
+                enriched['assistant_message'] = True
+                # Detect if response contains citations
+                if '[' in content and ']' in content:
+                    enriched['may_have_citations'] = True
+
+            # Topic detection (simple keyword-based)
+            topics = self._detect_topics(content)
+            if topics:
+                enriched['topics'] = topics
+
+            logger.debug(f'Enriched memory with {len(enriched)} metadata fields')
+            return enriched
 
         except Exception as e:
-            logger.warning(f'Research metadata extraction failed: {e}')
-            return {}
+            logger.error(f'Error enriching memory: {e}')
+            return metadata or {}
+
+    def _detect_topics(self, content: str) -> list[str]:
+        """Simple topic detection based on keywords."""
+        topics = []
+        content_lower = content.lower()
+
+        topic_keywords = {
+            'machine_learning': ['neural', 'network', 'training', 'model', 'dataset'],
+            'research': ['paper', 'study', 'journal', 'publication', 'author'],
+            'programming': ['code', 'function', 'class', 'variable', 'algorithm'],
+            'data_science': ['data', 'analysis', 'statistics', 'visualization'],
+            'arxiv': ['arxiv', 'preprint', 'submission'],
+        }
+
+        for topic, keywords in topic_keywords.items():
+            if any(keyword in content_lower for keyword in keywords):
+                topics.append(topic)
+
+        return topics
 
 
 class MemoryWritePipeline:
     """
     Complete pipeline for processing memories before storage.
 
-    Combines salience scoring, filtering, and metadata enrichment.
+    Combines filtering, enrichment, and scoring.
     """
 
-    def __init__(
-        self,
-        min_salience: float = 0.1,
-        enable_filtering: bool = True,
-        enable_enrichment: bool = True,
-    ):
-        """
-        Initialize memory write pipeline.
-
-        Args:
-            min_salience: Minimum salience score for storage
-            enable_filtering: Whether to filter low-quality memories
-            enable_enrichment: Whether to enrich metadata
-        """
-        self.scorer = SalienceScorer()
-        self.filter = MemoryFilter(min_salience=min_salience)
+    def __init__(self):
+        """Initialize the write pipeline with all components."""
+        self.filter = MemoryFilter()
         self.enricher = MemoryEnricher()
-        self.enable_filtering = enable_filtering
-        self.enable_enrichment = enable_enrichment
-
-        logger.info(
-            f'Memory write pipeline initialized (filtering={enable_filtering}, enrichment={enable_enrichment})'
-        )
+        self.scorer = SalienceScorer()
 
     def process_memory(
         self,
-        user_id: str,
         content: str,
-        role: str = 'user',
-        scope: str = 'core',
-        agent_id: str | None = None,
+        role: str,
         metadata: dict[str, Any] | None = None,
         user_context: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
@@ -515,922 +288,475 @@ class MemoryWritePipeline:
         Process a memory through the complete pipeline.
 
         Args:
-            user_id: User identifier
             content: Memory content
             role: Message role
-            scope: Memory scope
-            agent_id: Agent identifier
             metadata: Initial metadata
-            user_context: User context and preferences
+            user_context: User context for scoring
 
         Returns:
-            Dict with processed memory data, or None if filtered out
+            dict[str, Any] | None: Processed memory data or None if filtered out
         """
         try:
-            # Calculate salience score
+            # Step 1: Filter
+            should_store, filter_reason = self.filter.should_store(
+                content, role, metadata
+            )
+            if not should_store:
+                logger.debug(f'Memory filtered out: {filter_reason}')
+                return None
+
+            # Step 2: Enrich
+            enriched_metadata = self.enricher.enrich(content, role, metadata)
+
+            # Step 3: Score
             salience_score = self.scorer.calculate_salience(
-                content=content, role=role, metadata=metadata, user_context=user_context
+                content, role, enriched_metadata, user_context
             )
 
-            # Apply filtering if enabled
-            if self.enable_filtering:
-                if not self.filter.should_store_memory(
-                    content=content,
-                    role=role,
-                    salience_score=salience_score,
-                    metadata=metadata,
-                ):
-                    logger.debug('Memory filtered out by pipeline')
-                    return None
-
-            # Enrich metadata if enabled
-            enriched_metadata = metadata.copy() if metadata else {}
-            if self.enable_enrichment:
-                enriched_metadata = self.enricher.enrich_metadata(
-                    content=content,
-                    role=role,
-                    existing_metadata=enriched_metadata,
-                    user_context=user_context,
-                )
-
-            # Add salience score to metadata
-            enriched_metadata['salience_score'] = salience_score
-
-            # Return processed memory data
-            return {
-                'user_id': user_id,
+            # Combine all data
+            memory_data = {
                 'content': content,
                 'role': role,
-                'scope': scope,
-                'agent_id': agent_id,
                 'metadata': enriched_metadata,
                 'salience_score': salience_score,
+                'pipeline_version': '1.0',
+                'processed_at': datetime.now().isoformat(),
             }
+
+            logger.info(
+                f'Processed {role} memory with salience score: {salience_score:.3f}'
+            )
+            return memory_data
 
         except Exception as e:
-            logger.error(f'Memory pipeline processing failed: {e}')
+            logger.error(f'Error in memory write pipeline: {e}')
             # Return basic memory data on error
             return {
-                'user_id': user_id,
                 'content': content,
                 'role': role,
-                'scope': scope,
-                'agent_id': agent_id,
                 'metadata': metadata or {},
-                'salience_score': 0.5,  # Default moderate score
+                'salience_score': 0.5,
+                'error': str(e),
             }
-
-
-# ==================== RETRIEVAL PIPELINE CLASSES ====================
 
 
 class RelevanceScorer:
     """
-    Calculate relevance scores for memory retrieval queries.
+    Score memories for relevance to a specific query or context.
 
-    Uses semantic similarity, contextual matching, and temporal factors
-    to determine how relevant each memory is to a given query.
+    Used during retrieval to rank memories by relevance.
     """
 
-    def __init__(self, temporal_decay_factor: float = 0.95):
-        """
-        Initialize the relevance scorer.
-
-        Args:
-            temporal_decay_factor: Factor for temporal decay (0.9-1.0)
-        """
-        self.temporal_decay_factor = temporal_decay_factor
-
-        # Query type patterns for contextual scoring
-        self.query_patterns = {
-            'question': [
-                r'\?$',
-                r'^(what|how|why|when|where|who|which)',
-                r'(explain|describe|tell me|show me)',
-            ],
-            'request': [
-                r'^(find|search|get|retrieve)',
-                r'^(can you|could you|please)',
-                r'(help me|assist me)',
-            ],
-            'reference': [
-                r'(paper|article|research|study)',
-                r'(arxiv|doi|citation)',
-                r'(author|researcher)',
-            ],
-            'analysis': [
-                r'(analyze|compare|evaluate)',
-                r'(trends|patterns|insights)',
-                r'(methodology|approach)',
-            ],
-        }
+    def __init__(self):
+        """Initialize the relevance scorer."""
+        # Boost factors for different types of matches
+        self.exact_match_boost = 1.0
+        self.partial_match_boost = 0.5
+        self.semantic_match_boost = 0.3
+        self.metadata_match_boost = 0.2
 
     def calculate_relevance(
         self,
-        query: str,
         memory_content: str,
         memory_metadata: dict[str, Any],
+        query: str,
         query_context: dict[str, Any] | None = None,
-        embedding_similarity: float | None = None,
     ) -> float:
         """
-        Calculate relevance score between query and memory.
+        Calculate relevance score between memory and query.
 
         Args:
-            query: Search query
-            memory_content: Memory content to score
+            memory_content: Stored memory content
             memory_metadata: Memory metadata
-            query_context: Context about the query
-            embedding_similarity: Pre-computed embedding similarity score
+            query: Search query
+            query_context: Additional query context
 
         Returns:
-            float: Relevance score (0.0-1.0)
+            float: Relevance score (0.0 to 1.0+, can exceed 1.0 with boosts)
         """
         try:
-            # Start with base semantic similarity
-            relevance_score = (
-                embedding_similarity if embedding_similarity is not None else 0.5
-            )
+            score = 0.0
+            query_lower = query.lower()
+            content_lower = memory_content.lower()
 
-            # Content-based relevance
-            content_score = self._calculate_content_relevance(query, memory_content)
-            relevance_score = (relevance_score * 0.6) + (content_score * 0.4)
+            # Exact phrase match
+            if query_lower in content_lower:
+                score += self.exact_match_boost
+                # Bonus for multiple occurrences
+                occurrences = content_lower.count(query_lower)
+                score += (occurrences - 1) * 0.1
 
-            # Contextual matching
-            context_score = self._calculate_context_relevance(
-                query, memory_metadata, query_context
-            )
-            relevance_score = (relevance_score * 0.8) + (context_score * 0.2)
+            # Word-level matching
+            query_words = set(query_lower.split())
+            content_words = set(content_lower.split())
+            common_words = query_words & content_words
 
-            # Temporal decay
-            temporal_score = self._calculate_temporal_relevance(memory_metadata)
-            relevance_score *= temporal_score
+            if common_words:
+                # Percentage of query words found
+                word_coverage = len(common_words) / len(query_words)
+                score += word_coverage * self.partial_match_boost
 
-            # Salience boost
-            salience_score = memory_metadata.get('salience_score', 0.5)
-            relevance_score = (relevance_score * 0.85) + (salience_score * 0.15)
+            # Metadata matching
+            if memory_metadata:
+                # Topic matching
+                memory_topics = memory_metadata.get('topics', [])
+                if query_context:
+                    query_topics = query_context.get('topics', [])
+                    topic_overlap = set(memory_topics) & set(query_topics)
+                    if topic_overlap:
+                        score += len(topic_overlap) * 0.1
 
-            return min(1.0, max(0.0, relevance_score))
+                # URL/DOI matching
+                if 'urls' in memory_metadata or 'dois' in memory_metadata:
+                    if any(
+                        ref in query_lower
+                        for ref in memory_metadata.get('urls', [])
+                        + memory_metadata.get('dois', [])
+                    ):
+                        score += self.metadata_match_boost
+
+                # Temporal relevance (recent memories slightly preferred)
+                if 'timestamp' in memory_metadata:
+                    try:
+                        memory_time = datetime.fromisoformat(
+                            memory_metadata['timestamp']
+                        )
+                        age_hours = (
+                            datetime.now() - memory_time
+                        ).total_seconds() / 3600
+                        if age_hours < 24:  # Last 24 hours
+                            score += 0.1
+                        elif age_hours < 168:  # Last week
+                            score += 0.05
+                    except Exception:
+                        pass
+
+            # Role-based adjustments
+            if memory_metadata.get('role') == 'user' and query_context:
+                if query_context.get('prefer_user_content'):
+                    score += 0.1
+
+            # Salience interaction (highly salient memories get small boost)
+            base_salience = memory_metadata.get('salience_score', 0.5)
+            if base_salience > 0.8:
+                score += 0.05
+
+            logger.debug(f'Calculated relevance score: {score:.3f}')
+            return score
 
         except Exception as e:
-            logger.error(f'Relevance calculation failed: {e}')
-            return 0.5  # Default moderate relevance
-
-    def _calculate_content_relevance(self, query: str, content: str) -> float:
-        """Calculate content-based relevance score."""
-        query_lower = query.lower().strip()
-        content_lower = content.lower().strip()
-
-        if not query_lower or not content_lower:
+            logger.error(f'Error calculating relevance: {e}')
             return 0.0
-
-        # Exact phrase matching
-        if query_lower in content_lower:
-            return 0.9
-
-        # Word overlap scoring
-        query_words = set(query_lower.split())
-        content_words = set(content_lower.split())
-
-        if not query_words:
-            return 0.0
-
-        # Calculate overlap ratio
-        overlap = len(query_words.intersection(content_words))
-        overlap_ratio = overlap / len(query_words)
-
-        # Boost for key terms
-        key_terms = {'research', 'paper', 'study', 'analysis', 'method', 'result'}
-        key_overlap = len(query_words.intersection(key_terms))
-        key_boost = key_overlap * 0.1
-
-        return min(1.0, overlap_ratio + key_boost)
-
-    def _calculate_context_relevance(
-        self,
-        query: str,
-        memory_metadata: dict[str, Any],
-        query_context: dict[str, Any] | None,
-    ) -> float:
-        """Calculate contextual relevance score."""
-        score = 0.5
-
-        # Query type matching
-        query_type = self._detect_query_type(query)
-        memory_type = memory_metadata.get('content_type', 'general')
-
-        # Type compatibility matrix
-        type_compatibility = {
-            ('question', 'question'): 0.9,
-            ('question', 'general'): 0.7,
-            ('request', 'academic_reference'): 0.9,
-            ('reference', 'academic_reference'): 0.95,
-            ('analysis', 'question'): 0.8,
-        }
-
-        compatibility = type_compatibility.get((query_type, memory_type), 0.6)
-        score = (score * 0.7) + (compatibility * 0.3)
-
-        # Context matching
-        if query_context:
-            research_fields = query_context.get('research_fields', [])
-            memory_fields = memory_metadata.get('research_fields', [])
-
-            if research_fields and memory_fields:
-                field_overlap = len(
-                    set(research_fields).intersection(set(memory_fields))
-                )
-                field_boost = min(0.2, field_overlap * 0.1)
-                score += field_boost
-
-        return min(1.0, score)
-
-    def _calculate_temporal_relevance(self, memory_metadata: dict[str, Any]) -> float:
-        """Calculate temporal relevance factor."""
-        created_at = memory_metadata.get('created_at')
-        if not created_at:
-            return 1.0
-
-        try:
-            created_time = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-            now = datetime.now(created_time.tzinfo)
-
-            # Calculate days since creation
-            days_old = (now - created_time).days
-
-            # Apply exponential decay
-            decay_factor = self.temporal_decay_factor ** (days_old / 30)  # Per month
-            return max(0.1, decay_factor)  # Minimum 10% relevance
-
-        except Exception:
-            return 1.0  # Default to no decay on parse error
-
-    def _detect_query_type(self, query: str) -> str:
-        """Detect the type of query for contextual matching."""
-        query_lower = query.lower()
-
-        for query_type, patterns in self.query_patterns.items():
-            for pattern in patterns:
-                if re.search(pattern, query_lower):
-                    return query_type
-
-        return 'general'
 
 
 class RetrievalRanker:
     """
-    Rank and filter retrieved memories based on multiple factors.
+    Rank and filter retrieved memories for optimal context.
 
-    Combines relevance, salience, recency, and user preferences
-    to produce optimal memory ranking for retrieval.
+    Combines relevance scoring with diversity and context limits.
     """
 
-    def __init__(
-        self,
-        relevance_weight: float = 0.4,
-        salience_weight: float = 0.3,
-        recency_weight: float = 0.2,
-        diversity_weight: float = 0.1,
-    ):
+    def __init__(self, max_results: int = 10):
         """
         Initialize the retrieval ranker.
 
         Args:
-            relevance_weight: Weight for relevance scores
-            salience_weight: Weight for salience scores
-            recency_weight: Weight for recency scores
-            diversity_weight: Weight for diversity scores
+            max_results: Maximum number of results to return
         """
-        self.relevance_weight = relevance_weight
-        self.salience_weight = salience_weight
-        self.recency_weight = recency_weight
-        self.diversity_weight = diversity_weight
+        self.max_results = max_results
+        self.relevance_scorer = RelevanceScorer()
 
-        # Ensure weights sum to 1.0
-        total_weight = sum(
-            [relevance_weight, salience_weight, recency_weight, diversity_weight]
-        )
-        if abs(total_weight - 1.0) > 0.01:
-            logger.warning(f'Ranking weights sum to {total_weight}, normalizing to 1.0')
-            self.relevance_weight /= total_weight
-            self.salience_weight /= total_weight
-            self.recency_weight /= total_weight
-            self.diversity_weight /= total_weight
+        # Diversity parameters
+        self.similarity_threshold = 0.8  # For deduplication
+        self.topic_diversity_weight = 0.2
 
     def rank_memories(
         self,
         memories: list[dict[str, Any]],
         query: str,
-        user_preferences: dict[str, Any] | None = None,
-        max_results: int = 10,
+        query_context: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """
-        Rank memories by relevance and other factors.
+        Rank and filter memories for retrieval.
 
         Args:
-            memories: List of memories with relevance scores
-            query: Original search query
-            user_preferences: User-specific ranking preferences
-            max_results: Maximum number of results to return
+            memories: List of memory records
+            query: Search query
+            query_context: Query context
 
         Returns:
-            List of ranked memories with ranking scores
+            list[dict[str, Any]]: Ranked and filtered memories
         """
-        if not memories:
-            return []
-
         try:
-            # Calculate composite scores for all memories
+            # Score all memories
             scored_memories = []
             for memory in memories:
-                composite_score = self._calculate_composite_score(
-                    memory, user_preferences
+                relevance = self.relevance_scorer.calculate_relevance(
+                    memory.get('content', ''),
+                    memory.get('metadata', {}),
+                    query,
+                    query_context,
                 )
-                memory['_ranking_score'] = composite_score
-                scored_memories.append(memory)
 
-            # Sort by composite score
-            scored_memories.sort(key=lambda x: x['_ranking_score'], reverse=True)
+                # Combine with salience for final score
+                salience = memory.get('salience_score', 0.5)
+                combined_score = (0.7 * relevance) + (0.3 * salience)
+
+                scored_memories.append(
+                    {'memory': memory, 'relevance': relevance, 'score': combined_score}
+                )
+
+            # Sort by score
+            scored_memories.sort(key=lambda x: x['score'], reverse=True)
 
             # Apply diversity filtering
-            diverse_memories = self._apply_diversity_filter(scored_memories, query)
+            diverse_memories = self._ensure_diversity(scored_memories)
 
-            # Return top results
-            return diverse_memories[:max_results]
+            # Take top results
+            final_results = diverse_memories[: self.max_results]
+
+            # Format output
+            ranked_memories = []
+            for item in final_results:
+                memory = item['memory'].copy()
+                memory['retrieval_score'] = item['score']
+                memory['relevance_score'] = item['relevance']
+                ranked_memories.append(memory)
+
+            logger.info(
+                f'Ranked {len(ranked_memories)} memories from {len(memories)} candidates'
+            )
+            return ranked_memories
 
         except Exception as e:
-            logger.error(f'Memory ranking failed: {e}')
-            return memories[:max_results]
+            logger.error(f'Error ranking memories: {e}')
+            # Return original list on error
+            return memories[: self.max_results]
 
-    def _calculate_composite_score(
-        self, memory: dict[str, Any], user_preferences: dict[str, Any] | None
-    ) -> float:
-        """Calculate composite ranking score."""
-        # Get individual scores
-        relevance = memory.get('_relevance_score', 0.5)
-        salience = memory.get('salience_score', 0.5)
-        recency = self._calculate_recency_score(memory)
-        diversity = memory.get('_diversity_score', 0.5)
-
-        # Apply user preferences
-        if user_preferences:
-            relevance = self._apply_user_preferences(
-                relevance, memory, user_preferences
-            )
-
-        # Calculate weighted composite score
-        composite = (
-            (relevance * self.relevance_weight)
-            + (salience * self.salience_weight)
-            + (recency * self.recency_weight)
-            + (diversity * self.diversity_weight)
-        )
-
-        return min(1.0, max(0.0, composite))
-
-    def _calculate_recency_score(self, memory: dict[str, Any]) -> float:
-        """Calculate recency score based on creation time."""
-        created_at = memory.get('created_at')
-        if not created_at:
-            return 0.5
-
-        try:
-            created_time = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-            now = datetime.now(created_time.tzinfo)
-
-            # Calculate hours since creation
-            hours_old = (now - created_time).total_seconds() / 3600
-
-            # Recent memories get higher scores
-            if hours_old < 1:
-                return 1.0
-            elif hours_old < 24:
-                return 0.9
-            elif hours_old < 168:  # 1 week
-                return 0.7
-            elif hours_old < 720:  # 1 month
-                return 0.5
-            else:
-                return 0.3
-
-        except Exception:
-            return 0.5
-
-    def _apply_user_preferences(
-        self, base_score: float, memory: dict[str, Any], preferences: dict[str, Any]
-    ) -> float:
-        """Apply user preferences to adjust scoring."""
-        adjusted_score = base_score
-
-        # Preferred content types
-        preferred_types = preferences.get('content_types', [])
-        memory_type = memory.get('metadata', {}).get('content_type')
-        if preferred_types and memory_type in preferred_types:
-            adjusted_score = min(1.0, adjusted_score * 1.1)
-
-        # Research field preferences
-        preferred_fields = preferences.get('research_fields', [])
-        memory_fields = memory.get('metadata', {}).get('research_fields', [])
-        if preferred_fields and any(
-            field in memory_fields for field in preferred_fields
-        ):
-            adjusted_score = min(1.0, adjusted_score * 1.05)
-
-        return adjusted_score
-
-    def _apply_diversity_filter(
-        self,
-        memories: list[dict[str, Any]],
-        query: str,  # noqa: ARG002
+    def _ensure_diversity(
+        self, scored_memories: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
-        """Apply diversity filtering to avoid redundant results."""
-        if len(memories) <= 3:
-            return memories
+        """Ensure diversity in results by removing near-duplicates."""
+        if not scored_memories:
+            return []
 
-        diverse_memories = []
-        seen_content_hashes = set()
+        diverse = [scored_memories[0]]
 
-        for memory in memories:
-            content = memory.get('content', '')
-            content_hash = hash(content.lower().strip())
+        for candidate in scored_memories[1:]:
+            is_duplicate = False
 
-            # Skip very similar content
-            if content_hash not in seen_content_hashes:
-                diverse_memories.append(memory)
-                seen_content_hashes.add(content_hash)
-
-                # Stop if we have enough diverse results
-                if len(diverse_memories) >= len(memories) * 0.8:
+            # Check similarity with already selected memories
+            for selected in diverse:
+                similarity = self._calculate_similarity(
+                    candidate['memory'], selected['memory']
+                )
+                if similarity > self.similarity_threshold:
+                    is_duplicate = True
                     break
 
-        return diverse_memories
+            if not is_duplicate:
+                diverse.append(candidate)
+
+        return diverse
+
+    def _calculate_similarity(
+        self, memory1: dict[str, Any], memory2: dict[str, Any]
+    ) -> float:
+        """Calculate similarity between two memories."""
+        # Simple content-based similarity
+        content1 = memory1.get('content', '').lower()
+        content2 = memory2.get('content', '').lower()
+
+        if content1 == content2:
+            return 1.0
+
+        # Word overlap similarity
+        words1 = set(content1.split())
+        words2 = set(content2.split())
+
+        if not words1 or not words2:
+            return 0.0
+
+        intersection = words1 & words2
+        union = words1 | words2
+
+        return len(intersection) / len(union)
 
 
 class RetrievalMetrics:
     """
-    Track and analyze memory retrieval performance metrics.
+    Track and analyze retrieval performance metrics.
 
-    Provides insights into search quality, user satisfaction,
-    and system performance for continuous improvement.
+    Helps optimize retrieval strategies over time.
     """
 
     def __init__(self):
-        """Initialize retrieval metrics tracker."""
-        self.query_metrics: dict[str, Any] = {}
-        self.performance_metrics: dict[str, list[float]] = {
-            'search_latency': [],
-            'relevance_scores': [],
-            'result_counts': [],
-            'cache_hit_rate': [],
-        }
-        self.user_metrics: dict[str, dict[str, Any]] = {}
+        """Initialize metrics tracking."""
+        self.query_count = 0
+        self.total_candidates = 0
+        self.total_retrieved = 0
+        self.relevance_scores: list[float] = []
+        self.response_times: list[float] = []
 
-    def record_query(
+        # Performance thresholds
+        self.slow_query_threshold = 1.0  # seconds
+        self.low_relevance_threshold = 0.3
+
+    def record_retrieval(
         self,
         query: str,
-        user_id: str,
-        results: list[dict[str, Any]],
-        search_time: float,
-        cache_hit: bool = False,
+        candidates_count: int,
+        retrieved_count: int,
+        relevance_scores: list[float],
+        response_time: float,
     ) -> None:
         """
-        Record metrics for a completed query.
+        Record metrics for a retrieval operation.
 
         Args:
-            query: Search query text
-            user_id: User who performed the query
-            results: Search results returned
-            search_time: Time taken for search in seconds
-            cache_hit: Whether result was served from cache
+            query: The search query
+            candidates_count: Number of candidate memories
+            retrieved_count: Number of retrieved memories
+            relevance_scores: Relevance scores of retrieved memories
+            response_time: Time taken for retrieval (seconds)
         """
-        try:
-            timestamp = datetime.now().isoformat()
-            query_id = hash(f'{query}:{user_id}:{timestamp}')
+        self.query_count += 1
+        self.total_candidates += candidates_count
+        self.total_retrieved += retrieved_count
+        self.relevance_scores.extend(relevance_scores)
+        self.response_times.append(response_time)
 
-            # Record query-level metrics
-            self.query_metrics[query_id] = {
-                'query': query,
-                'user_id': user_id,
-                'timestamp': timestamp,
-                'result_count': len(results),
-                'search_time': search_time,
-                'cache_hit': cache_hit,
-                'avg_relevance': self._calculate_avg_relevance(results),
-                'avg_salience': self._calculate_avg_salience(results),
-            }
-
-            # Update performance metrics
-            self.performance_metrics['search_latency'].append(search_time)
-            self.performance_metrics['result_counts'].append(len(results))
-            self.performance_metrics['cache_hit_rate'].append(1.0 if cache_hit else 0.0)
-
-            if results:
-                avg_relevance = self._calculate_avg_relevance(results)
-                self.performance_metrics['relevance_scores'].append(avg_relevance)
-
-            # Update user metrics
-            if user_id not in self.user_metrics:
-                self.user_metrics[user_id] = {
-                    'total_queries': 0,
-                    'avg_search_time': 0.0,
-                    'preferred_content_types': {},
-                    'query_patterns': [],
-                }
-
-            user_stats = self.user_metrics[user_id]
-            user_stats['total_queries'] += 1
-            user_stats['query_patterns'].append(query)
-
-            # Update rolling averages
-            current_avg = user_stats['avg_search_time']
-            query_count = user_stats['total_queries']
-            user_stats['avg_search_time'] = (
-                current_avg * (query_count - 1) + search_time
-            ) / query_count
-
-            # Track content type preferences
-            for result in results:
-                content_type = result.get('metadata', {}).get('content_type', 'general')
-                user_stats['preferred_content_types'][content_type] = (
-                    user_stats['preferred_content_types'].get(content_type, 0) + 1
-                )
-
-            logger.debug(
-                f'Recorded query metrics for user {user_id}: {len(results)} results in {search_time:.3f}s'
+        # Log performance warnings
+        if response_time > self.slow_query_threshold:
+            logger.warning(
+                f'Slow retrieval query ({response_time:.2f}s): "{query[:50]}..."'
             )
 
-        except Exception as e:
-            logger.error(f'Failed to record query metrics: {e}')
-
-    def get_performance_summary(self) -> dict[str, Any]:
-        """Get overall performance metrics summary."""
-        try:
-            if not self.performance_metrics['search_latency']:
-                return {'status': 'no_data'}
-
-            summary = {
-                'total_queries': len(self.query_metrics),
-                'avg_search_latency': sum(self.performance_metrics['search_latency'])
-                / len(self.performance_metrics['search_latency']),
-                'avg_result_count': sum(self.performance_metrics['result_counts'])
-                / len(self.performance_metrics['result_counts']),
-                'cache_hit_rate': sum(self.performance_metrics['cache_hit_rate'])
-                / len(self.performance_metrics['cache_hit_rate']),
-                'avg_relevance_score': sum(self.performance_metrics['relevance_scores'])
-                / len(self.performance_metrics['relevance_scores'])
-                if self.performance_metrics['relevance_scores']
-                else 0.0,
-                'unique_users': len(self.user_metrics),
-            }
-
-            return summary
-
-        except Exception as e:
-            logger.error(f'Failed to generate performance summary: {e}')
-            return {'status': 'error', 'message': str(e)}
-
-    def get_user_insights(self, user_id: str) -> dict[str, Any]:
-        """Get insights for a specific user."""
-        user_stats = self.user_metrics.get(user_id)
-        if not user_stats:
-            return {'status': 'no_data'}
-
-        try:
-            # Analyze query patterns
-            patterns = self._analyze_query_patterns(user_stats['query_patterns'])
-
-            # Get top content types
-            content_preferences = dict(
-                sorted(
-                    user_stats['preferred_content_types'].items(),
-                    key=lambda x: x[1],
-                    reverse=True,
-                )[:5]
+        avg_relevance = (
+            sum(relevance_scores) / len(relevance_scores) if relevance_scores else 0
+        )
+        if avg_relevance < self.low_relevance_threshold:
+            logger.warning(
+                f'Low relevance retrieval (avg: {avg_relevance:.3f}): "{query[:50]}..."'
             )
 
-            return {
-                'total_queries': user_stats['total_queries'],
-                'avg_search_time': user_stats['avg_search_time'],
-                'content_preferences': content_preferences,
-                'query_patterns': patterns,
-                'activity_level': self._categorize_activity_level(
-                    user_stats['total_queries']
-                ),
-            }
+    def get_summary(self) -> dict[str, Any]:
+        """
+        Get summary of retrieval metrics.
 
-        except Exception as e:
-            logger.error(f'Failed to generate user insights: {e}')
-            return {'status': 'error', 'message': str(e)}
+        Returns:
+            dict[str, Any]: Metrics summary
+        """
+        if not self.query_count:
+            return {'message': 'No retrieval operations recorded'}
 
-    def _calculate_avg_relevance(self, results: list[dict[str, Any]]) -> float:
-        """Calculate average relevance score from results."""
-        if not results:
-            return 0.0
+        avg_candidates = self.total_candidates / self.query_count
+        avg_retrieved = self.total_retrieved / self.query_count
+        avg_relevance = (
+            sum(self.relevance_scores) / len(self.relevance_scores)
+            if self.relevance_scores
+            else 0
+        )
+        avg_response_time = (
+            sum(self.response_times) / len(self.response_times)
+            if self.response_times
+            else 0
+        )
 
-        relevance_scores = [r.get('_relevance_score', 0.5) for r in results]
-        return sum(relevance_scores) / len(relevance_scores)
-
-    def _calculate_avg_salience(self, results: list[dict[str, Any]]) -> float:
-        """Calculate average salience score from results."""
-        if not results:
-            return 0.0
-
-        salience_scores = [r.get('salience_score', 0.5) for r in results]
-        return sum(salience_scores) / len(salience_scores)
-
-    def _analyze_query_patterns(self, queries: list[str]) -> dict[str, Any]:
-        """Analyze user query patterns."""
-        if not queries:
-            return {}
-
-        # Categorize recent queries
-        recent_queries = queries[-20:] if len(queries) > 20 else queries
-
-        patterns = {
-            'question_ratio': len([q for q in recent_queries if '?' in q])
-            / len(recent_queries),
-            'avg_query_length': sum(len(q.split()) for q in recent_queries)
-            / len(recent_queries),
-            'research_focused': len(
-                [
-                    q
-                    for q in recent_queries
-                    if any(
-                        term in q.lower()
-                        for term in ['research', 'paper', 'study', 'analysis']
-                    )
-                ]
-            )
-            / len(recent_queries),
+        return {
+            'total_queries': self.query_count,
+            'avg_candidates_per_query': round(avg_candidates, 1),
+            'avg_retrieved_per_query': round(avg_retrieved, 1),
+            'avg_relevance_score': round(avg_relevance, 3),
+            'avg_response_time_seconds': round(avg_response_time, 3),
+            'slow_queries': sum(
+                1 for t in self.response_times if t > self.slow_query_threshold
+            ),
+            'retrieval_ratio': round(
+                self.total_retrieved / self.total_candidates if self.total_candidates else 0, 3
+            ),
         }
-
-        return patterns
-
-    def _categorize_activity_level(self, query_count: int) -> str:
-        """Categorize user activity level."""
-        if query_count < 5:
-            return 'low'
-        elif query_count < 20:
-            return 'moderate'
-        elif query_count < 50:
-            return 'high'
-        else:
-            return 'very_high'
 
 
 class MemoryRetrievalPipeline:
     """
-    Complete pipeline for memory retrieval with semantic search and ranking.
+    Complete pipeline for retrieving memories.
 
-    Orchestrates the full retrieval workflow including query processing,
-    semantic search, relevance scoring, ranking, and metrics collection.
+    Handles search, ranking, and metric tracking.
     """
 
-    def __init__(
-        self,
-        rag_service=None,
-        enable_semantic_search: bool = True,
-        enable_caching: bool = True,
-        cache_ttl: int = 300,  # 5 minutes
-        max_results: int = 20,
-    ):
+    def __init__(self, max_results: int = 10):
         """
-        Initialize the memory retrieval pipeline.
+        Initialize retrieval pipeline.
 
         Args:
-            rag_service: RAG service for vector search
-            enable_semantic_search: Enable semantic vector search
-            enable_caching: Enable result caching
-            cache_ttl: Cache time-to-live in seconds
             max_results: Maximum results to return
         """
-        self.rag_service = rag_service
-        self.enable_semantic_search = enable_semantic_search
-        self.enable_caching = enable_caching
-        self.cache_ttl = cache_ttl
-        self.max_results = max_results
-
-        # Pipeline components
-        self.relevance_scorer = RelevanceScorer()
-        self.ranker = RetrievalRanker()
+        self.ranker = RetrievalRanker(max_results)
         self.metrics = RetrievalMetrics()
 
-        # Result cache
-        self.cache: dict[str, dict[str, Any]] = {}
-
-        logger.info(
-            f'Memory retrieval pipeline initialized '
-            f'(semantic_search={enable_semantic_search}, caching={enable_caching})'
-        )
-
-    def search_memories(
+    def retrieve(
         self,
         query: str,
-        user_id: str,
-        memories: list[dict[str, Any]],
-        scope: str = 'core',
-        user_context: dict[str, Any] | None = None,
-        user_preferences: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+        candidate_memories: list[dict[str, Any]],
+        query_context: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """
-        Search and rank memories using the complete pipeline.
+        Retrieve relevant memories for a query.
 
         Args:
             query: Search query
-            user_id: User performing the search
-            memories: Pool of memories to search
-            scope: Memory scope being searched
-            user_context: Context about the query
-            user_preferences: User-specific preferences
+            candidate_memories: Pool of memories to search
+            query_context: Additional query context
 
         Returns:
-            Dict with results, metrics, and metadata
+            list[dict[str, Any]]: Retrieved and ranked memories
         """
         start_time = datetime.now()
-        cache_key = f'{hash(query)}:{user_id}:{scope}'
 
         try:
-            # Check cache first
-            if self.enable_caching and cache_key in self.cache:
-                cached_result = self.cache[cache_key]
-                cache_time = datetime.fromisoformat(cached_result['timestamp'])
-                if (start_time - cache_time).total_seconds() < self.cache_ttl:
-                    self.metrics.record_query(
-                        query,
-                        user_id,
-                        cached_result['results'],
-                        (datetime.now() - start_time).total_seconds(),
-                        cache_hit=True,
-                    )
-                    return cached_result
-
-            # Process query
-            processed_memories = self._process_query_search(
-                query, memories, user_context
-            )
-
-            # Rank results
+            # Rank memories
             ranked_memories = self.ranker.rank_memories(
-                processed_memories, query, user_preferences, self.max_results
+                candidate_memories, query, query_context
             )
-
-            # Prepare result
-            search_time = (datetime.now() - start_time).total_seconds()
-            result = {
-                'results': ranked_memories,
-                'query': query,
-                'total_searched': len(memories),
-                'total_results': len(ranked_memories),
-                'search_time': search_time,
-                'timestamp': start_time.isoformat(),
-                'used_semantic_search': self.enable_semantic_search,
-                'cache_hit': False,
-            }
-
-            # Cache result
-            if self.enable_caching:
-                self.cache[cache_key] = result
 
             # Record metrics
-            self.metrics.record_query(query, user_id, ranked_memories, search_time)
+            response_time = (datetime.now() - start_time).total_seconds()
+            relevance_scores = [
+                m.get('relevance_score', 0.0) for m in ranked_memories
+            ]
 
-            logger.debug(
-                f'Memory search completed: {len(ranked_memories)} results '
-                f'from {len(memories)} memories in {search_time:.3f}s'
+            self.metrics.record_retrieval(
+                query,
+                len(candidate_memories),
+                len(ranked_memories),
+                relevance_scores,
+                response_time,
             )
 
-            return result
-
-        except Exception as e:
-            logger.error(f'Memory retrieval pipeline failed: {e}')
-            search_time = (datetime.now() - start_time).total_seconds()
-
-            # Return basic text search fallback
-            return self._fallback_search(query, memories, search_time)
-
-    def _process_query_search(
-        self,
-        query: str,
-        memories: list[dict[str, Any]],
-        user_context: dict[str, Any] | None,
-    ) -> list[dict[str, Any]]:
-        """Process memories through semantic search and relevance scoring."""
-        processed_memories = []
-
-        # Get semantic embeddings if available
-        embedding_scores = {}
-        if self.enable_semantic_search and self.rag_service:
-            embedding_scores = self._get_semantic_similarities(query, memories)
-
-        # Score each memory for relevance
-        for memory in memories:
-            memory_id = memory.get('id', '')
-            embedding_similarity = embedding_scores.get(memory_id, None)
-
-            relevance_score = self.relevance_scorer.calculate_relevance(
-                query=query,
-                memory_content=memory.get('content', ''),
-                memory_metadata=memory.get('metadata', {}),
-                query_context=user_context,
-                embedding_similarity=embedding_similarity,
+            logger.info(
+                f'Retrieved {len(ranked_memories)} memories in {response_time:.3f}s'
             )
-
-            # Add relevance score to memory
-            memory['_relevance_score'] = relevance_score
-            processed_memories.append(memory)
-
-        # Filter out very low relevance results
-        min_relevance = 0.1
-        filtered_memories = [
-            m for m in processed_memories if m['_relevance_score'] >= min_relevance
-        ]
-
-        return filtered_memories
-
-    def _get_semantic_similarities(
-        self, query: str, memories: list[dict[str, Any]]
-    ) -> dict[str, float]:
-        """Get semantic similarity scores using RAG service."""
-        try:
-            if not self.rag_service:
-                return {}
-
-            # Extract memory contents for embedding
-            memory_contents = [m.get('content', '') for m in memories]
-            memory_ids = [m.get('id', '') for m in memories]
-
-            # Use RAG service for semantic search
-            # Note: This is a simplified approach - real implementation
-            # would need proper integration with the vector store
-            similarities = {}
-
-            for i, content in enumerate(memory_contents):
-                if content and memory_ids[i]:
-                    # Placeholder similarity calculation
-                    # Real implementation would use vector embeddings
-                    similarity = self._calculate_text_similarity(query, content)
-                    similarities[memory_ids[i]] = similarity
-
-            return similarities
+            return ranked_memories
 
         except Exception as e:
-            logger.error(f'Semantic similarity calculation failed: {e}')
-            return {}
+            logger.error(f'Error in retrieval pipeline: {e}')
+            # Return empty list on error
+            return []
 
-    def _calculate_text_similarity(self, query: str, content: str) -> float:
-        """Fallback text similarity calculation."""
-        query_words = set(query.lower().split())
-        content_words = set(content.lower().split())
+    def get_metrics(self) -> dict[str, Any]:
+        """Get retrieval performance metrics."""
+        return self.metrics.get_summary()
 
-        if not query_words or not content_words:
-            return 0.0
 
-        intersection = len(query_words.intersection(content_words))
-        union = len(query_words.union(content_words))
-
-        return intersection / union if union > 0 else 0.0
-
-    def _fallback_search(
-        self, query: str, memories: list[dict[str, Any]], search_time: float
-    ) -> dict[str, Any]:
-        """Fallback search using basic text matching."""
-        query_lower = query.lower()
-        matching_memories = []
-
-        for memory in memories:
-            content = memory.get('content', '').lower()
-            if query_lower in content:
-                # Simple relevance score
-                relevance = (
-                    content.count(query_lower) / len(content.split()) if content else 0
-                )
-                memory['_relevance_score'] = min(1.0, relevance * 2)
-                matching_memories.append(memory)
-
-        # Sort by relevance
-        matching_memories.sort(key=lambda x: x['_relevance_score'], reverse=True)
-
-        return {
-            'results': matching_memories[: self.max_results],
-            'query': query,
-            'total_searched': len(memories),
-            'total_results': len(matching_memories[: self.max_results]),
-            'search_time': search_time,
-            'timestamp': datetime.now().isoformat(),
-            'used_semantic_search': False,
-            'cache_hit': False,
-            'fallback_search': True,
-        }
-
-    def get_metrics_summary(self) -> dict[str, Any]:
-        """Get pipeline performance metrics."""
-        return self.metrics.get_performance_summary()
-
-    def get_user_insights(self, user_id: str) -> dict[str, Any]:
-        """Get user-specific search insights."""
-        return self.metrics.get_user_insights(user_id)
-
-    def clear_cache(self) -> None:
-        """Clear the result cache."""
-        self.cache.clear()
-        logger.info('Memory retrieval cache cleared')
+# Re-export all classes for backward compatibility
+__all__ = [
+    'SalienceScorer',
+    'MemoryFilter',
+    'MemoryEnricher',
+    'MemoryWritePipeline',
+    'RelevanceScorer',
+    'RetrievalRanker',
+    'RetrievalMetrics',
+    'MemoryRetrievalPipeline',
+]

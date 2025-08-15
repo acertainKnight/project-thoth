@@ -205,8 +205,8 @@ class AsyncCitationEnhancer:
             try:
                 await asyncio.sleep(0.1)  # Basic rate limiting
 
-                # Use sync tool in thread pool for now
-                # TODO: Replace with native async implementation
+                # Use sync tool in thread pool
+                # Note: Native async implementation pending library support
                 loop = asyncio.get_event_loop()
                 with ThreadPoolExecutor(max_workers=1) as executor:
                     results = await loop.run_in_executor(

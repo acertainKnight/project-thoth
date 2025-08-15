@@ -64,8 +64,8 @@ class MCPTool(ABC):
     def validate_arguments(self, arguments: dict[str, Any]) -> bool:
         """Validate arguments against the input schema."""
         try:
-            # TODO: Implement JSON Schema validation
-            # For now, just check required fields exist
+            # Basic validation - check required fields exist
+            # Full JSON Schema validation can be added when needed
             schema = self.input_schema
             if 'required' in schema:
                 for field in schema['required']:

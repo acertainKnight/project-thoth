@@ -99,7 +99,7 @@ class ThothPipeline:
         self.pdf_tracker = PDFTracker()
 
         # Initialize components that aren't yet services
-        # TODO: CitationGraph should eventually be converted to a service
+        # Note: CitationGraph will be converted to a service in future refactoring
         self.citation_tracker = CitationGraph(
             knowledge_base_dir=self.config.knowledge_base_dir,
             graph_storage_path=self.config.graph_storage_path,
