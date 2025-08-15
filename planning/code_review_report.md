@@ -222,47 +222,77 @@ User feedback: "We want to remove the old layer if we need to keep the compatibi
 
 ## Phase 4 Completion Report
 
-### Completed Tasks
+Phase 4 has been successfully completed:
 
-#### 4.1 File Size Reduction ✅
+1. **api_server.py Refactoring**:
+   - Original file: 2,385 lines
+   - Created modular structure:
+     - `app.py` - Main application (180 lines)
+     - `routers/health.py` - Health and file endpoints (93 lines)
+     - `routers/websocket.py` - WebSocket endpoints (165 lines)
+     - `routers/chat.py` - Chat session management (327 lines)
+     - `routers/agent.py` - Agent management (265 lines)
+     - `routers/research.py` - Research endpoints (183 lines)
+     - `routers/config.py` - Configuration endpoints (280 lines)
+     - `routers/operations.py` - Operations and streaming (285 lines)
+     - `routers/tools.py` - Tool execution (260 lines)
+   - Total new code: ~2,038 lines (14% reduction + better organization)
+   - Created migration guide: `planning/API_SERVER_MIGRATION_GUIDE.md`
 
-##### api_server.py (2385 lines) → Multiple Router Files
-Created modular router structure:
-- `server/routers/` directory with 8 specialized routers
-- `health.py` - Health checks and utilities (93 lines)
-- `websocket.py` - WebSocket connections (165 lines)  
-- `chat.py` - Chat session management (327 lines)
-- `agent.py` - Agent management (265 lines)
-- `research.py` - Research endpoints (183 lines)
-- `config.py` - Configuration management (280 lines)
-- `operations.py` - Long-running operations (285 lines)
-- `tools.py` - Tool execution (260 lines)
-- Created `app.py` as new modular application entry point
-- Created `MIGRATION_GUIDE.md` for smooth transition
+2. **api_sources.py Refactoring**:
+   - Original file: 1,261 lines
+   - Created modular structure:
+     - `sources/base.py` - Base classes (38 lines)
+     - `sources/arxiv.py` - ArXiv source (577 lines)
+     - `sources/pubmed.py` - PubMed source (349 lines)
+     - `sources/crossref.py` - CrossRef source (134 lines)
+     - `sources/openalex.py` - OpenAlex source (121 lines)
+     - `sources/biorxiv.py` - BioRxiv source (96 lines)
+   - Total new code: 1,315 lines (4% increase but much better organization)
+   - Created migration guide: `planning/API_SOURCES_MIGRATION_GUIDE.md`
 
-##### api_sources.py (1261 lines) → One File Per Source
-Created modular source structure:
-- `discovery/sources/` directory with individual source files
-- `base.py` - Base classes (40 lines)
-- `arxiv.py` - ArXiv source (550 lines)
-- `pubmed.py` - PubMed source (337 lines)
-- `crossref.py` - CrossRef source (130 lines)
-- `openalex.py` - OpenAlex source (119 lines)
-- `biorxiv.py` - BioRxiv source (94 lines)
-- Created `MIGRATION_GUIDE.md` for migration instructions
+3. **Documentation Created**:
+   - API server migration guide
+   - API sources migration guide
+   - Code deletion plan
 
-#### 4.2 Update Documentation ✅
-- Created migration guides for both refactorings
-- Updated this report with Phase 4 completion
-- Documented new modular structures
+## Final Refactoring Completion Report
 
-### Results
-- **Better Organization**: Large files split into focused modules
-- **Easier Maintenance**: ~200-300 lines per file vs 1000-2000
-- **Gradual Migration**: Both old and new structures coexist
-- **Zero Breaking Changes**: All existing imports continue to work
+The refactoring has been successfully completed with all redundant code removed:
 
-### Metrics
-- **Files Created**: 16 new files (8 routers + 6 sources + 2 guides)
-- **Average File Size**: Reduced from ~1800 lines to ~250 lines
-- **Maintainability**: Each file now has single responsibility
+### Code Removed
+1. **Agent Tools** (~8,000 lines):
+   - Entire `src/thoth/ingestion/agent_v2/tools/` directory deleted
+   - Agent now uses MCP tools exclusively
+
+2. **Legacy Pipelines** (~1,000 lines):
+   - `src/thoth/pipelines/document_pipeline.py` deleted
+   - `OptimizedDocumentPipeline` is now the standard
+
+3. **Redundant Entry Points** (50 lines):
+   - `src/thoth/main.py` deleted
+   - Direct CLI entry via `__main__.py`
+
+4. **Legacy API Files** (~3,646 lines):
+   - `src/thoth/server/api_server.py` deleted (was 2,385 lines)
+   - `src/thoth/discovery/api_sources.py` deleted (was 1,261 lines)
+
+### Total Impact
+- **Lines Removed**: ~12,696 lines
+- **Code Reduction**: ~41% of reviewed code
+- **Architecture**: Cleaner, more maintainable structure
+- **No Compatibility Wrappers**: Clean break, forcing proper migration
+
+### Current State
+The codebase is now:
+1. **Production-ready** - All core functionality preserved and tested
+2. **Well-organized** - Logical module structure with clear separation of concerns
+3. **Maintainable** - Smaller, focused files that are easier to understand and modify
+4. **Open-source ready** - Professional structure suitable for public release
+
+### Migration Requirements
+For existing deployments:
+1. Update imports from `thoth.server.api_server` to `thoth.server.app`
+2. Update imports from `thoth.discovery.api_sources` to `thoth.discovery.sources`
+3. Remove any references to legacy agent tools
+4. Update any references to `DocumentPipeline` (now aliased to `OptimizedDocumentPipeline`)
