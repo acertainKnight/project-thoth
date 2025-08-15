@@ -14,7 +14,7 @@ from typing import Any
 
 import requests
 
-from thoth.discovery.api_sources import (
+from thoth.discovery.sources import (
     BioRxivAPISource,
     CrossRefAPISource,
     OpenAlexAPISource,

@@ -14,7 +14,7 @@ from typing import Any
 
 from loguru import logger
 
-from thoth.discovery.api_sources import (
+from thoth.discovery.sources import (
     ArxivAPISource,
     BioRxivAPISource,
     CrossRefAPISource,

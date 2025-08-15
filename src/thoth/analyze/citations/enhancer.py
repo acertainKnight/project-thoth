@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from thoth.analyze.citations.opencitation import OpenCitationsAPI
 from thoth.analyze.citations.scholarly import ScholarlyAPI
 from thoth.analyze.citations.semanticscholar import SemanticScholarAPI
-from thoth.discovery.api_sources import ArxivClient
+from thoth.discovery.sources import ArxivClient
 from thoth.utilities.schemas import Citation
 
 

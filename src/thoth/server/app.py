@@ -8,6 +8,7 @@ endpoints into logical routers for better maintainability.
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -109,6 +110,67 @@ def get_pdf_dir():
 def get_notes_dir():
     """Get notes directory from config."""
     return config.notes_dir
+
+
+# Legacy compatibility functions
+async def start_server(
+    host: str,
+    port: int,
+    pdf_directory: Path,
+    notes_directory: Path,
+    api_base_url: str,
+    pipeline: Any | None = None,
+    reload: bool = False,
+):
+    """
+    Start the FastAPI server with research agent integration.
+    
+    This is a compatibility function for the legacy API.
+    """
+    import uvicorn
+    
+    # Override config if needed
+    if pdf_directory:
+        config.pdf_dir = pdf_directory
+    if notes_directory:
+        config.notes_dir = notes_directory
+    
+    # Run the server
+    uvicorn.run(
+        app,
+        host=host,
+        port=port,
+        reload=reload,
+    )
+
+
+def start_obsidian_server(
+    host: str,
+    port: int,
+    pdf_directory: Path,
+    notes_directory: Path,
+    api_base_url: str,
+    pipeline: Any | None = None,
+    reload: bool = False,
+):
+    """
+    Synchronous wrapper for starting the server.
+    
+    This function provides backward compatibility with the old API.
+    """
+    import asyncio
+    
+    asyncio.run(
+        start_server(
+            host=host,
+            port=port,
+            pdf_directory=pdf_directory,
+            notes_directory=notes_directory,
+            api_base_url=api_base_url,
+            pipeline=pipeline,
+            reload=reload,
+        )
+    )
 
 
 if __name__ == "__main__":
