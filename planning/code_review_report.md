@@ -869,3 +869,296 @@ def test_all_interfaces_identical():
 6. **Clarity**: Clear architecture, easy onboarding
 
 The adapter pattern preserves 100% of functionality while dramatically simplifying the codebase.
+
+## Agent Using MCP Tools Directly
+
+### Option A: Agent with Separate Adapters (Previous Recommendation)
+- Agent has its own tool adapters
+- Maintains LangChain tool compatibility
+- More code but clearer separation
+
+### Option B: Agent Using MCP Tools Directly (Better!)
+- Agent becomes an MCP client
+- No separate agent tool implementations needed
+- Reduces code even further
+- Single protocol for all tool access
+
+## Current Architecture (Complex & Duplicated)
+
+```mermaid
+graph TB
+    subgraph "User Interfaces"
+        CLI[CLI Commands]
+        Watch[File Watcher]
+        API[REST API]
+        WS[WebSocket]
+    end
+
+    subgraph "Multiple Entry Points"
+        Main1[__main__.py]
+        Main2[main.py]
+        Main3[cli/main.py]
+        APIServer[api_server.py<br/>2385 lines!]
+    end
+
+    subgraph "Pipeline Layer"
+        TP[ThothPipeline<br/>DEPRECATED]
+        DP[DocumentPipeline]
+        ODP[OptimizedDocumentPipeline]
+        KP[KnowledgePipeline]
+    end
+
+    subgraph "Service Layer"
+        SM[ServiceManager]
+        PS[ProcessingService]
+        CS[CitationService]
+        TS[TagService]
+        DS[DiscoveryService]
+        RS[RAGService]
+        WS2[WebSearchService]
+    end
+
+    subgraph "Analyze Components"
+        LP[LLMProcessor]
+        CP[CitationProcessor]
+        TC[TagConsolidator]
+        CE[CitationEnhancer]
+        ACE[AsyncCitationEnhancer]
+    end
+
+    subgraph "MCP Implementation"
+        MCPS[MCP Server]
+        MCPTools[13 Tool Files<br/>~10,000 lines]
+        MCPT1[processing_tools.py]
+        MCPT2[citation_tools.py]
+        MCPT3[tag_tools.py]
+        MCPT4[discovery_tools.py]
+        MCPT5[rag_tools.py]
+    end
+
+    subgraph "Agent V2 Implementation"
+        Agent[Agent Core]
+        AgentServer[Agent Server]
+        AgentTools[10 Tool Files<br/>~8,000 lines]
+        AT1[analysis_tools.py]
+        AT2[discovery_tools.py]
+        AT3[pdf_tools.py]
+        AT4[query_tools.py]
+        AT5[rag_tools.py]
+    end
+
+    subgraph "Storage Layer"
+        CG[CitationGraph<br/>1135 lines]
+        KB[Knowledge Base]
+        Letta[Letta Memory]
+        VS[Vector Store]
+    end
+
+    %% Connections showing duplication
+    CLI --> Main1
+    Main1 --> Main2
+    Main2 --> Main3
+    Main3 --> TP
+    Main3 --> DP
+    Main3 --> ODP
+
+    Watch --> APIServer
+    API --> APIServer
+    WS --> APIServer
+
+    TP --> SM
+    DP --> SM
+    ODP --> SM
+    KP --> SM
+
+    SM --> PS
+    SM --> CS
+    SM --> TS
+    SM --> DS
+    SM --> RS
+
+    PS --> LP
+    CS --> CP
+    TS --> TC
+
+    %% Duplicate implementations
+    PS -.-> MCPT1
+    CS -.-> MCPT2
+    TS -.-> MCPT3
+    DS -.-> MCPT4
+    RS -.-> MCPT5
+
+    PS -.-> AT1
+    DS -.-> AT2
+    PS -.-> AT3
+    RS -.-> AT4
+    RS -.-> AT5
+
+    MCPS --> MCPTools
+    Agent --> AgentTools
+
+    %% Storage connections
+    SM --> CG
+    SM --> KB
+    Agent --> Letta
+    RS --> VS
+
+    style TP fill:#ffcccc
+    style MCPTools fill:#ffdddd
+    style AgentTools fill:#ffdddd
+```
+
+## Proposed Architecture (Streamlined)
+
+```mermaid
+graph TB
+    subgraph "User Interfaces"
+        CLI[CLI Commands]
+        Watch[File Watcher]
+        API[REST API]
+        WS[WebSocket]
+    end
+
+    subgraph "Single Entry Point"
+        Main[__main__.py]
+        App[Modular App<br/>~500 lines each]
+    end
+
+    subgraph "Unified Service Layer"
+        SM[ServiceManager]
+        FS[FileService<br/>OCR+Analysis]
+        KS[KnowledgeService<br/>Graph+Search]
+        DS[DiscoveryService]
+        MS[MemoryService]
+        AS[AgentService]
+    end
+
+    subgraph "MCP Protocol Layer"
+        MCPS[MCP Server]
+        MCPA[MCP Adapters<br/>~500 lines total]
+    end
+
+    subgraph "Agent as MCP Client"
+        Agent[Agent Core<br/>MCP Client]
+    end
+
+    subgraph "Unified Storage"
+        USG[Unified Storage<br/>Knowledge+Memory]
+        CG[Citation Graph]
+        Letta[Letta Memory]
+        VS[Vector Store]
+    end
+
+    %% Clean connections
+    CLI --> Main
+    Watch --> Main
+    API --> App
+    WS --> App
+    
+    Main --> SM
+    App --> SM
+
+    SM --> FS
+    SM --> KS
+    SM --> DS
+    SM --> MS
+    SM --> AS
+
+    %% MCP as universal protocol
+    MCPS --> MCPA
+    MCPA --> SM
+
+    %% Agent uses MCP
+    Agent -->|MCP Protocol| MCPS
+    AS -->|Manages| Agent
+
+    %% Storage
+    KS --> USG
+    MS --> USG
+    USG --> CG
+    USG --> Letta
+    USG --> VS
+
+    style SM fill:#ccffcc
+    style MCPA fill:#ccffcc
+    style Agent fill:#ccffcc
+```
+
+## Detailed Comparison
+
+### Current System Complexity
+- **3 Parallel Implementations**: Services, MCP tools, Agent tools
+- **Multiple Entry Points**: 3 levels of main files
+- **Duplicate Pipelines**: 3 pipeline classes doing similar things
+- **File Bloat**: Single files with 2000+ lines
+- **~30,000+ lines** of code total
+
+### Proposed System Simplicity
+- **1 Implementation**: Services only
+- **MCP as Universal Protocol**: Both external clients and agent use MCP
+- **Single Entry Point**: Direct and clean
+- **Modular Files**: No file over 500 lines
+- **~15,000 lines** of code total (50% reduction)
+
+## Implementation: Agent as MCP Client
+
+```python
+# Current: Agent has duplicate tools
+class AgentV2:
+    def __init__(self):
+        self.tools = [
+            AnalysisTool(),      # Duplicate of service
+            DiscoveryTool(),     # Duplicate of service
+            PDFTool(),           # Duplicate of service
+            # ... 10 more duplicate tools
+        ]
+
+# Proposed: Agent uses MCP directly
+class Agent:
+    def __init__(self, mcp_server_url: str):
+        self.mcp_client = MCPClient(mcp_server_url)
+        self.tools = self.mcp_client.list_tools()  # Get all tools via MCP
+    
+    async def use_tool(self, tool_name: str, params: dict):
+        return await self.mcp_client.call_tool(tool_name, params)
+```
+
+## Benefits of Agent Using MCP
+
+1. **Zero Duplication**: Agent doesn't need its own tool implementations
+2. **Always in Sync**: Agent automatically gets new tools when services are updated
+3. **Protocol Standardization**: MCP becomes the universal tool protocol
+4. **Simpler Testing**: Test MCP interface once, works for all clients
+5. **Better Separation**: Agent focuses on reasoning, not tool implementation
+
+## Migration Path
+
+### Phase 1: MCP Adapters (Week 1)
+```python
+# Create MCP adapters for all services
+mcp_server.register_adapter(FileServiceMCPAdapter(file_service))
+mcp_server.register_adapter(KnowledgeServiceMCPAdapter(knowledge_service))
+# ... etc
+```
+
+### Phase 2: Agent as MCP Client (Week 2)
+```python
+# Convert agent to use MCP
+agent = Agent(mcp_client=MCPClient("http://localhost:8000/mcp"))
+# Remove all agent tool implementations
+```
+
+### Phase 3: Cleanup (Week 3-4)
+- Remove agent_v2/tools/ directory completely
+- Remove duplicate service implementations from MCP tools
+- Consolidate configuration
+- Update documentation
+
+## Final Architecture Benefits
+
+1. **Single Source of Truth**: Services contain all business logic
+2. **Universal Protocol**: MCP for all tool access (external + internal)
+3. **50% Code Reduction**: From ~30k to ~15k lines
+4. **Maintainability**: Fix/update in one place
+5. **Flexibility**: Easy to add new clients (just implement MCP client)
+6. **Performance**: Less code to load and execute
