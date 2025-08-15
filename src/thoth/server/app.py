@@ -78,17 +78,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(health_router)
-app.include_router(websocket_router)
-app.include_router(chat_router)
+# Include all routers
+from thoth.server.routers import routers
 
-# Note: Additional routers would be added here as they are created:
-# app.include_router(agent_router)
-# app.include_router(research_router)
-# app.include_router(config_router)
-# app.include_router(operations_router)
-# app.include_router(tools_router)
+for router in routers:
+    app.include_router(router)
 
 
 # Dependency injection helpers

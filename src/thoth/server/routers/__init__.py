@@ -13,7 +13,20 @@ from .research import router as research_router
 from .tools import router as tools_router
 from .websocket import router as websocket_router
 
+# Export all routers
+routers = [
+    agent_router,
+    chat_router,
+    config_router,
+    health_router,
+    operations_router,
+    research_router,
+    tools_router,
+    websocket_router,
+]
+
 __all__ = [
+    'routers',
     'agent_router',
     'chat_router', 
     'config_router',
