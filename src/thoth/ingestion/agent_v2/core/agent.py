@@ -5,8 +5,6 @@ This module provides the core agent that orchestrates all research activities
 using a modern LangGraph architecture with MCP framework.
 """
 
-from importlib import import_module
-from pkgutil import iter_modules
 from typing import Any
 
 from langchain_core.messages import (
@@ -22,9 +20,7 @@ from loguru import logger
 
 from thoth.ingestion.agent_v2.core.state import ResearchAgentState
 from thoth.ingestion.agent_v2.core.token_tracker import TokenUsageTracker
-from thoth.ingestion.agent_v2.tools import __path__ as _tools_path
-from thoth.ingestion.agent_v2.tools.base_tool import ToolRegistry
-from thoth.ingestion.agent_v2.tools.decorators import get_registered_tools
+# Legacy tool imports removed - using MCP tools only
 from thoth.services.service_manager import ServiceManager
 
 # Import memory system (optional dependency)
@@ -91,11 +87,7 @@ class ResearchAssistant:
         self.tool_registry = None
         self._initialized = False
 
-        # Initialize tool registry for non-MCP tools immediately if needed
-        if not self.use_mcp_tools:
-            from thoth.ingestion.agent_v2.tools.base_tool import ToolRegistry
-
-            self.tool_registry = ToolRegistry(service_manager=self.service_manager)
+        # MCP tools will be loaded during async initialization
 
         # Set up system prompt
         self.system_prompt = system_prompt or self._get_default_system_prompt()
@@ -128,15 +120,10 @@ class ResearchAssistant:
                 )
             except Exception as e:
                 logger.error(f'Failed to initialize MCP tools: {e}')
-                logger.info('Falling back to legacy tools')
-                self.use_mcp_tools = False
-
-        if not self.use_mcp_tools:
-            # Fall back to legacy tools
-            self.tool_registry = ToolRegistry(service_manager=self.service_manager)
-            self._register_tools()
-            self.tools = self.tool_registry.create_all_tools()
-            logger.info(f'Using legacy tools - loaded {len(self.tools)} tools')
+                raise RuntimeError(
+                    'MCP tools initialization failed. '
+                    'Please ensure MCP server is running.'
+                ) from e
 
         # Bind tools to LLM
         self.llm_with_tools = self.llm.bind_tools(self.tools)
@@ -149,15 +136,7 @@ class ResearchAssistant:
             f'Research Assistant fully initialized with {len(self.tools)} tools'
         )
 
-    def _register_tools(self) -> None:
-        """Register all available tools discovered via decorators."""
-        # Import all tool modules to trigger decorator registration
-        for module in iter_modules(_tools_path):
-            import_module(f'thoth.ingestion.agent_v2.tools.{module.name}')
 
-        # Register each discovered tool class
-        for name, cls in get_registered_tools().items():
-            self.tool_registry.register(name, cls)
 
     async def _get_mcp_tools_via_adapter(self) -> list[Any]:
         """Get MCP tools using official LangChain MCP adapter."""
@@ -194,12 +173,10 @@ class ResearchAssistant:
             return []
         except Exception as e:
             logger.error(f'Failed to connect to MCP server: {e}')
-            logger.warning('Falling back to legacy tools')
-            # Fall back to legacy tools if MCP connection fails
-            self.use_mcp_tools = False
-            self.tool_registry = ToolRegistry(service_manager=self.service_manager)
-            self._register_tools()
-            return self.tool_registry.create_all_tools()
+            raise RuntimeError(
+                'Failed to connect to MCP server. '
+                'Please ensure MCP server is running.'
+            ) from e
 
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt for the agent."""

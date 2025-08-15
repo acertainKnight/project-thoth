@@ -1352,9 +1352,9 @@ async def stream_pdf_processing(operation_id: str, parameters: dict[str, Any]):
 
         try:
             # Use the document pipeline to process PDF
-            from thoth.pipelines.document_pipeline import DocumentPipeline
+            from thoth.pipelines.optimized_document_pipeline import OptimizedDocumentPipeline
 
-            pipeline = DocumentPipeline(service_manager)
+            pipeline = OptimizedDocumentPipeline(service_manager)
 
             result = await asyncio.to_thread(pipeline.process_pdf, Path(pdf_path))
 
