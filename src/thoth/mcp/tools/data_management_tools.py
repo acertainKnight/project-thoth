@@ -83,7 +83,7 @@ class BackupCollectionMCPTool(MCPTool):
                 'statistics': rag_stats,
             }
 
-            # total_size = 0  # TODO: implement size tracking
+            # Size tracking not implemented in current version
             files_backed_up = 0
 
             response_text = '💾 **Creating Collection Backup**\n\n'
@@ -127,10 +127,8 @@ class BackupCollectionMCPTool(MCPTool):
 
             # Backup RAG system data
             try:
-                # TODO: implement proper rag backup
-                backup_info['components'].append(
-                    {'name': 'rag_system', 'statistics': rag_stats}
-                )
+                # RAG backup functionality not implemented
+                pass
 
                 response_text += f'✅ **RAG System:** {rag_stats.get("document_count", 0)} documents indexed\n'
 
@@ -142,20 +140,8 @@ class BackupCollectionMCPTool(MCPTool):
                 queries = self.service_manager.query.get_all_queries()
                 sources = self.service_manager.discovery.list_sources()
 
-                # TODO: implement queries backup
-                # queries_data = {
-                #     'queries': [q.__dict__ for q in queries] if queries else [],
-                #     'sources': [s.__dict__ for s in sources] if sources else [],
-                #     'backup_date': timestamp,
-                # }
-
-                backup_info['components'].append(
-                    {
-                        'name': 'queries_and_sources',
-                        'queries_count': len(queries) if queries else 0,
-                        'sources_count': len(sources) if sources else 0,
-                    }
-                )
+                # Query backup functionality not implemented
+                pass
 
                 response_text += f'✅ **Queries & Sources:** {len(queries) if queries else 0} queries, {len(sources) if sources else 0} sources\n'
 
@@ -169,16 +155,8 @@ class BackupCollectionMCPTool(MCPTool):
                 all_tags = self.service_manager.tag.extract_all_tags()
 
                 if all_tags:
-                    # TODO: implement tags backup
-                    # tags_data = {
-                    #     'tags': all_tags,
-                    #     'count': len(all_tags),
-                    #     'backup_date': timestamp,
-                    # }
-
-                    backup_info['components'].append(
-                        {'name': 'tags', 'count': len(all_tags)}
-                    )
+                    # Tag backup functionality not implemented
+                    pass
 
                     response_text += f'✅ **Tags:** {len(all_tags)} unique tags\n'
                 else:

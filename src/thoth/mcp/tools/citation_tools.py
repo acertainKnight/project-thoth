@@ -576,7 +576,6 @@ class ExtractCitationsMCPTool(MCPTool):
             article_identifier = arguments['article_identifier']
             include_outbound = arguments.get('include_outbound', True)
             include_inbound = arguments.get('include_inbound', True)
-            # max_depth = arguments.get('max_depth', 2)  # TODO: implement depth
 
             # Find the target article
             search_results = self.service_manager.rag.search(

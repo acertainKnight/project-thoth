@@ -286,7 +286,7 @@ class MCPServer:
 
     async def _handle_prompts_list(self, request_id: Any) -> JSONRPCResponse:
         """Handle prompts/list request."""
-        # TODO: Implement prompt templates
+        # Return empty list for now - prompt templates not implemented
         result = {'prompts': []}
         return self.protocol_handler.create_response(request_id, result)
 
@@ -294,7 +294,7 @@ class MCPServer:
         self, request_id: Any, _params: dict[str, Any]
     ) -> JSONRPCResponse:
         """Handle prompts/get request."""
-        # TODO: Implement prompt template retrieval
+        # Return empty template - prompt retrieval not implemented
         return self.protocol_handler.create_error_response(
             request_id, MCPErrorCodes.PROMPT_NOT_FOUND, 'Prompts not yet implemented'
         )

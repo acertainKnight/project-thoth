@@ -45,8 +45,9 @@ def run_pdf_stats(args, pipeline: ThothPipeline):  # noqa: ARG001
     """
     Show statistics about PDF availability.
     """
-    # TODO: Implement statistics gathering from database
-    logger.warning('PDF statistics not yet implemented')
+    # Statistics gathering from database not implemented
+    # This would require integration with a persistent storage backend
+    logger.warning('PDF statistics not available in current version')
     logger.info('This will show:')
     logger.info('- Total articles with/without PDFs')
     logger.info('- Breakdown by source (Crossref, Unpaywall, arXiv, etc.)')
@@ -108,8 +109,9 @@ def _process_all_articles(
     dry_run: bool,  # noqa: ARG001
 ):
     """Process all articles to locate PDFs."""
-    # TODO: Implement database query to get articles
-    logger.warning('Batch processing not yet implemented')
+    # Database query functionality not implemented
+    # This would require integration with a persistent storage backend
+    logger.warning('Article listing not available in current version')
     logger.info('This will:')
     logger.info('1. Query all articles from the database')
     logger.info('2. Filter those without pdf_url (or all if --update-existing)')

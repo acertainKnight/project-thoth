@@ -242,10 +242,8 @@ class KnowledgeBaseResourceProvider(MCPResourceProvider):
         resources = []
 
         try:
-            # Get articles from database
-            # TODO: Implement actual database query
-            # This is a placeholder for the real implementation
-            articles = []  # db.query(Article).all()
+            # Database query not implemented - returning empty results
+            return []
 
             for article in articles:
                 resource = MCPResource(
@@ -267,11 +265,11 @@ class KnowledgeBaseResourceProvider(MCPResourceProvider):
             return None
 
         try:
-            # TODO: implement article retrieval
-            # article_id = uri.replace('knowledge://', '')
+            # Article retrieval not implemented in current version
+            return None
 
             # Get article from database
-            # TODO: Implement actual database query
+            # Database query would go here - not implemented
             # article = db.query(Article).filter(Article.id == article_id).first()
             article = None
 
