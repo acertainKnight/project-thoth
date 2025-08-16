@@ -1,16 +1,10 @@
 """
-MCP Tools Package
+MCP-compliant tools for Thoth.
 
-This package contains all MCP-compliant tools for the Thoth research assistant.
+This module provides all MCP-compliant tools organized by category.
 """
 
-# Import the base classes from the parent base_tools module
-from ..base_tools import MCPTool, MCPToolCallResult, MCPToolRegistry
-from .advanced_rag_tools import (
-    CreateCustomIndexMCPTool,
-    OptimizeSearchMCPTool,
-    ReindexCollectionMCPTool,
-)
+# Import all tools from their respective modules
 from .analysis_tools import (
     AnalyzeTopicMCPTool,
     EvaluateArticleMCPTool,
@@ -18,7 +12,10 @@ from .analysis_tools import (
     GenerateResearchSummaryMCPTool,
 )
 from .article_tools import (
-    DeleteArticleMCPTool,
+    CiteArticleMCPTool,
+    GetArticleDetailsMCPTool,
+    GetRelatedArticlesMCPTool,
+    ListArticlesMCPTool,
     SearchArticlesMCPTool,
     UpdateArticleMetadataMCPTool,
 )
@@ -27,13 +24,13 @@ from .citation_tools import (
     ExtractCitationsMCPTool,
     FormatCitationsMCPTool,
 )
-from .data_management_tools import (
+from .data import (
     BackupCollectionMCPTool,
     ExportArticleDataMCPTool,
     GenerateReadingListMCPTool,
     SyncWithObsidianMCPTool,
 )
-from .discovery_tools import (
+from .discovery import (
     CreateArxivSourceMCPTool,
     CreateBiorxivSourceMCPTool,
     CreateCrossrefSourceMCPTool,
@@ -44,159 +41,204 @@ from .discovery_tools import (
     ListDiscoverySourcesMCPTool,
     RunDiscoveryMCPTool,
 )
-from .download_pdf_tool import (
-    DownloadPdfMCPTool,
-)
+from .download_pdf_tool import DownloadArticlePdfMCPTool
 from .pdf_content_tools import (
-    ExtractPdfMetadataMCPTool,
-    LocatePdfMCPTool,
-    ValidatePdfSourcesMCPTool,
+    ExtractImagesFromPdfMCPTool,
+    ExtractSectionFromPdfMCPTool,
+    ExtractTablesFromPdfMCPTool,
+    GetPdfStructureMCPTool,
+    SearchInPdfMCPTool,
 )
 from .processing_tools import (
-    BatchProcessPdfsMCPTool,
-    CollectionStatsMCPTool,
-    GetArticleDetailsMCPTool,
-    ListArticlesMCPTool,
+    AutoTagArticlesMCPTool,
+    GenerateNotesMCPTool,
+    ProcessArticleMCPTool,
     ProcessPdfMCPTool,
+    RegenerateNotesMCPTool,
+    SummarizeArticleMCPTool,
 )
 from .query_tools import (
     CreateQueryMCPTool,
     DeleteQueryMCPTool,
     GetQueryMCPTool,
     ListQueriesMCPTool,
+    RunQueryMCPTool,
     UpdateQueryMCPTool,
+)
+from .advanced_rag_tools import (
+    AdvancedSearchMCPTool,
+    CompareArticlesMCPTool,
+    IndexDocumentMCPTool,
+    RagStatusMCPTool,
+    ReindexCollectionMCPTool,
+    SearchByEmbeddingMCPTool,
+    SearchWithContextMCPTool,
 )
 from .tag_tools import (
-    ConsolidateAndRetagMCPTool,
-    ConsolidateTagsMCPTool,
-    ManageTagVocabularyMCPTool,
-    SuggestTagsMCPTool,
+    AddTagsMCPTool,
+    GetPopularTagsMCPTool,
+    ListTagsMCPTool,
+    MergeTagsMCPTool,
+    RemoveTagsMCPTool,
+    RenameTagMCPTool,
+    SearchByTagsMCPTool,
 )
-from .web_search_tool import (
-    WebSearchMCPTool,
-)
+from .web_search_tool import WebSearchMCPTool
 
-# List of all available MCP tool classes
-MCP_TOOL_CLASSES = [
-    # Query management tools
-    ListQueriesMCPTool,
-    CreateQueryMCPTool,
-    GetQueryMCPTool,
-    UpdateQueryMCPTool,
-    DeleteQueryMCPTool,
-    # Discovery source tools
-    ListDiscoverySourcesMCPTool,
-    CreateArxivSourceMCPTool,
-    CreatePubmedSourceMCPTool,
-    CreateCrossrefSourceMCPTool,
-    CreateOpenalexSourceMCPTool,
-    CreateBiorxivSourceMCPTool,
-    GetDiscoverySourceMCPTool,
-    RunDiscoveryMCPTool,
-    DeleteDiscoverySourceMCPTool,
-    # Processing tools
-    ProcessPdfMCPTool,
-    BatchProcessPdfsMCPTool,
-    GetArticleDetailsMCPTool,
-    ListArticlesMCPTool,
-    CollectionStatsMCPTool,
-    # Article search and management tools
-    SearchArticlesMCPTool,
-    UpdateArticleMetadataMCPTool,
-    DeleteArticleMCPTool,
-    # Tag management tools
-    ConsolidateTagsMCPTool,
-    SuggestTagsMCPTool,
-    ManageTagVocabularyMCPTool,
-    ConsolidateAndRetagMCPTool,
-    # Citation and bibliography tools
-    FormatCitationsMCPTool,
-    ExportBibliographyMCPTool,
-    ExtractCitationsMCPTool,
-    # Analysis and intelligence tools
-    EvaluateArticleMCPTool,
-    AnalyzeTopicMCPTool,
-    FindRelatedPapersMCPTool,
-    GenerateResearchSummaryMCPTool,
-    # Data management and export tools
-    BackupCollectionMCPTool,
-    ExportArticleDataMCPTool,
-    GenerateReadingListMCPTool,
-    SyncWithObsidianMCPTool,
-    # PDF and content tools
-    LocatePdfMCPTool,
-    ValidatePdfSourcesMCPTool,
-    ExtractPdfMetadataMCPTool,
-    DownloadPdfMCPTool,
-    # Web search tools
-    WebSearchMCPTool,
-    # Advanced RAG tools
-    ReindexCollectionMCPTool,
-    OptimizeSearchMCPTool,
-    CreateCustomIndexMCPTool,
-]
-
-
-def register_all_mcp_tools(registry: MCPToolRegistry) -> None:
-    """
-    Register all MCP tools with the registry.
-
-    Args:
-        registry: MCPToolRegistry instance to register tools with
-    """
-    for tool_class in MCP_TOOL_CLASSES:
-        registry.register_class(tool_class)
-
+# Tool registry
+TOOL_REGISTRY = {
+    # Article Tools
+    'list_articles': ListArticlesMCPTool,
+    'search_articles': SearchArticlesMCPTool,
+    'get_article_details': GetArticleDetailsMCPTool,
+    'get_related_articles': GetRelatedArticlesMCPTool,
+    'cite_article': CiteArticleMCPTool,
+    'update_article_metadata': UpdateArticleMetadataMCPTool,
+    
+    # Analysis Tools
+    'evaluate_article': EvaluateArticleMCPTool,
+    'analyze_topic': AnalyzeTopicMCPTool,
+    'find_related_papers': FindRelatedPapersMCPTool,
+    'generate_research_summary': GenerateResearchSummaryMCPTool,
+    
+    # Citation Tools
+    'format_citations': FormatCitationsMCPTool,
+    'export_bibliography': ExportBibliographyMCPTool,
+    'extract_citations': ExtractCitationsMCPTool,
+    
+    # Data Management Tools
+    'backup_collection': BackupCollectionMCPTool,
+    'export_article_data': ExportArticleDataMCPTool,
+    'generate_reading_list': GenerateReadingListMCPTool,
+    'sync_with_obsidian': SyncWithObsidianMCPTool,
+    
+    # Discovery Tools
+    'list_discovery_sources': ListDiscoverySourcesMCPTool,
+    'create_arxiv_source': CreateArxivSourceMCPTool,
+    'create_pubmed_source': CreatePubmedSourceMCPTool,
+    'create_crossref_source': CreateCrossrefSourceMCPTool,
+    'create_openalex_source': CreateOpenalexSourceMCPTool,
+    'create_biorxiv_source': CreateBiorxivSourceMCPTool,
+    'get_discovery_source': GetDiscoverySourceMCPTool,
+    'run_discovery': RunDiscoveryMCPTool,
+    'delete_discovery_source': DeleteDiscoverySourceMCPTool,
+    
+    # PDF Tools
+    'download_article_pdf': DownloadArticlePdfMCPTool,
+    'get_pdf_structure': GetPdfStructureMCPTool,
+    'search_in_pdf': SearchInPdfMCPTool,
+    'extract_section_from_pdf': ExtractSectionFromPdfMCPTool,
+    'extract_tables_from_pdf': ExtractTablesFromPdfMCPTool,
+    'extract_images_from_pdf': ExtractImagesFromPdfMCPTool,
+    
+    # Processing Tools
+    'process_pdf': ProcessPdfMCPTool,
+    'process_article': ProcessArticleMCPTool,
+    'summarize_article': SummarizeArticleMCPTool,
+    'generate_notes': GenerateNotesMCPTool,
+    'regenerate_notes': RegenerateNotesMCPTool,
+    'auto_tag_articles': AutoTagArticlesMCPTool,
+    
+    # Query Tools
+    'list_queries': ListQueriesMCPTool,
+    'create_query': CreateQueryMCPTool,
+    'get_query': GetQueryMCPTool,
+    'update_query': UpdateQueryMCPTool,
+    'delete_query': DeleteQueryMCPTool,
+    'run_query': RunQueryMCPTool,
+    
+    # RAG Tools
+    'rag_status': RagStatusMCPTool,
+    'search_with_context': SearchWithContextMCPTool,
+    'advanced_search': AdvancedSearchMCPTool,
+    'search_by_embedding': SearchByEmbeddingMCPTool,
+    'compare_articles': CompareArticlesMCPTool,
+    'index_document': IndexDocumentMCPTool,
+    'reindex_collection': ReindexCollectionMCPTool,
+    
+    # Tag Tools
+    'list_tags': ListTagsMCPTool,
+    'add_tags': AddTagsMCPTool,
+    'remove_tags': RemoveTagsMCPTool,
+    'rename_tag': RenameTagMCPTool,
+    'merge_tags': MergeTagsMCPTool,
+    'get_popular_tags': GetPopularTagsMCPTool,
+    'search_by_tags': SearchByTagsMCPTool,
+    
+    # Web Tools
+    'web_search': WebSearchMCPTool,
+}
 
 __all__ = [
-    'MCP_TOOL_CLASSES',
-    'AnalyzeTopicMCPTool',
-    'BackupCollectionMCPTool',
-    'BatchProcessPdfsMCPTool',
-    'CollectionStatsMCPTool',
-    'ConsolidateAndRetagMCPTool',
-    'ConsolidateTagsMCPTool',
-    'CreateArxivSourceMCPTool',
-    'CreateBiorxivSourceMCPTool',
-    'CreateCrossrefSourceMCPTool',
-    'CreateCustomIndexMCPTool',
-    'CreateOpenalexSourceMCPTool',
-    'CreatePubmedSourceMCPTool',
-    'CreateQueryMCPTool',
-    'DeleteArticleMCPTool',
-    'DeleteDiscoverySourceMCPTool',
-    'DeleteQueryMCPTool',
-    'DownloadPdfMCPTool',
+    'TOOL_REGISTRY',
+    # Article Tools
+    'ListArticlesMCPTool',
+    'SearchArticlesMCPTool',
+    'GetArticleDetailsMCPTool',
+    'GetRelatedArticlesMCPTool',
+    'CiteArticleMCPTool',
+    'UpdateArticleMetadataMCPTool',
+    # Analysis Tools
     'EvaluateArticleMCPTool',
-    'ExportArticleDataMCPTool',
+    'AnalyzeTopicMCPTool',
+    'FindRelatedPapersMCPTool',
+    'GenerateResearchSummaryMCPTool',
+    # Citation Tools
+    'FormatCitationsMCPTool',
     'ExportBibliographyMCPTool',
     'ExtractCitationsMCPTool',
-    'ExtractPdfMetadataMCPTool',
-    'FindRelatedPapersMCPTool',
-    'FormatCitationsMCPTool',
+    # Data Management Tools
+    'BackupCollectionMCPTool',
+    'ExportArticleDataMCPTool',
     'GenerateReadingListMCPTool',
-    'GenerateResearchSummaryMCPTool',
-    'GetArticleDetailsMCPTool',
-    'GetDiscoverySourceMCPTool',
-    'GetQueryMCPTool',
-    'ListArticlesMCPTool',
-    'ListDiscoverySourcesMCPTool',
-    'ListQueriesMCPTool',
-    'LocatePdfMCPTool',
-    'MCPTool',
-    'MCPToolCallResult',
-    'MCPToolRegistry',
-    'ManageTagVocabularyMCPTool',
-    'OptimizeSearchMCPTool',
-    'ProcessPdfMCPTool',
-    'ReindexCollectionMCPTool',
-    'RunDiscoveryMCPTool',
-    'SearchArticlesMCPTool',
-    'SuggestTagsMCPTool',
     'SyncWithObsidianMCPTool',
-    'UpdateArticleMetadataMCPTool',
+    # Discovery Tools
+    'ListDiscoverySourcesMCPTool',
+    'CreateArxivSourceMCPTool',
+    'CreatePubmedSourceMCPTool',
+    'CreateCrossrefSourceMCPTool',
+    'CreateOpenalexSourceMCPTool',
+    'CreateBiorxivSourceMCPTool',
+    'GetDiscoverySourceMCPTool',
+    'RunDiscoveryMCPTool',
+    'DeleteDiscoverySourceMCPTool',
+    # PDF Tools
+    'DownloadArticlePdfMCPTool',
+    'GetPdfStructureMCPTool',
+    'SearchInPdfMCPTool',
+    'ExtractSectionFromPdfMCPTool',
+    'ExtractTablesFromPdfMCPTool',
+    'ExtractImagesFromPdfMCPTool',
+    # Processing Tools
+    'ProcessPdfMCPTool',
+    'ProcessArticleMCPTool',
+    'SummarizeArticleMCPTool',
+    'GenerateNotesMCPTool',
+    'RegenerateNotesMCPTool',
+    'AutoTagArticlesMCPTool',
+    # Query Tools
+    'ListQueriesMCPTool',
+    'CreateQueryMCPTool',
+    'GetQueryMCPTool',
     'UpdateQueryMCPTool',
-    'ValidatePdfSourcesMCPTool',
+    'DeleteQueryMCPTool',
+    'RunQueryMCPTool',
+    # RAG Tools
+    'RagStatusMCPTool',
+    'SearchWithContextMCPTool',
+    'AdvancedSearchMCPTool',
+    'SearchByEmbeddingMCPTool',
+    'CompareArticlesMCPTool',
+    'IndexDocumentMCPTool',
+    'ReindexCollectionMCPTool',
+    # Tag Tools
+    'ListTagsMCPTool',
+    'AddTagsMCPTool',
+    'RemoveTagsMCPTool',
+    'RenameTagMCPTool',
+    'MergeTagsMCPTool',
+    'GetPopularTagsMCPTool',
+    'SearchByTagsMCPTool',
+    # Web Tools
     'WebSearchMCPTool',
-    'register_all_mcp_tools',
 ]
