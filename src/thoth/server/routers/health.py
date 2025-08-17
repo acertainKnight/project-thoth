@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 
 from thoth.monitoring.health import HealthMonitor
-from thoth.utilities.download import download_pdf
+from thoth.ingestion.pdf_downloader import download_pdf
 
 router = APIRouter(tags=["health", "utility"])
 

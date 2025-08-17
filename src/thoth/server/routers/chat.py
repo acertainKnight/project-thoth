@@ -4,13 +4,22 @@ Chat sessions and messages endpoints.
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from loguru import logger
 from pydantic import BaseModel
 
 from thoth.server.chat_models import ChatManager
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+def get_chat_manager() -> ChatManager:
+    """Get chat manager from app state."""
+    from thoth.server.app import app
+    
+    if not hasattr(app.state, 'chat_manager'):
+        raise HTTPException(status_code=503, detail='Chat manager not initialized')
+    return app.state.chat_manager
 
 
 # Request/Response models
@@ -39,12 +48,9 @@ class MessageHistoryResponse(BaseModel):
 @router.post('/sessions')
 async def create_chat_session(
     request: CreateSessionRequest,
-    chat_manager: ChatManager | None = None
+    chat_manager: ChatManager = Depends(get_chat_manager)
 ) -> dict[str, Any]:
     """Create a new chat session."""
-    if chat_manager is None:
-        raise HTTPException(status_code=503, detail='Chat manager not initialized')
-
     try:
         session = chat_manager.create_session(
             title=request.title, metadata=request.metadata
@@ -74,12 +80,9 @@ async def create_chat_session(
 async def list_chat_sessions(
     active_only: bool = True,
     limit: int = 50,
-    chat_manager: ChatManager | None = None
+    chat_manager: ChatManager = Depends(get_chat_manager)
 ) -> SessionListResponse:
     """List chat sessions."""
-    if chat_manager is None:
-        raise HTTPException(status_code=503, detail='Chat manager not initialized')
-
     try:
         sessions = chat_manager.list_sessions(active_only=active_only, limit=limit)
 
@@ -109,12 +112,9 @@ async def list_chat_sessions(
 @router.get('/sessions/{session_id}')
 async def get_chat_session(
     session_id: str,
-    chat_manager: ChatManager | None = None
+    chat_manager: ChatManager = Depends(get_chat_manager)
 ) -> dict[str, Any]:
     """Get a specific chat session."""
-    if chat_manager is None:
-        raise HTTPException(status_code=503, detail='Chat manager not initialized')
-
     try:
         session = chat_manager.get_session(session_id)
         if not session:
@@ -146,12 +146,9 @@ async def get_chat_session(
 async def update_chat_session(
     session_id: str,
     request: UpdateSessionRequest,
-    chat_manager: ChatManager | None = None
+    chat_manager: ChatManager = Depends(get_chat_manager)
 ) -> dict[str, Any]:
     """Update a chat session."""
-    if chat_manager is None:
-        raise HTTPException(status_code=503, detail='Chat manager not initialized')
-
     try:
         success = chat_manager.update_session(
             session_id=session_id, title=request.title, metadata=request.metadata
@@ -189,12 +186,9 @@ async def update_chat_session(
 @router.delete('/sessions/{session_id}')
 async def delete_chat_session(
     session_id: str,
-    chat_manager: ChatManager | None = None
+    chat_manager: ChatManager = Depends(get_chat_manager)
 ) -> dict[str, Any]:
     """Delete a chat session and all its messages."""
-    if chat_manager is None:
-        raise HTTPException(status_code=503, detail='Chat manager not initialized')
-
     try:
         success = chat_manager.delete_session(session_id)
 
@@ -214,12 +208,9 @@ async def delete_chat_session(
 @router.post('/sessions/{session_id}/archive')
 async def archive_chat_session(
     session_id: str,
-    chat_manager: ChatManager | None = None
+    chat_manager: ChatManager = Depends(get_chat_manager)
 ) -> dict[str, Any]:
     """Archive a chat session (mark as inactive)."""
-    if chat_manager is None:
-        raise HTTPException(status_code=503, detail='Chat manager not initialized')
-
     try:
         success = chat_manager.archive_session(session_id)
 
@@ -241,12 +232,9 @@ async def get_chat_history(
     session_id: str,
     limit: int = 100,
     offset: int = 0,
-    chat_manager: ChatManager | None = None
+    chat_manager: ChatManager = Depends(get_chat_manager)
 ) -> MessageHistoryResponse:
     """Get chat history for a session."""
-    if chat_manager is None:
-        raise HTTPException(status_code=503, detail='Chat manager not initialized')
-
     try:
         # Get session info
         session = chat_manager.get_session(session_id)
@@ -299,12 +287,9 @@ async def search_chat_messages(
     query: str,
     session_id: str | None = None,
     limit: int = 50,
-    chat_manager: ChatManager | None = None
+    chat_manager: ChatManager = Depends(get_chat_manager)
 ) -> dict[str, Any]:
     """Search chat messages by content."""
-    if chat_manager is None:
-        raise HTTPException(status_code=503, detail='Chat manager not initialized')
-
     try:
         messages = chat_manager.search_messages(
             query, session_id=session_id, limit=limit

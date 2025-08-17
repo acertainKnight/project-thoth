@@ -1,7 +1,10 @@
 """Pipelines package for Thoth."""
 
 from .base import BasePipeline
-from .document_pipeline import DocumentPipeline
 from .knowledge_pipeline import KnowledgePipeline
+from .optimized_document_pipeline import OptimizedDocumentPipeline
 
-__all__ = ['BasePipeline', 'DocumentPipeline', 'KnowledgePipeline']
+# Alias for backward compatibility
+DocumentPipeline = OptimizedDocumentPipeline
+
+__all__ = ['BasePipeline', 'DocumentPipeline', 'KnowledgePipeline', 'OptimizedDocumentPipeline']

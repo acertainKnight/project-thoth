@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from thoth.pipeline import ThothPipeline
-from thoth.pipelines.document_pipeline import DocumentPipeline
+from thoth.pipelines import DocumentPipeline
 
 
 class TestDocumentPipeline:

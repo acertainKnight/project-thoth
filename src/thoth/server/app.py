@@ -73,7 +73,7 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=config.endpoint_config.cors_origins,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:8080", "*"],  # TODO: Make this configurable
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -95,6 +95,11 @@ def get_service_manager():
 def get_chat_manager():
     """Get chat manager from app state."""
     return app.state.chat_manager
+
+
+def create_app():
+    """Create a new FastAPI app instance. Used for testing."""
+    return app
 
 
 def get_research_agent():

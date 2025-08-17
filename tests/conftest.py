@@ -46,6 +46,7 @@ def thoth_config(temp_workspace):
         config = ThothConfig(
             core=CoreConfig(
                 workspace_dir=temp_workspace,
+                prompts_dir=Path(__file__).parent.parent / 'templates' / 'prompts',
                 api_keys=APIKeys(
                     mistral_key='test_mistral_key',
                     openrouter_key='test_openrouter_key',

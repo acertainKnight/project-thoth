@@ -6,7 +6,7 @@ import asyncio
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from loguru import logger
 
 from thoth.server.chat_models import ChatManager, ChatMessage
@@ -14,6 +14,15 @@ from thoth.services.llm_router import LLMRouter
 from thoth.utilities.config import get_config
 
 router = APIRouter(tags=["websocket"])
+
+
+def get_chat_manager() -> ChatManager:
+    """Get chat manager from app state."""
+    from thoth.server.app import app
+    
+    if not hasattr(app.state, 'chat_manager'):
+        return None  # For WebSockets, we'll handle this differently
+    return app.state.chat_manager
 
 
 class ConnectionManager:
@@ -50,11 +59,14 @@ progress_ws_manager = ConnectionManager()
 @router.websocket('/ws/chat')
 async def websocket_chat(
     websocket: WebSocket,
-    research_agent=None,
-    chat_manager: ChatManager | None = None
+    research_agent=None
 ) -> None:
     """WebSocket endpoint for real-time chat with persistence."""
     await chat_ws_manager.connect(websocket)
+    
+    # Get chat manager from app state
+    chat_manager = get_chat_manager()
+    
     try:
         while True:
             data = await websocket.receive_json()

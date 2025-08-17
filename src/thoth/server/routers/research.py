@@ -6,7 +6,7 @@ import asyncio
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
 from loguru import logger
 from pydantic import BaseModel
@@ -16,6 +16,15 @@ from thoth.services.llm_router import LLMRouter
 from thoth.utilities.config import get_config
 
 router = APIRouter(prefix="/research", tags=["research"])
+
+
+def get_chat_manager() -> ChatManager:
+    """Get chat manager from app state."""
+    from thoth.server.app import app
+    
+    if not hasattr(app.state, 'chat_manager'):
+        raise HTTPException(status_code=503, detail='Chat manager not initialized')
+    return app.state.chat_manager
 
 
 class ChatRequest(BaseModel):
@@ -37,7 +46,7 @@ class ResearchRequest(BaseModel):
 async def research_chat(
     request: ChatRequest,
     research_agent=None,
-    chat_manager: ChatManager | None = None
+    chat_manager: ChatManager = Depends(get_chat_manager)
 ):
     """
     Chat with the research agent.

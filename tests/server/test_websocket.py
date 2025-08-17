@@ -1,7 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from thoth.server import api_server
+from thoth.server import app as server_app
+from thoth.server import create_app
 
 
 class DummyAgent:
@@ -23,10 +24,17 @@ class DummyRouter:
 
 @pytest.fixture
 def client(monkeypatch):
-    api_server.research_agent = DummyAgent()
-    monkeypatch.setattr(api_server, 'LLMRouter', lambda config: DummyRouter(config))
-    monkeypatch.setattr(api_server, 'get_config', lambda: object())
-    return TestClient(api_server.app)
+    # Create a test app with mocked dependencies
+    from thoth.utilities.config import ThothConfig
+    
+    # Mock the global objects that the app uses
+    monkeypatch.setattr('thoth.server.app.research_agent', DummyAgent())
+    monkeypatch.setattr('thoth.server.app.LLMRouter', lambda config: DummyRouter(config))
+    monkeypatch.setattr('thoth.server.app.get_config', lambda: ThothConfig())
+    
+    # Create the app
+    test_app = create_app()
+    return TestClient(test_app)
 
 
 def test_websocket_chat(client):

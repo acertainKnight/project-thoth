@@ -496,3 +496,7 @@ class ChatPersistenceManager:
                 logger.info(f'Cleaned up {deleted_count} old chat sessions')
 
             return deleted_count
+
+
+# Alias for backward compatibility
+ChatManager = ChatPersistenceManager

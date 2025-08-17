@@ -5,21 +5,8 @@ DEPRECATED: This module is maintained for backward compatibility only.
 Please use thoth.config instead.
 """
 
-# Import everything from the new config module for backward compatibility
-from thoth.config import (
-    ThothConfig,
-    get_config,
-    reset_config,
-    APIConfig as APIKeys,  # Alias for compatibility
-    LLMConfig,
-    DirectoryConfig,
-    ServerConfig,
-    PerformanceConfig,
-    FeatureFlags,
-)
-
-# Re-export commonly used items
-__all__ = ['ThothConfig', 'get_config', 'reset_config', 'APIKeys', 'LLMConfig']
+# TODO: Once migration is complete, import from thoth.config
+# For now, the classes are defined in this file
 
 # Keep the old imports for now to avoid breaking changes
 import os

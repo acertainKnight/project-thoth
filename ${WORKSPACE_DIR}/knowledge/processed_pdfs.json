@@ -1,0 +1,10 @@
+{
+  "/tmp/tmp80bmejjt/sample.pdf": {
+    "processed_time": 1755448685.1905653,
+    "size": 429,
+    "mtime": 1755448685.178677,
+    "note_path": "/tmp/tmp80bmejjt/notes/sample_note.md",
+    "new_pdf_path": "/tmp/tmp80bmejjt/notes/sample.pdf",
+    "new_markdown_path": "/tmp/tmp80bmejjt/notes/sample_markdown.md"
+  }
+}

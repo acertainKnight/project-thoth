@@ -4,7 +4,7 @@ from datetime import datetime
 
 from thoth.utilities.schemas import ResearchQuery, ScrapedArticleMetadata
 
-from ..api_sources import ArxivClient
+from ..sources import ArxivClient
 from .base import BaseDiscoveryPlugin
 
 
