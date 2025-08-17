@@ -6,5 +6,13 @@
     "note_path": "/tmp/tmp80bmejjt/notes/sample_note.md",
     "new_pdf_path": "/tmp/tmp80bmejjt/notes/sample.pdf",
     "new_markdown_path": "/tmp/tmp80bmejjt/notes/sample_markdown.md"
+  },
+  "/tmp/tmpsbvwqxi9/sample.pdf": {
+    "processed_time": 1755450651.6142864,
+    "size": 429,
+    "mtime": 1755450651.6019728,
+    "note_path": "/tmp/tmpsbvwqxi9/notes/sample_note.md",
+    "new_pdf_path": "/tmp/tmpsbvwqxi9/notes/sample.pdf",
+    "new_markdown_path": "/tmp/tmpsbvwqxi9/notes/sample_markdown.md"
   }
 }

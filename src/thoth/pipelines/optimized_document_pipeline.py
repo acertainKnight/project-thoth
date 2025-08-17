@@ -17,6 +17,7 @@ from typing import Any
 
 from loguru import logger
 
+from thoth.errors import PipelineError
 from thoth.pipelines.base import BasePipeline
 from thoth.services.async_processing_service import AsyncProcessingService
 from thoth.utilities.schemas import Citation
@@ -148,7 +149,11 @@ class OptimizedDocumentPipeline(BasePipeline):
             )
 
         # OCR conversion (potentially cached)
-        markdown_path, no_images_markdown = self._ocr_convert_optimized(pdf_path)
+        try:
+            markdown_path, no_images_markdown = self._ocr_convert_optimized(pdf_path)
+        except RuntimeError as e:
+            # Re-raise with a more specific error message for tests
+            raise PipelineError(f'OCR conversion failed: {e}') from e
         self.logger.info(f'OCR conversion completed: {markdown_path}')
 
         # Parallel analysis with dynamic worker scaling

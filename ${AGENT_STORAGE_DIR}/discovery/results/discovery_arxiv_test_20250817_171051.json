@@ -1,0 +1,11 @@
+{
+  "source_name": "arxiv_test",
+  "run_timestamp": "2025-08-17T17:10:51.365780",
+  "articles_found": 1,
+  "articles_filtered": 1,
+  "articles_downloaded": 0,
+  "errors": [
+    "PDF download failed for 't'"
+  ],
+  "execution_time_seconds": 0.0077800750732421875
+}
