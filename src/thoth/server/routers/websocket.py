@@ -58,14 +58,15 @@ progress_ws_manager = ConnectionManager()
 
 @router.websocket('/ws/chat')
 async def websocket_chat(
-    websocket: WebSocket,
-    research_agent=None
+    websocket: WebSocket
 ) -> None:
     """WebSocket endpoint for real-time chat with persistence."""
     await chat_ws_manager.connect(websocket)
     
-    # Get chat manager from app state
+    # Get chat manager and research agent from app state
     chat_manager = get_chat_manager()
+    from thoth.server.app import app
+    research_agent = app.state.research_agent
     
     try:
         while True:
@@ -148,11 +149,13 @@ async def websocket_chat(
 
 
 @router.websocket('/ws/status')
-async def websocket_status(websocket: WebSocket, research_agent=None) -> None:
+async def websocket_status(websocket: WebSocket) -> None:
     """WebSocket endpoint for status updates."""
     await status_ws_manager.connect(websocket)
+    from thoth.server.app import app
     try:
         while True:
+            research_agent = app.state.research_agent
             status = 'running' if research_agent else 'not_initialized'
             await websocket.send_json({'status': status})
             await asyncio.sleep(5)

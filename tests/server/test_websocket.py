@@ -26,15 +26,25 @@ class DummyRouter:
 def client(monkeypatch):
     # Create a test app with mocked dependencies
     from thoth.utilities.config import ThothConfig
+    from thoth.server.app import app
     
-    # Mock the global objects that the app uses
-    monkeypatch.setattr('thoth.server.app.research_agent', DummyAgent())
-    monkeypatch.setattr('thoth.server.app.LLMRouter', lambda config: DummyRouter(config))
-    monkeypatch.setattr('thoth.server.app.get_config', lambda: ThothConfig())
+    # Mock the initialization of research agent and other dependencies
+    monkeypatch.setattr('thoth.ingestion.agent_v2.core.agent.create_research_assistant_async', 
+                       lambda **kwargs: DummyAgent())
+    monkeypatch.setattr('thoth.services.llm_router.LLMRouter', lambda config: DummyRouter(config))
     
-    # Create the app
-    test_app = create_app()
-    return TestClient(test_app)
+    # Initialize app state with mocked objects
+    app.state.research_agent = DummyAgent()
+    app.state.service_manager = None  # Mock service manager if needed
+    
+    # Initialize chat manager to avoid 503 errors
+    from thoth.server.chat_models import ChatPersistenceManager
+    from pathlib import Path
+    import tempfile
+    temp_dir = Path(tempfile.mkdtemp())
+    app.state.chat_manager = ChatPersistenceManager(storage_path=temp_dir)
+    
+    return TestClient(app)
 
 
 def test_websocket_chat(client):

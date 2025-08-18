@@ -32,6 +32,7 @@ class ChatRequest(BaseModel):
     message: str
     session_id: str | None = None
     model: str | None = None
+    id: str | None = None  # Optional message ID for tracking
 
 
 class ResearchRequest(BaseModel):
@@ -45,7 +46,6 @@ class ResearchRequest(BaseModel):
 @router.post('/chat')
 async def research_chat(
     request: ChatRequest,
-    research_agent=None,
     chat_manager: ChatManager = Depends(get_chat_manager)
 ):
     """
@@ -54,6 +54,9 @@ async def research_chat(
     This endpoint provides a synchronous interface to the research agent,
     with optional chat history persistence.
     """
+    from thoth.server.app import app
+    research_agent = app.state.research_agent
+    
     if research_agent is None:
         raise HTTPException(
             status_code=503, detail='Research agent not initialized'
@@ -134,6 +137,7 @@ async def research_chat(
                 'response': agent_response,
                 'model_used': model_to_use,
                 'tool_calls': tool_calls,
+                'id': request.id,  # Include message ID if provided
             }
         )
 
@@ -146,8 +150,7 @@ async def research_chat(
 
 @router.post('/query')
 async def research_query(
-    request: ResearchRequest,
-    research_agent=None
+    request: ResearchRequest
 ):
     """
     Execute a research query with specified sources.
@@ -155,6 +158,9 @@ async def research_query(
     This endpoint allows for more structured research queries with
     specific source selection and result filtering.
     """
+    from thoth.server.app import app
+    research_agent = app.state.research_agent
+    
     if research_agent is None:
         raise HTTPException(
             status_code=503, detail='Research agent not initialized'

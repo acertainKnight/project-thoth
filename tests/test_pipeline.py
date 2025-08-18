@@ -110,14 +110,16 @@ class TestThothPipeline:
     def test_process_pdf_failure(self, pipeline, sample_pdf_path):
         """Test PDF processing failure handling."""
         with patch.object(pipeline.services.processing, 'ocr_convert') as mock_ocr:
-            # Mock OCR failure
-            mock_ocr.side_effect = Exception('OCR failed')
+            with patch.object(pipeline.services.processing, '_local_pdf_to_markdown') as mock_local:
+                # Mock both OCR and fallback failure
+                mock_ocr.side_effect = Exception('OCR failed')
+                mock_local.side_effect = Exception('Local processing failed')
 
-            # Process PDF should raise exception
-            with pytest.raises(Exception) as exc_info:
-                pipeline.process_pdf(sample_pdf_path)
+                # Process PDF should raise exception
+                with pytest.raises(Exception) as exc_info:
+                    pipeline.process_pdf(sample_pdf_path)
 
-            assert 'OCR conversion failed' in str(exc_info.value)
+                assert 'OCR conversion failed' in str(exc_info.value)
 
     def test_index_knowledge_base(self, pipeline):
         """Test knowledge base indexing."""

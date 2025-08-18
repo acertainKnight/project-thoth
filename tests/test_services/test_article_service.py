@@ -21,9 +21,9 @@ class TestArticleService:
     """Test suite for ArticleService."""
 
     @pytest.fixture
-    def article_service(self):
+    def article_service(self, thoth_config):
         """Create an ArticleService instance for testing."""
-        return ArticleService()
+        return ArticleService(config=thoth_config)
 
     @pytest.fixture
     def sample_article(self):

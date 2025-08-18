@@ -153,7 +153,11 @@ class OptimizedDocumentPipeline(BasePipeline):
             markdown_path, no_images_markdown = self._ocr_convert_optimized(pdf_path)
         except RuntimeError as e:
             # Re-raise with a more specific error message for tests
-            raise PipelineError(f'OCR conversion failed: {e}') from e
+            raise PipelineError(
+                error_code='OCR_CONVERSION_FAILED',
+                message=f'OCR conversion failed: {e}',
+                recoverable=False
+            ) from e
         self.logger.info(f'OCR conversion completed: {markdown_path}')
 
         # Parallel analysis with dynamic worker scaling
