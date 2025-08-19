@@ -63,7 +63,7 @@ class ThothPipeline:
             notes_dir: Directory to save generated notes. If None, default from config is used.
             api_base_url: Base URL for the FastAPI endpoint. If None, loaded from config.
         """  # noqa: W505
-        # ThothPipeline now uses OptimizedDocumentPipeline by default for best performance
+        # ThothPipeline now uses OptimizedDocumentPipeline by default
         logger.info(
             'ThothPipeline initialized with optimized processing (50-65% faster) '
             'including async I/O, intelligent caching, and CPU-aware scaling.'
@@ -145,21 +145,22 @@ class ThothPipeline:
         """
         Regenerate all markdown notes for all articles in the citation graph.
 
-        This method delegates to the CitationGraph's regenerate_all_notes method
+        This method delegates to the CitationService's regenerate_all_notes method
         and returns a list of (final_pdf_path, final_note_path) for successfully
         regenerated notes.
 
         Returns:
             list[tuple[Path, Path]]: A list of (PDF path, note path) tuples for successes.
         """  # noqa: W505
-        if not self.citation_tracker:
+        if not self.services:
             logger.error(
-                'CitationGraph is not initialized. Cannot regenerate all notes.'
+                'ServiceManager is not initialized. Cannot regenerate all notes.'
             )
             return []
 
         logger.info('Pipeline initiating regeneration of all notes.')
-        successful_files = self.citation_tracker.regenerate_all_notes()
+        # Use CitationService instead of calling CitationGraph directly
+        successful_files = self.services.citation.regenerate_all_notes()
         logger.info(
             f'Pipeline completed regeneration of all notes. {len(successful_files)} notes successfully regenerated.'
         )

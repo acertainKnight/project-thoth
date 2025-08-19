@@ -199,7 +199,7 @@ class TestThothPipeline:
         pipeline.citation_tracker.note_generator = MagicMock()
 
         # Mock regenerate_all_notes to return successful files
-        pipeline.citation_tracker.regenerate_all_notes.return_value = [
+        pipeline.services.citation.regenerate_all_notes.return_value = [
             (Path('/path/to/pdf1.pdf'), Path('/path/to/note1.md'))
         ]
 
@@ -211,7 +211,7 @@ class TestThothPipeline:
         assert results[0][1] == Path('/path/to/note1.md')
 
         # Verify method was called
-        pipeline.citation_tracker.regenerate_all_notes.assert_called_once()
+        pipeline.services.citation.regenerate_all_notes.assert_called_once()
 
     def test_consolidate_and_retag_all_articles(self, pipeline):
         """Test tag consolidation and retagging."""
