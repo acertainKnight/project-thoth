@@ -175,14 +175,16 @@ async def websocket_chat(websocket: WebSocket) -> None:
 
             message = data.get('message', '')
             session_id = data.get('session_id')
+            message_id = data.get('id')
 
             if not message:
-                await websocket.send_json(
-                    {
-                        'error': 'Message is required',
-                        'type': 'error',
-                    }
-                )
+                error_response = {
+                    'error': 'Message is required',
+                    'type': 'error',
+                }
+                if message_id:
+                    error_response['id'] = message_id
+                await websocket.send_json(error_response)
                 continue
 
             try:
@@ -207,22 +209,24 @@ async def websocket_chat(websocket: WebSocket) -> None:
                     )
 
                 # Send response back to client
-                await websocket.send_json(
-                    {
-                        'response': response.get('response', ''),
-                        'tool_calls': response.get('tool_calls', []),
-                        'type': 'response',
-                    }
-                )
+                response_data = {
+                    'response': response.get('response', ''),
+                    'tool_calls': response.get('tool_calls', []),
+                    'type': 'response',
+                }
+                if message_id:
+                    response_data['id'] = message_id
+                await websocket.send_json(response_data)
 
             except Exception as e:
                 logger.error(f'Error processing chat message: {e}')
-                await websocket.send_json(
-                    {
-                        'error': f'Error processing message: {e}',
-                        'type': 'error',
-                    }
-                )
+                error_response = {
+                    'error': f'Error processing message: {e}',
+                    'type': 'error',
+                }
+                if message_id:
+                    error_response['id'] = message_id
+                await websocket.send_json(error_response)
 
     except WebSocketDisconnect:
         logger.info('WebSocket chat connection closed')
@@ -239,6 +243,9 @@ async def websocket_status(websocket: WebSocket) -> None:
     logger.info('WebSocket status connection established')
 
     try:
+        # Send initial status
+        await websocket.send_json({'status': 'running'})
+
         while True:
             await asyncio.sleep(1)  # Keep connection alive
     except WebSocketDisconnect:

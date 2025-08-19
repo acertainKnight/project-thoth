@@ -33,12 +33,15 @@ def health_check():
     Returns:
         dict: Health status information
     """
-    health_monitor = HealthMonitor()
+    from thoth.server.app import service_manager
+
+    health_monitor = HealthMonitor(service_manager)
+    status = health_monitor.overall_status()
 
     return {
-        'status': 'healthy',
-        'timestamp': health_monitor.get_current_time(),
-        'services': health_monitor.get_service_status(),
+        'status': 'healthy' if status.get('healthy') else 'unhealthy',
+        'healthy': status.get('healthy', True),
+        'services': status.get('services', {}),
     }
 
 
