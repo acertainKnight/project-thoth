@@ -15,7 +15,7 @@ from loguru import logger
 
 # Import memory pipeline components
 try:
-    from .pipeline import MemoryWritePipeline
+    from .pipelines import MemoryWritePipeline
 
     PIPELINE_AVAILABLE = True
 except ImportError:
@@ -107,7 +107,7 @@ class ThothMemoryStore(_LettaStore):
         # Initialize retrieval pipeline
         self.retrieval_pipeline = None
         if enable_retrieval_pipeline and PIPELINE_AVAILABLE:
-            from thoth.memory.pipeline import MemoryRetrievalPipeline
+            from thoth.memory.pipelines import MemoryRetrievalPipeline
 
             self.retrieval_pipeline = MemoryRetrievalPipeline(
                 rag_service=self.rag_service,
