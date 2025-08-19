@@ -1,19 +1,19 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from thoth.server import api_server
+from thoth.server.app import app
 
 
 class DummyAgent:
-    async def chat(self, message, session_id=None, model_override=None):  # noqa: ARG002
-        return {'response': f'echo:{message}'}
+    async def chat(self, message, session_id=None, model_override=None, context=None):  # noqa: ARG002
+        return {'response': f'echo:{message}', 'tool_calls': []}
 
     def get_available_tools(self):
         return ['t1']
 
 
 class DummyRouter:
-    def __init__(self, _config: object):
+    def __init__(self, _config: object = None):
         """Dummy router."""
         pass
 
@@ -23,10 +23,27 @@ class DummyRouter:
 
 @pytest.fixture
 def client(monkeypatch):
-    api_server.research_agent = DummyAgent()
-    monkeypatch.setattr(api_server, 'LLMRouter', lambda config: DummyRouter(config))
-    monkeypatch.setattr(api_server, 'get_config', lambda: object())
-    return TestClient(api_server.app)
+    # Patch the module-level variables directly in the websocket and research routers
+    import thoth.server.routers.research as research_module
+    import thoth.server.routers.websocket as websocket_module
+
+    # Set up dummy agent in the websocket router
+    websocket_module.research_agent = DummyAgent()
+    research_module.research_agent = DummyAgent()
+
+    # Patch LLMRouter import in the research router module specifically
+    monkeypatch.setattr('thoth.server.routers.research.LLMRouter', DummyRouter)
+
+    # Create a mock config object with necessary attributes
+    class MockConfig:
+        def __init__(self):
+            pass
+
+    monkeypatch.setattr(
+        'thoth.server.routers.research.get_config', lambda: MockConfig()
+    )
+
+    return TestClient(app)
 
 
 def test_websocket_chat(client):
