@@ -6,7 +6,9 @@ scattered across CitationProcessor, tracker, and other components.
 """
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from loguru import logger
 
 from thoth.analyze.citations.citations import CitationProcessor
 from thoth.analyze.citations.formatter import CitationFormatter, CitationStyle
@@ -14,6 +16,9 @@ from thoth.services.base import BaseService, ServiceError
 from thoth.services.llm_service import LLMService
 from thoth.services.pdf_locator_service import PdfLocatorService
 from thoth.utilities.schemas import AnalysisResponse, Citation
+
+if TYPE_CHECKING:
+    from thoth.knowledge.graph import CitationGraph
 
 
 class CitationService(BaseService):
@@ -70,6 +75,18 @@ class CitationService(BaseService):
             self._pdf_locator_service = PdfLocatorService(self.config)
             self._pdf_locator_service.initialize()
         return self._pdf_locator_service
+
+    @property
+    def citation_tracker(self) -> 'CitationGraph':
+        """Get or create the citation graph."""
+        if not hasattr(self, '_citation_tracker'):
+            from thoth.knowledge.graph import CitationGraph
+
+            self._citation_tracker = CitationGraph(
+                knowledge_base_dir=self.config.knowledge_base_dir,
+                notes_dir=self.config.notes_dir,
+            )
+        return self._citation_tracker
 
     def initialize(self) -> None:
         """Initialize the citation service."""
@@ -487,6 +504,134 @@ class CitationService(BaseService):
                 self.handle_error(e, f"locating PDF for '{citation.title[:50]}'")
             )
             return None
+
+    def regenerate_all_notes(self) -> list[tuple[Path, Path]]:
+        """
+        Regenerate all markdown notes for all articles in the citation graph.
+
+        This method iterates through each article in the citation graph,
+        retrieves its data, uses the NoteService to recreate its
+        markdown note, and returns a list of (PDF path, note path) tuples
+        for successfully regenerated notes.
+
+        Returns:
+            list[tuple[Path, Path]]: A list of tuples, where each tuple
+                                     contains the final Path to the PDF file
+                                     and the final Path to its regenerated note.
+
+        Raises:
+            ServiceError: If note regeneration fails
+        """
+        try:
+            self.validate_input()
+
+            if not hasattr(self, '_service_manager') or not self._service_manager:
+                # Get service manager from global if not set
+                from thoth.services.service_manager import ServiceManager
+                from thoth.utilities.config import get_config
+
+                self._service_manager = ServiceManager(get_config())
+                self._service_manager.initialize()
+
+            graph = self.citation_tracker.graph
+            logger.info(
+                f'Starting regeneration of all notes for {len(graph.nodes)} articles.'
+            )
+
+            regenerated_count = 0
+            failed_count = 0
+            successfully_regenerated_files: list[tuple[Path, Path]] = []
+
+            for article_id in list(graph.nodes):  # Iterate over a copy of node IDs
+                article_title = (
+                    graph.nodes[article_id].get('metadata', {}).get('title', article_id)
+                )
+                logger.info(f'Attempting to regenerate note for: {article_title}')
+
+                # Get regeneration data from citation tracker
+                regeneration_data = (
+                    self.citation_tracker.get_article_data_for_regeneration(article_id)
+                )
+
+                if regeneration_data:
+                    try:
+                        # Use NoteService through ServiceManager
+                        (
+                            note_path,
+                            final_pdf_path,
+                            markdown_path,
+                        ) = self._service_manager.note.create_note(
+                            pdf_path=regeneration_data['pdf_path'],
+                            markdown_path=regeneration_data['markdown_path'],
+                            analysis=regeneration_data['analysis'],
+                            citations=regeneration_data['citations'],
+                        )
+
+                        logger.info(
+                            f'Successfully regenerated note for: {article_title} at {note_path}'
+                        )
+                        regenerated_count += 1
+                        successfully_regenerated_files.append(
+                            (final_pdf_path, note_path)
+                        )
+
+                    except Exception as e:
+                        logger.error(
+                            f'Failed to regenerate note for {article_title} (ID: {article_id}): {e}'
+                        )
+                        failed_count += 1
+                else:
+                    logger.warning(
+                        f'No regeneration data found for article: {article_title}'
+                    )
+                    failed_count += 1
+
+            self.log_operation(
+                'notes_regenerated',
+                total_articles=len(graph.nodes),
+                regenerated=regenerated_count,
+                failed=failed_count,
+            )
+
+            return successfully_regenerated_files
+
+        except Exception as e:
+            raise ServiceError(self.handle_error(e, 'regenerating all notes')) from e
+
+    def update_obsidian_links(self, article_id: str) -> bool:
+        """
+        Update Obsidian markdown links for an article's citations.
+
+        This method finds all citations from the article and updates the
+        corresponding Obsidian markdown note with proper wiki-links to
+        existing notes for cited articles.
+
+        Args:
+            article_id: ID of the article to update
+
+        Returns:
+            bool: True if update was successful
+
+        Raises:
+            ServiceError: If link update fails
+        """
+        try:
+            self.validate_input(article_id=article_id)
+
+            # Delegate core link updating logic to citation tracker
+            # but handle it as a service operation with proper error handling
+            self.citation_tracker.update_obsidian_links(article_id)
+
+            self.log_operation('obsidian_links_updated', article_id=article_id)
+            return True
+
+        except Exception as e:
+            self.logger.error(
+                self.handle_error(
+                    e, f'updating Obsidian links for article {article_id}'
+                )
+            )
+            return False
 
     def health_check(self) -> dict[str, str]:
         """Basic health status for the CitationService."""
