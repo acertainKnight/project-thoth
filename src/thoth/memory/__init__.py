@@ -7,6 +7,15 @@ for research conversations and discoveries.
 """
 
 from .checkpointer import LettaCheckpointer
+from .components import (
+    MemoryEnricher,
+    MemoryFilter,
+    RelevanceScorer,
+    RetrievalMetrics,
+    RetrievalRanker,
+    SalienceScorer,
+)
+from .pipelines import MemoryRetrievalPipeline, MemoryWritePipeline
 from .scheduler import MemoryJobConfig, MemoryScheduler
 from .store import ThothMemoryStore
 from .summarization import EpisodicSummarizer, MemorySummarizationJob
@@ -44,9 +53,17 @@ def get_shared_scheduler() -> MemoryScheduler:
 __all__ = [
     'EpisodicSummarizer',
     'LettaCheckpointer',
+    'MemoryEnricher',
+    'MemoryFilter',
     'MemoryJobConfig',
+    'MemoryRetrievalPipeline',
     'MemoryScheduler',
     'MemorySummarizationJob',
+    'MemoryWritePipeline',
+    'RelevanceScorer',
+    'RetrievalMetrics',
+    'RetrievalRanker',
+    'SalienceScorer',
     'ThothMemoryStore',
     'get_shared_checkpointer',
     'get_shared_scheduler',

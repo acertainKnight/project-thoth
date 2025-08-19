@@ -11,14 +11,10 @@ from unittest.mock import Mock
 
 import pytest
 
-from thoth.ingestion.agent_v2.tools.pdf_tools import (
-    LocatePdfsForQueryTool,
-    LocatePdfTool,
-    ValidatePdfSourceTool,
-)
+# Legacy agent tools removed - use MCP tools instead
+# from thoth.mcp.tools import (pdf tools available via MCP)
 from thoth.services.citation_service import CitationService
 from thoth.services.pdf_locator_service import PdfLocation, PdfLocatorService
-from thoth.services.service_manager import ServiceManager
 from thoth.utilities.schemas import Citation
 
 
@@ -100,93 +96,11 @@ class TestCitationServicePdfIntegration:
         assert results[0][1] is None
 
 
-class TestAgentPdfTools:
-    """Test agent PDF tools."""
-
-    @pytest.fixture
-    def mock_service_manager(self):
-        """Create a mock service manager."""
-        manager = Mock(spec=ServiceManager)
-
-        # Mock PDF locator
-        manager.pdf_locator = Mock(spec=PdfLocatorService)
-        manager.pdf_locator.locate.return_value = PdfLocation(
-            url='https://example.com/paper.pdf',
-            source='crossref',
-            licence='cc-by',
-            is_oa=True,
-        )
-
-        # Mock RAG service for search
-        manager.rag = Mock()
-        manager.rag.search.return_value = [
-            {
-                'title': 'Test Paper',
-                'content': 'Abstract with DOI: 10.1234/test',
-                'score': 0.95,
-            }
-        ]
-
-        # Mock query service
-        manager.query = Mock()
-        manager.query.get_query.return_value = Mock(
-            name='test_query',
-            research_question='Test research question',
-            keywords=['test', 'research'],
-        )
-
-        return manager
-
-    def test_locate_pdf_tool_with_doi(self, mock_service_manager):
-        """Test LocatePdfTool with DOI."""
-        tool = LocatePdfTool(service_manager=mock_service_manager)
-
-        result = tool._run(doi='10.1234/test')
-
-        assert 'PDF Found!' in result
-        assert 'https://example.com/paper.pdf' in result
-        assert 'crossref' in result
-        mock_service_manager.pdf_locator.locate.assert_called_once_with(
-            doi='10.1234/test', arxiv_id=None
-        )
-
-    def test_locate_pdf_tool_with_title(self, mock_service_manager):
-        """Test LocatePdfTool with title search."""
-        tool = LocatePdfTool(service_manager=mock_service_manager)
-
-        result = tool._run(title='Test Paper')
-
-        assert 'PDF Found!' in result
-        # Should have searched for the title and extracted DOI
-        mock_service_manager.rag.search.assert_called_once_with(query='Test Paper', k=1)
-        mock_service_manager.pdf_locator.locate.assert_called_once()
-
-    def test_test_pdf_source_tool(self, mock_service_manager):
-        """Test TestPdfSourceTool."""
-        tool = ValidatePdfSourceTool(service_manager=mock_service_manager)
-
-        # Mock specific source methods
-        mock_service_manager.pdf_locator._from_crossref = Mock(
-            return_value=PdfLocation(
-                url='https://test.com/pdf', source='crossref', is_oa=True
-            )
-        )
-
-        result = tool._run(source='crossref')
-
-        assert 'Testing PDF Location Source(s): crossref' in result
-        assert 'Success' in result
-
-    def test_locate_pdfs_for_query_tool(self, mock_service_manager):
-        """Test LocatePdfsForQueryTool."""
-        tool = LocatePdfsForQueryTool(service_manager=mock_service_manager)
-
-        result = tool._run(query_name='test_query', limit=1)
-
-        assert 'Locating PDFs for Query: test_query' in result
-        assert 'Found 1 articles' in result
-        mock_service_manager.query.get_query.assert_called_once_with('test_query')
-        mock_service_manager.rag.search.assert_called_once()
+# Legacy TestAgentPdfTools class removed during Phase 1 refactoring
+# The legacy agent tools (LocatePdfTool, ValidatePdfSourceTool, LocatePdfsForQueryTool)
+# were removed as part of the MCP-only transition. PDF locator functionality
+# is now available through MCP tools and continues to be tested via the
+# CitationService integration tests above.
 
 
 class TestCitationProcessorPdfIntegration:

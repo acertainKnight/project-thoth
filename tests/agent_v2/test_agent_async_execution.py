@@ -42,16 +42,21 @@ class TestAgentAsyncExecution:
 
     @pytest.fixture
     def legacy_agent(self, pipeline):
-        """Create an agent with legacy tools for testing."""
+        """Create an agent - legacy tools removed, now uses MCP only."""
         import asyncio
 
-        agent = create_research_assistant(
-            service_manager=pipeline.services,
-            enable_memory=False,  # Disable memory for simpler testing
-            use_mcp_tools=False,
-        )
-        # Initialize the agent to load tools synchronously
-        asyncio.run(agent.async_initialize())
+        try:
+            agent = create_research_assistant(
+                service_manager=pipeline.services,
+                enable_memory=False,  # Disable memory for simpler testing
+                use_mcp_tools=True,  # Legacy tools removed, MCP required
+            )
+            # Initialize the agent to load tools synchronously
+            asyncio.run(agent.async_initialize())
+        except RuntimeError as e:
+            if 'MCP tools are required' in str(e):
+                pytest.skip('MCP tools not available for legacy agent test')
+            raise
         return agent
 
     @pytest.mark.asyncio
@@ -126,18 +131,18 @@ class TestAgentAsyncExecution:
 
     @pytest.mark.asyncio
     async def test_agent_tool_loading(self, mcp_agent, legacy_agent):
-        """Test that agents have tools loaded."""
-        # Test MCP agent tools
+        """Test that agents have tools loaded - both use MCP now."""
+        # Both agents now use MCP tools (legacy tools were removed in Phase 1)
         mcp_tools = mcp_agent.get_available_tools()
         assert isinstance(mcp_tools, list)
         assert len(mcp_tools) > 0
 
-        # Test legacy agent tools
+        # "Legacy" agent also uses MCP tools now
         legacy_tools = legacy_agent.get_available_tools()
         assert isinstance(legacy_tools, list)
         assert len(legacy_tools) > 0
 
-        # Verify tool structure
+        # Verify both agents have the same MCP tool structure
         for tool in mcp_tools[:3]:  # Check first few tools
             assert 'name' in tool
             assert 'description' in tool

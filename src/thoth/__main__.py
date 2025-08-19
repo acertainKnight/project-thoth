@@ -8,7 +8,7 @@ to be run with 'python -m thoth'.
 
 import sys
 
-from thoth.main import main
+from thoth.cli.main import main
 
 if __name__ == '__main__':
     sys.exit(main())
