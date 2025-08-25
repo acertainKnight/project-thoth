@@ -60,27 +60,28 @@ The central orchestrator that manages all Thoth services with dependency injecti
 class ServiceManager:
     """Central service manager coordinating all Thoth services."""
 
-    def __init__(self):
-        # Core services
-        self.llm_service = LLMService()
-        self.rag_service = RAGService()
-        self.discovery_service = DiscoveryService()
-        self.citation_service = CitationService()
-        self.tag_service = TagService()
+    def __init__(self, config: ThothConfig | None = None):
+        self.config = config or get_config()
+        self._services = {}
+        self._initialized = False
 
-        # Advanced services
-        self.article_service = ArticleService()
-        self.note_service = NoteService()
-        self.query_service = QueryService()
-        self.processing_service = ProcessingService()
-        self.async_processing_service = AsyncProcessingService()
-        self.cache_service = CacheService()
-        self.web_search_service = WebSearchService()
-        self.pdf_locator_service = PdfLocatorService()
+    def initialize(self) -> None:
+        """Initialize all services with proper dependencies."""
+        # Core services with dependency injection
+        self._services['llm'] = LLMService(config=self.config)
+        self._services['processing'] = ProcessingService(
+            config=self.config, llm_service=self._services['llm']
+        )
+        self._services['rag'] = RAGService(config=self.config)
+        self._services['discovery'] = DiscoveryService(config=self.config)
+        self._services['citation'] = CitationService(config=self.config)
 
-        # API and routing
-        self.api_gateway = APIGateway()
-        self.llm_router = LLMRouter()
+        # Advanced services (optional, with availability checks)
+        if OPTIMIZED_SERVICES_AVAILABLE:
+            self._services['cache'] = CacheService(config=self.config)
+            self._services['async_processing'] = AsyncProcessingService(
+                config=self.config, llm_service=self._services['llm']
+            )
 ```
 
 **Responsibilities:**
@@ -203,6 +204,56 @@ class DiscoveryManager:
 - **Web Search**: General academic content
 - **Chrome Extension**: User-browsed papers
 - **RSS Feeds**: Journal updates
+
+### 5.5. Memory System (`src/thoth/memory/`)
+
+Advanced persistent memory system built on Letta framework for comprehensive conversation and research context management:
+
+#### Memory Architecture
+```python
+class ThothMemoryStore:
+    """
+    Letta-based memory store with multi-scope persistent memory management.
+
+    Features:
+    - Salience-based memory retention
+    - Multi-scope memory (core/episodic/archival)
+    - Cross-session persistence
+    - Contextual memory enrichment
+    """
+```
+
+#### Memory Scopes
+- **Core Memory**: Long-term persistent facts and preferences
+- **Episodic Memory**: Conversation history and interactions
+- **Archival Memory**: Deep storage for large context and historical data
+
+#### Memory Pipeline Architecture
+```
+Memory Input → Salience Scoring → Filtering → Enrichment → Storage
+     ↓              ↓              ↓           ↓           ↓
+Context       → Importance    → Relevance → Enhanced  → Persistent
+Assessment      Analysis        Filtering    Metadata    Storage
+```
+
+#### LangGraph Checkpointer Integration
+```python
+class LettaCheckpointer(BaseCheckpointer):
+    """LangGraph-compatible checkpointer using Letta memory backend."""
+
+    async def aput(self, config: RunnableConfig, checkpoint: Checkpoint, ...):
+        """Store conversation checkpoints with memory context."""
+
+    async def aget(self, config: RunnableConfig) -> Optional[Checkpoint]:
+        """Retrieve conversation state with memory integration."""
+```
+
+#### Memory Features
+- **Salience-Based Retention**: Intelligent memory importance scoring
+- **Session Management**: Cross-session conversation continuity
+- **Health Monitoring**: Built-in system health checks and recovery
+- **Fallback Management**: Graceful degradation during system issues
+- **Vector Integration**: Semantic search across memory contexts
 
 ### 6. MCP Integration (`src/thoth/mcp/`)
 

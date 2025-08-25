@@ -160,6 +160,7 @@ Thumbs.db
 
 # Code agents
 /.claude/
+CLAUDE.md
 /.cursor/
 .cursorrules
 .cursorignore

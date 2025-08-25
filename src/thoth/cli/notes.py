@@ -3,7 +3,7 @@ from loguru import logger
 from thoth.pipeline import ThothPipeline
 
 
-def run_reprocess_note(args, pipeline: ThothPipeline):
+def run_reprocess_note(args, pipeline: ThothPipeline) -> int:
     """
     Regenerate the note for an existing article.
     """
@@ -60,7 +60,7 @@ def run_reprocess_note(args, pipeline: ThothPipeline):
         return 1
 
 
-def run_regenerate_all_notes(args, pipeline: ThothPipeline):
+def run_regenerate_all_notes(args, pipeline: ThothPipeline) -> int:
     """
     Regenerate all notes for all articles in the citation graph.
     """
@@ -79,7 +79,7 @@ def run_regenerate_all_notes(args, pipeline: ThothPipeline):
         return 1
 
 
-def run_consolidate_tags(args, pipeline: ThothPipeline):
+def run_consolidate_tags(args, pipeline: ThothPipeline) -> int:
     """
     Consolidate existing tags and suggest additional relevant tags for all articles.
     """
@@ -102,7 +102,7 @@ def run_consolidate_tags(args, pipeline: ThothPipeline):
         return 1
 
 
-def configure_subparser(subparsers):
+def configure_subparser(subparsers) -> None:
     """Configure the subparser for note-related commands."""
     reprocess_parser = subparsers.add_parser(
         'reprocess-note',
