@@ -577,9 +577,9 @@ class CustomSourcePlugin(DiscoveryPlugin):
 #### Custom Processing Pipelines
 ```python
 # src/thoth/pipelines/custom_pipeline.py
-from thoth.pipelines.base import Pipeline
+from thoth.pipelines.base import BasePipeline
 
-class CustomPipeline(Pipeline):
+class CustomPipeline(BasePipeline):
     def process_document(self, document: Document) -> ProcessedDocument:
         # Implement custom processing
         pass
