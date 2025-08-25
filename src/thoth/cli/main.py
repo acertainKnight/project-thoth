@@ -41,7 +41,7 @@ from . import (  # noqa: E402
 )
 
 
-def main():
+def main() -> None:
     """Main entry point for the Thoth CLI."""
     parser = argparse.ArgumentParser(
         description='Thoth - Academic PDF processing system'

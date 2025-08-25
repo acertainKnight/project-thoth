@@ -133,7 +133,7 @@ class ThothPipeline:
 
         logger.info('Thoth pipeline initialized with service layer')
 
-    def process_pdf(self, pdf_path: str | Path):
+    def process_pdf(self, pdf_path: str | Path) -> tuple[Path, Path, Path]:
         """Process a PDF using the internal :class:`DocumentPipeline`."""
 
         try:
