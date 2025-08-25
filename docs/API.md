@@ -586,31 +586,33 @@ Create backups of the knowledge base and associated data.
 - `compression` (boolean): Compress backup files
 - `include_vectors` (boolean): Include vector embeddings
 
-## Client SDKs
+## Client Integration
 
-### Python SDK
+### Python Integration
 
 ```python
-from thoth_client import ThothClient
+import requests
 
-# Initialize client
-client = ThothClient(base_url="http://localhost:8000", api_key="optional")
+# Initialize base URL
+BASE_URL = "http://localhost:8000"
 
 # Chat operations
-session = client.chat.create_session(title="Research Session")
-response = client.chat.send_message(session.id, "What are the latest ML papers?")
+session_response = requests.post(f"{BASE_URL}/chat/sessions",
+                               json={"title": "Research Session"})
+session_id = session_response.json()["id"]
 
-# Document operations
-doc = client.documents.upload("paper.pdf")
-client.documents.process(doc.document_id, extract_citations=True)
-
-# Search operations
-results = client.search.papers("transformer attention", limit=10)
-rag_response = client.rag.generate("Explain attention mechanisms", max_tokens=1000)
+response = requests.post(f"{BASE_URL}/research/chat",
+                        json={"message": "What are the latest ML papers?",
+                              "session_id": session_id})
 
 # Discovery operations
-task = client.discovery.start("quantum computing", sources=["arxiv"])
-results = client.discovery.get_results(task.task_id)
+discovery_response = requests.post(f"{BASE_URL}/discovery/run",
+                                  json={"source_name": "arxiv_source"})
+
+# RAG operations
+rag_response = requests.post(f"{BASE_URL}/rag/search",
+                            json={"query": "transformer attention",
+                                  "k": 10})
 ```
 
 ### JavaScript SDK

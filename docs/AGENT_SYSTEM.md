@@ -383,20 +383,12 @@ Empty KB → Sources Created → Papers Added → Processed → Knowledge Graph
 
 ### Custom Tool Integration
 
-The agent system supports custom tool integration:
+The agent system uses MCP (Model Context Protocol) tools. Custom tools should be implemented as MCP tools:
 
 ```python
-from thoth.ingestion.agent_v2.tools.base_tool import BaseThothTool
-from thoth.ingestion.agent_v2.tools.decorators import tool
-
-@tool
-class CustomAnalysisTool(BaseThothTool):
-    name: str = "custom_analysis"
-    description: str = "Performs custom analysis on research papers"
-
-    def _run(self, parameters):
-        # Custom analysis logic
-        return analysis_results
+# Add custom tools via MCP server extension
+# Tools are automatically discovered through MCP protocol
+# See src/thoth/mcp/tools/ for existing tool implementations
 ```
 
 ### Integration with External Systems
