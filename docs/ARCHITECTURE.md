@@ -204,6 +204,56 @@ class DiscoveryManager:
 - **Chrome Extension**: User-browsed papers
 - **RSS Feeds**: Journal updates
 
+### 5.5. Memory System (`src/thoth/memory/`)
+
+Advanced persistent memory system built on Letta framework for comprehensive conversation and research context management:
+
+#### Memory Architecture
+```python
+class ThothMemoryStore:
+    """
+    Letta-based memory store with multi-scope persistent memory management.
+
+    Features:
+    - Salience-based memory retention
+    - Multi-scope memory (core/episodic/archival)
+    - Cross-session persistence
+    - Contextual memory enrichment
+    """
+```
+
+#### Memory Scopes
+- **Core Memory**: Long-term persistent facts and preferences
+- **Episodic Memory**: Conversation history and interactions
+- **Archival Memory**: Deep storage for large context and historical data
+
+#### Memory Pipeline Architecture
+```
+Memory Input → Salience Scoring → Filtering → Enrichment → Storage
+     ↓              ↓              ↓           ↓           ↓
+Context       → Importance    → Relevance → Enhanced  → Persistent
+Assessment      Analysis        Filtering    Metadata    Storage
+```
+
+#### LangGraph Checkpointer Integration
+```python
+class LettaCheckpointer(BaseCheckpointer):
+    """LangGraph-compatible checkpointer using Letta memory backend."""
+
+    async def aput(self, config: RunnableConfig, checkpoint: Checkpoint, ...):
+        """Store conversation checkpoints with memory context."""
+
+    async def aget(self, config: RunnableConfig) -> Optional[Checkpoint]:
+        """Retrieve conversation state with memory integration."""
+```
+
+#### Memory Features
+- **Salience-Based Retention**: Intelligent memory importance scoring
+- **Session Management**: Cross-session conversation continuity
+- **Health Monitoring**: Built-in system health checks and recovery
+- **Fallback Management**: Graceful degradation during system issues
+- **Vector Integration**: Semantic search across memory contexts
+
 ### 6. MCP Integration (`src/thoth/mcp/`)
 
 Model Context Protocol implementation for AI agent interoperability:
