@@ -8,7 +8,7 @@ __version__ = '0.1.0'
 
 # Import key components for easier access
 from thoth.pipeline import ThothPipeline
-from thoth.pipelines.document_pipeline import DocumentPipeline
+from thoth.pipelines import DocumentPipeline
 from thoth.server.pdf_monitor import PDFMonitor
 
 __all__ = ['DocumentPipeline', 'PDFMonitor', 'ThothPipeline']

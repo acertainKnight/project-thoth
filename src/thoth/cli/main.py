@@ -31,6 +31,7 @@ from . import (  # noqa: E402
     agent,
     discovery,
     mcp,
+    memory,
     notes,
     pdf,
     performance,
@@ -40,7 +41,7 @@ from . import (  # noqa: E402
 )
 
 
-def main():
+def main() -> None:
     """Main entry point for the Thoth CLI."""
     parser = argparse.ArgumentParser(
         description='Thoth - Academic PDF processing system'
@@ -53,6 +54,7 @@ def main():
     agent.configure_subparser(subparsers)
     discovery.configure_subparser(subparsers)
     mcp.configure_subparser(subparsers)
+    memory.configure_subparser(subparsers)
     notes.configure_subparser(subparsers)
     pdf.configure_subparser(subparsers)
     performance.configure_subparser(subparsers)

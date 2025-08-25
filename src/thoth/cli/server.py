@@ -47,7 +47,7 @@ def start_api_server(host='127.0.0.1', port=8000, base_url='/', reload=False):
         # Import here to avoid circular dependencies
         from pathlib import Path
 
-        from thoth.server.api_server import start_obsidian_server
+        from thoth.server.app import start_obsidian_server
         from thoth.utilities.config import get_config
 
         # Get configuration

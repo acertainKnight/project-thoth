@@ -5,8 +5,7 @@ This module provides the core agent that orchestrates all research activities
 using a modern LangGraph architecture with MCP framework.
 """
 
-from importlib import import_module
-from pkgutil import iter_modules
+# Removed legacy tool discovery imports
 from typing import Any
 
 from langchain_core.messages import (
@@ -22,10 +21,18 @@ from loguru import logger
 
 from thoth.ingestion.agent_v2.core.state import ResearchAgentState
 from thoth.ingestion.agent_v2.core.token_tracker import TokenUsageTracker
-from thoth.ingestion.agent_v2.tools import __path__ as _tools_path
-from thoth.ingestion.agent_v2.tools.base_tool import ToolRegistry
-from thoth.ingestion.agent_v2.tools.decorators import get_registered_tools
+
+# Legacy tool imports removed - using MCP tools exclusively
 from thoth.services.service_manager import ServiceManager
+
+# Import memory system (optional dependency)
+try:
+    from thoth.memory import ThothMemoryStore, get_shared_checkpointer
+
+    MEMORY_AVAILABLE = True
+except ImportError:
+    MEMORY_AVAILABLE = False
+    logger.warning('Thoth memory system not available, using basic MemorySaver')
 
 # Import MCP components
 try:
@@ -52,7 +59,8 @@ class ResearchAssistant:
         service_manager: ServiceManager,
         enable_memory: bool = True,
         system_prompt: str | None = None,
-        use_mcp_tools: bool = True,
+        use_mcp_tools: bool = True,  # Always True - legacy parameter kept for compatibility
+        memory_store: ThothMemoryStore | None = None,
     ):
         """
         Initialize the research assistant.
@@ -62,10 +70,17 @@ class ResearchAssistant:
             enable_memory: Whether to enable conversation memory
             system_prompt: Custom system prompt (uses default if None)
             use_mcp_tools: Whether to use MCP tools (defaults to True if available)
+            memory_store: Optional ThothMemoryStore for persistent memory
         """
         self.service_manager = service_manager
         self.enable_memory = enable_memory
-        self.use_mcp_tools = use_mcp_tools and MCP_AVAILABLE
+        # Force MCP tools usage - no fallback to legacy tools
+        if not MCP_AVAILABLE:
+            raise RuntimeError(
+                'MCP tools are required but not available. Install dependencies.'
+            )
+        self.use_mcp_tools = True
+        self.memory_store = memory_store
 
         # Get LLM from service manager
         self.llm = self.service_manager.llm.get_client()
@@ -79,11 +94,7 @@ class ResearchAssistant:
         self.tool_registry = None
         self._initialized = False
 
-        # Initialize tool registry for non-MCP tools immediately if needed
-        if not self.use_mcp_tools:
-            from thoth.ingestion.agent_v2.tools.base_tool import ToolRegistry
-
-            self.tool_registry = ToolRegistry(service_manager=self.service_manager)
+        # Legacy tool registry initialization removed - MCP tools only
 
         # Set up system prompt
         self.system_prompt = system_prompt or self._get_default_system_prompt()
@@ -106,25 +117,16 @@ class ResearchAssistant:
         if self._initialized:
             return
 
-        # Initialize tool registry (MCP or legacy)
-        if self.use_mcp_tools:
-            try:
-                # Use the new MCP adapter approach
-                self.tools = await self._get_mcp_tools_via_adapter()
-                logger.info(
-                    f'Using MCP tools via adapter - loaded {len(self.tools)} tools'
-                )
-            except Exception as e:
-                logger.error(f'Failed to initialize MCP tools: {e}')
-                logger.info('Falling back to legacy tools')
-                self.use_mcp_tools = False
-
-        if not self.use_mcp_tools:
-            # Fall back to legacy tools
-            self.tool_registry = ToolRegistry(service_manager=self.service_manager)
-            self._register_tools()
-            self.tools = self.tool_registry.create_all_tools()
-            logger.info(f'Using legacy tools - loaded {len(self.tools)} tools')
+        # Initialize MCP tools exclusively
+        try:
+            # Use the new MCP adapter approach
+            self.tools = await self._get_mcp_tools_via_adapter()
+            logger.info(
+                f'MCP tools loaded successfully - {len(self.tools)} tools available'
+            )
+        except Exception as e:
+            logger.error(f'Failed to initialize MCP tools: {e}')
+            raise RuntimeError(f'MCP tools are required but failed to initialize: {e}')
 
         # Bind tools to LLM
         self.llm_with_tools = self.llm.bind_tools(self.tools)
@@ -137,15 +139,7 @@ class ResearchAssistant:
             f'Research Assistant fully initialized with {len(self.tools)} tools'
         )
 
-    def _register_tools(self) -> None:
-        """Register all available tools discovered via decorators."""
-        # Import all tool modules to trigger decorator registration
-        for module in iter_modules(_tools_path):
-            import_module(f'thoth.ingestion.agent_v2.tools.{module.name}')
-
-        # Register each discovered tool class
-        for name, cls in get_registered_tools().items():
-            self.tool_registry.register(name, cls)
+    # Legacy tool registration removed - MCP tools only
 
     async def _get_mcp_tools_via_adapter(self) -> list[Any]:
         """Get MCP tools using official LangChain MCP adapter."""
@@ -182,12 +176,7 @@ class ResearchAssistant:
             return []
         except Exception as e:
             logger.error(f'Failed to connect to MCP server: {e}')
-            logger.warning('Falling back to legacy tools')
-            # Fall back to legacy tools if MCP connection fails
-            self.use_mcp_tools = False
-            self.tool_registry = ToolRegistry(service_manager=self.service_manager)
-            self._register_tools()
-            return self.tool_registry.create_all_tools()
+            raise RuntimeError(f'MCP connection failed and no fallback available: {e}')
 
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt for the agent."""
@@ -217,9 +206,34 @@ When users ask about their research or express interests:
 
 Remember: You have direct access to tools - use them immediately rather than just explaining what you would do."""
 
+    def _get_memory_checkpointer(self) -> Any:
+        """
+        Get the appropriate memory checkpointer.
+
+        Returns:
+            LettaCheckpointer if Thoth memory is available and configured,
+            otherwise fallback to MemorySaver.
+        """
+        if MEMORY_AVAILABLE and self.memory_store:
+            # Use Thoth's Letta-based checkpointer
+            from thoth.memory import LettaCheckpointer
+
+            checkpointer = LettaCheckpointer(self.memory_store)
+            logger.info('Using Letta-based persistent memory checkpointer')
+            return checkpointer
+        elif MEMORY_AVAILABLE and not self.memory_store:
+            # Use shared checkpointer if no specific store provided
+            checkpointer = get_shared_checkpointer()
+            logger.info('Using shared Letta checkpointer')
+            return checkpointer
+        else:
+            # Fallback to basic in-memory checkpointer
+            logger.info('Using basic MemorySaver (no persistence)')
+            return MemorySaver()
+
     def _build_graph(self) -> Any:
         """Build the LangGraph agent graph using MCP tooling."""
-        memory = MemorySaver() if self.enable_memory else None
+        memory = self._get_memory_checkpointer() if self.enable_memory else None
 
         try:
             # Attempt to use the modern prebuilt agent from LangGraph
@@ -453,12 +467,8 @@ Remember: You have direct access to tools - use them immediately rather than jus
         ]
 
     def list_tools(self) -> list[str]:
-        """Return the names of all available tools."""
-        if self.use_mcp_tools:
-            # For MCP tools, extract names from the tools list
-            return [tool.name for tool in self.tools] if self.tools else []
-        else:
-            return self.tool_registry.get_tool_names() if self.tool_registry else []
+        """Return the names of all available MCP tools."""
+        return [tool.name for tool in self.tools] if self.tools else []
 
     def reset_memory(self, session_id: str | None = None) -> None:
         """
@@ -485,6 +495,7 @@ def create_research_assistant(
     enable_memory: bool = True,
     system_prompt: str | None = None,
     use_mcp_tools: bool = True,
+    memory_store: ThothMemoryStore | None = None,
 ) -> ResearchAssistant:
     """
     Factory function to create a research assistant.
@@ -495,6 +506,7 @@ def create_research_assistant(
         enable_memory: Whether to enable conversation memory
         system_prompt: Custom system prompt
         use_mcp_tools: Whether to use MCP tools (defaults to True)
+        memory_store: Optional ThothMemoryStore for persistent memory
 
     Returns:
         ResearchAssistant: Configured research assistant instance
@@ -515,6 +527,7 @@ def create_research_assistant(
         enable_memory=enable_memory,
         system_prompt=system_prompt,
         use_mcp_tools=use_mcp_tools,
+        memory_store=memory_store,
     )
 
 
@@ -524,6 +537,7 @@ async def create_research_assistant_async(
     enable_memory: bool = True,
     system_prompt: str | None = None,
     use_mcp_tools: bool = True,
+    memory_store: ThothMemoryStore | None = None,
 ) -> ResearchAssistant:
     """
     Async factory function to create and fully initialize a research assistant.
@@ -537,6 +551,7 @@ async def create_research_assistant_async(
         enable_memory: Whether to enable conversation memory
         system_prompt: Custom system prompt
         use_mcp_tools: Whether to use MCP tools (defaults to True)
+        memory_store: Optional ThothMemoryStore for persistent memory
 
     Returns:
         ResearchAssistant: Fully initialized research assistant instance
@@ -552,6 +567,7 @@ async def create_research_assistant_async(
         enable_memory=enable_memory,
         system_prompt=system_prompt,
         use_mcp_tools=use_mcp_tools,
+        memory_store=memory_store,
     )
 
     # Complete async initialization
