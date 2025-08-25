@@ -10,15 +10,14 @@ This module contains the main pipeline that orchestrates the processing of PDF d
 
 from __future__ import annotations
 
-import warnings
 from pathlib import Path
 from typing import Any
 
 from loguru import logger
 
 from thoth.knowledge.graph import CitationGraph
-from thoth.pipelines.document_pipeline import DocumentPipeline
 from thoth.pipelines.knowledge_pipeline import KnowledgePipeline
+from thoth.pipelines.optimized_document_pipeline import OptimizedDocumentPipeline
 from thoth.server.pdf_monitor import PDFTracker
 from thoth.services.service_manager import ServiceManager
 from thoth.utilities.config import get_config
@@ -64,14 +63,10 @@ class ThothPipeline:
             notes_dir: Directory to save generated notes. If None, default from config is used.
             api_base_url: Base URL for the FastAPI endpoint. If None, loaded from config.
         """  # noqa: W505
-        # Issue gentle deprecation notice for main ThothPipeline
-        warnings.warn(
-            'ThothPipeline is now considered legacy. '
-            'For 50-65% faster processing, consider using OptimizedDocumentPipeline '
-            "via 'thoth monitor --optimized' or 'thoth performance' commands. "
-            'The optimized version provides async I/O, intelligent caching, and CPU-aware scaling.',
-            DeprecationWarning,
-            stacklevel=2,
+        # ThothPipeline now uses OptimizedDocumentPipeline by default
+        logger.info(
+            'ThothPipeline initialized with optimized processing (50-65% faster) '
+            'including async I/O, intelligent caching, and CPU-aware scaling.'
         )
 
         # Load configuration
@@ -116,8 +111,8 @@ class ThothPipeline:
         # Set citation tracker in services that need it
         self.services.set_citation_tracker(self.citation_tracker)
 
-        # Initialize document pipeline for handling PDF processing
-        self.document_pipeline = DocumentPipeline(
+        # Initialize optimized document pipeline for handling PDF processing
+        self.document_pipeline = OptimizedDocumentPipeline(
             services=self.services,
             citation_tracker=self.citation_tracker,
             pdf_tracker=self.pdf_tracker,
@@ -138,7 +133,7 @@ class ThothPipeline:
 
         logger.info('Thoth pipeline initialized with service layer')
 
-    def process_pdf(self, pdf_path: str | Path):
+    def process_pdf(self, pdf_path: str | Path) -> tuple[Path, Path, Path]:
         """Process a PDF using the internal :class:`DocumentPipeline`."""
 
         try:
@@ -150,21 +145,22 @@ class ThothPipeline:
         """
         Regenerate all markdown notes for all articles in the citation graph.
 
-        This method delegates to the CitationGraph's regenerate_all_notes method
+        This method delegates to the CitationService's regenerate_all_notes method
         and returns a list of (final_pdf_path, final_note_path) for successfully
         regenerated notes.
 
         Returns:
             list[tuple[Path, Path]]: A list of (PDF path, note path) tuples for successes.
         """  # noqa: W505
-        if not self.citation_tracker:
+        if not self.services:
             logger.error(
-                'CitationGraph is not initialized. Cannot regenerate all notes.'
+                'ServiceManager is not initialized. Cannot regenerate all notes.'
             )
             return []
 
         logger.info('Pipeline initiating regeneration of all notes.')
-        successful_files = self.citation_tracker.regenerate_all_notes()
+        # Use CitationService instead of calling CitationGraph directly
+        successful_files = self.services.citation.regenerate_all_notes()
         logger.info(
             f'Pipeline completed regeneration of all notes. {len(successful_files)} notes successfully regenerated.'
         )

@@ -75,6 +75,9 @@ dependencies = [
     "pytest-cov>=6.1.1",
     "aiofiles>=24.1.0",
     "psutil>=7.0.0",
+    # Memory and Persistence Dependencies
+    "letta>=0.9,<1.0", # For advanced memory management
+    "alembic>=1.13.0", # For database migrations
 ]
 
 [project.optional-dependencies]

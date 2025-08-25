@@ -109,11 +109,17 @@ python -m thoth agent
 
 ### Programmatic Access
 ```python
-from thoth_client import ThothClient
+import requests
 
-client = ThothClient("http://localhost:8000")
-session = client.chat.create_session(title="AI Research")
-response = client.chat.send_message(session.id, "What are the latest attention mechanisms?")
+# Create a chat session
+response = requests.post("http://localhost:8000/chat/sessions",
+                        json={"title": "AI Research"})
+session_id = response.json()["id"]
+
+# Send a message
+response = requests.post(f"http://localhost:8000/research/chat",
+                        json={"message": "What are the latest attention mechanisms?",
+                              "session_id": session_id})
 ```
 
 ## System Requirements
