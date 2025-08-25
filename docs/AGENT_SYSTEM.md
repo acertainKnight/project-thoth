@@ -49,6 +49,53 @@ Comprehensive toolkit organized by functionality:
 - **RAG Tools**: Knowledge base querying and context retrieval
 - **Web Tools**: Web search and content scraping
 
+#### 4. Memory System (`src/thoth/memory/`)
+
+Advanced persistent memory system using Letta framework for sophisticated conversation and research context management:
+
+```python
+# Agent with memory enabled
+agent = create_research_assistant(
+    service_manager=service_manager,
+    enable_memory=True,           # Uses Letta-based persistent memory
+    use_mcp_tools=True           # Model Context Protocol tools
+)
+await agent.async_initialize()   # Required for memory system loading
+```
+
+**Memory Features:**
+- **Multi-Scope Memory**: Core memory (facts), episodic memory (conversations), archival memory (deep context)
+- **Salience-Based Retention**: Intelligent scoring system for memory importance
+- **Cross-Session Persistence**: Conversations continue seamlessly across sessions
+- **Contextual Enrichment**: Memory entries enhanced with metadata and relationships
+- **LangGraph Integration**: Full compatibility with conversation checkpointing
+
+**Memory Architecture:**
+```python
+# Memory scopes automatically managed
+memory_store = ThothMemoryStore()
+
+# Core memory: Long-term facts and preferences
+await memory_store.write_memory(
+    user_id="researcher_1",
+    content="User focuses on transformer architectures",
+    scope="core"
+)
+
+# Episodic memory: Conversation interactions
+await memory_store.write_memory(
+    user_id="researcher_1",
+    content="Discussed attention mechanisms in detail",
+    scope="episodic"
+)
+
+# Memory retrieval with salience filtering
+memories = await memory_store.read_memories(
+    user_id="researcher_1",
+    min_salience=0.7  # Only high-importance memories
+)
+```
+
 ## Available Tools
 
 ### Analysis Tools

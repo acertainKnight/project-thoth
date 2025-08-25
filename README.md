@@ -37,7 +37,7 @@ Thoth provides a comprehensive suite of tools for researchers, academics, and kn
 #### Advanced Agent System
 - **LangGraph-powered Research Assistant**: Modern agentic workflow with memory and tool orchestration
 - **Multi-Tool Integration**: Comprehensive toolkit for research tasks with automatic tool selection
-- **Conversation Memory**: Persistent context across research sessions
+- **Advanced Memory System**: Letta-based persistent memory with salience-based retention, multi-scope memory (core/episodic/archival), and cross-session continuity
 - **MCP Framework Integration**: Full Model Context Protocol support for AI agent interoperability
 
 #### Sophisticated Document Processing
