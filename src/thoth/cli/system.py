@@ -19,7 +19,7 @@ except ImportError:
     OPTIMIZED_PIPELINE_AVAILABLE = False
 
 
-def run_monitor(args, pipeline: ThothPipeline):
+def run_monitor(args, pipeline: ThothPipeline) -> int:
     """
     Run the PDF monitor with optional performance optimizations.
     """
@@ -99,7 +99,7 @@ def run_monitor(args, pipeline: ThothPipeline):
     return 0
 
 
-def process_pdf(args, pipeline: ThothPipeline):
+def process_pdf(args, pipeline: ThothPipeline) -> None:
     """
     Process a single PDF file.
     """
@@ -122,7 +122,7 @@ def process_pdf(args, pipeline: ThothPipeline):
     logger.info(f'Successfully processed: {pdf_path} -> {note_path}')
 
 
-def run_api_server(args, pipeline: ThothPipeline):
+def run_api_server(args, pipeline: ThothPipeline) -> int:
     """
     Run the Obsidian API server.
     """
@@ -151,7 +151,7 @@ def run_api_server(args, pipeline: ThothPipeline):
         return 1
 
 
-def run_scrape_filter_test(args, pipeline: ThothPipeline):
+def run_scrape_filter_test(args, pipeline: ThothPipeline) -> int:
     """
     Test the filter with sample articles.
     """
@@ -215,7 +215,7 @@ def run_scrape_filter_test(args, pipeline: ThothPipeline):
     return 0
 
 
-def configure_subparser(subparsers):
+def configure_subparser(subparsers) -> None:
     """Configure the subparser for system commands."""
     monitor_parser = subparsers.add_parser('monitor', help='Run the PDF monitor')
     monitor_parser.add_argument(
