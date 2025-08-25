@@ -60,27 +60,28 @@ The central orchestrator that manages all Thoth services with dependency injecti
 class ServiceManager:
     """Central service manager coordinating all Thoth services."""
 
-    def __init__(self):
-        # Core services
-        self.llm_service = LLMService()
-        self.rag_service = RAGService()
-        self.discovery_service = DiscoveryService()
-        self.citation_service = CitationService()
-        self.tag_service = TagService()
+    def __init__(self, config: ThothConfig | None = None):
+        self.config = config or get_config()
+        self._services = {}
+        self._initialized = False
 
-        # Advanced services
-        self.article_service = ArticleService()
-        self.note_service = NoteService()
-        self.query_service = QueryService()
-        self.processing_service = ProcessingService()
-        self.async_processing_service = AsyncProcessingService()
-        self.cache_service = CacheService()
-        self.web_search_service = WebSearchService()
-        self.pdf_locator_service = PdfLocatorService()
+    def initialize(self) -> None:
+        """Initialize all services with proper dependencies."""
+        # Core services with dependency injection
+        self._services['llm'] = LLMService(config=self.config)
+        self._services['processing'] = ProcessingService(
+            config=self.config, llm_service=self._services['llm']
+        )
+        self._services['rag'] = RAGService(config=self.config)
+        self._services['discovery'] = DiscoveryService(config=self.config)
+        self._services['citation'] = CitationService(config=self.config)
 
-        # API and routing
-        self.api_gateway = APIGateway()
-        self.llm_router = LLMRouter()
+        # Advanced services (optional, with availability checks)
+        if OPTIMIZED_SERVICES_AVAILABLE:
+            self._services['cache'] = CacheService(config=self.config)
+            self._services['async_processing'] = AsyncProcessingService(
+                config=self.config, llm_service=self._services['llm']
+            )
 ```
 
 **Responsibilities:**
