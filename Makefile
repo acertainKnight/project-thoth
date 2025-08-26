@@ -243,5 +243,175 @@ logs: ## Show API server logs (if running)
 	@echo "$(YELLOW)Showing API server logs...$(NC)"
 	@tail -f logs/thoth.log 2>/dev/null || echo "$(YELLOW)No logs found. Make sure the API server is running.$(NC)"
 
+# -----------------------------------------------------------------------------
+# Docker Targets
+# -----------------------------------------------------------------------------
+
+.PHONY: docker-build
+docker-build: ## Build Docker images
+	@echo "$(YELLOW)Building Docker images...$(NC)"
+	@docker build -t thoth-app:latest -f Dockerfile .
+	@docker build -t thoth-app:dev -f Dockerfile.dev .
+	@echo "$(GREEN)✓ Docker images built$(NC)"
+
+.PHONY: docker-build-prod
+docker-build-prod: ## Build production Docker image
+	@echo "$(YELLOW)Building production Docker image...$(NC)"
+	@docker build -t thoth-app:latest --target runtime -f Dockerfile .
+	@echo "$(GREEN)✓ Production Docker image built$(NC)"
+
+.PHONY: docker-build-dev
+docker-build-dev: ## Build development Docker image
+	@echo "$(YELLOW)Building development Docker image...$(NC)"
+	@docker build -t thoth-app:dev -f Dockerfile.dev .
+	@echo "$(GREEN)✓ Development Docker image built$(NC)"
+
+.PHONY: docker-up
+docker-up: ## Start Docker services (production)
+	@echo "$(YELLOW)Starting Docker services...$(NC)"
+	@docker compose up -d
+	@echo "$(GREEN)✓ Services started$(NC)"
+	@echo "$(YELLOW)API server: http://localhost:8000$(NC)"
+	@echo "$(YELLOW)MCP server: http://localhost:8001$(NC)"
+	@echo "$(YELLOW)ChromaDB: http://localhost:8003$(NC)"
+
+.PHONY: docker-up-dev
+docker-up-dev: ## Start Docker services (development)
+	@echo "$(YELLOW)Starting Docker development services...$(NC)"
+	@docker compose -f docker-compose.dev.yml up -d
+	@echo "$(GREEN)✓ Development services started$(NC)"
+	@echo "$(YELLOW)API server: http://localhost:8000$(NC)"
+	@echo "$(YELLOW)MCP server: http://localhost:8001$(NC)"
+	@echo "$(YELLOW)ChromaDB: http://localhost:8003$(NC)"
+
+.PHONY: docker-up-prod
+docker-up-prod: ## Start Docker services (production)
+	@echo "$(YELLOW)Starting Docker production services...$(NC)"
+	@docker compose -f docker-compose.prod.yml up -d
+	@echo "$(GREEN)✓ Production services started$(NC)"
+
+.PHONY: docker-down
+docker-down: ## Stop Docker services
+	@echo "$(YELLOW)Stopping Docker services...$(NC)"
+	@docker compose down
+	@echo "$(GREEN)✓ Services stopped$(NC)"
+
+.PHONY: docker-down-dev
+docker-down-dev: ## Stop Docker development services
+	@echo "$(YELLOW)Stopping Docker development services...$(NC)"
+	@docker compose -f docker-compose.dev.yml down
+	@echo "$(GREEN)✓ Development services stopped$(NC)"
+
+.PHONY: docker-down-prod
+docker-down-prod: ## Stop Docker production services
+	@echo "$(YELLOW)Stopping Docker production services...$(NC)"
+	@docker compose -f docker-compose.prod.yml down
+	@echo "$(GREEN)✓ Production services stopped$(NC)"
+
+.PHONY: docker-logs
+docker-logs: ## Show Docker service logs
+	@echo "$(YELLOW)Showing Docker service logs...$(NC)"
+	@docker compose logs -f
+
+.PHONY: docker-logs-dev
+docker-logs-dev: ## Show Docker development service logs
+	@echo "$(YELLOW)Showing Docker development service logs...$(NC)"
+	@docker compose -f docker-compose.dev.yml logs -f
+
+.PHONY: docker-logs-app
+docker-logs-app: ## Show main application logs
+	@echo "$(YELLOW)Showing application logs...$(NC)"
+	@docker compose logs -f thoth-app
+
+.PHONY: docker-ps
+docker-ps: ## Show Docker service status
+	@echo "$(YELLOW)Docker Service Status:$(NC)"
+	@echo "====================="
+	@docker compose ps
+
+.PHONY: docker-health
+docker-health: ## Check health of Docker services
+	@echo "$(YELLOW)Checking Docker service health...$(NC)"
+	@docker exec thoth-app python /app/docker/healthcheck.py --simple 2>/dev/null || echo "$(RED)Health check failed$(NC)"
+
+.PHONY: docker-shell
+docker-shell: ## Open shell in main application container
+	@echo "$(YELLOW)Opening shell in Thoth application container...$(NC)"
+	@docker exec -it thoth-app /bin/bash
+
+.PHONY: docker-shell-dev
+docker-shell-dev: ## Open shell in development container
+	@echo "$(YELLOW)Opening shell in Thoth development container...$(NC)"
+	@docker exec -it thoth-app-dev /bin/bash
+
+.PHONY: docker-clean
+docker-clean: ## Clean Docker images and volumes
+	@echo "$(YELLOW)Cleaning Docker images and containers...$(NC)"
+	@docker compose down -v --remove-orphans
+	@docker system prune -f
+	@echo "$(GREEN)✓ Docker cleanup complete$(NC)"
+
+.PHONY: docker-clean-volumes
+docker-clean-volumes: ## Clean Docker volumes (WARNING: deletes all data)
+	@echo "$(RED)WARNING: This will delete ALL Thoth data in Docker volumes!$(NC)"
+	@read -p "Are you sure? Type 'yes' to continue: " confirm && [ "$$confirm" = "yes" ] || exit 1
+	@echo "$(YELLOW)Removing Docker volumes...$(NC)"
+	@docker compose down -v
+	@docker volume prune -f
+	@echo "$(GREEN)✓ Docker volumes cleaned$(NC)"
+
+.PHONY: docker-restart
+docker-restart: ## Restart Docker services
+	@echo "$(YELLOW)Restarting Docker services...$(NC)"
+	@docker compose restart
+	@echo "$(GREEN)✓ Services restarted$(NC)"
+
+.PHONY: docker-rebuild
+docker-rebuild: ## Rebuild and restart Docker services
+	@echo "$(YELLOW)Rebuilding and restarting Docker services...$(NC)"
+	@docker compose down
+	@docker compose build --no-cache
+	@docker compose up -d
+	@echo "$(GREEN)✓ Services rebuilt and started$(NC)"
+
+.PHONY: docker-init
+docker-init: ## Initialize Docker environment (first-time setup)
+	@echo "$(YELLOW)Initializing Docker environment...$(NC)"
+	@if [ ! -f .env.docker ]; then \
+		echo "$(YELLOW)Creating .env.docker from template...$(NC)"; \
+		cp .env.docker.example .env.docker; \
+		echo "$(GREEN)✓ Created .env.docker$(NC)"; \
+		echo "$(YELLOW)Please edit .env.docker with your API keys$(NC)"; \
+	else \
+		echo "$(GREEN)✓ .env.docker already exists$(NC)"; \
+	fi
+	@make docker-build
+	@echo "$(GREEN)✓ Docker environment initialized$(NC)"
+	@echo "$(YELLOW)Next steps:$(NC)"
+	@echo "  1. Edit .env.docker with your API keys"
+	@echo "  2. Run 'make docker-up' to start services"
+
+# -----------------------------------------------------------------------------
+# Combined Development Targets
+# -----------------------------------------------------------------------------
+
+.PHONY: docker-dev
+docker-dev: ## Complete development setup with Docker
+	@echo "$(YELLOW)Starting complete Docker development environment...$(NC)"
+	@make docker-build-dev
+	@make docker-up-dev
+	@echo "$(GREEN)✓ Development environment ready$(NC)"
+	@echo "$(YELLOW)Services available at:$(NC)"
+	@echo "  - API Server: http://localhost:8000"
+	@echo "  - MCP Server: http://localhost:8001"
+	@echo "  - ChromaDB: http://localhost:8003"
+
+.PHONY: docker-prod
+docker-prod: ## Complete production setup with Docker
+	@echo "$(YELLOW)Starting complete Docker production environment...$(NC)"
+	@make docker-build-prod
+	@make docker-up-prod
+	@echo "$(GREEN)✓ Production environment ready$(NC)"
+
 # Set default target
 .DEFAULT_GOAL := help

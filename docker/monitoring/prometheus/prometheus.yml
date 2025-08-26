@@ -1,0 +1,163 @@
+# ==============================================================================
+# Prometheus Configuration for Thoth AI Research Assistant
+# Metrics collection and alerting configuration
+# ==============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+# Rule files for alerting
+rule_files:
+  - "rules/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # ==============================================================================
+  # Prometheus Self-Monitoring
+  # ==============================================================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+
+  # ==============================================================================
+  # Thoth Application Metrics
+  # ==============================================================================
+  - job_name: 'thoth-api'
+    static_configs:
+      - targets: ['thoth-app-prod:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    params:
+      format: ['prometheus']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'thoth-api'
+
+  # ==============================================================================
+  # MCP Server Metrics
+  # ==============================================================================
+  - job_name: 'thoth-mcp'
+    static_configs:
+      - targets: ['thoth-app-prod:8001']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'thoth-mcp'
+
+  # ==============================================================================
+  # ChromaDB Metrics
+  # ==============================================================================
+  - job_name: 'chromadb'
+    static_configs:
+      - targets: ['chromadb:8003']
+    metrics_path: '/api/v1/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'chromadb'
+
+  # ==============================================================================
+  # Node Exporter - Host Metrics
+  # ==============================================================================
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'thoth-host'
+
+  # ==============================================================================
+  # cAdvisor - Container Metrics
+  # ==============================================================================
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'container-metrics'
+
+  # ==============================================================================
+  # Docker Daemon Metrics (if enabled)
+  # ==============================================================================
+  - job_name: 'docker'
+    static_configs:
+      - targets: ['host.docker.internal:9323']  # Docker daemon metrics
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'docker-daemon'
+
+  # ==============================================================================
+  # Nginx Metrics (if nginx-prometheus-exporter is deployed)
+  # ==============================================================================
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'nginx'
+
+  # ==============================================================================
+  # Custom Health Check Metrics
+  # ==============================================================================
+  - job_name: 'thoth-health'
+    static_configs:
+      - targets: ['thoth-app-prod:8000']
+    metrics_path: '/health'
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    params:
+      format: ['prometheus']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'thoth-health'
+
+# ==============================================================================
+# Alertmanager Configuration
+# ==============================================================================
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# ==============================================================================
+# Recording Rules (optional)
+# ==============================================================================
+# recording_rules:
+#   - name: thoth.rules
+#     interval: 30s
+#     rules:
+#       - record: thoth:request_rate_5m
+#         expr: rate(http_requests_total[5m])
+#       - record: thoth:error_rate_5m
+#         expr: rate(http_requests_total{status=~"5.."}[5m])
+
+# ==============================================================================
+# Remote Write Configuration (for external monitoring services)
+# ==============================================================================
+# remote_write:
+#   - url: "https://prometheus-us-central1.grafana.net/api/prom/push"
+#     basic_auth:
+#       username: "user_id"
+#       password: "api_key"

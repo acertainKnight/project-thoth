@@ -1,0 +1,265 @@
+# ==============================================================================
+# Thoth AI Research Assistant - Production Docker Compose
+# Production-hardened configuration with security and performance optimizations
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ==============================================================================
+  # ChromaDB Vector Database (Production)
+  # ==============================================================================
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: thoth-chromadb-prod
+    environment:
+      - CHROMA_SERVER_HOST=0.0.0.0
+      - CHROMA_SERVER_HTTP_PORT=8003
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - CHROMA_LOG_LEVEL=INFO
+      - CHROMA_SERVER_CORS_ALLOW_ORIGINS=http://localhost:8000
+    volumes:
+      - thoth-chroma-data-prod:/chroma/chroma
+    # Only expose to internal network in production
+    expose:
+      - "8003"
+    networks:
+      - thoth-prod-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/tmp
+
+  # ==============================================================================
+  # Thoth Main Application (Production)
+  # ==============================================================================
+  thoth-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: thoth-app-prod
+    environment:
+      # Database connections
+      - THOTH_CHROMADB_HOST=chromadb
+      - THOTH_CHROMADB_PORT=8003
+      - THOTH_CHROMADB_URL=http://chromadb:8003
+
+      # Server configuration
+      - THOTH_API_HOST=0.0.0.0
+      - THOTH_API_PORT=8000
+      - THOTH_MCP_HOST=0.0.0.0
+      - THOTH_MCP_PORT=8001
+
+      # Directory paths
+      - THOTH_WORKSPACE_DIR=/workspace
+      - THOTH_PDF_DIR=/workspace/pdfs
+      - THOTH_NOTES_DIR=/workspace/notes
+      - THOTH_DATA_DIR=/workspace/data
+      - THOTH_QUERIES_DIR=/workspace/queries
+      - THOTH_DISCOVERY_SOURCES_DIR=/workspace/discovery
+      - THOTH_KNOWLEDGE_BASE_DIR=/workspace/knowledge
+      - THOTH_LOGS_DIR=/workspace/logs
+      - THOTH_CACHE_DIR=/workspace/cache
+
+      # Production settings
+      - THOTH_LOG_LEVEL=INFO
+      - THOTH_DOCKER=1
+      - THOTH_PRODUCTION=1
+      - PYTHONPATH=/app/src
+
+      # Security settings
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+
+      # Performance settings
+      - THOTH_DISCOVERY_AUTO_START_SCHEDULER=false
+      - THOTH_DISCOVERY_DEFAULT_MAX_ARTICLES=50
+      - THOTH_RESEARCH_AGENT_MEMORY_ENABLED=true
+      - THOTH_AGENT_MAX_TOOL_CALLS=20
+      - THOTH_AGENT_TIMEOUT_SECONDS=300
+
+      # Cache settings
+      - THOTH_ENABLE_CACHE=true
+      - THOTH_CACHE_TTL=3600
+      - THOTH_MAX_MEMORY=2GB
+
+    env_file:
+      - .env.prod  # Production environment variables
+
+    volumes:
+      # Persistent data only, no source code mounting
+      - thoth-workspace-prod:/workspace
+      - thoth-data-prod:/workspace/data
+      - thoth-logs-prod:/workspace/logs
+      - thoth-cache-prod:/workspace/cache
+
+      # Read-only configuration
+      - ./prompts:/workspace/prompts:ro
+      - ./templates:/workspace/templates:ro
+
+    ports:
+      - "8000:8000"  # Main API server
+      - "8001:8001"  # MCP server
+
+    networks:
+      - thoth-prod-network
+
+    depends_on:
+      chromadb:
+        condition: service_healthy
+
+    restart: always
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+    # Production resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.5'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/tmp
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  # ==============================================================================
+  # Nginx Reverse Proxy (Optional - for production load balancing)
+  # ==============================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: thoth-nginx-prod
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - thoth-prod-network
+    depends_on:
+      - thoth-app
+    restart: always
+    profiles:
+      - proxy
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+
+  # ==============================================================================
+  # Log Aggregation (Optional - for production monitoring)
+  # ==============================================================================
+  log-aggregator:
+    image: fluent/fluent-bit:latest
+    container_name: thoth-logs-prod
+    volumes:
+      - ./docker/fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - thoth-logs-prod:/workspace/logs:ro
+    networks:
+      - thoth-prod-network
+    depends_on:
+      - thoth-app
+    restart: always
+    profiles:
+      - monitoring
+    security_opt:
+      - no-new-privileges:true
+
+# ==============================================================================
+# Production Volumes
+# ==============================================================================
+volumes:
+  thoth-chroma-data-prod:
+    driver: local
+    name: thoth-chroma-data-prod
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/thoth/data/chroma
+
+  thoth-workspace-prod:
+    driver: local
+    name: thoth-workspace-prod
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/thoth/workspace
+
+  thoth-data-prod:
+    driver: local
+    name: thoth-data-prod
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/thoth/data
+
+  thoth-logs-prod:
+    driver: local
+    name: thoth-logs-prod
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/thoth/logs
+
+  thoth-cache-prod:
+    driver: local
+    name: thoth-cache-prod
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/thoth/cache
+
+# ==============================================================================
+# Production Network
+# ==============================================================================
+networks:
+  thoth-prod-network:
+    driver: bridge
+    name: thoth-prod-network
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+    driver_opts:
+      com.docker.network.bridge.name: thoth-prod0

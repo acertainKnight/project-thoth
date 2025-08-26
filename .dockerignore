@@ -122,6 +122,14 @@ knowledge/
 logs/
 obsidian-vault/
 .obsidian/
+workspace/
+pdfs/
+notes/
+queries/
+discovery/
+cache/
+chroma/
+chroma_db/
 
 # Configuration files with secrets
 .env

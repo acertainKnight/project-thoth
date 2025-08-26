@@ -1,0 +1,82 @@
+# ==============================================================================
+# Thoth AI Research Assistant - Development Dockerfile
+# Optimized for development with hot-reload and debugging capabilities
+# ==============================================================================
+
+FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+
+# Set environment variables for development
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    THOTH_DOCKER=1 \
+    THOTH_LOG_LEVEL=DEBUG \
+    THOTH_DEV_MODE=1 \
+    THOTH_ENABLE_HOT_RELOAD=1
+
+# Install system dependencies including development tools
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    vim \
+    htop \
+    tree \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user for development
+RUN groupadd -r thoth && useradd -r -g thoth -s /bin/bash thoth
+
+# Create application and workspace directories
+RUN mkdir -p /app /workspace /data/logs /data/cache \
+    && chown -R thoth:thoth /app /workspace /data
+
+# Set working directory
+WORKDIR /app
+
+# Install dependencies first (better caching) - includes dev dependencies
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --locked --no-install-project
+
+# Copy source code and install project
+COPY --chown=thoth:thoth . /app
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked
+
+# Switch to non-root user
+USER thoth
+
+# Create workspace structure
+RUN mkdir -p /workspace/{pdfs,notes,data,queries,discovery,knowledge,logs,cache,tmp}
+
+# Set up development environment variables
+ENV PATH="/app/.venv/bin:$PATH" \
+    THOTH_WORKSPACE_DIR=/workspace \
+    THOTH_PDF_DIR=/workspace/pdfs \
+    THOTH_NOTES_DIR=/workspace/notes \
+    THOTH_DATA_DIR=/workspace/data \
+    THOTH_QUERIES_DIR=/workspace/queries \
+    THOTH_DISCOVERY_SOURCES_DIR=/workspace/discovery \
+    THOTH_KNOWLEDGE_BASE_DIR=/workspace/knowledge \
+    THOTH_LOGS_DIR=/workspace/logs \
+    THOTH_CACHE_DIR=/workspace/cache \
+    THOTH_API_HOST=0.0.0.0 \
+    THOTH_API_PORT=8000 \
+    THOTH_MCP_HOST=0.0.0.0 \
+    THOTH_MCP_PORT=8001
+
+# Health check for development
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Expose ports for API server, MCP server, and debugging
+EXPOSE 8000 8001 5678
+
+# Note: Source code will be mounted as volume in development
+# Default command with hot reload enabled
+CMD ["python", "-m", "thoth", "server", "start", "--api-host", "0.0.0.0", "--api-port", "8000", "--no-discovery", "--no-mcp", "--api-reload"]
