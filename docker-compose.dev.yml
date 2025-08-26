@@ -1,0 +1,184 @@
+# ==============================================================================
+# Thoth AI Research Assistant - Development Docker Compose
+# Development environment with hot-reload and debugging capabilities
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ==============================================================================
+  # ChromaDB Vector Database (Development)
+  # ==============================================================================
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: thoth-chromadb-dev
+    environment:
+      - CHROMA_SERVER_HOST=0.0.0.0
+      - CHROMA_SERVER_HTTP_PORT=8003
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - CHROMA_LOG_LEVEL=DEBUG
+    volumes:
+      - thoth-chroma-data-dev:/chroma/chroma
+    ports:
+      - "8003:8003"
+    networks:
+      - thoth-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ==============================================================================
+  # Thoth Main Application (Development)
+  # ==============================================================================
+  thoth-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: thoth-app-dev
+    environment:
+      # Database connections
+      - THOTH_CHROMADB_HOST=chromadb
+      - THOTH_CHROMADB_PORT=8003
+      - THOTH_CHROMADB_URL=http://chromadb:8003
+
+      # Server configuration
+      - THOTH_API_HOST=0.0.0.0
+      - THOTH_API_PORT=8000
+      - THOTH_MCP_HOST=0.0.0.0
+      - THOTH_MCP_PORT=8001
+
+      # Directory paths
+      - THOTH_WORKSPACE_DIR=/workspace
+      - THOTH_PDF_DIR=/workspace/pdfs
+      - THOTH_NOTES_DIR=/workspace/notes
+      - THOTH_DATA_DIR=/workspace/data
+      - THOTH_QUERIES_DIR=/workspace/queries
+      - THOTH_DISCOVERY_SOURCES_DIR=/workspace/discovery
+      - THOTH_KNOWLEDGE_BASE_DIR=/workspace/knowledge
+      - THOTH_LOGS_DIR=/workspace/logs
+      - THOTH_CACHE_DIR=/workspace/cache
+
+      # Development settings
+      - THOTH_LOG_LEVEL=DEBUG
+      - THOTH_DEV_MODE=1
+      - THOTH_DOCKER=1
+      - THOTH_ENABLE_HOT_RELOAD=1
+      - PYTHONPATH=/app/src
+
+      # API Keys (loaded from environment)
+      - API_MISTRAL_KEY=${API_MISTRAL_KEY:-}
+      - API_OPENROUTER_KEY=${API_OPENROUTER_KEY:-}
+      - API_OPENCITATIONS_KEY=${API_OPENCITATIONS_KEY:-}
+      - API_GOOGLE_KEY=${API_GOOGLE_KEY:-}
+      - API_SEMANTIC_SCHOLAR_KEY=${API_SEMANTIC_SCHOLAR_KEY:-}
+      - API_WEB_SEARCH_KEY=${API_WEB_SEARCH_KEY:-}
+
+      # Development-specific settings
+      - THOTH_DISCOVERY_AUTO_START_SCHEDULER=false
+      - THOTH_DISCOVERY_DEFAULT_MAX_ARTICLES=10
+      - THOTH_RESEARCH_AGENT_MEMORY_ENABLED=true
+      - THOTH_AGENT_MAX_TOOL_CALLS=20
+      - THOTH_AGENT_TIMEOUT_SECONDS=600
+
+    volumes:
+      # Source code mounting for hot-reload
+      - ./src:/app/src
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./README.md:/app/README.md
+      - ./CLAUDE.md:/app/CLAUDE.md
+
+      # Persistent development data
+      - thoth-workspace-dev:/workspace
+      - thoth-data-dev:/workspace/data
+      - thoth-logs-dev:/workspace/logs
+      - thoth-cache-dev:/workspace/cache
+
+      # Development configuration
+      - ./prompts:/workspace/prompts
+      - ./templates:/workspace/templates
+      - ./.env:/app/.env:ro
+
+    ports:
+      - "8000:8000"  # Main API server
+      - "8001:8001"  # MCP server
+      - "5678:5678"  # Debug port
+
+    networks:
+      - thoth-dev-network
+
+    depends_on:
+      chromadb:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+    # Development command with hot-reload
+    command: ["python", "-m", "thoth", "api", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ==============================================================================
+  # Development Tools Container (Optional)
+  # ==============================================================================
+  dev-tools:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: thoth-dev-tools
+    environment:
+      - PYTHONPATH=/app/src
+      - THOTH_WORKSPACE_DIR=/workspace
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - thoth-workspace-dev:/workspace
+    networks:
+      - thoth-dev-network
+    profiles:
+      - tools
+    command: ["tail", "-f", "/dev/null"]  # Keep container running
+
+# ==============================================================================
+# Development Volumes
+# ==============================================================================
+volumes:
+  thoth-chroma-data-dev:
+    driver: local
+    name: thoth-chroma-data-dev
+
+  thoth-workspace-dev:
+    driver: local
+    name: thoth-workspace-dev
+
+  thoth-data-dev:
+    driver: local
+    name: thoth-data-dev
+
+  thoth-logs-dev:
+    driver: local
+    name: thoth-logs-dev
+
+  thoth-cache-dev:
+    driver: local
+    name: thoth-cache-dev
+
+# ==============================================================================
+# Development Network
+# ==============================================================================
+networks:
+  thoth-dev-network:
+    driver: bridge
+    name: thoth-dev-network
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
