@@ -1,0 +1,206 @@
+# ==============================================================================
+# Thoth Monitoring Stack
+# Prometheus, Grafana, and log aggregation for production monitoring
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ==============================================================================
+  # Prometheus - Metrics Collection
+  # ==============================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: thoth-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - thoth-prometheus-data:/prometheus
+    networks:
+      - thoth-monitoring
+      - thoth-prod-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # ==============================================================================
+  # Grafana - Visualization Dashboard
+  # ==============================================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: thoth-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin  # Change in production
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel
+    ports:
+      - "3000:3000"
+    volumes:
+      - thoth-grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - thoth-monitoring
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # ==============================================================================
+  # Node Exporter - Host Metrics
+  # ==============================================================================
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: thoth-node-exporter
+    command:
+      - '--path.rootfs=/host'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - thoth-monitoring
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # ==============================================================================
+  # cAdvisor - Container Metrics
+  # ==============================================================================
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: thoth-cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - thoth-monitoring
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # ==============================================================================
+  # Elasticsearch - Log Storage
+  # ==============================================================================
+  elasticsearch:
+    image: elasticsearch:8.8.0
+    container_name: thoth-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - thoth-elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - thoth-monitoring
+    restart: unless-stopped
+    profiles:
+      - logging
+
+  # ==============================================================================
+  # Kibana - Log Visualization
+  # ==============================================================================
+  kibana:
+    image: kibana:8.8.0
+    container_name: thoth-kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    networks:
+      - thoth-monitoring
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+    profiles:
+      - logging
+
+  # ==============================================================================
+  # Filebeat - Log Shipping
+  # ==============================================================================
+  filebeat:
+    image: elastic/filebeat:8.8.0
+    container_name: thoth-filebeat
+    user: root
+    volumes:
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - thoth-logs-prod:/workspace/logs:ro
+    networks:
+      - thoth-monitoring
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+    profiles:
+      - logging
+
+  # ==============================================================================
+  # AlertManager - Alert Management
+  # ==============================================================================
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: thoth-alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - thoth-alertmanager-data:/alertmanager
+    networks:
+      - thoth-monitoring
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+# ==============================================================================
+# Volumes
+# ==============================================================================
+volumes:
+  thoth-prometheus-data:
+    driver: local
+    name: thoth-prometheus-data
+
+  thoth-grafana-data:
+    driver: local
+    name: thoth-grafana-data
+
+  thoth-elasticsearch-data:
+    driver: local
+    name: thoth-elasticsearch-data
+
+  thoth-alertmanager-data:
+    driver: local
+    name: thoth-alertmanager-data
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  thoth-monitoring:
+    driver: bridge
+    name: thoth-monitoring
+
+  thoth-prod-network:
+    external: true

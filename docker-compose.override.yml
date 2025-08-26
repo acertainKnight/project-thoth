@@ -1,0 +1,42 @@
+# ==============================================================================
+# Thoth AI Research Assistant - Docker Compose Override
+# Local development overrides and customizations
+# This file is automatically loaded by docker-compose and can be customized
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ==============================================================================
+  # Thoth App Overrides
+  # Local development customizations
+  # ==============================================================================
+  thoth-app:
+    # Override for local development
+    environment:
+      # Local development settings
+      - THOTH_LOG_LEVEL=DEBUG
+      - THOTH_DEV_MODE=1
+
+    volumes:
+      # Mount local configuration if it exists
+      - ./config.local.yml:/app/config.local.yml:ro
+
+      # Mount local workspace directory if it exists
+      - ./workspace:/workspace
+
+    # Enable debugging port
+    ports:
+      - "5678:5678"  # Debug port
+
+  # ==============================================================================
+  # ChromaDB Overrides
+  # ==============================================================================
+  chromadb:
+    environment:
+      # More verbose logging for local development
+      - CHROMA_LOG_LEVEL=DEBUG
+
+    # Expose ChromaDB port for direct access during development
+    ports:
+      - "8003:8003"
