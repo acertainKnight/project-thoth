@@ -27,7 +27,7 @@ from thoth.services.service_manager import ServiceManager
 
 # Import memory system (optional dependency)
 try:
-    from thoth.memory import ThothMemoryStore, get_shared_checkpointer
+    from thoth.memory import ThothMemoryStore
 
     MEMORY_AVAILABLE = True
 except ImportError:
@@ -59,7 +59,6 @@ class ResearchAssistant:
         service_manager: ServiceManager,
         enable_memory: bool = True,
         system_prompt: str | None = None,
-        use_mcp_tools: bool = True,  # Always True - legacy parameter kept for compatibility
         memory_store: ThothMemoryStore | None = None,
     ):
         """
@@ -126,7 +125,9 @@ class ResearchAssistant:
             )
         except Exception as e:
             logger.error(f'Failed to initialize MCP tools: {e}')
-            raise RuntimeError(f'MCP tools are required but failed to initialize: {e}')
+            raise RuntimeError(
+                f'MCP tools are required but failed to initialize: {e}'
+            ) from e
 
         # Bind tools to LLM
         self.llm_with_tools = self.llm.bind_tools(self.tools)
@@ -176,7 +177,9 @@ class ResearchAssistant:
             return []
         except Exception as e:
             logger.error(f'Failed to connect to MCP server: {e}')
-            raise RuntimeError(f'MCP connection failed and no fallback available: {e}')
+            raise RuntimeError(
+                f'MCP connection failed and no fallback available: {e}'
+            ) from e
 
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt for the agent."""
@@ -214,22 +217,30 @@ Remember: You have direct access to tools - use them immediately rather than jus
             LettaCheckpointer if Thoth memory is available and configured,
             otherwise fallback to MemorySaver.
         """
-        if MEMORY_AVAILABLE and self.memory_store:
-            # Use Thoth's Letta-based checkpointer
-            from thoth.memory import LettaCheckpointer
+        # For now, always use MemorySaver since LettaCheckpointer doesn't
+        # implement async methods
+        logger.info(
+            'Using basic MemorySaver (LettaCheckpointer async not implemented yet)'
+        )
+        return MemorySaver()
 
-            checkpointer = LettaCheckpointer(self.memory_store)
-            logger.info('Using Letta-based persistent memory checkpointer')
-            return checkpointer
-        elif MEMORY_AVAILABLE and not self.memory_store:
-            # Use shared checkpointer if no specific store provided
-            checkpointer = get_shared_checkpointer()
-            logger.info('Using shared Letta checkpointer')
-            return checkpointer
-        else:
-            # Fallback to basic in-memory checkpointer
-            logger.info('Using basic MemorySaver (no persistence)')
-            return MemorySaver()
+        # TODO: Re-enable when LettaCheckpointer implements aget_tuple
+        # if MEMORY_AVAILABLE and self.memory_store:
+        #     # Use Thoth's Letta-based checkpointer
+        #     from thoth.memory import LettaCheckpointer
+        #
+        #     checkpointer = LettaCheckpointer(self.memory_store)
+        #     logger.info('Using Letta-based persistent memory checkpointer')
+        #     return checkpointer
+        # elif MEMORY_AVAILABLE and not self.memory_store:
+        #     # Use shared checkpointer if no specific store provided
+        #     checkpointer = get_shared_checkpointer()
+        #     logger.info('Using shared Letta checkpointer')
+        #     return checkpointer
+        # else:
+        #     # Fallback to basic in-memory checkpointer
+        #     logger.info('Using basic MemorySaver (no persistence)')
+        #     return MemorySaver()
 
     def _build_graph(self) -> Any:
         """Build the LangGraph agent graph using MCP tooling."""
@@ -371,10 +382,15 @@ Remember: You have direct access to tools - use them immediately rather than jus
             return response
 
         except Exception as e:
+            import traceback
+
+            error_details = traceback.format_exc()
             logger.error(f'Error in agent chat: {e}')
+            logger.error(f'Traceback:\n{error_details}')
             return {
                 'response': f'I encountered an error: {e!s}',
                 'error': str(e),
+                'traceback': error_details,
             }
 
     async def chat_messages(
@@ -494,7 +510,6 @@ def create_research_assistant(
     adapter=None,
     enable_memory: bool = True,
     system_prompt: str | None = None,
-    use_mcp_tools: bool = True,
     memory_store: ThothMemoryStore | None = None,
 ) -> ResearchAssistant:
     """
@@ -505,7 +520,6 @@ def create_research_assistant(
         adapter: AgentAdapter instance (legacy compatibility)
         enable_memory: Whether to enable conversation memory
         system_prompt: Custom system prompt
-        use_mcp_tools: Whether to use MCP tools (defaults to True)
         memory_store: Optional ThothMemoryStore for persistent memory
 
     Returns:
@@ -514,6 +528,7 @@ def create_research_assistant(
     Note:
         Either service_manager or adapter must be provided.
         If both are provided, service_manager takes precedence.
+        MCP tools are always used (no legacy tool fallback).
     """
     if service_manager is None and adapter is None:
         raise ValueError('Either service_manager or adapter must be provided')
@@ -526,7 +541,6 @@ def create_research_assistant(
         service_manager=service_manager,
         enable_memory=enable_memory,
         system_prompt=system_prompt,
-        use_mcp_tools=use_mcp_tools,
         memory_store=memory_store,
     )
 

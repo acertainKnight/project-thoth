@@ -17,6 +17,9 @@ async def run_agent_chat(_args, pipeline: ThothPipeline):
             enable_memory=True,
         )
 
+        # Initialize the agent asynchronously to load MCP tools
+        await agent.async_initialize()
+
         print('\\n' + '=' * 70)
         print('🤖 Welcome to Thoth Research Assistant!')
         print('=' * 70)
