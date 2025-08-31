@@ -49,7 +49,6 @@ class TestAgentAsyncExecution:
             agent = create_research_assistant(
                 service_manager=pipeline.services,
                 enable_memory=False,  # Disable memory for simpler testing
-                use_mcp_tools=True,  # Legacy tools removed, MCP required
             )
             # Initialize the agent to load tools synchronously
             asyncio.run(agent.async_initialize())

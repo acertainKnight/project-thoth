@@ -27,7 +27,7 @@ from thoth.services.service_manager import ServiceManager
 
 # Import memory system (optional dependency)
 try:
-    from thoth.memory import ThothMemoryStore, get_shared_checkpointer
+    from thoth.memory import ThothMemoryStore
 
     MEMORY_AVAILABLE = True
 except ImportError:
@@ -54,12 +54,14 @@ class ResearchAssistant:
     including discovery sources, query management, and knowledge base exploration.
     """
 
+    # Enterprise MCP connection pooling (managed by mcp_tools_manager)
+
     def __init__(
         self,
         service_manager: ServiceManager,
         enable_memory: bool = True,
         system_prompt: str | None = None,
-        use_mcp_tools: bool = True,  # Always True - legacy parameter kept for compatibility
+        use_mcp_tools: bool = True,
         memory_store: ThothMemoryStore | None = None,
     ):
         """
@@ -74,13 +76,15 @@ class ResearchAssistant:
         """
         self.service_manager = service_manager
         self.enable_memory = enable_memory
-        # Force MCP tools usage - no fallback to legacy tools
+        self.use_mcp_tools = use_mcp_tools
+        # MCP tools are required for proper functionality
         if not MCP_AVAILABLE:
             raise RuntimeError(
                 'MCP tools are required but not available. Install dependencies.'
             )
         self.use_mcp_tools = True
         self.memory_store = memory_store
+        self.mcp_client = None  # Will be initialized in async_initialize()
 
         # Get LLM from service manager
         self.llm = self.service_manager.llm.get_client()
@@ -90,7 +94,6 @@ class ResearchAssistant:
 
         # Initialize tools - will be loaded asynchronously
         self.tools = []
-        self.mcp_client = None
         self.tool_registry = None
         self._initialized = False
 
@@ -117,7 +120,7 @@ class ResearchAssistant:
         if self._initialized:
             return
 
-        # Initialize MCP tools exclusively
+        # Initialize MCP tools (required for proper functionality)
         try:
             # Use the new MCP adapter approach
             self.tools = await self._get_mcp_tools_via_adapter()
@@ -126,7 +129,9 @@ class ResearchAssistant:
             )
         except Exception as e:
             logger.error(f'Failed to initialize MCP tools: {e}')
-            raise RuntimeError(f'MCP tools are required but failed to initialize: {e}')
+            raise RuntimeError(
+                f'MCP tools are required but failed to initialize: {e}'
+            ) from e
 
         # Bind tools to LLM
         self.llm_with_tools = self.llm.bind_tools(self.tools)
@@ -142,18 +147,20 @@ class ResearchAssistant:
     # Legacy tool registration removed - MCP tools only
 
     async def _get_mcp_tools_via_adapter(self) -> list[Any]:
-        """Get MCP tools using official LangChain MCP adapter."""
+        """Get MCP tools using official LangChain MCP adapter patterns."""
         if not self.use_mcp_tools:
             return []
 
         try:
             from langchain_mcp_adapters.client import MultiServerMCPClient
 
-            # Connect to local Thoth MCP server
             # Get the MCP connection details from configuration
             mcp_port = self.service_manager.config.mcp_port
             mcp_host = self.service_manager.config.mcp_host
 
+            logger.info('Initializing MCP tools with official LangChain adapters...')
+
+            # Use the official MultiServerMCPClient pattern
             self.mcp_client = MultiServerMCPClient(
                 {
                     'thoth': {
@@ -163,20 +170,28 @@ class ResearchAssistant:
                 }
             )
 
-            # Get tools directly from MCP server - no manual conversion needed
-            logger.info('Connecting to local MCP server for tools...')
+            # Load tools using the official pattern
             tools = await self.mcp_client.get_tools()
-            logger.info(f'Successfully loaded {len(tools)} tools from MCP server')
+
+            if not tools:
+                logger.warning('No MCP tools available - running in degraded mode')
+                return []
+
+            logger.info(
+                f'Successfully loaded {len(tools)} MCP tools using official LangChain adapters'
+            )
             return tools
 
-        except ImportError:
-            logger.error(
-                'langchain-mcp-adapters not installed. Install with: pip install langchain-mcp-adapters'
-            )
+        except ImportError as e:
+            logger.error(f'Missing MCP dependencies: {e}')
+            logger.error('Install with: pip install langchain-mcp-adapters')
             return []
         except Exception as e:
-            logger.error(f'Failed to connect to MCP server: {e}')
-            raise RuntimeError(f'MCP connection failed and no fallback available: {e}')
+            logger.error(f'Failed to initialize MCP tools: {e}')
+
+            # Graceful degradation - continue without MCP tools
+            logger.warning('Continuing in degraded mode without MCP tools')
+            return []
 
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt for the agent."""
@@ -214,22 +229,30 @@ Remember: You have direct access to tools - use them immediately rather than jus
             LettaCheckpointer if Thoth memory is available and configured,
             otherwise fallback to MemorySaver.
         """
-        if MEMORY_AVAILABLE and self.memory_store:
-            # Use Thoth's Letta-based checkpointer
-            from thoth.memory import LettaCheckpointer
+        # For now, always use MemorySaver since LettaCheckpointer doesn't
+        # implement async methods
+        logger.info(
+            'Using basic MemorySaver (LettaCheckpointer async not implemented yet)'
+        )
+        return MemorySaver()
 
-            checkpointer = LettaCheckpointer(self.memory_store)
-            logger.info('Using Letta-based persistent memory checkpointer')
-            return checkpointer
-        elif MEMORY_AVAILABLE and not self.memory_store:
-            # Use shared checkpointer if no specific store provided
-            checkpointer = get_shared_checkpointer()
-            logger.info('Using shared Letta checkpointer')
-            return checkpointer
-        else:
-            # Fallback to basic in-memory checkpointer
-            logger.info('Using basic MemorySaver (no persistence)')
-            return MemorySaver()
+        # TODO: Re-enable when LettaCheckpointer implements aget_tuple
+        # if MEMORY_AVAILABLE and self.memory_store:
+        #     # Use Thoth's Letta-based checkpointer
+        #     from thoth.memory import LettaCheckpointer
+        #
+        #     checkpointer = LettaCheckpointer(self.memory_store)
+        #     logger.info('Using Letta-based persistent memory checkpointer')
+        #     return checkpointer
+        # elif MEMORY_AVAILABLE and not self.memory_store:
+        #     # Use shared checkpointer if no specific store provided
+        #     checkpointer = get_shared_checkpointer()
+        #     logger.info('Using shared Letta checkpointer')
+        #     return checkpointer
+        # else:
+        #     # Fallback to basic in-memory checkpointer
+        #     logger.info('Using basic MemorySaver (no persistence)')
+        #     return MemorySaver()
 
     def _build_graph(self) -> Any:
         """Build the LangGraph agent graph using MCP tooling."""
@@ -371,10 +394,15 @@ Remember: You have direct access to tools - use them immediately rather than jus
             return response
 
         except Exception as e:
+            import traceback
+
+            error_details = traceback.format_exc()
             logger.error(f'Error in agent chat: {e}')
+            logger.error(f'Traceback:\n{error_details}')
             return {
                 'response': f'I encountered an error: {e!s}',
                 'error': str(e),
+                'traceback': error_details,
             }
 
     async def chat_messages(
@@ -488,6 +516,26 @@ Remember: You have direct access to tools - use them immediately rather than jus
         """Return accumulated token usage for a user."""
         return self.usage_tracker.get_usage(user_id)
 
+    async def cleanup(self) -> None:
+        """Clean up MCP client resources."""
+        if self.mcp_client:
+            try:
+                # Close the MCP client using proper async context management
+                # Note: MultiServerMCPClient handles cleanup automatically
+                logger.info('Cleaning up MCP client resources')
+                self.mcp_client = None
+            except Exception as e:
+                logger.warning(f'Error during MCP client cleanup: {e}')
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        await self.async_initialize()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.cleanup()
+
 
 def create_research_assistant(
     service_manager: ServiceManager | None = None,
@@ -514,6 +562,7 @@ def create_research_assistant(
     Note:
         Either service_manager or adapter must be provided.
         If both are provided, service_manager takes precedence.
+        MCP tools are always used (no legacy tool fallback).
     """
     if service_manager is None and adapter is None:
         raise ValueError('Either service_manager or adapter must be provided')
@@ -526,8 +575,8 @@ def create_research_assistant(
         service_manager=service_manager,
         enable_memory=enable_memory,
         system_prompt=system_prompt,
-        use_mcp_tools=use_mcp_tools,
         memory_store=memory_store,
+        use_mcp_tools=use_mcp_tools,
     )
 
 

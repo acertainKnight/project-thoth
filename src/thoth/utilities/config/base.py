@@ -6,6 +6,7 @@ across all configuration modules.
 """
 
 import sys
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from pydantic import Field
@@ -60,11 +61,16 @@ class BaseServerConfig(BaseSettings):
     auto_start: bool = Field(False, description='Whether to auto-start')
 
 
+if TYPE_CHECKING:
+    from . import ThothConfig
+
+
 def setup_logging(config: 'ThothConfig') -> None:
     """Set up logging configuration using loguru.
 
     Args:
-        config (ThothConfig): The Thoth configuration object containing logging settings.
+        config (ThothConfig): The Thoth configuration object containing logging
+            settings.
 
     Returns:
         None: Sets up loguru logger with file and console handlers.
