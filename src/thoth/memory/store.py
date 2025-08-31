@@ -23,11 +23,19 @@ except ImportError:
     logger.warning('Memory pipeline not available')
 
 try:
-    from letta.memory import MemoryStore as _LettaStore
+    # Try new Letta API first (0.11.x+)
+    import letta
+
+    _LettaStore = letta.Memory  # Use the Memory class from Letta
+    LETTA_AVAILABLE = True
+    logger.info('Letta memory system available')
 except ImportError:
+    LETTA_AVAILABLE = False
     logger.warning('Letta not available, using fallback memory store')
 
-    # Fallback for development/testing
+# Fallback for development/testing
+if not LETTA_AVAILABLE:
+
     class _LettaStore:
         def __init__(self, *_args, **_kwargs):
             self._memory = {}

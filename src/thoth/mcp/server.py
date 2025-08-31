@@ -329,16 +329,68 @@ class MCPServer:
         self.resource_manager.add_provider(provider)
 
 
+async def start_mcp_server(
+    service_manager: ServiceManager | None = None,
+    enable_stdio: bool = True,
+    enable_http: bool = True,
+    http_host: str = 'localhost',
+    http_port: int = 8001,
+    enable_sse: bool = False,
+    sse_host: str = 'localhost',
+    sse_port: int = 8002,
+) -> None:
+    """
+    Start the MCP server with the specified transports.
+
+    Args:
+        service_manager: ServiceManager instance. If None, creates a default one.
+        enable_stdio: Enable stdio transport for CLI
+        enable_http: Enable HTTP transport for web APIs
+        http_host: HTTP server host
+        http_port: HTTP server port
+        enable_sse: Enable Server-Sent Events transport
+        sse_host: SSE server host
+        sse_port: SSE server port
+    """
+    if service_manager is None:
+        from thoth.services.service_manager import ServiceManager
+
+        service_manager = ServiceManager()
+
+    server = create_mcp_server(
+        service_manager=service_manager,
+        enable_stdio=enable_stdio,
+        enable_http=enable_http,
+        http_host=http_host,
+        http_port=http_port,
+        enable_sse=enable_sse,
+        sse_host=sse_host,
+        sse_port=sse_port,
+    )
+
+    # Register all MCP tools
+    logger.info('Registering MCP tools...')
+    from thoth.mcp.tools import register_all_mcp_tools
+
+    register_all_mcp_tools(server.tool_registry)
+    logger.info(f'Registered {len(server.tool_registry.get_tool_names())} MCP tools')
+
+    logger.info(f'MCP server will start on http://{http_host}:{http_port}')
+
+    await server.start()
+    logger.info('MCP server started successfully')
+
+
 # Factory function for easy server creation
 def create_mcp_server(
     service_manager: ServiceManager,
     enable_stdio: bool = True,
     enable_http: bool = True,
     http_host: str = 'localhost',
-    http_port: int = 8000,
+    http_port: int = 8001,
     enable_sse: bool = False,
     sse_host: str = 'localhost',
-    sse_port: int = 8001,
+    sse_port: int = 8002,
 ) -> MCPServer:
     """
     Create and configure an MCP server with transports.

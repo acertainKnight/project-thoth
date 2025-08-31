@@ -78,6 +78,7 @@ dependencies = [
     # Memory and Persistence Dependencies
     "letta>=0.9,<1.0", # For advanced memory management
     "alembic>=1.13.0", # For database migrations
+    "sqlite-vec>=0.1.6",
 ]
 
 [project.optional-dependencies]
