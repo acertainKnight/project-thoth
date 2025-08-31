@@ -2,6 +2,8 @@
 
 > **Vision:** Transform Thoth into a state-of-the-art multi-agent autonomous research platform that enables users to create custom agents through natural language interaction, leveraging the latest advances in multi-agent orchestration, self-extending systems, and collaborative AI research.
 
+> **Implementation Philosophy:** Maximize reuse of existing Thoth services and patterns. Agents are orchestration layers over existing functionality, not reimplementations. See `multi_agent_framework_v3_minimal.md` for the minimal integration approach.
+
 ---
 
 ## 1. Executive Summary
@@ -25,6 +27,27 @@ This plan extends the original multi-agent framework to incorporate cutting-edge
 ---
 
 ## 2. Core Architecture Enhancements
+
+### 2.0 Reuse-First Design Principle
+
+Before creating any new classes or systems, we leverage existing Thoth components:
+
+```python
+# INSTEAD OF: Creating new agent base classes
+# WE USE: Existing services with thin adapters
+
+# Example: DocumentProcessorAgent is just ProcessingService + routing
+DocumentProcessorAgent = ServiceAgentAdapter(
+    service=existing_processing_service,
+    task_routing={
+        "ocr": "ocr_to_markdown",         # Existing method
+        "analyze": "analyze_content",      # Existing method
+        "extract": "extract_text"          # Existing method
+    }
+)
+
+# No new processing logic - just orchestration
+```
 
 ### 2.1 Dynamic Agent Creation System
 
@@ -1246,29 +1269,53 @@ const AgentNetworkDashboard: React.FC = () => {
 
 ### 14.1 Alignment with Current Architecture
 
-The multi-agent framework will integrate seamlessly with Thoth's existing patterns:
+The multi-agent framework integrates by wrapping existing services, not replacing them:
 
 ```python
-# src/thoth/agents/base.py - Following existing service patterns
-from thoth.services.base import BaseService
-from thoth.utilities.config import ThothConfig
+# src/thoth/agents/adapters.py - Agents as service orchestrators
+from thoth.services.service_manager import ServiceManager
 
-class BaseAgent(BaseService):
-    """Base agent class following Thoth's service architecture."""
+class ServiceAgentAdapter:
+    """Convert existing services into agents without modification."""
     
-    def __init__(self, config: ThothConfig, service_manager: ServiceManager):
-        super().__init__(config)
-        self.service_manager = service_manager
-        self.services = self._initialize_services()
+    def __init__(self, service: BaseService, capability_map: dict[str, str]):
+        self.service = service  # Use existing service instance
+        self.capability_map = capability_map  # Map tasks to existing methods
     
-    def _initialize_services(self):
-        """Initialize required services following existing patterns."""
-        return {
-            'llm': self.service_manager.llm,
-            'processing': self.service_manager.processing,
-            'citation': self.service_manager.citation,
-            'rag': self.service_manager.rag
-        }
+    async def execute(self, task: dict) -> dict:
+        """Route tasks to existing service methods."""
+        method = self.capability_map.get(task['type'])
+        if not method:
+            raise ValueError(f"Unknown task type: {task['type']}")
+        
+        # Call existing service method directly
+        service_method = getattr(self.service, method)
+        return await service_method(**task.get('params', {}))
+
+# Create agents from existing services - zero new implementation
+def create_agents_from_services(service_manager: ServiceManager) -> dict:
+    return {
+        "DocumentProcessor": ServiceAgentAdapter(
+            service_manager.processing,
+            {
+                "ocr": "ocr_to_markdown",
+                "analyze": "analyze_content",
+                "process": "process_document"
+            }
+        ),
+        "CitationMiner": ServiceAgentAdapter(
+            service_manager.citation,
+            {
+                "extract": "extract_citations",
+                "format": "format_citations",
+                "graph": "build_citation_graph"
+            }
+        ),
+        "Researcher": ServiceAgentAdapter(
+            service_manager.rag,
+            {"search": "search", "query": "query_knowledge"}
+        )
+    }
 ```
 
 ### 14.2 Service Manager Integration
@@ -1298,34 +1345,48 @@ class EnhancedServiceManager(ServiceManager):
         return self._agent_orchestrator
 ```
 
-### 14.3 Pipeline Compatibility Layer
+### 14.3 Pipeline as Default Agent Workflow
 
 ```python
-# src/thoth/pipeline.py - Minimal changes to existing pipeline
+# src/thoth/pipeline.py - Pipeline IS the agent orchestration
 class ThothPipeline:
-    """Enhanced pipeline with optional multi-agent support."""
+    """Existing pipeline that becomes the default agent workflow."""
     
     def __init__(self, *args, **kwargs):
+        # NO CHANGES to existing initialization
         super().__init__(*args, **kwargs)
-        self.config = get_config()
-        self.multi_agent_enabled = self.config.get('multi_agent', False)
         
-        if self.multi_agent_enabled:
-            self.orchestrator = self.service_manager.agent_orchestrator
+        # Single optional addition for agent event emission
+        self.agent_mode = kwargs.get('agent_mode', False)
     
     async def process_pdf(self, pdf_path: Path, **kwargs):
-        """Process PDF with backward compatibility."""
+        """Existing method - no logic changes, just optional events."""
         
-        if self.multi_agent_enabled:
-            # Delegate to orchestrator
-            task = Task(
-                type="PROCESS_PDF",
-                payload={"pdf_path": str(pdf_path), **kwargs}
-            )
-            return await self.orchestrator.execute(task)
-        else:
-            # Use existing pipeline logic
-            return await self._legacy_process_pdf(pdf_path, **kwargs)
+        if self.agent_mode:
+            # Emit events for monitoring, but don't change logic
+            await self._emit_event("task_started", {"pdf": str(pdf_path)})
+        
+        # ALL EXISTING LOGIC UNCHANGED
+        result = await self._original_process_pdf(pdf_path, **kwargs)
+        
+        if self.agent_mode:
+            await self._emit_event("task_completed", {"result": result})
+        
+        return result
+
+# The pipeline already orchestrates services - we just expose it as agents
+class PipelineAsAgentOrchestrator:
+    """Use existing pipeline as agent orchestration template."""
+    
+    def __init__(self, pipeline: ThothPipeline):
+        self.pipeline = pipeline  # Reuse entire pipeline
+        
+    async def orchestrate(self, goal: str) -> Any:
+        # Parse goal and call existing pipeline methods
+        if "pdf" in goal:
+            return await self.pipeline.process_pdf(extract_path(goal))
+        elif "research" in goal:
+            return await self.pipeline.knowledge_pipeline.process_query(goal)
 ```
 
 ### 14.4 FastAPI Router Extensions
@@ -1419,7 +1480,24 @@ This enhanced multi-agent framework positions Thoth as a premier example of resp
 - **Scalable Architecture**: From single-user research to enterprise deployments
 - **Open and Extensible**: Clear APIs and extension points for community contributions
 
-This framework demonstrates that the future of AI lies not in unconstrained autonomous systems, but in carefully designed, safety-conscious platforms that augment human capabilities while protecting against potential harms. Thoth stands as a testament to what's possible when AI safety and cutting-edge capabilities are given equal priority in system design.# Obsidian Plugin Integration for Multi-Agent Framework
+This framework demonstrates that the future of AI lies not in unconstrained autonomous systems, but in carefully designed, safety-conscious platforms that augment human capabilities while protecting against potential harms. Thoth stands as a testament to what's possible when AI safety and cutting-edge capabilities are given equal priority in system design.
+
+### Implementation Philosophy: Maximum Reuse, Minimal Change
+
+The key insight of this framework is that **Thoth's existing services already provide all the capabilities needed for a multi-agent system**. Rather than reimplementing functionality:
+
+1. **Services ARE Agents**: Each existing service (ProcessingService, CitationService, etc.) becomes an agent through thin adapters
+2. **Pipeline IS Orchestration**: The existing pipeline logic serves as the default agent orchestration pattern
+3. **MCP Tools ARE Actions**: Every MCP tool is automatically an agent capability
+4. **Safety IS Built-In**: Existing validation, error handling, and logging provide the safety layer
+
+This approach results in:
+- **90% Code Reuse**: Most agent functionality comes from existing services
+- **10% New Code**: Only orchestration and adapter layers are new
+- **Zero Breaking Changes**: All existing code paths remain unchanged
+- **Immediate Value**: Full agent capabilities available on day one
+
+By building on Thoth's solid foundation rather than alongside it, we create a more maintainable, reliable, and powerful system that truly showcases both AI innovation and engineering excellence.# Obsidian Plugin Integration for Multi-Agent Framework
 
 ## 14.5 Obsidian Plugin Integration
 
