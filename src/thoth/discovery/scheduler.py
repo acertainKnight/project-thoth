@@ -266,7 +266,9 @@ class DiscoveryScheduler:
                 )
 
             # Run discovery
-            result = self.discovery_manager.run_discovery(source_name, max_articles)
+            result = self.discovery_manager.run_discovery(
+                source_name=source_name, max_articles=max_articles
+            )
 
             # Update schedule state
             if source_name in self.schedule_state:
@@ -275,11 +277,13 @@ class DiscoveryScheduler:
                 )
                 self._save_schedule_state()
 
-            return result.model_dump()
+            result_dict = result.model_dump()
+            result_dict['success'] = len(result.errors) == 0
+            return result_dict
 
         except Exception as e:
             logger.error(f'Error running source {source_name}: {e}')
-            return {'error': str(e)}
+            return {'success': False, 'error': str(e)}
 
     def _scheduler_loop(self) -> None:
         """
@@ -327,7 +331,7 @@ class DiscoveryScheduler:
                     # Run the source
                     max_articles = schedule_info.get('max_articles_per_run')
                     result = self.discovery_manager.run_discovery(
-                        source_name, max_articles
+                        source_name=source_name, max_articles=max_articles
                     )
 
                     # Update schedule state

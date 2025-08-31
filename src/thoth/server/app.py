@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from loguru import logger
 from starlette.middleware.cors import CORSMiddleware
 
+from thoth.mcp.monitoring import mcp_health_router
 from thoth.server.chat_models import ChatPersistenceManager
 from thoth.server.routers import (
     agent,
@@ -132,6 +133,9 @@ def create_app() -> FastAPI:
 
     # Include routers with proper prefixes
     app.include_router(health.router, tags=['health'])
+    app.include_router(
+        mcp_health_router, tags=['mcp-health']
+    )  # Enterprise MCP monitoring
     app.include_router(websocket.router, tags=['websocket'])
     app.include_router(chat.router, prefix='/chat', tags=['chat'])
     app.include_router(agent.router, prefix='/agent', tags=['agent'])
@@ -171,7 +175,7 @@ async def start_server(
     host: str = '127.0.0.1',
     port: int = 8000,
     auto_start_mcp: bool = True,
-    **kwargs,
+    **kwargs,  # noqa: ARG001
 ) -> None:
     """
     Start the Thoth server with all necessary components.
@@ -211,7 +215,7 @@ async def start_server(
         service_manager = ServiceManager()
 
         # Initialize LLM router
-        llm_router = LLMRouter(config)
+        llm_router = LLMRouter(config)  # noqa: F841
 
         # Initialize chat persistence manager
         try:
@@ -223,7 +227,15 @@ async def start_server(
             logger.warning(f'Failed to initialize chat manager: {e}')
             chat_manager = None
 
-        # Initialize research agent
+        # Start MCP server FIRST if requested
+        if auto_start_mcp:
+            await _start_mcp_server_background()
+            # Give the MCP server a moment to start up
+            import asyncio
+
+            await asyncio.sleep(2)
+
+        # Initialize research agent (after MCP server is running)
         try:
             from thoth.ingestion.agent_v2.core.agent import (
                 create_research_assistant_async,
@@ -245,10 +257,6 @@ async def start_server(
         research.set_dependencies(research_agent, chat_manager)
         operations.set_service_manager(service_manager)
         tools.set_dependencies(research_agent, service_manager)
-
-        # Start MCP server if requested
-        if auto_start_mcp:
-            await _start_mcp_server_background()
 
         logger.info('Thoth server initialization completed successfully')
 
@@ -295,7 +303,7 @@ def start_obsidian_server(
         server = uvicorn.Server(config)
 
         # Set up signal handlers for graceful shutdown
-        def signal_handler(signum, frame):
+        def signal_handler(signum, frame):  # noqa: ARG001
             logger.info(f'Received signal {signum}, initiating shutdown...')
             server.should_exit = True
 

@@ -8,6 +8,8 @@ and getting collection statistics.
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
+
 from ..base_tools import MCPTool, MCPToolCallResult, NoInputTool
 
 
@@ -501,8 +503,12 @@ class CollectionStatsMCPTool(NoInputTool):
     async def execute(self, _arguments: dict[str, Any]) -> MCPToolCallResult:
         """Get collection statistics."""
         try:
-            # Get RAG statistics
-            rag_stats = self.service_manager.rag.get_statistics()
+            # Get RAG statistics with error handling
+            try:
+                rag_stats = self.service_manager.rag.get_stats()
+            except Exception as e:
+                logger.warning(f'Failed to get RAG stats: {e}')
+                rag_stats = {}
 
             # Try to get additional stats from other services
             response_text = '📊 **Collection Statistics**\n\n'
@@ -520,7 +526,7 @@ class CollectionStatsMCPTool(NoInputTool):
             if rag_stats.get('last_indexed'):
                 response_text += f'  - Last indexed: {rag_stats["last_indexed"]}\n'
 
-            # Try to get document type breakdown
+            # Try to get document type breakdown with improved error handling
             try:
                 # Sample articles to get type distribution
                 sample_results = self.service_manager.rag.search(query='', k=100)
@@ -533,9 +539,12 @@ class CollectionStatsMCPTool(NoInputTool):
                     response_text += '\n**📄 Document Types:**\n'
                     for doc_type, count in sorted(doc_types.items()):
                         response_text += f'  - {doc_type}: {count}\n'
+                else:
+                    response_text += '\n**📄 Document Types:** No documents found\n'
 
-            except Exception:
-                pass  # Skip if not available
+            except Exception as e:
+                logger.warning(f'Failed to get document type breakdown: {e}')
+                response_text += '\n**📄 Document Types:** Unable to retrieve (service unavailable)\n'
 
             # Embeddings info
             if 'embeddings' in rag_stats:

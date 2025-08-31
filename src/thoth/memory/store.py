@@ -23,11 +23,19 @@ except ImportError:
     logger.warning('Memory pipeline not available')
 
 try:
-    from letta.memory import MemoryStore as _LettaStore
+    # Try new Letta API first (0.11.x+)
+    import letta
+
+    _LettaStore = letta.Memory  # Use the Memory class from Letta
+    LETTA_AVAILABLE = True
+    logger.info('Letta memory system available')
 except ImportError:
+    LETTA_AVAILABLE = False
     logger.warning('Letta not available, using fallback memory store')
 
-    # Fallback for development/testing
+# Fallback for development/testing
+if not LETTA_AVAILABLE:
+
     class _LettaStore:
         def __init__(self, *_args, **_kwargs):
             self._memory = {}
@@ -110,11 +118,11 @@ class ThothMemoryStore(_LettaStore):
             from thoth.memory.pipelines import MemoryRetrievalPipeline
 
             self.retrieval_pipeline = MemoryRetrievalPipeline(
-                rag_service=self.rag_service,
-                enable_semantic_search=bool(self.rag_service),
-                enable_caching=True,
-                cache_ttl=300,
-                max_results=20,
+                relevance_weight=0.4,
+                salience_weight=0.3,
+                recency_weight=0.2,
+                diversity_weight=0.1,
+                enable_metrics=True,
             )
             logger.info('Memory retrieval pipeline enabled')
         elif enable_retrieval_pipeline:
