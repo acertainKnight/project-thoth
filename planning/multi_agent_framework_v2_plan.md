@@ -2,7 +2,7 @@
 
 > **Vision:** Transform Thoth into a state-of-the-art multi-agent autonomous research platform that enables users to create custom agents through natural language interaction, leveraging the latest advances in multi-agent orchestration, self-extending systems, and collaborative AI research.
 
-> **Implementation Philosophy:** Maximize reuse of existing Thoth services and patterns. Agents are orchestration layers over existing functionality, not reimplementations. See `multi_agent_framework_v3_minimal.md` for the minimal integration approach.
+> **Implementation Philosophy:** Build cutting-edge capabilities through intelligent orchestration of existing services. All advanced features (Phoenix pattern, dynamic agent creation, specialized research agents) are implemented as creative compositions of current functionality. See `multi_agent_framework_v4_balanced.md` for the balanced approach that maximizes both innovation and code reuse.
 
 ---
 
@@ -28,25 +28,43 @@ This plan extends the original multi-agent framework to incorporate cutting-edge
 
 ## 2. Core Architecture Enhancements
 
-### 2.0 Reuse-First Design Principle
+### 2.0 Innovation Through Service Composition
 
-Before creating any new classes or systems, we leverage existing Thoth components:
+Advanced capabilities emerge from creative orchestration of existing services:
 
 ```python
-# INSTEAD OF: Creating new agent base classes
-# WE USE: Existing services with thin adapters
+# Example 1: Phoenix Pattern using existing services
+class PhoenixAgent:
+    def __init__(self, service_manager):
+        self.services = service_manager  # All existing services
+        
+    async def self_modify(self, new_capability_request: str):
+        # Use existing LLM to understand request
+        spec = await self.services.llm.extract_spec(new_capability_request)
+        
+        # Map to existing service methods
+        if "summarize" in spec.capability:
+            return self.services.processing.analyze_content  # Existing method
+        elif "find papers" in spec.capability:
+            return self.services.discovery.search_arxiv      # Existing method
+        
+        # No new code - just dynamic routing to existing services
 
-# Example: DocumentProcessorAgent is just ProcessingService + routing
-DocumentProcessorAgent = ServiceAgentAdapter(
-    service=existing_processing_service,
-    task_routing={
-        "ocr": "ocr_to_markdown",         # Existing method
-        "analyze": "analyze_content",      # Existing method
-        "extract": "extract_text"          # Existing method
-    }
-)
-
-# No new processing logic - just orchestration
+# Example 2: Research Agent combining multiple services creatively
+class AdvancedResearchAgent:
+    async def generate_hypothesis(self, topic):
+        # Step 1: Use existing RAG to find background
+        background = await self.services.rag.search(topic)
+        
+        # Step 2: Use existing discovery to find recent papers  
+        papers = await self.services.discovery.get_recent_papers(topic)
+        
+        # Step 3: Use existing LLM with creative prompting
+        hypothesis = await self.services.llm.generate(
+            prompt=f"Based on {background} and gaps in {papers}, hypothesize..."
+        )
+        
+        # NEW capability through creative ORCHESTRATION of existing services
 ```
 
 ### 2.1 Dynamic Agent Creation System
