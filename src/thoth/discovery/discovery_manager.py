@@ -405,7 +405,12 @@ class DiscoveryManager:
         default_max = api_config.get('schedule_config', {}).get(
             'max_articles_per_run', 50
         )
-        return api_source.search(api_config, max_articles or default_max)
+
+        try:
+            return api_source.search(api_config, max_articles or default_max)
+        except Exception as e:
+            logger.error(f'API search failed for {source_type}: {e}')
+            return []
 
     def _discover_from_scraper(
         self, scraper_config, max_articles: int | None = None

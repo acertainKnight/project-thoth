@@ -26,14 +26,14 @@ def get_openrouter_models() -> list[dict[str, Any]]:
         return _model_cache
 
     try:
-        response = requests.get("https://openrouter.ai/api/v1/models")
+        response = requests.get('https://openrouter.ai/api/v1/models')
         response.raise_for_status()
-        _model_cache = response.json().get("data", [])
+        _model_cache = response.json().get('data', [])
         _last_cache_time = current_time
-        logger.info(f"Fetched and cached {len(_model_cache)} models from OpenRouter.")
+        logger.info(f'Fetched and cached {len(_model_cache)} models from OpenRouter.')
         return _model_cache
     except requests.RequestException as e:
-        logger.error(f"Failed to fetch models from OpenRouter: {e}")
+        logger.error(f'Failed to fetch models from OpenRouter: {e}')
         return _model_cache or []  # Return stale cache if available
 
 
@@ -102,13 +102,13 @@ class OpenRouterRateLimiter:
         """  # noqa: W505
         try:
             response = requests.get(
-                "https://openrouter.ai/api/v1/auth/key",
-                headers={"Authorization": f"Bearer {self.api_key}"},
+                'https://openrouter.ai/api/v1/auth/key',
+                headers={'Authorization': f'Bearer {self.api_key}'},
             )
             if response.status_code == 200:
-                data = response.json().get("data", {})
-                usage = data.get("usage", 0)
-                limit = data.get("limit")
+                data = response.json().get('data', {})
+                usage = data.get('usage', 0)
+                limit = data.get('limit')
 
                 # Calculate remaining credits
                 if limit is not None:
@@ -117,11 +117,11 @@ class OpenRouterRateLimiter:
                 return float(self.max_surge_limit)
             else:
                 logger.error(
-                    f"Failed to get credits: {response.status_code} {response.text}"
+                    f'Failed to get credits: {response.status_code} {response.text}'
                 )
                 return None
         except Exception as e:
-            logger.error(f"Error getting credits: {e}")
+            logger.error(f'Error getting credits: {e}')
             return None
 
     def setup(self) -> None:
@@ -136,7 +136,7 @@ class OpenRouterRateLimiter:
             # If we can't get credits, use a conservative limit
             requests_per_second = self.min_requests_per_second
             logger.warning(
-                f"Unable to determine credits. Setting rate limit to {requests_per_second} req/s"
+                f'Unable to determine credits. Setting rate limit to {requests_per_second} req/s'
             )
         else:
             # Calculate requests per second based on credits (1 req/credit/s)
@@ -149,7 +149,7 @@ class OpenRouterRateLimiter:
                 )
 
             logger.info(
-                f"Available credits: {self.credits}, setting rate limit to {requests_per_second} req/s"
+                f'Available credits: {self.credits}, setting rate limit to {requests_per_second} req/s'
             )
 
         self.rate_limiter = InMemoryRateLimiter(
@@ -262,7 +262,7 @@ class OpenRouterClient(BaseLLMClient, ChatOpenAI):
     def __init__(
         self,
         api_key: str | None = None,
-        model: str | list[str] = "openai/gpt-4",
+        model: str | list[str] = 'openai/gpt-4',
         temperature: float = 0.7,
         max_tokens: int | None = None,
         site_url: str | None = None,
@@ -275,36 +275,40 @@ class OpenRouterClient(BaseLLMClient, ChatOpenAI):
         # Get API key from parameter or environment
         api_key = (
             api_key
-            or os.getenv("OPENROUTER_API_KEY")
-            or os.getenv("API_OPENROUTER_KEY")
+            or os.getenv('OPENROUTER_API_KEY')
+            or os.getenv('API_OPENROUTER_KEY')
         )
         if not api_key:
             raise ValueError(
-                "OpenRouter API key not found. Please set OPENROUTER_API_KEY or API_OPENROUTER_KEY environment variable or pass api_key parameter."
+                'OpenRouter API key not found. Please set OPENROUTER_API_KEY or API_OPENROUTER_KEY environment variable or pass api_key parameter.'
             )
 
         # Set up rate limiter if requested
         if use_rate_limiter:
             rate_limiter = OpenRouterRateLimiter(api_key=api_key)
             rate_limiter.setup()
-            kwargs["rate_limiter"] = rate_limiter.get_langchain_limiter()
+            kwargs['rate_limiter'] = rate_limiter.get_langchain_limiter()
 
         # Set up headers for OpenRouter
         extra_headers = {
-            "HTTP-Referer": site_url
-            or "http://localhost:8000",  # OpenRouter tracks usage by site
-            "X-Title": site_name or "Thoth Research Assistant",  # Shows in rankings
+            'HTTP-Referer': site_url
+            or 'http://localhost:8000',  # OpenRouter tracks usage by site
+            'X-Title': site_name or 'Thoth Research Assistant',  # Shows in rankings
         }
+
+        # Add extra_headers to model_kwargs to avoid warning
+        if 'model_kwargs' not in kwargs:
+            kwargs['model_kwargs'] = {}
+        kwargs['model_kwargs']['extra_headers'] = extra_headers
 
         # Initialize the parent ChatOpenAI with OpenRouter configuration
         super().__init__(
             api_key=api_key,  # OpenRouter API key
-            base_url="https://openrouter.ai/api/v1",  # OpenRouter API base URL
+            base_url='https://openrouter.ai/api/v1',  # OpenRouter API base URL
             model_name=model,  # Use model_name to pass model string or list
             temperature=temperature,
             max_tokens=max_tokens,
             streaming=streaming,
-            extra_headers=extra_headers,
             **kwargs,
         )
 
@@ -314,12 +318,12 @@ class OpenRouterClient(BaseLLMClient, ChatOpenAI):
         if instance_id not in self.custom_attributes:
             self.custom_attributes[instance_id] = {}
 
-        self.custom_attributes[instance_id]["use_rate_limiter"] = use_rate_limiter
-        self.custom_attributes[instance_id]["rate_limiter"] = None
+        self.custom_attributes[instance_id]['use_rate_limiter'] = use_rate_limiter
+        self.custom_attributes[instance_id]['rate_limiter'] = None
 
         # Set up rate limiter if requested
         if use_rate_limiter and api_key:
-            self.custom_attributes[instance_id]["rate_limiter"] = OpenRouterRateLimiter(
+            self.custom_attributes[instance_id]['rate_limiter'] = OpenRouterRateLimiter(
                 api_key=api_key
             )
 
@@ -331,9 +335,9 @@ class OpenRouterClient(BaseLLMClient, ChatOpenAI):
         """
         instance_id = id(self)
         use_rate_limiter = self.custom_attributes.get(instance_id, {}).get(
-            "use_rate_limiter", False
+            'use_rate_limiter', False
         )
-        rate_limiter = self.custom_attributes.get(instance_id, {}).get("rate_limiter")
+        rate_limiter = self.custom_attributes.get(instance_id, {}).get('rate_limiter')
 
         # Apply rate limiting if enabled
         if use_rate_limiter and rate_limiter:

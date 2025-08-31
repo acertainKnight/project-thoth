@@ -257,8 +257,16 @@ class MCPProtocolHandler:
         server_capabilities: MCPCapabilities,
     ) -> MCPInitializeResult:
         """Handle MCP initialize request."""
+        # Allow multiple clients to initialize (each gets their own session)
+        # Store the client info for this session
+        client_name = params.clientInfo.name if params.clientInfo else 'unknown'
+
         if self.initialized:
-            raise ValueError('Already initialized')
+            logger.debug(
+                f'Additional client connecting: {client_name} (server already initialized)'
+            )
+        else:
+            logger.info(f'First client connecting: {client_name} (initializing server)')
 
         # Validate protocol version compatibility
         if params.protocolVersion != self.protocol_version:
@@ -266,7 +274,7 @@ class MCPProtocolHandler:
                 f'Protocol version mismatch: client={params.protocolVersion}, server={self.protocol_version}'
             )
 
-        # Store client capabilities
+        # Store client capabilities (last client wins, but that's OK for our use case)
         self.client_capabilities = params.capabilities
         self.initialized = True
 

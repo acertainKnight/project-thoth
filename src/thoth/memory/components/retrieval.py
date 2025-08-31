@@ -177,7 +177,7 @@ class RetrievalRanker:
     def _apply_diversity_filter(
         self,
         memories: list[dict[str, Any]],
-        query: str,
+        query: str,  # noqa: ARG002
     ) -> list[dict[str, Any]]:
         """Apply diversity filtering to avoid redundant results."""
         if len(memories) <= 3:
@@ -339,8 +339,9 @@ class RetrievalMetrics:
         }
 
         # Store feedback (implement storage mechanism as needed)
+        # TODO: Implement actual feedback storage using feedback dict
         logger.info(
-            f'User feedback recorded: {feedback_type} on rank {result_rank} for query "{query}"'
+            f'User feedback recorded: {feedback["feedback_type"]} on rank {feedback["result_rank"]} for query "{feedback["query"]}"'
         )
 
     def get_query_stats(self) -> dict[str, Any]:
