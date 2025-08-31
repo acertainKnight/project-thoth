@@ -1242,21 +1242,152 @@ const AgentNetworkDashboard: React.FC = () => {
 
 ---
 
-## 14. Future Enhancements
+## 14. Integration with Existing Thoth Codebase
 
-### 14.1 Agent Evolution and Learning
+### 14.1 Alignment with Current Architecture
+
+The multi-agent framework will integrate seamlessly with Thoth's existing patterns:
+
+```python
+# src/thoth/agents/base.py - Following existing service patterns
+from thoth.services.base import BaseService
+from thoth.utilities.config import ThothConfig
+
+class BaseAgent(BaseService):
+    """Base agent class following Thoth's service architecture."""
+    
+    def __init__(self, config: ThothConfig, service_manager: ServiceManager):
+        super().__init__(config)
+        self.service_manager = service_manager
+        self.services = self._initialize_services()
+    
+    def _initialize_services(self):
+        """Initialize required services following existing patterns."""
+        return {
+            'llm': self.service_manager.llm,
+            'processing': self.service_manager.processing,
+            'citation': self.service_manager.citation,
+            'rag': self.service_manager.rag
+        }
+```
+
+### 14.2 Service Manager Integration
+
+```python
+# Extend existing ServiceManager to include agent orchestration
+class EnhancedServiceManager(ServiceManager):
+    """Extended service manager with agent support."""
+    
+    def __init__(self, config: ThothConfig | None = None):
+        super().__init__(config)
+        self._agent_orchestrator = None
+        self._agent_registry = None
+    
+    @property
+    def agent_orchestrator(self) -> AgentOrchestrator:
+        """Get or create agent orchestrator."""
+        if self._agent_orchestrator is None:
+            if self.config.multi_agent:
+                self._agent_orchestrator = AgentOrchestrator(
+                    config=self.config,
+                    service_manager=self
+                )
+            else:
+                # Fallback to pipeline adapter
+                self._agent_orchestrator = PipelineAdapter(self)
+        return self._agent_orchestrator
+```
+
+### 14.3 Pipeline Compatibility Layer
+
+```python
+# src/thoth/pipeline.py - Minimal changes to existing pipeline
+class ThothPipeline:
+    """Enhanced pipeline with optional multi-agent support."""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.config = get_config()
+        self.multi_agent_enabled = self.config.get('multi_agent', False)
+        
+        if self.multi_agent_enabled:
+            self.orchestrator = self.service_manager.agent_orchestrator
+    
+    async def process_pdf(self, pdf_path: Path, **kwargs):
+        """Process PDF with backward compatibility."""
+        
+        if self.multi_agent_enabled:
+            # Delegate to orchestrator
+            task = Task(
+                type="PROCESS_PDF",
+                payload={"pdf_path": str(pdf_path), **kwargs}
+            )
+            return await self.orchestrator.execute(task)
+        else:
+            # Use existing pipeline logic
+            return await self._legacy_process_pdf(pdf_path, **kwargs)
+```
+
+### 14.4 FastAPI Router Extensions
+
+```python
+# src/thoth/server/routers/agents.py - New router following existing patterns
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+
+router = APIRouter(prefix="/api/v2/agents", tags=["agents"])
+
+class AgentCreationRequest(BaseModel):
+    """Request model for creating new agents."""
+    name: str
+    description: str
+    capabilities: list[str]
+    constraints: dict[str, Any] | None = None
+
+@router.post("/create")
+async def create_agent(
+    request: AgentCreationRequest,
+    orchestrator: AgentOrchestrator = Depends(get_orchestrator)
+):
+    """Create a new agent via natural language description."""
+    try:
+        agent_spec = await orchestrator.agent_creator.create_from_description(
+            name=request.name,
+            description=request.description,
+            capabilities=request.capabilities,
+            constraints=request.constraints
+        )
+        
+        agent_id = await orchestrator.register_agent(agent_spec)
+        
+        return {
+            "agent_id": agent_id,
+            "status": "created",
+            "capabilities": agent_spec.capabilities
+        }
+    except Exception as e:
+        logger.error(f"Failed to create agent: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+```
+
+---
+
+## 15. Future Enhancements
+
+### 15.1 Agent Evolution and Learning
 
 - Agents that improve their prompts based on performance
 - Genetic algorithms for agent optimization
 - Transfer learning between similar agents
 
-### 14.2 Federated Agent Networks
+### 15.2 Federated Agent Networks
 
 - Cross-organization agent collaboration
 - Privacy-preserving knowledge sharing
 - Blockchain-based agent reputation system
 
-### 14.3 Quantum-Ready Architecture
+### 15.3 Quantum-Ready Architecture
 
 - Prepare for quantum computing integration
 - Quantum-enhanced optimization algorithms
@@ -1288,4 +1419,603 @@ This enhanced multi-agent framework positions Thoth as a premier example of resp
 - **Scalable Architecture**: From single-user research to enterprise deployments
 - **Open and Extensible**: Clear APIs and extension points for community contributions
 
-This framework demonstrates that the future of AI lies not in unconstrained autonomous systems, but in carefully designed, safety-conscious platforms that augment human capabilities while protecting against potential harms. Thoth stands as a testament to what's possible when AI safety and cutting-edge capabilities are given equal priority in system design.
+This framework demonstrates that the future of AI lies not in unconstrained autonomous systems, but in carefully designed, safety-conscious platforms that augment human capabilities while protecting against potential harms. Thoth stands as a testament to what's possible when AI safety and cutting-edge capabilities are given equal priority in system design.# Obsidian Plugin Integration for Multi-Agent Framework
+
+## 14.5 Obsidian Plugin Integration
+
+### 14.5.1 Type Definitions
+
+```typescript
+// obsidian-plugin/thoth-obsidian/src/types/agents.ts
+export interface Agent {
+  id: string;
+  name: string;
+  type: 'system' | 'user_created';
+  capabilities: string[];
+  status: 'active' | 'inactive' | 'creating';
+  created_at: string;
+}
+
+export interface AgentTask {
+  id: string;
+  type: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  agent_id: string;
+  progress: number;
+  result?: any;
+  error?: string;
+}
+
+export interface AgentCreationSettings {
+  enableAgentCreation: boolean;
+  maxUserAgents: number;
+  defaultAgentCapabilities: string[];
+  agentSafetyLevel: 'strict' | 'moderate' | 'permissive';
+}
+```
+
+### 14.5.2 Agent Management Modal
+
+```typescript
+// obsidian-plugin/thoth-obsidian/src/modals/AgentManagementModal.ts
+import { Modal, App, Setting } from 'obsidian';
+import { ThothPlugin } from '../main';
+
+export class AgentManagementModal extends Modal {
+  plugin: ThothPlugin;
+  agents: Agent[] = [];
+  
+  constructor(app: App, plugin: ThothPlugin) {
+    super(app);
+    this.plugin = plugin;
+  }
+  
+  async onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    
+    contentEl.createEl('h2', { text: 'Thoth Agent Management' });
+    
+    // Create agent button
+    new Setting(contentEl)
+      .setName('Create New Agent')
+      .setDesc('Create a custom agent with specific capabilities')
+      .addButton(btn => btn
+        .setButtonText('Create Agent')
+        .setCta()
+        .onClick(() => this.openAgentCreationModal())
+      );
+    
+    // Load and display existing agents
+    await this.loadAgents();
+    this.displayAgents();
+  }
+  
+  async loadAgents() {
+    try {
+      const response = await fetch(`${this.plugin.settings.endpointBaseUrl}/api/v2/agents/list`);
+      this.agents = await response.json();
+    } catch (error) {
+      console.error('Failed to load agents:', error);
+    }
+  }
+  
+  displayAgents() {
+    const agentsContainer = this.contentEl.createEl('div', { cls: 'thoth-agents-container' });
+    
+    this.agents.forEach(agent => {
+      const agentEl = agentsContainer.createEl('div', { cls: 'thoth-agent-card' });
+      
+      agentEl.createEl('h3', { text: agent.name });
+      agentEl.createEl('p', { text: `Type: ${agent.type}` });
+      agentEl.createEl('p', { text: `Status: ${agent.status}` });
+      
+      const capabilitiesEl = agentEl.createEl('div', { cls: 'agent-capabilities' });
+      agent.capabilities.forEach(cap => {
+        capabilitiesEl.createEl('span', { 
+          text: cap, 
+          cls: 'agent-capability-tag' 
+        });
+      });
+      
+      // Agent controls
+      new Setting(agentEl)
+        .addButton(btn => btn
+          .setButtonText('Configure')
+          .onClick(() => this.configureAgent(agent))
+        )
+        .addButton(btn => btn
+          .setButtonText('Test')
+          .onClick(() => this.testAgent(agent))
+        );
+    });
+  }
+}
+```
+
+### 14.5.3 Agent Chat Interface
+
+```typescript
+// obsidian-plugin/thoth-obsidian/src/views/AgentChatView.ts
+import { ItemView, WorkspaceLeaf } from 'obsidian';
+import { ThothPlugin } from '../main';
+
+export const AGENT_CHAT_VIEW_TYPE = 'thoth-agent-chat';
+
+export class AgentChatView extends ItemView {
+  plugin: ThothPlugin;
+  private eventSource: EventSource | null = null;
+  private currentAgentId: string | null = null;
+  
+  constructor(leaf: WorkspaceLeaf, plugin: ThothPlugin) {
+    super(leaf);
+    this.plugin = plugin;
+  }
+  
+  getViewType() {
+    return AGENT_CHAT_VIEW_TYPE;
+  }
+  
+  getDisplayText() {
+    return 'Thoth Agent Chat';
+  }
+  
+  async onOpen() {
+    const container = this.containerEl.children[1];
+    container.empty();
+    
+    // Create chat interface
+    const chatContainer = container.createEl('div', { cls: 'thoth-agent-chat' });
+    
+    // Agent selector
+    const agentSelector = chatContainer.createEl('select', { cls: 'agent-selector' });
+    await this.populateAgentSelector(agentSelector);
+    
+    // Chat messages area
+    const messagesArea = chatContainer.createEl('div', { cls: 'chat-messages' });
+    
+    // Task progress indicator
+    const progressArea = chatContainer.createEl('div', { cls: 'agent-task-progress' });
+    
+    // Input area
+    const inputContainer = chatContainer.createEl('div', { cls: 'chat-input-container' });
+    const chatInput = inputContainer.createEl('textarea', { 
+      cls: 'chat-input',
+      placeholder: 'Describe what you want the agent to do...'
+    });
+    
+    const sendButton = inputContainer.createEl('button', { 
+      text: 'Send',
+      cls: 'chat-send-button'
+    });
+    
+    sendButton.addEventListener('click', () => {
+      this.sendMessage(chatInput.value, messagesArea, progressArea);
+      chatInput.value = '';
+    });
+  }
+  
+  async sendMessage(message: string, messagesArea: HTMLElement, progressArea: HTMLElement) {
+    if (!message.trim() || !this.currentAgentId) return;
+    
+    // Add user message to chat
+    this.addMessage(messagesArea, 'user', message);
+    
+    // Create agent message placeholder
+    const agentMessageEl = this.addMessage(messagesArea, 'agent', '');
+    
+    // Start SSE connection for streaming response
+    const url = `${this.plugin.settings.endpointBaseUrl}/api/v2/agents/run`;
+    
+    this.eventSource = new EventSource(url + '?' + new URLSearchParams({
+      goal: message,
+      agent_id: this.currentAgentId,
+      stream: 'true'
+    }));
+    
+    this.eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      
+      if (data.type === 'task_update') {
+        this.updateTaskProgress(progressArea, data);
+      } else if (data.type === 'content') {
+        agentMessageEl.textContent += data.content;
+      } else if (data.type === 'safety_check') {
+        this.showSafetyApproval(data);
+      } else if (data.type === 'complete') {
+        this.eventSource?.close();
+        this.eventSource = null;
+        progressArea.empty();
+      }
+    };
+    
+    this.eventSource.onerror = (error) => {
+      console.error('SSE error:', error);
+      this.eventSource?.close();
+      this.eventSource = null;
+    };
+  }
+  
+  private updateTaskProgress(progressArea: HTMLElement, data: any) {
+    progressArea.empty();
+    
+    const taskEl = progressArea.createEl('div', { cls: 'task-progress' });
+    taskEl.createEl('span', { text: `${data.agent_name}: ${data.task_type}` });
+    
+    const progressBar = taskEl.createEl('div', { cls: 'progress-bar' });
+    const progressFill = progressBar.createEl('div', { cls: 'progress-fill' });
+    progressFill.style.width = `${data.progress}%`;
+  }
+  
+  private async showSafetyApproval(data: any) {
+    // Show modal for user approval of potentially risky actions
+    const modal = new SafetyApprovalModal(this.app, data);
+    const approved = await modal.show();
+    
+    // Send approval response
+    await fetch(`${this.plugin.settings.endpointBaseUrl}/api/v2/agents/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        task_id: data.task_id,
+        approved: approved
+      })
+    });
+  }
+}
+```
+
+### 14.5.4 Settings Integration
+
+```typescript
+// Add to obsidian-plugin/thoth-obsidian/src/types/index.ts
+export interface ThothSettings {
+  // ... existing settings ...
+  
+  // === MULTI-AGENT CONFIGURATION ===
+  multiAgentEnabled: boolean;
+  agentCreationEnabled: boolean;
+  maxConcurrentAgents: number;
+  agentSafetyLevel: 'strict' | 'moderate' | 'permissive';
+  agentAutoSaveConversations: boolean;
+  showAgentStatusInStatusBar: boolean;
+  
+  // Agent UI preferences
+  agentChatLayout: 'sidebar' | 'tab' | 'modal';
+  showAgentCapabilities: boolean;
+  enableAgentSuggestions: boolean;
+  
+  // Safety preferences
+  requireApprovalForFileChanges: boolean;
+  requireApprovalForAgentCreation: boolean;
+  agentActionLogging: boolean;
+}
+```
+
+### 14.5.5 Command Palette Integration
+
+```typescript
+// Add to main.ts in the onload() method
+this.addCommand({
+  id: 'open-agent-management',
+  name: 'Open Agent Management',
+  callback: () => {
+    new AgentManagementModal(this.app, this).open();
+  }
+});
+
+this.addCommand({
+  id: 'create-agent-from-selection',
+  name: 'Create Agent from Selection',
+  editorCallback: (editor, view) => {
+    const selection = editor.getSelection();
+    if (selection) {
+      this.createAgentFromDescription(selection);
+    }
+  }
+});
+
+this.addCommand({
+  id: 'run-multi-agent-analysis',
+  name: 'Run Multi-Agent Analysis on Current File',
+  callback: async () => {
+    const activeFile = this.app.workspace.getActiveFile();
+    if (activeFile) {
+      await this.runMultiAgentAnalysis(activeFile);
+    }
+  }
+});
+```
+
+### 14.5.6 Status Bar Integration
+
+```typescript
+// Add agent status to status bar
+class AgentStatusBarItem {
+  private statusBarEl: HTMLElement;
+  private plugin: ThothPlugin;
+  
+  constructor(plugin: ThothPlugin) {
+    this.plugin = plugin;
+    this.statusBarEl = plugin.addStatusBarItem();
+    this.update();
+  }
+  
+  update() {
+    const activeAgents = this.plugin.getActiveAgentCount();
+    this.statusBarEl.setText(`🤖 ${activeAgents} agents`);
+    this.statusBarEl.onclick = () => {
+      new AgentManagementModal(this.plugin.app, this.plugin).open();
+    };
+  }
+}
+```
+
+### 14.5.7 CSS Styling
+
+```css
+/* Add to styles.css */
+.thoth-agents-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  padding: 16px;
+}
+
+.thoth-agent-card {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 16px;
+  background-color: var(--background-secondary);
+}
+
+.agent-capability-tag {
+  display: inline-block;
+  padding: 4px 8px;
+  margin: 2px;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+.thoth-agent-chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.agent-task-progress {
+  padding: 8px 16px;
+  background-color: var(--background-secondary);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.progress-bar {
+  width: 100%;
+  height: 4px;
+  background-color: var(--background-modifier-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: var(--interactive-accent);
+  transition: width 0.3s ease;
+}
+
+.chat-input-container {
+  display: flex;
+  padding: 16px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.chat-input {
+  flex: 1;
+  margin-right: 8px;
+  padding: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  resize: none;
+  min-height: 60px;
+}
+
+.chat-send-button {
+  padding: 8px 16px;
+}
+```### 14.6 Database Schema Extensions
+
+```sql
+-- New tables for multi-agent support
+CREATE TABLE IF NOT EXISTS agents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    capabilities JSONB NOT NULL DEFAULT '[]',
+    constraints JSONB DEFAULT '{}',
+    system_prompt TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(255),
+    is_active BOOLEAN DEFAULT true,
+    metadata JSONB DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS agent_tasks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agent_id UUID REFERENCES agents(id),
+    type VARCHAR(100) NOT NULL,
+    payload JSONB NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    result JSONB,
+    error TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    parent_task_id UUID REFERENCES agent_tasks(id)
+);
+
+CREATE TABLE IF NOT EXISTS agent_conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agent_id UUID REFERENCES agents(id),
+    user_id VARCHAR(255),
+    messages JSONB NOT NULL DEFAULT '[]',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for performance
+CREATE INDEX idx_agent_tasks_status ON agent_tasks(status);
+CREATE INDEX idx_agent_tasks_agent_id ON agent_tasks(agent_id);
+CREATE INDEX idx_agent_conversations_user ON agent_conversations(user_id);
+```
+
+### 14.7 Configuration Updates
+
+```toml
+# Addition to ~/.thoth.toml
+[multi_agent]
+enabled = false  # Default to false for backward compatibility
+orchestrator_mode = "in_process"  # or "distributed"
+max_agents = 10
+default_agent_timeout = 300
+enable_agent_creation = true
+agent_safety_level = "strict"
+
+[multi_agent.safety]
+require_approval_for_file_ops = true
+enable_rollback = true
+max_retries = 3
+incident_response_enabled = true
+
+[multi_agent.monitoring]
+enable_telemetry = true
+metrics_export_interval = 60
+log_agent_actions = true
+```
+
+### 14.8 Migration Strategy
+
+```python
+# src/thoth/migrations/add_multi_agent_support.py
+from alembic import op
+import sqlalchemy as sa
+
+def upgrade():
+    """Add multi-agent support to existing Thoth installation."""
+    
+    # 1. Create new tables
+    op.create_table(
+        'agents',
+        sa.Column('id', sa.UUID(), nullable=False),
+        sa.Column('name', sa.String(255), nullable=False),
+        sa.Column('type', sa.String(50), nullable=False),
+        sa.Column('capabilities', sa.JSON(), nullable=False, server_default='[]'),
+        sa.Column('constraints', sa.JSON(), server_default='{}'),
+        sa.Column('system_prompt', sa.Text()),
+        sa.Column('created_at', sa.TIMESTAMP(), server_default=sa.func.now()),
+        sa.Column('created_by', sa.String(255)),
+        sa.Column('is_active', sa.Boolean(), server_default='true'),
+        sa.Column('metadata', sa.JSON(), server_default='{}'),
+        sa.PrimaryKeyConstraint('id')
+    )
+    
+    # 2. Add multi_agent config to existing config
+    op.add_column('thoth_config', 
+        sa.Column('multi_agent_settings', sa.JSON(), server_default='{}')
+    )
+    
+    # 3. Create default system agents
+    op.execute("""
+        INSERT INTO agents (name, type, capabilities) VALUES
+        ('DocumentProcessor', 'system', '["ocr", "markdown", "analysis"]'),
+        ('CitationMiner', 'system', '["citation_extraction", "graph_building"]'),
+        ('ResearchAssistant', 'system', '["web_search", "rag", "synthesis"]')
+    """)
+
+def downgrade():
+    """Remove multi-agent support."""
+    op.drop_table('agent_conversations')
+    op.drop_table('agent_tasks')
+    op.drop_table('agents')
+    op.drop_column('thoth_config', 'multi_agent_settings')
+```
+
+### 14.9 Implementation Phases
+
+#### Phase 1: Core Integration (Week 1-2)
+1. Create `src/thoth/agents/` package structure
+2. Implement `BaseAgent` following service patterns
+3. Add agent support to `ServiceManager`
+4. Create pipeline compatibility layer
+
+#### Phase 2: API Integration (Week 3)
+1. Add `/api/v2/agents` router
+2. Implement SSE streaming for agent tasks
+3. Add WebSocket support for real-time updates
+4. Create agent management endpoints
+
+#### Phase 3: Obsidian Plugin (Week 4-5)
+1. Add agent types and interfaces
+2. Create Agent Management Modal
+3. Implement Agent Chat View
+4. Add command palette commands
+5. Update settings interface
+
+#### Phase 4: Testing & Documentation (Week 6)
+1. Add integration tests for multi-agent flows
+2. Create end-to-end tests with Obsidian plugin
+3. Update API documentation
+4. Create user guide for agent creation
+
+### 14.10 Backward Compatibility Checklist
+
+- [ ] All existing API endpoints continue to work unchanged
+- [ ] Pipeline processes PDFs identically when multi_agent=false
+- [ ] Service Manager maintains existing interface
+- [ ] No changes required to existing Obsidian workflows
+- [ ] Configuration files remain compatible
+- [ ] Database migrations are reversible
+- [ ] Performance impact is minimal when disabled
+
+### 14.11 Performance Considerations
+
+```python
+# Optimizations for multi-agent mode
+class AgentPerformanceOptimizer:
+    """Optimize agent execution for minimal overhead."""
+    
+    def __init__(self):
+        self.agent_pool = AgentPool(max_size=10)
+        self.task_queue = PriorityQueue()
+        self.cache_manager = AgentCacheManager()
+    
+    async def optimize_execution(self, task: Task):
+        """Optimize task execution."""
+        
+        # 1. Check cache for similar tasks
+        if cached_result := await self.cache_manager.get(task):
+            return cached_result
+        
+        # 2. Reuse agent instances from pool
+        agent = await self.agent_pool.acquire(task.agent_type)
+        
+        try:
+            # 3. Execute with performance monitoring
+            with PerformanceMonitor() as monitor:
+                result = await agent.execute(task)
+                
+            # 4. Cache successful results
+            if result.status == "success":
+                await self.cache_manager.set(task, result)
+                
+            return result
+        finally:
+            await self.agent_pool.release(agent)
+```
