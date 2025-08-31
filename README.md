@@ -1,173 +1,228 @@
 # Thoth Research Assistant
 
-Thoth is an advanced AI-powered research assistant system designed for academic research paper processing, knowledge management, and intelligent document analysis. The system combines a powerful Python backend with an Obsidian plugin for seamless integration into research workflows.
+An advanced AI-powered research assistant system designed for academic research paper processing, knowledge management, and intelligent document analysis. Thoth combines a powerful Python backend with an Obsidian plugin for seamless integration into research workflows.
 
-## Overview
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://python.org)
+[![License](https://img.shields.io/badge/License-Apache_2.0-green)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen)](CONTRIBUTING.md)
 
-Thoth provides a comprehensive suite of tools for researchers, academics, and knowledge workers:
+[Quick Start](#quick-start) • [Installation](#installation) • [Usage](#usage-examples) • [Contributing](#contributing)
 
-- **🔍 Intelligent PDF Processing**: Automatically extract, analyze, and summarize academic papers
-- **🤖 AI-Powered Analysis**: Advanced LLM integration for document understanding and knowledge extraction
-- **📚 Knowledge Management**: Build and maintain searchable knowledge graphs from research materials
-- **🔗 Citation Discovery**: Automated citation extraction and academic source validation
-- **💬 Interactive Chat Interface**: Converse with your research corpus through AI-powered chat
-- **🌐 Web Integration**: Discover and process academic papers from web sources
-- **📝 Obsidian Integration**: Seamless integration with Obsidian for note-taking and knowledge management
-- **⚡ MCP Protocol Support**: Modern Context Protocol for AI agent interoperability
+## Why Thoth?
 
-## Architecture
+Thoth revolutionizes academic research by combining cutting-edge AI with intuitive knowledge management. Whether you're a researcher managing hundreds of papers, a student building literature reviews, or an academic seeking insights from document collections, Thoth provides intelligent automation for your research workflow.
 
-### Core Components
+**Key Benefits:**
+- **Faster Analysis**: AI-powered paper summarization and analysis
+- **Smart Integration**: Native Obsidian plugin with real-time sync
+- **Multi-Source Discovery**: Automated paper discovery from ArXiv, Semantic Scholar, and more
+- **Persistent Memory**: Advanced agent system with cross-session memory
 
-**Python Backend (`src/thoth/`)**
-- **Pipeline System**: Modular document processing pipelines
-- **Service Layer**: Microservice architecture for scalable operations
-- **MCP Server**: Model Context Protocol implementation for AI agent integration
-- **API Server**: FastAPI-based REST API and WebSocket support
-- **CLI Interface**: Comprehensive command-line tools
+## Table of Contents
 
-**Obsidian Plugin (`obsidian-plugin/thoth-obsidian/`)**
-- **Multi-Chat Interface**: Multiple concurrent research conversations
-- **Real-time Integration**: Live connection to Thoth backend services
-- **Settings Management**: Comprehensive configuration interface
-- **Document Integration**: Direct interaction with Obsidian notes and files
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Key Features](#key-features)
+- [Architecture](#architecture)
+- [Usage Examples](#usage-examples)
+- [Configuration](#configuration)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
 
-### Key Features
+## Quick Start
 
-#### Advanced Agent System
-- **LangGraph-powered Research Assistant**: Modern agentic workflow with memory and tool orchestration
-- **Multi-Tool Integration**: Comprehensive toolkit for research tasks with automatic tool selection
-- **Advanced Memory System**: Letta-based persistent memory with salience-based retention, multi-scope memory (core/episodic/archival), and cross-session continuity
-- **MCP Framework Integration**: Full Model Context Protocol support for AI agent interoperability
+```bash
+# Clone and setup
+git clone https://github.com/acertainKnight/project-thoth.git
+cd project-thoth
 
-#### Sophisticated Document Processing
-- **Multi-Stage Pipeline**: Configurable document processing with extensible stages
-- **Citation Graph Analysis**: Advanced citation extraction with network analysis
-- **Semantic Chunking**: Intelligent text segmentation preserving context
+# Install dependencies (requires Python 3.10+)
+uv venv && uv sync
+
+# Configure API keys
+echo "MISTRAL_API_KEY=your_key_here" > .env
+echo "OPENROUTER_API_KEY=your_key_here" >> .env
+
+# Launch Thoth
+make dev  # Starts both API server and plugin watcher
+```
+
+Visit `http://localhost:8000` to verify the API server is running.
+
+## Key Features
+
+### Advanced AI System
+- **LangGraph-Powered Agents**: Modern agentic workflows with tool orchestration
+- **Multi-Provider LLM Router**: Intelligent routing across OpenAI, Anthropic, Mistral, OpenRouter
+- **Persistent Memory**: Letta-based memory system with salience-based retention
+- **MCP Framework**: Full Model Context Protocol support for agent interoperability
+
+### Document Processing
+- **Multi-Stage Pipelines**: Configurable processing with extensible stages
+- **Citation Analysis**: Advanced extraction with network analysis capabilities
+- **Semantic Chunking**: Context-preserving intelligent text segmentation
 - **Metadata Enrichment**: Automated extraction of academic metadata and relationships
 
-#### Enterprise-Grade AI Integration
-- **Multi-Provider LLM Router**: Intelligent routing based on task type and cost optimization
-- **Advanced RAG System**: ChromaDB-based vector store with semantic search
-- **Structured Output Processing**: Instructor-based LLM responses with Pydantic validation
-- **Token Usage Tracking**: Comprehensive monitoring and cost management
-
-#### Research Discovery Engine
-- **Multi-Source Discovery**: ArXiv, Semantic Scholar, web search integration
+### Research Discovery
+- **Multi-Source Integration**: ArXiv, Semantic Scholar, and web search
 - **Chrome Extension Bridge**: Real-time paper collection from browser
 - **Automated Scheduling**: Background discovery with configurable intervals
 - **Source Evaluation**: Pre-download relevance scoring and filtering
 
-#### Knowledge Management
-- **Dynamic Knowledge Graphs**: NetworkX-based relationship modeling
-- **Tag Consolidation**: AI-powered tag hierarchy and organization
-- **Query Management**: Persistent research queries with evaluation metrics
-- **Cross-Reference Analysis**: Connection discovery between papers and concepts
+## Architecture
 
-## Quick Start
+Thoth uses a service-oriented architecture with the `ServiceManager` as the central orchestrator:
+
+```mermaid
+graph TD
+    A[Research Agent] --> B[Service Manager]
+    B --> C[LLM Router]
+    B --> D[RAG System]
+    B --> E[Discovery Engine]
+    B --> F[Pipeline Processor]
+
+    G[Obsidian Plugin] --> H[API Server]
+    H --> B
+
+    I[CLI Interface] --> J[MCP Server]
+    J --> B
+
+    K[External APIs] --> E
+    L[Vector Store] --> D
+```
+
+### Core Components
+
+**Python Backend** (`src/thoth/`)
+- **Service Architecture**: Microservice-based with centralized ServiceManager
+- **Pipeline System**: Modular, extensible document processing stages
+- **Agent System**: LangGraph-powered with persistent memory
+- **API Layer**: FastAPI server with REST + WebSocket support
+- **MCP Integration**: Full Model Context Protocol implementation
+- **CLI Tools**: Comprehensive command-line interface
+
+**Obsidian Plugin** (`obsidian-plugin/thoth-obsidian/`)
+- **Multi-Chat Interface**: Concurrent research conversations
+- **Real-time Sync**: Live WebSocket connection to backend
+- **Settings Panel**: Complete configuration management
+- **Note Integration**: Direct interaction with vault files
+- **Auto-updates**: Hot reload during development
+
+**Technology Stack**: Python, FastAPI, LangGraph, TypeScript, Obsidian, ChromaDB
+
+## Installation
 
 ### Prerequisites
-
 - Python 3.10-3.12
-- Node.js 16+ (for Obsidian plugin)
 - Obsidian (for plugin integration)
+- uv (recommended) or pip
 
-### Installation
+### Quick Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/acertainKnight/project-thoth.git
-   cd project-thoth
-   ```
-
-2. **Set up Python environment**
-   ```bash
-   # Using uv (recommended)
-   uv venv
-   uv sync
-
-   # Or using pip
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   pip install -e .
-   ```
-
-3. **Configure API keys**
-   Create a `.env` file with your API keys:
-   ```bash
-   MISTRAL_API_KEY=your_mistral_key
-   OPENROUTER_API_KEY=your_openrouter_key
-   # Add other optional keys as needed
-   ```
-
-4. **Deploy Obsidian Plugin**
-   ```bash
-   make deploy-plugin
-   # Or specify custom vault location:
-   make deploy-plugin OBSIDIAN_VAULT="/path/to/your/vault"
-   ```
-
-5. **Start the services**
-   ```bash
-   # Start API server
-   make start-api
-
-   # Or start both plugin watcher and API server
-   make dev
-   ```
-
-### Development Workflow
-
-**Quick Commands via Makefile:**
 ```bash
-make help              # Show all available commands
-make check-deps        # Verify required dependencies
-make deploy-plugin     # Build and deploy Obsidian plugin
-make start-api         # Start Thoth API server
-make dev               # Start development mode (plugin + API)
-make status            # Check service status
-make clean             # Clean build artifacts
+# Clone repository
+git clone https://github.com/acertainKnight/project-thoth.git
+cd project-thoth
+
+# Install with uv (recommended)
+uv venv && uv sync
+
+# Or with pip
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -e .
+
+# Configure API keys
+echo "MISTRAL_API_KEY=your_key_here" > .env
+echo "OPENROUTER_API_KEY=your_key_here" >> .env
+
+# Deploy to Obsidian and start services
+make dev
 ```
 
-**Manual Commands:**
+### API Keys
+
+| Service | Required | Purpose |
+|---------|----------|---------|
+| Mistral | Yes | Primary LLM provider |
+| OpenRouter | Yes | LLM fallback |
+| OpenAI | No | Alternative LLM |
+| Semantic Scholar | No | Paper discovery |
+
+Get keys from: [Mistral Console](https://console.mistral.ai/), [OpenRouter](https://openrouter.ai/keys)
+
+## Usage Examples
+
+### Interactive Research Session
 ```bash
-# CLI interface
-python -m thoth --help
+# Start the research agent
+python -m thoth agent
 
-# Start specific services
-python -m thoth api --host 0.0.0.0 --port 8000
-python -m thoth mcp stdio
-python -m thoth agent research --query "machine learning"
+# Start with specific research focus
+python -m thoth agent research --query "transformer architectures"
+```
 
-# Process documents
-python -m thoth pdf process /path/to/papers/
+### Document Processing
+```bash
+# Process single PDF
+python -m thoth pdf process /path/to/paper.pdf
+
+# Batch process directory
+python -m thoth pdf process /path/to/papers/ --parallel
+
+# Monitor directory with real-time processing
+python -m thoth monitor --watch-dir ./papers --optimized
+```
+
+### Multi-Source Discovery
+```bash
+# Start discovery service
 python -m thoth discovery start
+
+# Search specific sources
+python -m thoth discovery search "large language models" --source arxiv
+python -m thoth discovery search "neural networks" --source semantic_scholar
 ```
+
+### Development Commands
+
+| Command | Purpose |
+|---------|---------|
+| `make dev` | Full development environment |
+| `make start-api` | API server only |
+| `make deploy-plugin` | Deploy to Obsidian |
+| `make status` | Check service health |
+| `make clean` | Clean build artifacts |
 
 ## Configuration
 
 ### Environment Variables
 
-Thoth uses environment variables and configuration files for setup:
-
-```bash
-# Core API Keys
-MISTRAL_API_KEY=           # Primary LLM provider
-OPENROUTER_API_KEY=        # Alternative LLM provider
-
-# Optional Services
-OPENCITATIONS_KEY=         # Citation data access
-GOOGLE_API_KEY=           # Web search capabilities
-SEMANTIC_SCHOLAR_KEY=     # Academic paper metadata
-
-# System Configuration
-THOTH_WORKSPACE_DIR=      # Main working directory
-THOTH_PDF_DIR=           # PDF storage location
-THOTH_DATA_DIR=          # Data and cache directory
-```
+| Category | Variable | Purpose | Required |
+|----------|----------|---------|----------|
+| AI | `MISTRAL_API_KEY` | Primary LLM provider | Yes |
+| AI | `OPENROUTER_API_KEY` | LLM fallback/alternatives | Yes |
+| AI | `OPENAI_API_KEY` | OpenAI models | No |
+| Discovery | `SEMANTIC_SCHOLAR_KEY` | Academic paper metadata | No |
+| Discovery | `GOOGLE_API_KEY` | Web search capabilities | No |
+| Data | `OPENCITATIONS_KEY` | Citation data access | No |
+| System | `THOTH_WORKSPACE_DIR` | Main working directory | No |
+| System | `THOTH_PDF_DIR` | PDF storage location | No |
 
 ### Directory Structure
+```
+workspace/
+├── pdfs/              # Original PDF documents
+├── data/              # Processed documents and embeddings
+├── knowledge/         # Knowledge graphs and citations
+├── logs/              # Application logs
+└── config/            # User configuration files
+```
 
+## Development
+
+### Project Structure
 ```
 project-thoth/
 ├── src/thoth/              # Python package
@@ -184,136 +239,58 @@ project-thoth/
 └── pyproject.toml        # Python project configuration
 ```
 
-## Usage Examples
-
-### Research Workflow
-
-1. **Start the API server**
-   ```bash
-   # Start the Obsidian API server
-   python -m thoth api --host 127.0.0.1 --port 8000
-
-   # Or use the Makefile
-   make start-api
-   ```
-
-2. **Interactive research session**
-   ```bash
-   # Start interactive agent chat
-   python -m thoth agent
-   ```
-
-3. **Document monitoring and processing**
-   ```bash
-   # Monitor PDF directory with API server
-   python -m thoth monitor --watch-dir ./papers --api-server --optimized
-
-   # Process specific PDF
-   python -m thoth locate-pdf "paper title or DOI"
-   ```
-
-4. **Advanced research through Obsidian**
-   - Ensure API server is running (`make start-api`)
-   - Open Obsidian → Use Ctrl/Cmd+P → "Open Research Chat"
-   - Multi-chat support for different research topics
-   - Real-time connection to your knowledge base
-
-5. **MCP integration**
-   ```bash
-   # Start MCP server for CLI integration
-   python -m thoth mcp stdio
-
-   # HTTP MCP server
-   python -m thoth mcp http --host localhost --port 8000
-   ```
-
-### MCP Integration
-
-Thoth implements the Model Context Protocol for seamless AI agent integration:
-
+### Testing
 ```bash
-# Start MCP server for CLI tools
-python -m thoth mcp stdio
+# Run all tests
+pytest tests/
 
-# HTTP server for web integration
-python -m thoth mcp http --host localhost --port 8000
+# Run with coverage
+pytest --cov=src/thoth tests/
+
+# Run specific test categories
+pytest tests/services/            # Service layer tests
+pytest tests/agent_v2/            # Agent system tests
+pytest tests/integration/         # Integration tests
 ```
 
-### API Usage
-
-The REST API provides programmatic access to all Thoth capabilities:
-
-```python
-import requests
-
-# Start a chat session
-response = requests.post("http://localhost:8000/chat/sessions",
-                        json={"title": "Research Session"})
-
-# Send a message
-requests.post(f"http://localhost:8000/chat/sessions/{session_id}/messages",
-              json={"message": "Summarize recent ML papers"})
+### Code Quality
+```bash
+# Linting and formatting
+uv run ruff check            # Check code quality
+uv run ruff format           # Format code
+uv run pytest               # Run tests
 ```
+
+### Quick Contribution Guide
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make your changes following our style guide
+4. Test your changes: `pytest tests/`
+5. Commit your changes: `git commit -m "Add amazing feature"`
+6. Push to your branch: `git push origin feature/amazing-feature`
+7. Open a Pull Request
 
 ## Advanced Features
 
+### Multi-Agent Intelligence
+- **Specialized Research Agents**: Dedicated agents for literature review, citation analysis, and concept extraction
+- **Agent Orchestration**: Intelligent coordination between agents for complex research workflows
+- **Memory Sharing**: Cross-agent knowledge sharing for comprehensive analysis
+
 ### Knowledge Graph Integration
-- Automatic relationship extraction from documents
-- Graph-based query capabilities
-- Visual knowledge mapping
+- **Automatic Relationship Extraction**: AI-powered discovery of connections between papers and concepts
+- **Visual Knowledge Mapping**: Interactive graph visualization of research relationships
+- **Graph-Based Queries**: Semantic search through connected knowledge structures
 
-### Multi-Agent Architecture
-- Specialized agents for different research tasks
-- Agent coordination and memory sharing
-- Extensible agent framework
-
-### Performance Optimization
-- Async processing for concurrent operations
-- Caching and request optimization
-- Memory management for large document collections
-
-## Development
-
-### Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests: `pytest`
-5. Submit a pull request
-
-### Code Quality
-
-The project uses modern Python tooling:
-- **Ruff**: Fast Python linter and formatter
-- **Black**: Code formatting
-- **pytest**: Testing framework
-- **pre-commit**: Git hooks for code quality
-
-```bash
-# Run code quality checks
-uv run ruff check
-uv run ruff format
-uv run pytest
-```
-
-### Architecture Extensions
-
-Thoth is designed for extensibility:
-- **Plugin System**: Add custom document processors
-- **Service Integration**: Connect to external APIs and databases
-- **Transport Layers**: Support for various communication protocols
-- **LLM Providers**: Easy integration of new language models
+### Performance & Scale
+- **Async Processing**: Concurrent operations for handling multiple documents simultaneously
+- **Smart Caching**: Intelligent caching of embeddings, analysis results, and API responses
+- **Memory Management**: Efficient handling of large document collections and knowledge bases
 
 ## License
 
-MIT License - see LICENSE file for details.
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/acertainKnight/project-thoth/issues)
-- **Documentation**: [Project Wiki](https://github.com/acertainKnight/project-thoth/wiki)
-- **Discussions**: [GitHub Discussions](https://github.com/acertainKnight/project-thoth/discussions)
+Apache License 2.0 - See [LICENSE](LICENSE) file for details.
 
 ---
 
