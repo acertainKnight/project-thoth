@@ -1,9 +1,4 @@
-"""
-Base configuration classes and common utilities.
-
-This module provides the foundational classes and utilities that are shared
-across all configuration modules.
-"""
+"""Base configuration classes and logging utilities."""
 
 import sys
 from typing import TYPE_CHECKING

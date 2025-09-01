@@ -108,7 +108,7 @@ class SearchArticlesMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"🔍 No articles found matching the search criteria for: '{query}'",
+                            'text': f"No articles found matching the search criteria for: '{query}'",
                         }
                     ]
                 )
@@ -182,8 +182,8 @@ class SearchArticlesMCPTool(MCPTool):
                     pass  # Keep original order if sorting fails
 
             # Format response
-            response_text = f"🔍 **Search Results for:** '{query}'\n\n"
-            response_text += f'📊 Found {len(filtered_results)} articles'
+            response_text = f"**Search Results for:** '{query}'\n\n"
+            response_text += f'Found {len(filtered_results)} articles'
 
             # Show active filters
             active_filters = []
@@ -223,24 +223,24 @@ class SearchArticlesMCPTool(MCPTool):
                             authors_str += f' (+{len(authors) - 2} more)'
                     else:
                         authors_str = str(authors)
-                    response_text += f'   👥 Authors: {authors_str}\n'
+                    response_text += f'   Authors: {authors_str}\n'
 
                 if metadata.get('publication_date'):
-                    response_text += f'   📅 Date: {metadata["publication_date"]}\n'
+                    response_text += f'   Date: {metadata["publication_date"]}\n'
 
                 if metadata.get('journal'):
                     response_text += f'   📖 Journal: {metadata["journal"]}\n'
 
                 if metadata.get('citation_count'):
-                    response_text += f'   📊 Citations: {metadata["citation_count"]}\n'
+                    response_text += f'   Citations: {metadata["citation_count"]}\n'
 
-                response_text += f'   🎯 Relevance: {score:.3f}\n'
+                response_text += f'   Relevance: {score:.3f}\n'
 
                 # Add content preview
                 content = result.get('content', '')
                 if content:
                     preview = content[:150].replace('\n', ' ')
-                    response_text += f'   📝 Preview: {preview}...\n'
+                    response_text += f'   Preview: {preview}...\n'
 
                 response_text += '\n'
 
@@ -305,7 +305,7 @@ class UpdateArticleMetadataMCPTool(MCPTool):
             if not search_results:
                 return MCPToolCallResult(
                     content=[
-                        {'type': 'text', 'text': f'❌ Article not found: {identifier}'}
+                        {'type': 'text', 'text': f'Article not found: {identifier}'}
                     ],
                     isError=True,
                 )
@@ -337,19 +337,19 @@ class UpdateArticleMetadataMCPTool(MCPTool):
                         content=[
                             {
                                 'type': 'text',
-                                'text': '❌ No updates specified. Provide add_tags, remove_tags, or update_metadata.',
+                                'text': 'No updates specified. Provide add_tags, remove_tags, or update_metadata.',
                             }
                         ],
                         isError=True,
                     )
 
                 # Format success response
-                response_text = f'✅ **Updated Article:** {article_title}\n\n'
+                response_text = f'**Updated Article:** {article_title}\n\n'
                 response_text += '**Changes Made:**\n'
                 for update in updates_made:
                     response_text += f'  - {update}\n'
 
-                response_text += '\n💡 **Note:** Changes will be reflected in future searches and may require re-indexing.'
+                response_text += '\n**Note:** Changes will be reflected in future searches and may require re-indexing.'
 
                 return MCPToolCallResult(
                     content=[{'type': 'text', 'text': response_text}]
@@ -360,7 +360,7 @@ class UpdateArticleMetadataMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'❌ Failed to update article metadata: {e!s}\n\n💡 This feature may not be fully implemented in the current version.',
+                            'text': f'Failed to update article metadata: {e!s}\n\nThis feature may not be fully implemented in the current version.',
                         }
                     ],
                     isError=True,
@@ -410,7 +410,7 @@ class DeleteArticleMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': '❌ Deletion not confirmed. Set confirm_deletion to true to proceed with permanent deletion.',
+                            'text': 'Deletion not confirmed. Set confirm_deletion to true to proceed with permanent deletion.',
                         }
                     ],
                     isError=True,
@@ -422,7 +422,7 @@ class DeleteArticleMCPTool(MCPTool):
             if not search_results:
                 return MCPToolCallResult(
                     content=[
-                        {'type': 'text', 'text': f'❌ Article not found: {identifier}'}
+                        {'type': 'text', 'text': f'Article not found: {identifier}'}
                     ],
                     isError=True,
                 )
@@ -443,13 +443,13 @@ class DeleteArticleMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'⚠️  **Article Deletion Not Fully Implemented**\n\n'
+                            'text': f' **Article Deletion Not Fully Implemented**\n\n'
                             f'Article identified: {article_title}\n\n'
-                            f'💡 **To manually remove this article:**\n'
+                            f'**To manually remove this article:**\n'
                             f'  1. Delete the source markdown file\n'
                             f'  2. Re-index the knowledge base using `index_knowledge_base`\n'
                             f'  3. Clear and rebuild the RAG index if needed\n\n'
-                            f'🔧 Full deletion functionality requires additional implementation in the article service.',
+                            f'Full deletion functionality requires additional implementation in the article service.',
                         }
                     ],
                     isError=True,
@@ -460,7 +460,7 @@ class DeleteArticleMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'❌ Failed to delete article: {e!s}',
+                            'text': f'Failed to delete article: {e!s}',
                         }
                     ],
                     isError=True,

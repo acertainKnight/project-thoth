@@ -96,16 +96,6 @@ class DiscoveryManager:
 
         Raises:
             DiscoveryManagerError: If source creation fails.
-
-        Example:
-            >>> manager = DiscoveryManager()
-            >>> source = DiscoverySource(
-            ...     name='arxiv_ml',
-            ...     source_type='api',
-            ...     description='ArXiv machine learning papers',
-            ...     api_config={'source': 'arxiv', 'categories': ['cs.LG']},
-            ... )
-            >>> manager.create_source(source)
         """
         try:
             source_file = self.sources_config_dir / f'{source.name}.json'
@@ -253,10 +243,6 @@ class DiscoveryManager:
         Raises:
             DiscoveryManagerError: If discovery fails.
 
-        Example:
-            >>> manager = DiscoveryManager()
-            >>> result = manager.run_discovery('arxiv_ml', max_articles=50)
-            >>> print(f'Found {result.articles_found} articles')
         """
         start_time = time.time()
 
@@ -502,10 +488,6 @@ class DiscoveryManager:
         Returns:
             dict[str, Any]: Discovery statistics.
 
-        Example:
-            >>> manager = DiscoveryManager()
-            >>> stats = manager.get_discovery_statistics(7)
-            >>> print(f'Total articles found: {stats["total_articles_found"]}')
         """
         try:
             cutoff_time = datetime.now().timestamp() - (days * 24 * 3600)

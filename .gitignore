@@ -161,9 +161,16 @@ Thumbs.db
 # Code agents
 /.claude/
 CLAUDE.md
+CLAUDE.md.backup
 /.cursor/
 .cursorrules
 .cursorignore
+
+# AI-generated planning and backup files
+/planning/
+*plan*.md
+*.backup
+README-docker.md
 
 # Logs
 logs/

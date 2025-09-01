@@ -242,19 +242,9 @@ class KnowledgeBaseResourceProvider(MCPResourceProvider):
         resources = []
 
         try:
-            # Get articles from database
-            # TODO: Implement actual database query
-            # This is a placeholder for the real implementation
-            articles = []  # db.query(Article).all()
-
-            for article in articles:
-                resource = MCPResource(
-                    uri=f'knowledge://{article.id}',
-                    name=article.title,
-                    description=f'Article: {article.title}',
-                    mimeType='text/plain',
-                )
-                resources.append(resource)
+            # Knowledge base integration is not yet implemented
+            # This provider is currently a stub
+            logger.warning('Knowledge base resource provider not yet implemented')
 
         except Exception as e:
             logger.error(f'Error listing knowledge base resources: {e}')
@@ -267,25 +257,9 @@ class KnowledgeBaseResourceProvider(MCPResourceProvider):
             return None
 
         try:
-            # TODO: implement article retrieval
-            # article_id = uri.replace('knowledge://', '')
-
-            # Get article from database
-            # TODO: Implement actual database query
-            # article = db.query(Article).filter(Article.id == article_id).first()
-            article = None
-
-            if not article:
-                return None
-
-            # Format article content
-            content = f'Title: {article.title}\n\n'
-            if hasattr(article, 'abstract') and article.abstract:
-                content += f'Abstract: {article.abstract}\n\n'
-            if hasattr(article, 'content') and article.content:
-                content += f'Content:\n{article.content}'
-
-            return MCPResourceContents(uri=uri, mimeType='text/plain', text=content)
+            # Knowledge base integration is not yet implemented
+            logger.warning('Knowledge base resource retrieval not yet implemented')
+            return None
 
         except Exception as e:
             logger.error(f'Error getting knowledge base resource {uri}: {e}')

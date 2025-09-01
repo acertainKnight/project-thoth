@@ -128,7 +128,7 @@ class DownloadPdfMCPTool(MCPTool):
                                 content=[
                                     {
                                         'type': 'text',
-                                        'text': f"{response_text}\n❌ **Error:** No PDF URL found for article '{article_title}'.\n\n💡 **Try:** Using `locate_pdf` tool first to find the PDF URL.",
+                                        'text': f"{response_text}\n**Error:** No PDF URL found for article '{article_title}'.\n\n**Try:** Using `locate_pdf` tool first to find the PDF URL.",
                                     }
                                 ],
                                 isError=True,
@@ -138,7 +138,7 @@ class DownloadPdfMCPTool(MCPTool):
                             content=[
                                 {
                                     'type': 'text',
-                                    'text': f"{response_text}\n❌ **Error:** Article not found: '{source}'.\n\n💡 **Try:** Using a direct PDF URL or DOI instead.",
+                                    'text': f"{response_text}\n**Error:** Article not found: '{source}'.\n\n**Try:** Using a direct PDF URL or DOI instead.",
                                 }
                             ],
                             isError=True,
@@ -149,7 +149,7 @@ class DownloadPdfMCPTool(MCPTool):
                         content=[
                             {
                                 'type': 'text',
-                                'text': f'{response_text}\n❌ **Error:** Failed to search for article: {search_error!s}',
+                                'text': f'{response_text}\n**Error:** Failed to search for article: {search_error!s}',
                             }
                         ],
                         isError=True,
@@ -196,10 +196,10 @@ class DownloadPdfMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'{response_text}⚠️ **File Already Exists**\n\n'
+                            'text': f'{response_text}**File Already Exists**\n\n'
                             f'**Path:** {full_path}\n'
                             f'**Size:** {file_size:.1f} MB\n\n'
-                            f'💡 **Options:**\n'
+                            f'**Options:**\n'
                             f'- Use `overwrite: true` to replace the file\n'
                             f'- Use a different `filename`\n'
                             f'- Use a different `output_directory`',
@@ -208,7 +208,7 @@ class DownloadPdfMCPTool(MCPTool):
                 )
 
             # Download the PDF
-            response_text += '🚀 **Starting Download...**\n'
+            response_text += '**Starting Download...**\n'
 
             try:
                 # Set up request headers
@@ -233,10 +233,10 @@ class DownloadPdfMCPTool(MCPTool):
                             content=[
                                 {
                                     'type': 'text',
-                                    'text': f'{response_text}❌ **Error:** URL does not appear to serve a PDF file.\n\n'
+                                    'text': f'{response_text}**Error:** URL does not appear to serve a PDF file.\n\n'
                                     f'**Content-Type:** {content_type}\n'
                                     f'**URL:** {download_url}\n\n'
-                                    f'💡 **Tip:** The URL might redirect to a landing page. Try finding the direct PDF link.',
+                                    f'**Tip:** The URL might redirect to a landing page. Try finding the direct PDF link.',
                                 }
                             ],
                             isError=True,
@@ -262,7 +262,7 @@ class DownloadPdfMCPTool(MCPTool):
                         content=[
                             {
                                 'type': 'text',
-                                'text': f'{response_text}❌ **Download Failed:** File is empty.\n\n'
+                                'text': f'{response_text}**Download Failed:** File is empty.\n\n'
                                 f'**URL:** {download_url}\n'
                                 f'**Status Code:** {response.status_code}',
                             }
@@ -271,22 +271,22 @@ class DownloadPdfMCPTool(MCPTool):
                     )
 
                 # Success!
-                response_text += '✅ **Download Complete!**\n\n'
-                response_text += '📄 **File Details:**\n'
+                response_text += '**Download Complete!**\n\n'
+                response_text += '**File Details:**\n'
                 response_text += f'- **Path:** {full_path}\n'
                 response_text += f'- **Size:** {final_size_mb:.1f} MB\n'
                 response_text += '- **Status:** Successfully downloaded\n\n'
 
                 # Additional info
                 if total_size > 0:
-                    response_text += '📊 **Download Stats:**\n'
+                    response_text += '**Download Stats:**\n'
                     response_text += (
                         f'- **Expected Size:** {total_size / (1024 * 1024):.1f} MB\n'
                     )
                     response_text += f'- **Actual Size:** {final_size_mb:.1f} MB\n'
-                    response_text += f'- **Integrity:** {"✅ Complete" if final_size == total_size else "⚠️ Size mismatch"}\n\n'
+                    response_text += f'- **Integrity:** {"Complete" if final_size == total_size else "Size mismatch"}\n\n'
 
-                response_text += '🎯 **Next Steps:**\n'
+                response_text += '**Next Steps:**\n'
                 response_text += '- Use `extract_pdf_metadata` to analyze the PDF\n'
                 response_text += (
                     '- Use `process_pdf` to add it to your knowledge base\n'
@@ -302,8 +302,8 @@ class DownloadPdfMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'{response_text}❌ **Download Timeout:** Request timed out after {timeout} seconds.\n\n'
-                            f'💡 **Try:** Increasing the timeout value or checking your internet connection.',
+                            'text': f'{response_text}**Download Timeout:** Request timed out after {timeout} seconds.\n\n'
+                            f'**Try:** Increasing the timeout value or checking your internet connection.',
                         }
                     ],
                     isError=True,
@@ -314,9 +314,9 @@ class DownloadPdfMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'{response_text}❌ **Download Failed:** {req_error!s}\n\n'
+                            'text': f'{response_text}**Download Failed:** {req_error!s}\n\n'
                             f'**URL:** {download_url}\n\n'
-                            f'💡 **Common Issues:**\n'
+                            f'**Common Issues:**\n'
                             f'- URL requires authentication or subscription\n'
                             f'- Server is temporarily unavailable\n'
                             f'- URL has expired or changed\n'
@@ -338,8 +338,8 @@ class DownloadPdfMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'{response_text}❌ **Download Error:** {download_error!s}\n\n'
-                            f'🔧 **Troubleshooting:**\n'
+                            'text': f'{response_text}**Download Error:** {download_error!s}\n\n'
+                            f'**Troubleshooting:**\n'
                             f'- Check if the URL is accessible in a browser\n'
                             f'- Verify you have write permissions to the output directory\n'
                             f'- Try a different output directory\n'

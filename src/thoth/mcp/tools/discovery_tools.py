@@ -31,7 +31,7 @@ class ListDiscoverySourcesMCPTool(NoInputTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': "📋 No discovery sources configured. Use 'create_arxiv_source' or 'create_pubmed_source' to add one.",
+                            'text': "No discovery sources configured. Use 'create_arxiv_source' or 'create_pubmed_source' to add one.",
                         }
                     ]
                 )
@@ -42,7 +42,7 @@ class ListDiscoverySourcesMCPTool(NoInputTool):
             content_parts.append(
                 {
                     'type': 'text',
-                    'text': f'📋 **Found {len(sources)} Discovery Sources:**\n',
+                    'text': f'**Found {len(sources)} Discovery Sources:**\n',
                 }
             )
 
@@ -159,7 +159,7 @@ class CreateArxivSourceMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"✅ Successfully created ArXiv source '{name}' with categories {categories} and keywords {keywords}",
+                            'text': f"Successfully created ArXiv source '{name}' with categories {categories} and keywords {keywords}",
                         }
                     ]
                 )
@@ -168,7 +168,7 @@ class CreateArxivSourceMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"❌ Failed to create ArXiv source '{name}' - it may already exist",
+                            'text': f"Failed to create ArXiv source '{name}' - it may already exist",
                         }
                     ],
                     isError=True,
@@ -264,7 +264,7 @@ class CreatePubmedSourceMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"✅ Successfully created PubMed source '{name}' with keywords {keywords}",
+                            'text': f"Successfully created PubMed source '{name}' with keywords {keywords}",
                         }
                     ]
                 )
@@ -273,7 +273,7 @@ class CreatePubmedSourceMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"❌ Failed to create PubMed source '{name}' - it may already exist",
+                            'text': f"Failed to create PubMed source '{name}' - it may already exist",
                         }
                     ],
                     isError=True,
@@ -305,7 +305,7 @@ class GetDiscoverySourceMCPTool(SourceNameTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"❌ Discovery source '{source_name}' not found",
+                            'text': f"Discovery source '{source_name}' not found",
                         }
                     ],
                     isError=True,
@@ -313,7 +313,7 @@ class GetDiscoverySourceMCPTool(SourceNameTool):
 
             # Format source details
             status = '🟢 Active' if source.is_active else '🔴 Inactive'
-            source_details = f'📋 **Discovery Source: {source.name}**\n\n'
+            source_details = f'**Discovery Source: {source.name}**\n\n'
             source_details += f'**Type:** {source.source_type}\n'
             source_details += f'**Status:** {status}\n'
             source_details += f'**Description:** {source.description}\n'
@@ -406,7 +406,7 @@ class RunDiscoveryMCPTool(MCPTool):
                         content=[
                             {
                                 'type': 'text',
-                                'text': f"✅ Discovery completed for '{source_name}':\n  - Articles found: {articles_found}\n  - Articles processed: {articles_processed}",
+                                'text': f"Discovery completed for '{source_name}':\n  - Articles found: {articles_found}\n  - Articles processed: {articles_processed}",
                             }
                         ]
                     )
@@ -416,7 +416,7 @@ class RunDiscoveryMCPTool(MCPTool):
                         content=[
                             {
                                 'type': 'text',
-                                'text': f"❌ Discovery failed for '{source_name}': {error_msg}",
+                                'text': f"Discovery failed for '{source_name}': {error_msg}",
                             }
                         ],
                         isError=True,
@@ -436,7 +436,9 @@ class RunDiscoveryMCPTool(MCPTool):
                         name for name, r in results.items() if r.get('success')
                     ]
 
-                    result_text = f'✅ Discovery completed for {len(successful_sources)} sources:\n'
+                    result_text = (
+                        f'Discovery completed for {len(successful_sources)} sources:\n'
+                    )
                     result_text += f'  - Total articles found: {total_found}\n'
                     result_text += f'  - Total articles processed: {total_processed}\n'
                     result_text += f'  - Sources run: {", ".join(successful_sources)}'
@@ -449,7 +451,7 @@ class RunDiscoveryMCPTool(MCPTool):
                         content=[
                             {
                                 'type': 'text',
-                                'text': '❌ No active discovery sources found to run',
+                                'text': 'No active discovery sources found to run',
                             }
                         ],
                         isError=True,
@@ -538,13 +540,13 @@ class CreateCrossrefSourceMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'✅ **CrossRef Discovery Source Created Successfully!**\n\n'
+                            'text': f'**CrossRef Discovery Source Created Successfully!**\n\n'
                             f'**Source Details:**\n'
                             f'- Name: `{name}`\n'
                             f'- Type: CrossRef API\n'
                             f'- Keywords: {", ".join(keywords)}\n'
                             f'- Schedule: Every {schedule_hours} hours, max {max_articles} articles\n\n'
-                            f'🚀 **Ready to use!** Run discovery with `run_discovery` tool.',
+                            f'**Ready to use!** Run discovery with `run_discovery` tool.',
                         }
                     ]
                 )
@@ -553,7 +555,7 @@ class CreateCrossrefSourceMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"❌ Failed to create CrossRef source '{name}'. Check if name already exists.",
+                            'text': f"Failed to create CrossRef source '{name}'. Check if name already exists.",
                         }
                     ],
                     isError=True,
@@ -641,13 +643,13 @@ class CreateOpenalexSourceMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'✅ **OpenAlex Discovery Source Created Successfully!**\n\n'
+                            'text': f'**OpenAlex Discovery Source Created Successfully!**\n\n'
                             f'**Source Details:**\n'
                             f'- Name: `{name}`\n'
                             f'- Type: OpenAlex API\n'
                             f'- Keywords: {", ".join(keywords)}\n'
                             f'- Schedule: Every {schedule_hours} hours, max {max_articles} articles\n\n'
-                            f'🚀 **Ready to use!** OpenAlex provides comprehensive metadata and is free to use.',
+                            f'**Ready to use!** OpenAlex provides comprehensive metadata and is free to use.',
                         }
                     ]
                 )
@@ -656,7 +658,7 @@ class CreateOpenalexSourceMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"❌ Failed to create OpenAlex source '{name}'. Check if name already exists.",
+                            'text': f"Failed to create OpenAlex source '{name}'. Check if name already exists.",
                         }
                     ],
                     isError=True,
@@ -757,7 +759,7 @@ class CreateBiorxivSourceMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'✅ **bioRxiv Discovery Source Created Successfully!**\n\n'
+                            'text': f'**bioRxiv Discovery Source Created Successfully!**\n\n'
                             f'**Source Details:**\n'
                             f'- Name: `{name}`\n'
                             f'- Type: bioRxiv API{date_range}\n'
@@ -771,7 +773,7 @@ class CreateBiorxivSourceMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"❌ Failed to create bioRxiv source '{name}'. Check if name already exists.",
+                            'text': f"Failed to create bioRxiv source '{name}'. Check if name already exists.",
                         }
                     ],
                     isError=True,
@@ -803,7 +805,7 @@ class DeleteDiscoverySourceMCPTool(SourceNameTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"✅ Successfully deleted discovery source '{source_name}'",
+                            'text': f"Successfully deleted discovery source '{source_name}'",
                         }
                     ]
                 )
@@ -812,7 +814,7 @@ class DeleteDiscoverySourceMCPTool(SourceNameTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"❌ Failed to delete discovery source '{source_name}' - it may not exist",
+                            'text': f"Failed to delete discovery source '{source_name}' - it may not exist",
                         }
                     ],
                     isError=True,

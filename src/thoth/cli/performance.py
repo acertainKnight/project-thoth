@@ -88,10 +88,10 @@ def run_optimized_batch(args, pipeline: ThothPipeline):
             try:
                 _ = optimized_pipeline.process_pdf(pdf_path)
                 successful += 1
-                logger.info(f'✅ [{i}/{len(pdf_paths)}] Processed: {pdf_path.name}')
+                logger.info(f'[{i}/{len(pdf_paths)}] Processed: {pdf_path.name}')
             except Exception as e:
                 failed += 1
-                logger.error(f'❌ [{i}/{len(pdf_paths)}] Failed: {pdf_path.name} - {e}')
+                logger.error(f'[{i}/{len(pdf_paths)}] Failed: {pdf_path.name} - {e}')
 
             # Progress update every 5 files
             if i % 5 == 0 or i == len(pdf_paths):
@@ -105,19 +105,19 @@ def run_optimized_batch(args, pipeline: ThothPipeline):
 
     # Print summary
     print('\n' + '=' * 60)
-    print('🚀 OPTIMIZED BATCH PROCESSING COMPLETE')
+    print('OPTIMIZED BATCH PROCESSING COMPLETE')
     print('=' * 60)
-    print(f'📊 Total PDFs: {len(pdf_paths)}')
-    print(f'✅ Successful: {successful}')
-    print(f'❌ Failed: {failed}')
-    print(f'📈 Success Rate: {successful / len(pdf_paths) * 100:.1f}%')
-    print(f'⏱️  Total Time: {total_time:.1f} seconds')
-    print(f'⚡ Average Time per PDF: {total_time / len(pdf_paths):.1f} seconds')
-    print(f'🏃 Processing Rate: {successful / (total_time / 60):.1f} files/minute')
+    print(f'Total PDFs: {len(pdf_paths)}')
+    print(f'Successful: {successful}')
+    print(f'Failed: {failed}')
+    print(f'Success Rate: {successful / len(pdf_paths) * 100:.1f}%')
+    print(f'Total Time: {total_time:.1f} seconds')
+    print(f'Average Time per PDF: {total_time / len(pdf_paths):.1f} seconds')
+    print(f'Processing Rate: {successful / (total_time / 60):.1f} files/minute')
 
     # Get performance stats
     perf_stats = optimized_pipeline.get_performance_stats()
-    print('\n🔧 Performance Configuration:')
+    print('\nPerformance Configuration:')
     print(f'   CPU Cores: {perf_stats.get("cpu_count", "Unknown")}')
     print(f'   Max Workers: {perf_stats.get("max_workers", {})}')
     print(f'   Async Enabled: {perf_stats.get("async_processing_enabled", False)}')
@@ -178,7 +178,7 @@ def run_benchmark(args, pipeline: ThothPipeline):
     time.sleep(2)
 
     # Run optimized processing
-    logger.info('🚀 Running optimized processing benchmark...')
+    logger.info('Running optimized processing benchmark...')
     optimized_start = time.time()
     optimized_successful = 0
 
@@ -201,21 +201,21 @@ def run_benchmark(args, pipeline: ThothPipeline):
 
     # Print benchmark results
     print('\n' + '=' * 60)
-    print('📊 PERFORMANCE BENCHMARK RESULTS')
+    print('PERFORMANCE BENCHMARK RESULTS')
     print('=' * 60)
-    print(f'📝 Test Files: {len(pdf_paths)} PDFs')
+    print(f'Test Files: {len(pdf_paths)} PDFs')
 
     print('\n🐌 Standard Processing:')
     print(f'   Total Time: {standard_time:.1f} seconds')
     print(f'   Average per PDF: {standard_avg:.1f} seconds')
     print(f'   Successful: {standard_successful}/{len(pdf_paths)}')
 
-    print('\n🚀 Optimized Processing:')
+    print('\nOptimized Processing:')
     print(f'   Total Time: {optimized_time:.1f} seconds')
     print(f'   Average per PDF: {optimized_avg:.1f} seconds')
     print(f'   Successful: {optimized_successful}/{len(pdf_paths)}')
 
-    print('\n📈 Performance Improvement:')
+    print('\nPerformance Improvement:')
     print(f'   Speed Improvement: {improvement:.1f}% faster')
     print(f'   Speedup Factor: {speedup:.1f}x')
 
@@ -263,11 +263,11 @@ def run_cache_stats(args, pipeline: ThothPipeline):  # noqa: ARG001
 
         if success:
             if cache_type:
-                print(f'\n✅ Cleared {cache_type} cache')
+                print(f'\nCleared {cache_type} cache')
             else:
-                print('\n✅ Cleared all caches')
+                print('\nCleared all caches')
         else:
-            print('\n❌ Failed to clear cache')
+            print('\nFailed to clear cache')
             return 1
 
     return 0
@@ -284,7 +284,7 @@ def run_system_info(args, pipeline: ThothPipeline):  # noqa: ARG001
     config = get_config()
 
     print('\n' + '=' * 50)
-    print('🖥️  SYSTEM INFORMATION')
+    print('SYSTEM INFORMATION')
     print('=' * 50)
 
     # CPU Information

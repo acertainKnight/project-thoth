@@ -64,17 +64,53 @@ class MCPTool(ABC):
     def validate_arguments(self, arguments: dict[str, Any]) -> bool:
         """Validate arguments against the input schema."""
         try:
-            # TODO: Implement JSON Schema validation
-            # For now, just check required fields exist
             schema = self.input_schema
+
+            # Check required fields
             if 'required' in schema:
                 for field in schema['required']:
                     if field not in arguments:
+                        logger.error(
+                            f"Missing required field '{field}' for tool {self.name}"
+                        )
                         return False
+
+            # Check properties exist and validate basic types
+            if 'properties' in schema:
+                for field, value in arguments.items():
+                    if field in schema['properties']:
+                        field_schema = schema['properties'][field]
+                        if 'type' in field_schema:
+                            expected_type = field_schema['type']
+                            if not self._validate_type(value, expected_type):
+                                logger.error(
+                                    f"Field '{field}' has invalid type for tool {self.name}"
+                                )
+                                return False
+
             return True
         except Exception as e:
             logger.error(f'Error validating arguments for {self.name}: {e}')
             return False
+
+    def _validate_type(self, value: Any, expected_type: str) -> bool:
+        """Validate a value matches the expected JSON Schema type."""
+        type_mapping = {
+            'string': str,
+            'integer': int,
+            'number': (int, float),
+            'boolean': bool,
+            'array': list,
+            'object': dict,
+        }
+
+        if expected_type == 'null':
+            return value is None
+
+        if expected_type in type_mapping:
+            return isinstance(value, type_mapping[expected_type])
+
+        return True  # Unknown type, allow it
 
     def handle_error(self, error: Exception) -> MCPToolCallResult:
         """Standard error handling for tools."""

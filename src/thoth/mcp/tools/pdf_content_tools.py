@@ -8,6 +8,8 @@ and extracting metadata from PDF files.
 from pathlib import Path
 from typing import Any
 
+import requests
+
 from ..base_tools import MCPTool, MCPToolCallResult
 
 
@@ -69,7 +71,7 @@ class LocatePdfMCPTool(MCPTool):
                 doi = ''
                 arxiv_id = ''
 
-            response_text = f'🔍 **PDF Location Search for:** {title}\n\n'
+            response_text = f'**PDF Location Search for:** {title}\n\n'
 
             # Try to use PDF locator service
             try:
@@ -82,7 +84,7 @@ class LocatePdfMCPTool(MCPTool):
                     pdf_url = pdf_results.get('pdf_url')
                     source = pdf_results.get('source', 'Unknown')
 
-                    response_text += '✅ **PDF Found!**\n'
+                    response_text += '**PDF Found!**\n'
                     response_text += f'- **Source:** {source}\n'
                     response_text += f'- **URL:** {pdf_url}\n'
 
@@ -116,18 +118,89 @@ class LocatePdfMCPTool(MCPTool):
                             filename = f'{safe_title}.pdf'
                             full_path = output_path / filename
 
-                            # Placeholder for actual download
-                            response_text += '📥 **Download Status:**\n'
-                            response_text += f'- Target path: {full_path}\n'
-                            response_text += '- Status: ⚠️ Download functionality not yet implemented\n'
-                            response_text += '- Manual download: Copy the URL above to download manually\n\n'
+                            # Implement actual download
+                            try:
+                                import requests
+
+                                # Make sure output directory exists
+                                output_path.mkdir(parents=True, exist_ok=True)
+
+                                # Download the PDF
+                                headers = {
+                                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                                }
+
+                                response = requests.get(
+                                    pdf_url, headers=headers, stream=True, timeout=30
+                                )
+                                response.raise_for_status()
+
+                                # Check content type
+                                content_type = response.headers.get('content-type', '')
+                                if (
+                                    'pdf' not in content_type.lower()
+                                    and not pdf_url.lower().endswith('.pdf')
+                                ):
+                                    # Try to determine from content
+                                    first_bytes = (
+                                        response.content[:1024]
+                                        if hasattr(response, 'content')
+                                        else b''
+                                    )
+                                    if not first_bytes.startswith(b'%PDF'):
+                                        response_text += '**Download Warning:**\n'
+                                        response_text += (
+                                            f'- Content type: {content_type}\n'
+                                        )
+                                        response_text += (
+                                            '- May not be a valid PDF file\n\n'
+                                        )
+
+                                # Write file
+                                with open(full_path, 'wb') as f:
+                                    for chunk in response.iter_content(chunk_size=8192):
+                                        if chunk:
+                                            f.write(chunk)
+
+                                file_size = full_path.stat().st_size
+                                response_text += '**Download Complete:**\n'
+                                response_text += f'- Downloaded to: {full_path}\n'
+                                response_text += (
+                                    f'- File size: {file_size / 1024 / 1024:.2f} MB\n'
+                                )
+                                response_text += '- Status: Successfully downloaded\n\n'
+
+                                # Try to validate it's a real PDF
+                                try:
+                                    import PyPDF2
+
+                                    with open(full_path, 'rb') as pdf_file:
+                                        reader = PyPDF2.PdfReader(pdf_file)
+                                        num_pages = len(reader.pages)
+                                        response_text += f'- PDF validation: {num_pages} pages detected\n'
+                                except Exception:
+                                    response_text += '- PDF validation: Could not verify PDF structure\n'
+
+                            except (
+                                requests.exceptions.RequestException
+                            ) as download_error:
+                                response_text += '**Download Failed:**\n'
+                                response_text += f'- Error: {download_error}\n'
+                                response_text += f'- Manual download: {pdf_url}\n'
+                                response_text += f'- Suggested path: {full_path}\n\n'
+
+                            except Exception as general_error:
+                                response_text += '**Download Error:**\n'
+                                response_text += f'- Error: {general_error}\n'
+                                response_text += f'- Manual download: {pdf_url}\n'
+                                response_text += f'- Target path: {full_path}\n\n'
 
                         except Exception as download_error:
                             response_text += (
-                                f'❌ **Download Failed:** {download_error!s}\n\n'
+                                f'**Download Failed:** {download_error!s}\n\n'
                             )
 
-                    response_text += '💡 **Next Steps:**\n'
+                    response_text += '**Next Steps:**\n'
                     response_text += '- Use the URL above to access the PDF\n'
                     response_text += (
                         '- Consider processing the PDF with `process_pdf` tool\n'
@@ -136,16 +209,16 @@ class LocatePdfMCPTool(MCPTool):
 
                 else:
                     # PDF not found - provide search suggestions
-                    response_text += '❌ **PDF Not Found**\n\n'
+                    response_text += '**PDF Not Found**\n\n'
 
-                    response_text += '🔍 **Search Attempted:**\n'
+                    response_text += '**Search Attempted:**\n'
                     if doi:
                         response_text += f'- DOI: {doi}\n'
                     if arxiv_id:
                         response_text += f'- arXiv ID: {arxiv_id}\n'
                     response_text += f'- Title: {title}\n\n'
 
-                    response_text += '💡 **Alternative Sources to Try:**\n'
+                    response_text += '**Alternative Sources to Try:**\n'
                     response_text += '- Search directly on arXiv.org\n'
                     response_text += "- Check publisher's website\n"
                     response_text += '- Try Google Scholar\n'
@@ -163,10 +236,10 @@ class LocatePdfMCPTool(MCPTool):
 
             except Exception as pdf_error:
                 # Fallback if PDF locator service is not available
-                response_text += '⚠️ **PDF Locator Service Unavailable**\n\n'
+                response_text += '**PDF Locator Service Unavailable**\n\n'
                 response_text += f'**Error:** {pdf_error!s}\n\n'
 
-                response_text += '🔍 **Manual Search Suggestions:**\n'
+                response_text += '**Manual Search Suggestions:**\n'
                 response_text += f'1. **arXiv:** https://arxiv.org/search/?query={title.replace(" ", "+")}\n'
                 response_text += f'2. **Google Scholar:** https://scholar.google.com/scholar?q={title.replace(" ", "+")}\n'
 
@@ -180,7 +253,7 @@ class LocatePdfMCPTool(MCPTool):
                     '5. **Directory of Open Access Journals:** https://doaj.org/\n\n'
                 )
 
-                response_text += '💡 **Tip:** Many publishers offer free access to older articles or have open access policies.'
+                response_text += '**Tip:** Many publishers offer free access to older articles or have open access policies.'
 
             return MCPToolCallResult(
                 content=[{'type': 'text', 'text': response_text.strip()}]
@@ -224,12 +297,12 @@ class ValidatePdfSourcesMCPTool(MCPTool):
             source_name = arguments.get('source_name')
             test_sample = arguments.get('test_sample', True)
 
-            response_text = '🔧 **PDF Sources Validation**\n\n'
+            response_text = '**PDF Sources Validation**\n\n'
 
             # Try to get PDF locator service status
             try:
                 # This would test the PDF locator service
-                response_text += '📊 **Validation Results:**\n\n'
+                response_text += '**Validation Results:**\n\n'
 
                 # Test different PDF sources
                 sources_to_test = [
@@ -257,7 +330,7 @@ class ValidatePdfSourcesMCPTool(MCPTool):
                             content=[
                                 {
                                     'type': 'text',
-                                    'text': f'❌ Unknown PDF source: {source_name}\n\nAvailable sources: arXiv, PubMed Central, DOAJ, Unpaywall, CORE',
+                                    'text': f'Unknown PDF source: {source_name}\n\nAvailable sources: arXiv, PubMed Central, DOAJ, Unpaywall, CORE',
                                 }
                             ],
                             isError=True,
@@ -267,32 +340,93 @@ class ValidatePdfSourcesMCPTool(MCPTool):
                 for source in sources_to_test:
                     response_text += f'**{source["name"]}** - {source["description"]}\n'
 
-                    # Placeholder for actual testing
-                    # In a real implementation, this would test API connectivity, etc.
-                    response_text += '  - Status: ⚠️ Validation not fully implemented\n'
-                    response_text += '  - API Access: Unknown\n'
-                    response_text += '  - Rate Limits: Unknown\n'
+                    # Implement actual source testing
+                    try:
+                        if source['name'] == 'arXiv':
+                            # Test arXiv API
+                            test_url = 'https://export.arxiv.org/api/query?search_query=all:test&max_results=1'
+                            test_response = requests.get(test_url, timeout=10)
+                            if test_response.status_code == 200:
+                                response_text += '  - Status: ✓ API accessible\n'
+                                response_text += '  - API Access: Working\n'
+                                response_text += (
+                                    '  - Rate Limits: 1 request per 3 seconds\n'
+                                )
+                            else:
+                                response_text += f'  - Status: ✗ API error ({test_response.status_code})\n'
+                                response_text += '  - API Access: Failed\n'
+
+                        elif source['name'] == 'bioRxiv':
+                            # Test bioRxiv access
+                            test_url = 'https://www.biorxiv.org/content/early/recent'
+                            test_response = requests.head(test_url, timeout=10)
+                            if test_response.status_code == 200:
+                                response_text += '  - Status: ✓ Site accessible\n'
+                                response_text += '  - API Access: HTTP accessible\n'
+                                response_text += (
+                                    '  - Rate Limits: Standard web requests\n'
+                                )
+                            else:
+                                response_text += f'  - Status: ✗ Site error ({test_response.status_code})\n'
+
+                        elif 'doi.org' in source.get('url', ''):
+                            # Test DOI resolution
+                            test_url = 'https://doi.org/10.1000/182'  # Test DOI
+                            test_response = requests.head(
+                                test_url, timeout=10, allow_redirects=False
+                            )
+                            if test_response.status_code in [302, 303, 301]:
+                                response_text += (
+                                    '  - Status: ✓ DOI resolution working\n'
+                                )
+                                response_text += '  - API Access: Working\n'
+                                response_text += '  - Rate Limits: No official limits\n'
+                            else:
+                                response_text += f'  - Status: ✗ DOI error ({test_response.status_code})\n'
+
+                        else:
+                            # Generic HTTP test
+                            test_url = source.get('url', source.get('base_url'))
+                            if test_url:
+                                test_response = requests.head(test_url, timeout=10)
+                                if test_response.status_code == 200:
+                                    response_text += '  - Status: ✓ Site accessible\n'
+                                    response_text += '  - API Access: Working\n'
+                                else:
+                                    response_text += f'  - Status: ✗ Error ({test_response.status_code})\n'
+                            else:
+                                response_text += '  - Status: ⚠ No URL to test\n'
+
+                    except requests.exceptions.Timeout:
+                        response_text += '  - Status: ✗ Timeout (>10s)\n'
+                        response_text += '  - API Access: Slow/unavailable\n'
+                    except requests.exceptions.RequestException as e:
+                        response_text += '  - Status: ✗ Connection error\n'
+                        response_text += f'  - Error: {str(e)[:50]}...\n'
+                    except Exception as e:
+                        response_text += '  - Status: ✗ Test error\n'
+                        response_text += f'  - Error: {str(e)[:50]}...\n'
                     response_text += '  - Last Tested: Never\n\n'
 
                 if test_sample:
-                    response_text += '📝 **Sample Testing:**\n'
-                    response_text += '- Sample articles test: ⚠️ Not implemented\n'
+                    response_text += '**Sample Testing:**\n'
+                    response_text += '- Sample articles test: Not implemented\n'
                     response_text += '- Success rate: Unknown\n'
                     response_text += '- Average response time: Unknown\n\n'
 
-                response_text += '🔧 **Recommendations:**\n'
+                response_text += '**Recommendations:**\n'
                 response_text += '- Implement comprehensive PDF source testing\n'
                 response_text += '- Add monitoring for source availability\n'
                 response_text += '- Create fallback mechanisms for failed sources\n'
                 response_text += '- Monitor API rate limits and quotas\n\n'
 
-                response_text += '💡 **Current Status:**\n'
+                response_text += '**Current Status:**\n'
                 response_text += 'PDF source validation is in development. Basic PDF location functionality is available through the `locate_pdf` tool, but comprehensive validation and monitoring features are planned for future releases.'
 
             except Exception as validation_error:
-                response_text += '❌ **Validation Error:**\n'
+                response_text += '**Validation Error:**\n'
                 response_text += f'{validation_error!s}\n\n'
-                response_text += '🔧 **Troubleshooting:**\n'
+                response_text += '**Troubleshooting:**\n'
                 response_text += '- Check PDF locator service configuration\n'
                 response_text += '- Verify network connectivity\n'
                 response_text += '- Ensure required API keys are configured\n'
@@ -351,7 +485,7 @@ class ExtractPdfMetadataMCPTool(MCPTool):
             if not pdf_file.exists():
                 return MCPToolCallResult(
                     content=[
-                        {'type': 'text', 'text': f'❌ PDF file not found: {pdf_path}'}
+                        {'type': 'text', 'text': f'PDF file not found: {pdf_path}'}
                     ],
                     isError=True,
                 )
@@ -359,12 +493,12 @@ class ExtractPdfMetadataMCPTool(MCPTool):
             if not pdf_file.suffix.lower() == '.pdf':
                 return MCPToolCallResult(
                     content=[
-                        {'type': 'text', 'text': f'❌ File is not a PDF: {pdf_path}'}
+                        {'type': 'text', 'text': f'File is not a PDF: {pdf_path}'}
                     ],
                     isError=True,
                 )
 
-            response_text = '📄 **PDF Metadata Extraction**\n\n'
+            response_text = '**PDF Metadata Extraction**\n\n'
             response_text += f'**File:** {pdf_file.name}\n'
             response_text += f'**Path:** {pdf_path}\n'
             response_text += (
@@ -372,21 +506,20 @@ class ExtractPdfMetadataMCPTool(MCPTool):
             )
 
             try:
-                # Try to extract metadata using PyPDF2 or similar library
-                # This is a placeholder implementation
+                # Extract metadata using PyPDF2
                 import PyPDF2
 
                 with open(pdf_path, 'rb') as file:
                     pdf_reader = PyPDF2.PdfReader(file)
 
                     # Basic PDF properties
-                    response_text += '📊 **Document Properties:**\n'
+                    response_text += '**Document Properties:**\n'
                     response_text += f'- Pages: {len(pdf_reader.pages)}\n'
 
                     # PDF metadata
                     if pdf_reader.metadata:
                         metadata = pdf_reader.metadata
-                        response_text += '\n📋 **PDF Metadata:**\n'
+                        response_text += '\n**PDF Metadata:**\n'
 
                         if metadata.get('/Title'):
                             response_text += f'- **Title:** {metadata["/Title"]}\n'
@@ -415,7 +548,7 @@ class ExtractPdfMetadataMCPTool(MCPTool):
 
                     # Extract text preview if requested
                     if extract_text_preview and len(pdf_reader.pages) > 0:
-                        response_text += '\n📝 **Text Preview (First Page):**\n'
+                        response_text += '\n**Text Preview (First Page):**\n'
                         try:
                             first_page = pdf_reader.pages[0]
                             text_content = first_page.extract_text()
@@ -427,12 +560,12 @@ class ExtractPdfMetadataMCPTool(MCPTool):
                                 )
                                 response_text += f'```\n{preview_text}...\n```\n'
                             else:
-                                response_text += '⚠️ No text could be extracted from the first page.\n'
+                                response_text += (
+                                    'No text could be extracted from the first page.\n'
+                                )
 
                         except Exception as text_error:
-                            response_text += (
-                                f'❌ Text extraction failed: {text_error!s}\n'
-                            )
+                            response_text += f'Text extraction failed: {text_error!s}\n'
 
                     # Document structure analysis
                     if analyze_structure:
@@ -458,17 +591,17 @@ class ExtractPdfMetadataMCPTool(MCPTool):
                         response_text += f'- Estimated reading time: {len(pdf_reader.pages) * 2} minutes\n'
 
                 # Additional analysis suggestions
-                response_text += '\n💡 **Analysis Suggestions:**\n'
+                response_text += '\n**Analysis Suggestions:**\n'
                 response_text += '- Use `process_pdf` to fully process this document\n'
                 response_text += '- Check if the PDF is text-based or image-based\n'
                 response_text += '- Consider OCR if text extraction is limited\n'
                 response_text += '- Look for DOI or arXiv ID in the metadata\n\n'
 
-                response_text += '✅ **Metadata extraction completed successfully!**'
+                response_text += '**Metadata extraction completed successfully!**'
 
             except ImportError:
                 # Fallback if PyPDF2 is not available
-                response_text += '⚠️ **PDF Processing Library Not Available**\n\n'
+                response_text += '**PDF Processing Library Not Available**\n\n'
                 response_text += '**Basic File Info:**\n'
                 response_text += '- File exists: ✅\n'
                 response_text += '- File format: PDF\n'
@@ -476,21 +609,21 @@ class ExtractPdfMetadataMCPTool(MCPTool):
                     f'- Size: {pdf_file.stat().st_size / (1024 * 1024):.1f} MB\n\n'
                 )
 
-                response_text += '🔧 **To enable full metadata extraction:**\n'
+                response_text += '**To enable full metadata extraction:**\n'
                 response_text += '- Install PyPDF2: `pip install PyPDF2`\n'
                 response_text += '- Or use: `uv add PyPDF2`\n\n'
 
-                response_text += '💡 **Alternative:** Use `process_pdf` tool which includes metadata extraction as part of the full processing pipeline.'
+                response_text += '**Alternative:** Use `process_pdf` tool which includes metadata extraction as part of the full processing pipeline.'
 
             except Exception as extraction_error:
-                response_text += '❌ **Metadata Extraction Failed:**\n'
+                response_text += '**Metadata Extraction Failed:**\n'
                 response_text += f'{extraction_error!s}\n\n'
-                response_text += '🔧 **Possible Issues:**\n'
+                response_text += '**Possible Issues:**\n'
                 response_text += '- PDF file may be corrupted\n'
                 response_text += '- PDF may be password protected\n'
                 response_text += '- File may not be a valid PDF\n'
                 response_text += '- PDF may use unsupported features\n\n'
-                response_text += '💡 **Try:** Using a different PDF processing tool or repairing the PDF file.'
+                response_text += '**Try:** Using a different PDF processing tool or repairing the PDF file.'
 
             return MCPToolCallResult(
                 content=[{'type': 'text', 'text': response_text.strip()}]
