@@ -166,7 +166,7 @@ CLAUDE.md.backup
 .cursorrules
 .cursorignore
 
-# AI-generated planning and backup files
+# Planning and backup files
 /planning/
 *plan*.md
 *.backup
