@@ -1,9 +1,4 @@
-"""
-Service manager for orchestrating all Thoth services.
-
-This module provides a central manager for initializing and accessing
-all services in a consistent way.
-"""
+"""Central service manager for Thoth components."""
 
 from typing import Any
 

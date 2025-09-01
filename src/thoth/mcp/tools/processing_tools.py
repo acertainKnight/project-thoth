@@ -1,9 +1,4 @@
-"""
-MCP-compliant PDF processing and article management tools.
-
-This module provides tools for processing PDFs, managing articles,
-and getting collection statistics.
-"""
+"""PDF processing and article management tools for MCP."""
 
 from pathlib import Path
 from typing import Any
@@ -52,7 +47,7 @@ class ProcessPdfMCPTool(MCPTool):
             if not Path(pdf_path).exists():
                 return MCPToolCallResult(
                     content=[
-                        {'type': 'text', 'text': f'❌ PDF file not found: {pdf_path}'}
+                        {'type': 'text', 'text': f'PDF file not found: {pdf_path}'}
                     ],
                     isError=True,
                 )
@@ -68,22 +63,22 @@ class ProcessPdfMCPTool(MCPTool):
                     note_path = result.get('note_path', '')
 
                     response_text = (
-                        f'✅ Successfully processed PDF: {Path(pdf_path).name}\n'
+                        f'Successfully processed PDF: {Path(pdf_path).name}\n'
                     )
-                    response_text += f'📄 Article: {article_title}\n'
+                    response_text += f'Article: {article_title}\n'
 
                     if note_path:
-                        response_text += f'📝 Note created: {note_path}\n'
+                        response_text += f'Note created: {note_path}\n'
 
                     # Add processing stats if available
                     if result.get('processing_time'):
                         response_text += (
-                            f'⏱️ Processing time: {result["processing_time"]:.1f}s\n'
+                            f'Processing time: {result["processing_time"]:.1f}s\n'
                         )
 
                     if result.get('citations_found'):
                         response_text += (
-                            f'🔗 Citations extracted: {result["citations_found"]}\n'
+                            f'Citations extracted: {result["citations_found"]}\n'
                         )
 
                     return MCPToolCallResult(
@@ -95,7 +90,7 @@ class ProcessPdfMCPTool(MCPTool):
                         content=[
                             {
                                 'type': 'text',
-                                'text': f'❌ Failed to process PDF: {error_msg}',
+                                'text': f'Failed to process PDF: {error_msg}',
                             }
                         ],
                         isError=True,
@@ -106,7 +101,7 @@ class ProcessPdfMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'❌ Processing error: {processing_error!s}',
+                            'text': f'Processing error: {processing_error!s}',
                         }
                     ],
                     isError=True,
@@ -165,7 +160,7 @@ class BatchProcessPdfsMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'❌ Directory not found: {directory_path}',
+                            'text': f'Directory not found: {directory_path}',
                         }
                     ],
                     isError=True,
@@ -179,7 +174,7 @@ class BatchProcessPdfsMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'📁 No PDF files found in: {directory_path}',
+                            'text': f'No PDF files found in: {directory_path}',
                         }
                     ]
                 )
@@ -197,25 +192,25 @@ class BatchProcessPdfsMCPTool(MCPTool):
 
                     if result.get('success'):
                         successful += 1
-                        results.append(f'✅ {pdf_file.name}')
+                        results.append(f'{pdf_file.name}')
                     else:
                         failed += 1
                         error = result.get('error', 'Unknown error')
-                        results.append(f'❌ {pdf_file.name}: {error}')
+                        results.append(f'{pdf_file.name}: {error}')
 
                 except Exception as e:
                     failed += 1
-                    results.append(f'❌ {pdf_file.name}: {e!s}')
+                    results.append(f'{pdf_file.name}: {e!s}')
 
             # Format response
-            response_text = '📁 **Batch Processing Complete**\n\n'
-            response_text += '📊 **Summary:**\n'
+            response_text = '**Batch Processing Complete**\n\n'
+            response_text += '**Summary:**\n'
             response_text += f'  - Total files: {len(pdf_files)}\n'
             response_text += f'  - Successful: {successful}\n'
             response_text += f'  - Failed: {failed}\n\n'
 
             if results:
-                response_text += '📋 **Results:**\n'
+                response_text += '**Results:**\n'
                 for result in results[:10]:  # Limit to first 10 results
                     response_text += f'  {result}\n'
 
@@ -265,7 +260,7 @@ class GetArticleDetailsMCPTool(MCPTool):
             if not search_results:
                 return MCPToolCallResult(
                     content=[
-                        {'type': 'text', 'text': f'❌ Article not found: {identifier}'}
+                        {'type': 'text', 'text': f'Article not found: {identifier}'}
                     ],
                     isError=True,
                 )
@@ -283,7 +278,7 @@ class GetArticleDetailsMCPTool(MCPTool):
                 pass
 
             # Format comprehensive response
-            response_text = '📄 **Article Details**\n\n'
+            response_text = '**Article Details**\n\n'
             response_text += f'**Title:** {article.get("title", "Unknown")}\n'
 
             # Add metadata if available
@@ -417,7 +412,7 @@ class ListArticlesMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': '📚 No articles found in the knowledge base.',
+                            'text': 'No articles found in the knowledge base.',
                         }
                     ]
                 )
@@ -437,14 +432,14 @@ class ListArticlesMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'📚 No articles found for page {offset // limit + 1}. Total articles: {total_results}',
+                            'text': f'No articles found for page {offset // limit + 1}. Total articles: {total_results}',
                         }
                     ]
                 )
 
             # Format response
-            response_text = '📚 **Articles in Knowledge Base**\n\n'
-            response_text += f'📊 **Page {offset // limit + 1}** (showing {len(paginated_results)} of {total_results} articles)\n\n'
+            response_text = '**Articles in Knowledge Base**\n\n'
+            response_text += f'**Page {offset // limit + 1}** (showing {len(paginated_results)} of {total_results} articles)\n\n'
 
             for i, article in enumerate(paginated_results, offset + 1):
                 title = article.get('title', 'Untitled')
@@ -452,7 +447,7 @@ class ListArticlesMCPTool(MCPTool):
                 score = article.get('score', 0)
 
                 response_text += f'**{i}. {title}**\n'
-                response_text += f'   📄 Type: {doc_type}\n'
+                response_text += f'   Type: {doc_type}\n'
 
                 # Add metadata if available
                 metadata = article.get('metadata', {})
@@ -464,13 +459,13 @@ class ListArticlesMCPTool(MCPTool):
                             authors_str += f' (+{len(authors) - 3} more)'
                     else:
                         authors_str = str(authors)
-                    response_text += f'   👥 Authors: {authors_str}\n'
+                    response_text += f'   Authors: {authors_str}\n'
 
                 if metadata.get('publication_date'):
-                    response_text += f'   📅 Date: {metadata["publication_date"]}\n'
+                    response_text += f'   Date: {metadata["publication_date"]}\n'
 
                 if search_term:
-                    response_text += f'   📊 Relevance: {score:.3f}\n'
+                    response_text += f'   Relevance: {score:.3f}\n'
 
                 response_text += '\n'
 
@@ -478,7 +473,7 @@ class ListArticlesMCPTool(MCPTool):
             if total_results > offset + limit:
                 next_offset = offset + limit
                 response_text += (
-                    f'💡 **Tip:** Use `offset: {next_offset}` to see the next page.\n'
+                    f'**Tip:** Use `offset: {next_offset}` to see the next page.\n'
                 )
 
             return MCPToolCallResult(
@@ -511,10 +506,10 @@ class CollectionStatsMCPTool(NoInputTool):
                 rag_stats = {}
 
             # Try to get additional stats from other services
-            response_text = '📊 **Collection Statistics**\n\n'
+            response_text = '**Collection Statistics**\n\n'
 
             # RAG System Stats
-            response_text += '**📚 Knowledge Base:**\n'
+            response_text += '**Knowledge Base:**\n'
             response_text += (
                 f'  - Total documents: {rag_stats.get("document_count", 0)}\n'
             )
@@ -536,19 +531,21 @@ class CollectionStatsMCPTool(NoInputTool):
                         doc_type = result.get('document_type', 'Unknown')
                         doc_types[doc_type] = doc_types.get(doc_type, 0) + 1
 
-                    response_text += '\n**📄 Document Types:**\n'
+                    response_text += '\n**Document Types:**\n'
                     for doc_type, count in sorted(doc_types.items()):
                         response_text += f'  - {doc_type}: {count}\n'
                 else:
-                    response_text += '\n**📄 Document Types:** No documents found\n'
+                    response_text += '\n**Document Types:** No documents found\n'
 
             except Exception as e:
                 logger.warning(f'Failed to get document type breakdown: {e}')
-                response_text += '\n**📄 Document Types:** Unable to retrieve (service unavailable)\n'
+                response_text += (
+                    '\n**Document Types:** Unable to retrieve (service unavailable)\n'
+                )
 
             # Embeddings info
             if 'embeddings' in rag_stats:
-                response_text += '\n**🔍 Search System:**\n'
+                response_text += '\n**Search System:**\n'
                 response_text += (
                     f'  - Model: {rag_stats["embeddings"].get("model", "N/A")}\n'
                 )
@@ -559,7 +556,7 @@ class CollectionStatsMCPTool(NoInputTool):
                 sources = self.service_manager.discovery.list_sources()
                 active_sources = [s for s in sources if s.is_active]
 
-                response_text += '\n**🔍 Discovery Sources:**\n'
+                response_text += '\n**Discovery Sources:**\n'
                 response_text += f'  - Total sources: {len(sources)}\n'
                 response_text += f'  - Active sources: {len(active_sources)}\n'
 
@@ -591,8 +588,8 @@ class CollectionStatsMCPTool(NoInputTool):
                 pass  # Skip if not available
 
             # System health indicator
-            response_text += '\n**⚡ System Status:**\n'
-            response_text += f'  - RAG System: {"✅ Active" if rag_stats.get("document_count", 0) > 0 else "⚠️ Empty"}\n'
+            response_text += '\n**System Status:**\n'
+            response_text += f'  - RAG System: {"Active" if rag_stats.get("document_count", 0) > 0 else "Empty"}\n'
 
             return MCPToolCallResult(
                 content=[{'type': 'text', 'text': response_text.strip()}]

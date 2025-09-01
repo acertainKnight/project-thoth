@@ -77,7 +77,7 @@ class WebSearchMCPTool(MCPTool):
             region = arguments.get('region', 'us')
             time_range = arguments.get('time_range', 'any')
 
-            response_text = '🔍 **Web Search Results**\n\n'
+            response_text = '**Web Search Results**\n\n'
             response_text += f'**Query:** {query}\n'
             response_text += f'**Max Results:** {max_results}\n'
             response_text += f'**Search Engine:** {search_engine}\n\n'
@@ -97,7 +97,7 @@ class WebSearchMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'{response_text}❌ **No Results Found**\n\n'
+                            'text': f'{response_text}**No Results Found**\n\n'
                             f'Try:\n'
                             f'- Different search terms\n'
                             f'- Broader query\n'
@@ -109,7 +109,7 @@ class WebSearchMCPTool(MCPTool):
                 )
 
             # Display results
-            response_text += f'✅ **Found {len(search_results)} Results**\n'
+            response_text += f'**Found {len(search_results)} Results**\n'
             response_text += (
                 f'**Search Backend:** {search_results[0].get("backend", "Unknown")}\n'
             )
@@ -136,7 +136,7 @@ class WebSearchMCPTool(MCPTool):
                 response_text += '---\n\n'
 
             # Add search tips
-            response_text += '💡 **Search Tips:**\n'
+            response_text += '**Search Tips:**\n'
             response_text += '- Use quotes for exact phrases: `"machine learning"`\n'
             response_text += '- Use - to exclude terms: `python -snake`\n'
             response_text += (
@@ -144,7 +144,7 @@ class WebSearchMCPTool(MCPTool):
             )
             response_text += '- Try different search engines for varied results\n\n'
 
-            response_text += '🔗 **Next Steps:**\n'
+            response_text += '**Next Steps:**\n'
             response_text += '- Click URLs to visit pages\n'
             response_text += '- Use `download_pdf` if PDFs are found\n'
             response_text += '- Use `process_pdf` to add content to knowledge base'

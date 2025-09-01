@@ -30,7 +30,7 @@ class ListQueriesMCPTool(NoInputTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': '📋 No research queries found. Create one with create_query!',
+                            'text': 'No research queries found. Create one with create_query!',
                         }
                     ]
                 )
@@ -42,7 +42,7 @@ class ListQueriesMCPTool(NoInputTool):
             content_parts.append(
                 {
                     'type': 'text',
-                    'text': f'📋 **Found {len(queries)} Research Queries:**\n',
+                    'text': f'**Found {len(queries)} Research Queries:**\n',
                 }
             )
 
@@ -152,7 +152,7 @@ class CreateQueryMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"✅ Successfully created query '{arguments['name']}'",
+                            'text': f"Successfully created query '{arguments['name']}'",
                         }
                     ]
                 )
@@ -161,7 +161,7 @@ class CreateQueryMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"❌ Failed to create query '{arguments['name']}' - it may already exist",
+                            'text': f"Failed to create query '{arguments['name']}' - it may already exist",
                         }
                     ],
                     isError=True,
@@ -191,13 +191,13 @@ class GetQueryMCPTool(QueryNameTool):
             if not query:
                 return MCPToolCallResult(
                     content=[
-                        {'type': 'text', 'text': f"❌ Query '{query_name}' not found"}
+                        {'type': 'text', 'text': f"Query '{query_name}' not found"}
                     ],
                     isError=True,
                 )
 
             # Format query details as structured content
-            query_details = f'📋 **Query: {query.name}**\n\n'
+            query_details = f'**Query: {query.name}**\n\n'
             query_details += f'**Description:** {query.description}\n'
             query_details += f'**Research Question:** {query.research_question}\n'
             query_details += f'**Created:** {query.created_at}\n'
@@ -295,7 +295,7 @@ class UpdateQueryMCPTool(MCPTool):
 
             if not updates:
                 return MCPToolCallResult(
-                    content=[{'type': 'text', 'text': '❌ No updates provided'}],
+                    content=[{'type': 'text', 'text': 'No updates provided'}],
                     isError=True,
                 )
 
@@ -306,7 +306,7 @@ class UpdateQueryMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"✅ Successfully updated query '{query_name}'",
+                            'text': f"Successfully updated query '{query_name}'",
                         }
                     ]
                 )
@@ -315,7 +315,7 @@ class UpdateQueryMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"❌ Failed to update query '{query_name}' - it may not exist",
+                            'text': f"Failed to update query '{query_name}' - it may not exist",
                         }
                     ],
                     isError=True,
@@ -347,7 +347,7 @@ class DeleteQueryMCPTool(QueryNameTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"✅ Successfully deleted query '{query_name}'",
+                            'text': f"Successfully deleted query '{query_name}'",
                         }
                     ]
                 )
@@ -356,7 +356,7 @@ class DeleteQueryMCPTool(QueryNameTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"❌ Failed to delete query '{query_name}' - it may not exist",
+                            'text': f"Failed to delete query '{query_name}' - it may not exist",
                         }
                     ],
                     isError=True,

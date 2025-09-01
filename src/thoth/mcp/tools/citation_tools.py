@@ -81,7 +81,7 @@ class FormatCitationsMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': "❌ Please provide either 'articles' list or 'search_query' parameter.",
+                            'text': "Please provide either 'articles' list or 'search_query' parameter.",
                         }
                     ],
                     isError=True,
@@ -92,7 +92,7 @@ class FormatCitationsMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': '❌ No articles found to format citations for.',
+                            'text': 'No articles found to format citations for.',
                         }
                     ],
                     isError=True,
@@ -224,7 +224,7 @@ class FormatCitationsMCPTool(MCPTool):
             for citation in formatted_citations:
                 response_text += f'{citation}\n\n'
 
-            response_text += '💡 **Tip:** Copy these citations to your reference manager or bibliography.'
+            response_text += '**Tip:** Copy these citations to your reference manager or bibliography.'
 
             return MCPToolCallResult(
                 content=[{'type': 'text', 'text': response_text.strip()}]
@@ -298,7 +298,7 @@ class ExportBibliographyMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'❌ No articles found {source_description}.',
+                            'text': f'No articles found {source_description}.',
                         }
                     ],
                     isError=True,
@@ -327,7 +327,7 @@ class ExportBibliographyMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'❌ Unsupported format: {export_format}',
+                            'text': f'Unsupported format: {export_format}',
                         }
                     ],
                     isError=True,
@@ -337,7 +337,7 @@ class ExportBibliographyMCPTool(MCPTool):
 
             # For now, we'll return the content as text
             # In a real implementation, this might save to a file
-            response_text = '📚 **Bibliography Export Complete**\n\n'
+            response_text = '**Bibliography Export Complete**\n\n'
             response_text += f'**Format:** {export_format.upper()}\n'
             response_text += f'**Articles:** {len(articles)} {source_description}\n'
             response_text += f'**Filename:** {full_filename}\n\n'
@@ -349,7 +349,7 @@ class ExportBibliographyMCPTool(MCPTool):
                     f'\n... ({len(bibliography_content) - 1000} more characters)'
                 )
             response_text += '\n```\n\n'
-            response_text += '💡 **Full Content:**\n'
+            response_text += '**Full Content:**\n'
             response_text += bibliography_content
 
             return MCPToolCallResult(content=[{'type': 'text', 'text': response_text}])
@@ -588,7 +588,7 @@ class ExtractCitationsMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'❌ Article not found: {article_identifier}',
+                            'text': f'Article not found: {article_identifier}',
                         }
                     ],
                     isError=True,
@@ -602,14 +602,14 @@ class ExtractCitationsMCPTool(MCPTool):
                 # This would use the citation service to get citation networks
                 # For now, we'll provide a basic analysis based on available data
 
-                response_text = f'🔗 **Citation Analysis for:** {title}\n\n'
+                response_text = f'**Citation Analysis for:** {title}\n\n'
 
                 # Get basic citation info from metadata
                 metadata = article.get('metadata', {})
                 citation_count = metadata.get('citation_count', 0)
                 references = metadata.get('references', [])
 
-                response_text += '📊 **Citation Statistics:**\n'
+                response_text += '**Citation Statistics:**\n'
                 response_text += f'  - Times cited: {citation_count}\n'
                 response_text += f'  - References made: {len(references)}\n\n'
 
@@ -649,7 +649,7 @@ class ExtractCitationsMCPTool(MCPTool):
                         response_text += '\n'
 
                 # Analyze citation patterns
-                response_text += '🔍 **Citation Network Insights:**\n'
+                response_text += '**Citation Network Insights:**\n'
 
                 # Calculate citation metrics
                 if citation_count > 0:
@@ -668,7 +668,7 @@ class ExtractCitationsMCPTool(MCPTool):
                     )
                     response_text += f'  - Reference diversity: {"High" if len(references) > 50 else "Moderate" if len(references) > 20 else "Low"}\n'
 
-                response_text += '\n💡 **Note:** Citation analysis is based on available metadata. For complete citation networks, ensure articles are processed with citation extraction enabled.'
+                response_text += '\n**Note:** Citation analysis is based on available metadata. For complete citation networks, ensure articles are processed with citation extraction enabled.'
 
                 return MCPToolCallResult(
                     content=[{'type': 'text', 'text': response_text}]
@@ -679,7 +679,7 @@ class ExtractCitationsMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'⚠️ Citation analysis partially available.\n\n'
+                            'text': f'Citation analysis partially available.\n\n'
                             f'**Article:** {title}\n\n'
                             f'**Basic Info:**\n'
                             f'  - Found in knowledge base: ✅\n'

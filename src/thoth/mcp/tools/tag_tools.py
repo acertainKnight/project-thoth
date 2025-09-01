@@ -27,8 +27,8 @@ class ConsolidateTagsMCPTool(NoInputTool):
             # Use the tag service to consolidate tags
             result = self.service_manager.tag.consolidate_only()
 
-            response_text = '🏷️ **Tag Consolidation Complete**\n\n'
-            response_text += '📊 **Summary:**\n'
+            response_text = '**Tag Consolidation Complete**\n\n'
+            response_text += '**Summary:**\n'
             response_text += f'  - Articles processed: {result["articles_processed"]}\n'
             response_text += f'  - Articles updated: {result["articles_updated"]}\n'
             response_text += f'  - Tags consolidated: {result["tags_consolidated"]}\n'
@@ -51,7 +51,7 @@ class ConsolidateTagsMCPTool(NoInputTool):
                         )
                     response_text += '\n'
 
-            response_text += '✅ Tag consolidation completed. Similar tags have been merged using AI analysis.'
+            response_text += 'Tag consolidation completed. Similar tags have been merged using AI analysis.'
 
             return MCPToolCallResult(content=[{'type': 'text', 'text': response_text}])
 
@@ -105,7 +105,7 @@ class SuggestTagsMCPTool(MCPTool):
                         content=[
                             {
                                 'type': 'text',
-                                'text': f'❌ Article not found: {article_identifier}',
+                                'text': f'Article not found: {article_identifier}',
                             }
                         ],
                         isError=True,
@@ -125,7 +125,7 @@ class SuggestTagsMCPTool(MCPTool):
                         content=[
                             {
                                 'type': 'text',
-                                'text': '❌ No existing tag vocabulary found. Process some articles first to build a tag vocabulary.',
+                                'text': 'No existing tag vocabulary found. Process some articles first to build a tag vocabulary.',
                             }
                         ],
                         isError=True,
@@ -142,7 +142,7 @@ class SuggestTagsMCPTool(MCPTool):
                 suggested_tags = suggestion_result.get('suggested_tags', [])
                 reasoning = suggestion_result.get('reasoning', '')
 
-                response_text = f'🏷️ **Tag Suggestions for:** {title}\n\n'
+                response_text = f'**Tag Suggestions for:** {title}\n\n'
                 response_text += f'**Current Tags:** {", ".join(current_tags) if current_tags else "None"}\n\n'
 
                 if suggested_tags:
@@ -150,9 +150,9 @@ class SuggestTagsMCPTool(MCPTool):
                         f'**Suggested Tags:** {", ".join(suggested_tags)}\n\n'
                     )
                     response_text += f'**Reasoning:** {reasoning}\n\n'
-                    response_text += '💡 **Note:** Use `update_article_metadata` to apply these suggestions.'
+                    response_text += '**Note:** Use `update_article_metadata` to apply these suggestions.'
                 else:
-                    response_text += '✅ No additional tags suggested. Current tags appear comprehensive.'
+                    response_text += 'No additional tags suggested. Current tags appear comprehensive.'
 
                 return MCPToolCallResult(
                     content=[{'type': 'text', 'text': response_text}]
@@ -162,8 +162,8 @@ class SuggestTagsMCPTool(MCPTool):
                 # Suggest tags for all articles
                 result = self.service_manager.tag.suggest_additional()
 
-                response_text = '🏷️ **Tag Suggestions Complete**\n\n'
-                response_text += '📊 **Summary:**\n'
+                response_text = '**Tag Suggestions Complete**\n\n'
+                response_text += '**Summary:**\n'
                 response_text += (
                     f'  - Articles processed: {result["articles_processed"]}\n'
                 )
@@ -174,9 +174,9 @@ class SuggestTagsMCPTool(MCPTool):
                 )
 
                 if result['articles_updated'] > 0:
-                    response_text += '✅ Additional tags have been suggested and applied to articles that could benefit from better tagging.'
+                    response_text += 'Additional tags have been suggested and applied to articles that could benefit from better tagging.'
                 else:
-                    response_text += '✅ All articles already have comprehensive tags. No additional suggestions needed.'
+                    response_text += 'All articles already have comprehensive tags. No additional suggestions needed.'
 
                 return MCPToolCallResult(
                     content=[{'type': 'text', 'text': response_text}]
@@ -208,7 +208,7 @@ class ManageTagVocabularyMCPTool(NoInputTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': '📚 No tags found in the collection. Process some articles first to build a tag vocabulary.',
+                            'text': 'No tags found in the collection. Process some articles first to build a tag vocabulary.',
                         }
                     ]
                 )
@@ -227,8 +227,8 @@ class ManageTagVocabularyMCPTool(NoInputTool):
             # Sort tags by usage
             sorted_tags = sorted(tag_usage.items(), key=lambda x: x[1], reverse=True)
 
-            response_text = '🏷️ **Tag Vocabulary Management**\n\n'
-            response_text += '📊 **Overview:**\n'
+            response_text = '**Tag Vocabulary Management**\n\n'
+            response_text += '**Overview:**\n'
             response_text += f'  - Total unique tags: {len(all_tags)}\n'
             response_text += f'  - Tags in use: {len(tag_usage)}\n'
             response_text += f'  - Unused tags: {len(all_tags) - len(tag_usage)}\n\n'
@@ -270,13 +270,15 @@ class ManageTagVocabularyMCPTool(NoInputTool):
 
             if potentially_similar:
                 response_text += (
-                    '🔍 **Potentially Similar Tags (may need consolidation):**\n'
+                    '**Potentially Similar Tags (may need consolidation):**\n'
                 )
                 for tag1, tag2 in potentially_similar[:10]:
                     usage1 = tag_usage.get(tag1, 0)
                     usage2 = tag_usage.get(tag2, 0)
                     response_text += f"  - '{tag1}' ({usage1}) ↔ '{tag2}' ({usage2})\n"
-                response_text += '\n💡 Use `consolidate_tags` to merge similar tags automatically.\n\n'
+                response_text += (
+                    '\nUse `consolidate_tags` to merge similar tags automatically.\n\n'
+                )
 
             response_text += '🛠️ **Available Actions:**\n'
             response_text += '  - `consolidate_tags` - Merge similar tags using AI\n'
@@ -307,8 +309,8 @@ class ConsolidateAndRetagMCPTool(NoInputTool):
             # Use the tag service's comprehensive consolidation and retagging
             result = self.service_manager.tag.consolidate_and_retag()
 
-            response_text = '🏷️ **Comprehensive Tag Management Complete**\n\n'
-            response_text += '📊 **Summary:**\n'
+            response_text = '**Comprehensive Tag Management Complete**\n\n'
+            response_text += '**Summary:**\n'
             response_text += f'  - Articles processed: {result["articles_processed"]}\n'
             response_text += f'  - Articles updated: {result["articles_updated"]}\n'
             response_text += f'  - Tags consolidated: {result["tags_consolidated"]}\n'
@@ -344,7 +346,7 @@ class ConsolidateAndRetagMCPTool(NoInputTool):
             response_text += '  - Improved organization and searchability\n'
             response_text += '  - Enhanced tag consistency across collection\n\n'
 
-            response_text += '✅ Your research collection now has a clean, consolidated tag vocabulary with AI-suggested enhancements.'
+            response_text += 'Your research collection now has a clean, consolidated tag vocabulary with AI-suggested enhancements.'
 
             return MCPToolCallResult(content=[{'type': 'text', 'text': response_text}])
 

@@ -50,6 +50,26 @@ make dev  # Starts both API server and plugin watcher
 
 Visit `http://localhost:8000` to verify the API server is running.
 
+### Docker Deployment
+
+For containerized deployment:
+
+```bash
+# Development
+make docker-init     # Initialize Docker environment
+cp .env.docker.example .env.docker
+make docker-dev      # Start development services
+
+# Production
+cp .env.prod.example .env.prod
+make docker-prod     # Deploy production services
+```
+
+Services will be available at:
+- API Server: http://localhost:8000
+- MCP Server: http://localhost:8001
+- ChromaDB: http://localhost:8003
+
 ## Key Features
 
 ### Advanced AI System

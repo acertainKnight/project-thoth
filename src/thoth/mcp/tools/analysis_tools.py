@@ -1,9 +1,4 @@
-"""
-MCP-compliant analysis and intelligence tools.
-
-This module provides advanced analysis tools for evaluating articles,
-analyzing topics, finding related papers, and generating research insights.
-"""
+"""Analysis tools for article evaluation and research insights."""
 
 from typing import Any
 
@@ -51,7 +46,7 @@ class EvaluateArticleMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"❌ Query '{query_name}' not found. Use 'list_queries' to see available queries.",
+                            'text': f"Query '{query_name}' not found. Use 'list_queries' to see available queries.",
                         }
                     ],
                     isError=True,
@@ -67,7 +62,7 @@ class EvaluateArticleMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"❌ Could not find article: '{article_identifier}'",
+                            'text': f"Could not find article: '{article_identifier}'",
                         }
                     ],
                     isError=True,
@@ -96,14 +91,14 @@ class EvaluateArticleMCPTool(MCPTool):
                         content=[
                             {
                                 'type': 'text',
-                                'text': f"❌ Failed to evaluate article against query '{query_name}'",
+                                'text': f"Failed to evaluate article against query '{query_name}'",
                             }
                         ],
                         isError=True,
                     )
 
                 # Format response
-                response_text = '📊 **Article Evaluation Results**\n\n'
+                response_text = '**Article Evaluation Results**\n\n'
                 response_text += f'**Article:** {title}\n'
                 response_text += f'**Query:** {query_name}\n\n'
                 response_text += (
@@ -130,12 +125,12 @@ class EvaluateArticleMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'📊 **Basic Article Evaluation**\n\n'
+                            'text': f'**Basic Article Evaluation**\n\n'
                             f'**Article:** {title}\n'
                             f'**Query:** {query_name}\n\n'
-                            f'**Article Found:** ✅\n'
-                            f'**Query Exists:** ✅\n\n'
-                            f'💡 **Note:** Full evaluation requires article service integration. '
+                            f'**Article Found:** Yes\n'
+                            f'**Query Exists:** Yes\n\n'
+                            f'**Note:** Full evaluation requires article service integration. '
                             f"The article '{title}' has been located in the knowledge base and can be evaluated against your research query.",
                         }
                     ]
@@ -202,7 +197,7 @@ class AnalyzeTopicMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"❌ No papers found on the topic: '{topic}'",
+                            'text': f"No papers found on the topic: '{topic}'",
                         }
                     ],
                     isError=True,
@@ -223,12 +218,12 @@ class AnalyzeTopicMCPTool(MCPTool):
             )
 
             # Format comprehensive response
-            response_text = f'📚 **Topic Analysis: {topic}**\n\n'
-            response_text += f'🔍 **Analysis Depth:** {depth.title()}\n'
-            response_text += f'📄 **Papers Analyzed:** {len(search_results)}\n\n'
+            response_text = f'**Topic Analysis: {topic}**\n\n'
+            response_text += f'**Analysis Depth:** {depth.title()}\n'
+            response_text += f'**Papers Analyzed:** {len(search_results)}\n\n'
 
             # Add top relevant papers
-            response_text += '📊 **Most Relevant Papers:**\n'
+            response_text += '**Most Relevant Papers:**\n'
             for i, result in enumerate(search_results[:5], 1):
                 title = result.get('title', 'Untitled')
                 score = result.get('score', 0)
@@ -237,7 +232,7 @@ class AnalyzeTopicMCPTool(MCPTool):
             if len(search_results) > 5:
                 response_text += f'... and {len(search_results) - 5} more papers\n'
 
-            response_text += f'\n💡 **AI Analysis:**\n{analysis_result.get("answer", "Analysis not available")}\n\n'
+            response_text += f'\n**AI Analysis:**\n{analysis_result.get("answer", "Analysis not available")}\n\n'
 
             # Add paper metadata insights
             authors = set()
@@ -271,14 +266,14 @@ class AnalyzeTopicMCPTool(MCPTool):
             # Add insights
             if len(authors) > 3:
                 top_authors = list(authors)[:5]
-                response_text += f'👥 **Key Researchers:** {", ".join(top_authors)}'
+                response_text += f'**Key Researchers:** {", ".join(top_authors)}'
                 if len(authors) > 5:
                     response_text += f' (+{len(authors) - 5} more)'
                 response_text += '\n'
 
             if len(journals) > 2:
                 top_journals = list(journals)[:3]
-                response_text += f'📖 **Main Venues:** {", ".join(top_journals)}'
+                response_text += f'**Main Venues:** {", ".join(top_journals)}'
                 if len(journals) > 3:
                     response_text += f' (+{len(journals) - 3} more)'
                 response_text += '\n'
@@ -289,11 +284,11 @@ class AnalyzeTopicMCPTool(MCPTool):
                     if len(set(years)) > 1
                     else str(years[0])
                 )
-                response_text += f'📅 **Time Period:** {year_range}\n'
+                response_text += f'**Time Period:** {year_range}\n'
 
             # Add recommendations based on depth
             if depth == 'deep' and len(search_results) >= 10:
-                response_text += '\n🎯 **Research Opportunities:**\n'
+                response_text += '\n**Research Opportunities:**\n'
                 response_text += f'- {len(search_results)} papers provide substantial foundation for further research\n'
                 response_text += '- Consider exploring connections between different methodological approaches\n'
                 response_text += (
@@ -369,7 +364,7 @@ class FindRelatedPapersMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"❌ Could not find paper: '{paper_identifier}'",
+                            'text': f"Could not find paper: '{paper_identifier}'",
                         }
                     ],
                     isError=True,
@@ -403,15 +398,15 @@ class FindRelatedPapersMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"🔍 No related papers found for: '{target_title}'\n\n"
+                            'text': f"No related papers found for: '{target_title}'\n\n"
                             f'Try lowering the similarity threshold or expanding your search terms.',
                         }
                     ]
                 )
 
             # Start building response
-            response_text = f'🔗 **Related Papers for:** {target_title}\n\n'
-            response_text += f'📊 **Found {len(related_papers)} related papers**\n\n'
+            response_text = f'**Related Papers for:** {target_title}\n\n'
+            response_text += f'**Found {len(related_papers)} related papers**\n\n'
 
             # Analyze connections if requested
             if explain_connections and len(related_papers) >= 2:
@@ -429,16 +424,16 @@ class FindRelatedPapersMCPTool(MCPTool):
                         question=connections_question, k=6
                     )
 
-                    response_text += '💡 **Key Relationships:**\n'
+                    response_text += '**Key Relationships:**\n'
                     response_text += f'{connections_result.get("answer", "Connection analysis not available")}\n\n'
 
                 except Exception:
                     response_text += (
-                        '💡 **Connection analysis temporarily unavailable**\n\n'
+                        '**Connection analysis temporarily unavailable**\n\n'
                     )
 
             # List related papers
-            response_text += '📑 **Related Papers:**\n\n'
+            response_text += '**Related Papers:**\n\n'
             for i, paper in enumerate(related_papers, 1):
                 title = paper.get('title', 'Untitled')
                 score = paper.get('score', 0)
@@ -446,7 +441,7 @@ class FindRelatedPapersMCPTool(MCPTool):
                 content = paper.get('content', '')
 
                 response_text += f'**{i}. {title}**\n'
-                response_text += f'   🎯 Similarity: {score:.3f}\n'
+                response_text += f'   Similarity: {score:.3f}\n'
 
                 # Add metadata if available
                 authors = metadata.get('authors', [])
@@ -457,21 +452,21 @@ class FindRelatedPapersMCPTool(MCPTool):
                             authors_str += f' (+{len(authors) - 2} more)'
                     else:
                         authors_str = str(authors)
-                    response_text += f'   👥 Authors: {authors_str}\n'
+                    response_text += f'   Authors: {authors_str}\n'
 
                 if metadata.get('publication_date'):
-                    response_text += f'   📅 Date: {metadata["publication_date"]}\n'
+                    response_text += f'   Date: {metadata["publication_date"]}\n'
 
                 # Add content preview
                 if content:
                     preview = content[:150].replace('\n', ' ')
-                    response_text += f'   📝 Preview: {preview}...\n'
+                    response_text += f'   Preview: {preview}...\n'
 
                 response_text += '\n'
 
             # Add research suggestions
             if len(related_papers) >= 3:
-                response_text += '🎯 **Research Suggestions:**\n'
+                response_text += '**Research Suggestions:**\n'
                 response_text += '- Compare methodologies across these related papers\n'
                 response_text += '- Look for citation patterns and shared references\n'
                 response_text += '- Consider how these papers build upon each other\n'
@@ -553,7 +548,7 @@ class GenerateResearchSummaryMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f"❌ No papers found for: '{topic_or_query}'",
+                            'text': f"No papers found for: '{topic_or_query}'",
                         }
                     ],
                     isError=True,
@@ -612,8 +607,8 @@ class GenerateResearchSummaryMCPTool(MCPTool):
                     citation_counts.append(citations)
 
             # Build comprehensive summary
-            response_text = f'📋 **Research Summary: {topic_or_query}**\n\n'
-            response_text += '📊 **Analysis Overview:**\n'
+            response_text = f'**Research Summary: {topic_or_query}**\n\n'
+            response_text += '**Analysis Overview:**\n'
             response_text += f'- Papers analyzed: {len(search_results)}\n'
             response_text += f'- Summary type: {summary_type.title()}\n'
 
@@ -632,11 +627,11 @@ class GenerateResearchSummaryMCPTool(MCPTool):
             response_text += '\n'
 
             # Add AI-generated summary
-            response_text += f'🤖 **AI-Generated Summary:**\n{summary_result.get("answer", "Summary not available")}\n\n'
+            response_text += f'**AI-Generated Summary:**\n{summary_result.get("answer", "Summary not available")}\n\n'
 
             # Add key statistics
             if len(authors) > 5:
-                response_text += '👥 **Key Contributors:**\n'
+                response_text += '**Key Contributors:**\n'
                 top_authors = sorted(authors)[:8]  # Show top 8 authors alphabetically
                 response_text += f'- {", ".join(top_authors)}'
                 if len(authors) > 8:
@@ -644,7 +639,7 @@ class GenerateResearchSummaryMCPTool(MCPTool):
                 response_text += '\n\n'
 
             if len(journals) > 3:
-                response_text += '📖 **Primary Publication Venues:**\n'
+                response_text += '**Primary Publication Venues:**\n'
                 top_journals = sorted(journals)[:5]
                 response_text += f'- {", ".join(top_journals)}'
                 if len(journals) > 5:
@@ -653,7 +648,7 @@ class GenerateResearchSummaryMCPTool(MCPTool):
 
             # Add paper citations if requested
             if include_citations:
-                response_text += '📚 **Key Papers Referenced:**\n\n'
+                response_text += '**Key Papers Referenced:**\n\n'
                 for i, result in enumerate(search_results[:10], 1):  # Top 10 papers
                     title = result.get('title', 'Untitled')
                     metadata = result.get('metadata', {})
@@ -688,7 +683,7 @@ class GenerateResearchSummaryMCPTool(MCPTool):
                     )
 
             # Add research recommendations
-            response_text += '🎯 **Research Recommendations:**\n'
+            response_text += '**Research Recommendations:**\n'
             if summary_type in ['gaps', 'comprehensive']:
                 response_text += (
                     '- Review the identified research gaps for potential future work\n'
