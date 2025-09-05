@@ -1,0 +1,12 @@
+Based on the user's query, select the most appropriate language model from the following list.
+Consider the model's description and its likely strengths. For example, some models are better for creative tasks, some for coding, and some for general reasoning.
+
+User Query:
+"{{ query }}"
+
+Available Models:
+{% for model in models %}
+- `{{ model.id }}`: {{ model.description | default('No description') }}
+{% endfor %}
+
+Your selection should be only the model ID (e.g., `openai/gpt-4o-mini`).
