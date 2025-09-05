@@ -53,7 +53,7 @@ class BaseAPISource(ABC):
             return class_name[:-9].lower()  # Remove 'APISource' suffix
         return class_name.lower()
 
-    def validate_config(self, config: dict[str, Any]) -> dict[str, str]:
+    def validate_config(self, config: dict[str, Any]) -> dict[str, str]:  # noqa: ARG002
         """
         Validate the configuration for this source.
 

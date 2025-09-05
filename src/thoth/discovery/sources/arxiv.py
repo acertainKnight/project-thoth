@@ -116,7 +116,7 @@ class ArxivClient:
             max_results: Maximum number of results to return.
             sort_by: Sort criteria ("relevance", "lastUpdatedDate", "submittedDate").
             sort_order: Sort order ("ascending" or "descending").
-            search_field: Field to search in ("all", "title", "abstract", "author", etc.)
+            search_field: Field to search in ("all", "title", "abstract", "author")
 
         Returns:
             List[ArxivPaper]: List of arXiv papers matching the search criteria.
@@ -417,7 +417,8 @@ class ArxivAPISource(BaseAPISource):
                    - keywords: List of keywords to search for
                    - start_date: Start date for search (YYYY-MM-DD)
                    - end_date: End date for search (YYYY-MM-DD)
-                   - sort_by: Sort order ('relevance', 'lastUpdatedDate', 'submittedDate')
+                   - sort_by: Sort order ('relevance', 'lastUpdatedDate',
+                        'submittedDate', etc.)
                    - sort_order: Sort direction ('ascending', 'descending')
             max_results: Maximum number of results to return.
 

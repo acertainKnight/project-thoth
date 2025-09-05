@@ -77,6 +77,7 @@ dependencies = [
     "psutil>=7.0.0",
     # Memory and Persistence Dependencies
     "letta>=0.9,<1.0", # For advanced memory management
+    "letta-mcp-server>=0.1.0", # For MCP integration with Letta
     "alembic>=1.13.0", # For database migrations
     "sqlite-vec>=0.1.6",
 ]
@@ -157,25 +158,25 @@ target-version = ["py312"]
 
 ### sqlfluff ########################################################################
 [tool.sqlfluff.core]
-dialect    = "bigquery"
+dialect    = "postgres"
 templater  = "jinja"
 exclude_rules = "L015,L026,L027,L031,L034,L042,L054"
 ignore        = "templating"
 
-[tool.sqlfluff.rules]
+[tool.sqlfluff.indentation]
 tab_space_size = 2
 
-[tool.sqlfluff.rules.L010]
+[tool.sqlfluff.rules.capitalisation.keywords]
 capitalisation_policy = "upper"
 
-[tool.sqlfluff.rules.L014]
+[tool.sqlfluff.rules.capitalisation.identifiers]
 extended_capitalisation_policy = "lower"
 unquoted_identifiers_policy    = "all"
 
-[tool.sqlfluff.rules.L016]
+[tool.sqlfluff.rules.layout.long_lines]
 ignore_comment_lines = true
 
-[tool.sqlfluff.rules.L030]
+[tool.sqlfluff.rules.capitalisation.functions]
 extended_capitalisation_policy = "upper"
 
 ### codespell ########################################################################

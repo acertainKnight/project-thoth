@@ -71,5 +71,6 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+        args: [--multi]
       - id: check-toml
       - id: check-merge-conflict

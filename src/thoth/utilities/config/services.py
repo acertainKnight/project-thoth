@@ -64,6 +64,54 @@ class MCPConfig(BaseServerConfig):
     enabled: bool = Field(True, description='Whether MCP server is enabled')
 
 
+class LettaConfig(BaseSettings):
+    """Configuration for Letta memory system."""
+
+    model_config = SettingsConfigDict(
+        env_prefix='LETTA_',
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='ignore',
+    )
+
+    # Server connection
+    server_url: str = Field('http://localhost:8283', description='Letta server URL')
+    api_key: str | None = Field(
+        None, description='Optional API key for Letta server authentication'
+    )
+
+    # Agent configuration
+    agent_name: str = Field(
+        'thoth_research_agent', description='Name of the Thoth research agent in Letta'
+    )
+
+    # Memory configuration
+    core_memory_limit: int = Field(
+        10000, description='Character limit for core memory blocks'
+    )
+    archival_memory_enabled: bool = Field(
+        True, description='Enable archival memory for long-term storage'
+    )
+    recall_memory_enabled: bool = Field(
+        True, description='Enable recall memory for conversation history'
+    )
+
+    # Performance settings
+    enable_smart_truncation: bool = Field(
+        True, description='Enable intelligent memory truncation when limits are reached'
+    )
+    consolidation_interval_hours: int = Field(
+        24, description='Hours between memory consolidation runs'
+    )
+
+    # Fallback behavior
+    fallback_enabled: bool = Field(
+        True,
+        description='Enable fallback to basic memory store when Letta is unavailable',
+    )
+
+
 class DiscoveryConfig(BaseSettings):
     """Configuration for the discovery system."""
 

@@ -297,7 +297,7 @@ async def batch_process(request: BatchProcessRequest):
     operation_id = str(uuid.uuid4())
 
     # Convert to streaming operation request
-    streaming_request = StreamingOperationRequest(
+    StreamingOperationRequest(
         operation_type='batch_process',
         parameters={
             'items': request.items,

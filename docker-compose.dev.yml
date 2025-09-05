@@ -14,19 +14,19 @@ services:
     container_name: thoth-chromadb-dev
     environment:
       - CHROMA_SERVER_HOST=0.0.0.0
-      - CHROMA_SERVER_HTTP_PORT=8003
+      - CHROMA_SERVER_HTTP_PORT=8000
       - IS_PERSISTENT=TRUE
       - PERSIST_DIRECTORY=/chroma/chroma
       - CHROMA_LOG_LEVEL=DEBUG
     volumes:
       - thoth-chroma-data-dev:/chroma/chroma
     ports:
-      - "8003:8003"
+      - "8003:8000"
     networks:
       - thoth-dev-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8003/api/v1/heartbeat"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/api/v1/heartbeat"]
       interval: 30s
       timeout: 10s
       retries: 3

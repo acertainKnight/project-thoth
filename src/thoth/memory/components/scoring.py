@@ -268,7 +268,8 @@ class RelevanceScorer:
                 # Temporal relevance - recent memories might be more relevant
                 timestamp = context.get('timestamp')
                 if timestamp and memory_metadata and memory_metadata.get('timestamp'):
-                    # Simple recency boost (implement more sophisticated temporal scoring if needed)
+                    # Simple recency boost
+                    # TODO: implement more sophisticated temporal scoring
                     score += 0.1
 
                 # Topic matching

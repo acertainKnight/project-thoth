@@ -41,7 +41,7 @@ class MemoryFilter:
         content: str,
         role: str,
         salience_score: float,
-        metadata: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,  # noqa: ARG002
     ) -> bool:
         """
         Determine if a memory should be stored.
