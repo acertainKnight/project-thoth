@@ -130,7 +130,7 @@ class MemoryWritePipeline:
         Process a batch of memories through the pipeline.
 
         Args:
-            memories: List of memory dictionaries with 'content', 'role', and optional 'metadata'
+            memories: List of memory dictionaries with 'content', 'role', and 'metadata'
             user_context: User context for processing
 
         Returns:

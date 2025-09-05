@@ -42,7 +42,8 @@ class OpenAlexAPISource(BaseAPISource):
                    - keywords: List of keywords to search for
                    - start_date: Start date for search (YYYY-MM-DD)
                    - end_date: End date for search (YYYY-MM-DD)
-                   - sort_by: Sort criteria ('relevance', 'publication_date', 'cited_by_count', etc.)
+                   - sort_by: Sort criteria ('relevance', 'publication_date',
+                        'cited_by_count', etc.)
             max_results: Maximum number of results to return.
 
         Returns:

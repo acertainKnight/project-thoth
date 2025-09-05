@@ -31,6 +31,7 @@ from .services import (
     CitationConfig,
     DiscoveryConfig,
     EndpointConfig,
+    LettaConfig,
     LoggingConfig,
     MCPConfig,
     MonitorConfig,
@@ -80,6 +81,9 @@ class ThothConfig(BaseSettings):
     api_gateway_config: APIGatewayConfig = Field(
         default_factory=APIGatewayConfig,
         description='External API gateway configuration',
+    )
+    letta_config: LettaConfig = Field(
+        default_factory=LettaConfig, description='Letta memory system configuration'
     )
     # ------------------------------------------------------------------
     # Backwards compatibility helpers
@@ -195,6 +199,15 @@ class ThothConfig(BaseSettings):
     @property
     def mcp_host(self) -> str:  # pragma: no cover
         return self.mcp_config.host
+
+    # Convenience properties for Letta memory system
+    @property
+    def letta_server_url(self) -> str:  # pragma: no cover
+        return self.letta_config.server_url
+
+    @property
+    def letta_api_key(self) -> str | None:  # pragma: no cover
+        return self.letta_config.api_key
 
     def setup_logging(self) -> None:
         """Set up logging configuration using loguru."""

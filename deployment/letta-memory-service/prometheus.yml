@@ -1,0 +1,53 @@
+# ==============================================================================
+# Prometheus Configuration for Letta Memory Service Monitoring
+# ==============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "alert_rules.yml"
+
+scrape_configs:
+  # Letta Memory Service metrics
+  - job_name: 'letta-memory'
+    static_configs:
+      - targets: ['letta:8283']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # PostgreSQL metrics (if pg_exporter is enabled)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Redis metrics (if redis_exporter is enabled)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Nginx metrics (if nginx-prometheus-exporter is enabled)
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:9113']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Node/container metrics
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+
+# Alerting rules (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093

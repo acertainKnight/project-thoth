@@ -70,26 +70,47 @@ Thoth is a sophisticated research assistant that combines:
 
 ### For New Users
 1. Start with the [README](../README.md) for a quick overview
-2. Follow the [Setup Guide](SETUP.md) for installation
-3. Explore the [Usage Guide](USAGE.md) for common workflows
+2. Follow the [Setup Guide](SETUP.md) for installation and deployment options
+3. Review the [Service Management Guide](SERVICE_MANAGEMENT.md) for multi-service architecture
+4. Explore the [Usage Guide](USAGE.md) for common workflows
 
 ### For Developers
 1. Review the [Architecture Overview](ARCHITECTURE.md) for system design
 2. Study the [Services Documentation](SERVICES.md) for detailed APIs
 3. Examine the [Agent System](AGENT_SYSTEM.md) for advanced features
 4. Reference the [API Documentation](API.md) for integration details
+5. Learn [Service Management](SERVICE_MANAGEMENT.md) for deployment and scaling
 
 ### For Advanced Users
 1. Understand the [Agent System](AGENT_SYSTEM.md) for sophisticated workflows
 2. Use the [API Documentation](API.md) for programmatic access
 3. Customize services using the [Services Documentation](SERVICES.md)
+4. Deploy with [Service Management](SERVICE_MANAGEMENT.md) for production scaling
 
 ## Common Use Cases
 
 ### Academic Research
+
+#### Multi-Service Setup (Recommended)
+```bash
+# Start all services with memory system
+./scripts/start-all-services.sh dev
+
+# Set up document monitoring
+python -m thoth monitor --watch-dir ./papers --optimized
+
+# Index documents for search
+python -m thoth rag index --force
+
+# Interactive research session with persistent memory
+python -m thoth agent
+# Agent now has access to memory tools for storing research context
+```
+
+#### Traditional Setup
 ```bash
 # Start the system
-python -m thoth api --host 127.0.0.1 --port 8000
+python -m thoth server start --api-host 0.0.0.0 --api-port 8000
 
 # Set up document monitoring
 python -m thoth monitor --watch-dir ./papers --optimized

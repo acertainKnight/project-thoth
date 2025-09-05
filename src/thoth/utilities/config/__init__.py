@@ -44,37 +44,29 @@ from .services import (
 
 # Maintain full backwards compatibility - export everything exactly as before
 __all__ = [
-    # Base classes
+    'APIGatewayConfig',
+    'APIKeys',
     'BaseLLMConfig',
     'BaseServerConfig',
-    'ModelConfig',
-    # API Keys
-    'APIKeys',
-    # LLM configurations
+    'CitationConfig',
     'CitationLLMConfig',
+    'CoreConfig',
+    'DiscoveryConfig',
+    'EndpointConfig',
+    'FeatureConfig',
     'LLMConfig',
+    'LoggingConfig',
+    'MCPConfig',
+    'ModelConfig',
+    'MonitorConfig',
+    'PerformanceConfig',
     'QueryBasedRoutingConfig',
+    'RAGConfig',
+    'ResearchAgentConfig',
     'ResearchAgentLLMConfig',
     'ScrapeFilterLLMConfig',
     'TagConsolidatorLLMConfig',
-    # Performance
-    'PerformanceConfig',
-    # Service configurations
-    'APIGatewayConfig',
-    'CitationConfig',
-    'DiscoveryConfig',
-    'EndpointConfig',
-    'LoggingConfig',
-    'MCPConfig',
-    'MonitorConfig',
-    'RAGConfig',
-    'ResearchAgentConfig',
-    # Main configuration
     'ThothConfig',
-    # Simplified config classes (used by ThothConfig)
-    'CoreConfig',
-    'FeatureConfig',
-    # Utility functions
     'get_config',
     'load_config',
     'setup_logging',

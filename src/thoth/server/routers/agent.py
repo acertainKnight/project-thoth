@@ -262,7 +262,9 @@ async def restart_agent(request: AgentRestartRequest = None):
             }
 
             # Schedule process termination after response
-            asyncio.create_task(delayed_shutdown())
+            task = asyncio.create_task(delayed_shutdown())
+            # Keep reference to prevent garbage collection
+            _ = task
 
             return JSONResponse(response_data)
 

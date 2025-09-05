@@ -15,7 +15,17 @@ This guide covers various deployment scenarios for Thoth, from local development
 
 ## Overview
 
-### Recent Docker Infrastructure Updates (v0.1.0+)
+### Multi-Service Architecture (v0.2.0+)
+
+Thoth now supports **completely separated, independently scalable services**:
+
+- **🧠 Memory Service**: Letta-based hierarchical memory system (separate container)
+- **💬 Chat Agent**: Research agent with MCP tools (main application)
+- **🔍 Discovery Service**: Automated paper discovery (can run separately)
+- **🗄️ Vector Database**: ChromaDB for RAG operations (separate container)
+- **📊 Monitoring Stack**: Prometheus + Grafana (separate containers)
+
+### Recent Infrastructure Updates (v0.1.0+)
 
 The Docker deployment system has been significantly improved:
 
@@ -24,6 +34,7 @@ The Docker deployment system has been significantly improved:
 - **Multi-stage Builds**: Optimized production images with reduced size
 - **Environment Compatibility**: All environment variables and service references updated
 - **Health Monitoring**: Comprehensive health checks and monitoring capabilities
+- **Service Separation**: Complete isolation and independent scaling of services
 
 ### Deployment Architecture Options
 
@@ -56,12 +67,53 @@ graph TB
 
 ## Local Development
 
-### Quick Setup
+### Multi-Service Development Setup (Recommended)
+
+Deploy all services separately for development with full isolation and scaling capabilities.
 
 1. **Clone and Initialize**:
    ```bash
    git clone <repository-url>
    cd project-thoth
+   make check-deps
+   ```
+
+2. **Configure All Services**:
+   ```bash
+   # Main application
+   cp .env.example .env
+   # Edit .env with your API keys
+
+   # Memory service
+   cp deployment/letta-memory-service/.env.example deployment/letta-memory-service/.env
+   # Edit with Letta configuration
+   ```
+
+3. **Start Development Environment**:
+   ```bash
+   # Start all services in development mode
+   ./scripts/start-all-services.sh dev
+
+   # Or start services individually
+   make -f Makefile.services start-memory      # Memory service
+   make -f Makefile.services start-chat        # Chat agent
+   make -f Makefile.services start-vector-db   # Vector database
+   make -f Makefile.services start-monitoring  # Monitoring (optional)
+   ```
+
+4. **Verify Services**:
+   ```bash
+   # Check all service health
+   ./scripts/start-all-services.sh status
+
+   # Or check individual services
+   make -f Makefile.services health-check
+   ```
+
+### Traditional Single-Container Setup
+
+1. **Initialize Docker Environment**:
+   ```bash
    make docker-init
    ```
 
@@ -73,6 +125,7 @@ graph TB
 
 3. **Start Development Environment**:
    ```bash
+   # Build and start all services in one container
    make docker-dev
    ```
 
@@ -104,17 +157,57 @@ make docker-down-dev
 
 ## Single Server Production
 
-### Prerequisites
+### Multi-Service Production Deployment (Recommended)
 
+Deploy all services separately on a single server for better resource utilization and fault isolation.
+
+#### Prerequisites
+- Linux server (Ubuntu 20.04+ recommended)
+- 8+ GB RAM, 4+ CPU cores (for multi-service)
+- 100+ GB disk space
+- Docker and Docker Compose installed
+- Domain name (optional, for SSL)
+
+#### Quick Production Deployment
+```bash
+# 1. Clone repository
+git clone <repository-url>
+cd project-thoth
+
+# 2. Configure all services
+cp .env.example .env
+cp deployment/letta-memory-service/.env.example deployment/letta-memory-service/.env
+# Edit both files with production settings
+
+# 3. Start production environment
+./scripts/start-all-services.sh prod
+
+# 4. Verify deployment
+./scripts/start-all-services.sh status
+```
+
+#### Service URLs (Production)
+- **Main API**: http://localhost:8000
+- **MCP Server**: http://localhost:8001
+- **Memory Service**: http://localhost:8283
+- **Vector Database**: http://localhost:8003
+- **Prometheus**: http://localhost:9090
+- **Grafana**: http://localhost:3000
+
+### Traditional Single-Container Production
+
+For simpler deployments with all services in one container.
+
+#### Prerequisites
 - Linux server (Ubuntu 20.04+ recommended)
 - 4+ GB RAM, 2+ CPU cores
 - 50+ GB disk space
 - Docker and Docker Compose installed
 - Domain name (optional, for SSL)
 
-### Deployment Steps
+#### Traditional Deployment Steps
 
-#### 1. Server Preparation
+##### 1. Server Preparation
 
 ```bash
 # Update system

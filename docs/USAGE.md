@@ -15,7 +15,35 @@ This guide covers the day-to-day usage of Thoth Research Assistant for research 
 
 ## Getting Started
 
-### Quick Start Workflow
+### Multi-Service Workflow (Recommended)
+
+1. **Start all Thoth services**
+   ```bash
+   # Development environment
+   ./scripts/start-all-services.sh dev
+
+   # Or production environment
+   ./scripts/start-all-services.sh prod
+
+   # Check all services are running
+   ./scripts/start-all-services.sh status
+   ```
+
+2. **Deploy Obsidian plugin**
+   ```bash
+   make deploy-plugin
+   ```
+
+3. **Open Obsidian and start a research chat**
+   - Press `Ctrl/Cmd+P` → "Open Research Chat"
+   - Or click the Thoth icon in the ribbon
+
+4. **Begin your research with memory capabilities**
+   ```
+   "Find recent papers on transformer architectures in NLP and remember my research focus"
+   ```
+
+### Traditional Single-Service Workflow
 
 1. **Start Thoth services**
    ```bash
@@ -42,15 +70,37 @@ python -m thoth --help              # Show all commands
 python -m thoth <command> --help    # Help for specific command
 ```
 
+#### Service Management
+```bash
+# Multi-service management
+./scripts/start-all-services.sh dev         # Start all services (dev)
+./scripts/start-all-services.sh prod        # Start all services (prod)
+./scripts/start-all-services.sh status      # Check service status
+./scripts/stop-all-services.sh              # Stop all services
+
+# Individual service management
+make -f Makefile.services start-memory      # Memory service only
+make -f Makefile.services start-chat        # Chat agent only
+make -f Makefile.services start-monitoring  # Monitoring only
+make -f Makefile.services health-check      # Check all service health
+make -f Makefile.services logs-all          # View all logs
+```
+
 #### Agent Operations
 ```bash
 # Start interactive research assistant with full tool access
 python -m thoth agent
+
+# Test memory integration
+python scripts/test_memory_mcp_integration.py
 ```
 
 #### System Operations
 ```bash
-# Start Obsidian API server
+# Start unified server (includes API + MCP)
+python -m thoth server start --api-host 0.0.0.0 --api-port 8000
+
+# Traditional API server (legacy)
 python -m thoth api --host 127.0.0.1 --port 8000
 
 # Monitor PDF directory for processing
@@ -61,6 +111,17 @@ python -m thoth monitor --watch-dir ./papers --api-server --optimized
 
 # Locate specific PDF by title or DOI
 python -m thoth locate-pdf "Attention Is All You Need"
+```
+
+#### Memory Operations (New)
+```bash
+# Memory system health check
+curl http://localhost:8283/health
+
+# Test memory tools via agent
+python -m thoth agent
+# In chat: "Use memory_health_check to verify the memory system"
+# In chat: "Use memory_stats to show memory usage"
 ```
 
 #### Discovery Operations
@@ -122,10 +183,40 @@ python -m thoth system clean-cache
 
 ### CLI Examples
 
-#### Research Workflow Example
+#### Multi-Service Research Workflow Example
+```bash
+# 1. Start all services
+./scripts/start-all-services.sh dev
+
+# 2. Verify services are healthy
+./scripts/start-all-services.sh status
+
+# 3. Test memory integration
+python scripts/test_memory_mcp_integration.py
+
+# 4. Set up document monitoring
+python -m thoth monitor --watch-dir ./papers --optimized
+
+# 5. List and run discovery sources
+python -m thoth discovery list
+python -m thoth discovery run --source "arxiv_ml" --max-articles 30
+
+# 6. Index documents for RAG
+python -m thoth rag index --force
+
+# 7. Search and query knowledge base
+python -m thoth rag search --query "attention mechanisms" --k 10
+python -m thoth rag ask --question "Compare different attention mechanisms in transformers"
+
+# 8. Interactive research session with memory
+python -m thoth agent
+# In chat: "Remember that I'm researching transformer efficiency. Find related papers."
+```
+
+#### Traditional Single-Service Workflow Example
 ```bash
 # 1. Start the API server
-python -m thoth api --host 127.0.0.1 --port 8000
+python -m thoth server start --api-host 0.0.0.0 --api-port 8000
 
 # 2. Set up document monitoring
 python -m thoth monitor --watch-dir ./papers --api-server --optimized
@@ -197,6 +288,18 @@ Access Thoth commands via `Ctrl/Cmd+P`:
 /export                  # Export chat to file
 /settings               # Open plugin settings
 /status                 # Show system status
+/memory_stats           # Show memory system usage (with Letta)
+/memory_search <query>  # Search archival memory
+```
+
+##### Memory Integration Commands (New)
+With the Letta memory system, you can use these natural language commands:
+```
+"Remember that I'm researching transformer efficiency"
+"What did we discuss about attention mechanisms earlier?"
+"Store this important finding: [your finding]"
+"Search my past research about neural architectures"
+"What are my current research focus areas?"
 ```
 
 ### Settings Configuration

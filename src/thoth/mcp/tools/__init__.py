@@ -47,6 +47,15 @@ from .discovery_tools import (
 from .download_pdf_tool import (
     DownloadPdfMCPTool,
 )
+from .memory_tools import (
+    ArchivalMemoryInsertMCPTool,
+    ArchivalMemorySearchMCPTool,
+    ConversationSearchMCPTool,
+    CoreMemoryAppendMCPTool,
+    CoreMemoryReplaceMCPTool,
+    MemoryHealthCheckMCPTool,
+    MemoryStatsMCPTool,
+)
 from .pdf_content_tools import (
     ExtractPdfMetadataMCPTool,
     LocatePdfMCPTool,
@@ -134,6 +143,14 @@ MCP_TOOL_CLASSES = [
     ReindexCollectionMCPTool,
     OptimizeSearchMCPTool,
     CreateCustomIndexMCPTool,
+    # Memory management tools (Letta integration)
+    CoreMemoryAppendMCPTool,
+    CoreMemoryReplaceMCPTool,
+    ArchivalMemoryInsertMCPTool,
+    ArchivalMemorySearchMCPTool,
+    ConversationSearchMCPTool,
+    MemoryStatsMCPTool,
+    MemoryHealthCheckMCPTool,
 ]
 
 
@@ -151,11 +168,16 @@ def register_all_mcp_tools(registry: MCPToolRegistry) -> None:
 __all__ = [
     'MCP_TOOL_CLASSES',
     'AnalyzeTopicMCPTool',
+    'ArchivalMemoryInsertMCPTool',
+    'ArchivalMemorySearchMCPTool',
     'BackupCollectionMCPTool',
     'BatchProcessPdfsMCPTool',
     'CollectionStatsMCPTool',
     'ConsolidateAndRetagMCPTool',
     'ConsolidateTagsMCPTool',
+    'ConversationSearchMCPTool',
+    'CoreMemoryAppendMCPTool',
+    'CoreMemoryReplaceMCPTool',
     'CreateArxivSourceMCPTool',
     'CreateBiorxivSourceMCPTool',
     'CreateCrossrefSourceMCPTool',
@@ -187,6 +209,8 @@ __all__ = [
     'MCPToolCallResult',
     'MCPToolRegistry',
     'ManageTagVocabularyMCPTool',
+    'MemoryHealthCheckMCPTool',
+    'MemoryStatsMCPTool',
     'OptimizeSearchMCPTool',
     'ProcessPdfMCPTool',
     'ReindexCollectionMCPTool',

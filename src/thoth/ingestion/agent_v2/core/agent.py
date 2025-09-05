@@ -27,7 +27,7 @@ from thoth.services.service_manager import ServiceManager
 
 # Import memory system (optional dependency)
 try:
-    from thoth.memory import ThothMemoryStore
+    from thoth.memory import ThothMemoryStore, get_memory_manager
 
     MEMORY_AVAILABLE = True
 except ImportError:
@@ -63,6 +63,7 @@ class ResearchAssistant:
         system_prompt: str | None = None,
         use_mcp_tools: bool = True,
         memory_store: ThothMemoryStore | None = None,
+        use_letta_memory: bool = True,
     ):
         """
         Initialize the research assistant.
@@ -77,6 +78,7 @@ class ResearchAssistant:
         self.service_manager = service_manager
         self.enable_memory = enable_memory
         self.use_mcp_tools = use_mcp_tools
+        self.use_letta_memory = use_letta_memory
         # MCP tools are required for proper functionality
         if not MCP_AVAILABLE:
             raise RuntimeError(
@@ -84,6 +86,7 @@ class ResearchAssistant:
             )
         self.use_mcp_tools = True
         self.memory_store = memory_store
+        self.letta_memory_manager = None  # Will be initialized if enabled
         self.mcp_client = None  # Will be initialized in async_initialize()
 
         # Get LLM from service manager
@@ -119,6 +122,18 @@ class ResearchAssistant:
         """
         if self._initialized:
             return
+
+        # Initialize Letta memory system if enabled
+        # Note: Letta memory is now accessed through MCP tools, not direct integration
+        if self.use_letta_memory and MEMORY_AVAILABLE:
+            try:
+                # Initialize the memory manager (this will be available to MCP tools)
+                self.letta_memory_manager = get_memory_manager()
+                logger.info('Letta memory system initialized for MCP tools')
+            except Exception as e:
+                logger.error(f'Failed to initialize Letta memory: {e}')
+                logger.warning('Memory tools will use fallback implementation')
+                self.letta_memory_manager = None
 
         # Initialize MCP tools (required for proper functionality)
         try:
@@ -195,7 +210,28 @@ class ResearchAssistant:
 
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt for the agent."""
-        return """You are Thoth, an advanced research assistant specialized in academic literature management and analysis.
+        memory_context = ''
+        if self.use_letta_memory:
+            memory_context = """
+
+**Persistent Memory System**:
+You have access to a hierarchical memory system through MCP tools:
+- Core Memory: Key information about the user and current research focus (always accessible)
+- Recall Memory: Complete conversation history with semantic search
+- Archival Memory: Long-term storage for important research findings
+
+Memory MCP tools available:
+- `core_memory_append` - Add information to core memory blocks
+- `core_memory_replace` - Update core memory content
+- `archival_memory_insert` - Store important findings permanently
+- `archival_memory_search` - Search past research and discoveries
+- `conversation_search` - Search conversation history
+- `memory_stats` - Check memory usage and health
+
+Always use memory tools to store important information about user research interests and significant discoveries.
+"""
+
+        return f"""You are Thoth, an advanced research assistant specialized in academic literature management and analysis.
 
 Your capabilities include:
 
@@ -203,7 +239,7 @@ Your capabilities include:
 2. **Query Management**: Create research queries that filter articles based on your interests
 3. **Knowledge Exploration**: Search, analyze, and answer questions about the research collection
 4. **Paper Analysis**: Evaluate articles, find connections, and analyze research topics
-5. **PDF Location**: Find open-access PDFs for articles using DOI or arXiv identifiers
+5. **PDF Location**: Find open-access PDFs for articles using DOI or arXiv identifiers{memory_context}
 
 Key behaviors:
 - Be proactive: When users express research interests, suggest creating sources and queries
@@ -211,13 +247,17 @@ Key behaviors:
 - Be analytical: Help users understand connections between papers and research trends
 - Be efficient: Use tools in parallel when possible
 - Be resourceful: Help users find PDFs for articles they're interested in
+- Be memory-aware: Store important findings and recall past research when relevant
 
 When users ask about their research or express interests:
 1. Check existing queries and sources with list tools
-2. Suggest creating new sources/queries if relevant
-3. Use RAG tools to explore existing knowledge
-4. Help locate PDFs for important papers
-5. Provide actionable next steps
+2. Search archival memory for relevant past research
+3. Suggest creating new sources/queries if relevant
+4. Use RAG tools to explore existing knowledge
+5. Help locate PDFs for important papers
+6. Store important discoveries in archival memory
+7. Update core memory with new research focus areas
+8. Provide actionable next steps
 
 Remember: You have direct access to tools - use them immediately rather than just explaining what you would do."""
 
@@ -544,6 +584,7 @@ def create_research_assistant(
     system_prompt: str | None = None,
     use_mcp_tools: bool = True,
     memory_store: ThothMemoryStore | None = None,
+    use_letta_memory: bool = True,
 ) -> ResearchAssistant:
     """
     Factory function to create a research assistant.
@@ -577,6 +618,7 @@ def create_research_assistant(
         system_prompt=system_prompt,
         memory_store=memory_store,
         use_mcp_tools=use_mcp_tools,
+        use_letta_memory=use_letta_memory,
     )
 
 
@@ -587,6 +629,7 @@ async def create_research_assistant_async(
     system_prompt: str | None = None,
     use_mcp_tools: bool = True,
     memory_store: ThothMemoryStore | None = None,
+    use_letta_memory: bool = True,
 ) -> ResearchAssistant:
     """
     Async factory function to create and fully initialize a research assistant.
@@ -617,6 +660,7 @@ async def create_research_assistant_async(
         system_prompt=system_prompt,
         use_mcp_tools=use_mcp_tools,
         memory_store=memory_store,
+        use_letta_memory=use_letta_memory,
     )
 
     # Complete async initialization

@@ -22,7 +22,7 @@ class MemoryEnricher:
     def enrich_metadata(
         self,
         content: str,
-        role: str,
+        role: str,  # noqa: ARG002
         existing_metadata: dict[str, Any] | None = None,
         user_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:

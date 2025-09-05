@@ -147,7 +147,7 @@ async def execute_search_papers_tool(parameters: dict[str, Any]) -> dict[str, An
             'status': 'success',
         }
     except Exception as e:
-        raise ValueError(f'Search papers failed: {e}')
+        raise ValueError(f'Search papers failed: {e}') from e
 
 
 async def execute_analyze_document_tool(parameters: dict[str, Any]) -> dict[str, Any]:
@@ -172,7 +172,7 @@ async def execute_analyze_document_tool(parameters: dict[str, Any]) -> dict[str,
             'status': 'success',
         }
     except Exception as e:
-        raise ValueError(f'Document analysis failed: {e}')
+        raise ValueError(f'Document analysis failed: {e}') from e
 
 
 async def execute_download_pdf_tool(parameters: dict[str, Any]) -> dict[str, Any]:
@@ -197,7 +197,7 @@ async def execute_download_pdf_tool(parameters: dict[str, Any]) -> dict[str, Any
             'status': 'success',
         }
     except Exception as e:
-        raise ValueError(f'PDF download failed: {e}')
+        raise ValueError(f'PDF download failed: {e}') from e
 
 
 async def execute_rag_search_tool(parameters: dict[str, Any]) -> dict[str, Any]:
@@ -221,7 +221,7 @@ async def execute_rag_search_tool(parameters: dict[str, Any]) -> dict[str, Any]:
             'status': 'success',
         }
     except Exception as e:
-        raise ValueError(f'RAG search failed: {e}')
+        raise ValueError(f'RAG search failed: {e}') from e
 
 
 @router.post('/execute/command')
@@ -287,11 +287,12 @@ async def execute_command_sync(request: CommandExecutionRequest) -> dict[str, An
             'timestamp': time.time(),
         }
     except Exception as e:
-        raise ValueError(f'Command execution failed: {e}')
+        raise ValueError(f'Command execution failed: {e}') from e
 
 
 async def execute_discovery_command(
-    args: list[str], kwargs: dict[str, Any]
+    args: list[str],
+    kwargs: dict[str, Any],  # noqa: ARG001
 ) -> dict[str, Any]:
     """Execute a discovery command."""
     discovery_service = service_manager.discovery_service
@@ -312,7 +313,8 @@ async def execute_discovery_command(
 
 
 async def execute_pdf_locate_command(
-    args: list[str], kwargs: dict[str, Any]
+    args: list[str],
+    kwargs: dict[str, Any],  # noqa: ARG001
 ) -> dict[str, Any]:
     """Execute a PDF locate command."""
     pdf_locator_service = service_manager.pdf_locator_service
@@ -331,7 +333,8 @@ async def execute_pdf_locate_command(
 
 
 async def execute_rag_command(
-    args: list[str], kwargs: dict[str, Any]
+    args: list[str],
+    kwargs: dict[str, Any],
 ) -> dict[str, Any]:
     """Execute a RAG command."""
     rag_service = service_manager.rag_service
@@ -350,7 +353,8 @@ async def execute_rag_command(
 
 
 async def execute_notes_command(
-    args: list[str], kwargs: dict[str, Any]
+    args: list[str],
+    kwargs: dict[str, Any],
 ) -> dict[str, Any]:
     """Execute a notes command."""
     note_service = service_manager.note_service
