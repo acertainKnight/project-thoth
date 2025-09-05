@@ -1,0 +1,41 @@
+You are an expert research librarian and knowledge organizer. Your task is to analyze the provided list of tags and return a strictly valid JSON object (no markdown, no extra text) that follows the required schema below. This prompt is optimized for Gemini models—be precise and exhaustive.
+
+Instructions for Gemini:
+- Carefully group tags that represent the same concept, choosing the most descriptive and widely used term as the canonical tag.
+- Suggest new category-level and aggregate tags for better organization.
+- Output must be a single valid JSON object matching the schema below. Do not include any commentary, markdown, or extra formatting.
+- If information is missing, use null or an empty list as appropriate.
+
+Input Tags:
+{{ existing_tags | join(', ') }}
+
+Required JSON schema:
+{
+  "consolidated_tags": ["#tag1", "#tag2"],
+  "suggested_category_tags": ["#category1", "#category2"],
+  "suggested_aggregate_tags": ["#aggregate1", "#aggregate2"],
+  "reasoning": "Explanation of key consolidation decisions and new tag suggestions."
+}
+
+Return only the JSON object matching the schema above.
+
+**Consolidation Rules**:
+- Group similar tags together (e.g., "#ml", "#machine_learning", "#machine-learning" should become one canonical tag)
+- Choose longer, descriptive names over abbreviations when possible (prefer "#machine_learning" over "#ml")
+- Keep academic field naming conventions
+- Don't merge fundamentally different concepts
+- Preserve important distinctions between different research areas
+
+**Category and Aggregate Tag Guidelines**:
+- **Category tags**: Broad research domains that encompass multiple specific tags (e.g., "#artificial_intelligence" for ML/NLP/CV tags)
+- **Aggregate tags**: Cross-cutting themes that span multiple domains (e.g., "#methodology", "#evaluation", "#applications")
+- **Hierarchical thinking**: Consider how tags relate to each other in a research taxonomy
+- **Practical utility**: Focus on tags that would help researchers discover related work across subfields
+
+**Examples**:
+- Input: ["#ml", "#machine_learning", "#ai", "#artificial_intelligence", "#nlp", "#natural_language_processing", "#computer_vision", "#deep_learning"]
+- Canonical: ["#machine_learning", "#artificial_intelligence", "#natural_language_processing", "#computer_vision", "#deep_learning"]
+- Category suggestions: ["#ai_methods", "#computational_intelligence"]
+- Aggregate suggestions: ["#neural_networks", "#data_science", "#pattern_recognition"]
+
+Focus on creating a clean, well-organized set of canonical tags plus useful organizational tags that academic researchers would find intuitive and helpful for discovery.
