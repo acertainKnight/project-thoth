@@ -6,18 +6,6 @@ import pytest
 from pypdf import PdfWriter
 
 from thoth.utilities.config import (
-    APIGatewayConfig,
-    APIKeys,
-    CitationConfig,
-    CitationLLMConfig,
-    CoreConfig,
-    EndpointConfig,
-    FeatureConfig,
-    LLMConfig,
-    LoggingConfig,
-    ModelConfig,
-    RAGConfig,
-    TagConsolidatorLLMConfig,
     ThothConfig,
 )
 
@@ -38,60 +26,76 @@ def temp_workspace():
 @pytest.fixture
 def thoth_config(temp_workspace):
     """
-    Create a ThothConfig object with mocked values for testing.
-    This fixture now programmatically builds the config to avoid
-    issues with environment variable conflicts and validation errors.
+    Create a ThothConfig object with test values using hybrid loader.
     """
-    with tempfile.TemporaryDirectory():
-        config = ThothConfig(
-            core=CoreConfig(
-                workspace_dir=temp_workspace,
-                api_keys=APIKeys(
-                    mistral_key='test_mistral_key',
-                    openrouter_key='test_openrouter_key',
-                    openai_key='test_openai_key',
-                    anthropic_key='test_anthropic_key',
-                    opencitations_key='test_opencitations_key',
-                    semanticscholar_api_key='test_semanticscholar_key',
-                ),
-                llm_config=LLMConfig(
-                    model='openai/gpt-4o-mini',
-                ),
-            ),
-            features=FeatureConfig(
-                api_server=EndpointConfig(
-                    host='localhost',
-                    port=8000,
-                    base_url='http://localhost:8000',
-                    auto_start=False,
-                ),
-                rag=RAGConfig(
-                    collection_name='test_collection',
-                    embedding_model='all-MiniLM-L6-v2',
-                ),
-            ),
-            logging_config=LoggingConfig(
-                level='INFO',
-                logformat='<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>',
-            ),
-            api_gateway_config=APIGatewayConfig(
-                endpoints={
-                    'test_service': 'https://httpbin.org',
-                    'mock_api': 'https://jsonplaceholder.typicode.com',
+    import json
+    import tempfile
+    from pathlib import Path
+
+    # Create a temporary settings file for testing
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        test_settings = {
+            'apiKeys': {
+                'mistralKey': 'test_mistral_key',
+                'openrouterKey': 'test_openrouter_key',
+                'openaiKey': 'test_openai_key',
+                'anthropicKey': 'test_anthropic_key',
+                'opencitationsKey': 'test_opencitations_key',
+                'semanticScholarKey': 'test_semanticscholar_key',
+            },
+            'llm': {
+                'default': {'model': 'openai/gpt-4o-mini'},
+                'citation': {'model': 'openai/gpt-4o-mini'},
+                'researchAgent': {'model': 'test/research-model'},
+                'tagConsolidator': {
+                    'consolidateModel': 'test/model',
+                    'suggestModel': 'test/model',
+                    'mapModel': 'test/model',
                 },
-                rate_limit=10.0,
-                cache_expiry=300,
-            ),
-            citation_llm_config=CitationLLMConfig(model='test/model'),
-            tag_consolidator_llm_config=TagConsolidatorLLMConfig(
-                consolidate_model='test/model',
-                suggest_model='test/model',
-                map_model='test/model',
-                model_settings=ModelConfig(),
-            ),
-            citation_config=CitationConfig(opencitations_key='dummy-key'),
+            },
+            'paths': {
+                'workspace': str(temp_workspace),
+                'pdf': 'data/pdf',
+                'notes': 'data/notes',
+            },
+            'servers': {
+                'api': {
+                    'host': 'localhost',
+                    'port': 8000,
+                    'baseUrl': 'http://localhost:8000',
+                }
+            },
+            'rag': {
+                'collectionName': 'test_collection',
+                'embeddingModel': 'all-MiniLM-L6-v2',
+            },
+            'logging': {'level': 'INFO', 'format': '{time} | {level} | {message}'},
+        }
+        json.dump(test_settings, f)
+        temp_settings_path = f.name
+
+    try:
+        # Create config using hybrid loader with temporary settings file
+        from thoth.utilities.config.hybrid_loader import (
+            HybridConfigLoader,
+            create_hybrid_settings,
         )
-        yield config
+
+        # Temporarily replace the settings file path
+        original_init = HybridConfigLoader.__init__
+
+        def mock_init(self, env_file='.env', settings_file='.thoth.settings.json'):  # noqa: ARG001
+            original_init(self, env_file, temp_settings_path)
+
+        HybridConfigLoader.__init__ = mock_init
+
+        try:
+            config = create_hybrid_settings(ThothConfig)
+            yield config
+        finally:
+            HybridConfigLoader.__init__ = original_init
+    finally:
+        Path(temp_settings_path).unlink(missing_ok=True)
 
 
 @pytest.fixture
@@ -104,6 +108,27 @@ def mock_config(temp_workspace):
     config.knowledge_base_dir = temp_workspace / 'knowledge'
     config.api_keys.openrouter_key = 'test-openrouter-key'
     config.api_keys.mistral_key = 'test-mistral-key'
+    config.api_keys.openai_key = 'test-openai-key'
+    config.api_keys.anthropic_key = 'test-anthropic-key'
+    config.api_keys.opencitations_key = 'test-opencitations-key'
+
+    # Add nested config objects explicitly
+    config.citation_llm_config = MagicMock()
+    config.citation_llm_config.model = 'openai/gpt-4o-mini'
+
+    config.citation_config = MagicMock()
+    config.citation_config.use_semanticscholar = True
+    config.citation_config.use_opencitations = True
+    config.citation_config.use_scholarly = False
+    config.citation_config.use_arxiv = False
+
+    config.rag_config = MagicMock()
+    config.rag_config.collection_name = 'test_collection'
+    config.rag_config.embedding_model = 'all-MiniLM-L6-v2'
+    config.rag_config.vector_db_path = temp_workspace / 'vector_db'
+    config.rag_config.chunk_size = 4000
+    config.rag_config.chunk_overlap = 200
+
     return config
 
 

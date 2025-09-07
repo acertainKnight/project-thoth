@@ -181,8 +181,12 @@ node_modules/
 # Data
 /knowledge/
 /cache/
+/data/
 
 # Generated reports
 *_report.json
 *_results.json
 *_diagnostic.json
+
+# Configuration files
+.thoth.settings.json

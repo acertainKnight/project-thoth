@@ -7,6 +7,61 @@ version: '3.8'
 
 services:
   # ==============================================================================
+  # Letta Memory Server
+  # Advanced persistent memory system for research agents
+  # ==============================================================================
+  letta:
+    image: letta/letta:latest
+    container_name: thoth-letta
+    environment:
+      - LETTA_SERVER_HOST=0.0.0.0
+      - LETTA_SERVER_PORT=8283
+      - LETTA_PG_URI=postgresql://letta:letta@letta-postgres:5432/letta
+      # API keys will be inherited from main app environment
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - thoth-letta-data:/letta/.persist
+    ports:
+      - "8283:8283"
+    networks:
+      - thoth-network
+    depends_on:
+      letta-postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8283/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ==============================================================================
+  # PostgreSQL Database for Letta
+  # Stores Letta agent states and memory data
+  # ==============================================================================
+  letta-postgres:
+    image: postgres:15-alpine
+    container_name: thoth-letta-postgres
+    environment:
+      - POSTGRES_DB=letta
+      - POSTGRES_USER=letta
+      - POSTGRES_PASSWORD=letta_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    volumes:
+      - thoth-letta-postgres:/var/lib/postgresql/data
+    networks:
+      - thoth-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U letta -d letta"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ==============================================================================
   # ChromaDB Vector Database
   # Persistent vector storage for RAG operations
   # ==============================================================================
@@ -132,6 +187,16 @@ services:
 # Persistent Volumes
 # ==============================================================================
 volumes:
+  # Letta memory system storage
+  thoth-letta-data:
+    driver: local
+    name: thoth-letta-data
+
+  # PostgreSQL database for Letta
+  thoth-letta-postgres:
+    driver: local
+    name: thoth-letta-postgres
+
   # ChromaDB vector database storage
   thoth-chroma-data:
     driver: local

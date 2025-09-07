@@ -25,7 +25,7 @@ class APIKeys(BaseSettings):
     openrouter_key: str | None = Field(None, description='OpenRouter API key for LLM')
     openai_key: str | None = Field(None, description='OpenAI API key for LLM')
     anthropic_key: str | None = Field(None, description='Anthropic API key for LLM')
-    opencitations_key: str = Field(..., description='OpenCitations API key')
+    opencitations_key: str | None = Field(None, description='OpenCitations API key')
     google_api_key: str | None = Field(
         None, description='Google API key for web search (legacy)'
     )

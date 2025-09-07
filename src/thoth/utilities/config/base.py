@@ -33,7 +33,7 @@ class BaseLLMConfig(BaseSettings):
         env_nested_delimiter='_',
     )
 
-    model: str = Field('', description='LLM model identifier')
+    model: str = Field('openai/gpt-4o-mini', description='LLM model identifier')
     model_settings: ModelConfig = Field(
         default_factory=ModelConfig, description='Model parameters'
     )
@@ -51,8 +51,8 @@ class BaseServerConfig(BaseSettings):
         extra='ignore',
     )
 
-    host: str = Field(..., description='Host to bind to')
-    port: int = Field(..., description='Port to bind to')
+    host: str = Field('localhost', description='Host to bind to')
+    port: int = Field(8000, description='Port to bind to')
     auto_start: bool = Field(False, description='Whether to auto-start')
 
 

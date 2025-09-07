@@ -274,6 +274,7 @@ docker-up: ## Start Docker services (production)
 	@echo "$(YELLOW)API server: http://localhost:8000$(NC)"
 	@echo "$(YELLOW)MCP server: http://localhost:8001$(NC)"
 	@echo "$(YELLOW)ChromaDB: http://localhost:8003$(NC)"
+	@echo "$(YELLOW)Letta server: http://localhost:8283$(NC)"
 
 .PHONY: docker-up-dev
 docker-up-dev: ## Start Docker services (development)
@@ -283,6 +284,7 @@ docker-up-dev: ## Start Docker services (development)
 	@echo "$(YELLOW)API server: http://localhost:8000$(NC)"
 	@echo "$(YELLOW)MCP server: http://localhost:8001$(NC)"
 	@echo "$(YELLOW)ChromaDB: http://localhost:8003$(NC)"
+	@echo "$(YELLOW)Letta server: http://localhost:8283$(NC)"
 
 .PHONY: docker-up-prod
 docker-up-prod: ## Start Docker services (production)
@@ -405,6 +407,7 @@ docker-dev: ## Complete development setup with Docker
 	@echo "  - API Server: http://localhost:8000"
 	@echo "  - MCP Server: http://localhost:8001"
 	@echo "  - ChromaDB: http://localhost:8003"
+	@echo "  - Letta Server: http://localhost:8283"
 
 .PHONY: docker-prod
 docker-prod: ## Complete production setup with Docker

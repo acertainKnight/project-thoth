@@ -24,7 +24,9 @@ class EndpointConfig(BaseServerConfig):
         extra='ignore',
     )
 
-    base_url: str = Field(..., description='Base URL for the endpoint')
+    base_url: str = Field(
+        'http://localhost:8000', description='Base URL for the endpoint'
+    )
 
 
 class MonitorConfig(BaseSettings):
@@ -78,7 +80,8 @@ class LettaConfig(BaseSettings):
     # Server connection
     server_url: str = Field('http://localhost:8283', description='Letta server URL')
     api_key: str | None = Field(
-        None, description='Optional API key for Letta server authentication'
+        None,
+        description='Optional API key for Letta server authentication (not required for local Letta installation)',
     )
 
     # Agent configuration

@@ -1,0 +1,260 @@
+{
+  "$schema": "./thoth.settings.schema.json",
+  "version": "1.0.0",
+  "lastModified": "2024-01-01T00:00:00Z",
+  "_comment": "API keys and sensitive information should be stored in .env file for security. See .env.example for required keys.",
+  "llm": {
+    "default": {
+      "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+      "temperature": 0.9,
+      "maxTokens": 500000,
+      "topP": 1.0,
+      "frequencyPenalty": 0.0,
+      "presencePenalty": 0.0,
+      "streaming": false,
+      "useRateLimiter": true,
+      "docProcessing": "auto",
+      "maxOutputTokens": 500000,
+      "maxContextLength": 8000,
+      "chunkSize": 4000,
+      "chunkOverlap": 200,
+      "refineThresholdMultiplier": 1.2,
+      "mapReduceThresholdMultiplier": 3.0
+    },
+    "citation": {
+      "model": "openai/gpt-3.5-turbo",
+      "temperature": 0.9,
+      "maxTokens": 10000,
+      "maxOutputTokens": 10000,
+      "maxContextLength": 4000,
+      "models": {
+        "documentCitation": null,
+        "referenceCleaning": null,
+        "structuredExtraction": null,
+        "batchStructuredExtraction": null
+      }
+    },
+    "tagConsolidator": {
+      "consolidateModel": "google/gemini-flash-1.5-8b",
+      "suggestModel": "google/gemini-flash-1.5-8b",
+      "mapModel": "mistralai/ministral-3b",
+      "temperature": 0.9,
+      "maxTokens": 10000,
+      "maxOutputTokens": 10000,
+      "maxContextLength": 8000
+    },
+    "researchAgent": {
+      "model": "anthropic/claude-3.5-sonnet:beta",
+      "temperature": 0.9,
+      "maxTokens": 50000,
+      "maxOutputTokens": 50000,
+      "maxContextLength": 100000,
+      "useAutoModelSelection": false,
+      "autoModelRequireToolCalling": false,
+      "autoModelRequireStructuredOutput": false
+    },
+    "scrapeFilter": {
+      "model": "google/gemini-2.5-flash-preview-05-20",
+      "temperature": 0.9,
+      "maxTokens": 10000,
+      "maxOutputTokens": 10000,
+      "maxContextLength": 50000
+    },
+    "queryBasedRouting": {
+      "enabled": false,
+      "routingModel": "openai/gpt-4o-mini",
+      "useDynamicPrompt": false
+    }
+  },
+  "rag": {
+    "embeddingModel": "openai/text-embedding-3-small",
+    "embeddingBatchSize": 100,
+    "skipFilesWithImages": true,
+    "vectorDbPath": "knowledge/vector_db",
+    "collectionName": "thoth_knowledge",
+    "chunkSize": 1000,
+    "chunkOverlap": 200,
+    "chunkEncoding": "cl100k_base",
+    "qa": {
+      "model": "openai/gpt-4o-mini",
+      "temperature": 0.2,
+      "maxTokens": 2000,
+      "retrievalK": 4
+    }
+  },
+  "memory": {
+    "letta": {
+      "serverUrl": "http://localhost:8283",
+      "_comment": "Letta API key is optional for local installations. Store in .env as LETTA_API_KEY only if using Letta Cloud or password-protected self-hosted instances.",
+      "agentName": "thoth_research_agent",
+      "coreMemoryLimit": 10000,
+      "archivalMemoryEnabled": true,
+      "recallMemoryEnabled": true,
+      "enableSmartTruncation": true,
+      "consolidationIntervalHours": 24,
+      "fallbackEnabled": true
+    },
+    "thoth": {
+      "_comment": "Database URL should be stored in .env as DATABASE_URL",
+      "vectorBackend": "chromadb",
+      "namespace": "thoth",
+      "pipeline": {
+        "enabled": true,
+        "minSalience": 0.1,
+        "enableEnrichment": true,
+        "enableFiltering": true
+      },
+      "retrieval": {
+        "enabled": true,
+        "relevanceWeight": 0.4,
+        "salienceWeight": 0.3,
+        "recencyWeight": 0.2,
+        "diversityWeight": 0.1
+      }
+    },
+    "scheduler": {
+      "jobs": {
+        "episodicSummarization": {
+          "enabled": true,
+          "intervalHours": 24,
+          "timeOfDay": null,
+          "daysOfWeek": null,
+          "parameters": {
+            "analysisWindowHours": 168,
+            "minMemoriesThreshold": 10,
+            "cleanupAfterSummary": false
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "workspace": "/app",
+    "pdf": "data/pdf",
+    "markdown": "data/markdown",
+    "notes": "data/notes",
+    "prompts": "data/prompts",
+    "templates": "data/templates",
+    "output": "data/output",
+    "knowledgeBase": "data/knowledge",
+    "graphStorage": "data/graph/citations.graphml",
+    "queries": "data/queries",
+    "agentStorage": "data/agent",
+    "discovery": {
+      "sources": "data/discovery/sources",
+      "results": "data/discovery/results",
+      "chromeConfigs": "data/discovery/chrome_configs"
+    },
+    "logs": "logs"
+  },
+  "servers": {
+    "api": {
+      "host": "0.0.0.0",
+      "port": 8000,
+      "baseUrl": "http://localhost:8000",
+      "autoStart": false
+    },
+    "mcp": {
+      "host": "localhost",
+      "port": 8001,
+      "autoStart": true,
+      "enabled": true
+    },
+    "monitor": {
+      "autoStart": false,
+      "watchInterval": 10,
+      "bulkProcessSize": 10
+    }
+  },
+  "discovery": {
+    "autoStartScheduler": false,
+    "defaultMaxArticles": 50,
+    "defaultIntervalMinutes": 60,
+    "rateLimitDelay": 1.0,
+    "chromeExtension": {
+      "enabled": true,
+      "host": "localhost",
+      "port": 8765
+    },
+    "webSearch": {
+      "_comment": "Web search API keys should be in .env as API_WEB_SEARCH_KEY",
+      "providers": ["serper", "duckduckgo", "searxng", "brave"]
+    }
+  },
+  "citation": {
+    "linkFormat": "uri",
+    "style": "IEEE",
+    "apis": {
+      "_comment": "API keys for citation services should be in .env",
+      "useOpencitations": true,
+      "useScholarly": true,
+      "useSemanticScholar": false,
+      "useArxiv": false
+    },
+    "processing": {
+      "mode": "single",
+      "batchSize": 5
+    }
+  },
+  "performance": {
+    "autoScaleWorkers": true,
+    "workers": {
+      "tagMapping": "auto",
+      "articleProcessing": "auto",
+      "contentAnalysis": "auto",
+      "citationEnhancement": "auto",
+      "citationPdf": "auto",
+      "citationExtraction": "auto"
+    },
+    "ocr": {
+      "maxConcurrent": 3,
+      "enableCaching": true,
+      "cacheTtlHours": 24
+    },
+    "async": {
+      "enabled": true,
+      "timeoutSeconds": 300
+    },
+    "memory": {
+      "optimizationEnabled": true,
+      "chunkProcessingEnabled": true,
+      "maxDocumentSizeMb": 50
+    },
+    "semanticScholar": {
+      "maxRetries": 3,
+      "maxBackoffSeconds": 30.0,
+      "backoffMultiplier": 1.5
+    }
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "{time} | {level} | {file}:{line} | {function} | {message}",
+    "dateFormat": "YYYY-MM-DD HH:mm:ss",
+    "file": {
+      "enabled": true,
+      "path": "logs/thoth.log",
+      "mode": "a",
+      "level": "INFO"
+    },
+    "console": {
+      "enabled": true,
+      "level": "INFO"
+    }
+  },
+  "apiGateway": {
+    "rateLimit": 5.0,
+    "cacheExpiry": 3600,
+    "defaultTimeout": 15,
+    "endpoints": {}
+  },
+  "environment": {
+    "type": "docker",
+    "pythonUnbuffered": true,
+    "development": false,
+    "security": {
+      "_comment": "Encryption keys, JWT secrets, and other security credentials should be in .env file",
+      "sessionTimeout": 3600,
+      "apiRateLimit": 100
+    }
+  }
+}

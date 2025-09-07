@@ -10,11 +10,17 @@ from pathlib import Path
 from loguru import logger
 
 try:
-    from letta import LettaClient, create_client
-    from letta.schemas.agent import AgentState
-    from letta.schemas.memory import BasicBlockMemory
-    from letta.schemas.message import Message
-    from letta.schemas.tool import Tool
+    from letta_client import (
+        AgentState,
+        Message,
+        Tool,
+    )
+    from letta_client import (
+        Letta as LettaClient,
+    )
+    from letta_client import (
+        Memory as BasicBlockMemory,
+    )
 
     LETTA_AVAILABLE = True
     logger.info('Letta framework available')
@@ -73,9 +79,9 @@ class LettaMemoryManager:
         try:
             # Initialize Letta client
             if api_key:
-                self.client = create_client(base_url=base_url, token=api_key)
+                self.client = LettaClient(base_url=base_url, token=api_key)
             else:
-                self.client = create_client(base_url=base_url)
+                self.client = LettaClient(base_url=base_url)
 
             # Create or load agent
             self.agent = self._initialize_agent(agent_name)
@@ -103,11 +109,11 @@ class LettaMemoryManager:
 
         try:
             # Try to load existing agent
-            agents = self.client.list_agents()
+            agents = self.client.agents.list()
             for agent in agents:
                 if agent.name == agent_name:
                     logger.info(f'Loaded existing agent: {agent_name}')
-                    return self.client.get_agent(agent.id)
+                    return self.client.agents.retrieve(agent.id)
 
             # Create new agent with hierarchical memory
             memory = BasicBlockMemory(
@@ -135,7 +141,7 @@ class LettaMemoryManager:
                 ]
             )
 
-            agent = self.client.create_agent(
+            agent = self.client.agents.create(
                 name=agent_name,
                 memory=memory,
                 tools=self._get_research_tools(),
@@ -511,7 +517,7 @@ class LettaMemoryManager:
 
         try:
             # Test basic operations
-            agents = self.client.list_agents()
+            agents = self.client.agents.list()
 
             return {
                 'status': 'healthy',
