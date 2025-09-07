@@ -1,0 +1,448 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Thoth Settings",
+  "description": "Configuration settings for Thoth Research Assistant (non-sensitive settings only)",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Path to the JSON schema file"
+    },
+    "version": {
+      "type": "string",
+      "description": "Settings file version",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "lastModified": {
+      "type": "string",
+      "description": "ISO 8601 timestamp of last modification",
+      "format": "date-time"
+    },
+    "_comment": {
+      "type": "string",
+      "description": "Comment about the settings file"
+    },
+    "llm": {
+      "type": "object",
+      "description": "Language model configurations",
+      "properties": {
+        "default": {
+          "$ref": "#/definitions/llmConfig"
+        },
+        "citation": {
+          "$ref": "#/definitions/citationLlmConfig"
+        },
+        "tagConsolidator": {
+          "$ref": "#/definitions/tagLlmConfig"
+        },
+        "researchAgent": {
+          "$ref": "#/definitions/researchAgentLlmConfig"
+        },
+        "scrapeFilter": {
+          "$ref": "#/definitions/baseLlmConfig"
+        },
+        "queryBasedRouting": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "routingModel": { "type": "string" },
+            "useDynamicPrompt": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "rag": {
+      "type": "object",
+      "description": "RAG (Retrieval-Augmented Generation) settings",
+      "properties": {
+        "embeddingModel": { "type": "string" },
+        "embeddingBatchSize": { "type": "integer", "minimum": 1 },
+        "skipFilesWithImages": { "type": "boolean" },
+        "vectorDbPath": { "type": "string" },
+        "collectionName": { "type": "string" },
+        "chunkSize": { "type": "integer", "minimum": 100 },
+        "chunkOverlap": { "type": "integer", "minimum": 0 },
+        "chunkEncoding": { "type": "string" },
+        "qa": {
+          "type": "object",
+          "properties": {
+            "model": { "type": "string" },
+            "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+            "maxTokens": { "type": "integer", "minimum": 1 },
+            "retrievalK": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "description": "Memory system configurations",
+      "properties": {
+        "letta": {
+          "type": "object",
+          "properties": {
+            "serverUrl": { "type": "string", "format": "uri" },
+            "_comment": { "type": "string" },
+            "agentName": { "type": "string" },
+            "coreMemoryLimit": { "type": "integer", "minimum": 100 },
+            "archivalMemoryEnabled": { "type": "boolean" },
+            "recallMemoryEnabled": { "type": "boolean" },
+            "enableSmartTruncation": { "type": "boolean" },
+            "consolidationIntervalHours": { "type": "integer", "minimum": 1 },
+            "fallbackEnabled": { "type": "boolean" }
+          }
+        },
+        "thoth": {
+          "type": "object",
+          "properties": {
+            "_comment": { "type": "string" },
+            "vectorBackend": { "type": "string", "enum": ["chromadb", "pinecone", "weaviate"] },
+            "namespace": { "type": "string" },
+            "pipeline": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "minSalience": { "type": "number", "minimum": 0, "maximum": 1 },
+                "enableEnrichment": { "type": "boolean" },
+                "enableFiltering": { "type": "boolean" }
+              }
+            },
+            "retrieval": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "relevanceWeight": { "type": "number", "minimum": 0, "maximum": 1 },
+                "salienceWeight": { "type": "number", "minimum": 0, "maximum": 1 },
+                "recencyWeight": { "type": "number", "minimum": 0, "maximum": 1 },
+                "diversityWeight": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          }
+        },
+        "scheduler": {
+          "type": "object",
+          "properties": {
+            "jobs": {
+              "type": "object",
+              "properties": {
+                "episodicSummarization": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": { "type": "boolean" },
+                    "intervalHours": { "type": "integer", "minimum": 1 },
+                    "timeOfDay": { "type": ["string", "null"], "pattern": "^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$" },
+                    "daysOfWeek": { "type": ["array", "null"], "items": { "type": "integer", "minimum": 0, "maximum": 6 } },
+                    "parameters": {
+                      "type": "object",
+                      "properties": {
+                        "analysisWindowHours": { "type": "integer", "minimum": 1 },
+                        "minMemoriesThreshold": { "type": "integer", "minimum": 1 },
+                        "cleanupAfterSummary": { "type": "boolean" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "description": "File system paths",
+      "properties": {
+        "workspace": { "type": "string" },
+        "pdf": { "type": "string" },
+        "markdown": { "type": "string" },
+        "notes": { "type": "string" },
+        "prompts": { "type": "string" },
+        "templates": { "type": "string" },
+        "output": { "type": "string" },
+        "knowledgeBase": { "type": "string" },
+        "graphStorage": { "type": "string" },
+        "queries": { "type": "string" },
+        "agentStorage": { "type": "string" },
+        "discovery": {
+          "type": "object",
+          "properties": {
+            "sources": { "type": "string" },
+            "results": { "type": "string" },
+            "chromeConfigs": { "type": "string" }
+          }
+        },
+        "logs": { "type": "string" }
+      }
+    },
+    "servers": {
+      "type": "object",
+      "description": "Server configurations",
+      "properties": {
+        "api": {
+          "type": "object",
+          "properties": {
+            "host": { "type": "string" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "baseUrl": { "type": "string", "format": "uri" },
+            "autoStart": { "type": "boolean" }
+          }
+        },
+        "mcp": {
+          "type": "object",
+          "properties": {
+            "host": { "type": "string" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "autoStart": { "type": "boolean" },
+            "enabled": { "type": "boolean" }
+          }
+        },
+        "monitor": {
+          "type": "object",
+          "properties": {
+            "autoStart": { "type": "boolean" },
+            "watchInterval": { "type": "integer", "minimum": 1 },
+            "bulkProcessSize": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "discovery": {
+      "type": "object",
+      "description": "Discovery system settings",
+      "properties": {
+        "autoStartScheduler": { "type": "boolean" },
+        "defaultMaxArticles": { "type": "integer", "minimum": 1 },
+        "defaultIntervalMinutes": { "type": "integer", "minimum": 15 },
+        "rateLimitDelay": { "type": "number", "minimum": 0 },
+        "chromeExtension": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "host": { "type": "string" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+          }
+        },
+        "webSearch": {
+          "type": "object",
+          "properties": {
+            "_comment": { "type": "string" },
+            "providers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["serper", "duckduckgo", "searxng", "brave"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "citation": {
+      "type": "object",
+      "description": "Citation processing settings",
+      "properties": {
+        "linkFormat": { "type": "string", "enum": ["uri", "wikilink", "markdown"] },
+        "style": { "type": "string", "enum": ["IEEE", "APA", "MLA", "Chicago", "Harvard"] },
+        "apis": {
+          "type": "object",
+          "properties": {
+            "_comment": { "type": "string" },
+            "useOpencitations": { "type": "boolean" },
+            "useScholarly": { "type": "boolean" },
+            "useSemanticScholar": { "type": "boolean" },
+            "useArxiv": { "type": "boolean" }
+          }
+        },
+        "processing": {
+          "type": "object",
+          "properties": {
+            "mode": { "type": "string", "enum": ["single", "batch", "parallel"] },
+            "batchSize": { "type": "integer", "minimum": 1, "maximum": 20 }
+          }
+        }
+      }
+    },
+    "performance": {
+      "type": "object",
+      "description": "Performance and optimization settings",
+      "properties": {
+        "autoScaleWorkers": { "type": "boolean" },
+        "workers": {
+          "type": "object",
+          "properties": {
+            "tagMapping": { "type": ["string", "integer"] },
+            "articleProcessing": { "type": ["string", "integer"] },
+            "contentAnalysis": { "type": ["string", "integer"] },
+            "citationEnhancement": { "type": ["string", "integer"] },
+            "citationPdf": { "type": ["string", "integer"] },
+            "citationExtraction": { "type": ["string", "integer"] }
+          }
+        },
+        "ocr": {
+          "type": "object",
+          "properties": {
+            "maxConcurrent": { "type": "integer", "minimum": 1 },
+            "enableCaching": { "type": "boolean" },
+            "cacheTtlHours": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "async": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "timeoutSeconds": { "type": "integer", "minimum": 30 }
+          }
+        },
+        "memory": {
+          "type": "object",
+          "properties": {
+            "optimizationEnabled": { "type": "boolean" },
+            "chunkProcessingEnabled": { "type": "boolean" },
+            "maxDocumentSizeMb": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "semanticScholar": {
+          "type": "object",
+          "properties": {
+            "maxRetries": { "type": "integer", "minimum": 1 },
+            "maxBackoffSeconds": { "type": "number", "minimum": 1 },
+            "backoffMultiplier": { "type": "number", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "description": "Logging configuration",
+      "properties": {
+        "level": { "type": "string", "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] },
+        "format": { "type": "string" },
+        "dateFormat": { "type": "string" },
+        "file": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "path": { "type": "string" },
+            "mode": { "type": "string", "enum": ["a", "w"] },
+            "level": { "type": "string", "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] }
+          }
+        },
+        "console": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "level": { "type": "string", "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] }
+          }
+        }
+      }
+    },
+    "apiGateway": {
+      "type": "object",
+      "description": "API gateway settings",
+      "properties": {
+        "rateLimit": { "type": "number", "minimum": 0 },
+        "cacheExpiry": { "type": "integer", "minimum": 0 },
+        "defaultTimeout": { "type": "integer", "minimum": 1 },
+        "endpoints": { "type": "object" }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "description": "Environment settings",
+      "properties": {
+        "type": { "type": "string", "enum": ["docker", "local", "production"] },
+        "pythonUnbuffered": { "type": "boolean" },
+        "development": { "type": "boolean" },
+        "security": {
+          "type": "object",
+          "properties": {
+            "_comment": { "type": "string" },
+            "sessionTimeout": { "type": "integer", "minimum": 60 },
+            "apiRateLimit": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    }
+  },
+  "required": ["version"],
+  "definitions": {
+    "llmConfig": {
+      "type": "object",
+      "properties": {
+        "model": { "type": "string" },
+        "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+        "maxTokens": { "type": "integer", "minimum": 1 },
+        "topP": { "type": "number", "minimum": 0, "maximum": 1 },
+        "frequencyPenalty": { "type": "number", "minimum": -2, "maximum": 2 },
+        "presencePenalty": { "type": "number", "minimum": -2, "maximum": 2 },
+        "streaming": { "type": "boolean" },
+        "useRateLimiter": { "type": "boolean" },
+        "docProcessing": { "type": "string", "enum": ["auto", "direct", "map_reduce", "refine"] },
+        "maxOutputTokens": { "type": "integer", "minimum": 1 },
+        "maxContextLength": { "type": "integer", "minimum": 1 },
+        "chunkSize": { "type": "integer", "minimum": 100 },
+        "chunkOverlap": { "type": "integer", "minimum": 0 },
+        "refineThresholdMultiplier": { "type": "number", "minimum": 0.1 },
+        "mapReduceThresholdMultiplier": { "type": "number", "minimum": 1 }
+      }
+    },
+    "baseLlmConfig": {
+      "type": "object",
+      "properties": {
+        "model": { "type": "string" },
+        "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+        "maxTokens": { "type": "integer", "minimum": 1 },
+        "maxOutputTokens": { "type": "integer", "minimum": 1 },
+        "maxContextLength": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "citationLlmConfig": {
+      "allOf": [
+        { "$ref": "#/definitions/baseLlmConfig" },
+        {
+          "properties": {
+            "models": {
+              "type": "object",
+              "properties": {
+                "documentCitation": { "type": ["string", "null"] },
+                "referenceCleaning": { "type": ["string", "null"] },
+                "structuredExtraction": { "type": ["string", "null"] },
+                "batchStructuredExtraction": { "type": ["string", "null"] }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "tagLlmConfig": {
+      "type": "object",
+      "properties": {
+        "consolidateModel": { "type": "string" },
+        "suggestModel": { "type": "string" },
+        "mapModel": { "type": "string" },
+        "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+        "maxTokens": { "type": "integer", "minimum": 1 },
+        "maxOutputTokens": { "type": "integer", "minimum": 1 },
+        "maxContextLength": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "researchAgentLlmConfig": {
+      "allOf": [
+        { "$ref": "#/definitions/baseLlmConfig" },
+        {
+          "properties": {
+            "model": {
+              "oneOf": [
+                { "type": "string" },
+                { "type": "array", "items": { "type": "string" } }
+              ]
+            },
+            "useAutoModelSelection": { "type": "boolean" },
+            "autoModelRequireToolCalling": { "type": "boolean" },
+            "autoModelRequireStructuredOutput": { "type": "boolean" }
+          }
+        }
+      ]
+    }
+  }
+}

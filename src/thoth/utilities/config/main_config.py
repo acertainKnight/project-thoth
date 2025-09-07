@@ -567,8 +567,10 @@ class ThothConfig(BaseSettings):
 
 
 def load_config() -> ThothConfig:
-    """Load the configuration."""
-    config = ThothConfig()
+    """Load the configuration using hybrid loader."""
+    from .hybrid_loader import create_hybrid_settings
+
+    config = create_hybrid_settings(ThothConfig)
     config.setup_logging()
     return config
 

@@ -23,8 +23,8 @@ class LLMConfig(BaseLLMConfig):
         env_nested_delimiter='_',
     )
 
-    # Primary LLM requires model field
-    model: str = Field(..., description='Primary LLM model identifier')
+    # Primary LLM model with default
+    model: str = Field('openai/gpt-4o-mini', description='Primary LLM model identifier')
 
     chunk_size: int = Field(4000, description='Chunk size for splitting documents')
     chunk_overlap: int = Field(200, description='Chunk overlap for splitting documents')
@@ -68,8 +68,8 @@ class CitationLLMConfig(BaseLLMConfig):
         extra='allow',
     )
 
-    # Citation LLM requires model field
-    model: str = Field(..., description='Default citation LLM model')
+    # Citation LLM model with default
+    model: str = Field('openai/gpt-4o-mini', description='Default citation LLM model')
 
     # Override defaults for citation-specific use case
     max_output_tokens: int = Field(
@@ -110,10 +110,14 @@ class TagConsolidatorLLMConfig(BaseLLMConfig):
         10000, description='Max tokens for tag processing (focused outputs)'
     )
 
-    # Tag-specific models (base model field is optional for this config)
-    consolidate_model: str = Field(..., description='Tag consolidator LLM model')
-    suggest_model: str = Field(..., description='Tag suggestor LLM model')
-    map_model: str = Field(..., description='Tag mapper LLM model')
+    # Tag-specific models with defaults
+    consolidate_model: str = Field(
+        'google/gemini-flash-1.5-8b', description='Tag consolidator LLM model'
+    )
+    suggest_model: str = Field(
+        'google/gemini-flash-1.5-8b', description='Tag suggestor LLM model'
+    )
+    map_model: str = Field('mistralai/ministral-3b', description='Tag mapper LLM model')
 
 
 class ResearchAgentLLMConfig(BaseLLMConfig):
@@ -127,8 +131,10 @@ class ResearchAgentLLMConfig(BaseLLMConfig):
         extra='allow',
     )
 
-    # Override model field to support multiple models
-    model: str | list[str] = Field(..., description='Research agent LLM model(s)')
+    # Override model field to support multiple models with default
+    model: str | list[str] = Field(
+        'anthropic/claude-3.5-sonnet', description='Research agent LLM model(s)'
+    )
 
     # Override defaults for research agent (needs larger context)
     max_context_length: int = Field(
@@ -158,8 +164,8 @@ class ScrapeFilterLLMConfig(BaseLLMConfig):
         extra='allow',
     )
 
-    # Scrape filter LLM requires model field
-    model: str = Field(..., description='Scrape filter LLM model')
+    # Scrape filter LLM model with default
+    model: str = Field('mistralai/ministral-8b', description='Scrape filter LLM model')
 
     # Override defaults for scrape filtering (needs larger context for web content)
     max_output_tokens: int = Field(10000, description='Max tokens for scrape filtering')
