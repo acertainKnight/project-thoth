@@ -775,4 +775,4 @@ GET /redoc  # ReDoc
 
 ---
 
-For more examples and advanced usage patterns, see the [Usage Guide](USAGE.md) and [examples directory](../examples/).
+For more examples and advanced usage patterns, see the [Usage Guide](usage.md) and [examples directory](../examples/).

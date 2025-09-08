@@ -766,4 +766,4 @@ export THOTH_MAX_CONCURRENT=2
 
 ---
 
-*For more advanced usage patterns, see the [Examples](examples/) directory and [API Documentation](API.md).*
+*For more advanced usage patterns, see the [Examples](examples/) directory and [API Documentation](api.md).*

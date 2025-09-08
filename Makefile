@@ -331,6 +331,39 @@ docker-ps: ## Show Docker service status
 	@echo "====================="
 	@docker compose ps
 
+.PHONY: docker-status
+docker-status: ## Show comprehensive Docker status for all environments
+	@echo "$(YELLOW)Thoth Docker Status Overview:$(NC)"
+	@echo "===================================="
+	@echo "$(CYAN)Production Services:$(NC)"
+	@-docker compose -f docker-compose.prod.yml ps 2>/dev/null || echo "  No production services running"
+	@echo ""
+	@echo "$(CYAN)Development Services:$(NC)"
+	@-docker compose -f docker-compose.dev.yml ps 2>/dev/null || echo "  No development services running"
+	@echo ""
+	@echo "$(CYAN)Default Services:$(NC)"
+	@-docker compose -f docker-compose.yml ps 2>/dev/null || echo "  No default services running"
+	@echo ""
+	@echo "$(CYAN)All Thoth-related Containers:$(NC)"
+	@-docker ps --filter "name=thoth" --filter "name=letta" --filter "name=chroma" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || echo "  No Thoth containers running"
+
+.PHONY: docker-volumes
+docker-volumes: ## Show data storage overview
+	@echo "$(YELLOW)Thoth Data Storage Overview:$(NC)"
+	@echo "============================="
+	@echo "$(CYAN)Local Filesystem (easily accessible):$(NC)"
+	@-du -sh ./workspace 2>/dev/null || echo "  ./workspace/ - not created yet"
+	@-du -sh ./data 2>/dev/null || echo "  ./data/ - not created yet"
+	@-du -sh ./logs 2>/dev/null || echo "  ./logs/ - not created yet"
+	@-du -sh ./cache 2>/dev/null || echo "  ./cache/ - not created yet"
+	@echo ""
+	@echo "$(CYAN)Docker-managed volumes (databases):$(NC)"
+	@-docker volume ls --filter "name=thoth" --format "table {{.Name}}\t{{.Size}}" 2>/dev/null | head -1
+	@-docker volume ls --filter "name=thoth" --format "table {{.Name}}\t{{.Size}}" 2>/dev/null | tail -n +2 | sort
+	@echo ""
+	@echo "$(GREEN)✓ Local files can be watched and backed up normally$(NC)"
+	@echo "$(GREEN)✓ Database volumes preserve vector stores and memory$(NC)"
+
 .PHONY: docker-health
 docker-health: ## Check health of Docker services
 	@echo "$(YELLOW)Checking Docker service health...$(NC)"
@@ -346,12 +379,86 @@ docker-shell-dev: ## Open shell in development container
 	@echo "$(YELLOW)Opening shell in Thoth development container...$(NC)"
 	@docker exec -it thoth-app-dev /bin/bash
 
+.PHONY: docker-shutdown
+docker-shutdown: ## Shutdown ALL Docker services and clean up (comprehensive)
+	@echo "$(YELLOW)Shutting down ALL Thoth Docker services...$(NC)"
+	@echo "$(CYAN)Stopping all docker-compose configurations...$(NC)"
+	@-docker compose -f docker-compose.yml down --remove-orphans 2>/dev/null || true
+	@-docker compose -f docker-compose.dev.yml down --remove-orphans 2>/dev/null || true
+	@-docker compose -f docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
+	@echo "$(CYAN)Stopping any running Thoth containers...$(NC)"
+	@-docker stop $$(docker ps -q --filter "name=thoth") 2>/dev/null || true
+	@-docker stop $$(docker ps -q --filter "name=letta") 2>/dev/null || true
+	@-docker stop $$(docker ps -q --filter "name=chromadb") 2>/dev/null || true
+	@echo "$(CYAN)Cleaning up unused containers and networks...$(NC)"
+	@-docker container prune -f 2>/dev/null || true
+	@-docker network prune -f 2>/dev/null || true
+	@echo "$(GREEN)✓ All Thoth Docker services shutdown complete$(NC)"
+
+.PHONY: docker-shutdown-dev
+docker-shutdown-dev: ## Shutdown only development services
+	@echo "$(YELLOW)Shutting down development services...$(NC)"
+	@-docker compose -f docker-compose.dev.yml down --remove-orphans 2>/dev/null || true
+	@echo "$(GREEN)✓ Development services shutdown complete$(NC)"
+
+.PHONY: docker-shutdown-prod
+docker-shutdown-prod: ## Shutdown only production services
+	@echo "$(YELLOW)Shutting down production services...$(NC)"
+	@-docker compose -f docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
+	@echo "$(GREEN)✓ Production services shutdown complete$(NC)"
+
+.PHONY: docker-shutdown-service
+docker-shutdown-service: ## Shutdown specific service (usage: make docker-shutdown-service SERVICE=chromadb)
+	@if [ -z "$(SERVICE)" ]; then \
+		echo "$(RED)Error: Please specify SERVICE=<service_name>$(NC)"; \
+		echo "$(YELLOW)Example: make docker-shutdown-service SERVICE=chromadb$(NC)"; \
+		echo "$(YELLOW)Available services: thoth-api, thoth-mcp, chromadb, letta, letta-postgres$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(YELLOW)Shutting down service: $(SERVICE)$(NC)"
+	@-docker compose stop $(SERVICE) 2>/dev/null || true
+	@-docker compose -f docker-compose.dev.yml stop $(SERVICE) 2>/dev/null || true
+	@-docker compose -f docker-compose.prod.yml stop $(SERVICE) 2>/dev/null || true
+	@echo "$(GREEN)✓ Service $(SERVICE) shutdown complete$(NC)"
+
+.PHONY: docker-clean-cache
+docker-clean-cache: ## Clean only Docker build cache (preserves images and data)
+	@echo "$(YELLOW)Cleaning Docker build cache...$(NC)"
+	@docker builder prune -f
+	@echo "$(CYAN)Removing unused containers...$(NC)"
+	@-docker container prune -f 2>/dev/null || true
+	@echo "$(CYAN)Removing unused networks...$(NC)"
+	@-docker network prune -f 2>/dev/null || true
+	@echo "$(GREEN)✓ Docker cache cleanup complete$(NC)"
+
 .PHONY: docker-clean
-docker-clean: ## Clean Docker images and volumes
-	@echo "$(YELLOW)Cleaning Docker images and containers...$(NC)"
-	@docker compose down -v --remove-orphans
-	@docker system prune -f
-	@echo "$(GREEN)✓ Docker cleanup complete$(NC)"
+docker-clean: ## Clean Docker containers and unused images (preserves data)
+	@echo "$(YELLOW)Cleaning Docker containers and unused images...$(NC)"
+	@echo "$(CYAN)Stopping services...$(NC)"
+	@-docker compose down --remove-orphans 2>/dev/null || true
+	@echo "$(CYAN)Removing unused containers...$(NC)"
+	@-docker container prune -f 2>/dev/null || true
+	@echo "$(CYAN)Removing unused images...$(NC)"
+	@-docker image prune -f 2>/dev/null || true
+	@echo "$(CYAN)Removing unused networks...$(NC)"
+	@-docker network prune -f 2>/dev/null || true
+	@echo "$(GREEN)✓ Docker cleanup complete (data preserved)$(NC)"
+
+.PHONY: docker-clean-all
+docker-clean-all: ## Complete Docker cleanup including data (WARNING: deletes all data)
+	@echo "$(RED)WARNING: This will shutdown and DELETE ALL Thoth Docker data!$(NC)"
+	@read -p "Are you sure? Type 'yes' to continue: " confirm && [ "$$confirm" = "yes" ] || exit 1
+	@echo "$(YELLOW)Performing complete shutdown and cleanup...$(NC)"
+	@$(MAKE) docker-shutdown
+	@echo "$(CYAN)Removing all volumes...$(NC)"
+	@-docker compose -f docker-compose.yml down -v 2>/dev/null || true
+	@-docker compose -f docker-compose.dev.yml down -v 2>/dev/null || true
+	@-docker compose -f docker-compose.prod.yml down -v 2>/dev/null || true
+	@-docker volume prune -f 2>/dev/null || true
+	@echo "$(CYAN)Removing Thoth images...$(NC)"
+	@-docker rmi $$(docker images --filter "reference=*thoth*" -q) 2>/dev/null || true
+	@-docker rmi $$(docker images --filter "reference=*letta*" -q) 2>/dev/null || true
+	@echo "$(GREEN)✓ Complete Docker cleanup finished$(NC)"
 
 .PHONY: docker-clean-volumes
 docker-clean-volumes: ## Clean Docker volumes (WARNING: deletes all data)
@@ -387,6 +494,8 @@ docker-init: ## Initialize Docker environment (first-time setup)
 	else \
 		echo "$(GREEN)✓ .env.docker already exists$(NC)"; \
 	fi
+	@echo "$(YELLOW)Initializing local workspace directories...$(NC)"
+	@./init-workspace.sh
 	@make docker-build
 	@echo "$(GREEN)✓ Docker environment initialized$(NC)"
 	@echo "$(YELLOW)Next steps:$(NC)"

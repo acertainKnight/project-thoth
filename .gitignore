@@ -188,5 +188,10 @@ node_modules/
 *_results.json
 *_diagnostic.json
 
+# Test and mock data
+MagicMock/
+mock_*/
+*.mock
+
 # Configuration files
 .thoth.settings.json

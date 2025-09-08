@@ -56,19 +56,66 @@ For containerized deployment:
 
 ```bash
 # Development
-make docker-init     # Initialize Docker environment
-cp .env.docker.example .env.docker
+make docker-init     # Initialize environment + local workspace
+# Edit .env.docker with your API keys
 make docker-dev      # Start development services
 
 # Production
 cp .env.prod.example .env.prod
 make docker-prod     # Deploy production services
+
+# Cloud Deployment
+# See docs/cloud-deployment.md for AWS, GCP, Azure setup
+
+# Management
+make docker-status           # Check status of all environments
+make docker-volumes          # Show persistent data volumes and sizes
+make docker-shutdown         # Shutdown ALL services and clean up
+make docker-shutdown-dev     # Shutdown only development services
+make docker-shutdown-prod    # Shutdown only production services
+make docker-shutdown-service SERVICE=<name> # Shutdown specific service
+
+# Cleanup (increasing levels of deletion)
+make docker-clean-cache      # Clean only build cache (safest)
+make docker-clean            # Clean containers + unused images (preserves data)
+make docker-clean-all        # Complete cleanup (WARNING: deletes data)
+
+| Command | Build Cache | Containers | Images | Persistent Data |
+|---------|-------------|------------|--------|-----------------|
+| `docker-clean-cache` | ✅ Delete | ❌ Keep | ❌ Keep | ✅ **SAFE** |
+| `docker-clean` | ✅ Delete | ✅ Delete | ⚠️ Unused only | ✅ **SAFE** |
+| `docker-clean-all` | ✅ Delete | ✅ Delete | ✅ Delete | ⚠️ **DELETES** |
+
+### 🔒 **Data Storage & Access**
+Your valuable data is stored locally and can be watched in real-time:
+
+#### **📁 Local Filesystem** (easily accessible)
+- **Workspace**: `./workspace/` - PDFs, notes, processed documents
+- **Application Data**: `./data/` - Embeddings, outputs, citations
+- **Logs**: `./logs/` - Application logs for monitoring
+- **Cache**: `./cache/` - Temporary cache files
+
+#### **🗄️ Database Volumes** (Docker-managed)
+- **Knowledge Base**: ChromaDB vectors → `thoth-chroma-data` volume
+- **Memory System**: Letta data → `thoth-letta-data` + `thoth-letta-postgres` volumes
+
+#### **👁️ Real-Time Monitoring**
+```bash
+# Watch files being created/processed
+tail -f logs/*.log
+ls -la workspace/data/
+find workspace -name '*.pdf' -newer yesterday
+```
+
+**✅ SAFE commands** (`docker-clean-cache`, `docker-clean`) preserve ALL your data
+**⚠️ DANGER command** (`docker-clean-all`) requires confirmation and deletes everything
 ```
 
 Services will be available at:
 - API Server: http://localhost:8000
 - MCP Server: http://localhost:8001
 - ChromaDB: http://localhost:8003
+- Letta Server: http://localhost:8283
 
 ## Key Features
 
