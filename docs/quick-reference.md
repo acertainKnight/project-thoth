@@ -296,12 +296,12 @@ THOTH_AGENT_TIMEOUT_SECONDS=600          # Longer timeouts
 
 ## 📚 Documentation Links
 
-- **[Setup Guide](SETUP.md)** - Installation and configuration
-- **[Service Management](SERVICE_MANAGEMENT.md)** - Comprehensive service guide
-- **[Usage Guide](USAGE.md)** - Day-to-day usage
-- **[API Documentation](API.md)** - REST API and WebSocket reference
-- **[Architecture](ARCHITECTURE.md)** - System design overview
-- **[Deployment](DEPLOYMENT.md)** - Production deployment guide
+- **[Setup Guide](setup.md)** - Installation and configuration
+- **[Service Management](service-management.md)** - Comprehensive service guide
+- **[Usage Guide](usage.md)** - Day-to-day usage
+- **[API Documentation](api.md)** - REST API and WebSocket reference
+- **[Architecture](architecture.md)** - System design overview
+- **[Deployment](deployment.md)** - Production deployment guide
 
 ---
 

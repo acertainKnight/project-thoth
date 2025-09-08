@@ -1,38 +1,494 @@
 # ==============================================================================
-# Thoth AI Research Assistant - Production Docker Compose
-# Production-hardened configuration with security and performance optimizations
+# Thoth AI Research Assistant - Production Configuration
+# Scalable microservices architecture for production deployment
 # ==============================================================================
 
 version: '3.8'
 
 services:
   # ==============================================================================
-  # ChromaDB Vector Database (Production)
+  # Infrastructure Services
   # ==============================================================================
+
+  # PostgreSQL Database for Letta Memory System
+  letta-postgres:
+    image: postgres:15-alpine
+    container_name: thoth-prod-letta-postgres
+    environment:
+      - POSTGRES_DB=letta
+      - POSTGRES_USER=letta
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    volumes:
+      - thoth-prod-letta-postgres:/var/lib/postgresql/data
+    secrets:
+      - postgres_password
+    networks:
+      - thoth-prod-backend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U letta -d letta"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+
+  # ChromaDB Vector Database
   chromadb:
     image: chromadb/chroma:latest
-    container_name: thoth-chromadb-prod
+    container_name: thoth-prod-chromadb
     environment:
       - CHROMA_SERVER_HOST=0.0.0.0
       - CHROMA_SERVER_HTTP_PORT=8003
       - IS_PERSISTENT=TRUE
       - PERSIST_DIRECTORY=/chroma/chroma
-      - CHROMA_LOG_LEVEL=INFO
-      - CHROMA_SERVER_CORS_ALLOW_ORIGINS=http://localhost:8000
+      - ANONYMIZED_TELEMETRY=FALSE
+      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.token.TokenAuthCredentialsProvider
+      - CHROMA_SERVER_AUTH_PROVIDER=chromadb.auth.token.TokenAuthServerProvider
+      - CHROMA_SERVER_AUTH_TOKEN_TRANSPORT_HEADER=X-Chroma-Token
     volumes:
-      - thoth-chroma-data-prod:/chroma/chroma
-    # Only expose to internal network in production
-    expose:
-      - "8003"
+      - thoth-prod-chroma-data:/chroma/chroma
+    secrets:
+      - chroma_auth_token
     networks:
-      - thoth-prod-network
-    restart: always
+      - thoth-prod-backend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8003/api/v1/heartbeat"]
       interval: 30s
       timeout: 10s
       retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+
+  # Redis Cache for session management and caching
+  redis:
+    image: redis:7-alpine
+    container_name: thoth-prod-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - thoth-prod-redis-data:/data
+    networks:
+      - thoth-prod-backend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+
+  # ==============================================================================
+  # Thoth Microservices - Core Services
+  # ==============================================================================
+
+  # Letta Memory Service
+  letta:
+    image: letta/letta:latest
+    container_name: thoth-prod-letta
+    environment:
+      - LETTA_SERVER_HOST=0.0.0.0
+      - LETTA_SERVER_PORT=8283
+      - LETTA_PG_URI=postgresql://letta:${POSTGRES_PASSWORD}@letta-postgres:5432/letta
+      - OPENAI_API_KEY_FILE=/run/secrets/openai_api_key
+      - ANTHROPIC_API_KEY_FILE=/run/secrets/anthropic_api_key
+      - LETTA_LOG_LEVEL=INFO
+    volumes:
+      - thoth-prod-letta-data:/letta/.persist
+    secrets:
+      - openai_api_key
+      - anthropic_api_key
+    networks:
+      - thoth-prod-backend
+    depends_on:
+      letta-postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8283/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
       start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+
+  # Main API Server (Scalable)
+  thoth-api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+      target: production
+    environment:
+      # Service discovery
+      - THOTH_CHROMADB_URL=http://chromadb:8003
+      - THOTH_LETTA_URL=http://letta:8283
+      - THOTH_MCP_URL=http://thoth-mcp:8001
+      - THOTH_DISCOVERY_URL=http://thoth-discovery:8004
+      - THOTH_REDIS_URL=redis://redis:6379
+
+      # Server configuration
+      - THOTH_API_HOST=0.0.0.0
+      - THOTH_API_PORT=8000
+      - THOTH_LOG_LEVEL=INFO
+      - THOTH_PRODUCTION=true
+
+      # Security
+      - THOTH_API_SECRET_KEY_FILE=/run/secrets/api_secret_key
+      - THOTH_CORS_ORIGINS=https://yourdomain.com,https://api.yourdomain.com
+
+      # Directory paths
+      - THOTH_WORKSPACE_DIR=/workspace
+      - THOTH_PDF_DIR=/workspace/pdfs
+      - THOTH_NOTES_DIR=/workspace/notes
+      - THOTH_DATA_DIR=/workspace/data
+    volumes:
+      - thoth-prod-workspace:/workspace
+    secrets:
+      - api_secret_key
+      - openai_api_key
+      - anthropic_api_key
+      - semantic_scholar_api_key
+    networks:
+      - thoth-prod-frontend
+      - thoth-prod-backend
+    depends_on:
+      chromadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  # MCP Server (Model Context Protocol)
+  thoth-mcp:
+    build:
+      context: .
+      dockerfile: docker/mcp/Dockerfile
+      target: production
+    environment:
+      # Service discovery
+      - THOTH_CHROMADB_URL=http://chromadb:8003
+      - THOTH_LETTA_URL=http://letta:8283
+      - THOTH_API_URL=http://thoth-api:8000
+      - THOTH_REDIS_URL=redis://redis:6379
+
+      # Server configuration
+      - THOTH_MCP_HOST=0.0.0.0
+      - THOTH_MCP_PORT=8001
+      - THOTH_LOG_LEVEL=INFO
+
+      # Directory paths
+      - THOTH_WORKSPACE_DIR=/workspace
+      - THOTH_DATA_DIR=/workspace/data
+    volumes:
+      - thoth-prod-workspace:/workspace
+    secrets:
+      - openai_api_key
+      - anthropic_api_key
+    networks:
+      - thoth-prod-backend
+    depends_on:
+      - chromadb
+      - redis
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+
+  # Discovery Service (Background Processing)
+  thoth-discovery:
+    build:
+      context: .
+      dockerfile: docker/discovery/Dockerfile
+      target: production
+    environment:
+      # Service discovery
+      - THOTH_CHROMADB_URL=http://chromadb:8003
+      - THOTH_API_URL=http://thoth-api:8000
+      - THOTH_REDIS_URL=redis://redis:6379
+
+      # Server configuration
+      - THOTH_DISCOVERY_HOST=0.0.0.0
+      - THOTH_DISCOVERY_PORT=8004
+      - THOTH_LOG_LEVEL=INFO
+
+      # Discovery settings
+      - THOTH_DISCOVERY_AUTO_START_SCHEDULER=true
+      - THOTH_DISCOVERY_DEFAULT_MAX_ARTICLES=100
+      - THOTH_DISCOVERY_CHECK_INTERVAL=1800
+      - THOTH_DISCOVERY_RATE_LIMIT=60
+
+      # Directory paths
+      - THOTH_WORKSPACE_DIR=/workspace
+      - THOTH_DISCOVERY_SOURCES_DIR=/workspace/discovery
+    volumes:
+      - thoth-prod-workspace:/workspace
+    secrets:
+      - semantic_scholar_api_key
+      - web_search_api_key
+    networks:
+      - thoth-prod-backend
+    depends_on:
+      - chromadb
+      - redis
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+
+  # PDF Monitor Service (Background Processing)
+  thoth-pdf-monitor:
+    build:
+      context: .
+      dockerfile: docker/pdf-monitor/Dockerfile
+      target: production
+    environment:
+      # Service discovery
+      - THOTH_API_URL=http://thoth-api:8000
+      - THOTH_CHROMADB_URL=http://chromadb:8003
+      - THOTH_REDIS_URL=redis://redis:6379
+
+      # Monitor configuration
+      - THOTH_LOG_LEVEL=INFO
+      - THOTH_PDF_MONITOR_INTERVAL=60
+      - THOTH_PDF_MONITOR_BATCH_SIZE=10
+
+      # Directory paths
+      - THOTH_WORKSPACE_DIR=/workspace
+      - THOTH_PDF_DIR=/workspace/pdfs
+      - THOTH_NOTES_DIR=/workspace/notes
+    volumes:
+      - thoth-prod-workspace:/workspace
+    secrets:
+      - openai_api_key
+    networks:
+      - thoth-prod-backend
+    depends_on:
+      - chromadb
+      - redis
+    restart: unless-stopped
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+    security_opt:
+      - no-new-privileges:true
+
+  # Research Agent Service (Scalable)
+  thoth-agent:
+    build:
+      context: .
+      dockerfile: docker/agent/Dockerfile
+      target: production
+    environment:
+      # Service discovery
+      - THOTH_CHROMADB_URL=http://chromadb:8003
+      - THOTH_LETTA_URL=http://letta:8283
+      - THOTH_MCP_URL=http://thoth-mcp:8001
+      - THOTH_API_URL=http://thoth-api:8000
+      - THOTH_REDIS_URL=redis://redis:6379
+
+      # Agent configuration
+      - THOTH_AGENT_HOST=0.0.0.0
+      - THOTH_AGENT_PORT=8005
+      - THOTH_LOG_LEVEL=INFO
+
+      # Agent settings
+      - THOTH_RESEARCH_AGENT_MEMORY_ENABLED=true
+      - THOTH_AGENT_MAX_TOOL_CALLS=20
+      - THOTH_AGENT_TIMEOUT_SECONDS=300
+      - THOTH_AGENT_CONCURRENT_SESSIONS=5
+
+      # Directory paths
+      - THOTH_WORKSPACE_DIR=/workspace
+      - THOTH_DATA_DIR=/workspace/data
+    volumes:
+      - thoth-prod-workspace:/workspace
+    secrets:
+      - openai_api_key
+      - anthropic_api_key
+    networks:
+      - thoth-prod-backend
+    depends_on:
+      - chromadb
+      - letta
+      - thoth-mcp
+      - redis
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+
+  # ==============================================================================
+  # Load Balancer & Reverse Proxy
+  # ==============================================================================
+
+  nginx:
+    image: nginx:alpine
+    container_name: thoth-prod-nginx
+    volumes:
+      - ./docker/nginx/prod.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+      - thoth-prod-logs:/var/log/nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - thoth-prod-frontend
+    depends_on:
+      - thoth-api
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+
+  # ==============================================================================
+  # Monitoring & Observability
+  # ==============================================================================
+
+  # Prometheus metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: thoth-prod-prometheus
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - thoth-prod-prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    networks:
+      - thoth-prod-backend
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -43,167 +499,33 @@ services:
           cpus: '0.1'
     security_opt:
       - no-new-privileges:true
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /var/tmp
 
-  # ==============================================================================
-  # Thoth Main Application (Production)
-  # ==============================================================================
-  thoth-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime
-    container_name: thoth-app-prod
+  # Grafana dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: thoth-prod-grafana
     environment:
-      # Database connections
-      - THOTH_CHROMADB_HOST=chromadb
-      - THOTH_CHROMADB_PORT=8003
-      - THOTH_CHROMADB_URL=http://chromadb:8003
-
-      # Server configuration
-      - THOTH_API_HOST=0.0.0.0
-      - THOTH_API_PORT=8000
-      - THOTH_MCP_HOST=0.0.0.0
-      - THOTH_MCP_PORT=8001
-
-      # Directory paths
-      - THOTH_WORKSPACE_DIR=/workspace
-      - THOTH_PDF_DIR=/workspace/pdfs
-      - THOTH_NOTES_DIR=/workspace/notes
-      - THOTH_DATA_DIR=/workspace/data
-      - THOTH_QUERIES_DIR=/workspace/queries
-      - THOTH_DISCOVERY_SOURCES_DIR=/workspace/discovery
-      - THOTH_KNOWLEDGE_BASE_DIR=/workspace/knowledge
-      - THOTH_LOGS_DIR=/workspace/logs
-      - THOTH_CACHE_DIR=/workspace/cache
-
-      # Production settings
-      - THOTH_LOG_LEVEL=INFO
-      - THOTH_DOCKER=1
-      - THOTH_PRODUCTION=1
-      - PYTHONPATH=/app/src
-
-      # Security settings
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-
-      # Performance settings
-      - THOTH_DISCOVERY_AUTO_START_SCHEDULER=false
-      - THOTH_DISCOVERY_DEFAULT_MAX_ARTICLES=50
-      - THOTH_RESEARCH_AGENT_MEMORY_ENABLED=true
-      - THOTH_AGENT_MAX_TOOL_CALLS=20
-      - THOTH_AGENT_TIMEOUT_SECONDS=300
-
-      # Cache settings
-      - THOTH_ENABLE_CACHE=true
-      - THOTH_CACHE_TTL=3600
-      - THOTH_MAX_MEMORY=2GB
-
-    env_file:
-      - .env.prod  # Production environment variables
-
+      - GF_SECURITY_ADMIN_PASSWORD_FILE=/run/secrets/grafana_admin_password
+      - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
-      # Persistent data only, no source code mounting
-      - thoth-workspace-prod:/workspace
-      - thoth-data-prod:/workspace/data
-      - thoth-logs-prod:/workspace/logs
-      - thoth-cache-prod:/workspace/cache
-
-      # Read-only configuration
-      - ./prompts:/workspace/prompts:ro
-      - ./templates:/workspace/templates:ro
-
-    ports:
-      - "8000:8000"  # Main API server
-      - "8001:8001"  # MCP server
-
+      - thoth-prod-grafana-data:/var/lib/grafana
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    secrets:
+      - grafana_admin_password
     networks:
-      - thoth-prod-network
-
+      - thoth-prod-backend
     depends_on:
-      chromadb:
-        condition: service_healthy
-
-    restart: always
-
-    healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
-
-    # Production resource limits
+      - prometheus
+    restart: unless-stopped
     deploy:
       resources:
         limits:
-          memory: 2G
-          cpus: '1.5'
+          memory: 512M
+          cpus: '0.25'
         reservations:
-          memory: 1G
-          cpus: '0.5'
-
-    # Security hardening
-    security_opt:
-      - no-new-privileges:true
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /var/tmp
-
-    # Logging configuration
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "100m"
-        max-file: "3"
-
-  # ==============================================================================
-  # Nginx Reverse Proxy (Optional - for production load balancing)
-  # ==============================================================================
-  nginx:
-    image: nginx:alpine
-    container_name: thoth-nginx-prod
-    volumes:
-      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
-    ports:
-      - "80:80"
-      - "443:443"
-    networks:
-      - thoth-prod-network
-    depends_on:
-      - thoth-app
-    restart: always
-    profiles:
-      - proxy
-    security_opt:
-      - no-new-privileges:true
-    read_only: true
-    tmpfs:
-      - /var/cache/nginx
-      - /var/run
-      - /tmp
-
-  # ==============================================================================
-  # Log Aggregation (Optional - for production monitoring)
-  # ==============================================================================
-  log-aggregator:
-    image: fluent/fluent-bit:latest
-    container_name: thoth-logs-prod
-    volumes:
-      - ./docker/fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
-      - thoth-logs-prod:/workspace/logs:ro
-    networks:
-      - thoth-prod-network
-    depends_on:
-      - thoth-app
-    restart: always
-    profiles:
-      - monitoring
+          memory: 128M
+          cpus: '0.1'
     security_opt:
       - no-new-privileges:true
 
@@ -211,55 +533,101 @@ services:
 # Production Volumes
 # ==============================================================================
 volumes:
-  thoth-chroma-data-prod:
+  thoth-prod-letta-data:
     driver: local
-    name: thoth-chroma-data-prod
+    name: thoth-prod-letta-data
     driver_opts:
       type: none
       o: bind
-      device: /opt/thoth/data/chroma
+      device: /opt/thoth/letta
 
-  thoth-workspace-prod:
+  thoth-prod-letta-postgres:
     driver: local
-    name: thoth-workspace-prod
+    name: thoth-prod-letta-postgres
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/thoth/postgres
+
+  thoth-prod-chroma-data:
+    driver: local
+    name: thoth-prod-chroma-data
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/thoth/chroma
+
+  thoth-prod-redis-data:
+    driver: local
+    name: thoth-prod-redis-data
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/thoth/redis
+
+  thoth-prod-workspace:
+    driver: local
+    name: thoth-prod-workspace
     driver_opts:
       type: none
       o: bind
       device: /opt/thoth/workspace
 
-  thoth-data-prod:
+  thoth-prod-logs:
     driver: local
-    name: thoth-data-prod
-    driver_opts:
-      type: none
-      o: bind
-      device: /opt/thoth/data
-
-  thoth-logs-prod:
-    driver: local
-    name: thoth-logs-prod
+    name: thoth-prod-logs
     driver_opts:
       type: none
       o: bind
       device: /opt/thoth/logs
 
-  thoth-cache-prod:
+  thoth-prod-prometheus-data:
     driver: local
-    name: thoth-cache-prod
+    name: thoth-prod-prometheus-data
     driver_opts:
       type: none
       o: bind
-      device: /opt/thoth/cache
+      device: /opt/thoth/prometheus
+
+  thoth-prod-grafana-data:
+    driver: local
+    name: thoth-prod-grafana-data
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/thoth/grafana
 
 # ==============================================================================
-# Production Network
+# Production Networks
 # ==============================================================================
 networks:
-  thoth-prod-network:
+  thoth-prod-frontend:
     driver: bridge
-    name: thoth-prod-network
-    ipam:
-      config:
-        - subnet: 172.22.0.0/16
-    driver_opts:
-      com.docker.network.bridge.name: thoth-prod0
+    name: thoth-prod-frontend
+    internal: false
+
+  thoth-prod-backend:
+    driver: bridge
+    name: thoth-prod-backend
+    internal: true
+
+# ==============================================================================
+# Production Secrets
+# ==============================================================================
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  chroma_auth_token:
+    file: ./secrets/chroma_auth_token.txt
+  api_secret_key:
+    file: ./secrets/api_secret_key.txt
+  openai_api_key:
+    file: ./secrets/openai_api_key.txt
+  anthropic_api_key:
+    file: ./secrets/anthropic_api_key.txt
+  semantic_scholar_api_key:
+    file: ./secrets/semantic_scholar_api_key.txt
+  web_search_api_key:
+    file: ./secrets/web_search_api_key.txt
+  grafana_admin_password:
+    file: ./secrets/grafana_admin_password.txt

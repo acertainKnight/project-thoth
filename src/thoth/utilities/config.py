@@ -6,7 +6,7 @@ configuration components from the new modular structure.
 """
 
 # Re-export everything from the modular config package for backwards compatibility
-from .config import *  # noqa: F403
+# Using explicit imports instead of star import for security and clarity
 
 # Specifically import the public API to ensure it's available
 from .config import (

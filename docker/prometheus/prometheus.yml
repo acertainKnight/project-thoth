@@ -1,0 +1,90 @@
+# ==============================================================================
+# Prometheus Configuration for Thoth Microservices
+# ==============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'thoth-monitor'
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 5s
+
+  # Thoth API Server metrics
+  - job_name: 'thoth-api'
+    static_configs:
+      - targets: ['thoth-api:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # Thoth MCP Server metrics
+  - job_name: 'thoth-mcp'
+    static_configs:
+      - targets: ['thoth-mcp:8001']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # Thoth Discovery Service metrics
+  - job_name: 'thoth-discovery'
+    static_configs:
+      - targets: ['thoth-discovery:8004']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Thoth Agent Service metrics
+  - job_name: 'thoth-agent'
+    static_configs:
+      - targets: ['thoth-agent:8005']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # ChromaDB metrics
+  - job_name: 'chromadb'
+    static_configs:
+      - targets: ['chromadb:8003']
+    metrics_path: '/api/v1/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Redis metrics (if redis_exporter is added)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # PostgreSQL metrics (if postgres_exporter is added)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['letta-postgres:5432']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Nginx metrics
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:80']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+# Alerting rules
+rule_files:
+  - "alert_rules.yml"
+
+# Alertmanager configuration (if using alertmanager)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093

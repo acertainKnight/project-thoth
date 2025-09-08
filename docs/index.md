@@ -6,16 +6,16 @@ Welcome to the comprehensive documentation for Thoth, an advanced AI-powered res
 
 ### Getting Started
 - **[README](../README.md)** - Project overview and quick start guide
-- **[Setup Guide](SETUP.md)** - Detailed installation and configuration instructions
-- **[Usage Guide](USAGE.md)** - Comprehensive usage documentation and examples
+- **[Setup Guide](setup.md)** - Detailed installation and configuration instructions
+- **[Usage Guide](usage.md)** - Comprehensive usage documentation and examples
 
 ### System Architecture
-- **[Architecture Overview](ARCHITECTURE.md)** - High-level system design and component interactions
-- **[Services Documentation](SERVICES.md)** - Detailed service architecture and APIs
-- **[Agent System](AGENT_SYSTEM.md)** - Advanced agentic workflows and tool integration
+- **[Architecture Overview](architecture.md)** - High-level system design and component interactions
+- **[Services Documentation](services.md)** - Detailed service architecture and APIs
+- **[Agent System](agent-system.md)** - Advanced agentic workflows and tool integration
 
 ### API Reference
-- **[API Documentation](API.md)** - Complete REST API, WebSocket, and MCP protocol reference
+- **[API Documentation](api.md)** - Complete REST API, WebSocket, and MCP protocol reference
 
 ## What is Thoth?
 
@@ -70,22 +70,22 @@ Thoth is a sophisticated research assistant that combines:
 
 ### For New Users
 1. Start with the [README](../README.md) for a quick overview
-2. Follow the [Setup Guide](SETUP.md) for installation and deployment options
-3. Review the [Service Management Guide](SERVICE_MANAGEMENT.md) for multi-service architecture
-4. Explore the [Usage Guide](USAGE.md) for common workflows
+2. Follow the [Setup Guide](setup.md) for installation and deployment options
+3. Review the [Service Management Guide](service-management.md) for multi-service architecture
+4. Explore the [Usage Guide](usage.md) for common workflows
 
 ### For Developers
-1. Review the [Architecture Overview](ARCHITECTURE.md) for system design
-2. Study the [Services Documentation](SERVICES.md) for detailed APIs
-3. Examine the [Agent System](AGENT_SYSTEM.md) for advanced features
-4. Reference the [API Documentation](API.md) for integration details
-5. Learn [Service Management](SERVICE_MANAGEMENT.md) for deployment and scaling
+1. Review the [Architecture Overview](architecture.md) for system design
+2. Study the [Services Documentation](services.md) for detailed APIs
+3. Examine the [Agent System](agent-system.md) for advanced features
+4. Reference the [API Documentation](api.md) for integration details
+5. Learn [Service Management](service-management.md) for deployment and scaling
 
 ### For Advanced Users
-1. Understand the [Agent System](AGENT_SYSTEM.md) for sophisticated workflows
-2. Use the [API Documentation](API.md) for programmatic access
-3. Customize services using the [Services Documentation](SERVICES.md)
-4. Deploy with [Service Management](SERVICE_MANAGEMENT.md) for production scaling
+1. Understand the [Agent System](agent-system.md) for sophisticated workflows
+2. Use the [API Documentation](api.md) for programmatic access
+3. Customize services using the [Services Documentation](services.md)
+4. Deploy with [Service Management](service-management.md) for production scaling
 
 ## Common Use Cases
 
@@ -167,4 +167,4 @@ MIT License - see [LICENSE](../LICENSE) file for details.
 
 ---
 
-**Ready to get started?** Begin with the [Setup Guide](SETUP.md) or explore the [Usage Guide](USAGE.md) for detailed examples.
+**Ready to get started?** Begin with the [Setup Guide](setup.md) or explore the [Usage Guide](usage.md) for detailed examples.

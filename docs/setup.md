@@ -614,11 +614,11 @@ python -m thoth monitor --watch-dir /path/to/pdfs --optimized
 
 After successful setup:
 
-1. **Read the [Usage Guide](USAGE.md)** for detailed feature documentation
+1. **Read the [Usage Guide](usage.md)** for detailed feature documentation
 2. **Explore [Examples](examples/)** for common research workflows
-3. **Check [API Documentation](API.md)** for programmatic access
+3. **Check [API Documentation](api.md)** for programmatic access
 4. **Join the community** for support and feature discussions
 
 ---
 
-*For additional help, see the [FAQ](FAQ.md) or create an issue on GitHub.*
+*For additional help, see the [FAQ](faq.md) or create an issue on GitHub.*
