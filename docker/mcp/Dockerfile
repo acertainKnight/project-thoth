@@ -66,8 +66,12 @@ USER thoth
 # Set working directory
 WORKDIR /app
 
-# Create default workspace structure
-RUN mkdir -p /workspace/{data,cache}
+# Create default workspace structure with Letta directories
+RUN mkdir -p /workspace/{data,cache} \
+    && mkdir -p /workspace/data/letta/config \
+    && mkdir -p /workspace/data/cache/letta \
+    && mkdir -p /workspace/logs/letta \
+    && chown -R thoth:thoth /workspace
 
 # Health check for container orchestration
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

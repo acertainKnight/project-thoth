@@ -138,7 +138,7 @@ def create_app() -> FastAPI:
     )  # Enterprise MCP monitoring
     app.include_router(websocket.router, tags=['websocket'])
     app.include_router(chat.router, prefix='/chat', tags=['chat'])
-    app.include_router(agent.router, prefix='/agent', tags=['agent'])
+    app.include_router(agent.router, prefix='/agents', tags=['agent'])
     app.include_router(research.router, prefix='/research', tags=['research'])
     app.include_router(config.router, prefix='/config', tags=['config'])
     app.include_router(operations.router, prefix='/operations', tags=['operations'])
@@ -249,11 +249,25 @@ async def start_server(
             logger.error(f'Failed to initialize research agent: {e}')
             research_agent = None
 
+        # Initialize Letta orchestrator for agent management
+        thoth_orchestrator = None
+        try:
+            from thoth.agents.orchestrator import ThothOrchestrator
+
+            thoth_orchestrator = ThothOrchestrator(
+                service_manager=service_manager, workspace_dir=config.agent_storage_dir
+            )
+            await thoth_orchestrator.setup()
+            logger.info('Thoth orchestrator initialized successfully')
+        except Exception as e:
+            logger.warning(f'Failed to initialize Thoth orchestrator: {e}')
+            thoth_orchestrator = None
+
         # Set up router dependencies
         health.set_directories(pdf_dir, notes_dir, base_url)
         websocket.set_dependencies(service_manager, research_agent, chat_manager)
         chat.set_chat_manager(chat_manager)
-        agent.set_dependencies(research_agent, current_config)
+        agent.set_dependencies(research_agent, current_config, thoth_orchestrator)
         research.set_dependencies(research_agent, chat_manager)
         operations.set_service_manager(service_manager)
         tools.set_dependencies(research_agent, service_manager)

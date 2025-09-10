@@ -280,7 +280,7 @@ class ManageTagVocabularyMCPTool(NoInputTool):
                     '\nUse `consolidate_tags` to merge similar tags automatically.\n\n'
                 )
 
-            response_text += '🛠️ **Available Actions:**\n'
+            response_text += '🛠 **Available Actions:**\n'
             response_text += '  - `consolidate_tags` - Merge similar tags using AI\n'
             response_text += '  - `suggest_tags` - Add missing tags to articles\n'
 

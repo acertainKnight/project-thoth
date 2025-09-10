@@ -120,10 +120,18 @@ Services will be available at:
 ## Key Features
 
 ### Advanced AI System
-- **LangGraph-Powered Agents**: Modern agentic workflows with tool orchestration
+- **Letta-Based Agent Orchestration**: Claude Code-style subagent creation and management
+- **Chat-Driven Agent Creation**: Create specialized agents through natural language
 - **Multi-Provider LLM Router**: Intelligent routing across OpenAI, Anthropic, Mistral, OpenRouter
-- **Persistent Memory**: Letta-based memory system with salience-based retention
+- **Persistent Memory**: Advanced memory system with salience-based retention and cross-session persistence
 - **MCP Framework**: Full Model Context Protocol support for agent interoperability
+
+### Intelligent Agent System
+- **Dynamic Agent Creation**: `"create an agent that analyzes citation patterns"`
+- **@Agent Interactions**: `"@citation-analyzer analyze this paper's references"`
+- **Specialized Agent Types**: Research, Analysis, Discovery, Citation, and Synthesis agents
+- **Tool Auto-Assignment**: Agents automatically receive appropriate tools based on their purpose
+- **Memory Persistence**: Agents maintain context and knowledge across sessions
 
 ### Document Processing
 - **Multi-Stage Pipelines**: Configurable processing with extensible stages
@@ -143,20 +151,28 @@ Thoth uses a service-oriented architecture with the `ServiceManager` as the cent
 
 ```mermaid
 graph TD
-    A[Research Agent] --> B[Service Manager]
-    B --> C[LLM Router]
-    B --> D[RAG System]
-    B --> E[Discovery Engine]
-    B --> F[Pipeline Processor]
+    A[ThothOrchestrator] --> B[Service Manager]
+    A --> C[SubagentFactory]
+    A --> D[LettaToolRegistry]
 
-    G[Obsidian Plugin] --> H[API Server]
-    H --> B
+    C --> E[Letta Server]
+    D --> E
 
-    I[CLI Interface] --> J[MCP Server]
-    J --> B
+    B --> F[LLM Router]
+    B --> G[RAG System]
+    B --> H[Discovery Engine]
+    B --> I[Pipeline Processor]
 
-    K[External APIs] --> E
-    L[Vector Store] --> D
+    J[Obsidian Plugin] --> K[API Server]
+    K --> A
+    K --> B
+
+    L[CLI Interface] --> M[MCP Server]
+    M --> B
+
+    N[External APIs] --> H
+    O[Vector Store] --> G
+    P[Agent Memory] --> E
 ```
 
 ### Core Components
@@ -252,6 +268,30 @@ python -m thoth discovery search "large language models" --source arxiv
 python -m thoth discovery search "neural networks" --source semantic_scholar
 ```
 
+### Intelligent Agent System
+```bash
+# Create specialized agents through chat
+"create an agent that analyzes citation patterns in research papers"
+"make a discovery agent for machine learning papers"
+"build an agent that helps with reference formatting"
+
+# Interact with created agents using @mentions
+"@citation-analyzer analyze the references in this paper"
+"@ml-discovery find recent papers about transformer attention mechanisms"
+"@reference-formatter format these citations in APA style"
+
+# List and manage your agents
+"list my agents"
+"show available agents"
+```
+
+**Agent Types:**
+- **Research**: General research assistance and literature reviews
+- **Analysis**: Deep document analysis and critical evaluation
+- **Discovery**: Multi-source paper finding and monitoring
+- **Citation**: Citation extraction and bibliography management
+- **Synthesis**: Knowledge integration and summary generation
+
 ### Development Commands
 
 | Command | Purpose |
@@ -276,12 +316,18 @@ python -m thoth discovery search "neural networks" --source semantic_scholar
 | Data | `OPENCITATIONS_KEY` | Citation data access | No |
 | System | `THOTH_WORKSPACE_DIR` | Main working directory | No |
 | System | `THOTH_PDF_DIR` | PDF storage location | No |
+| Agents | `LETTA_SERVER_URL` | Letta server connection | No |
+| Agents | `LETTA_ENABLE_AGENT_SYSTEM` | Enable agent orchestration | No |
+| Agents | `LETTA_MAX_AGENTS_PER_USER` | Agent limit per user | No |
 
 ### Directory Structure
 ```
 workspace/
 ├── pdfs/              # Original PDF documents
 ├── data/              # Processed documents and embeddings
+├── agents/            # Agent configurations and memory
+│   ├── system/        # System-provided agents
+│   └── user/          # User-created agents
 ├── knowledge/         # Knowledge graphs and citations
 ├── logs/              # Application logs
 └── config/            # User configuration files
@@ -294,7 +340,13 @@ workspace/
 project-thoth/
 ├── src/thoth/              # Python package
 │   ├── cli/               # Command-line interface
+│   ├── agents/            # Agent system (NEW)
+│   │   ├── orchestrator.py   # Main orchestrator
+│   │   ├── subagent_factory.py # Agent creation
+│   │   └── schemas.py        # Agent data models
 │   ├── services/          # Core services
+│   ├── tools/             # Tool registration system (NEW)
+│   ├── memory/            # Letta memory integration (NEW)
 │   ├── mcp/              # MCP protocol implementation
 │   ├── server/           # API server
 │   ├── pipelines/        # Document processing

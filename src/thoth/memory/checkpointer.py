@@ -16,6 +16,7 @@ from langgraph.checkpoint.base import (
     BaseCheckpointSaver,
     Checkpoint,
     CheckpointMetadata,
+    CheckpointTuple,
 )
 from loguru import logger
 
@@ -413,6 +414,93 @@ class LettaCheckpointer(BaseCheckpointSaver):
                 'error': str(e),
                 'component': 'LettaCheckpointer',
             }
+
+    # Async methods required by LangGraph
+    async def aget_tuple(self, config: RunnableConfig) -> CheckpointTuple | None:
+        """
+        Async version of get_tuple for LangGraph compatibility.
+
+        Args:
+            config: Runnable configuration
+
+        Returns:
+            Latest checkpoint tuple or None if not found
+        """
+        import asyncio
+
+        try:
+            # Use asyncio to run sync method in executor
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self.get_tuple, config)
+            return result
+        except Exception as e:
+            logger.error(f'Error in aget_tuple: {e}')
+            return None
+
+    async def alist(
+        self,
+        config: RunnableConfig,
+        *,
+        filter: dict[str, Any] | None = None,
+        before: RunnableConfig | None = None,
+        limit: int | None = None,
+    ) -> list[CheckpointTuple]:
+        """
+        Async version of list for LangGraph compatibility.
+
+        Args:
+            config: Runnable configuration
+            filter: Optional filter criteria
+            before: Optional checkpoint to start before
+            limit: Optional limit on results
+
+        Returns:
+            List of checkpoint tuples
+        """
+        import asyncio
+
+        try:
+            # Use asyncio to run sync method in executor
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                lambda: self.list(config, filter=filter, before=before, limit=limit),
+            )
+            return result
+        except Exception as e:
+            logger.error(f'Error in alist: {e}')
+            return []
+
+    async def aput(
+        self,
+        config: RunnableConfig,
+        checkpoint: Checkpoint,
+        metadata: CheckpointMetadata,
+    ) -> RunnableConfig:
+        """
+        Async version of put for LangGraph compatibility.
+
+        Args:
+            config: Runnable configuration
+            checkpoint: Checkpoint data to save
+            metadata: Checkpoint metadata
+
+        Returns:
+            Updated configuration with checkpoint ID
+        """
+        import asyncio
+
+        try:
+            # Use asyncio to run sync method in executor
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.put, config, checkpoint, metadata
+            )
+            return result
+        except Exception as e:
+            logger.error(f'Error in aput: {e}')
+            # Return original config on error
+            return config
 
     def load_context_memories(
         self, config: RunnableConfig, conversation_context: str, max_memories: int = 5

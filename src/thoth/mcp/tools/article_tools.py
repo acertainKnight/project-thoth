@@ -229,7 +229,7 @@ class SearchArticlesMCPTool(MCPTool):
                     response_text += f'   Date: {metadata["publication_date"]}\n'
 
                 if metadata.get('journal'):
-                    response_text += f'   📖 Journal: {metadata["journal"]}\n'
+                    response_text += f'    Journal: {metadata["journal"]}\n'
 
                 if metadata.get('citation_count'):
                     response_text += f'   Citations: {metadata["citation_count"]}\n'

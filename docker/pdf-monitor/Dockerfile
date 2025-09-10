@@ -71,7 +71,11 @@ USER thoth
 WORKDIR /app
 
 # Create default workspace structure
-RUN mkdir -p /workspace/{pdfs,notes,data,logs,cache}
+RUN mkdir -p /workspace/{pdfs,notes,data,logs,cache} \
+    && mkdir -p /workspace/data/letta/config \
+    && mkdir -p /workspace/data/cache/letta \
+    && mkdir -p /workspace/logs/letta \
+    && chown -R thoth:thoth /workspace
 
 # Set PATH to include the virtual environment
 ENV PATH="/app/.venv/bin:$PATH" \

@@ -395,7 +395,7 @@ class ValidatePdfSourcesMCPTool(MCPTool):
                                 else:
                                     response_text += f'  - Status: ✗ Error ({test_response.status_code})\n'
                             else:
-                                response_text += '  - Status: ⚠ No URL to test\n'
+                                response_text += '  - Status:  No URL to test\n'
 
                     except requests.exceptions.Timeout:
                         response_text += '  - Status: ✗ Timeout (>10s)\n'
@@ -569,7 +569,7 @@ class ExtractPdfMetadataMCPTool(MCPTool):
 
                     # Document structure analysis
                     if analyze_structure:
-                        response_text += '\n🏗️ **Document Structure Analysis:**\n'
+                        response_text += '\n🏗 **Document Structure Analysis:**\n'
                         response_text += f'- Total pages: {len(pdf_reader.pages)}\n'
 
                         # Analyze page sizes
@@ -603,7 +603,7 @@ class ExtractPdfMetadataMCPTool(MCPTool):
                 # Fallback if PyPDF2 is not available
                 response_text += '**PDF Processing Library Not Available**\n\n'
                 response_text += '**Basic File Info:**\n'
-                response_text += '- File exists: ✅\n'
+                response_text += '- File exists: \n'
                 response_text += '- File format: PDF\n'
                 response_text += (
                     f'- Size: {pdf_file.stat().st_size / (1024 * 1024):.1f} MB\n\n'

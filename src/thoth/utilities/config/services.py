@@ -108,6 +108,21 @@ class LettaConfig(BaseSettings):
         24, description='Hours between memory consolidation runs'
     )
 
+    # Agent system configuration
+    enable_agent_system: bool = Field(
+        True, description='Enable Letta-based agent orchestration system'
+    )
+    agent_workspace_subdir: str = Field(
+        'agents', description='Subdirectory within workspace for agent storage'
+    )
+    max_agents_per_user: int = Field(
+        50, description='Maximum number of agents per user'
+    )
+    default_agent_tools: list[str] = Field(
+        default_factory=lambda: ['search_articles', 'analyze_document'],
+        description='Default tools assigned to new agents',
+    )
+
     # Fallback behavior
     fallback_enabled: bool = Field(
         True,

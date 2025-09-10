@@ -125,7 +125,7 @@ class MCPTool(ABC):
             content=[
                 {
                     'type': 'text',
-                    'text': f'❌ Error in {self.name}: {error!s}\n\n🔍 Debug info: {type(error).__name__}',
+                    'text': f' Error in {self.name}: {error!s}\n\n Debug info: {type(error).__name__}',
                 }
             ],
             isError=True,
@@ -205,7 +205,7 @@ class MCPToolRegistry:
         tool = self.get_tool(name)
         if not tool:
             return MCPToolCallResult(
-                content=[{'type': 'text', 'text': f"❌ Tool '{name}' not found"}],
+                content=[{'type': 'text', 'text': f" Tool '{name}' not found"}],
                 isError=True,
             )
 
@@ -213,7 +213,7 @@ class MCPToolRegistry:
         if not tool.validate_arguments(arguments):
             return MCPToolCallResult(
                 content=[
-                    {'type': 'text', 'text': f"❌ Invalid arguments for tool '{name}'"}
+                    {'type': 'text', 'text': f" Invalid arguments for tool '{name}'"}
                 ],
                 isError=True,
             )

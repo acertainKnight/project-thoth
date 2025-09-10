@@ -18,13 +18,15 @@ router = APIRouter()
 # Module-level variables that will be set by the main app
 research_agent = None
 current_config: dict[str, Any] = {}
+orchestrator = None  # Will hold the ThothOrchestrator instance
 
 
-def set_dependencies(agent, config):
+def set_dependencies(agent, config, thoth_orchestrator=None):
     """Set the dependencies for this router."""
-    global research_agent, current_config
+    global research_agent, current_config, orchestrator
     research_agent = agent
     current_config = config
+    orchestrator = thoth_orchestrator
 
 
 # Request Models
@@ -37,6 +39,12 @@ class ConfigUpdateRequest(BaseModel):
 class AgentRestartRequest(BaseModel):
     update_config: bool = False
     new_config: ConfigUpdateRequest | None = None
+
+
+class ChatMessage(BaseModel):
+    message: str
+    conversation_id: str | None = None
+    user_id: str = 'default'
 
 
 async def delayed_shutdown():
@@ -338,4 +346,143 @@ async def sync_obsidian_settings(settings: dict[str, Any]):
         logger.error(f'Error syncing Obsidian settings: {e}')
         raise HTTPException(
             status_code=500, detail=f'Failed to sync settings: {e!s}'
+        ) from e
+
+
+@router.post('/chat')
+async def agent_chat(message_request: ChatMessage):
+    """
+    Handle chat messages with Letta-based agent orchestration.
+
+    This endpoint routes messages to appropriate agents based on content,
+    supports agent creation, and manages @agent mentions.
+    """
+    try:
+        # Check if orchestrator is available
+        if orchestrator is None:
+            # Fallback to regular research agent if orchestrator not available
+            if research_agent is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail='Neither orchestrator nor research agent is available',
+                )
+
+            # Use the regular research agent for backward compatibility
+            response = research_agent.astream_events(
+                {'messages': [('user', message_request.message)]}, version='v1'
+            )
+
+            # Extract response from events
+            result_text = ''
+            async for event in response:
+                if event['event'] == 'on_chain_end':
+                    result_text = (
+                        event['data']['output']
+                        .get('messages', [{}])[-1]
+                        .get('content', '')
+                    )
+                    break
+
+            return JSONResponse(
+                {
+                    'response': result_text or 'No response generated',
+                    'agent_type': 'research',
+                    'conversation_id': message_request.conversation_id,
+                }
+            )
+
+        # Use the Letta orchestrator for advanced agent management
+        response = await orchestrator.handle_message(
+            message=message_request.message,
+            user_id=message_request.user_id,
+            thread_id=message_request.conversation_id,
+        )
+
+        return JSONResponse(
+            {
+                'response': response,
+                'agent_type': 'letta_orchestrated',
+                'conversation_id': message_request.conversation_id,
+                'user_id': message_request.user_id,
+            }
+        )
+
+    except HTTPException:
+        # Re-raise HTTPExceptions to preserve status codes
+        raise
+    except Exception as e:
+        logger.error(f'Error in agent chat: {e}')
+        raise HTTPException(
+            status_code=500, detail=f'Failed to process agent chat: {e!s}'
+        ) from e
+
+
+@router.get('/list')
+async def list_available_agents():
+    """List all available agents."""
+    try:
+        if orchestrator is None:
+            return JSONResponse(
+                {
+                    'agents': [],
+                    'message': 'Orchestrator not available - no custom agents available',
+                }
+            )
+
+        # Get available agents from orchestrator
+        try:
+            system_agents = (
+                await orchestrator._get_system_agents()
+                if hasattr(orchestrator, '_get_system_agents')
+                else []
+            )
+            user_agents = (
+                await orchestrator._get_user_agents('default')
+                if hasattr(orchestrator, '_get_user_agents')
+                else []
+            )
+
+            agents_list = []
+
+            # Add system agents
+            for agent in system_agents:
+                agents_list.append(
+                    {
+                        'name': agent.name,
+                        'description': agent.description,
+                        'type': 'system',
+                        'capabilities': getattr(agent, 'capabilities', []),
+                    }
+                )
+
+            # Add user agents
+            for agent in user_agents:
+                agents_list.append(
+                    {
+                        'name': agent.name,
+                        'description': agent.description,
+                        'type': 'user',
+                        'capabilities': getattr(agent, 'capabilities', []),
+                    }
+                )
+
+            return JSONResponse(
+                {
+                    'agents': agents_list,
+                    'total_count': len(agents_list),
+                    'system_count': len(system_agents),
+                    'user_count': len(user_agents),
+                }
+            )
+
+        except Exception as e:
+            logger.error(f'Error getting agent lists: {e}')
+            return JSONResponse(
+                {'agents': [], 'message': f'Error retrieving agents: {e!s}'}
+            )
+
+    except Exception as e:
+        logger.error(f'Error listing agents: {e}')
+        raise HTTPException(
+            status_code=500, detail=f'Failed to list agents: {e!s}'
         ) from e
