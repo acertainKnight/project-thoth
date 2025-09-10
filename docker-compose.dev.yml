@@ -22,7 +22,7 @@ services:
     volumes:
       - thoth-dev-letta-postgres:/var/lib/postgresql/data
     ports:
-      - "5432:5432"  # Exposed for development access
+      - "5433:5432"  # Exposed for development access (avoiding conflict with system PostgreSQL)
     networks:
       - thoth-dev-network
     restart: unless-stopped
@@ -39,23 +39,23 @@ services:
     container_name: thoth-dev-chromadb
     environment:
       - CHROMA_SERVER_HOST=0.0.0.0
-      - CHROMA_SERVER_HTTP_PORT=8003
+      - CHROMA_SERVER_HTTP_PORT=8000
       - IS_PERSISTENT=TRUE
       - PERSIST_DIRECTORY=/chroma/chroma
       - ANONYMIZED_TELEMETRY=FALSE
     volumes:
       - thoth-dev-chroma-data:/chroma/chroma
     ports:
-      - "8003:8003"
+      - "8003:8000"
     networks:
       - thoth-dev-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8003/api/v1/heartbeat"]
+      test: ["CMD", "sh", "-c", "grep -q ':1F40 ' /proc/net/tcp && echo ChromaDB healthy || exit 1"]
       interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+      timeout: 8s
+      retries: 5
+      start_period: 45s
 
   # ==============================================================================
   # Thoth Microservices
@@ -69,11 +69,27 @@ services:
       - LETTA_SERVER_HOST=0.0.0.0
       - LETTA_SERVER_PORT=8283
       - LETTA_PG_URI=postgresql://letta:letta_dev_password@letta-postgres:5432/letta
+
+      # LLM Provider Configuration
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - API_MISTRAL_KEY=${API_MISTRAL_KEY:-}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
+
+      # Security Configuration
+      - SECURE=${LETTA_SECURE:-false}
+      - LETTA_SERVER_PASSWORD=${LETTA_SERVER_PASSWORD:-}
+
+      # Tool Execution & Sandboxing
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - E2B_SANDBOX_TEMPLATE_ID=${E2B_SANDBOX_TEMPLATE_ID:-}
+      - TOOL_EXEC_DIR=/workspace/tools
+
+      # Logging
       - LETTA_LOG_LEVEL=DEBUG
     volumes:
-      - thoth-dev-letta-data:/letta/.persist
+      - thoth-dev-letta-data:/var/lib/postgresql/data
+      - ./workspace:/workspace  # For tool execution and shared data
     ports:
       - "8283:8283"
     networks:
@@ -97,6 +113,15 @@ services:
       target: development
     container_name: thoth-dev-api
     environment:
+      # User permissions
+      - HOME=/workspace
+
+      # Letta configuration - override default data directories
+      - LETTA_DIR=/workspace/data/letta
+      - LETTA_LOGS_DIR=/workspace/logs/letta
+      - LETTA_CACHE_DIR=/workspace/data/cache/letta
+      - LETTA_CONFIG_DIR=/workspace/data/letta/config
+
       # Service discovery
       - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_LETTA_URL=http://letta:8283
@@ -149,6 +174,15 @@ services:
       target: development
     container_name: thoth-dev-mcp
     environment:
+      # User permissions
+      - HOME=/workspace
+
+      # Letta configuration - override default data directories
+      - LETTA_DIR=/workspace/data/letta
+      - LETTA_LOGS_DIR=/workspace/logs/letta
+      - LETTA_CACHE_DIR=/workspace/data/cache/letta
+      - LETTA_CONFIG_DIR=/workspace/data/letta/config
+
       # Service discovery
       - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_LETTA_URL=http://letta:8283
@@ -192,6 +226,15 @@ services:
       target: development
     container_name: thoth-dev-discovery
     environment:
+      # User permissions
+      - HOME=/workspace
+
+      # Letta configuration - override default data directories
+      - LETTA_DIR=/workspace/data/letta
+      - LETTA_LOGS_DIR=/workspace/logs/letta
+      - LETTA_CACHE_DIR=/workspace/data/cache/letta
+      - LETTA_CONFIG_DIR=/workspace/data/letta/config
+
       # Service discovery
       - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_API_URL=http://thoth-api:8000
@@ -238,6 +281,15 @@ services:
       target: development
     container_name: thoth-dev-pdf-monitor
     environment:
+      # User permissions
+      - HOME=/workspace
+
+      # Letta configuration - override default data directories
+      - LETTA_DIR=/workspace/data/letta
+      - LETTA_LOGS_DIR=/workspace/logs/letta
+      - LETTA_CACHE_DIR=/workspace/data/cache/letta
+      - LETTA_CONFIG_DIR=/workspace/data/letta/config
+
       # Service discovery
       - THOTH_API_URL=http://thoth-api:8000
       - THOTH_CHROMADB_URL=http://chromadb:8003
@@ -271,6 +323,15 @@ services:
       target: development
     container_name: thoth-dev-agent
     environment:
+      # User permissions
+      - HOME=/workspace
+
+      # Letta configuration - override default data directories
+      - LETTA_DIR=/workspace/data/letta
+      - LETTA_LOGS_DIR=/workspace/logs/letta
+      - LETTA_CACHE_DIR=/workspace/data/cache/letta
+      - LETTA_CONFIG_DIR=/workspace/data/letta/config
+
       # Service discovery
       - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_LETTA_URL=http://letta:8283

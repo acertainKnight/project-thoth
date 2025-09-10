@@ -19,6 +19,9 @@ services:
       - THOTH_DEV_MODE=1
 
     volumes:
+      # Mount local configuration if it exists
+      - ./config.local.yml:/app/config.local.yml:ro
+
       # Mount local workspace directory if it exists
       - ./workspace:/workspace
 

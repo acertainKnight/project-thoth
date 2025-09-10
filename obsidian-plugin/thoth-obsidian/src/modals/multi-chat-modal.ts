@@ -308,6 +308,7 @@ export class MultiChatModal extends Modal {
 
     const tabs = [
       { id: 'chat', label: '💬 Chat', icon: 'message-circle' },
+      { id: 'agents', label: '🤖 Agents', icon: 'bot' },
       { id: 'commands', label: '⚡ Commands', icon: 'terminal' },
       { id: 'tools', label: '🔧 Tools', icon: 'wrench' },
       { id: 'status', label: '📊 Status', icon: 'activity' }
@@ -330,7 +331,7 @@ export class MultiChatModal extends Modal {
   switchTab(tabId: string) {
     // Update tab buttons
     this.tabContainer.querySelectorAll('.thoth-tab-button').forEach((btn, index) => {
-      if (index === ['chat', 'commands', 'tools', 'status'].indexOf(tabId)) {
+      if (index === ['chat', 'agents', 'commands', 'tools', 'status'].indexOf(tabId)) {
         btn.addClass('active');
       } else {
         btn.removeClass('active');
@@ -350,6 +351,9 @@ export class MultiChatModal extends Modal {
     switch (this.currentTab) {
       case 'chat':
         this.renderChatTab();
+        break;
+      case 'agents':
+        this.renderAgentsTab();
         break;
       case 'commands':
         this.renderCommandsTab();
@@ -443,6 +447,176 @@ export class MultiChatModal extends Modal {
     this.createConnectionStatus(statusArea);
     this.createSystemInfo(statusArea);
     this.createActivityLog(statusArea);
+  }
+
+  async renderAgentsTab() {
+    const agentsArea = this.contentContainer.createEl('div', { cls: 'agents-area' });
+
+    // Header with create agent button
+    const header = agentsArea.createEl('div', { cls: 'agents-header' });
+    header.createEl('h3', { text: '🤖 Agent Management' });
+
+    const createBtn = header.createEl('button', {
+      text: '+ Create Agent',
+      cls: 'create-agent-btn'
+    });
+
+    createBtn.onclick = () => {
+      this.showCreateAgentDialog();
+    };
+
+    // Info section
+    const infoSection = agentsArea.createEl('div', { cls: 'agents-info' });
+    infoSection.createEl('p', {
+      text: 'Agents are specialized AI assistants for specific research tasks. Create custom agents or use @agent-name to interact with them.',
+      cls: 'agents-description'
+    });
+
+    // Usage examples
+    const usageSection = agentsArea.createEl('div', { cls: 'usage-examples' });
+    usageSection.createEl('h4', { text: 'Usage Examples:' });
+
+    const examples = [
+      'Create a citation analysis agent: "create an agent that analyzes citation patterns"',
+      'Use an existing agent: "@citation-analyzer analyze this paper\'s references"',
+      'List available agents: "list my agents"'
+    ];
+
+    const examplesList = usageSection.createEl('ul');
+    examples.forEach(example => {
+      const li = examplesList.createEl('li');
+      li.createEl('code', { text: example });
+    });
+
+    // Agents list
+    const agentsListContainer = agentsArea.createEl('div', { cls: 'agents-list-container' });
+    await this.loadAndDisplayAgents(agentsListContainer);
+  }
+
+  async loadAndDisplayAgents(container: HTMLElement) {
+    try {
+      // Clear existing content
+      container.empty();
+
+      const loadingEl = container.createEl('div', { text: 'Loading agents...', cls: 'loading' });
+
+      // Fetch available agents
+      const endpoint = this.plugin.getEndpointUrl();
+      const response = await fetch(`${endpoint}/agents/list`);
+
+      loadingEl.remove();
+
+      if (response.ok) {
+        const data = await response.json();
+        this.displayAgentsList(container, data.agents || []);
+      } else {
+        container.createEl('div', {
+          text: 'Failed to load agents. Agent system may not be available.',
+          cls: 'error-message'
+        });
+      }
+
+    } catch (error) {
+      container.empty();
+      container.createEl('div', {
+        text: `Error loading agents: ${error.message}`,
+        cls: 'error-message'
+      });
+    }
+  }
+
+  displayAgentsList(container: HTMLElement, agents: any[]) {
+    if (agents.length === 0) {
+      container.createEl('div', {
+        text: 'No agents available. Create your first agent!',
+        cls: 'empty-state'
+      });
+      return;
+    }
+
+    const agentsList = container.createEl('div', { cls: 'agents-list' });
+
+    agents.forEach(agent => {
+      const agentCard = agentsList.createEl('div', { cls: 'agent-card' });
+
+      const agentHeader = agentCard.createEl('div', { cls: 'agent-header' });
+      agentHeader.createEl('h4', { text: `@${agent.name}` });
+
+      const typeEl = agentHeader.createEl('span', {
+        text: agent.type || 'custom',
+        cls: `agent-type agent-type-${agent.type || 'custom'}`
+      });
+
+      agentCard.createEl('p', { text: agent.description, cls: 'agent-description' });
+
+      if (agent.capabilities && agent.capabilities.length > 0) {
+        const capsList = agentCard.createEl('div', { cls: 'agent-capabilities' });
+        capsList.createEl('strong', { text: 'Capabilities: ' });
+        capsList.createEl('span', { text: agent.capabilities.join(', ') });
+      }
+
+      const actions = agentCard.createEl('div', { cls: 'agent-actions' });
+
+      const useBtn = actions.createEl('button', {
+        text: 'Use Agent',
+        cls: 'use-agent-btn'
+      });
+
+      useBtn.onclick = () => {
+        // Switch to chat tab and insert @agent mention
+        this.switchTab('chat');
+        // Find the input field and add the agent mention
+        setTimeout(() => {
+          const inputField = document.querySelector('.chat-input') as HTMLTextAreaElement;
+          if (inputField) {
+            inputField.value = `@${agent.name} `;
+            inputField.focus();
+          }
+        }, 100);
+      };
+
+      if (agent.type === 'user') {
+        const deleteBtn = actions.createEl('button', {
+          text: 'Delete',
+          cls: 'delete-agent-btn'
+        });
+
+        deleteBtn.onclick = () => {
+          this.confirmDeleteAgent(agent.name);
+        };
+      }
+    });
+  }
+
+  showCreateAgentDialog() {
+    // For now, show a simple alert. In the future, this could be a more sophisticated modal.
+    const description = prompt(
+      'Describe the agent you want to create:\n\nExample: "Create a citation analysis agent that can extract and analyze references from research papers"'
+    );
+
+    if (description && description.trim()) {
+      // Switch to chat tab and send the creation message
+      this.switchTab('chat');
+      setTimeout(() => {
+        const inputField = document.querySelector('.chat-input') as HTMLTextAreaElement;
+        if (inputField) {
+          inputField.value = `Create an agent that ${description.trim()}`;
+          // Trigger the send message function
+          const sendBtn = document.querySelector('.chat-send-btn') as HTMLButtonElement;
+          if (sendBtn && !sendBtn.disabled) {
+            sendBtn.click();
+          }
+        }
+      }, 100);
+    }
+  }
+
+  async confirmDeleteAgent(agentName: string) {
+    if (confirm(`Delete agent @${agentName}? This action cannot be undone.`)) {
+      // TODO: Implement agent deletion API call
+      // For now, just show a notice
+      new Notice(`Agent deletion not yet implemented for @${agentName}`);
+    }
   }
 
   addStyles() {
@@ -1297,14 +1471,18 @@ export class MultiChatModal extends Modal {
       sendBtn.textContent = 'Sending...';
 
       try {
-        // Send to server
+        // Send to server - use agent endpoint for agent messages
         const endpoint = this.plugin.getEndpointUrl();
-        const response = await fetch(`${endpoint}/research/chat`, {
+        const isAgentMessage = this.detectAgentInteraction(message);
+        const apiEndpoint = isAgentMessage ? '/agents/chat' : '/research/chat';
+
+        const response = await fetch(`${endpoint}${apiEndpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             message: message,
             conversation_id: sessionId,
+            user_id: 'obsidian_user', // TODO: Add user identification
             timestamp: Date.now(),
             id: crypto.randomUUID()
           })
@@ -1440,6 +1618,40 @@ export class MultiChatModal extends Modal {
       console.error('Error renaming session:', error);
       new Notice('Failed to rename session');
     }
+  }
+
+  detectAgentInteraction(message: string): boolean {
+    /**
+     * Detect if message contains agent creation requests or @agent mentions
+     */
+    const messageLower = message.toLowerCase();
+
+    // Check for agent creation patterns
+    const creationPatterns = [
+      /create.*agent/i,
+      /make.*agent/i,
+      /build.*agent/i,
+      /new.*agent/i,
+      /add.*agent/i
+    ];
+
+    const hasCreationPattern = creationPatterns.some(pattern => pattern.test(message));
+
+    // Check for @agent mentions
+    const agentMentions = /@([a-z][-a-z]*[a-z]|[a-z]+)/gi.test(message);
+
+    // Check for agent list requests
+    const listPatterns = [
+      /list.*agents?/i,
+      /show.*agents?/i,
+      /what.*agents?/i,
+      /available.*agents?/i,
+      /my.*agents?/i
+    ];
+
+    const hasListPattern = listPatterns.some(pattern => pattern.test(message));
+
+    return hasCreationPattern || agentMentions || hasListPattern;
   }
 
   async deleteSession(sessionId: string) {

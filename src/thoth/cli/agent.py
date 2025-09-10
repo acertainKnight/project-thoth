@@ -21,7 +21,7 @@ async def run_agent_chat(_args, pipeline: ThothPipeline):
         await agent.async_initialize()
 
         print('\\n' + '=' * 70)
-        print('🤖 Welcome to Thoth Research Assistant!')
+        print(' Welcome to Thoth Research Assistant!')
         print('=' * 70)
         print(
             'I am your AI research assistant, powered by LangGraph and MCP framework.'
@@ -34,14 +34,14 @@ async def run_agent_chat(_args, pipeline: ThothPipeline):
         print('  • Knowledge Base - Search and analyze your paper collection')
         print('  • Paper Analysis - Find connections and analyze research topics')
 
-        print('\\n💡 **Example Commands:**')
+        print('\\n **Example Commands:**')
         print('  • "Show me my discovery sources"')
         print('  • "Create an ArXiv source for machine learning papers"')
         print('  • "What papers do I have on transformers?"')
         print('  • "Explain the connection between paper A and paper B"')
         print('  • "Analyze deep learning research in my collection"')
 
-        print('\\n🚀 **Tips:**')
+        print('\\n **Tips:**')
         print('  • I can use multiple tools to provide comprehensive answers')
         print('  • I remember our conversation context')
         print('  • Type "exit" or "quit" to end the session')
@@ -69,7 +69,7 @@ async def run_agent_chat(_args, pipeline: ThothPipeline):
                 print(f'\\nAssistant: {response["response"]}')
 
                 if response.get('tool_calls'):
-                    print('\\n🔧 Tools used:')
+                    print('\\n Tools used:')
                     for tool_call in response['tool_calls']:
                         print(f'  - {tool_call["tool"]}')
 
@@ -80,14 +80,14 @@ async def run_agent_chat(_args, pipeline: ThothPipeline):
                 break
             except Exception as e:
                 logger.error(f'Error in agent chat: {e}')
-                print(f'\\n❌ Error: {e}')
+                print(f'\\n Error: {e}')
                 print("Please try again or type 'exit' to quit.")
 
         return 0
 
     except Exception as e:
         logger.error(f'Failed to start agent chat: {e}')
-        print(f'❌ Failed to start agent chat: {e}')
+        print(f' Failed to start agent chat: {e}')
         return 1
 
 

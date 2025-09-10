@@ -42,7 +42,7 @@ def run_monitor(args, pipeline: ThothPipeline) -> int:
             notes_dir=config.notes_dir,
             markdown_dir=config.markdown_dir,
         )
-        logger.info('✅ Monitor using optimized processing pipeline')
+        logger.info(' Monitor using optimized processing pipeline')
     elif args.optimized and not OPTIMIZED_PIPELINE_AVAILABLE:
         logger.warning(
             'Optimized pipeline requested but not available, using standard pipeline'

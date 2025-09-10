@@ -100,11 +100,11 @@ async def launch_mcp_server(
         logger.info(f'Available tools: {len(server.tool_registry.get_tool_names())}')
 
         if stdio:
-            logger.info('✅ Stdio transport enabled (for CLI integration)')
+            logger.info(' Stdio transport enabled (for CLI integration)')
         if http:
-            logger.info(f'✅ HTTP transport enabled at http://{http_host}:{http_port}')
+            logger.info(f' HTTP transport enabled at http://{http_host}:{http_port}')
         if sse:
-            logger.info(f'✅ SSE transport enabled at http://{sse_host}:{sse_port}')
+            logger.info(f' SSE transport enabled at http://{sse_host}:{sse_port}')
 
         await server.start()
 

@@ -51,7 +51,7 @@ def list_jobs():
 
     except Exception as e:
         logger.error(f'Failed to list memory jobs: {e}')
-        click.echo(f'❌ Error: {e}', err=True)
+        click.echo(f' Error: {e}', err=True)
 
 
 @jobs.command()
@@ -74,9 +74,7 @@ def status():
             for job in status['jobs']:
                 name = job['name']
                 enabled = '🟢 Enabled' if job['enabled'] else '🔴 Disabled'
-                configured = (
-                    '✅ Configured' if job['configured'] else '❌ Not configured'
-                )
+                configured = ' Configured' if job['configured'] else ' Not configured'
 
                 click.echo(f'\n{name}')
                 click.echo(f'  Status: {enabled}, {configured}')
@@ -89,7 +87,7 @@ def status():
 
                 if job.get('last_result'):
                     result = job['last_result']
-                    status_icon = '✅' if result.get('status') == 'success' else '❌'
+                    status_icon = 'success' if result.get('status') == 'success' else ''
                     click.echo(
                         f'  Last result: {status_icon} {result.get("summary", "No summary")}'
                     )
@@ -98,7 +96,7 @@ def status():
 
     except Exception as e:
         logger.error(f'Failed to get job status: {e}')
-        click.echo(f'❌ Error: {e}', err=True)
+        click.echo(f' Error: {e}', err=True)
 
 
 @jobs.command()
@@ -122,7 +120,7 @@ def add(
         available_jobs = scheduler.get_available_jobs()
 
         if job_name not in available_jobs:
-            click.echo(f'❌ Unknown job: {job_name}')
+            click.echo(f' Unknown job: {job_name}')
             click.echo('Available jobs:')
             for name in available_jobs.keys():
                 click.echo(f'  - {name}')
@@ -138,7 +136,7 @@ def add(
                 days_list = [int(d.strip()) for d in days_of_week.split(',')]
             except ValueError:
                 click.echo(
-                    '❌ Invalid days-of-week format. Use comma-separated numbers (0=Monday)'
+                    ' Invalid days-of-week format. Use comma-separated numbers (0=Monday)'
                 )
                 return
 
@@ -149,7 +147,7 @@ def add(
                 custom_params = json.loads(parameters)
                 job_parameters.update(custom_params)
             except json.JSONDecodeError:
-                click.echo('❌ Invalid JSON in parameters')
+                click.echo(' Invalid JSON in parameters')
                 return
 
         config = MemoryJobConfig(
@@ -161,11 +159,11 @@ def add(
         )
 
         scheduler.add_job(job_name, config)
-        click.echo(f'✅ Added memory job: {job_name}')
+        click.echo(f' Added memory job: {job_name}')
 
     except Exception as e:
         logger.error(f'Failed to add memory job: {e}')
-        click.echo(f'❌ Error: {e}', err=True)
+        click.echo(f' Error: {e}', err=True)
 
 
 @jobs.command()
@@ -175,11 +173,11 @@ def remove(job_name: str):
     try:
         scheduler = get_shared_scheduler()
         scheduler.remove_job(job_name)
-        click.echo(f'✅ Removed memory job: {job_name}')
+        click.echo(f' Removed memory job: {job_name}')
 
     except Exception as e:
         logger.error(f'Failed to remove memory job: {e}')
-        click.echo(f'❌ Error: {e}', err=True)
+        click.echo(f' Error: {e}', err=True)
 
 
 @jobs.command()
@@ -197,7 +195,7 @@ def run(job_name: str, user_id: str | None):
         result = scheduler.run_job_now(job_name, user_id)
 
         if 'error' in result:
-            click.echo(f'❌ Job failed: {result["error"]}')
+            click.echo(f' Job failed: {result["error"]}')
             return
 
         status = result.get('status', 'unknown')
@@ -208,7 +206,7 @@ def run(job_name: str, user_id: str | None):
                 summaries = result.get('summaries_created', 0)
                 memories = result.get('memories_analyzed', 0)
                 cleaned = result.get('memories_cleaned', 0)
-                click.echo(f'📊 Created {summaries} summaries from {memories} memories')
+                click.echo(f' Created {summaries} summaries from {memories} memories')
                 if cleaned > 0:
                     click.echo(f'🧹 Cleaned up {cleaned} old memories')
 
@@ -216,21 +214,21 @@ def run(job_name: str, user_id: str | None):
                 total_summaries = result.get('total_summaries_created', 0)
                 successful_users = result.get('successful_users', 0)
                 failed_users = result.get('failed_users', 0)
-                click.echo(f'📊 Processed {successful_users} users successfully')
-                click.echo(f'📊 Created {total_summaries} total summaries')
+                click.echo(f' Processed {successful_users} users successfully')
+                click.echo(f' Created {total_summaries} total summaries')
                 if failed_users > 0:
-                    click.echo(f'❌ {failed_users} users failed processing')
+                    click.echo(f' {failed_users} users failed processing')
 
             elif status == 'insufficient_memories':
                 count = result.get('memory_count', 0)
                 required = result.get('min_required', 0)
-                click.echo(f'⚠️  Insufficient memories: {count} < {required}')
+                click.echo(f'  Insufficient memories: {count} < {required}')
 
-        click.echo('✅ Job completed')
+        click.echo(' Job completed')
 
     except Exception as e:
         logger.error(f'Failed to run memory job: {e}')
-        click.echo(f'❌ Error: {e}', err=True)
+        click.echo(f' Error: {e}', err=True)
 
 
 @jobs.command()
@@ -239,11 +237,11 @@ def start():
     try:
         scheduler = get_shared_scheduler()
         scheduler.start()
-        click.echo('✅ Memory scheduler started')
+        click.echo(' Memory scheduler started')
 
     except Exception as e:
         logger.error(f'Failed to start memory scheduler: {e}')
-        click.echo(f'❌ Error: {e}', err=True)
+        click.echo(f' Error: {e}', err=True)
 
 
 @jobs.command()
@@ -252,11 +250,11 @@ def stop():
     try:
         scheduler = get_shared_scheduler()
         scheduler.stop()
-        click.echo('✅ Memory scheduler stopped')
+        click.echo(' Memory scheduler stopped')
 
     except Exception as e:
         logger.error(f'Failed to stop memory scheduler: {e}')
-        click.echo(f'❌ Error: {e}', err=True)
+        click.echo(f' Error: {e}', err=True)
 
 
 @memory_cli.group(name='summarize')
@@ -311,10 +309,10 @@ def user(user_id: str, analysis_window: int, min_memories: int, cleanup: bool):
             themes = result.get('themes_identified', 0)
             cleaned = result.get('memories_cleaned', 0)
 
-            click.echo('✅ Summarization completed!')
-            click.echo(f'📊 Analyzed: {memories} memories')
-            click.echo(f'🎯 Identified: {themes} themes')
-            click.echo(f'📝 Created: {summaries} summaries')
+            click.echo(' Summarization completed!')
+            click.echo(f' Analyzed: {memories} memories')
+            click.echo(f' Identified: {themes} themes')
+            click.echo(f' Created: {summaries} summaries')
             if cleaned > 0:
                 click.echo(f'🧹 Cleaned: {cleaned} old memories')
 
@@ -329,16 +327,16 @@ def user(user_id: str, analysis_window: int, min_memories: int, cleanup: bool):
 
         elif status == 'insufficient_memories':
             count = result.get('memory_count', 0)
-            click.echo(f'⚠️  Insufficient memories: {count} < {min_memories}')
+            click.echo(f'  Insufficient memories: {count} < {min_memories}')
 
         else:
             click.echo(
-                f'❌ Summarization failed: {result.get("message", "Unknown error")}'
+                f' Summarization failed: {result.get("message", "Unknown error")}'
             )
 
     except Exception as e:
         logger.error(f'Failed to summarize memories: {e}')
-        click.echo(f'❌ Error: {e}', err=True)
+        click.echo(f' Error: {e}', err=True)
 
 
 @summarize.command()
@@ -370,23 +368,23 @@ def all_users(analysis_window: int, min_memories: int):
             failed = result.get('failed_users', 0)
             total_summaries = result.get('total_summaries_created', 0)
 
-            click.echo('✅ Batch summarization completed!')
+            click.echo(' Batch summarization completed!')
             click.echo(f'👥 Total users: {total_users}')
-            click.echo(f'✅ Successful: {successful}')
-            click.echo(f'❌ Failed: {failed}')
-            click.echo(f'📝 Total summaries: {total_summaries}')
+            click.echo(f' Successful: {successful}')
+            click.echo(f' Failed: {failed}')
+            click.echo(f' Total summaries: {total_summaries}')
 
         elif status == 'no_users_found':
-            click.echo('⚠️  No users with episodic memories found')
+            click.echo('  No users with episodic memories found')
 
         else:
             click.echo(
-                f'❌ Batch summarization failed: {result.get("message", "Unknown error")}'
+                f' Batch summarization failed: {result.get("message", "Unknown error")}'
             )
 
     except Exception as e:
         logger.error(f'Failed to summarize all users: {e}')
-        click.echo(f'❌ Error: {e}', err=True)
+        click.echo(f' Error: {e}', err=True)
 
 
 @memory_cli.group(name='stats')
@@ -408,7 +406,7 @@ def user_stats(user_id: str):
         stats = store.get_memory_stats(user_id)
 
         if 'error' in stats:
-            click.echo(f'❌ Error: {stats["error"]}')
+            click.echo(f' Error: {stats["error"]}')
             return
 
         # Basic memory stats
@@ -427,7 +425,7 @@ def user_stats(user_id: str):
         # Retrieval metrics
         retrieval_metrics = stats.get('retrieval_metrics')
         if retrieval_metrics and retrieval_metrics.get('status') != 'no_data':
-            click.echo('\n🔍 Retrieval Performance:')
+            click.echo('\n Retrieval Performance:')
             click.echo(f'Total queries: {retrieval_metrics.get("total_queries", 0)}')
             click.echo(
                 f'Average search time: {retrieval_metrics.get("avg_search_time", 0):.3f}s'
@@ -445,7 +443,7 @@ def user_stats(user_id: str):
 
     except Exception as e:
         logger.error(f'Failed to get user stats: {e}')
-        click.echo(f'❌ Error: {e}', err=True)
+        click.echo(f' Error: {e}', err=True)
 
 
 @stats.command()
@@ -460,15 +458,15 @@ def system_stats():
         performance = store.get_retrieval_performance()
 
         if performance.get('status') == 'error':
-            click.echo(f'❌ Error: {performance.get("message")}')
+            click.echo(f' Error: {performance.get("message")}')
             return
 
         if performance.get('status') == 'retrieval_pipeline_not_available':
-            click.echo('⚠️  Retrieval pipeline not available')
+            click.echo('  Retrieval pipeline not available')
             return
 
         if performance.get('status') == 'no_data':
-            click.echo('⚠️  No retrieval data available')
+            click.echo('  No retrieval data available')
             return
 
         # Performance metrics
@@ -488,19 +486,19 @@ def system_stats():
         # Pipeline configuration
         config = performance.get('pipeline_config', {})
         if config:
-            click.echo('\n⚙️  Pipeline Configuration:')
+            click.echo('\n⚙  Pipeline Configuration:')
             click.echo(
-                f'Semantic search: {"✅ Enabled" if config.get("semantic_search_enabled") else "❌ Disabled"}'
+                f'Semantic search: {" Enabled" if config.get("semantic_search_enabled") else " Disabled"}'
             )
             click.echo(
-                f'Caching: {"✅ Enabled" if config.get("caching_enabled") else "❌ Disabled"}'
+                f'Caching: {" Enabled" if config.get("caching_enabled") else " Disabled"}'
             )
             click.echo(f'Cache TTL: {config.get("cache_ttl", 0)} seconds')
             click.echo(f'Max results: {config.get("max_results", 0)}')
 
     except Exception as e:
         logger.error(f'Failed to get system stats: {e}')
-        click.echo(f'❌ Error: {e}', err=True)
+        click.echo(f' Error: {e}', err=True)
 
 
 @memory_cli.group(name='admin')
@@ -547,12 +545,12 @@ def backup(backup_path: str | None, user_id: str | None):
             json.dump(backup_data, f, indent=2, default=str)
 
         click.echo(
-            f'✅ Backup completed: {len(memories)} memories saved to {backup_path}'
+            f' Backup completed: {len(memories)} memories saved to {backup_path}'
         )
 
     except Exception as e:
         logger.error(f'Failed to backup memories: {e}')
-        click.echo(f'❌ Error: {e}', err=True)
+        click.echo(f' Error: {e}', err=True)
 
 
 @admin.command()
@@ -579,7 +577,7 @@ def clear_user(user_id: str, scope: str, confirm: bool):
         # Get current count before deletion
         current_stats = store.get_memory_stats(user_id)
         if 'error' in current_stats:
-            click.echo(f'❌ Error getting user stats: {current_stats["error"]}')
+            click.echo(f' Error getting user stats: {current_stats["error"]}')
             return
 
         if scope == 'all':
@@ -599,12 +597,12 @@ def clear_user(user_id: str, scope: str, confirm: bool):
 
         # Note: This would need implementation in the memory store
         # result = store.clear_user_memories(user_id, scope)
-        click.echo('✅ Memory clearing completed')
-        click.echo('⚠️  Note: Actual deletion requires memory store implementation')
+        click.echo(' Memory clearing completed')
+        click.echo('  Note: Actual deletion requires memory store implementation')
 
     except Exception as e:
         logger.error(f'Failed to clear user memories: {e}')
-        click.echo(f'❌ Error: {e}', err=True)
+        click.echo(f' Error: {e}', err=True)
 
 
 @admin.command()
@@ -623,21 +621,21 @@ def cleanup_old(days: int, scope: str, dry_run: bool):
 
         click.echo(f'Cleaning up {scope} memories older than {days} days...')
         if dry_run:
-            click.echo('🔍 DRY RUN - No memories will be deleted')
+            click.echo(' DRY RUN - No memories will be deleted')
 
         # This would need implementation in the memory store
         # old_memories = store.find_old_memories(days, scope)
 
-        click.echo('⚠️  Note: Old memory cleanup requires memory store implementation')
+        click.echo('  Note: Old memory cleanup requires memory store implementation')
         click.echo(f'Target scope: {scope}')
         click.echo(f'Age threshold: {days} days')
 
         # Placeholder for actual implementation
-        click.echo('✅ Cleanup would be completed here')
+        click.echo(' Cleanup would be completed here')
 
     except Exception as e:
         logger.error(f'Failed to cleanup old memories: {e}')
-        click.echo(f'❌ Error: {e}', err=True)
+        click.echo(f' Error: {e}', err=True)
 
 
 @memory_cli.group(name='inspect')
@@ -727,7 +725,7 @@ def memories(user_id: str, scope: str | None, limit: int, output_format: str):
 
     except Exception as e:
         logger.error(f'Failed to inspect memories: {e}')
-        click.echo(f'❌ Error: {e}', err=True)
+        click.echo(f' Error: {e}', err=True)
 
 
 @inspect.command()
@@ -778,7 +776,7 @@ def search(query: str, user_id: str | None, scope: str | None, limit: int):
 
     except Exception as e:
         logger.error(f'Failed to search memories: {e}')
-        click.echo(f'❌ Error: {e}', err=True)
+        click.echo(f' Error: {e}', err=True)
 
 
 def run_memory_cli_from_args(args, _pipeline):

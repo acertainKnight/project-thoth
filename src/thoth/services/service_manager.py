@@ -8,6 +8,7 @@ from thoth.services.article_service import ArticleService
 from thoth.services.base import BaseService
 from thoth.services.citation_service import CitationService
 from thoth.services.discovery_service import DiscoveryService
+from thoth.services.letta_service import LettaService
 from thoth.services.llm_service import LLMService
 from thoth.services.note_service import NoteService
 from thoth.services.pdf_locator_service import PdfLocatorService
@@ -81,6 +82,9 @@ class ServiceManager:
         self._services['pdf_locator'] = PdfLocatorService(config=self.config)
 
         self._services['api_gateway'] = ExternalAPIGateway(config=self.config)
+
+        # Initialize Letta service for agent management
+        self._services['letta'] = LettaService(config=self.config)
 
         # Initialize services that need dependencies
         self._services['citation'] = CitationService(config=self.config)

@@ -99,10 +99,10 @@ class ReindexCollectionMCPTool(MCPTool):
             try:
                 response_text += '\n**Starting Reindexing Process...**\n'
                 response_text += f'- Batch size: {batch_size}\n'
-                response_text += f'- Include notes: {"✅" if include_notes else "❌"}\n'
                 response_text += (
-                    f'- Include articles: {"✅" if include_articles else "❌"}\n\n'
+                    f'- Include notes: {include_notes if include_notes else ""}\n'
                 )
+                response_text += f'- Include articles: {include_articles if include_articles else ""}\n\n'
 
                 # Perform the reindexing
                 reindex_stats = self.service_manager.rag.index_knowledge_base()

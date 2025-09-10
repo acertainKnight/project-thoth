@@ -214,7 +214,7 @@ class FormatCitationsMCPTool(MCPTool):
                 formatted_citations.append(f'[{i}] {citation}')
 
             # Format response
-            response_text = f'📖 **Citations Formatted ({style_name} Style)**\n\n'
+            response_text = f' **Citations Formatted ({style_name} Style)**\n\n'
 
             if search_query:
                 response_text += f'**Search Query:** {search_query}\n'
@@ -682,8 +682,8 @@ class ExtractCitationsMCPTool(MCPTool):
                             'text': f'Citation analysis partially available.\n\n'
                             f'**Article:** {title}\n\n'
                             f'**Basic Info:**\n'
-                            f'  - Found in knowledge base: ✅\n'
-                            f'  - Metadata available: {"✅" if metadata else "❌"}\n\n'
+                            f'  - Found in knowledge base: \n'
+                            f'  - Metadata available: {metadata if metadata else ""}\n\n'
                             f'**Note:** Full citation network analysis requires citation service integration.\n\n'
                             f'**Error:** {citation_error!s}',
                         }

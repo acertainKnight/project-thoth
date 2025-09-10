@@ -6,6 +6,10 @@
 version: '3.8'
 
 services:
+  # ==============================================================================
+  # Letta Memory Server
+  # Advanced persistent memory system for research agents
+  # ==============================================================================
   letta:
     image: letta/letta:latest
     container_name: thoth-letta
@@ -95,48 +99,48 @@ services:
     container_name: thoth-app
     environment:
       # Database connections
-      THOTH_CHROMADB_HOST: chromadb
-      THOTH_CHROMADB_PORT: 8003
-      THOTH_CHROMADB_URL: http://chromadb:8003
+      - THOTH_CHROMADB_HOST=chromadb
+      - THOTH_CHROMADB_PORT=8003
+      - THOTH_CHROMADB_URL=http://chromadb:8003
 
       # Server configuration
-      THOTH_API_HOST: 0.0.0.0
-      THOTH_API_PORT: 8000
-      THOTH_MCP_HOST: 0.0.0.0
-      THOTH_MCP_PORT: 8001
+      - THOTH_API_HOST=0.0.0.0
+      - THOTH_API_PORT=8000
+      - THOTH_MCP_HOST=0.0.0.0
+      - THOTH_MCP_PORT=8001
 
       # Directory paths (mounted volumes)
-      THOTH_WORKSPACE_DIR: /workspace
-      THOTH_PDF_DIR: /workspace/pdfs
-      THOTH_NOTES_DIR: /workspace/notes
-      THOTH_DATA_DIR: /workspace/data
-      THOTH_QUERIES_DIR: /workspace/queries
-      THOTH_DISCOVERY_SOURCES_DIR: /workspace/discovery
-      THOTH_KNOWLEDGE_BASE_DIR: /workspace/knowledge
-      THOTH_LOGS_DIR: /workspace/logs
-      THOTH_CACHE_DIR: /workspace/cache
+      - THOTH_WORKSPACE_DIR=/workspace
+      - THOTH_PDF_DIR=/workspace/pdfs
+      - THOTH_NOTES_DIR=/workspace/notes
+      - THOTH_DATA_DIR=/workspace/data
+      - THOTH_QUERIES_DIR=/workspace/queries
+      - THOTH_DISCOVERY_SOURCES_DIR=/workspace/discovery
+      - THOTH_KNOWLEDGE_BASE_DIR=/workspace/knowledge
+      - THOTH_LOGS_DIR=/workspace/logs
+      - THOTH_CACHE_DIR=/workspace/cache
 
       # Operational settings
-      THOTH_LOG_LEVEL: INFO
-      THOTH_DOCKER: 1
-      PYTHONPATH: /app/src
+      - THOTH_LOG_LEVEL=INFO
+      - THOTH_DOCKER=1
+      - PYTHONPATH=/app/src
 
       # API Keys (loaded from environment or .env file)
-      API_MISTRAL_KEY: ${API_MISTRAL_KEY:-}
-      API_OPENROUTER_KEY: ${API_OPENROUTER_KEY:-}
-      API_OPENCITATIONS_KEY: ${API_OPENCITATIONS_KEY:-}
-      API_GOOGLE_KEY: ${API_GOOGLE_KEY:-}
-      API_SEMANTIC_SCHOLAR_KEY: ${API_SEMANTIC_SCHOLAR_KEY:-}
-      API_WEB_SEARCH_KEY: ${API_WEB_SEARCH_KEY:-}
+      - API_MISTRAL_KEY=${API_MISTRAL_KEY:-}
+      - API_OPENROUTER_KEY=${API_OPENROUTER_KEY:-}
+      - API_OPENCITATIONS_KEY=${API_OPENCITATIONS_KEY:-}
+      - API_GOOGLE_KEY=${API_GOOGLE_KEY:-}
+      - API_SEMANTIC_SCHOLAR_KEY=${API_SEMANTIC_SCHOLAR_KEY:-}
+      - API_WEB_SEARCH_KEY=${API_WEB_SEARCH_KEY:-}
 
       # Discovery settings
-      THOTH_DISCOVERY_AUTO_START_SCHEDULER: "false"
-      THOTH_DISCOVERY_DEFAULT_MAX_ARTICLES: 50
+      - THOTH_DISCOVERY_AUTO_START_SCHEDULER=false
+      - THOTH_DISCOVERY_DEFAULT_MAX_ARTICLES=50
 
       # Agent settings
-      THOTH_RESEARCH_AGENT_MEMORY_ENABLED: "true"
-      THOTH_AGENT_MAX_TOOL_CALLS: 20
-      THOTH_AGENT_TIMEOUT_SECONDS: 300
+      - THOTH_RESEARCH_AGENT_MEMORY_ENABLED=true
+      - THOTH_AGENT_MAX_TOOL_CALLS=20
+      - THOTH_AGENT_TIMEOUT_SECONDS=300
 
     volumes:
       # Local workspace directories (bind mounts for easy access)

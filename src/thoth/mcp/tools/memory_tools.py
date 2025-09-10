@@ -57,7 +57,7 @@ class CoreMemoryAppendMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': '❌ Letta agent not available. Using fallback memory storage.',
+                            'text': ' Letta agent not available. Using fallback memory storage.',
                         }
                     ],
                     isError=True,
@@ -74,7 +74,7 @@ class CoreMemoryAppendMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'✅ Successfully appended to {memory_block} memory block.\n\nContent added: {content[:100]}{"..." if len(content) > 100 else ""}',
+                            'text': f' Successfully appended to {memory_block} memory block.\n\nContent added: {content[:100]}{"..." if len(content) > 100 else ""}',
                         }
                     ]
                 )
@@ -84,7 +84,7 @@ class CoreMemoryAppendMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'❌ Failed to append to core memory: {e}\n\nThis might indicate the Letta server is not running or the agent is not properly initialized.',
+                            'text': f' Failed to append to core memory: {e}\n\nThis might indicate the Letta server is not running or the agent is not properly initialized.',
                         }
                     ],
                     isError=True,
@@ -144,7 +144,7 @@ class CoreMemoryReplaceMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': '❌ Letta agent not available. Memory replacement not supported in fallback mode.',
+                            'text': ' Letta agent not available. Memory replacement not supported in fallback mode.',
                         }
                     ],
                     isError=True,
@@ -160,7 +160,7 @@ class CoreMemoryReplaceMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'✅ Successfully replaced content in {memory_block} memory block.\n\nReplaced: {old_content[:50]}{"..." if len(old_content) > 50 else ""}\nWith: {new_content[:50]}{"..." if len(new_content) > 50 else ""}',
+                            'text': f' Successfully replaced content in {memory_block} memory block.\n\nReplaced: {old_content[:50]}{"..." if len(old_content) > 50 else ""}\nWith: {new_content[:50]}{"..." if len(new_content) > 50 else ""}',
                         }
                     ]
                 )
@@ -170,7 +170,7 @@ class CoreMemoryReplaceMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'❌ Failed to replace core memory content: {e}',
+                            'text': f' Failed to replace core memory content: {e}',
                         }
                     ],
                     isError=True,
@@ -227,7 +227,7 @@ class ArchivalMemoryInsertMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'📝 Content stored in fallback archival memory:\n\n{content[:200]}{"..." if len(content) > 200 else ""}\n\n⚠️ Note: For full semantic search capabilities, ensure Letta server is running.',
+                            'text': f' Content stored in fallback archival memory:\n\n{content[:200]}{"..." if len(content) > 200 else ""}\n\n Note: For full semantic search capabilities, ensure Letta server is running.',
                         }
                     ]
                 )
@@ -240,7 +240,7 @@ class ArchivalMemoryInsertMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'✅ Successfully stored content in archival memory.\n\n📝 Content: {content[:150]}{"..." if len(content) > 150 else ""}\n\n🔍 This content is now searchable using archival_memory_search.',
+                            'text': f' Successfully stored content in archival memory.\n\n Content: {content[:150]}{"..." if len(content) > 150 else ""}\n\n This content is now searchable using archival_memory_search.',
                         }
                     ]
                 )
@@ -250,7 +250,7 @@ class ArchivalMemoryInsertMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'❌ Failed to insert into archival memory: {e}',
+                            'text': f' Failed to insert into archival memory: {e}',
                         }
                     ],
                     isError=True,
@@ -312,13 +312,13 @@ class ArchivalMemorySearchMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'🔍 No results found in archival memory for: "{query}"\n\nTry:\n- Different search terms\n- Broader query\n- Check if content has been archived using archival_memory_insert',
+                            'text': f' No results found in archival memory for: "{query}"\n\nTry:\n- Different search terms\n- Broader query\n- Check if content has been archived using archival_memory_insert',
                         }
                     ]
                 )
 
             # Format results
-            response_text = f'🔍 **Archival Memory Search Results for:** "{query}"\n\n'
+            response_text = f' **Archival Memory Search Results for:** "{query}"\n\n'
             response_text += f'**Found {len(results)} relevant items:**\n\n'
 
             for i, result in enumerate(results, 1):
@@ -330,7 +330,7 @@ class ArchivalMemorySearchMCPTool(MCPTool):
                 )
                 response_text += f'   *Source: {source}*\n\n'
 
-            response_text += '💡 **Tip:** Use the information above to inform your research and responses.'
+            response_text += ' **Tip:** Use the information above to inform your research and responses.'
 
             return MCPToolCallResult(
                 content=[{'type': 'text', 'text': response_text.strip()}]
@@ -397,7 +397,7 @@ class ConversationSearchMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'🔍 No past conversations found matching: "{query}"\n\nThis could mean:\n- This is a new topic for this user\n- Different terminology was used\n- The conversation happened in a different session',
+                            'text': f' No past conversations found matching: "{query}"\n\nThis could mean:\n- This is a new topic for this user\n- Different terminology was used\n- The conversation happened in a different session',
                         }
                     ]
                 )
@@ -463,7 +463,7 @@ class MemoryStatsMCPTool(MCPTool):
             health = memory_manager.health_check()
 
             response_text = '🧠 **Memory System Statistics**\n\n'
-            response_text += f'**System Status:** {"✅ Healthy" if health.get("status") == "healthy" else "⚠️ Issues detected"}\n'
+            response_text += f'**System Status:** {" Healthy" if health.get("status") == "healthy" else " Issues detected"}\n'
             response_text += f'**Memory Type:** {"Letta Hierarchical" if not health.get("fallback_active") else "Fallback Mode"}\n\n'
 
             # Core memory statistics
@@ -587,15 +587,15 @@ class MemoryHealthCheckMCPTool(MCPTool):
             # Basic health status
             status = health.get('status', 'unknown')
             if status == 'healthy':
-                response_text += '✅ **Status:** Healthy\n'
+                response_text += ' **Status:** Healthy\n'
             elif status == 'unhealthy':
-                response_text += '❌ **Status:** Unhealthy\n'
+                response_text += ' **Status:** Unhealthy\n'
             else:
-                response_text += '⚠️ **Status:** Unknown\n'
+                response_text += ' **Status:** Unknown\n'
 
-            response_text += f'**Letta Available:** {"✅ Yes" if not health.get("fallback_active") else "❌ No (using fallback)"}\n'
-            response_text += f'**Client Connected:** {"✅ Yes" if health.get("client_connected") else "❌ No"}\n'
-            response_text += f'**Agent Available:** {"✅ Yes" if health.get("agent_available") else "❌ No"}\n'
+            response_text += f'**Letta Available:** {" Yes" if not health.get("fallback_active") else " No (using fallback)"}\n'
+            response_text += f'**Client Connected:** {" Yes" if health.get("client_connected") else " No"}\n'
+            response_text += f'**Agent Available:** {" Yes" if health.get("agent_available") else " No"}\n'
 
             if health.get('error'):
                 response_text += f'\n**Error:** {health["error"]}\n'
