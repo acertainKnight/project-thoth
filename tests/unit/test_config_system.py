@@ -47,7 +47,7 @@ class TestLLMConfig:
         config = LLMConfig(model='openai/gpt-4o-mini')
 
         assert config.model == 'openai/gpt-4o-mini'
-        assert config.max_output_tokens == 50000
+        assert config.max_output_tokens == 8000
         assert config.chunk_size == 4000
         assert config.chunk_overlap == 200
 
@@ -66,7 +66,7 @@ class TestLLMConfig:
         config = LLMConfig(model='test/model')
 
         assert config.model_settings.temperature == 0.9
-        assert config.model_settings.max_tokens == 500000
+        assert config.model_settings.max_tokens == 8000
         assert config.model_settings.use_rate_limiter is True
 
 

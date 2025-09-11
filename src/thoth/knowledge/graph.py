@@ -112,7 +112,9 @@ class CitationGraph:
                     graph_data = json.load(f)
 
                 # Recreate the graph from the loaded data
-                self.graph = nx.node_link_graph(graph_data)
+                # Explicitly set edges="links" to maintain current behavior and silence
+                # deprecation warning
+                self.graph = nx.node_link_graph(graph_data, edges='links')
                 logger.info(
                     f'Loaded citation graph with {len(self.graph.nodes)} nodes and {len(self.graph.edges)} edges'
                 )

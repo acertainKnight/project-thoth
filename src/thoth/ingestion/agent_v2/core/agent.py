@@ -89,8 +89,13 @@ class ResearchAssistant:
         self.letta_memory_manager = None  # Will be initialized if enabled
         self.mcp_client = None  # Will be initialized in async_initialize()
 
-        # Get LLM from service manager
-        self.llm = self.service_manager.llm.get_client()
+        # Get LLM from service manager using research agent LLM config
+        research_config = self.service_manager.config.research_agent_llm_config
+        self.llm = self.service_manager.llm.get_client(
+            model=research_config.model,
+            temperature=research_config.model_settings.temperature,
+            max_tokens=research_config.max_output_tokens,
+        )
 
         # Token usage tracker
         self.usage_tracker = TokenUsageTracker()
@@ -167,35 +172,125 @@ class ResearchAssistant:
             return []
 
         try:
-            from langchain_mcp_adapters.client import MultiServerMCPClient
+            import asyncio
 
-            # Get the MCP connection details from configuration
-            mcp_port = self.service_manager.config.mcp_port
-            mcp_host = self.service_manager.config.mcp_host
+            from langchain_mcp_adapters.client import (
+                MultiServerMCPClient,
+                load_mcp_tools,
+            )
+            from langchain_mcp_adapters.sessions import create_session
 
             logger.info('Initializing MCP tools with official LangChain adapters...')
 
-            # Use the official MultiServerMCPClient pattern
-            self.mcp_client = MultiServerMCPClient(
-                {
-                    'thoth': {
-                        'url': f'http://{mcp_host}:{mcp_port}/mcp',
-                        'transport': 'streamable_http',
-                    }
+            # Try stdio connection first (more reliable)
+            try:
+                logger.info('Attempting stdio MCP connection...')
+
+                # Create a proper StdioConnection configuration
+                stdio_connection = {
+                    'transport': 'stdio',
+                    'command': 'python',
+                    'args': ['-m', 'thoth', 'mcp', 'stdio'],
                 }
-            )
 
-            # Load tools using the official pattern
-            tools = await self.mcp_client.get_tools()
+                # Load tools and store them outside the async context
+                loaded_tools = []
 
-            if not tools:
-                logger.warning('No MCP tools available - running in degraded mode')
-                return []
+                # Use the proper session creation approach for stdio
+                try:
+                    async with create_session(stdio_connection) as session:
+                        # Load tools from the session
+                        tools = await load_mcp_tools(session)
 
-            logger.info(
-                f'Successfully loaded {len(tools)} MCP tools using official LangChain adapters'
-            )
-            return tools
+                        if tools:
+                            # Copy tools to avoid session lifecycle issues
+                            loaded_tools = list(tools)
+                            logger.info(
+                                f'Successfully loaded {len(loaded_tools)} MCP tools via stdio connection'
+                            )
+
+                except asyncio.CancelledError:
+                    # Handle cancelled error gracefully - tools may have been loaded
+                    # already
+                    logger.warning(
+                        'Stdio session was cancelled during cleanup, but tools may have been loaded'
+                    )
+                except Exception as session_error:
+                    # Check if this is just a communication error after successful tool
+                    # loading
+                    if (
+                        any(
+                            keyword in str(session_error).lower()
+                            for keyword in [
+                                'invalid json',
+                                'validation error',
+                                'json_invalid',
+                            ]
+                        )
+                        and loaded_tools
+                    ):
+                        logger.warning(
+                            f'MCP communication error after loading tools: {session_error}'
+                        )
+                        logger.info(
+                            f'Proceeding with {len(loaded_tools)} successfully loaded tools'
+                        )
+                    elif (
+                        'unhandled errors in a TaskGroup' in str(session_error)
+                        and loaded_tools
+                    ):
+                        logger.warning(
+                            f'MCP session cleanup error after loading tools: {session_error}'
+                        )
+                        logger.info(
+                            f'Proceeding with {len(loaded_tools)} successfully loaded tools'
+                        )
+                    else:
+                        raise
+
+                # Return tools after the session context is closed
+                if loaded_tools:
+                    return loaded_tools
+                else:
+                    logger.warning('Stdio connection successful but no tools returned')
+
+            except Exception as stdio_error:
+                import traceback
+
+                logger.error(f'Stdio MCP connection failed: {stdio_error}')
+                logger.error(f'Full traceback: {traceback.format_exc()}')
+
+            # Fallback to HTTP connection if stdio fails
+            try:
+                logger.info('Attempting HTTP MCP connection as fallback...')
+                mcp_port = self.service_manager.config.mcp_port
+                mcp_host = self.service_manager.config.mcp_host
+
+                self.mcp_client = MultiServerMCPClient(
+                    {
+                        'thoth': {
+                            'url': f'http://{mcp_host}:{mcp_port}/mcp',
+                            'transport': 'streamable_http',
+                        }
+                    }
+                )
+
+                # Load tools using HTTP connection
+                tools = await self.mcp_client.get_tools()
+
+                if tools:
+                    logger.info(
+                        f'Successfully loaded {len(tools)} MCP tools via HTTP connection'
+                    )
+                    return tools
+                else:
+                    logger.warning('HTTP connection successful but no tools returned')
+
+            except Exception as http_error:
+                logger.warning(f'HTTP MCP connection failed: {http_error}')
+
+            logger.warning('No MCP tools available - running in degraded mode')
+            return []
 
         except ImportError as e:
             logger.error(f'Missing MCP dependencies: {e}')

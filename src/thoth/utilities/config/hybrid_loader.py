@@ -228,12 +228,12 @@ class HybridConfigLoader:
             'model': settings.get('model', 'openai/gpt-4o-mini'),
             'model_settings': {
                 'temperature': settings.get('temperature', 0.9),
-                'max_tokens': settings.get('maxTokens', 500000),
+                'max_tokens': settings.get('maxTokens', 8000),
                 'top_p': settings.get('topP', 1.0),
                 'streaming': settings.get('streaming', False),
                 'use_rate_limiter': settings.get('useRateLimiter', True),
             },
-            'max_output_tokens': settings.get('maxOutputTokens', 50000),
+            'max_output_tokens': settings.get('maxOutputTokens', 8000),
             'max_context_length': settings.get('maxContextLength', 8000),
             'chunk_size': settings.get('chunkSize', 4000),
             'chunk_overlap': settings.get('chunkOverlap', 200),
@@ -290,9 +290,9 @@ class HybridConfigLoader:
             'model': settings.get('model', 'anthropic/claude-3.5-sonnet'),
             'model_settings': {
                 'temperature': settings.get('temperature', 0.7),
-                'max_tokens': settings.get('maxTokens', 100000),
+                'max_tokens': settings.get('maxTokens', 8000),
             },
-            'max_output_tokens': settings.get('maxOutputTokens', 100000),
+            'max_output_tokens': settings.get('maxOutputTokens', 8000),
             'max_context_length': settings.get('maxContextLength', 100000),
             'use_auto_model_selection': settings.get('useAutoModelSelection', False),
             'auto_model_require_tool_calling': settings.get(

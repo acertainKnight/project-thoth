@@ -1,5 +1,6 @@
 """Health check and file operation endpoints."""
 
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Query
@@ -31,18 +32,51 @@ def health_check():
     Health check endpoint.
 
     Returns:
-        dict: Health status information
+        JSONResponse: Health status information with appropriate HTTP status code
     """
-    from thoth.server.app import service_manager
+    try:
+        from thoth.server.app import service_manager
 
-    health_monitor = HealthMonitor(service_manager)
-    status = health_monitor.overall_status()
+        if service_manager is None:
+            logger.warning('Service manager not initialized')
+            return JSONResponse(
+                status_code=503,
+                content={
+                    'status': 'unhealthy',
+                    'healthy': False,
+                    'error': 'Service manager not initialized',
+                    'services': {},
+                    'timestamp': datetime.utcnow().isoformat(),
+                },
+            )
 
-    return {
-        'status': 'healthy' if status.get('healthy') else 'unhealthy',
-        'healthy': status.get('healthy', True),
-        'services': status.get('services', {}),
-    }
+        health_monitor = HealthMonitor(service_manager)
+        status = health_monitor.overall_status()
+
+        is_healthy = status.get('healthy', False)
+        response_data = {
+            'status': 'healthy' if is_healthy else 'unhealthy',
+            'healthy': is_healthy,
+            'services': status.get('services', {}),
+            'timestamp': str(logger.opt().now()),
+        }
+
+        # Return appropriate HTTP status code
+        http_status = 200 if is_healthy else 503
+        return JSONResponse(status_code=http_status, content=response_data)
+
+    except Exception as e:
+        logger.error(f'Health check failed with error: {e}')
+        return JSONResponse(
+            status_code=500,
+            content={
+                'status': 'unhealthy',
+                'healthy': False,
+                'error': f'Health check failed: {e!s}',
+                'services': {},
+                'timestamp': str(logger.opt().now()),
+            },
+        )
 
 
 @router.get('/download-pdf')

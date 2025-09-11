@@ -16,7 +16,7 @@ class ModelConfig(BaseSettings):
         extra='ignore',
     )
     temperature: float = Field(0.9, description='Model temperature')
-    max_tokens: int = Field(500000, description='Model max tokens for generation')
+    max_tokens: int = Field(8000, description='Model max tokens for generation')
     top_p: float = Field(1.0, description='Model top p')
     streaming: bool = Field(False, description='Model streaming')
     use_rate_limiter: bool = Field(True, description='Model use rate limiter')
@@ -37,7 +37,7 @@ class BaseLLMConfig(BaseSettings):
     model_settings: ModelConfig = Field(
         default_factory=ModelConfig, description='Model parameters'
     )
-    max_output_tokens: int = Field(50000, description='Max tokens for generation')
+    max_output_tokens: int = Field(8000, description='Max tokens for generation')
     max_context_length: int = Field(8000, description='Max context length for model')
 
 

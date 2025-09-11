@@ -8,6 +8,7 @@ Welcome to the comprehensive documentation for Thoth, an advanced AI-powered res
 - **[README](../README.md)** - Project overview and quick start guide
 - **[Setup Guide](setup.md)** - Detailed installation and configuration instructions
 - **[Usage Guide](usage.md)** - Comprehensive usage documentation and examples
+- **[Letta Docker Setup](letta-docker-setup.md)** - Comprehensive Letta memory service Docker configuration
 
 ### System Architecture
 - **[Architecture Overview](architecture.md)** - High-level system design and component interactions

@@ -18,9 +18,8 @@ try:
     from letta_client import (
         Letta as LettaClient,
     )
-    from letta_client import (
-        Memory as BasicBlockMemory,
-    )
+    from letta_client.types.create_block import CreateBlock
+    from letta_client.types.embedding_config import EmbeddingConfig
 
     LETTA_AVAILABLE = True
     logger.info('Letta framework available')
@@ -33,7 +32,11 @@ except ImportError as e:
         def __init__(self, *args, **kwargs):
             pass
 
-    class BasicBlockMemory:
+    class CreateBlock:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class EmbeddingConfig:
         def __init__(self, *args, **kwargs):
             pass
 
@@ -115,40 +118,71 @@ class LettaMemoryManager:
                     logger.info(f'Loaded existing agent: {agent_name}')
                     return self.client.agents.retrieve(agent.id)
 
-            # Create new agent with hierarchical memory
-            memory = BasicBlockMemory(
-                blocks=[
-                    {
-                        'label': 'human',
-                        'value': 'Research context and user preferences for academic paper analysis',
-                        'limit': 2000,
-                    },
-                    {
-                        'label': 'persona',
-                        'value': 'I am Thoth, an advanced research assistant specializing in academic paper analysis and knowledge synthesis. I maintain persistent memory across sessions.',
-                        'limit': 2000,
-                    },
-                    {
-                        'label': 'research_focus',
-                        'value': 'Current research topics and active queries being investigated',
-                        'limit': 3000,
-                    },
-                    {
-                        'label': 'key_findings',
-                        'value': 'Important discoveries and insights from analyzed papers',
-                        'limit': 5000,
-                    },
-                ]
-            )
+            # Get available models and embedding configurations
+            models = self.client.models.list()
+            if not models:
+                logger.error('No LLM models available for agent creation')
+                return None
 
+            llm_config = models[0]  # Use the first available model
+            logger.info(f'Using LLM model: {llm_config.handle}')
+
+            # Get embedding configuration
+            embedding_config = None
+            try:
+                if hasattr(self.client, 'embedding_models'):
+                    embedding_models = self.client.embedding_models.list()
+                    if embedding_models:
+                        embedding_config = embedding_models[0]
+                        logger.info(f'Using embedding model: {embedding_config.handle}')
+            except Exception as e:
+                logger.warning(f'Could not get embedding models: {e}')
+
+            # Create embedding config manually if needed
+            if not embedding_config:
+                logger.info('Creating default embedding configuration')
+                embedding_config = EmbeddingConfig(
+                    embedding_model='text-embedding-ada-002',
+                    embedding_endpoint_type='openai',
+                    embedding_endpoint='https://api.openai.com/v1',
+                    embedding_dim=1536,
+                    embedding_chunk_size=300,
+                )
+
+            # Create memory blocks using the new API
+            memory_blocks = [
+                CreateBlock(
+                    label='human',
+                    value='Research context and user preferences for academic paper analysis',
+                    limit=2000,
+                ),
+                CreateBlock(
+                    label='persona',
+                    value='I am Thoth, an advanced research assistant specializing in academic paper analysis and knowledge synthesis. I maintain persistent memory across sessions.',
+                    limit=2000,
+                ),
+                CreateBlock(
+                    label='research_focus',
+                    value='Current research topics and active queries being investigated',
+                    limit=3000,
+                ),
+                CreateBlock(
+                    label='key_findings',
+                    value='Important discoveries and insights from analyzed papers',
+                    limit=5000,
+                ),
+            ]
+
+            # Create agent using the new Letta v0.11.3+ API
             agent = self.client.agents.create(
                 name=agent_name,
-                memory=memory,
-                tools=self._get_research_tools(),
+                memory_blocks=memory_blocks,  # Use memory_blocks instead of memory
+                llm_config=llm_config,  # Use llm_config instead of model string
+                embedding_config=embedding_config,  # Required in new API
                 system='You are Thoth, a research assistant with persistent memory across sessions. Use memory tools to store and retrieve important information.',
             )
 
-            logger.info(f'Created new agent: {agent_name}')
+            logger.info(f'Created new agent: {agent_name} (ID: {agent.id})')
             return agent
 
         except Exception as e:
