@@ -9,19 +9,49 @@ services:
   # ==============================================================================
   # Letta Memory Server
   # Advanced persistent memory system for research agents
+  # Following Letta self-hosting best practices
   # ==============================================================================
   letta:
     image: letta/letta:latest
     container_name: thoth-letta
     environment:
+      # Core Letta server configuration
       - LETTA_SERVER_HOST=0.0.0.0
       - LETTA_SERVER_PORT=8283
-      - LETTA_PG_URI=postgresql://letta:letta@letta-postgres:5432/letta
-      # API keys will be inherited from main app environment
+      - LETTA_PG_URI=postgresql://letta:letta_password@letta-postgres:5432/letta
+
+      # PostgreSQL connection pool configuration
+      - LETTA_PG_POOL_SIZE=20
+      - LETTA_PG_MAX_OVERFLOW=30
+      - LETTA_PG_POOL_TIMEOUT=30
+      - LETTA_PG_POOL_RECYCLE=1800
+
+      # Security and production settings
+      - SECURE=true
+      - LETTA_SERVER_PASSWORD=${LETTA_SERVER_PASSWORD:-letta_dev_password}
+
+      # Tool execution environment
+      - TOOL_EXEC_VENV_NAME=letta-tools
+
+      # Optional E2B sandbox configuration (uncomment to enable)
+      # - E2B_API_KEY=${E2B_API_KEY:-}
+      # - E2B_SANDBOX_TEMPLATE_ID=${E2B_SANDBOX_TEMPLATE_ID:-}
+
+      # API keys for LLM providers
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+
+      # Optional local LLM provider URLs
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
+      - VLLM_API_BASE=${VLLM_API_BASE:-}
+
+      # Filesystem configuration for self-hosted deployment
+      - LETTA_DATA_DIR=/letta/.persist
+      - HOME=/letta
     volumes:
       - thoth-letta-data:/letta/.persist
+      - thoth-letta-home:/letta
+    command: ["letta", "server", "--host", "0.0.0.0", "--port", "8283"]
     ports:
       - "8283:8283"
     networks:
@@ -31,18 +61,18 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8283/v1/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8283/health"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 60s
 
   # ==============================================================================
-  # PostgreSQL Database for Letta
-  # Stores Letta agent states and memory data
+  # PostgreSQL Database for Letta with pgvector extension
+  # Stores Letta agent states and memory data with vector support
   # ==============================================================================
   letta-postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     container_name: thoth-letta-postgres
     environment:
       - POSTGRES_DB=letta
@@ -51,6 +81,8 @@ services:
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8
     volumes:
       - thoth-letta-postgres:/var/lib/postgresql/data
+      # Initialize pgvector extension
+      - ./docker/postgres/init-vector.sql:/docker-entrypoint-initdb.d/init-vector.sql:ro
     networks:
       - thoth-network
     restart: unless-stopped
@@ -70,18 +102,17 @@ services:
     container_name: thoth-chromadb
     environment:
       - CHROMA_SERVER_HOST=0.0.0.0
-      - CHROMA_SERVER_HTTP_PORT=8003
       - IS_PERSISTENT=TRUE
-      - PERSIST_DIRECTORY=/chroma/chroma
+      - PERSIST_DIRECTORY=/data
     volumes:
-      - thoth-chroma-data:/chroma/chroma
+      - thoth-chroma-data:/data
     ports:
-      - "8003:8003"
+      - "8003:8000"
     networks:
       - thoth-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8003/api/v1/heartbeat"]
+      test: ["CMD", "sh", "-c", "grep -q ':1F40 ' /proc/net/tcp && echo ChromaDB healthy || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -125,6 +156,10 @@ services:
       - THOTH_DOCKER=1
       - PYTHONPATH=/app/src
 
+      # Fix Letta filesystem permissions (thoth-app also imports letta)
+      - LETTA_LOG_FILE=/workspace/logs/letta.log
+      - HOME=/workspace
+
       # API Keys (loaded from environment or .env file)
       - API_MISTRAL_KEY=${API_MISTRAL_KEY:-}
       - API_OPENROUTER_KEY=${API_OPENROUTER_KEY:-}
@@ -153,9 +188,12 @@ services:
       - ./prompts:/workspace/prompts:ro
       - ./templates:/workspace/templates:ro
 
+      # Writable directory for Letta logs and configs (thoth-app imports letta)
+      - thoth-app-home:/home/thoth
+
     ports:
-      - "8000:8000"  # Main API server
-      - "8001:8001"  # MCP server
+      - "8080:8000"  # Main API server (remapped to avoid local dev conflicts)
+      - "8081:8001"  # MCP server (remapped to avoid local dev conflicts)
 
     networks:
       - thoth-network
@@ -196,6 +234,16 @@ volumes:
   thoth-letta-postgres:
     driver: local
     name: thoth-letta-postgres
+
+  # Letta home directory (for logs and configs)
+  thoth-letta-home:
+    driver: local
+    name: thoth-letta-home
+
+  # Thoth-app home directory (for letta logs when imported by main app)
+  thoth-app-home:
+    driver: local
+    name: thoth-app-home
 
   # ChromaDB vector database storage
   thoth-chroma-data:

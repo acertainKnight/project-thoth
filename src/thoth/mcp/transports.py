@@ -411,8 +411,44 @@ class TransportManager:
 
     async def start_all(self):
         """Start all transports."""
-        for transport in self.transports.values():
-            await transport.start()
+        from loguru import logger
+
+        failed_transports = []
+        for name, transport in self.transports.items():
+            try:
+                await transport.start()
+                logger.info(f'Started MCP transport: {name}')
+            except OSError as e:
+                if e.errno == 98:  # Address already in use
+                    logger.warning(
+                        f"MCP transport '{name}' failed to start - port already in use: {e}"
+                    )
+                    logger.info(
+                        f'Consider changing the port for {name} transport in configuration'
+                    )
+                    failed_transports.append(name)
+                else:
+                    logger.error(
+                        f"MCP transport '{name}' failed to start with OS error: {e}"
+                    )
+                    failed_transports.append(name)
+            except Exception as e:
+                logger.error(f"MCP transport '{name}' failed to start: {e}")
+                failed_transports.append(name)
+
+        if failed_transports and len(failed_transports) == len(self.transports):
+            # All transports failed to start
+            raise RuntimeError(
+                f'All MCP transports failed to start: {", ".join(failed_transports)}'
+            )
+        elif failed_transports:
+            # Some transports failed, but at least one succeeded
+            logger.warning(
+                f'Some MCP transports failed to start: {", ".join(failed_transports)}'
+            )
+            logger.info(
+                f'MCP server will continue with {len(self.transports) - len(failed_transports)} working transports'
+            )
 
     async def stop_all(self):
         """Stop all transports."""

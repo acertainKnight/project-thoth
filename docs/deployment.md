@@ -19,7 +19,7 @@ This guide covers various deployment scenarios for Thoth, from local development
 
 Thoth now supports **completely separated, independently scalable services**:
 
-- **🧠 Memory Service**: Letta-based hierarchical memory system (separate container)
+- **🧠 Memory Service**: Letta-based hierarchical memory system (separate container) - [Setup Guide](letta-docker-setup.md)
 - **💬 Chat Agent**: Research agent with MCP tools (main application)
 - **🔍 Discovery Service**: Automated paper discovery (can run separately)
 - **🗄️ Vector Database**: ChromaDB for RAG operations (separate container)

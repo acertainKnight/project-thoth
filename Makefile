@@ -271,8 +271,8 @@ docker-up: ## Start Docker services (production)
 	@echo "$(YELLOW)Starting Docker services...$(NC)"
 	@docker compose up -d
 	@echo "$(GREEN)✓ Services started$(NC)"
-	@echo "$(YELLOW)API server: http://localhost:8000$(NC)"
-	@echo "$(YELLOW)MCP server: http://localhost:8001$(NC)"
+	@echo "$(YELLOW)API server: http://localhost:8080$(NC)"
+	@echo "$(YELLOW)MCP server: http://localhost:8081$(NC)"
 	@echo "$(YELLOW)ChromaDB: http://localhost:8003$(NC)"
 	@echo "$(YELLOW)Letta server: http://localhost:8283$(NC)"
 
@@ -281,8 +281,8 @@ docker-up-dev: ## Start Docker services (development)
 	@echo "$(YELLOW)Starting Docker development services...$(NC)"
 	@docker compose -f docker-compose.dev.yml up -d
 	@echo "$(GREEN)✓ Development services started$(NC)"
-	@echo "$(YELLOW)API server: http://localhost:8000$(NC)"
-	@echo "$(YELLOW)MCP server: http://localhost:8001$(NC)"
+	@echo "$(YELLOW)API server: http://localhost:8080$(NC)"
+	@echo "$(YELLOW)MCP server: http://localhost:8081$(NC)"
 	@echo "$(YELLOW)ChromaDB: http://localhost:8003$(NC)"
 	@echo "$(YELLOW)Letta server: http://localhost:8283$(NC)"
 
@@ -513,8 +513,8 @@ docker-dev: ## Complete development setup with Docker
 	@make docker-up-dev
 	@echo "$(GREEN)✓ Development environment ready$(NC)"
 	@echo "$(YELLOW)Services available at:$(NC)"
-	@echo "  - API Server: http://localhost:8000"
-	@echo "  - MCP Server: http://localhost:8001"
+	@echo "  - API Server: http://localhost:8080"
+	@echo "  - MCP Server: http://localhost:8081"
 	@echo "  - ChromaDB: http://localhost:8003"
 	@echo "  - Letta Server: http://localhost:8283"
 

@@ -38,7 +38,7 @@ class LLMProcessor:
         llm_service: LLMService,
         model: str,
         prompts_dir: str | Path,
-        max_output_tokens: int = 500000,
+        max_output_tokens: int = 8000,
         max_context_length: int = 8000,
         chunk_size: int = 4000,
         chunk_overlap: int = 200,

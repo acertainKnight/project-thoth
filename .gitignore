@@ -159,15 +159,16 @@ Thumbs.db
 .pytest_cache/
 
 # Code agents
-/.claude/
+/.claude/*
 CLAUDE.md
 CLAUDE.md.backup
-/.cursor/
+/.cursor/*
 .cursorrules
 .cursorignore
+/qdrant_storage
 
 # Planning and backup files
-/planning/
+/planning/*
 *plan*.md
 *.backup
 README-docker.md
@@ -195,3 +196,4 @@ mock_*/
 
 # Configuration files
 .thoth.settings.json
+qdrant_storage/raft_state.json
