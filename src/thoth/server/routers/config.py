@@ -6,10 +6,30 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from loguru import logger
+from pydantic import BaseModel, Field
 
-from thoth.utilities.config import get_config
+from thoth.utilities.config import ThothConfig, get_config
+from thoth.utilities.config.schema_generator import generate_config_schema
 
 router = APIRouter()
+
+
+class PartialValidationRequest(BaseModel):
+    """Request model for partial field validation."""
+
+    field_path: str = Field(
+        ..., description="Dot-notation path to the field (e.g., 'api_keys.mistral_key')"
+    )
+    field_value: Any = Field(..., description='New value for the field')
+
+
+class SchemaVersionResponse(BaseModel):
+    """Response model for schema version information."""
+
+    current_version: str
+    supported_versions: list[str]
+    migration_available: bool
+    migration_required: bool
 
 
 @router.get('/export')
@@ -119,119 +139,25 @@ async def validate_config(config_data: dict[str, Any] | None = None):
 
 @router.get('/schema')
 def get_config_schema():
-    """Get the configuration schema for the Obsidian plugin."""
-    schema = {
-        'version': '1.0.0',
-        'sections': {
-            'api_keys': {
-                'title': 'API Keys',
-                'description': 'External service API keys',
-                'fields': {
-                    'mistralKey': {
-                        'type': 'string',
-                        'required': False,
-                        'sensitive': True,
-                    },
-                    'openrouterKey': {
-                        'type': 'string',
-                        'required': False,
-                        'sensitive': True,
-                    },
-                    'opencitationsKey': {
-                        'type': 'string',
-                        'required': False,
-                        'sensitive': True,
-                    },
-                    'googleApiKey': {
-                        'type': 'string',
-                        'required': False,
-                        'sensitive': True,
-                    },
-                    'semanticScholarKey': {
-                        'type': 'string',
-                        'required': False,
-                        'sensitive': True,
-                    },
-                    'webSearchKey': {
-                        'type': 'string',
-                        'required': False,
-                        'sensitive': True,
-                    },
-                },
-            },
-            'directories': {
-                'title': 'Directory Configuration',
-                'description': 'File system paths',
-                'fields': {
-                    'workspaceDir': {
-                        'type': 'string',
-                        'required': True,
-                        'description': 'Main Thoth workspace directory',
-                    },
-                    'pdfDir': {
-                        'type': 'string',
-                        'required': False,
-                        'description': 'Directory for downloaded PDFs',
-                    },
-                    'notesDir': {
-                        'type': 'string',
-                        'required': False,
-                        'description': 'Directory for generated notes',
-                    },
-                },
-            },
-            'server': {
-                'title': 'Server Configuration',
-                'description': 'API server settings',
-                'fields': {
-                    'host': {
-                        'type': 'string',
-                        'default': 'localhost',
-                        'description': 'Server host address',
-                    },
-                    'port': {
-                        'type': 'integer',
-                        'default': 8000,
-                        'description': 'Server port number',
-                    },
-                },
-            },
-            'llm_settings': {
-                'title': 'LLM Configuration',
-                'description': 'Language model settings',
-                'fields': {
-                    'defaultModel': {
-                        'type': 'string',
-                        'default': 'mistral/mistral-large-latest',
-                        'description': 'Default language model',
-                    },
-                    'researchModel': {
-                        'type': 'string',
-                        'default': 'mistral/mistral-large-latest',
-                        'description': 'Model for research tasks',
-                    },
-                },
-            },
-            'discovery': {
-                'title': 'Discovery Settings',
-                'description': 'Paper discovery configuration',
-                'fields': {
-                    'autoStartScheduler': {
-                        'type': 'boolean',
-                        'default': False,
-                        'description': 'Auto-start discovery scheduler',
-                    },
-                    'maxArticlesPerSource': {
-                        'type': 'integer',
-                        'default': 50,
-                        'description': 'Maximum articles per discovery source',
-                    },
-                },
-            },
-        },
-    }
+    """
+    Get enhanced configuration schema with rich UI metadata for Obsidian.
+    """
+    try:
+        # Generate comprehensive schema from Pydantic models
+        schema = generate_config_schema(ThothConfig)
 
-    return JSONResponse(schema)
+        # Add timestamp and additional metadata
+        schema['generated_at'] = time.time()
+        schema['supports_partial_validation'] = True
+        schema['migration_support'] = True
+
+        return JSONResponse({'status': 'success', **schema})
+
+    except Exception as e:
+        logger.error(f'Failed to generate config schema: {e}')
+        raise HTTPException(
+            status_code=500, detail=f'Schema generation failed: {e!s}'
+        ) from e
 
 
 @router.get('/defaults')

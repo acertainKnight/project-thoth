@@ -166,6 +166,7 @@ CLAUDE.md.backup
 .cursorrules
 .cursorignore
 /qdrant_storage
+/.roo
 
 # Planning and backup files
 /planning/*
@@ -183,6 +184,7 @@ node_modules/
 /knowledge/
 /cache/
 /data/
+/workspace/
 
 # Generated reports
 *_report.json
