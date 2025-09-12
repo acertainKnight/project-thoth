@@ -103,6 +103,18 @@ class SchemaGenerator:
                 'letta_config.*',
             ],
         },
+        'Server': {
+            'title': 'Server Configuration',
+            'description': 'Server and network configuration settings',
+            'priority': 4,
+            'fields': ['port', 'host'],
+        },
+        'General': {
+            'title': 'General Settings',
+            'description': 'General configuration options',
+            'priority': 9,
+            'fields': ['*'],
+        },
     }
 
     # Field type mappings based on field names and types
@@ -148,13 +160,29 @@ class SchemaGenerator:
     def generate_schema(self, model_class: type[BaseModel]) -> dict[str, Any]:
         """Generate complete UI schema from a Pydantic model."""
         fields_dict: dict[str, Any] = {}
-        schema = {
-            'version': self.SCHEMA_VERSION,
-            'schema': {'fields': fields_dict, 'groups': self.FIELD_GROUPS.copy()},
-        }
+        validation_rules: dict[str, Any] = {}
 
         # Generate field metadata recursively
-        self._process_model_fields(model_class, fields_dict, '')
+        self._process_model_fields(model_class, fields_dict, validation_rules, '')
+
+        # Organize field groups for UI
+        field_groups = {}
+        for group_name, group_info in self.FIELD_GROUPS.items():
+            field_groups[group_name] = {
+                'title': group_info['title'],
+                'description': group_info['description'],
+                'order': group_info['priority'],
+            }
+
+        from datetime import datetime
+
+        schema = {
+            'schema_version': '2.0.0',
+            'fields': fields_dict,
+            'field_groups': field_groups,
+            'validation_rules': validation_rules,
+            'generated_at': datetime.now().isoformat(),
+        }
 
         return schema
 
@@ -162,6 +190,7 @@ class SchemaGenerator:
         self,
         model_class: type[BaseModel],
         fields_dict: dict[str, Any],
+        validation_rules: dict[str, Any],
         prefix: str = '',
     ):
         """Process all fields in a Pydantic model recursively."""
@@ -172,9 +201,18 @@ class SchemaGenerator:
 
             # Check if this is a nested model
             if self._is_pydantic_model(field_info.annotation):
+                # Add the nested field itself
+                field_metadata = self._generate_field_metadata(
+                    field_name, field_info, full_field_path
+                )
+                fields_dict[full_field_path] = field_metadata
+
                 # Recursively process nested model
                 self._process_model_fields(
-                    field_info.annotation, fields_dict, full_field_path
+                    field_info.annotation,
+                    fields_dict,
+                    validation_rules,
+                    full_field_path,
                 )
             else:
                 # Generate field metadata
@@ -182,6 +220,13 @@ class SchemaGenerator:
                     field_name, field_info, full_field_path
                 )
                 fields_dict[full_field_path] = field_metadata
+
+                # Add validation rules
+                validation = self._extract_validation_rules(
+                    field_info, field_info.annotation
+                )
+                if validation:
+                    validation_rules[full_field_path] = validation
 
     def _is_pydantic_model(self, annotation: Any) -> bool:
         """Check if an annotation is a Pydantic model."""
@@ -195,7 +240,9 @@ class SchemaGenerator:
     ) -> dict[str, Any]:
         """Generate comprehensive metadata for a single field."""
         # Get basic type information
-        field_type = self._determine_field_type(field_name, field_info, full_path)
+        field_type = self._determine_field_type(
+            field_name, field_info.annotation, field_info.description
+        )
         annotation = field_info.annotation
 
         # Build base metadata
@@ -218,8 +265,9 @@ class SchemaGenerator:
                 pass
 
         # Add environment variable mapping
-        if full_path in self.ENV_VAR_MAPPINGS:
-            metadata['env_var'] = self.ENV_VAR_MAPPINGS[full_path]
+        env_var = self._get_env_var_name(full_path)
+        if env_var:
+            metadata['env_var'] = env_var
 
         # Add validation rules
         validation = self._extract_validation_rules(field_info, annotation)
@@ -232,17 +280,25 @@ class SchemaGenerator:
             metadata['ui_hints'] = ui_hints
 
         # Add group assignment
-        group = self._determine_field_group(full_path)
-        if group:
-            metadata['group'] = group
+        group = self._get_field_group(field_name)
+        metadata['group'] = group
 
         return metadata
 
     def _determine_field_type(
-        self, field_name: str, field_info: FieldInfo, full_path: str
+        self, field_name: str, field_annotation: Any, description: str | None = None
     ) -> str:
         """Determine the UI field type based on field name and annotation."""
-        annotation = field_info.annotation
+        # Support both old signature (3 params) and new signature (FieldInfo)
+        if isinstance(field_annotation, FieldInfo):
+            # New signature: field_info, full_path
+            field_info = field_annotation
+            full_path = description or field_name
+            annotation = field_info.annotation
+        else:
+            # Old signature: field_name, type, description
+            annotation = field_annotation
+            full_path = field_name
 
         # Check field name patterns first
         field_name_lower = field_name.lower()
@@ -261,26 +317,24 @@ class SchemaGenerator:
 
         # Handle Union types (Optional)
         if hasattr(annotation, '__args__'):
-            args = get_args(field_info.annotation)
+            args = get_args(annotation)
             if len(args) == 2 and type(None) in args:
                 # This is Optional[T], get the non-None type
                 annotation = next(arg for arg in args if arg is not type(None))
 
         # Map Python types to UI types
-        if isinstance(annotation, bool):
+        if annotation is bool:
             return UIFieldType.BOOLEAN
-        elif isinstance(annotation, (int | float)):
+        elif annotation in (int, float):
             return UIFieldType.NUMBER
-        elif isinstance(annotation, str):
+        elif annotation is str:
             return UIFieldType.TEXT
-        elif isinstance(annotation, Path):
+        elif annotation is Path:
             if 'dir' in field_name_lower:
                 return UIFieldType.DIRECTORY
             else:
                 return UIFieldType.FILE
-        elif hasattr(annotation, '__origin__') and isinstance(
-            annotation.__origin__, list
-        ):
+        elif hasattr(annotation, '__origin__') and annotation.__origin__ is list:
             return UIFieldType.MULTISELECT
 
         return UIFieldType.TEXT
@@ -291,37 +345,70 @@ class SchemaGenerator:
         """Extract validation rules from field constraints."""
         validation = {}
 
-        # Handle constraints from field_info
-        constraints = getattr(field_info, 'constraints', []) or []
+        # Set required field
+        validation['required'] = field_info.is_required()
 
-        for constraint in constraints:
-            if hasattr(constraint, 'ge'):  # greater than or equal
-                validation['min'] = constraint.ge
-            elif hasattr(constraint, 'gt'):  # greater than
-                validation['min'] = constraint.gt + (
-                    0.01 if isinstance(constraint.gt, float) else 1
-                )
-            elif hasattr(constraint, 'le'):  # less than or equal
-                validation['max'] = constraint.le
-            elif hasattr(constraint, 'lt'):  # less than
-                validation['max'] = constraint.lt - (
-                    0.01 if isinstance(constraint.lt, float) else 1
-                )
-            elif hasattr(constraint, 'pattern'):  # regex pattern
-                validation['pattern'] = constraint.pattern
-                validation['message'] = f'Must match pattern: {constraint.pattern}'
-
-        # Add specific validation messages based on field type
+        # Handle Union types (Optional) to get the actual type
         origin = get_origin(annotation)
-        if origin is not None:
-            annotation = origin
+        actual_type = annotation
 
-        if isinstance(annotation, int):
-            validation['type'] = 'integer'
-        elif isinstance(annotation, float):
-            validation['type'] = 'number'
-        elif isinstance(annotation, str):
-            validation['type'] = 'string'
+        if origin is not None:
+            if hasattr(annotation, '__args__'):
+                args = get_args(annotation)
+                if len(args) == 2 and type(None) in args:
+                    # This is Optional[T], get the non-None type
+                    actual_type = next(arg for arg in args if arg is not type(None))
+                else:
+                    actual_type = origin
+            else:
+                actual_type = origin
+
+        # Set data type for validation
+        if actual_type is int:
+            validation['data_type'] = 'int'
+        elif actual_type is float:
+            validation['data_type'] = 'float'
+        elif actual_type is str:
+            validation['data_type'] = 'str'
+        elif actual_type is bool:
+            validation['data_type'] = 'bool'
+        else:
+            validation['data_type'] = 'str'  # Default fallback
+
+        # Handle constraints from field_info
+        if hasattr(field_info, 'constraints') and field_info.constraints:
+            for constraint in field_info.constraints:
+                if hasattr(constraint, 'ge'):  # greater than or equal
+                    validation['min_value'] = constraint.ge
+                elif hasattr(constraint, 'gt'):  # greater than
+                    validation['min_value'] = constraint.gt + (
+                        0.01 if isinstance(constraint.gt, float) else 1
+                    )
+                elif hasattr(constraint, 'le'):  # less than or equal
+                    validation['max_value'] = constraint.le
+                elif hasattr(constraint, 'lt'):  # less than
+                    validation['max_value'] = constraint.lt - (
+                        0.01 if isinstance(constraint.lt, float) else 1
+                    )
+                elif hasattr(constraint, 'pattern'):  # regex pattern
+                    validation['pattern'] = constraint.pattern
+                    validation['message'] = f'Must match pattern: {constraint.pattern}'
+
+        # Check for constraints in field_info metadata
+        if hasattr(field_info, 'metadata'):
+            for metadata_item in field_info.metadata:
+                if hasattr(metadata_item, 'ge'):
+                    validation['min_value'] = metadata_item.ge
+                elif hasattr(metadata_item, 'le'):
+                    validation['max_value'] = metadata_item.le
+                elif hasattr(metadata_item, 'gt'):
+                    validation['min_value'] = metadata_item.gt + (
+                        0.01 if isinstance(metadata_item.gt, float) else 1
+                    )
+                elif hasattr(metadata_item, 'lt'):
+                    validation['max_value'] = metadata_item.lt - (
+                        0.01 if isinstance(metadata_item.lt, float) else 1
+                    )
 
         return validation if validation else None
 
@@ -393,6 +480,37 @@ class SchemaGenerator:
                 hints['suggestions'] = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
 
         return hints if hints else None
+
+    def _get_field_group(self, field_name: str) -> str:
+        """Determine which group a field belongs to based on field name patterns."""
+        field_name_lower = field_name.lower()
+
+        # Check for API key fields
+        if 'key' in field_name_lower:
+            return 'API Keys'
+
+        # Check for directory fields
+        if 'dir' in field_name_lower or 'directory' in field_name_lower:
+            return 'Directories'
+
+        # Check for server-related fields
+        if 'port' in field_name_lower or 'host' in field_name_lower:
+            return 'Server'
+
+        # Default group
+        return 'General'
+
+    def _get_env_var_name(self, field_path: str) -> str:
+        """Generate environment variable name for a field."""
+        # Check if there's a specific mapping
+        if field_path in self.ENV_VAR_MAPPINGS:
+            return self.ENV_VAR_MAPPINGS[field_path]
+
+        # Generate standard format: THOTH_FIELD_NAME
+        env_name = field_path.replace('.', '_').upper()
+        if not env_name.startswith('THOTH_'):
+            env_name = f'THOTH_{env_name}'
+        return env_name
 
     def _determine_field_group(self, field_path: str) -> str | None:
         """Determine which group a field belongs to."""

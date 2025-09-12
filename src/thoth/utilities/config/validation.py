@@ -5,68 +5,51 @@ This module provides comprehensive validation functions that generate
 detailed, actionable error messages for the Obsidian plugin UI.
 """
 
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
 
-class ValidationResult:
+class IssueType(str, Enum):
+    """Types of validation issues."""
+
+    VALIDATION_ERROR = 'validation_error'
+    RANGE_ERROR = 'range_error'
+    TYPE_ERROR = 'type_error'
+    FORMAT_ERROR = 'format_error'
+    MISSING_FIELD = 'missing_field'
+    BUSINESS_LOGIC = 'business_logic'
+
+
+class IssueSeverity(str, Enum):
+    """Severity levels for validation issues."""
+
+    ERROR = 'error'
+    WARNING = 'warning'
+    INFO = 'info'
+
+
+class ValidationIssue(BaseModel):
+    """A single validation issue with detailed information."""
+
+    field_path: str
+    issue_type: IssueType
+    severity: IssueSeverity
+    message: str
+    suggestion: str | None = None
+    current_value: Any = None
+    expected_format: str | None = None
+
+
+class ValidationResult(BaseModel):
     """Structured validation result with detailed error information."""
 
-    def __init__(self):
-        self.valid = True
-        self.errors: list[dict[str, Any]] = []
-        self.warnings: list[dict[str, Any]] = []
-        self.suggestions: list[dict[str, Any]] = []
-
-    def add_error(
-        self,
-        field: str,
-        error_type: str,
-        message: str,
-        suggestion: str | None = None,
-        severity: str = 'error',
-    ):
-        """Add a validation error."""
-        self.valid = False
-        error_entry = {
-            'field': field,
-            'type': error_type,
-            'message': message,
-            'severity': severity,
-        }
-        if suggestion:
-            error_entry['suggestion'] = suggestion
-
-        self.errors.append(error_entry)
-
-    def add_warning(self, field: str, message: str, suggestion: str | None = None):
-        """Add a validation warning."""
-        warning_entry = {'field': field, 'message': message, 'severity': 'warning'}
-        if suggestion:
-            warning_entry['suggestion'] = suggestion
-
-        self.warnings.append(warning_entry)
-
-    def add_suggestion(self, field: str, message: str, action: str | None = None):
-        """Add a helpful suggestion."""
-        suggestion_entry = {'field': field, 'message': message}
-        if action:
-            suggestion_entry['action'] = action
-
-        self.suggestions.append(suggestion_entry)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary format for API responses."""
-        return {
-            'valid': self.valid,
-            'errors': self.errors,
-            'warnings': self.warnings,
-            'suggestions': self.suggestions,
-            'error_count': len(self.errors),
-            'warning_count': len(self.warnings),
-        }
+    is_valid: bool
+    errors: list[ValidationIssue] = []
+    warnings: list[ValidationIssue] = []
+    suggestions: list[ValidationIssue] = []
 
 
 class EnhancedValidator:
@@ -77,68 +60,146 @@ class EnhancedValidator:
         pass
 
     def validate_config(
-        self, config_class: type[BaseModel], config_data: dict[str, Any]
+        self, config_data: dict[str, Any], model_class: type[BaseModel] | None = None
     ) -> ValidationResult:
         """Validate configuration data with detailed error reporting."""
-        result = ValidationResult()
+        errors = []
+        warnings = []
+        suggestions = []
+
+        # Use provided model class or try to import ThothConfig
+        if model_class is None:
+            try:
+                from thoth.utilities.config import ThothConfig
+
+                model_class = ThothConfig
+            except ImportError:
+                # If ThothConfig is not available, we can't validate
+                errors.append(
+                    ValidationIssue(
+                        field_path='__root__',
+                        issue_type=IssueType.VALIDATION_ERROR,
+                        severity=IssueSeverity.ERROR,
+                        message='Configuration model not available for validation',
+                        suggestion='Please ensure the configuration module is properly imported',
+                    )
+                )
+                return ValidationResult(
+                    is_valid=False,
+                    errors=errors,
+                    warnings=warnings,
+                    suggestions=suggestions,
+                )
 
         try:
             # Attempt to create and validate the config
-            config_instance = config_class.model_validate(config_data)
+            config_instance = model_class.model_validate(config_data)
 
             # Perform additional business logic validation
-            self._perform_business_validation(config_instance, result)
+            business_issues = self._perform_business_validation(config_instance)
+            warnings.extend(business_issues.get('warnings', []))
+            suggestions.extend(business_issues.get('suggestions', []))
 
         except ValidationError as e:
             # Parse Pydantic validation errors
-            self._parse_pydantic_errors(e, result)
+            errors.extend(self._parse_pydantic_errors(e))
         except Exception as e:
             # Handle unexpected errors
-            result.add_error(
-                field='__root__',
-                error_type='unexpected_error',
-                message=f'Unexpected validation error: {e!s}',
-                suggestion='Please check your configuration format and try again',
+            errors.append(
+                ValidationIssue(
+                    field_path='__root__',
+                    issue_type=IssueType.VALIDATION_ERROR,
+                    severity=IssueSeverity.ERROR,
+                    message=f'Unexpected validation error: {e!s}',
+                    suggestion='Please check your configuration format and try again',
+                )
             )
 
-        return result
+        return ValidationResult(
+            is_valid=len(errors) == 0,
+            errors=errors,
+            warnings=warnings,
+            suggestions=suggestions,
+        )
 
     def validate_partial_config(
-        self, config_class: type[BaseModel], field_path: str, field_value: Any
+        self,
+        partial_data: dict[str, Any],
+        field_path: str,
+        model_class: type[BaseModel] | None = None,
     ) -> ValidationResult:
         """Validate a single field change without full config validation."""
-        result = ValidationResult()
+        errors = []
+        warnings = []
+        suggestions = []
+
+        # Use provided model class or try to import ThothConfig
+        if model_class is None:
+            try:
+                from thoth.utilities.config import ThothConfig
+
+                model_class = ThothConfig
+            except ImportError:
+                # If ThothConfig is not available, we can't validate
+                errors.append(
+                    ValidationIssue(
+                        field_path=field_path,
+                        issue_type=IssueType.VALIDATION_ERROR,
+                        severity=IssueSeverity.ERROR,
+                        message='Configuration model not available for validation',
+                        suggestion='Please ensure the configuration module is properly imported',
+                    )
+                )
+                return ValidationResult(
+                    is_valid=False,
+                    errors=errors,
+                    warnings=warnings,
+                    suggestions=suggestions,
+                )
 
         try:
             # Split field path to navigate nested structures
             path_parts = field_path.split('.')
 
             # Create a minimal config structure for validation
-            test_data = self._build_minimal_config(path_parts, field_value)
+            test_data = self._build_minimal_config(
+                path_parts, partial_data.get(field_path)
+            )
 
             # Validate just this field
-            config_instance = config_class.model_validate(test_data, strict=False)
+            config_instance = model_class.model_validate(test_data, strict=False)
 
             # Extract the specific field for validation
             field_obj = self._get_field_from_path(config_instance, path_parts)
 
             # Perform field-specific validation
-            self._validate_single_field(field_path, field_obj, result)
+            field_issues = self._validate_single_field(field_path, field_obj)
+            warnings.extend(field_issues.get('warnings', []))
+            suggestions.extend(field_issues.get('suggestions', []))
 
         except ValidationError as e:
             # Parse errors specific to this field
-            self._parse_partial_errors(e, field_path, result)
+            errors.extend(self._parse_partial_errors(e, field_path))
         except Exception as e:
-            result.add_error(
-                field=field_path,
-                error_type='validation_error',
-                message=f'Field validation failed: {e!s}',
+            errors.append(
+                ValidationIssue(
+                    field_path=field_path,
+                    issue_type=IssueType.VALIDATION_ERROR,
+                    severity=IssueSeverity.ERROR,
+                    message=f'Field validation failed: {e!s}',
+                )
             )
 
-        return result
+        return ValidationResult(
+            is_valid=len(errors) == 0,
+            errors=errors,
+            warnings=warnings,
+            suggestions=suggestions,
+        )
 
-    def _parse_pydantic_errors(self, error: ValidationError, result: ValidationResult):
+    def _parse_pydantic_errors(self, error: ValidationError) -> list[ValidationIssue]:
         """Parse Pydantic validation errors into detailed messages."""
+        issues = []
         for error_detail in error.errors():
             field_path = '.'.join(str(loc) for loc in error_detail['loc'])
             error_type = error_detail['type']
@@ -150,17 +211,23 @@ class EnhancedValidator:
                 error_type, message, field_path, input_value
             )
 
-            result.add_error(
-                field=field_path,
-                error_type=error_type,
-                message=enhanced_message,
-                suggestion=suggestion,
+            issues.append(
+                ValidationIssue(
+                    field_path=field_path,
+                    issue_type=IssueType.VALIDATION_ERROR,
+                    severity=IssueSeverity.ERROR,
+                    message=enhanced_message,
+                    suggestion=suggestion,
+                    current_value=input_value,
+                )
             )
+        return issues
 
     def _parse_partial_errors(
-        self, error: ValidationError, target_field: str, result: ValidationResult
-    ):
+        self, error: ValidationError, target_field: str
+    ) -> list[ValidationIssue]:
         """Parse errors from partial validation focusing on the target field."""
+        issues = []
         for error_detail in error.errors():
             field_path = '.'.join(str(loc) for loc in error_detail['loc'])
 
@@ -176,12 +243,17 @@ class EnhancedValidator:
                     error_type, message, field_path, input_value
                 )
 
-                result.add_error(
-                    field=target_field,  # Use the original target field
-                    error_type=error_type,
-                    message=enhanced_message,
-                    suggestion=suggestion,
+                issues.append(
+                    ValidationIssue(
+                        field_path=target_field,  # Use the original target field
+                        issue_type=IssueType.VALIDATION_ERROR,
+                        severity=IssueSeverity.ERROR,
+                        message=enhanced_message,
+                        suggestion=suggestion,
+                        current_value=input_value,
+                    )
                 )
+        return issues
 
     def _enhance_error_message(
         self, error_type: str, original_message: str, field_path: str, input_value: Any
@@ -244,8 +316,12 @@ class EnhancedValidator:
 
         return message, suggestion
 
-    def _perform_business_validation(self, config: BaseModel, result: ValidationResult):
+    def _perform_business_validation(
+        self, config: BaseModel
+    ) -> dict[str, list[ValidationIssue]]:
         """Perform business logic validation beyond basic Pydantic validation."""
+        warnings = []
+        suggestions = []
 
         # Example business validations that could be added:
 
@@ -253,41 +329,64 @@ class EnhancedValidator:
         if hasattr(config, 'api_keys'):
             api_keys = config.api_keys
             if not any(
-                [api_keys.mistral_key, api_keys.openrouter_key, api_keys.openai_key]
+                [
+                    getattr(api_keys, 'mistral_key', None),
+                    getattr(api_keys, 'openrouter_key', None),
+                    getattr(api_keys, 'openai_key', None),
+                ]
             ):
-                result.add_warning(
-                    field='api_keys',
-                    message='No LLM API keys configured',
-                    suggestion='Configure at least one LLM provider API key for full functionality',
+                warnings.append(
+                    ValidationIssue(
+                        field_path='api_keys',
+                        issue_type=IssueType.BUSINESS_LOGIC,
+                        severity=IssueSeverity.WARNING,
+                        message='No LLM API keys configured',
+                        suggestion='Configure at least one LLM provider API key for full functionality',
+                    )
                 )
 
         # Check directory accessibility
-        if hasattr(config, 'workspace_dir'):
-            workspace_path = Path(config.workspace_dir)
+        if hasattr(config, 'core') and hasattr(config.core, 'workspace_dir'):
+            workspace_path = Path(config.core.workspace_dir)
             if not workspace_path.exists():
-                result.add_warning(
-                    field='workspace_dir',
-                    message='Workspace directory does not exist',
-                    suggestion='The directory will be created automatically when needed',
+                warnings.append(
+                    ValidationIssue(
+                        field_path='core.workspace_dir',
+                        issue_type=IssueType.BUSINESS_LOGIC,
+                        severity=IssueSeverity.WARNING,
+                        message='Workspace directory does not exist',
+                        suggestion='The directory will be created automatically when needed',
+                    )
                 )
             elif not workspace_path.is_dir():
-                result.add_error(
-                    field='workspace_dir',
-                    error_type='path_validation',
-                    message='Workspace path exists but is not a directory',
-                    suggestion='Please choose a different path or remove the existing file',
+                warnings.append(
+                    ValidationIssue(
+                        field_path='core.workspace_dir',
+                        issue_type=IssueType.BUSINESS_LOGIC,
+                        severity=IssueSeverity.ERROR,
+                        message='Workspace path exists but is not a directory',
+                        suggestion='Please choose a different path or remove the existing file',
+                    )
                 )
 
         # Check port conflicts
         if hasattr(config, 'features') and hasattr(config.features, 'api_server'):
-            api_port = config.features.api_server.port
-            if hasattr(config.features, 'mcp') and config.features.mcp.port == api_port:
-                result.add_error(
-                    field='features.mcp.port',
-                    error_type='port_conflict',
-                    message='MCP server port conflicts with API server port',
-                    suggestion=f'Choose a different port (API server uses {api_port})',
+            api_port = getattr(config.features.api_server, 'port', None)
+            if (
+                hasattr(config.features, 'mcp')
+                and getattr(config.features.mcp, 'port', None) == api_port
+            ):
+                warnings.append(
+                    ValidationIssue(
+                        field_path='features.mcp.port',
+                        issue_type=IssueType.BUSINESS_LOGIC,
+                        severity=IssueSeverity.ERROR,
+                        message='MCP server port conflicts with API server port',
+                        suggestion=f'Choose a different port (API server uses {api_port})',
+                    )
                 )
+
+        return {'warnings': warnings, 'suggestions': suggestions}
 
     def _build_minimal_config(
         self, path_parts: list[str], value: Any
@@ -300,7 +399,7 @@ class EnhancedValidator:
         result: dict[str, Any] = {}
         current = result
 
-        for _i, part in enumerate(path_parts[:-1]):
+        for part in path_parts[:-1]:
             current[part] = {}
             current = current[part]
 
@@ -322,9 +421,11 @@ class EnhancedValidator:
         return current
 
     def _validate_single_field(
-        self, field_path: str, field_value: Any, result: ValidationResult
-    ):
+        self, field_path: str, field_value: Any
+    ) -> dict[str, list[ValidationIssue]]:
         """Perform additional validation on a single field."""
+        warnings = []
+        suggestions = []
 
         # Field-specific validation logic
         field_name = field_path.split('.')[-1].lower()
@@ -333,58 +434,78 @@ class EnhancedValidator:
         if 'key' in field_name and field_value:
             if isinstance(field_value, str):
                 if len(field_value.strip()) == 0:
-                    result.add_warning(
-                        field=field_path,
-                        message='API key appears to be empty',
-                        suggestion='Please enter a valid API key',
+                    warnings.append(
+                        ValidationIssue(
+                            field_path=field_path,
+                            issue_type=IssueType.BUSINESS_LOGIC,
+                            severity=IssueSeverity.WARNING,
+                            message='API key appears to be empty',
+                            suggestion='Please enter a valid API key',
+                        )
                     )
                 elif len(field_value) < 10:
-                    result.add_warning(
-                        field=field_path,
-                        message='API key seems unusually short',
-                        suggestion="Please verify you've copied the complete key",
+                    warnings.append(
+                        ValidationIssue(
+                            field_path=field_path,
+                            issue_type=IssueType.BUSINESS_LOGIC,
+                            severity=IssueSeverity.WARNING,
+                            message='API key seems unusually short',
+                            suggestion="Please verify you've copied the complete key",
+                        )
                     )
 
         # Validate ports
         if 'port' in field_name and isinstance(field_value, int):
             if field_value < 1024:
-                result.add_error(
-                    field=field_path,
-                    error_type='port_range',
-                    message='Port number is too low',
-                    suggestion='Use ports 1024 or higher to avoid conflicts with system services',
+                warnings.append(
+                    ValidationIssue(
+                        field_path=field_path,
+                        issue_type=IssueType.RANGE_ERROR,
+                        severity=IssueSeverity.ERROR,
+                        message='Port number is too low',
+                        suggestion='Use ports 1024 or higher to avoid conflicts with system services',
+                    )
                 )
             elif field_value > 65535:
-                result.add_error(
-                    field=field_path,
-                    error_type='port_range',
-                    message='Port number is too high',
-                    suggestion='Use ports 65535 or lower',
+                warnings.append(
+                    ValidationIssue(
+                        field_path=field_path,
+                        issue_type=IssueType.RANGE_ERROR,
+                        severity=IssueSeverity.ERROR,
+                        message='Port number is too high',
+                        suggestion='Use ports 65535 or lower',
+                    )
                 )
 
         # Validate temperatures
         if 'temperature' in field_name and isinstance(field_value, int | float):
             if field_value < 0.0 or field_value > 1.0:
-                result.add_error(
-                    field=field_path,
-                    error_type='range_validation',
-                    message='Temperature must be between 0.0 and 1.0',
-                    suggestion='Use 0.0 for deterministic outputs, 1.0 for maximum creativity',
+                warnings.append(
+                    ValidationIssue(
+                        field_path=field_path,
+                        issue_type=IssueType.RANGE_ERROR,
+                        severity=IssueSeverity.ERROR,
+                        message='Temperature must be between 0.0 and 1.0',
+                        suggestion='Use 0.0 for deterministic outputs, 1.0 for maximum creativity',
+                    )
                 )
+
+        return {'warnings': warnings, 'suggestions': suggestions}
 
 
 # Convenience function for easy import
 def validate_config(
-    config_class: type[BaseModel], config_data: dict[str, Any]
+    config_data: dict[str, Any], model_class: type[BaseModel] | None = None
 ) -> ValidationResult:
     """Validate configuration with enhanced error reporting."""
     validator = EnhancedValidator()
-    return validator.validate_config(config_class, config_data)
+    return validator.validate_config(config_data, model_class)
 
 
 def validate_partial_config(
-    config_class: type[BaseModel], field_path: str, field_value: Any
+    field_path: str, field_value: Any, model_class: type[BaseModel] | None = None
 ) -> ValidationResult:
     """Validate a single field change."""
     validator = EnhancedValidator()
-    return validator.validate_partial_config(config_class, field_path, field_value)
+    partial_data = {field_path: field_value}
+    return validator.validate_partial_config(partial_data, field_path, model_class)
