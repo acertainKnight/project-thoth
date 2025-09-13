@@ -24,10 +24,11 @@ try:
         ImpactReport,
         ServiceManager,
     )
+
     SERVICE_MANAGER_AVAILABLE = True
 except ImportError:
     SERVICE_MANAGER_AVAILABLE = False
-    logger.debug("Service manager not available for validation")
+    logger.debug('Service manager not available for validation')
 
 
 class IssueType(str, Enum):
@@ -129,7 +130,9 @@ class AutoFixSuggestions:
         self.fix_patterns = self._build_fix_patterns()
         self.help_database = self._build_help_database()
 
-    def detect_fixable_errors(self, validation_result: ValidationResult) -> list[AutoFix]:
+    def detect_fixable_errors(
+        self, validation_result: ValidationResult
+    ) -> list[AutoFix]:
         """Detect errors that can be automatically fixed."""
         auto_fixes = []
 
@@ -148,19 +151,17 @@ class AutoFixSuggestions:
                 'old_value': auto_fix.current_value,
                 'new_value': auto_fix.suggested_value,
                 'fix_type': auto_fix.fix_type,
-                'message': f'Applied {auto_fix.description}'
+                'message': f'Applied {auto_fix.description}',
             }
 
-            logger.info(f'Applied auto-fix {auto_fix.fix_id} for {auto_fix.field_path}: {auto_fix.current_value} -> {auto_fix.suggested_value}')
+            logger.info(
+                f'Applied auto-fix {auto_fix.fix_id} for {auto_fix.field_path}: {auto_fix.current_value} -> {auto_fix.suggested_value}'
+            )
             return result
 
         except Exception as e:
             logger.error(f'Failed to apply auto-fix {auto_fix.fix_id}: {e}')
-            return {
-                'success': False,
-                'error': str(e),
-                'fix_id': auto_fix.fix_id
-            }
+            return {'success': False, 'error': str(e), 'fix_id': auto_fix.fix_id}
 
     def suggest_configuration_improvements(self, config: dict) -> list[ValidationIssue]:
         """Suggest configuration improvements based on best practices."""
@@ -173,7 +174,9 @@ class AutoFixSuggestions:
 
         return suggestions
 
-    def provide_contextual_help(self, field_path: str, error: ValidationIssue) -> ContextualHelp:
+    def provide_contextual_help(
+        self, field_path: str, error: ValidationIssue
+    ) -> ContextualHelp:
         """Provide contextual help for a specific field and error."""
         help_content = self.help_database.get(field_path, {})
 
@@ -181,11 +184,13 @@ class AutoFixSuggestions:
             help_id=f'help_{field_path}_{error.issue_type}',
             field_path=field_path,
             title=help_content.get('title', f'Help for {field_path}'),
-            content=help_content.get('content', self._generate_default_help(field_path, error)),
+            content=help_content.get(
+                'content', self._generate_default_help(field_path, error)
+            ),
             examples=help_content.get('examples', []),
             related_fields=help_content.get('related_fields', []),
             documentation_links=help_content.get('documentation_links', []),
-            troubleshooting_steps=help_content.get('troubleshooting_steps', [])
+            troubleshooting_steps=help_content.get('troubleshooting_steps', []),
         )
 
     def _generate_auto_fixes_for_error(self, error: ValidationIssue) -> list[AutoFix]:
@@ -196,17 +201,23 @@ class AutoFixSuggestions:
 
         # Common auto-fixes based on error type and field patterns
         if error.issue_type == IssueType.TYPE_ERROR:
-            fixes.extend(self._generate_type_conversion_fixes(field_path, current_value, error))
+            fixes.extend(
+                self._generate_type_conversion_fixes(field_path, current_value, error)
+            )
         elif error.issue_type == IssueType.FORMAT_ERROR:
             fixes.extend(self._generate_format_fixes(field_path, current_value, error))
         elif error.issue_type == IssueType.RANGE_ERROR:
             fixes.extend(self._generate_range_fixes(field_path, current_value, error))
         elif error.issue_type == IssueType.MISSING_FIELD:
-            fixes.extend(self._generate_default_value_fixes(field_path, current_value, error))
+            fixes.extend(
+                self._generate_default_value_fixes(field_path, current_value, error)
+            )
 
         return fixes
 
-    def _generate_type_conversion_fixes(self, field_path: str, current_value: Any, error: ValidationIssue) -> list[AutoFix]:
+    def _generate_type_conversion_fixes(
+        self, field_path: str, current_value: Any, _error: ValidationIssue
+    ) -> list[AutoFix]:
         """Generate type conversion fixes."""
         fixes = []
 
@@ -214,129 +225,160 @@ class AutoFixSuggestions:
             try:
                 port_num = int(current_value)
                 if 1024 <= port_num <= 65535:
-                    fixes.append(AutoFix(
-                        fix_id=f'convert_port_{field_path}',
-                        description=f'Convert port "{current_value}" to integer',
-                        field_path=field_path,
-                        current_value=current_value,
-                        suggested_value=port_num,
-                        confidence=0.9,
-                        risk_level='low',
-                        fix_type='type_conversion'
-                    ))
+                    fixes.append(
+                        AutoFix(
+                            fix_id=f'convert_port_{field_path}',
+                            description=f'Convert port "{current_value}" to integer',
+                            field_path=field_path,
+                            current_value=current_value,
+                            suggested_value=port_num,
+                            confidence=0.9,
+                            risk_level='low',
+                            fix_type='type_conversion',
+                        )
+                    )
             except ValueError:
                 pass
 
         # Boolean conversion fixes
-        if isinstance(current_value, str) and current_value.lower() in ['true', 'false', 'yes', 'no', '1', '0']:
+        if isinstance(current_value, str) and current_value.lower() in [
+            'true',
+            'false',
+            'yes',
+            'no',
+            '1',
+            '0',
+        ]:
             bool_value = current_value.lower() in ['true', 'yes', '1']
-            fixes.append(AutoFix(
-                fix_id=f'convert_bool_{field_path}',
-                description=f'Convert "{current_value}" to boolean',
-                field_path=field_path,
-                current_value=current_value,
-                suggested_value=bool_value,
-                confidence=0.9,
-                risk_level='low',
-                fix_type='type_conversion'
-            ))
+            fixes.append(
+                AutoFix(
+                    fix_id=f'convert_bool_{field_path}',
+                    description=f'Convert "{current_value}" to boolean',
+                    field_path=field_path,
+                    current_value=current_value,
+                    suggested_value=bool_value,
+                    confidence=0.9,
+                    risk_level='low',
+                    fix_type='type_conversion',
+                )
+            )
 
         return fixes
 
-    def _generate_format_fixes(self, field_path: str, current_value: Any, error: ValidationIssue) -> list[AutoFix]:
+    def _generate_format_fixes(
+        self, field_path: str, current_value: Any, _error: ValidationIssue
+    ) -> list[AutoFix]:
         """Generate format fixes."""
         fixes = []
 
         # URL format fixes
         if 'url' in field_path.lower() and isinstance(current_value, str):
             if not current_value.startswith(('http://', 'https://')):
-                fixes.append(AutoFix(
-                    fix_id=f'fix_url_protocol_{field_path}',
-                    description='Add https:// protocol to URL',
-                    field_path=field_path,
-                    current_value=current_value,
-                    suggested_value=f'https://{current_value}',
-                    confidence=0.8,
-                    risk_level='low',
-                    fix_type='format_fix'
-                ))
+                fixes.append(
+                    AutoFix(
+                        fix_id=f'fix_url_protocol_{field_path}',
+                        description='Add https:// protocol to URL',
+                        field_path=field_path,
+                        current_value=current_value,
+                        suggested_value=f'https://{current_value}',
+                        confidence=0.8,
+                        risk_level='low',
+                        fix_type='format_fix',
+                    )
+                )
 
         # Path format fixes
-        if ('dir' in field_path.lower() or 'path' in field_path.lower()) and isinstance(current_value, str):
+        if ('dir' in field_path.lower() or 'path' in field_path.lower()) and isinstance(
+            current_value, str
+        ):
             # Convert backslashes to forward slashes on Windows
             if '\\' in current_value and '/' not in current_value:
                 normalized_path = current_value.replace('\\', '/')
-                fixes.append(AutoFix(
-                    fix_id=f'normalize_path_{field_path}',
-                    description='Normalize path separators',
-                    field_path=field_path,
-                    current_value=current_value,
-                    suggested_value=normalized_path,
-                    confidence=0.9,
-                    risk_level='low',
-                    fix_type='format_fix'
-                ))
+                fixes.append(
+                    AutoFix(
+                        fix_id=f'normalize_path_{field_path}',
+                        description='Normalize path separators',
+                        field_path=field_path,
+                        current_value=current_value,
+                        suggested_value=normalized_path,
+                        confidence=0.9,
+                        risk_level='low',
+                        fix_type='format_fix',
+                    )
+                )
 
         return fixes
 
-    def _generate_range_fixes(self, field_path: str, current_value: Any, error: ValidationIssue) -> list[AutoFix]:
+    def _generate_range_fixes(
+        self, field_path: str, current_value: Any, _error: ValidationIssue
+    ) -> list[AutoFix]:
         """Generate range fixes."""
         fixes = []
 
-        if isinstance(current_value, (int, float)):
+        if isinstance(current_value, int | float):
             # Port range fixes
             if 'port' in field_path.lower():
                 if current_value < 1024:
-                    fixes.append(AutoFix(
-                        fix_id=f'fix_port_range_{field_path}',
-                        description='Adjust port to minimum safe value',
-                        field_path=field_path,
-                        current_value=current_value,
-                        suggested_value=8000,
-                        confidence=0.7,
-                        risk_level='medium',
-                        fix_type='value_correction'
-                    ))
+                    fixes.append(
+                        AutoFix(
+                            fix_id=f'fix_port_range_{field_path}',
+                            description='Adjust port to minimum safe value',
+                            field_path=field_path,
+                            current_value=current_value,
+                            suggested_value=8000,
+                            confidence=0.7,
+                            risk_level='medium',
+                            fix_type='value_correction',
+                        )
+                    )
                 elif current_value > 65535:
-                    fixes.append(AutoFix(
-                        fix_id=f'fix_port_range_{field_path}',
-                        description='Adjust port to maximum allowed value',
-                        field_path=field_path,
-                        current_value=current_value,
-                        suggested_value=65535,
-                        confidence=0.8,
-                        risk_level='low',
-                        fix_type='value_correction'
-                    ))
+                    fixes.append(
+                        AutoFix(
+                            fix_id=f'fix_port_range_{field_path}',
+                            description='Adjust port to maximum allowed value',
+                            field_path=field_path,
+                            current_value=current_value,
+                            suggested_value=65535,
+                            confidence=0.8,
+                            risk_level='low',
+                            fix_type='value_correction',
+                        )
+                    )
 
             # Temperature range fixes
             if 'temperature' in field_path.lower():
                 if current_value < 0:
-                    fixes.append(AutoFix(
-                        fix_id=f'fix_temp_range_{field_path}',
-                        description='Set temperature to minimum value',
-                        field_path=field_path,
-                        current_value=current_value,
-                        suggested_value=0.0,
-                        confidence=0.9,
-                        risk_level='low',
-                        fix_type='value_correction'
-                    ))
+                    fixes.append(
+                        AutoFix(
+                            fix_id=f'fix_temp_range_{field_path}',
+                            description='Set temperature to minimum value',
+                            field_path=field_path,
+                            current_value=current_value,
+                            suggested_value=0.0,
+                            confidence=0.9,
+                            risk_level='low',
+                            fix_type='value_correction',
+                        )
+                    )
                 elif current_value > 1:
-                    fixes.append(AutoFix(
-                        fix_id=f'fix_temp_range_{field_path}',
-                        description='Set temperature to maximum value',
-                        field_path=field_path,
-                        current_value=current_value,
-                        suggested_value=1.0,
-                        confidence=0.9,
-                        risk_level='low',
-                        fix_type='value_correction'
-                    ))
+                    fixes.append(
+                        AutoFix(
+                            fix_id=f'fix_temp_range_{field_path}',
+                            description='Set temperature to maximum value',
+                            field_path=field_path,
+                            current_value=current_value,
+                            suggested_value=1.0,
+                            confidence=0.9,
+                            risk_level='low',
+                            fix_type='value_correction',
+                        )
+                    )
 
         return fixes
 
-    def _generate_default_value_fixes(self, field_path: str, current_value: Any, error: ValidationIssue) -> list[AutoFix]:
+    def _generate_default_value_fixes(
+        self, field_path: str, current_value: Any, _error: ValidationIssue
+    ) -> list[AutoFix]:
         """Generate default value fixes for missing fields."""
         fixes = []
 
@@ -350,21 +392,23 @@ class AutoFixSuggestions:
             'enabled': True,
             'auto_start': False,
             'batch_size': 10,
-            'chunk_size': 1000
+            'chunk_size': 1000,
         }
 
         for pattern, default_value in defaults.items():
             if pattern in field_path.lower():
-                fixes.append(AutoFix(
-                    fix_id=f'set_default_{field_path}',
-                    description=f'Set default value for {field_path}',
-                    field_path=field_path,
-                    current_value=current_value,
-                    suggested_value=default_value,
-                    confidence=0.6,
-                    risk_level='low',
-                    fix_type='default_substitution'
-                ))
+                fixes.append(
+                    AutoFix(
+                        fix_id=f'set_default_{field_path}',
+                        description=f'Set default value for {field_path}',
+                        field_path=field_path,
+                        current_value=current_value,
+                        suggested_value=default_value,
+                        confidence=0.6,
+                        risk_level='low',
+                        fix_type='default_substitution',
+                    )
+                )
                 break
 
         return fixes
@@ -375,17 +419,17 @@ class AutoFixSuggestions:
             'type_conversions': {
                 'string_to_int': r'^\d+$',
                 'string_to_float': r'^\d*\.\d+$',
-                'string_to_bool': r'^(true|false|yes|no|1|0)$'
+                'string_to_bool': r'^(true|false|yes|no|1|0)$',
             },
             'format_fixes': {
                 'url_protocol': r'^[^:]+\.[^:]+',
-                'path_separators': r'.*\\.*'
+                'path_separators': r'.*\\.*',
             },
             'common_typos': {
                 'localhost': ['127.0.0.1', 'local', 'loalhost'],
                 'https': ['http', 'htps'],
-                'enabled': ['enable', 'enabed']
-            }
+                'enabled': ['enable', 'enabed'],
+            },
         }
 
     def _build_help_database(self) -> dict[str, dict[str, Any]]:
@@ -400,8 +444,8 @@ class AutoFixSuggestions:
                 'troubleshooting_steps': [
                     'Ensure the API key is copied completely',
                     'Check if the key has proper permissions',
-                    'Verify your account has sufficient credits'
-                ]
+                    'Verify your account has sufficient credits',
+                ],
             },
             'servers.api.port': {
                 'title': 'API Server Port',
@@ -411,8 +455,8 @@ class AutoFixSuggestions:
                 'troubleshooting_steps': [
                     'Ensure port is not already in use',
                     'Use ports above 1024 for user applications',
-                    'Check firewall settings if connecting remotely'
-                ]
+                    'Check firewall settings if connecting remotely',
+                ],
             },
             'llm.default.temperature': {
                 'title': 'LLM Temperature Setting',
@@ -422,9 +466,9 @@ class AutoFixSuggestions:
                 'troubleshooting_steps': [
                     'Use 0.0-0.3 for factual tasks',
                     'Use 0.7-1.0 for creative tasks',
-                    'Adjust based on response quality'
-                ]
-            }
+                    'Adjust based on response quality',
+                ],
+            },
         }
 
     def _generate_default_help(self, field_path: str, error: ValidationIssue) -> str:
@@ -438,13 +482,15 @@ class AutoFixSuggestions:
         # Check chunk sizes
         chunk_size = config.get('rag', {}).get('chunk_size', 1000)
         if chunk_size > 2000:
-            suggestions.append(ValidationIssue(
-                field_path='rag.chunk_size',
-                issue_type=IssueType.BUSINESS_LOGIC,
-                severity=IssueSeverity.INFO,
-                message='Large chunk size may impact performance',
-                suggestion='Consider reducing chunk size to 1000-1500 for better performance'
-            ))
+            suggestions.append(
+                ValidationIssue(
+                    field_path='rag.chunk_size',
+                    issue_type=IssueType.BUSINESS_LOGIC,
+                    severity=IssueSeverity.INFO,
+                    message='Large chunk size may impact performance',
+                    suggestion='Consider reducing chunk size to 1000-1500 for better performance',
+                )
+            )
 
         return suggestions
 
@@ -455,13 +501,15 @@ class AutoFixSuggestions:
         # Check for insecure protocols
         api_host = config.get('servers', {}).get('api', {}).get('host', '')
         if api_host and not api_host.startswith(('https://', 'localhost', '127.0.0.1')):
-            suggestions.append(ValidationIssue(
-                field_path='servers.api.host',
-                issue_type=IssueType.BUSINESS_LOGIC,
-                severity=IssueSeverity.WARNING,
-                message='Consider using HTTPS for remote connections',
-                suggestion='Use HTTPS protocol for secure remote connections'
-            ))
+            suggestions.append(
+                ValidationIssue(
+                    field_path='servers.api.host',
+                    issue_type=IssueType.BUSINESS_LOGIC,
+                    severity=IssueSeverity.WARNING,
+                    message='Consider using HTTPS for remote connections',
+                    suggestion='Use HTTPS protocol for secure remote connections',
+                )
+            )
 
         return suggestions
 
@@ -472,13 +520,15 @@ class AutoFixSuggestions:
         # Check for missing API keys
         api_keys = config.get('api_keys', {})
         if not any(api_keys.values()):
-            suggestions.append(ValidationIssue(
-                field_path='api_keys',
-                issue_type=IssueType.BUSINESS_LOGIC,
-                severity=IssueSeverity.INFO,
-                message='No LLM API keys configured',
-                suggestion='Configure at least one LLM provider API key for full functionality'
-            ))
+            suggestions.append(
+                ValidationIssue(
+                    field_path='api_keys',
+                    issue_type=IssueType.BUSINESS_LOGIC,
+                    severity=IssueSeverity.INFO,
+                    message='No LLM API keys configured',
+                    suggestion='Configure at least one LLM provider API key for full functionality',
+                )
+            )
 
         return suggestions
 
@@ -493,7 +543,9 @@ class EnhancedValidator:
     def validate_config(
         self, config_data: dict[str, Any], model_class: type[BaseModel] | None = None
     ) -> ValidationResult:
-        """Validate configuration data with detailed error reporting and auto-fix suggestions."""
+        """
+        Validate configuration data with detailed error reporting and auto-fix.
+        """
         errors = []
         warnings = []
         suggestions = []
@@ -568,16 +620,22 @@ class EnhancedValidator:
 
         # Generate contextual help for errors
         for error in errors:
-            help_content = self.auto_fix_engine.provide_contextual_help(error.field_path, error)
+            help_content = self.auto_fix_engine.provide_contextual_help(
+                error.field_path, error
+            )
             contextual_help.append(help_content)
             # Add help and auto-fixes to the error
             error.contextual_help = help_content
-            error.auto_fixes = [fix for fix in auto_fixes if fix.field_path == error.field_path]
+            error.auto_fixes = [
+                fix for fix in auto_fixes if fix.field_path == error.field_path
+            ]
 
         result.contextual_help = contextual_help
 
         # Add configuration improvement suggestions
-        improvement_suggestions = self.auto_fix_engine.suggest_configuration_improvements(config_data)
+        improvement_suggestions = (
+            self.auto_fix_engine.suggest_configuration_improvements(config_data)
+        )
         result.suggestions.extend(improvement_suggestions)
 
         return result
@@ -683,8 +741,12 @@ class EnhancedValidator:
             )
         return issues
 
-    def _parse_pydantic_errors_enhanced(self, error: ValidationError) -> list[ValidationIssue]:
-        """Parse Pydantic validation errors with enhanced auto-fix and contextual help."""
+    def _parse_pydantic_errors_enhanced(
+        self, error: ValidationError
+    ) -> list[ValidationIssue]:
+        """
+        Parse Pydantic validation errors with enhanced auto-fix and contextual help.
+        """
         issues = []
         for error_detail in error.errors():
             field_path = '.'.join(str(loc) for loc in error_detail['loc'])
@@ -1002,7 +1064,7 @@ class EnhancedValidator:
 class PreRestartValidator:
     """
     Validator for configuration changes before service restart.
-    
+
     This class provides comprehensive validation for configuration changes
     that might require service restarts, with special handling for container
     environments.
@@ -1013,13 +1075,15 @@ class PreRestartValidator:
         self.service_manager = service_manager
         self._rollback_points: list[RollbackPoint] = []
 
-    def validate_configuration_for_restart(self, new_config: dict[str, Any]) -> 'ValidationResult':
+    def validate_configuration_for_restart(
+        self, new_config: dict[str, Any]
+    ) -> 'ValidationResult':
         """
         Validate configuration changes before applying and restarting services.
-        
+
         Args:
             new_config: New configuration to validate
-            
+
         Returns:
             ValidationResult with detailed validation information
         """
@@ -1037,29 +1101,33 @@ class PreRestartValidator:
         # Combine results
         all_errors = basic_result.errors + restart_issues.get('errors', [])
         all_warnings = basic_result.warnings + restart_issues.get('warnings', [])
-        all_suggestions = basic_result.suggestions + restart_issues.get('suggestions', [])
+        all_suggestions = basic_result.suggestions + restart_issues.get(
+            'suggestions', []
+        )
 
         return ValidationResult(
             is_valid=len(all_errors) == 0,
             errors=all_errors,
             warnings=all_warnings,
-            suggestions=all_suggestions
+            suggestions=all_suggestions,
         )
 
-    def analyze_service_impact(self, config_changes: 'ConfigChanges') -> 'ImpactAnalysis':
+    def analyze_service_impact(
+        self, config_changes: 'ConfigChanges'
+    ) -> 'ImpactAnalysis':
         """
         Analyze the impact of configuration changes on services.
-        
+
         Args:
             config_changes: Configuration changes to analyze
-            
+
         Returns:
             ImpactAnalysis with detailed impact information
         """
         affected_services = set()
         restart_required = False
         estimated_downtime = 0.0
-        risk_level = "low"
+        risk_level = 'low'
         warnings = []
 
         # Analyze changed paths to determine affected services
@@ -1081,7 +1149,7 @@ class PreRestartValidator:
                 affected_services.add('letta')
                 restart_required = True
                 estimated_downtime += 15.0  # Memory service restart is slow
-                risk_level = "medium"  # Memory restart has higher risk
+                risk_level = 'medium'  # Memory restart has higher risk
 
             elif 'discovery' in path_lower:
                 affected_services.add('discovery')
@@ -1092,8 +1160,10 @@ class PreRestartValidator:
                 affected_services.update(['api_gateway'])
                 restart_required = True
                 estimated_downtime += 2.0
-                risk_level = "high"  # Server config changes are risky
-                warnings.append("Server configuration changes may cause temporary unavailability")
+                risk_level = 'high'  # Server config changes are risky
+                warnings.append(
+                    'Server configuration changes may cause temporary unavailability'
+                )
 
             elif 'path' in path_lower:
                 # Path changes might affect multiple services
@@ -1102,14 +1172,18 @@ class PreRestartValidator:
 
         # Check for high-risk combinations
         if len(affected_services) > 3:
-            risk_level = "high"
-            warnings.append(f"Configuration change affects {len(affected_services)} services")
+            risk_level = 'high'
+            warnings.append(
+                f'Configuration change affects {len(affected_services)} services'
+            )
 
         # Check if we have rollback capability
         rollback_available = True
         if not SERVICE_MANAGER_AVAILABLE:
             rollback_available = False
-            warnings.append("Service manager not available - limited rollback capability")
+            warnings.append(
+                'Service manager not available - limited rollback capability'
+            )
 
         return ImpactAnalysis(
             affected_services=affected_services,
@@ -1117,16 +1191,16 @@ class PreRestartValidator:
             estimated_downtime_seconds=estimated_downtime,
             rollback_available=rollback_available,
             risk_level=risk_level,
-            warnings=warnings
+            warnings=warnings,
         )
 
     def create_rollback_point(self, description: str = '') -> RollbackPoint:
         """
         Create a rollback point for configuration changes.
-        
+
         Args:
             description: Description of the rollback point
-            
+
         Returns:
             RollbackPoint with backup information
         """
@@ -1143,9 +1217,10 @@ class PreRestartValidator:
             rollback_point = RollbackPoint(
                 rollback_id=rollback_id,
                 timestamp=timestamp,
-                description=description or f'Rollback point created at {timestamp.isoformat()}',
+                description=description
+                or f'Rollback point created at {timestamp.isoformat()}',
                 config_snapshot=current_config,
-                file_backup_path=backup_path
+                file_backup_path=backup_path,
             )
 
             self._rollback_points.append(rollback_point)
@@ -1165,10 +1240,10 @@ class PreRestartValidator:
     def stage_configuration_changes(self, changes: 'ConfigChanges') -> StagingResult:
         """
         Stage configuration changes for validation before applying.
-        
+
         Args:
             changes: Configuration changes to stage
-            
+
         Returns:
             StagingResult with staging operation details
         """
@@ -1189,6 +1264,7 @@ class PreRestartValidator:
 
             # Write staged config to file
             import json
+
             with open(staging_file, 'w') as f:
                 json.dump(staged_config, f, indent=2)
 
@@ -1199,51 +1275,56 @@ class PreRestartValidator:
                 success=True,
                 staging_path=str(staging_file),
                 validation_result=validation_result,
-                error_message=None
+                error_message=None,
             )
 
         except Exception as e:
             logger.error(f'Failed to stage configuration changes: {e}')
-            return StagingResult(
-                success=False,
-                staging_path='',
-                error_message=str(e)
-            )
+            return StagingResult(success=False, staging_path='', error_message=str(e))
 
     def generate_change_impact_report(self, changes: 'ConfigChanges') -> 'ImpactReport':
         """
         Generate detailed impact report for configuration changes.
-        
+
         Args:
             changes: Configuration changes to analyze
-            
+
         Returns:
             ImpactReport with comprehensive impact analysis
         """
         impact_analysis = self.analyze_service_impact(changes)
-        validation_result = self.validate_configuration_for_restart(self._get_current_configuration())
+        validation_result = self.validate_configuration_for_restart(
+            self._get_current_configuration()
+        )
 
         # Generate recommendations
         recommended_actions = []
 
-        if impact_analysis.risk_level == "high":
-            recommended_actions.append("Create rollback point before proceeding")
-            recommended_actions.append("Consider applying changes during maintenance window")
+        if impact_analysis.risk_level == 'high':
+            recommended_actions.append('Create rollback point before proceeding')
+            recommended_actions.append(
+                'Consider applying changes during maintenance window'
+            )
 
         if impact_analysis.restart_required:
             if impact_analysis.estimated_downtime_seconds > 30:
-                recommended_actions.append("Use rolling restart strategy to minimize downtime")
-            recommended_actions.append("Verify all services are healthy before restart")
+                recommended_actions.append(
+                    'Use rolling restart strategy to minimize downtime'
+                )
+            recommended_actions.append('Verify all services are healthy before restart')
 
         if len(impact_analysis.affected_services) > 1:
-            recommended_actions.append("Restart services in dependency order")
+            recommended_actions.append('Restart services in dependency order')
 
         # Add container-specific recommendations
         try:
             from thoth.docker.container_utils import is_running_in_docker
+
             if is_running_in_docker():
-                recommended_actions.append("Ensure persistent volumes are healthy")
-                recommended_actions.append("Use graceful restart strategy in container environment")
+                recommended_actions.append('Ensure persistent volumes are healthy')
+                recommended_actions.append(
+                    'Use graceful restart strategy in container environment'
+                )
         except ImportError:
             pass
 
@@ -1252,10 +1333,12 @@ class PreRestartValidator:
             changes=changes,
             impact_analysis=impact_analysis,
             validation_result=validation_result,
-            recommended_actions=recommended_actions
+            recommended_actions=recommended_actions,
         )
 
-    def _validate_restart_safety(self, config: dict[str, Any]) -> dict[str, list[ValidationIssue]]:
+    def _validate_restart_safety(
+        self, config: dict[str, Any]
+    ) -> dict[str, list[ValidationIssue]]:
         """Validate that configuration is safe for restart operations."""
         errors = []
         warnings = []
@@ -1271,25 +1354,29 @@ class PreRestartValidator:
                 if 'port' in api_config:
                     port = api_config['port']
                     if not isinstance(port, int) or port < 1024 or port > 65535:
-                        errors.append(ValidationIssue(
-                            field_path='servers.api.port',
-                            issue_type=IssueType.RANGE_ERROR,
-                            severity=IssueSeverity.ERROR,
-                            message='Invalid API server port for restart',
-                            suggestion='Use a valid port number between 1024 and 65535'
-                        ))
+                        errors.append(
+                            ValidationIssue(
+                                field_path='servers.api.port',
+                                issue_type=IssueType.RANGE_ERROR,
+                                severity=IssueSeverity.ERROR,
+                                message='Invalid API server port for restart',
+                                suggestion='Use a valid port number between 1024 and 65535',
+                            )
+                        )
 
         # Check for required services configuration
         required_sections = ['llm', 'rag']
         for section in required_sections:
             if section not in config:
-                warnings.append(ValidationIssue(
-                    field_path=section,
-                    issue_type=IssueType.MISSING_FIELD,
-                    severity=IssueSeverity.WARNING,
-                    message=f'Missing {section} configuration section',
-                    suggestion=f'Add {section} configuration for full functionality'
-                ))
+                warnings.append(
+                    ValidationIssue(
+                        field_path=section,
+                        issue_type=IssueType.MISSING_FIELD,
+                        severity=IssueSeverity.WARNING,
+                        message=f'Missing {section} configuration section',
+                        suggestion=f'Add {section} configuration for full functionality',
+                    )
+                )
 
         return {'errors': errors, 'warnings': warnings, 'suggestions': suggestions}
 
@@ -1298,13 +1385,16 @@ class PreRestartValidator:
         try:
             # Try to import and use settings service
             from thoth.services.settings_service import SettingsService
+
             settings_service = SettingsService(config=None)  # Avoid circular dependency
             return settings_service.load_settings()
         except Exception:
             # Fallback to empty config
             return {}
 
-    def _apply_changes_to_config(self, config: dict[str, Any], changed_paths: list[str]) -> None:
+    def _apply_changes_to_config(
+        self, config: dict[str, Any], changed_paths: list[str]
+    ) -> None:
         """Apply configuration changes to a config dictionary."""
         # This is a placeholder - in a real implementation, you'd apply specific changes
         # based on the changed_paths and new values
@@ -1383,11 +1473,11 @@ def validate_configuration_for_restart(
 ) -> 'ValidationResult':
     """
     Validate configuration for restart operations.
-    
+
     Args:
         new_config: New configuration to validate
         service_manager: Optional service manager for advanced validation
-        
+
     Returns:
         ValidationResult with restart-specific validation
     """
@@ -1400,11 +1490,11 @@ def analyze_configuration_impact(
 ) -> 'ImpactAnalysis':
     """
     Analyze impact of configuration changes.
-    
+
     Args:
         changes: Configuration changes to analyze
         service_manager: Optional service manager for analysis
-        
+
     Returns:
         ImpactAnalysis with detailed impact information
     """

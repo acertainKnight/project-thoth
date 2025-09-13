@@ -52,7 +52,9 @@ class ConditionalRule(BaseModel):
 
     rule_id: str
     description: str
-    condition_expression: str  # e.g., "api_keys.mistral_key != '' AND llm.enabled == true"
+    condition_expression: (
+        str  # e.g., "api_keys.mistral_key != '' AND llm.enabled == true"
+    )
     affected_fields: list[str]
     action: str  # 'show', 'hide', 'enable', 'disable', 'require', 'optional'
     priority: int = 0
@@ -62,7 +64,9 @@ class FieldRelationship(BaseModel):
     """Defines relationships between configuration fields."""
 
     relationship_id: str
-    relationship_type: str  # 'mutual_exclusive', 'dependent', 'complementary', 'conflicting'
+    relationship_type: (
+        str  # 'mutual_exclusive', 'dependent', 'complementary', 'conflicting'
+    )
     primary_field: str
     related_fields: list[str]
     description: str
@@ -81,7 +85,9 @@ class AdvancedCategory(BaseModel):
     icon: str | None = None
     collapsed_by_default: bool = False
     visibility_condition: str | None = None
-    required_for_functionality: list[str] = []  # What functionality this category enables
+    required_for_functionality: list[
+        str
+    ] = []  # What functionality this category enables
 
 
 class ConfigurationUseCase(BaseModel):
@@ -238,14 +244,14 @@ class SchemaGenerator:
                 depends_on='features.api_server.enabled',
                 condition='equals',
                 value=True,
-                action='show'
+                action='show',
             ),
             FieldDependency(
                 field_path='servers.api.port',
                 depends_on='features.api_server.enabled',
                 condition='equals',
                 value=True,
-                action='require'
+                action='require',
             ),
             # LLM configuration dependencies
             FieldDependency(
@@ -253,7 +259,7 @@ class SchemaGenerator:
                 depends_on='api_keys.mistral_key',
                 condition='not_empty',
                 value=None,
-                action='enable'
+                action='enable',
             ),
             # RAG dependencies
             FieldDependency(
@@ -261,7 +267,7 @@ class SchemaGenerator:
                 depends_on='features.rag.enabled',
                 condition='equals',
                 value=True,
-                action='require'
+                action='require',
             ),
             # Discovery dependencies
             FieldDependency(
@@ -269,8 +275,8 @@ class SchemaGenerator:
                 depends_on='features.discovery.enabled',
                 condition='equals',
                 value=True,
-                action='show'
-            )
+                action='show',
+            ),
         ]
 
     def _build_conditional_rules(self) -> list[ConditionalRule]:
@@ -279,35 +285,51 @@ class SchemaGenerator:
             ConditionalRule(
                 rule_id='api_server_config',
                 description='Show API server configuration when enabled',
-                condition_expression="features.api_server.enabled == true",
-                affected_fields=['servers.api.host', 'servers.api.port', 'servers.api.cors_enabled'],
+                condition_expression='features.api_server.enabled == true',
+                affected_fields=[
+                    'servers.api.host',
+                    'servers.api.port',
+                    'servers.api.cors_enabled',
+                ],
                 action='show',
-                priority=1
+                priority=1,
             ),
             ConditionalRule(
                 rule_id='llm_provider_config',
                 description='Show LLM configuration when API key is provided',
                 condition_expression="api_keys.mistral_key != '' OR api_keys.openrouter_key != ''",
-                affected_fields=['llm.default.model', 'llm.default.temperature', 'llm.default.max_tokens'],
+                affected_fields=[
+                    'llm.default.model',
+                    'llm.default.temperature',
+                    'llm.default.max_tokens',
+                ],
                 action='enable',
-                priority=2
+                priority=2,
             ),
             ConditionalRule(
                 rule_id='advanced_features',
                 description='Show advanced features for power users',
-                condition_expression="ui_preferences.show_advanced == true",
-                affected_fields=['performance_config.*', 'logging_config.level', 'features.research_agent.*'],
+                condition_expression='ui_preferences.show_advanced == true',
+                affected_fields=[
+                    'performance_config.*',
+                    'logging_config.level',
+                    'features.research_agent.*',
+                ],
                 action='show',
-                priority=3
+                priority=3,
             ),
             ConditionalRule(
                 rule_id='docker_mode',
                 description='Show Docker-specific settings in container environment',
-                condition_expression="environment.is_docker == true",
-                affected_fields=['docker.volume_mounts', 'docker.network_mode', 'docker.resource_limits'],
+                condition_expression='environment.is_docker == true',
+                affected_fields=[
+                    'docker.volume_mounts',
+                    'docker.network_mode',
+                    'docker.resource_limits',
+                ],
                 action='show',
-                priority=4
-            )
+                priority=4,
+            ),
         ]
 
     def _build_field_relationships(self) -> list[FieldRelationship]:
@@ -319,7 +341,7 @@ class SchemaGenerator:
                 primary_field='servers.api.port',
                 related_fields=['servers.mcp.port'],
                 description='API and MCP servers cannot use the same port',
-                validation_rules={'ensure_different_ports': True}
+                validation_rules={'ensure_different_ports': True},
             ),
             FieldRelationship(
                 relationship_id='llm_api_keys',
@@ -327,22 +349,22 @@ class SchemaGenerator:
                 primary_field='llm.default.model',
                 related_fields=['api_keys.mistral_key', 'api_keys.openrouter_key'],
                 description='LLM model requires corresponding API key',
-                validation_rules={'require_matching_provider': True}
+                validation_rules={'require_matching_provider': True},
             ),
             FieldRelationship(
                 relationship_id='rag_workspace',
                 relationship_type='dependent',
                 primary_field='rag.vector_db_path',
                 related_fields=['paths.workspace'],
-                description='Vector database should be within workspace for portability'
+                description='Vector database should be within workspace for portability',
             ),
             FieldRelationship(
                 relationship_id='discovery_paths',
                 relationship_type='complementary',
                 primary_field='features.discovery.enabled',
                 related_fields=['paths.pdf', 'paths.notes', 'discovery.sources'],
-                description='Discovery feature works best with configured paths and sources'
-            )
+                description='Discovery feature works best with configured paths and sources',
+            ),
         ]
 
     def _build_advanced_categories(self) -> list[AdvancedCategory]:
@@ -355,7 +377,7 @@ class SchemaGenerator:
                 priority=0,
                 icon='🚀',
                 collapsed_by_default=False,
-                required_for_functionality=['basic_llm', 'file_processing']
+                required_for_functionality=['basic_llm', 'file_processing'],
             ),
             AdvancedCategory(
                 category_id='api_configuration',
@@ -364,7 +386,11 @@ class SchemaGenerator:
                 priority=1,
                 icon='🔑',
                 collapsed_by_default=False,
-                required_for_functionality=['llm_processing', 'web_search', 'citation_enhancement']
+                required_for_functionality=[
+                    'llm_processing',
+                    'web_search',
+                    'citation_enhancement',
+                ],
             ),
             AdvancedCategory(
                 category_id='workspace_setup',
@@ -373,7 +399,11 @@ class SchemaGenerator:
                 priority=2,
                 icon='📁',
                 collapsed_by_default=False,
-                required_for_functionality=['file_organization', 'pdf_processing', 'note_management']
+                required_for_functionality=[
+                    'file_organization',
+                    'pdf_processing',
+                    'note_management',
+                ],
             ),
             AdvancedCategory(
                 category_id='ai_models',
@@ -383,7 +413,11 @@ class SchemaGenerator:
                 icon='🤖',
                 collapsed_by_default=False,
                 visibility_condition="api_keys.mistral_key != '' OR api_keys.openrouter_key != ''",
-                required_for_functionality=['text_analysis', 'content_generation', 'research_assistance']
+                required_for_functionality=[
+                    'text_analysis',
+                    'content_generation',
+                    'research_assistance',
+                ],
             ),
             AdvancedCategory(
                 category_id='advanced_features',
@@ -392,7 +426,7 @@ class SchemaGenerator:
                 priority=4,
                 icon='⚙️',
                 collapsed_by_default=True,
-                visibility_condition="ui_preferences.show_advanced == true"
+                visibility_condition='ui_preferences.show_advanced == true',
             ),
             AdvancedCategory(
                 category_id='performance',
@@ -401,7 +435,7 @@ class SchemaGenerator:
                 parent_category='advanced_features',
                 priority=5,
                 icon='📊',
-                collapsed_by_default=True
+                collapsed_by_default=True,
             ),
             AdvancedCategory(
                 category_id='development',
@@ -411,8 +445,8 @@ class SchemaGenerator:
                 priority=6,
                 icon='🛠️',
                 collapsed_by_default=True,
-                visibility_condition="environment.is_development == true"
-            )
+                visibility_condition='environment.is_development == true',
+            ),
         ]
 
     def _build_configuration_use_cases(self) -> list[ConfigurationUseCase]:
@@ -430,12 +464,12 @@ class SchemaGenerator:
                     'llm.default.model': 'mistral/mistral-large-latest',
                     'llm.default.temperature': 0.3,
                     'features.discovery.enabled': True,
-                    'features.api_server.enabled': False
+                    'features.api_server.enabled': False,
                 },
                 required_fields=['api_keys.mistral_key', 'paths.workspace'],
                 optional_fields=['features.discovery.enabled'],
                 performance_impact='low',
-                complexity_level='beginner'
+                complexity_level='beginner',
             ),
             ConfigurationUseCase(
                 use_case_id='power_user',
@@ -449,12 +483,12 @@ class SchemaGenerator:
                     'features.rag.enabled': True,
                     'features.discovery.enabled': True,
                     'performance_config.cache_enabled': True,
-                    'monitoring.health_checks': True
+                    'monitoring.health_checks': True,
                 },
                 required_fields=['api_keys.mistral_key', 'paths.workspace'],
                 optional_fields=['api_keys.openrouter_key', 'monitoring.health_checks'],
                 performance_impact='high',
-                complexity_level='advanced'
+                complexity_level='advanced',
             ),
             ConfigurationUseCase(
                 use_case_id='team_server',
@@ -467,17 +501,22 @@ class SchemaGenerator:
                     'servers.api.cors_enabled': True,
                     'features.rag.enabled': True,
                     'monitoring.health_checks': True,
-                    'performance_config.cache_enabled': True
+                    'performance_config.cache_enabled': True,
                 },
                 required_fields=['servers.api.port', 'api_keys.mistral_key'],
-                optional_fields=['servers.api.cors_enabled', 'monitoring.health_checks'],
+                optional_fields=[
+                    'servers.api.cors_enabled',
+                    'monitoring.health_checks',
+                ],
                 performance_impact='high',
-                complexity_level='intermediate'
-            )
+                complexity_level='intermediate',
+            ),
         ]
 
     def generate_schema(self, model_class: type[BaseModel]) -> dict[str, Any]:
-        """Generate complete UI schema from a Pydantic model with advanced organization."""
+        """
+        Generate complete UI schema from a Pydantic model with advanced organization.
+        """
         fields_dict: dict[str, Any] = {}
         validation_rules: dict[str, Any] = {}
 
@@ -504,23 +543,31 @@ class SchemaGenerator:
             'conditional_rules': [rule.dict() for rule in self.conditional_rules],
             'field_relationships': [rel.dict() for rel in self.field_relationships],
             'advanced_categories': [cat.dict() for cat in self.advanced_categories],
-            'configuration_use_cases': [case.dict() for case in self.configuration_use_cases],
+            'configuration_use_cases': [
+                case.dict() for case in self.configuration_use_cases
+            ],
             'ui_metadata': {
                 'supports_conditional_visibility': True,
                 'supports_auto_fix': True,
                 'supports_guided_setup': True,
-                'supports_advanced_organization': True
-            }
+                'supports_advanced_organization': True,
+            },
         }
 
         return schema
 
-    def evaluate_field_visibility(self, field_name: str, current_config: dict[str, Any]) -> bool:
-        """Evaluate whether a field should be visible based on dependencies and conditions."""
+    def evaluate_field_visibility(
+        self, field_name: str, current_config: dict[str, Any]
+    ) -> bool:
+        """
+        Evaluate whether a field should be visible based on dependencies and conditions.
+        """
         # Check field dependencies
         for dependency in self.field_dependencies:
             if dependency.field_path == field_name:
-                depends_value = self._get_config_value(current_config, dependency.depends_on)
+                depends_value = self._get_config_value(
+                    current_config, dependency.depends_on
+                )
 
                 if dependency.condition == 'equals':
                     if depends_value != dependency.value:
@@ -535,7 +582,9 @@ class SchemaGenerator:
         # Check conditional rules
         for rule in self.conditional_rules:
             if field_name in rule.affected_fields:
-                condition_met = self._evaluate_condition_expression(rule.condition_expression, current_config)
+                condition_met = self._evaluate_condition_expression(
+                    rule.condition_expression, current_config
+                )
                 if rule.action == 'show':
                     return condition_met
                 elif rule.action == 'hide':
@@ -543,7 +592,9 @@ class SchemaGenerator:
 
         return True  # Default to visible
 
-    def get_smart_defaults(self, field_name: str, current_config: dict[str, Any]) -> Any:
+    def get_smart_defaults(
+        self, field_name: str, current_config: dict[str, Any]
+    ) -> Any:
         """Get smart default values based on other settings."""
         # API server defaults
         if field_name == 'servers.api.port':
@@ -570,7 +621,9 @@ class SchemaGenerator:
 
         return None
 
-    def suggest_optimal_configuration(self, use_case: ConfigurationUseCase) -> dict[str, Any]:
+    def suggest_optimal_configuration(
+        self, use_case: ConfigurationUseCase
+    ) -> dict[str, Any]:
         """Suggest optimal configuration for a specific use case."""
         config = use_case.recommended_settings.copy()
 
@@ -586,65 +639,82 @@ class SchemaGenerator:
             'id': use_case.use_case_id,
             'name': use_case.name,
             'applied_at': datetime.now().isoformat(),
-            'complexity_level': use_case.complexity_level
+            'complexity_level': use_case.complexity_level,
         }
 
         return config
 
     def get_configuration_wizard_steps(self, use_case_id: str) -> list[dict[str, Any]]:
         """Get wizard steps for guided configuration setup."""
-        use_case = next((uc for uc in self.configuration_use_cases if uc.use_case_id == use_case_id), None)
+        use_case = next(
+            (
+                uc
+                for uc in self.configuration_use_cases
+                if uc.use_case_id == use_case_id
+            ),
+            None,
+        )
         if not use_case:
             return []
 
         steps = []
 
         # Step 1: Use case selection and overview
-        steps.append({
-            'step_id': 'overview',
-            'title': f'Setup: {use_case.name}',
-            'description': use_case.description,
-            'step_type': 'info',
-            'fields': [],
-            'validation_required': False
-        })
+        steps.append(
+            {
+                'step_id': 'overview',
+                'title': f'Setup: {use_case.name}',
+                'description': use_case.description,
+                'step_type': 'info',
+                'fields': [],
+                'validation_required': False,
+            }
+        )
 
         # Step 2: Required fields
         if use_case.required_fields:
-            steps.append({
-                'step_id': 'required_fields',
-                'title': 'Required Configuration',
-                'description': 'These settings are required for basic functionality',
-                'step_type': 'form',
-                'fields': use_case.required_fields,
-                'validation_required': True
-            })
+            steps.append(
+                {
+                    'step_id': 'required_fields',
+                    'title': 'Required Configuration',
+                    'description': 'These settings are required for basic functionality',
+                    'step_type': 'form',
+                    'fields': use_case.required_fields,
+                    'validation_required': True,
+                }
+            )
 
         # Step 3: Optional fields (grouped by category)
         optional_by_category = self._group_fields_by_category(use_case.optional_fields)
         for category, fields in optional_by_category.items():
-            steps.append({
-                'step_id': f'optional_{category.lower().replace(" ", "_")}',
-                'title': f'Optional: {category}',
-                'description': f'Additional {category.lower()} settings',
-                'step_type': 'form',
-                'fields': fields,
-                'validation_required': False
-            })
+            steps.append(
+                {
+                    'step_id': f'optional_{category.lower().replace(" ", "_")}',
+                    'title': f'Optional: {category}',
+                    'description': f'Additional {category.lower()} settings',
+                    'step_type': 'form',
+                    'fields': fields,
+                    'validation_required': False,
+                }
+            )
 
         # Step 4: Review and confirmation
-        steps.append({
-            'step_id': 'review',
-            'title': 'Review Configuration',
-            'description': 'Review your configuration before applying',
-            'step_type': 'review',
-            'fields': use_case.required_fields + use_case.optional_fields,
-            'validation_required': True
-        })
+        steps.append(
+            {
+                'step_id': 'review',
+                'title': 'Review Configuration',
+                'description': 'Review your configuration before applying',
+                'step_type': 'review',
+                'fields': use_case.required_fields + use_case.optional_fields,
+                'validation_required': True,
+            }
+        )
 
         return steps
 
-    def _evaluate_condition_expression(self, expression: str, config: dict[str, Any]) -> bool:
+    def _evaluate_condition_expression(
+        self, expression: str, config: dict[str, Any]
+    ) -> bool:
         """Evaluate a conditional expression against current configuration."""
         try:
             # Simple expression parser for basic conditions
@@ -655,6 +725,7 @@ class SchemaGenerator:
 
             # Find field references (format: field.path)
             import re
+
             field_refs = re.findall(r'[\w.]+(?=\s*[!=<>])', expression)
 
             for field_ref in field_refs:
@@ -669,7 +740,9 @@ class SchemaGenerator:
                     else:
                         value_repr = str(field_value).lower()
 
-                    expression_with_values = expression_with_values.replace(field_ref, value_repr)
+                    expression_with_values = expression_with_values.replace(
+                        field_ref, value_repr
+                    )
 
             # Evaluate the expression
             # Note: In production, use a safe expression evaluator
@@ -677,10 +750,14 @@ class SchemaGenerator:
             return bool(result)
 
         except Exception as e:
-            logger.warning(f'Failed to evaluate condition expression "{expression}": {e}')
+            logger.warning(
+                f'Failed to evaluate condition expression "{expression}": {e}'
+            )
             return True  # Default to showing field if evaluation fails
 
-    def _get_config_value(self, config: dict[str, Any], field_path: str, default: Any = None) -> Any:
+    def _get_config_value(
+        self, config: dict[str, Any], field_path: str, default: Any = None
+    ) -> Any:
         """Get a nested configuration value using dot notation."""
         keys = field_path.split('.')
         current = config
@@ -705,7 +782,9 @@ class SchemaGenerator:
 
         return grouped
 
-    def validate_field_relationships(self, config: dict[str, Any]) -> list[ValidationIssue]:
+    def validate_field_relationships(
+        self, config: dict[str, Any]
+    ) -> list[ValidationIssue]:
         """Validate field relationships and detect conflicts."""
         issues = []
 
@@ -717,14 +796,20 @@ class SchemaGenerator:
                 for related_field in relationship.related_fields:
                     related_value = self._get_config_value(config, related_field)
 
-                    if primary_value and related_value and primary_value == related_value:
-                        issues.append(ValidationIssue(
-                            field_path=relationship.primary_field,
-                            issue_type=IssueType.BUSINESS_LOGIC,
-                            severity=IssueSeverity.ERROR,
-                            message=f'Conflict with {related_field}: {relationship.description}',
-                            suggestion=f'Choose a different value for {relationship.primary_field} or {related_field}'
-                        ))
+                    if (
+                        primary_value
+                        and related_value
+                        and primary_value == related_value
+                    ):
+                        issues.append(
+                            ValidationIssue(
+                                field_path=relationship.primary_field,
+                                issue_type=IssueType.BUSINESS_LOGIC,
+                                severity=IssueSeverity.ERROR,
+                                message=f'Conflict with {related_field}: {relationship.description}',
+                                suggestion=f'Choose a different value for {relationship.primary_field} or {related_field}',
+                            )
+                        )
 
             elif relationship.relationship_type == 'dependent':
                 # Check dependencies
@@ -732,13 +817,15 @@ class SchemaGenerator:
                     for related_field in relationship.related_fields:
                         related_value = self._get_config_value(config, related_field)
                         if not related_value:
-                            issues.append(ValidationIssue(
-                                field_path=related_field,
-                                issue_type=IssueType.BUSINESS_LOGIC,
-                                severity=IssueSeverity.WARNING,
-                                message=f'Required for {relationship.primary_field}: {relationship.description}',
-                                suggestion=f'Configure {related_field} to use {relationship.primary_field}'
-                            ))
+                            issues.append(
+                                ValidationIssue(
+                                    field_path=related_field,
+                                    issue_type=IssueType.BUSINESS_LOGIC,
+                                    severity=IssueSeverity.WARNING,
+                                    message=f'Required for {relationship.primary_field}: {relationship.description}',
+                                    suggestion=f'Configure {related_field} to use {relationship.primary_field}',
+                                )
+                            )
 
         return issues
 
@@ -1082,12 +1169,16 @@ class SchemaGenerator:
 
 
 def generate_config_schema(config_class: type[BaseModel]) -> dict[str, Any]:
-    """Generate a complete UI schema for a configuration class with advanced features."""
+    """
+    Generate a complete UI schema for a configuration class with advanced features.
+    """
     generator = SchemaGenerator()
     return generator.generate_schema(config_class)
 
 
-def evaluate_field_visibility(field_name: str, current_config: dict[str, Any], schema: dict[str, Any]) -> bool:
+def evaluate_field_visibility(
+    field_name: str, current_config: dict[str, Any], _schema: dict[str, Any]
+) -> bool:
     """Evaluate field visibility based on schema dependencies."""
     generator = SchemaGenerator()
     return generator.evaluate_field_visibility(field_name, current_config)
@@ -1114,7 +1205,14 @@ def validate_field_relationships(config: dict[str, Any]) -> list[Any]:
 def suggest_optimal_configuration(use_case_id: str) -> dict[str, Any]:
     """Suggest optimal configuration for a use case."""
     generator = SchemaGenerator()
-    use_case = next((uc for uc in generator.configuration_use_cases if uc.use_case_id == use_case_id), None)
+    use_case = next(
+        (
+            uc
+            for uc in generator.configuration_use_cases
+            if uc.use_case_id == use_case_id
+        ),
+        None,
+    )
     if use_case:
         return generator.suggest_optimal_configuration(use_case)
     return {}
