@@ -22,6 +22,84 @@ router = APIRouter()
 service_manager = None
 
 
+# Collection and Articles endpoints
+@router.get('/collection/stats')
+async def get_collection_stats():
+    """Get collection statistics."""
+    if service_manager is None:
+        raise HTTPException(status_code=503, detail='Service manager not initialized')
+
+    try:
+        # Get basic stats from the service manager
+        stats = {
+            'total_documents': 0,
+            'processed_documents': 0,
+            'total_citations': 0,
+            'status': 'operational',
+        }
+
+        # If we have access to document services, get real stats
+        if (
+            hasattr(service_manager, 'citation_service')
+            and service_manager.citation_service
+        ):
+            try:
+                # Try to get real collection stats
+                pdf_tracker = getattr(
+                    service_manager.citation_service, 'pdf_tracker', None
+                )
+                if pdf_tracker:
+                    processed_files = getattr(pdf_tracker, '_processed_files', {})
+                    stats['processed_documents'] = len(processed_files)
+
+                citation_graph = getattr(
+                    service_manager.citation_service, 'citation_graph', None
+                )
+                if citation_graph and hasattr(citation_graph, '_graph'):
+                    stats['total_citations'] = citation_graph._graph.number_of_nodes()
+            except Exception as e:
+                logger.warning(f'Could not get detailed stats: {e}')
+
+        return stats
+
+    except Exception as e:
+        logger.error(f'Error getting collection stats: {e}')
+        raise HTTPException(
+            status_code=500, detail=f'Error getting collection stats: {e}'
+        )
+
+
+@router.get('/articles')
+async def list_articles(limit: int = 10, offset: int = 0):
+    """List articles in the collection."""
+    if service_manager is None:
+        raise HTTPException(status_code=503, detail='Service manager not initialized')
+
+    try:
+        # Return mock data for now - this would integrate with actual document storage
+        articles = [
+            {
+                'id': f'article_{i}',
+                'title': f'Sample Article {i}',
+                'authors': ['Author A', 'Author B'],
+                'year': 2024,
+                'status': 'processed',
+            }
+            for i in range(offset + 1, min(offset + limit + 1, 6))
+        ]
+
+        return {
+            'articles': articles,
+            'total': 5,  # Mock total
+            'limit': limit,
+            'offset': offset,
+        }
+
+    except Exception as e:
+        logger.error(f'Error listing articles: {e}')
+        raise HTTPException(status_code=500, detail=f'Error listing articles: {e}')
+
+
 def set_service_manager(sm):
     """Set the service manager for this router."""
     global service_manager

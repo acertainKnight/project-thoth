@@ -6,7 +6,6 @@ This module implements the hybrid configuration system that loads:
 - Non-sensitive settings from thoth.settings.json
 """
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -29,30 +28,118 @@ class HybridConfigLoader:
     def __init__(
         self,
         env_file: Path | str = '.env',
-        settings_file: Path | str = '.thoth.settings.json',
+        settings_file: Path | str | None = None,
     ):
         """
-        Initialize the hybrid config loader.
+        Initialize the hybrid config loader with vault-aware file detection.
 
         Args:
             env_file: Path to .env file (Docker settings only)
-            settings_file: Path to .thoth.settings.json file (all user settings)
+            settings_file: Path to .thoth.settings.json file (optional, auto-detect)
         """
         self.env_file = Path(env_file)
-        self.settings_file = Path(settings_file)
+
+        # Determine settings file path with vault awareness and env override
+        self.settings_file = self._determine_settings_path(settings_file)
         self._settings_cache = None
+        self._settings_service = (
+            None  # Lazy initialization to avoid circular dependency
+        )
+
+    def _determine_settings_path(self, provided_path: str | None = None) -> Path:
+        """
+        Determine the settings file path with vault awareness and env overrides.
+
+        This duplicates logic from SettingsService to avoid circular dependency.
+
+        Priority:
+        1. Environment variable THOTH_SETTINGS_FILE
+        2. Provided path parameter
+        3. Vault-aware detection (.obsidian directory present)
+        4. Current directory fallback
+
+        Args:
+            provided_path: Explicitly provided settings path
+
+        Returns:
+            Path to the settings file
+        """
+        import os
+
+        # 1. Check environment variable override
+        env_path = os.getenv('THOTH_SETTINGS_FILE')
+        if env_path:
+            path = Path(env_path).expanduser().resolve()
+            logger.info(f'Using settings file from THOTH_SETTINGS_FILE: {path}')
+            return path
+
+        # 2. Use provided path if given
+        if provided_path:
+            return Path(provided_path).resolve()
+
+        # 3. Check for Obsidian vault
+        vault_root = self._detect_obsidian_vault()
+        if vault_root:
+            vault_settings = vault_root / '.thoth.settings.json'
+            logger.info(
+                f'Obsidian vault detected at {vault_root}, using {vault_settings}'
+            )
+            return vault_settings
+
+        # 4. Default to current directory
+        default_path = Path('.thoth.settings.json').resolve()
+        logger.info(f'Using default settings path: {default_path}')
+        return default_path
+
+    def _detect_obsidian_vault(self) -> Path | None:
+        """
+        Detect if we're running within an Obsidian vault.
+
+        Looks for .obsidian directory in current working directory or parents.
+
+        Returns:
+            Path to vault root if detected, None otherwise
+        """
+        current = Path.cwd()
+
+        # Check current directory and up to 5 parent levels
+        for _ in range(6):
+            obsidian_dir = current / '.obsidian'
+            if obsidian_dir.exists() and obsidian_dir.is_dir():
+                logger.debug(f'Found .obsidian directory at: {current}')
+                return current
+
+            parent = current.parent
+            if parent == current:  # Reached filesystem root
+                break
+            current = parent
+
+        return None
+
+    def _get_settings_service(self):
+        """Lazy initialization of SettingsService to avoid circular dependency."""
+        if self._settings_service is None:
+            from thoth.services.settings_service import SettingsService
+
+            self._settings_service = SettingsService(
+                settings_path=self.settings_file,
+                config=None,  # Avoid circular dependency
+            )
+        return self._settings_service
 
     def load_json_settings(self) -> dict[str, Any]:
-        """Load settings from JSON file."""
-        if not self.settings_file.exists():
-            logger.warning(f'Settings file not found: {self.settings_file}')
-            return {}
+        """
+        Load settings from JSON file using enhanced SettingsService.
 
+        This now includes environment variable overrides and vault-aware file detection.
+        """
         try:
-            with open(self.settings_file) as f:
-                self._settings_cache = json.load(f)
-                logger.info(f'Loaded settings from {self.settings_file}')
-                return self._settings_cache
+            # Use the lazy-initialized SettingsService which handles env overrides
+            settings_service = self._get_settings_service()
+            settings = settings_service.load_settings()
+            self._settings_cache = settings
+            logger.info(f'Loaded settings from {self.settings_file} with env overrides')
+            return settings
         except Exception as e:
             logger.error(f'Failed to load settings file: {e}')
             return {}

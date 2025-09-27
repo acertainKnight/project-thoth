@@ -156,16 +156,36 @@ async def _start_mcp_server_background() -> None:
         logger.info('Starting MCP server in background...')
 
         # Import here to avoid circular dependencies
+        import socket
+
         from thoth.mcp.server import start_mcp_server
 
-        # Start MCP server
-        task = asyncio.create_task(start_mcp_server())
+        # Find available port for HTTP MCP server
+        def find_free_port(start_port: int = 8001) -> int:
+            """Find a free port starting from start_port"""
+            for port in range(start_port, start_port + 100):
+                try:
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                        s.bind(('localhost', port))
+                        return port
+                except OSError:
+                    continue
+            raise RuntimeError('Could not find a free port')
+
+        # Start MCP server with stdio only in background to avoid port conflicts
+        task = asyncio.create_task(
+            start_mcp_server(
+                enable_stdio=True,
+                enable_http=False,  # Disable HTTP to avoid port conflicts
+                enable_sse=False,
+            )
+        )
         _start_mcp_server_background._background_tasks.add(task)
 
         # Clean up completed tasks
         task.add_done_callback(_start_mcp_server_background._background_tasks.discard)
 
-        logger.info('MCP server background task started')
+        logger.info('MCP server background task started (stdio only)')
 
     except Exception as e:
         logger.error(f'Failed to start MCP server in background: {e}')
