@@ -96,6 +96,58 @@ export class APIUtilities {
     });
   }
 
+  async makeRequestWithRetry(url: string, options: RequestInit = {}, retries: number = 3, timeout: number = 5000): Promise<Response> {
+    let lastError: Error;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+        const requestOptions = {
+          ...options,
+          signal: controller.signal
+        };
+
+        const response = await this.makeRequest(url, requestOptions);
+        clearTimeout(timeoutId);
+
+        if (response.ok || response.status < 500) {
+          return response;
+        }
+
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      } catch (error) {
+        lastError = error as Error;
+
+        if (attempt < retries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    throw lastError!;
+  }
+
+  async isBackendOnline(baseUrl: string): Promise<boolean> {
+    try {
+      const healthUrl = this.buildEndpointUrl(baseUrl, '/health');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const response = await fetch(healthUrl, {
+        method: 'GET',
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      return response.ok;
+    } catch (error) {
+      return false;
+    }
+  }
+
   /**
    * Endpoint URL helpers
    */

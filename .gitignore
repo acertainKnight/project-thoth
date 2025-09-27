@@ -159,13 +159,16 @@ Thumbs.db
 .pytest_cache/
 
 # Code agents
-/.claude/*
+.claude/
 CLAUDE.md
 CLAUDE.md.backup
-/.cursor/*
+.cursor/
 .cursorrules
 .cursorignore
-/qdrant_storage
+qdrant_storage/
+.roo/
+.claude-flow/
+.hive-mind/
 
 # Planning and backup files
 /planning/*
@@ -183,6 +186,7 @@ node_modules/
 /knowledge/
 /cache/
 /data/
+/workspace/
 
 # Generated reports
 *_report.json
