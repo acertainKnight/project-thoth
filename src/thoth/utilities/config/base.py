@@ -34,6 +34,9 @@ class BaseLLMConfig(BaseSettings):
     )
 
     model: str = Field('openai/gpt-4o-mini', description='LLM model identifier')
+    provider: str | None = Field(
+        None, description='LLM provider (openai, anthropic, openrouter, etc.)'
+    )
     model_settings: ModelConfig = Field(
         default_factory=ModelConfig, description='Model parameters'
     )

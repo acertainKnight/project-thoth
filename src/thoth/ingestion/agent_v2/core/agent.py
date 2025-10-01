@@ -254,6 +254,13 @@ class ResearchAssistant:
 
             logger.info('Initializing MCP tools with official LangChain adapters...')
 
+            # Skip stdio connection in local mode - use HTTP MCP server instead
+            # Stdio has permission issues when not running in Docker
+            logger.info(
+                'Skipping stdio MCP connection - using separate HTTP MCP server'
+            )
+            return []  # Return empty list - tools loaded via separate MCP server
+
             # Try stdio connection first (more reliable)
             try:
                 logger.info('Attempting stdio MCP connection...')

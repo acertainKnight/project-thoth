@@ -84,9 +84,12 @@ class LLMProcessor:
             max_context_length * map_reduce_threshold_multiplier
         )
         model_kwargs.pop('max_tokens', None)
+        # Pass provider if available in config
+        provider = getattr(self.llm_service.config.llm_config, 'provider', None)
         self.llm = self.llm_service.get_client(
             model=self.model,
             max_tokens=self.max_output_tokens,
+            provider=provider,
             **self.model_kwargs,
         )
 

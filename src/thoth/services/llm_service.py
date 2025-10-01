@@ -63,6 +63,7 @@ class LLMService(BaseService):
         temperature: float | None = None,
         max_tokens: int | None = None,
         use_rate_limiter: bool = True,
+        provider: str | None = None,
         **kwargs,
     ) -> Any:
         """
@@ -73,6 +74,7 @@ class LLMService(BaseService):
             temperature: Temperature setting
             max_tokens: Maximum tokens
             use_rate_limiter: Whether to use rate limiting
+            provider: Provider to use (openai, anthropic, openrouter, etc.)
             **kwargs: Additional model parameters
 
         Returns:
@@ -89,9 +91,11 @@ class LLMService(BaseService):
                 temperature = self.config.llm_config.model_settings.temperature
             if max_tokens is None:
                 max_tokens = self.config.llm_config.model_settings.max_tokens
+            if provider is None and hasattr(self.config.llm_config, 'provider'):
+                provider = self.config.llm_config.provider
 
-            # Create cache key
-            cache_key = f'{model}_{temperature}_{max_tokens}'
+            # Create cache key including provider
+            cache_key = f'{provider}_{model}_{temperature}_{max_tokens}'
 
             # Check cache
             if cache_key in self._clients:
@@ -106,7 +110,33 @@ class LLMService(BaseService):
             model_kwargs.pop('max_tokens', None)
             model_kwargs.pop('use_rate_limiter', None)
 
-            provider, _ = model.split('/', 1) if '/' in model else (None, model)
+            # Determine provider from multiple sources:
+            # 1. Explicitly passed provider parameter
+            # 2. Provider from config
+            # 3. Extract from model string (e.g., "openai/gpt-4")
+            # 4. Default to openrouter
+            if provider is None:
+                # Try to extract from model string if it contains a slash
+                if '/' in model:
+                    extracted_provider, model_name = model.split('/', 1)
+                    provider = extracted_provider
+                else:
+                    # No slash in model, check if we have specific API keys
+                    # and infer provider, otherwise use openrouter
+                    provider = 'openrouter'
+
+            # For OpenRouter, ensure model has provider prefix
+            if provider == 'openrouter' and '/' not in model:
+                # Add appropriate prefix based on model name
+                if 'gpt' in model.lower():
+                    model = f'openai/{model}'
+                elif 'claude' in model.lower():
+                    model = f'anthropic/{model}'
+                elif 'mistral' in model.lower() or 'mixtral' in model.lower():
+                    model = f'mistralai/{model}'
+                elif 'gemini' in model.lower():
+                    model = f'google/{model}'
+                # If we can't determine, keep as is and let OpenRouter handle it
 
             cfg = dict(
                 model=model,
@@ -116,11 +146,15 @@ class LLMService(BaseService):
                 **model_kwargs,
             )
 
+            # Set appropriate API key based on provider
             if provider == 'openai' and self.config.api_keys.openai_key:
                 cfg['api_key'] = self.config.api_keys.openai_key
             elif provider == 'anthropic' and self.config.api_keys.anthropic_key:
                 cfg['api_key'] = self.config.api_keys.anthropic_key
+            elif provider == 'openrouter':
+                cfg['api_key'] = self.config.api_keys.openrouter_key
             else:
+                # Default to openrouter if no specific provider key
                 provider = 'openrouter'
                 cfg['api_key'] = self.config.api_keys.openrouter_key
 
@@ -132,7 +166,7 @@ class LLMService(BaseService):
             self.log_operation(
                 'client_created',
                 model=model,
-                provider=provider or 'openrouter',
+                provider=provider,
                 temperature=temperature,
                 max_tokens=max_tokens,
             )

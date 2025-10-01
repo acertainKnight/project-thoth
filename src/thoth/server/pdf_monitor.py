@@ -334,18 +334,32 @@ class PDFMonitor:
         logger.info(f'Started monitoring {self.watch_dir} for new PDF files')
 
         # Watch for settings file changes (hot reload)
-        # Try to find settings file in common locations
+        # Try to find settings file - check environment variable first
+        import os
+
         settings_path = None
-        for path in [
-            './thoth.settings.json',
-            './workspace/settings.json',
-            './_thoth/settings.json',
-            Path.home() / '.config/thoth/settings.json',
-        ]:
-            if Path(path).exists():
-                settings_path = Path(path)
-                logger.info(f'Hot reload enabled - watching settings: {settings_path}')
-                break
+
+        # Check environment variable first
+        env_settings = os.getenv('THOTH_SETTINGS_FILE')
+        if env_settings and Path(env_settings).exists():
+            settings_path = Path(env_settings)
+            logger.info(
+                f'Hot reload enabled - watching settings from env: {settings_path}'
+            )
+        else:
+            # Fall back to common locations
+            for path in [
+                './thoth.settings.json',
+                './workspace/settings.json',
+                './_thoth/settings.json',
+                Path.home() / '.config/thoth/settings.json',
+            ]:
+                if Path(path).exists():
+                    settings_path = Path(path)
+                    logger.info(
+                        f'Hot reload enabled - watching settings: {settings_path}'
+                    )
+                    break
 
         last_settings_mtime = (
             settings_path.stat().st_mtime

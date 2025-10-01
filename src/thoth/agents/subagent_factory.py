@@ -421,13 +421,20 @@ Focus on creating coherent, well-structured syntheses that highlight key insight
             # Create agent using Letta's built-in sleep-time memory management
             agent = self.client.agents.create(
                 name=letta_agent_name,
+                llm_config={
+                    'model': 'gpt-4o-mini',
+                    'model_endpoint_type': 'openai',
+                    'context_window': 128000,
+                },
+                embedding_config={
+                    'embedding_model': 'text-embedding-ada-002',
+                    'embedding_endpoint_type': 'openai',
+                    'embedding_dim': 1536,
+                },
                 memory_blocks=memory_blocks,
                 system=config.system_prompt,
                 tools=config.tools,  # Tools assigned during creation
                 enable_sleeptime=True,  # Enable Letta's automatic memory management
-                # Optional: specify LLM and embedding models
-                # llm_config={'model': 'openai/gpt-4'},
-                # embedding_config={'model': 'openai/text-embedding-3-small'}
             )
 
             # Log successful tool assignment (tools assigned during creation)
