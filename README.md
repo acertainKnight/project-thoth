@@ -32,23 +32,37 @@ Thoth revolutionizes academic research by combining cutting-edge AI with intuiti
 
 ## Quick Start
 
+### Option 1: Docker (Recommended)
 ```bash
-# Clone and setup
+# Clone repository
 git clone https://github.com/acertainKnight/project-thoth.git
 cd project-thoth
 
+# Configure your Obsidian vault path
+export OBSIDIAN_VAULT="/path/to/your/obsidian/vault"
+
+# One-command deployment (builds plugin + starts all services)
+make deploy-and-start OBSIDIAN_VAULT="$OBSIDIAN_VAULT"
+```
+
+This will:
+- ✅ Build and deploy the Obsidian plugin to your vault
+- ✅ Create complete `.thoth/` directory structure with all prompts
+- ✅ Start all services (API, MCP, ChromaDB, Letta, Discovery)
+- ✅ Services available at: `http://localhost:8000` (API), `http://localhost:8001` (MCP)
+
+### Option 2: Local Development
+```bash
 # Install dependencies (requires Python 3.10+)
 uv venv && uv sync
 
 # Configure API keys
-echo "MISTRAL_API_KEY=your_key_here" > .env
-echo "OPENROUTER_API_KEY=your_key_here" >> .env
+cp .env.example .env
+# Edit .env with your API keys
 
-# Launch Thoth
-make dev  # Starts both API server and plugin watcher
+# Deploy plugin and start services
+make dev OBSIDIAN_VAULT="/path/to/vault"
 ```
-
-Visit `http://localhost:8000` to verify the API server is running.
 
 ### Docker Deployment
 
@@ -120,11 +134,11 @@ Services will be available at:
 ## Key Features
 
 ### Advanced AI System
-- **Letta-Based Agent Orchestration**: Claude Code-style subagent creation and management
-- **Chat-Driven Agent Creation**: Create specialized agents through natural language
+- **52 MCP Tools**: Complete research assistant toolkit (100% functional)
+- **3rd Party MCP Plugins**: VSCode-compatible plugin system for extending capabilities
 - **Multi-Provider LLM Router**: Intelligent routing across OpenAI, Anthropic, Mistral, OpenRouter
-- **Persistent Memory**: Advanced memory system with salience-based retention and cross-session persistence
-- **MCP Framework**: Full Model Context Protocol support for agent interoperability
+- **Persistent Memory**: Letta-based with salience retention and cross-session persistence
+- **MCP Framework**: Full Model Context Protocol with HTTP/stdio/SSE transports
 
 ### Intelligent Agent System
 - **Dynamic Agent Creation**: `"create an agent that analyzes citation patterns"`
@@ -296,10 +310,14 @@ python -m thoth discovery search "neural networks" --source semantic_scholar
 
 | Command | Purpose |
 |---------|---------|
-| `make dev` | Full development environment |
-| `make start-api` | API server only |
-| `make deploy-plugin` | Deploy to Obsidian |
+| `make deploy-and-start` | Complete deployment + start all services |
+| `make deploy-plugin` | Deploy Obsidian plugin only |
+| `make start` | Start all Docker services |
+| `make stop` | Stop all services |
+| `make restart` | Restart all services |
 | `make status` | Check service health |
+| `make logs` | View service logs |
+| `make dev` | Start with live reload |
 | `make clean` | Clean build artifacts |
 
 ## Configuration
@@ -321,16 +339,30 @@ python -m thoth discovery search "neural networks" --source semantic_scholar
 | Agents | `LETTA_MAX_AGENTS_PER_USER` | Agent limit per user | No |
 
 ### Directory Structure
+
+All configuration and data is stored in your Obsidian vault:
+
 ```
-workspace/
-├── pdfs/              # Original PDF documents
-├── data/              # Processed documents and embeddings
-├── agents/            # Agent configurations and memory
-│   ├── system/        # System-provided agents
-│   └── user/          # User-created agents
-├── knowledge/         # Knowledge graphs and citations
-├── logs/              # Application logs
-└── config/            # User configuration files
+vault/
+├── .thoth/
+│   ├── data/
+│   │   ├── prompts/          # 22+ AI prompt templates
+│   │   ├── pdfs/            # Original documents
+│   │   ├── notes/           # Generated notes
+│   │   ├── knowledge/       # Citation graphs
+│   │   ├── queries/         # Saved queries
+│   │   ├── agents/          # Agent configurations
+│   │   └── discovery/       # Discovery results
+│   ├── cache/               # Temporary cache
+│   ├── logs/                # Application logs
+│   └── config/              # Configuration files
+│
+├── .obsidian/plugins/thoth/
+│   ├── main.js                 # Plugin code
+│   ├── manifest.json           # Plugin metadata
+│   └── mcp-plugins.json       # 3rd party MCP configuration
+│
+└── .thoth.settings.json        # Main settings
 ```
 
 ## Development
@@ -340,22 +372,35 @@ workspace/
 project-thoth/
 ├── src/thoth/              # Python package
 │   ├── cli/               # Command-line interface
-│   ├── agents/            # Agent system (NEW)
-│   │   ├── orchestrator.py   # Main orchestrator
-│   │   ├── subagent_factory.py # Agent creation
-│   │   └── schemas.py        # Agent data models
 │   ├── services/          # Core services
-│   ├── tools/             # Tool registration system (NEW)
-│   ├── memory/            # Letta memory integration (NEW)
-│   ├── mcp/              # MCP protocol implementation
-│   ├── server/           # API server
+│   │   ├── llm/          # Multi-provider LLM
+│   │   ├── service_manager.py  # Central orchestrator
+│   │   └── ...
+│   ├── ingestion/
+│   │   └── agent_v2/     # Modern agent system
+│   ├── mcp/              # MCP server + tools
+│   │   ├── server.py     # MCP server
+│   │   ├── tools/        # 52 built-in tools
+│   │   ├── plugin_manager.py  # 3rd party plugins
+│   │   └── validation.py      # Plugin validation
+│   ├── memory/           # Letta integration
 │   ├── pipelines/        # Document processing
-│   ├── rag/              # RAG implementation
-│   └── utilities/        # Helper modules
+│   ├── rag/              # Vector retrieval
+│   └── server/           # FastAPI server
+│
 ├── obsidian-plugin/       # Obsidian integration
-│   └── thoth-obsidian/   # Plugin source code
-├── Makefile              # Development commands
-└── pyproject.toml        # Python project configuration
+│   └── thoth-obsidian/
+│       ├── src/          # TypeScript source
+│       └── main.ts       # Entry point
+│
+├── docker/               # Docker configurations
+│   ├── api/
+│   ├── mcp/
+│   └── discovery/
+│
+├── templates/            # File templates
+├── Makefile             # Build commands (streamlined)
+└── docker-compose.dev.yml  # Docker services
 ```
 
 ### Testing

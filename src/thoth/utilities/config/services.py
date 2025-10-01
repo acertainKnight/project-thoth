@@ -48,7 +48,7 @@ class MonitorConfig(BaseSettings):
 
 
 class MCPConfig(BaseServerConfig):
-    """Configuration for MCP (Model Context Protocol) server."""
+    """Configuration for MCP (Model Context Protocol) server with plugin support."""
 
     model_config = SettingsConfigDict(
         env_prefix='MCP_',
@@ -62,8 +62,35 @@ class MCPConfig(BaseServerConfig):
     host: str = Field('localhost', description='MCP server host')
     port: int = Field(8001, description='MCP server port')
     auto_start: bool = Field(True, description='Auto-start MCP server with main server')
-
     enabled: bool = Field(True, description='Whether MCP server is enabled')
+
+    # Plugin system configuration
+    plugins_enabled: bool = Field(True, description='Enable MCP plugin system')
+    plugin_config_path: Path | None = Field(
+        None,
+        description='Path to MCP plugin configuration file (auto-detected if None)',
+    )
+    plugin_discovery_enabled: bool = Field(
+        True, description='Enable automatic plugin discovery'
+    )
+    plugin_discovery_paths: list[Path] = Field(
+        default_factory=lambda: [
+            Path.home() / '.local/share/mcp-servers',
+            Path('/usr/local/lib/mcp-servers'),
+            Path.cwd() / 'mcp-servers',
+        ],
+        description='Paths to search for MCP servers',
+    )
+    max_concurrent_plugins: int = Field(
+        10, description='Maximum concurrent plugin connections'
+    )
+    plugin_timeout: int = Field(30, description='Plugin connection timeout in seconds')
+    plugin_retry_attempts: int = Field(
+        3, description='Number of retry attempts for failed plugin connections'
+    )
+    plugin_health_check_interval: int = Field(
+        60, description='Plugin health check interval in seconds'
+    )
 
 
 class LettaConfig(BaseSettings):

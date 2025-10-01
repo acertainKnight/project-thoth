@@ -67,37 +67,44 @@ graph TB
 
 ## Local Development
 
-### Multi-Service Development Setup (Recommended)
+### Quick Start Deployment (Recommended)
 
-Deploy all services separately for development with full isolation and scaling capabilities.
+Deploy everything with Obsidian integration in one command.
 
-1. **Clone and Initialize**:
+1. **Clone and Configure**:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/acertainKnight/project-thoth.git
    cd project-thoth
-   make check-deps
+
+   # Set your Obsidian vault path
+   export OBSIDIAN_VAULT="/path/to/your/obsidian/vault"
    ```
 
-2. **Configure All Services**:
+2. **Deploy Everything**:
    ```bash
-   # Main application
-   cp .env.example .env
-   # Edit .env with your API keys
-
-   # Memory service
-   cp deployment/letta-memory-service/.env.example deployment/letta-memory-service/.env
-   # Edit with Letta configuration
+   # One command does it all
+   make deploy-and-start OBSIDIAN_VAULT="$OBSIDIAN_VAULT"
    ```
 
-3. **Start Development Environment**:
-   ```bash
-   # Start all services in development mode
-   ./scripts/start-all-services.sh dev
+   This automatically:
+   - Builds and deploys Obsidian plugin
+   - Creates `.thoth/` directory structure in vault
+   - Copies all prompt templates
+   - Starts all Docker services (API, MCP, ChromaDB, Letta, Discovery)
 
-   # Or start services individually
-   make -f Makefile.services start-memory      # Memory service
-   make -f Makefile.services start-chat        # Chat agent
-   make -f Makefile.services start-vector-db   # Vector database
+3. **Service Endpoints**:
+   - API Server: http://localhost:8000
+   - MCP Server: http://localhost:8001 (52 tools)
+   - ChromaDB: http://localhost:8003
+   - Letta Memory: http://localhost:8283
+   - Discovery: http://localhost:8004
+
+4. **Management Commands**:
+   ```bash
+   make status     # Check service health
+   make logs       # View service logs
+   make restart    # Restart all services
+   make stop       # Stop all services
    make -f Makefile.services start-monitoring  # Monitoring (optional)
    ```
 

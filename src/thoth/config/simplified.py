@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 if TYPE_CHECKING:  # pragma: no cover - for type hints only
@@ -47,36 +48,92 @@ class CoreConfig(BaseSettings):
         description='LLM settings',
     )
 
-    # Directory paths
-    workspace_dir: Path = Field(Path('.'), description='Base workspace directory')
-    pdf_dir: Path = Field(Path('data/pdf'), description='Directory for PDF files')
+    # Directory paths - automatically detects .thoth directory
+    workspace_dir: Path = Field(
+        default_factory=lambda: CoreConfig._get_default_workspace(),
+        description='Base workspace directory - auto-detects .thoth or uses THOTH_WORKSPACE_DIR',
+    )
+
+    @staticmethod
+    def _get_default_workspace() -> Path:
+        """Auto-detect workspace directory with priority order."""
+        # 1. Environment variable (highest priority)
+        if env_workspace := os.getenv('THOTH_WORKSPACE_DIR'):
+            return Path(env_workspace)
+
+        # 2. Docker default
+        if os.getenv('DOCKER_ENV') or os.path.exists('/.dockerenv'):
+            return Path('/workspace')
+
+        # 3. Look for .thoth directory in user directories (Obsidian vaults)
+        # Check common Obsidian vault locations
+        home = Path.home()
+        common_vault_paths = [
+            home / 'Documents',
+            home / 'Obsidian',
+            home / 'vaults',
+            home / 'Notes',
+            home / 'Desktop',
+            home,
+        ]
+
+        # Look for .thoth directories in potential vault locations
+        for base_path in common_vault_paths:
+            if base_path.exists():
+                # Look for .thoth directories in subdirectories (vault folders)
+                try:
+                    for vault_dir in base_path.iterdir():
+                        if vault_dir.is_dir():
+                            thoth_dir = vault_dir / '.thoth'
+                            if thoth_dir.exists() and thoth_dir.is_dir():
+                                return thoth_dir
+                except (PermissionError, OSError):
+                    continue
+
+        # 4. Check if we're running from within an Obsidian vault
+        current_dir = Path.cwd()
+        for parent in [current_dir, *list(current_dir.parents)]:
+            # Look for .obsidian folder indicating this is a vault
+            if (parent / '.obsidian').exists():
+                thoth_dir = parent / '.thoth'
+                if thoth_dir.exists() and thoth_dir.is_dir():
+                    return thoth_dir
+                # If .thoth doesn't exist in the vault, suggest creating it there
+                return thoth_dir  # Return the path even if it doesn't exist yet
+
+        # 5. Fallback - suggest creating .thoth in user's Documents
+        fallback = home / 'Documents' / 'Thoth' / '.thoth'
+        return fallback
+
+    # All paths are relative to workspace_dir and use new .thoth structure
+    pdf_dir: Path = Field(Path('data/pdfs'), description='Directory for PDF files')
     markdown_dir: Path = Field(
         Path('data/markdown'), description='Directory for Markdown files'
     )
     notes_dir: Path = Field(
-        Path('data/notes'), description='Directory for Obsidian notes'
+        Path('data/notes'), description='Directory for research notes'
     )
     prompts_dir: Path = Field(
-        Path('templates/prompts'), description='Directory for prompts'
+        Path('data/prompts'), description='Directory for custom prompts'
     )
     templates_dir: Path = Field(
-        Path('templates'), description='Directory for templates'
+        Path('data/templates'), description='Directory for templates'
     )
     output_dir: Path = Field(
-        Path('data/output'), description='Directory for output files'
+        Path('exports'), description='Directory for output files and exports'
     )
     knowledge_base_dir: Path = Field(
         Path('data/knowledge'), description='Directory for knowledge base'
     )
     graph_storage_path: Path = Field(
-        Path('data/graph/citations.graphml'),
+        Path('data/knowledge/citations.graphml'),
         description='Path for citation graph storage',
     )
     queries_dir: Path = Field(
         Path('data/queries'), description='Directory for research queries'
     )
     agent_storage_dir: Path = Field(
-        Path('data/agent'), description='Directory for agent-managed articles'
+        Path('data/agents'), description='Directory for agent session data'
     )
     discovery_sources_dir: Path = Field(
         Path('data/discovery/sources'),
@@ -89,6 +146,21 @@ class CoreConfig(BaseSettings):
         Path('data/discovery/chrome_configs'),
         description='Directory for Chrome extension configs',
     )
+    cache_dir: Path = Field(
+        Path('cache'), description='Directory for temporary cache files'
+    )
+    logs_dir: Path = Field(Path('logs'), description='Directory for log files')
+    config_dir: Path = Field(
+        Path('config'), description='Directory for local config overrides'
+    )
+
+    @field_validator('workspace_dir', mode='before')
+    @classmethod
+    def resolve_workspace_dir(cls, v) -> Path:
+        """Ensure workspace directory is resolved."""
+        if isinstance(v, str):
+            return Path(v).expanduser().resolve()
+        return Path(v).expanduser().resolve() if v else cls._get_default_workspace()
 
 
 class FeatureConfig(BaseSettings):

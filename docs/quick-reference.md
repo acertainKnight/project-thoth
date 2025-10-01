@@ -4,49 +4,55 @@
 
 ### 🏃 Quick Start
 ```bash
-# Start all services (development)
-./scripts/start-all-services.sh dev
+# One-command deployment (recommended)
+export OBSIDIAN_VAULT="/path/to/your/vault"
+make deploy-and-start OBSIDIAN_VAULT="$OBSIDIAN_VAULT"
 
-# Start all services (production)
-./scripts/start-all-services.sh prod
+# Start all services
+make start
 
 # Check status
-./scripts/start-all-services.sh status
+make status
+
+# View logs
+make logs
 
 # Stop everything
-./scripts/stop-all-services.sh
+make stop
 ```
 
-### 🎯 Individual Services
+### 🎯 Service Management
 
-| Command | Service | URL |
-|---------|---------|-----|
-| `make -f Makefile.services start-memory` | Memory (Letta) | http://localhost:8283 |
-| `make -f Makefile.services start-chat` | Chat Agent | http://localhost:8000 |
-| `make -f Makefile.services start-vector-db` | Vector DB | http://localhost:8003 |
-| `make -f Makefile.services start-monitoring` | Monitoring | http://localhost:9090 |
+| Command | Purpose |
+|---------|---------|
+| `make deploy-and-start` | Complete deployment + start all services |
+| `make deploy-plugin` | Deploy Obsidian plugin only |
+| `make start` | Start all Docker services |
+| `make stop` | Stop all services |
+| `make restart` | Restart all services |
+| `make status` | Check service health |
+| `make logs` | View service logs |
+| `make clean` | Clean build artifacts |
 
 ### 🔧 Service Operations
 
 ```bash
 # Health checks
-make -f Makefile.services health-check      # All services
-curl http://localhost:8283/health           # Memory service
-curl http://localhost:8000/health           # Main API
-curl http://localhost:8003/api/v1/heartbeat # Vector DB
+curl http://localhost:8000/health           # API server
+curl http://localhost:8001/health           # MCP server (52 tools)
+curl http://localhost:8003/api/v1/heartbeat # ChromaDB
+curl http://localhost:8283/health           # Letta memory
 
-# Logs
-make -f Makefile.services logs-all          # All logs
-make -f Makefile.services logs-memory       # Memory service
-make -f Makefile.services logs-chat         # Chat service
+# Docker container management
+docker ps                                   # View running containers
+docker logs thoth-dev-api                   # API server logs
+docker logs thoth-dev-mcp                   # MCP server logs
+docker logs thoth-dev-letta                 # Letta memory logs
+docker logs thoth-dev-chromadb              # ChromaDB logs
 
-# Scaling
-make -f Makefile.services scale-memory      # Scale memory replicas
-make -f Makefile.services scale-chat        # Scale chat replicas
-
-# Backup
-make -f Makefile.services backup-all        # Backup all data
-make -f Makefile.services backup-memory     # Memory service only
+# Service monitoring
+make status                                 # Check all services
+docker compose ps                           # Docker service status
 ```
 
 ## Memory System Commands
@@ -95,12 +101,13 @@ python -m thoth agent --use-letta-memory --enable-memory
 ### 🔧 System Commands
 ```bash
 # Server management
-python -m thoth server start               # Unified server
-python -m thoth server status             # Server status
+python -m thoth api --host 0.0.0.0 --port 8000   # API server
+python -m thoth mcp http --host 0.0.0.0 --port 8001  # MCP server (52 tools)
 
-# Traditional commands
-python -m thoth api                       # API server only
-python -m thoth mcp http                  # MCP server only
+# MCP tools available to agents
+python -m thoth agent                     # Agent with all 52 MCP tools
+# In chat: "Use thoth_search_papers to find papers on transformers"
+# In chat: "Use memory_stats to show memory usage"
 ```
 
 ## Discovery and Research Commands
@@ -158,14 +165,13 @@ LETTA_FALLBACK_ENABLED=true
 ## Service URLs
 
 ### 🌐 Development URLs
-| Service | URL | Login |
-|---------|-----|-------|
-| Main API | http://localhost:8000 | None |
-| MCP Server | http://localhost:8001 | None |
-| Memory Service | http://localhost:8283 | None |
-| Vector Database | http://localhost:8003 | None |
-| Prometheus | http://localhost:9090 | None |
-| Grafana | http://localhost:3000 | admin/admin |
+| Service | URL | Description |
+|---------|-----|-------------|
+| API Server | http://localhost:8000 | Main REST API + WebSocket |
+| MCP Server | http://localhost:8001 | 52 MCP tools |
+| ChromaDB | http://localhost:8003 | Vector database |
+| Letta Memory | http://localhost:8283 | Persistent agent memory |
+| Discovery | http://localhost:8004 | Multi-source paper discovery |
 
 ### 🔒 Production URLs
 | Service | URL | Access |

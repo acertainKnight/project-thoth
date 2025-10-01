@@ -87,8 +87,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     THOTH_MCP_HOST=0.0.0.0 \
     THOTH_MCP_PORT=8001
 
-# Production command - start the MCP server only
-CMD ["python", "-m", "thoth", "mcp", "stdio"]
+# Production command - start the MCP server with HTTP transport
+CMD ["python", "-m", "thoth", "mcp", "http", "--host", "0.0.0.0", "--port", "8001"]
 
 # ==============================================================================
 # Development stage - extends production with development tools
@@ -114,5 +114,5 @@ USER thoth
 ENV THOTH_LOG_LEVEL=DEBUG \
     THOTH_DEV_MODE=1
 
-# Development command
-CMD ["python", "-m", "thoth", "mcp", "stdio"]
+# Development command - HTTP transport for Docker
+CMD ["python", "-m", "thoth", "mcp", "http", "--host", "0.0.0.0", "--port", "8001", "--log-level", "DEBUG"]

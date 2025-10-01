@@ -142,8 +142,8 @@ class ResearchAssistant:
 
         # Initialize MCP tools (required for proper functionality)
         try:
-            # Use the new MCP adapter approach
-            self.tools = await self._get_mcp_tools_via_adapter()
+            # Load both internal Thoth tools and external plugin tools
+            self.tools = await self._get_all_mcp_tools()
             logger.info(
                 f'MCP tools loaded successfully - {len(self.tools)} tools available'
             )
@@ -165,6 +165,78 @@ class ResearchAssistant:
         )
 
     # Legacy tool registration removed - MCP tools only
+
+    async def _get_all_mcp_tools(self) -> list[Any]:
+        """
+        Load all MCP tools including internal Thoth tools and external plugins.
+
+        Returns:
+            list[Any]: Combined list of all available tools
+        """
+        all_tools = []
+
+        # Load internal Thoth MCP tools
+        try:
+            thoth_tools = await self._get_thoth_mcp_tools()
+            all_tools.extend(thoth_tools)
+            logger.info(f'Loaded {len(thoth_tools)} internal Thoth tools')
+        except Exception as e:
+            logger.error(f'Failed to load internal Thoth tools: {e}')
+            # Continue without internal tools - plugins might still work
+
+        # Load external MCP plugin tools if enabled
+        if (
+            hasattr(self.service_manager.config, 'mcp_config')
+            and self.service_manager.config.mcp_config.plugins_enabled
+        ):
+            try:
+                plugin_tools = await self._get_plugin_tools()
+                all_tools.extend(plugin_tools)
+                logger.info(f'Loaded {len(plugin_tools)} plugin tools')
+            except Exception as e:
+                logger.warning(f'Failed to load plugin tools: {e}')
+                # Continue without plugin tools - internal tools should still work
+        else:
+            logger.info('MCP plugins disabled in configuration')
+
+        if not all_tools:
+            logger.error('No MCP tools loaded from any source')
+            raise RuntimeError('No MCP tools available')
+
+        logger.info(f'Total MCP tools loaded: {len(all_tools)}')
+        return all_tools
+
+    async def _get_thoth_mcp_tools(self) -> list[Any]:
+        """Load internal Thoth MCP tools via adapter."""
+        return await self._get_mcp_tools_via_adapter()
+
+    async def _get_plugin_tools(self) -> list[Any]:
+        """
+        Load tools from external MCP plugins.
+
+        Returns:
+            list[Any]: Tools from all enabled plugins
+        """
+        try:
+            # Import here to avoid circular import
+            from thoth.mcp.plugin_manager import MCPPluginManager
+
+            # Initialize plugin manager
+            plugin_manager = MCPPluginManager(self.service_manager.config.mcp_config)
+
+            # Load plugin tools
+            plugin_tools = await plugin_manager.load_plugins()
+
+            if plugin_tools:
+                logger.info(f'Plugin system loaded {len(plugin_tools)} tools')
+                return plugin_tools
+            else:
+                logger.info('Plugin system found no enabled plugins')
+                return []
+
+        except Exception as e:
+            logger.error(f'Plugin loading failed: {e}')
+            raise
 
     async def _get_mcp_tools_via_adapter(self) -> list[Any]:
         """Get MCP tools using official LangChain MCP adapter patterns."""

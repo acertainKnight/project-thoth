@@ -1,0 +1,95 @@
+{
+  "$schema": "https://raw.githubusercontent.com/your-repo/thoth/main/thoth.settings.schema.json",
+  "version": "1.0.0",
+  "lastModified": "2025-01-07T00:00:00Z",
+  "_comment": "Thoth configuration file - place this in your Obsidian vault's .thoth directory",
+
+  "apiKeys": {
+    "_comment": "Add your API keys here",
+    "mistralKey": "",
+    "openrouterKey": "",
+    "openaiKey": "",
+    "anthropicKey": "",
+    "opencitationsKey": "",
+    "googleApiKey": "",
+    "googleSearchEngineId": "",
+    "semanticScholarKey": "",
+    "webSearchKey": "",
+    "webSearchProviders": ["serper", "duckduckgo", "searxng", "brave"],
+    "lettaApiKey": "",
+    "unpaywallEmail": "your-email@example.com"
+  },
+
+  "llm": {
+    "default": {
+      "model": "openai/gpt-4o",
+      "temperature": 0.9,
+      "maxTokens": 8000,
+      "topP": 1.0,
+      "frequencyPenalty": 0.0,
+      "presencePenalty": 0.0,
+      "streaming": false,
+      "useRateLimiter": true
+    },
+    "citation": {
+      "model": "openai/gpt-3.5-turbo",
+      "temperature": 0.9,
+      "maxTokens": 10000
+    }
+  },
+
+  "rag": {
+    "embeddingModel": "openai/text-embedding-3-small",
+    "vectorDbPath": "data/knowledge/vector_db",
+    "collectionName": "thoth_knowledge",
+    "chunkSize": 1000,
+    "chunkOverlap": 200
+  },
+
+  "paths": {
+    "_comment": "All paths are relative to this .thoth directory",
+    "workspace": ".",
+    "pdf": "data/pdfs",
+    "markdown": "data/markdown",
+    "notes": "data/notes",
+    "prompts": "data/prompts",
+    "templates": "data/templates",
+    "output": "exports",
+    "knowledgeBase": "data/knowledge",
+    "queries": "data/queries",
+    "agentStorage": "data/agents",
+    "discovery": {
+      "sources": "data/discovery/sources",
+      "results": "data/discovery/results"
+    },
+    "logs": "logs",
+    "cache": "cache"
+  },
+
+  "servers": {
+    "api": {
+      "host": "0.0.0.0",
+      "port": 8000,
+      "autoStart": false
+    },
+    "mcp": {
+      "host": "localhost",
+      "port": 8001,
+      "autoStart": true,
+      "enabled": true
+    }
+  },
+
+  "logging": {
+    "level": "INFO",
+    "file": {
+      "enabled": true,
+      "path": "logs/thoth.log"
+    }
+  },
+
+  "environment": {
+    "type": "local",
+    "development": false
+  }
+}

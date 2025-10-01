@@ -58,7 +58,7 @@ def health_check():
             'status': 'healthy' if is_healthy else 'unhealthy',
             'healthy': is_healthy,
             'services': status.get('services', {}),
-            'timestamp': str(logger.opt().now()),
+            'timestamp': datetime.now().isoformat(),
         }
 
         # Return appropriate HTTP status code
@@ -74,7 +74,7 @@ def health_check():
                 'healthy': False,
                 'error': f'Health check failed: {e!s}',
                 'services': {},
-                'timestamp': str(logger.opt().now()),
+                'timestamp': datetime.now().isoformat(),
             },
         )
 

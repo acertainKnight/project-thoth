@@ -94,10 +94,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     CHROMEDRIVER_PATH=/usr/bin/chromedriver
 
 # Production command - start the discovery service
-CMD ["python", "-m", "thoth", "discovery", "start", \
-     "--host", "0.0.0.0", \
-     "--port", "8004", \
-     "--auto-start"]
+CMD ["python", "-m", "thoth", "discovery", "server"]
 
 # ==============================================================================
 # Development stage - extends production with development tools
@@ -125,8 +122,4 @@ ENV THOTH_LOG_LEVEL=DEBUG \
     THOTH_DISCOVERY_CHECK_INTERVAL=300
 
 # Development command with more frequent checks
-CMD ["python", "-m", "thoth", "discovery", "start", \
-     "--host", "0.0.0.0", \
-     "--port", "8004", \
-     "--auto-start", \
-     "--debug"]
+CMD ["python", "-m", "thoth", "discovery", "server"]
