@@ -47,7 +47,7 @@ make deploy-and-start OBSIDIAN_VAULT="$OBSIDIAN_VAULT"
 
 This will:
 - ✅ Build and deploy the Obsidian plugin to your vault
-- ✅ Create complete `.thoth/` directory structure with all prompts
+- ✅ Create complete `_thoth/` directory structure with all prompts
 - ✅ Start all services (API, MCP, ChromaDB, Letta, Discovery)
 - ✅ Services available at: `http://localhost:8000` (API), `http://localhost:8001` (MCP)
 

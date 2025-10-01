@@ -2,7 +2,24 @@
   "$schema": "./thoth.settings.schema.json",
   "version": "1.0.0",
   "lastModified": "2024-01-01T00:00:00Z",
-  "_comment": "API keys and sensitive information should be stored in .env file for security. See .env.example for required keys.",
+  "_comment": "Comprehensive Thoth settings - API keys can go here or in .env file",
+
+  "apiKeys": {
+    "_comment": "Add your API keys here (or use .env file with API_ prefix)",
+    "mistralKey": "",
+    "openrouterKey": "",
+    "openaiKey": "",
+    "anthropicKey": "",
+    "opencitationsKey": "",
+    "googleApiKey": "",
+    "googleSearchEngineId": "",
+    "semanticScholarKey": "",
+    "webSearchKey": "",
+    "webSearchProviders": ["serper", "duckduckgo", "searxng", "brave"],
+    "lettaApiKey": "",
+    "unpaywallEmail": "your-email@example.com"
+  },
+
   "llm": {
     "default": {
       "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
@@ -163,7 +180,12 @@
     "monitor": {
       "autoStart": false,
       "watchInterval": 10,
-      "bulkProcessSize": 10
+      "bulkProcessSize": 10,
+      "watchDirectories": [
+        "/mnt/c/Users/nghal/OneDrive/Documents/Obsidian Vault/thoth/papers"
+      ],
+      "recursive": true,
+      "optimized": true
     }
   },
   "discovery": {
@@ -227,18 +249,26 @@
     }
   },
   "logging": {
-    "level": "INFO",
+    "level": "WARNING",
     "format": "{time} | {level} | {file}:{line} | {function} | {message}",
     "dateFormat": "YYYY-MM-DD HH:mm:ss",
+    "rotation": {
+      "enabled": true,
+      "maxBytes": 10485760,
+      "backupCount": 3
+    },
     "file": {
       "enabled": true,
       "path": "logs/thoth.log",
       "mode": "a",
-      "level": "INFO"
+      "level": "WARNING",
+      "rotation": "10 MB",
+      "retention": "7 days",
+      "compression": "zip"
     },
     "console": {
       "enabled": true,
-      "level": "INFO"
+      "level": "WARNING"
     }
   },
   "apiGateway": {

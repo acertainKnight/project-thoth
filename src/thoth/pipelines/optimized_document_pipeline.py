@@ -78,7 +78,7 @@ class OptimizedDocumentPipeline(BasePipeline):
         This async version provides better I/O utilization for API calls.
         """
         pdf_path = Path(pdf_path)
-        self.logger.info(f'Processing PDF (async): {pdf_path}')
+        self.logger.debug(f'Processing PDF (async): {pdf_path}')
 
         # Check if already processed
         if self.pdf_tracker.is_processed(
@@ -131,7 +131,7 @@ class OptimizedDocumentPipeline(BasePipeline):
         optimizations.
         """
         pdf_path = Path(pdf_path)
-        self.logger.info(f'Processing PDF (optimized): {pdf_path}')
+        self.logger.debug(f'Processing PDF (optimized): {pdf_path}')
 
         # Check if already processed
         if self.pdf_tracker.is_processed(
