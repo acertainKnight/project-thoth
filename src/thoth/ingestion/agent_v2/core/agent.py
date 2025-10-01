@@ -254,16 +254,36 @@ class ResearchAssistant:
 
             logger.info('Initializing MCP tools with official LangChain adapters...')
 
-            # Skip stdio connection in local mode - use HTTP MCP server instead
-            # Stdio has permission issues when not running in Docker
-            logger.info(
-                'Skipping stdio MCP connection - using separate HTTP MCP server'
-            )
-            return []  # Return empty list - tools loaded via separate MCP server
-
-            # Try stdio connection first (more reliable)
+            # Try HTTP connection to separate MCP server
+            # (avoids stdio permission issues)
             try:
-                logger.info('Attempting stdio MCP connection...')
+                logger.info('Attempting HTTP MCP connection to localhost:8001...')
+
+                # Create HTTP connection to our separate MCP server
+                http_connection = {
+                    'transport': 'sse',
+                    'url': 'http://localhost:8001/sse',
+                }
+
+                loaded_tools = []
+                try:
+                    async with create_session(http_connection) as session:
+                        tools = await load_mcp_tools(session)
+                        if tools:
+                            loaded_tools = list(tools)
+                            logger.info(
+                                f'Successfully loaded {len(loaded_tools)} MCP tools via HTTP'
+                            )
+                            return loaded_tools
+                except Exception as e:
+                    logger.warning(f'HTTP MCP connection failed: {e}')
+
+            except Exception as e:
+                logger.warning(f'Failed to connect to HTTP MCP server: {e}')
+
+            # If HTTP failed, try stdio as fallback (won't work in local but try anyway)
+            try:
+                logger.debug('Attempting stdio MCP connection as fallback...')
 
                 # Create a proper StdioConnection configuration
                 stdio_connection = {
