@@ -12,7 +12,7 @@ services:
 
   # PostgreSQL Database for Letta Memory System
   letta-postgres:
-    image: postgres:15-alpine
+    image: ankane/pgvector:latest
     container_name: thoth-dev-letta-postgres
     environment:
       - POSTGRES_DB=letta
@@ -21,6 +21,7 @@ services:
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8
     volumes:
       - thoth-dev-letta-postgres:/var/lib/postgresql/data
+      - ./docker/init-pgvector.sh:/docker-entrypoint-initdb.d/init-pgvector.sh:ro
     ports:
       - "5433:5432"  # Exposed for development access (avoiding conflict with system PostgreSQL)
     networks:
@@ -315,64 +316,6 @@ services:
       - chromadb
     restart: unless-stopped
 
-  # Research Agent Service
-  thoth-agent:
-    build:
-      context: .
-      dockerfile: docker/agent/Dockerfile
-      target: development
-    container_name: thoth-dev-agent
-    environment:
-      # User permissions
-      - HOME=/workspace
-
-      # Letta configuration - override default data directories
-      - LETTA_DIR=/workspace/data/letta
-      - LETTA_LOGS_DIR=/workspace/logs/letta
-      - LETTA_CACHE_DIR=/workspace/data/cache/letta
-      - LETTA_CONFIG_DIR=/workspace/data/letta/config
-
-      # Service discovery
-      - THOTH_CHROMADB_URL=http://chromadb:8003
-      - THOTH_LETTA_URL=http://letta:8283
-      - THOTH_MCP_URL=http://thoth-mcp:8001
-      - THOTH_API_URL=http://thoth-api:8000
-
-      # Agent configuration
-      - THOTH_AGENT_HOST=0.0.0.0
-      - THOTH_AGENT_PORT=8005
-      - THOTH_LOG_LEVEL=DEBUG
-
-      # Agent settings
-      - THOTH_RESEARCH_AGENT_MEMORY_ENABLED=true
-      - THOTH_AGENT_MAX_TOOL_CALLS=20
-      - THOTH_AGENT_TIMEOUT_SECONDS=300
-
-      # Directory paths
-      - THOTH_WORKSPACE_DIR=/workspace
-      - THOTH_DATA_DIR=/workspace/data
-
-      # API Keys
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-    volumes:
-      - ./workspace:/workspace
-      - ./src:/app/src:ro  # Mount source for development
-    ports:
-      - "8005:8005"
-    networks:
-      - thoth-dev-network
-    depends_on:
-      - chromadb
-      - letta
-      - thoth-mcp
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
 
   # ==============================================================================
   # Development Tools
@@ -393,7 +336,6 @@ services:
       - thoth-api
       - thoth-mcp
       - thoth-discovery
-      - thoth-agent
     restart: unless-stopped
 
 # ==============================================================================

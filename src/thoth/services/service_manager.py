@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from loguru import logger
+
 from thoth.knowledge.graph import CitationGraph
 from thoth.services.api_gateway import ExternalAPIGateway
 from thoth.services.article_service import ArticleService
@@ -89,11 +91,16 @@ class ServiceManager:
         # Initialize services that need dependencies
         self._services['citation'] = CitationService(config=self.config)
 
-        self._services['tag'] = TagService(
-            config=self.config,
-            llm_service=self._services['llm'],
-            citation_tracker=None,  # Will be set by pipeline
-        )
+        # Tag service requires OpenRouter API key - initialize if available
+        try:
+            self._services['tag'] = TagService(
+                config=self.config,
+                llm_service=self._services['llm'],
+                citation_tracker=None,  # Will be set by pipeline
+            )
+        except Exception as e:
+            logger.warning(f'TagService initialization skipped: {e}')
+            self._services['tag'] = None
 
         # Initialize optimized services if available
         if OPTIMIZED_SERVICES_AVAILABLE:
@@ -152,7 +159,8 @@ class ServiceManager:
             citation_tracker: CitationGraph instance
         """
         self._ensure_initialized()
-        self._services['tag']._citation_tracker = citation_tracker
+        if self._services['tag'] is not None:
+            self._services['tag']._citation_tracker = citation_tracker
         self._services['citation']._citation_tracker = citation_tracker
 
     def set_filter_function(self, filter_func: Any) -> None:

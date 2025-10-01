@@ -26,8 +26,9 @@ Thoth is a sophisticated research assistant that combines:
 - **📚 Intelligent Document Processing**: Multi-stage pipelines for PDF analysis and knowledge extraction
 - **🔍 Automated Discovery**: Multi-source paper discovery with quality evaluation
 - **💬 Interactive Research Interface**: Obsidian plugin with real-time AI chat integration
-- **⚡ Model Context Protocol**: Full MCP support for AI agent interoperability
+- **⚡ Model Context Protocol**: 52 built-in MCP tools + VSCode-compatible 3rd party plugin system
 - **🧠 Knowledge Management**: Dynamic knowledge graphs and semantic search capabilities
+- **💾 Persistent Memory**: Letta-based memory system with cross-session persistence
 
 ## Key Capabilities
 
@@ -92,35 +93,38 @@ Thoth is a sophisticated research assistant that combines:
 
 ### Academic Research
 
-#### Multi-Service Setup (Recommended)
+#### Quick Start (Recommended)
 ```bash
-# Start all services with memory system
-./scripts/start-all-services.sh dev
+# One-command deployment to Obsidian vault
+export OBSIDIAN_VAULT="/path/to/your/vault"
+make deploy-and-start OBSIDIAN_VAULT="$OBSIDIAN_VAULT"
 
-# Set up document monitoring
-python -m thoth monitor --watch-dir ./papers --optimized
-
-# Index documents for search
-python -m thoth rag index --force
-
-# Interactive research session with persistent memory
-python -m thoth agent
-# Agent now has access to memory tools for storing research context
+# This automatically:
+# - Builds and deploys Obsidian plugin
+# - Creates .thoth/ directory structure in vault
+# - Copies all 22+ prompt templates
+# - Starts all Docker services (API, MCP, ChromaDB, Letta, Discovery)
 ```
 
-#### Traditional Setup
+Services will be available at:
+- API Server: http://localhost:8000
+- MCP Server: http://localhost:8001  (52 tools)
+- ChromaDB: http://localhost:8003
+- Letta Memory: http://localhost:8283
+
+#### Docker Management
 ```bash
-# Start the system
-python -m thoth server start --api-host 0.0.0.0 --api-port 8000
+# Check service status
+make status
 
-# Set up document monitoring
-python -m thoth monitor --watch-dir ./papers --optimized
+# View logs
+make logs
 
-# Index documents for search
-python -m thoth rag index --force
+# Restart services
+make restart
 
-# Interactive research session
-python -m thoth agent
+# Stop services
+make stop
 ```
 
 ### Knowledge Management

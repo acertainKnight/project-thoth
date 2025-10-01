@@ -178,15 +178,16 @@ services:
       - THOTH_AGENT_TIMEOUT_SECONDS=300
 
     volumes:
-      # Local workspace directories (bind mounts for easy access)
-      - ./workspace:/workspace
-      - ./data:/workspace/data
-      - ./logs:/workspace/logs
-      - ./cache:/workspace/cache
+      # User's .thoth directory from their Obsidian vault (REQUIRED)
+      # Set THOTH_DATA_MOUNT to point to your Obsidian vault's .thoth directory
+      # Example: THOTH_DATA_MOUNT=/Users/john/Documents/MyVault/.thoth
+      - ${THOTH_DATA_MOUNT:?Please set THOTH_DATA_MOUNT to your Obsidian vault .thoth directory}:/workspace
 
-      # Configuration and templates (read-only)
-      - ./prompts:/workspace/prompts:ro
-      - ./templates:/workspace/templates:ro
+      # Temporary cache outside the main data volume
+      - thoth-tmp-cache:/tmp/cache
+
+      # Templates from repo for defaults (read-only)
+      - ./templates:/app/templates:ro
 
       # Writable directory for Letta logs and configs (thoth-app imports letta)
       - thoth-app-home:/home/thoth
@@ -250,8 +251,13 @@ volumes:
     driver: local
     name: thoth-chroma-data
 
-  # NOTE: workspace, data, logs, cache are now local bind mounts
-  # See bind mount volumes in services above (./workspace, ./data, etc.)
+  # Temporary cache volume (not persisted with user data)
+  thoth-tmp-cache:
+    driver: local
+    name: thoth-tmp-cache
+
+  # NOTE: Main data directory is now a single bind mount to .thoth
+  # User can override with THOTH_DATA_MOUNT environment variable
 
 # ==============================================================================
 # Networks

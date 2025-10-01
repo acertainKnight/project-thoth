@@ -182,11 +182,19 @@ logs/
 # Node
 node_modules/
 
-# Data
+# Data directories (should NEVER exist in repo)
 /knowledge/
 /cache/
 /data/
 /workspace/
+/exports/
+/prompts/
+
+# .thoth directory should NEVER be in repo - belongs in user's Obsidian vault
+/.thoth/
+
+# Prevent accidental commits of user .thoth directories
+**/.thoth/
 
 # Generated reports
 *_report.json

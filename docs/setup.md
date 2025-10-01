@@ -29,48 +29,51 @@ Thoth can be deployed in several configurations:
 
 ## Installation Methods
 
-### Method 1: Multi-Service Deployment (Recommended for Production)
+### Method 1: One-Command Deployment (Recommended)
 
-This method deploys each service separately for maximum scalability and fault isolation.
+Complete deployment with Obsidian integration in a single command.
 
-1. **Clone and Setup**
+1. **Clone and Configure**
    ```bash
    git clone https://github.com/acertainKnight/project-thoth.git
    cd project-thoth
 
-   # Check system dependencies
-   make check-deps
+   # Set your Obsidian vault path
+   export OBSIDIAN_VAULT="/path/to/your/obsidian/vault"
    ```
 
-2. **Configure All Services**
+2. **Deploy Everything**
    ```bash
-   # Main application configuration
-   cp .env.example .env
-   # Edit .env with your API keys
-
-   # Memory service configuration
-   cp deployment/letta-memory-service/.env.example deployment/letta-memory-service/.env
-   # Edit with Letta-specific settings
+   # One command does it all
+   make deploy-and-start OBSIDIAN_VAULT="$OBSIDIAN_VAULT"
    ```
 
-3. **Start All Services**
+   This command automatically:
+   - ✅ Builds the Obsidian plugin
+   - ✅ Deploys plugin to your vault
+   - ✅ Creates complete `.thoth/` directory structure
+   - ✅ Copies all 22+ prompt templates
+   - ✅ Creates settings and MCP plugin configuration
+   - ✅ Starts all Docker services (API, MCP, ChromaDB, Letta, Discovery)
+
+3. **Service URLs**
+   - **API Server**: http://localhost:8000
+   - **MCP Server**: http://localhost:8001 (52 tools)
+   - **ChromaDB**: http://localhost:8003
+   - **Letta Memory**: http://localhost:8283
+   - **Discovery**: http://localhost:8004
+
+4. **Verify Deployment**
    ```bash
-   # Development environment (all services)
-   ./scripts/start-all-services.sh dev
+   # Check all services are running
+   make status
 
-   # Production environment (all services)
-   ./scripts/start-all-services.sh prod
+   # View logs
+   make logs
 
-   # Check status
-   ./scripts/start-all-services.sh status
+   # Check vault integration
+   make check-vault
    ```
-
-4. **Service URLs**
-   - **Main API**: http://localhost:8000
-   - **MCP Server**: http://localhost:8001
-   - **Memory Service**: http://localhost:8283
-   - **Vector Database**: http://localhost:8003
-   - **Monitoring**: http://localhost:9090 (Prometheus), http://localhost:3000 (Grafana)
 
 ### Method 2: Individual Service Setup
 
