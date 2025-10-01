@@ -333,9 +333,55 @@ class PDFMonitor:
 
         logger.info(f'Started monitoring {self.watch_dir} for new PDF files')
 
+        # Watch for settings file changes (hot reload)
+        # Try to find settings file in common locations
+        settings_path = None
+        for path in [
+            './thoth.settings.json',
+            './workspace/settings.json',
+            './_thoth/settings.json',
+            Path.home() / '.config/thoth/settings.json',
+        ]:
+            if Path(path).exists():
+                settings_path = Path(path)
+                logger.info(f'Hot reload enabled - watching settings: {settings_path}')
+                break
+
+        last_settings_mtime = (
+            settings_path.stat().st_mtime
+            if settings_path and settings_path.exists()
+            else 0
+        )
+
         try:
             while True:
                 time.sleep(self.polling_interval)
+
+                # Check if settings file changed (hot reload)
+                if settings_path and settings_path.exists():
+                    current_mtime = settings_path.stat().st_mtime
+                    if current_mtime > last_settings_mtime:
+                        logger.info('Settings file changed, reloading configuration...')
+                        try:
+                            # Reload config
+                            self.config = get_config()
+
+                            # Check if watch directories changed in settings
+                            if hasattr(self.config, 'monitor_config') and hasattr(
+                                self.config.monitor_config, 'watch_directories'
+                            ):
+                                new_watch_dirs = (
+                                    self.config.monitor_config.watch_directories
+                                )
+                                logger.info(
+                                    f'Settings updated - watch directories: {new_watch_dirs}'
+                                )
+
+                            last_settings_mtime = current_mtime
+                            logger.info('Configuration reloaded successfully')
+                        except Exception as e:
+                            logger.error(f'Failed to reload settings: {e}')
+
         except KeyboardInterrupt:
             self.stop()
 
@@ -365,7 +411,7 @@ class PDFMonitor:
         """
         Process any existing PDF files in the watch directory.
         """
-        logger.info(f'Checking for existing PDF files in {self.watch_dir}')
+        logger.debug(f'Checking for existing PDF files in {self.watch_dir}')
 
         # Use recursive glob if recursive flag is set
         glob_pattern = '**/*.pdf' if self.recursive else '*.pdf'
@@ -376,7 +422,7 @@ class PDFMonitor:
                 if not pdf_file.is_file():
                     continue
 
-            logger.info(f'Processing existing PDF: {pdf_file}')
+            logger.debug(f'Processing existing PDF: {pdf_file}')
 
             try:
                 # The pipeline now handles tracking and reprocessing checks

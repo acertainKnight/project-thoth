@@ -68,7 +68,7 @@ class ProcessingService(BaseService):
 
     def initialize(self) -> None:
         """Initialize the processing service."""
-        self.logger.info('Processing service initialized')
+        self.logger.debug('Processing service initialized')
 
     def ocr_convert(
         self,
@@ -112,7 +112,7 @@ class ProcessingService(BaseService):
                 self.logger.info('Using local PDF to markdown conversion')
                 return self._local_pdf_to_markdown(pdf_path, output_dir)
 
-            self.logger.info(f'Uploading PDF for OCR: {pdf_path}')
+            self.logger.debug(f'Uploading PDF for OCR: {pdf_path}')
             uploaded_file = self._upload_file_to_mistral(pdf_path)
 
             signed_url_obj = self.mistral_client.files.get_signed_url(
@@ -120,7 +120,7 @@ class ProcessingService(BaseService):
             )
             signed_url = signed_url_obj.url
 
-            self.logger.info('Processing with Mistral OCR')
+            self.logger.debug('Processing with Mistral OCR')
             ocr_response = self._call_mistral_ocr(signed_url)
 
             combined_markdown = self._get_combined_markdown(ocr_response)

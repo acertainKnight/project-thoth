@@ -167,13 +167,13 @@ class LLMProcessor:
 
     def _load_content(self, state: AnalysisState) -> AnalysisState:
         """Loads content from the markdown file path in the state."""
-        logger.info('Loading content from markdown file...')
+        logger.debug('Loading content from markdown file...')
         markdown_path = state.get('markdown_path')
 
         # If markdown_path is a string, treat it as the content directly
         if isinstance(markdown_path, str):
             state['original_content'] = markdown_path
-            logger.info('Using provided markdown content directly')
+            logger.debug('Using provided markdown content directly')
             return state
 
         # Otherwise treat as a file path
@@ -185,13 +185,13 @@ class LLMProcessor:
 
         content = markdown_path.read_text(encoding='utf-8')
         state['original_content'] = content
-        logger.info(f'Successfully loaded content from {markdown_path}')
+        logger.debug(f'Successfully loaded content from {markdown_path}')
 
         return state
 
     def _determine_strategy(self, state: AnalysisState) -> AnalysisState:
         """Determines the processing strategy based on token count."""
-        logger.info('Determining processing strategy...')
+        logger.debug('Determining processing strategy...')
         content = state.get('original_content')  # Get content loaded by previous node
         if not content:
             raise ValueError(
@@ -207,29 +207,29 @@ class LLMProcessor:
         else:
             strategy = 'refine'
 
-        logger.info(f'Selected strategy: {strategy}')
+        logger.debug(f'Selected strategy: {strategy}')
         state['strategy'] = strategy
         return state
 
     def _split_content(self, state: AnalysisState) -> AnalysisState:
         """Splits the content into chunks if needed."""
-        logger.info('Splitting content into chunks...')
+        logger.debug('Splitting content into chunks...')
         content = state.get('original_content')
         if not content:
             raise ValueError('Original content not found in state for splitting.')
         texts = self.text_splitter.split_text(content)
         chunks = [Document(page_content=text) for text in texts]
-        logger.info(f'Split content into {len(chunks)} chunks.')
+        logger.debug(f'Split content into {len(chunks)} chunks.')
         state['content_chunks'] = chunks
         return state
 
     def _analyze_direct(self, state: AnalysisState) -> AnalysisState:
         """Analyzes the content directly."""
-        logger.info('Analyzing content directly...')
+        logger.debug('Analyzing content directly...')
         content = state.get('original_content')
         if not content:
             raise ValueError('Original content not found in state for direct analysis.')
-        logger.info(f'Analysis schema: {AnalysisResponse.model_json_schema()}')
+        logger.debug(f'Analysis schema: {AnalysisResponse.model_json_schema()}')
         result = self.direct_chain.invoke(
             {
                 'content': content,
@@ -242,7 +242,7 @@ class LLMProcessor:
 
     def _analyze_map_reduce(self, state: AnalysisState) -> AnalysisState:
         """Analyzes content using the map-reduce strategy."""
-        logger.info('Analyzing content using map-reduce...')
+        logger.debug('Analyzing content using map-reduce...')
         chunks = state['content_chunks']
         if not chunks:
             logger.error('Map-Reduce: No chunks to process!')
@@ -250,7 +250,7 @@ class LLMProcessor:
 
         # Map phase
         chunk_results = []
-        logger.info(f'Map phase: Processing {len(chunks)} chunks...')
+        logger.debug(f'Map phase: Processing {len(chunks)} chunks...')
         for i, chunk in enumerate(chunks):
             logger.debug(f'Processing chunk {i + 1}/{len(chunks)}')
             # Pass only the required input 'content' to map_chain
@@ -268,10 +268,10 @@ class LLMProcessor:
             raise LLMError('Failed to process any chunks in map phase')
 
         state['chunk_analyses'] = chunk_results
-        logger.info('Map phase completed.')
+        logger.debug('Map phase completed.')
 
         # Reduce phase
-        logger.info('Reduce phase: Combining chunk analyses...')
+        logger.debug('Reduce phase: Combining chunk analyses...')
         # Pass the list of AnalysisResponse models directly
         final_result = self.reduce_chain.invoke(
             {
@@ -281,19 +281,19 @@ class LLMProcessor:
         )
         logger.debug(f'Reduce phase result: {final_result}')
         state['final_analysis'] = final_result
-        logger.info('Reduce phase completed.')
+        logger.debug('Reduce phase completed.')
 
         return state
 
     def _analyze_refine(self, state: AnalysisState) -> AnalysisState:
         """Analyzes content using the refine strategy."""
-        logger.info('Analyzing content using refine...')
+        logger.debug('Analyzing content using refine...')
         chunks = state['content_chunks']
         if not chunks:
             logger.error('Refine: No chunks to process!')
             raise LLMError('No content chunks to process in refine strategy')
 
-        logger.info(f'Refine phase: Processing {len(chunks)} chunks sequentially...')
+        logger.debug(f'Refine phase: Processing {len(chunks)} chunks sequentially...')
         current_analysis: AnalysisResponse | None = None  # Initialize before loop
 
         for i, chunk in enumerate(chunks):
@@ -339,7 +339,7 @@ class LLMProcessor:
             raise LLMError('Refine process finished without producing a result.')
 
         state['final_analysis'] = current_analysis
-        logger.info('Refine phase completed.')
+        logger.debug('Refine phase completed.')
         return state
 
     # --- LangGraph conditional edges ---
@@ -415,7 +415,7 @@ class LLMProcessor:
 
         # Compile the graph
         app = workflow.compile()
-        logger.info('LangGraph workflow compiled.')
+        logger.debug('LangGraph workflow compiled.')
         logger.debug(
             f'Graph structure:\n{app.get_graph().draw_ascii()}'
         )  # Print graph structure for debugging
@@ -445,7 +445,7 @@ class LLMProcessor:
             ValueError: If an invalid forced strategy is provided or path is invalid.
             FileNotFoundError: If the markdown file does not exist.
         """  # noqa: W505
-        logger.info(
+        logger.debug(
             f'Starting content analysis for {markdown_path} using LangGraph workflow...'
         )
 
@@ -485,5 +485,5 @@ class LLMProcessor:
             )
             raise LLMError(f'Invalid analysis result type: {type(analysis_result)}')
 
-        logger.info('Content analysis completed successfully.')
+        logger.debug('Content analysis completed successfully.')
         return analysis_result
