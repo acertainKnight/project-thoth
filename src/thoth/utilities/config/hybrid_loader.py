@@ -313,6 +313,7 @@ class HybridConfigLoader:
         """Map JSON LLM settings to config fields."""
         mapped = {
             'model': settings.get('model', 'openai/gpt-4o-mini'),
+            'provider': settings.get('provider'),  # Map the provider field
             'model_settings': {
                 'temperature': settings.get('temperature', 0.9),
                 'max_tokens': settings.get('maxTokens', 8000),
@@ -339,6 +340,7 @@ class HybridConfigLoader:
         models = settings.get('models', {})
         mapped = {
             'model': settings.get('model', 'openai/gpt-4o-mini'),
+            'provider': settings.get('provider'),  # Map the provider field
             'model_settings': {
                 'temperature': settings.get('temperature', 0.3),
                 'max_tokens': settings.get('maxTokens', 10000),

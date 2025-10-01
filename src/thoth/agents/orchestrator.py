@@ -458,6 +458,16 @@ class ThothOrchestrator:
             # Create new main agent with proper Letta API
             main_agent = self.letta_client.agents.create(
                 name='thoth_main_orchestrator',
+                llm_config={
+                    'model': 'gpt-4o-mini',
+                    'model_endpoint_type': 'openai',
+                    'context_window': 128000,
+                },
+                embedding_config={
+                    'embedding_model': 'text-embedding-ada-002',
+                    'embedding_endpoint_type': 'openai',
+                    'embedding_dim': 1536,
+                },
                 memory_blocks=[
                     {
                         'label': 'persona',
@@ -624,6 +634,16 @@ You excel at providing thorough, objective analysis of academic content.""",
                     try:
                         _system_agent = self.letta_client.agents.create(
                             name=agent_config['name'],
+                            llm_config={
+                                'model': 'gpt-4o-mini',
+                                'model_endpoint_type': 'openai',
+                                'context_window': 128000,
+                            },
+                            embedding_config={
+                                'embedding_model': 'text-embedding-ada-002',
+                                'embedding_endpoint_type': 'openai',
+                                'embedding_dim': 1536,
+                            },
                             memory_blocks=[
                                 {
                                     'label': 'persona',

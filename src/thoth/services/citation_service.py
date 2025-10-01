@@ -55,8 +55,11 @@ class CitationService(BaseService):
         """Get or create the citation processor."""
         if self._citation_processor is None:
             llm_service = LLMService(self.config)
+            # Pass provider if available in config
+            provider = getattr(self.config.citation_llm_config, 'provider', None)
             llm = llm_service.get_client(
                 model=self.config.citation_llm_config.model,
+                provider=provider,
                 **self.config.citation_llm_config.model_settings.model_dump(),
             )
             self._citation_processor = CitationProcessor(
