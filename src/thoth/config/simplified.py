@@ -162,6 +162,61 @@ class CoreConfig(BaseSettings):
             return Path(v).expanduser().resolve()
         return Path(v).expanduser().resolve() if v else cls._get_default_workspace()
 
+    @field_validator(
+        'pdf_dir',
+        'markdown_dir',
+        'notes_dir',
+        'prompts_dir',
+        'templates_dir',
+        'output_dir',
+        'knowledge_base_dir',
+        'graph_storage_path',
+        'queries_dir',
+        'agent_storage_dir',
+        'discovery_sources_dir',
+        'discovery_results_dir',
+        'chrome_extension_configs_dir',
+        'cache_dir',
+        'logs_dir',
+        'config_dir',
+        mode='before',
+    )
+    @classmethod
+    def resolve_path_fields(cls, v, info) -> Path:
+        """Resolve path fields - use absolute paths as-is, make relative paths
+        relative to workspace_dir.
+
+        Args:
+            v: The path value to resolve
+            info: Validation context containing other field values
+
+        Returns:
+            Resolved Path object
+        """
+        # Convert to Path if string
+        if isinstance(v, str):
+            path = Path(v)
+        else:
+            path = Path(v) if v else Path('.')
+
+        # Expand user home directory references
+        path = path.expanduser()
+
+        # If path is absolute, use it as-is
+        if path.is_absolute():
+            return path.resolve()
+
+        # If path is relative, make it relative to workspace_dir
+        # Get workspace_dir from the validation context
+        workspace_dir = info.data.get('workspace_dir')
+        if workspace_dir:
+            if isinstance(workspace_dir, str):
+                workspace_dir = Path(workspace_dir)
+            return (workspace_dir / path).resolve()
+
+        # Fallback: return the path as-is if workspace_dir not available yet
+        return path
+
 
 class FeatureConfig(BaseSettings):
     """Configuration for optional features of Thoth."""
