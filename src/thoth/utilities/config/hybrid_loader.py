@@ -225,6 +225,8 @@ class HybridConfigLoader:
 
     def _get_thoth_config_data(self, json_settings: dict) -> dict[str, Any]:
         """Get data for main ThothConfig."""
+        from thoth.config.simplified import CoreConfig, FeatureConfig
+
         from .api_keys import APIKeys
         from .llm_models import (
             CitationLLMConfig,
@@ -239,23 +241,120 @@ class HybridConfigLoader:
             APIGatewayConfig,
             CitationConfig,
             DiscoveryConfig,
+            EndpointConfig,
             LettaConfig,
             LoggingConfig,
+            MCPConfig,
+            MonitorConfig,
             RAGConfig,
+            ResearchAgentConfig,
         )
 
         # Create nested configs
         config_data = {}
 
+        # Extract paths from vault settings and map to CoreConfig
+        paths = json_settings.get('paths', {})
+        core_config_data = {}
+
         # API Keys
-        config_data['api_keys'] = APIKeys(
+        core_config_data['api_keys'] = APIKeys(
             **self._map_api_keys(json_settings.get('apiKeys', {}))
         )
 
         # LLM configs
-        config_data['llm_config'] = LLMConfig(
+        core_config_data['llm_config'] = LLMConfig(
             **self._map_llm_settings(json_settings.get('llm', {}).get('default', {}))
         )
+
+        # Map vault paths to CoreConfig paths
+        if paths.get('workspace'):
+            core_config_data['workspace_dir'] = Path(paths['workspace'])
+        if paths.get('pdf'):
+            core_config_data['pdf_dir'] = Path(paths['pdf'])
+        if paths.get('markdown'):
+            core_config_data['markdown_dir'] = Path(paths['markdown'])
+        if paths.get('notes'):
+            core_config_data['notes_dir'] = Path(paths['notes'])
+        if paths.get('prompts'):
+            core_config_data['prompts_dir'] = Path(paths['prompts'])
+        if paths.get('templates'):
+            core_config_data['templates_dir'] = Path(paths['templates'])
+        if paths.get('output'):
+            core_config_data['output_dir'] = Path(paths['output'])
+        if paths.get('knowledgeBase'):
+            core_config_data['knowledge_base_dir'] = Path(paths['knowledgeBase'])
+        if paths.get('graphStorage'):
+            core_config_data['graph_storage_path'] = Path(paths['graphStorage'])
+        if paths.get('queries'):
+            core_config_data['queries_dir'] = Path(paths['queries'])
+        if paths.get('agentStorage'):
+            core_config_data['agent_storage_dir'] = Path(paths['agentStorage'])
+        if paths.get('discovery', {}).get('sources'):
+            core_config_data['discovery_sources_dir'] = Path(
+                paths['discovery']['sources']
+            )
+        if paths.get('discovery', {}).get('results'):
+            core_config_data['discovery_results_dir'] = Path(
+                paths['discovery']['results']
+            )
+        if paths.get('discovery', {}).get('chromeConfigs'):
+            core_config_data['chrome_extension_configs_dir'] = Path(
+                paths['discovery']['chromeConfigs']
+            )
+        if paths.get('logs'):
+            core_config_data['logs_dir'] = Path(paths['logs'])
+
+        # Create CoreConfig instance
+        config_data['core'] = CoreConfig(**core_config_data)
+
+        # Create FeatureConfig with nested configs
+        feature_config_data = {}
+
+        feature_config_data['api_server'] = EndpointConfig(
+            **self._map_endpoint_settings(
+                json_settings.get('servers', {}).get('api', {})
+            )
+        )
+        feature_config_data['monitor'] = MonitorConfig(
+            **self._map_monitor_settings(
+                json_settings.get('servers', {}).get('monitor', {})
+            )
+        )
+        feature_config_data['research_agent'] = ResearchAgentConfig(
+            **self._map_research_agent_settings(
+                json_settings.get('servers', {}).get('researchAgent', {})
+            )
+        )
+        feature_config_data['research_agent_llm'] = ResearchAgentLLMConfig(
+            **self._map_research_agent_llm_settings(
+                json_settings.get('llm', {}).get('researchAgent', {})
+            )
+        )
+        feature_config_data['mcp'] = MCPConfig(
+            **self._map_mcp_settings(json_settings.get('servers', {}).get('mcp', {}))
+        )
+        feature_config_data['scrape_filter_llm'] = ScrapeFilterLLMConfig(
+            **self._map_scrape_filter_llm_settings(
+                json_settings.get('llm', {}).get('scrapeFilter', {})
+            )
+        )
+        feature_config_data['discovery'] = DiscoveryConfig(
+            **self._map_discovery_settings(json_settings.get('discovery', {}))
+        )
+        feature_config_data['rag'] = RAGConfig(
+            **self._map_rag_settings(json_settings.get('rag', {}))
+        )
+        feature_config_data['query_based_routing'] = QueryBasedRoutingConfig(
+            **self._map_routing_settings(
+                json_settings.get('llm', {}).get('queryBasedRouting', {})
+            )
+        )
+
+        # Create FeatureConfig instance
+        config_data['features'] = FeatureConfig(**feature_config_data)
+
+        # Other top-level configs
         config_data['citation_llm_config'] = CitationLLMConfig(
             **self._map_citation_llm_settings(
                 json_settings.get('llm', {}).get('citation', {})
@@ -266,32 +365,14 @@ class HybridConfigLoader:
                 json_settings.get('llm', {}).get('tagConsolidator', {})
             )
         )
-        config_data['research_agent_llm_config'] = ResearchAgentLLMConfig(
-            **self._map_research_agent_llm_settings(
-                json_settings.get('llm', {}).get('researchAgent', {})
-            )
-        )
-        config_data['scrape_filter_llm_config'] = ScrapeFilterLLMConfig(
-            **self._map_scrape_filter_llm_settings(
-                json_settings.get('llm', {}).get('scrapeFilter', {})
-            )
-        )
-
-        # Service configs
-        config_data['rag_config'] = RAGConfig(
-            **self._map_rag_settings(json_settings.get('rag', {}))
+        config_data['citation_config'] = CitationConfig(
+            **self._map_citation_settings(json_settings.get('citation', {}))
         )
         config_data['performance_config'] = PerformanceConfig(
             **self._map_performance_settings(json_settings.get('performance', {}))
         )
         config_data['logging_config'] = LoggingConfig(
             **self._map_logging_settings(json_settings.get('logging', {}))
-        )
-        config_data['citation_config'] = CitationConfig(
-            **self._map_citation_settings(json_settings.get('citation', {}))
-        )
-        config_data['discovery_config'] = DiscoveryConfig(
-            **self._map_discovery_settings(json_settings.get('discovery', {}))
         )
         config_data['api_gateway_config'] = APIGatewayConfig(
             **self._map_api_gateway_settings(
@@ -300,11 +381,6 @@ class HybridConfigLoader:
         )
         config_data['letta_config'] = LettaConfig(
             **self._map_letta_settings(json_settings.get('memory', {}).get('letta', {}))
-        )
-        config_data['query_based_routing_config'] = QueryBasedRoutingConfig(
-            **self._map_routing_settings(
-                json_settings.get('llm', {}).get('routing', {})
-            )
         )
 
         return config_data
