@@ -134,9 +134,10 @@ local-start: ## Start services locally (Letta in Docker, rest local)
 	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT:-/mnt/c/Users/nghal/Documents/Obsidian Vault}"; \
 	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/_thoth" THOTH_SETTINGS_FILE="$$VAULT/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth discovery server > ./workspace/logs/discovery.log 2>&1 &'
 	@sleep 2
-	@echo "$(CYAN)Starting PDF Monitor (watching $(WATCH_DIR))...$(NC)"
 	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT:-/mnt/c/Users/nghal/Documents/Obsidian Vault}"; \
-	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/_thoth" THOTH_SETTINGS_FILE="$$VAULT/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth monitor --watch-dir "$(WATCH_DIR)" --optimized --recursive > ./workspace/logs/monitor.log 2>&1 &'
+	WATCH="$(WATCH_DIR)"; \
+	echo "$(CYAN)Starting PDF Monitor (watching $$WATCH)...$(NC)"; \
+	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/_thoth" THOTH_SETTINGS_FILE="$$VAULT/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=INFO uv run python -m thoth monitor --watch-dir "$$WATCH" --optimized --recursive > ./workspace/logs/monitor.log 2>&1 &'
 	@sleep 1
 	@echo "$(GREEN)✅ All services started:$(NC)"
 	@echo "  • Letta Memory: http://localhost:8283 $(CYAN)(Docker)$(NC)"
