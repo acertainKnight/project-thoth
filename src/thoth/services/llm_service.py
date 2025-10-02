@@ -110,20 +110,15 @@ class LLMService(BaseService):
             model_kwargs.pop('max_tokens', None)
             model_kwargs.pop('use_rate_limiter', None)
 
-            # Determine provider from multiple sources:
+            # Determine provider - ALWAYS default to openrouter
+            # unless explicitly specified
+            # Provider precedence:
             # 1. Explicitly passed provider parameter
             # 2. Provider from config
-            # 3. Extract from model string (e.g., "openai/gpt-4")
-            # 4. Default to openrouter
+            # 3. Default to openrouter (DO NOT extract from model string)
             if provider is None:
-                # Try to extract from model string if it contains a slash
-                if '/' in model:
-                    extracted_provider, model_name = model.split('/', 1)
-                    provider = extracted_provider
-                else:
-                    # No slash in model, check if we have specific API keys
-                    # and infer provider, otherwise use openrouter
-                    provider = 'openrouter'
+                # Default to OpenRouter - it supports all providers through unified API
+                provider = 'openrouter'
 
             # For OpenRouter, ensure model has provider prefix
             if provider == 'openrouter' and '/' not in model:

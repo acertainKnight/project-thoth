@@ -87,14 +87,8 @@ class SemanticScholarAPI:
         Raises:
             httpx.HTTPError: If the request fails after retries.
         """
-        # Simple circuit breaker: if we've had too many consecutive failures,
-        # temporarily avoid making requests
-        if self._consecutive_failures >= 10:
-            logger.warning(
-                f'Circuit breaker: {self._consecutive_failures} consecutive failures. '
-                'Skipping Semantic Scholar request to avoid further delays.'
-            )
-            return None
+        # Rate limiting on free tier is expected - no circuit breaker needed
+        # Just rely on exponential backoff to handle rate limits gracefully
 
         # Implement rate limiting with adaptive delay based on API key status
         current_time = time.time()
