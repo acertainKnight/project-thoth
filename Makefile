@@ -123,16 +123,20 @@ local-start: ## Start services locally (Letta in Docker, rest local)
 	@uv run chroma run --host 0.0.0.0 --port 8003 --path ./workspace/data/chromadb > ./workspace/logs/chromadb.log 2>&1 &
 	@sleep 2
 	@echo "$(CYAN)Starting API server...$(NC)"
-	@PYTHONPATH=src THOTH_WORKSPACE_DIR="/mnt/c/Users/nghal/OneDrive/Documents/Obsidian Vault/_thoth" THOTH_SETTINGS_FILE="/mnt/c/Users/nghal/OneDrive/Documents/Obsidian Vault/_thoth/settings.json" DOCKER_ENV=false THOTH_LETTA_URL=http://localhost:8283 LOG_LEVEL=WARNING uv run python -m thoth api --host 0.0.0.0 --port 8000 > ./workspace/logs/api.log 2>&1 &
+	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT:-/mnt/c/Users/nghal/Documents/Obsidian Vault}"; \
+	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/_thoth" THOTH_SETTINGS_FILE="$$VAULT/_thoth/settings.json" DOCKER_ENV=false THOTH_LETTA_URL=http://localhost:8283 LOG_LEVEL=WARNING uv run python -m thoth api --host 0.0.0.0 --port 8000 > ./workspace/logs/api.log 2>&1 &'
 	@sleep 3
 	@echo "$(CYAN)Starting MCP server...$(NC)"
-	@PYTHONPATH=src THOTH_WORKSPACE_DIR="/mnt/c/Users/nghal/OneDrive/Documents/Obsidian Vault/_thoth" THOTH_SETTINGS_FILE="/mnt/c/Users/nghal/OneDrive/Documents/Obsidian Vault/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth mcp http --host 0.0.0.0 --port 8001 > ./workspace/logs/mcp.log 2>&1 &
+	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT:-/mnt/c/Users/nghal/Documents/Obsidian Vault}"; \
+	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/_thoth" THOTH_SETTINGS_FILE="$$VAULT/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth mcp http --host 0.0.0.0 --port 8001 > ./workspace/logs/mcp.log 2>&1 &'
 	@sleep 2
 	@echo "$(CYAN)Starting Discovery service...$(NC)"
-	@PYTHONPATH=src THOTH_WORKSPACE_DIR="/mnt/c/Users/nghal/OneDrive/Documents/Obsidian Vault/_thoth" THOTH_SETTINGS_FILE="/mnt/c/Users/nghal/OneDrive/Documents/Obsidian Vault/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth discovery server > ./workspace/logs/discovery.log 2>&1 &
+	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT:-/mnt/c/Users/nghal/Documents/Obsidian Vault}"; \
+	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/_thoth" THOTH_SETTINGS_FILE="$$VAULT/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth discovery server > ./workspace/logs/discovery.log 2>&1 &'
 	@sleep 2
 	@echo "$(CYAN)Starting PDF Monitor (watching $(WATCH_DIR))...$(NC)"
-	@PYTHONPATH=src THOTH_WORKSPACE_DIR="/mnt/c/Users/nghal/OneDrive/Documents/Obsidian Vault/_thoth" THOTH_SETTINGS_FILE="/mnt/c/Users/nghal/OneDrive/Documents/Obsidian Vault/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth monitor --watch-dir "$(WATCH_DIR)" --optimized --recursive > ./workspace/logs/monitor.log 2>&1 &
+	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT:-/mnt/c/Users/nghal/Documents/Obsidian Vault}"; \
+	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/_thoth" THOTH_SETTINGS_FILE="$$VAULT/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth monitor --watch-dir "$(WATCH_DIR)" --optimized --recursive > ./workspace/logs/monitor.log 2>&1 &'
 	@sleep 1
 	@echo "$(GREEN)✅ All services started:$(NC)"
 	@echo "  • Letta Memory: http://localhost:8283 $(CYAN)(Docker)$(NC)"
