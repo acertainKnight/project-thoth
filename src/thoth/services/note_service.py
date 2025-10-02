@@ -107,17 +107,19 @@ class NoteService(BaseService):
             note_path = self.notes_dir / note_filename
             note_stem = note_path.stem
 
-            # Move and rename PDF and Markdown files to match the note's title
+            # Rename PDF and Markdown files to match note title (keep in same directory)
             import shutil
 
-            final_pdf_path = self.pdf_dir / f'{note_stem}{pdf_path.suffix}'
-            if pdf_path.exists():
+            # Keep PDF in its original directory, just rename it
+            final_pdf_path = pdf_path.parent / f'{note_stem}{pdf_path.suffix}'
+            if pdf_path.exists() and pdf_path != final_pdf_path:
                 shutil.move(str(pdf_path), str(final_pdf_path))
 
+            # Keep markdown in its original directory, just rename it
             final_markdown_path = (
-                self.markdown_dir / f'{note_stem}_markdown{markdown_path.suffix}'
+                markdown_path.parent / f'{note_stem}_markdown{markdown_path.suffix}'
             )
-            if markdown_path.exists():
+            if markdown_path.exists() and markdown_path != final_markdown_path:
                 shutil.move(str(markdown_path), str(final_markdown_path))
 
             # Update content with final paths and correct link formats
