@@ -123,20 +123,16 @@ local-start: ## Start services locally (Letta in Docker, rest local)
 	@uv run chroma run --host 0.0.0.0 --port 8003 --path ./workspace/data/chromadb > ./workspace/logs/chromadb.log 2>&1 &
 	@sleep 2
 	@echo "$(CYAN)Starting API server...$(NC)"
-	@bash -c 'if [ -f .env.vault ]; then source .env.vault; SETTINGS="$$OBSIDIAN_VAULT/_thoth/settings.json"; else SETTINGS="./thoth.settings.json"; fi; \
-	PYTHONPATH=src THOTH_WORKSPACE_DIR="$${OBSIDIAN_VAULT:-./workspace}/_thoth" THOTH_SETTINGS_FILE="$$SETTINGS" DOCKER_ENV=false THOTH_LETTA_URL=http://localhost:8283 LOG_LEVEL=WARNING uv run python -m thoth api --host 0.0.0.0 --port 8000 > ./workspace/logs/api.log 2>&1 &'
+	@PYTHONPATH=src THOTH_WORKSPACE_DIR="/mnt/c/Users/nghal/OneDrive/Documents/Obsidian Vault/_thoth" THOTH_SETTINGS_FILE="/mnt/c/Users/nghal/OneDrive/Documents/Obsidian Vault/_thoth/settings.json" DOCKER_ENV=false THOTH_LETTA_URL=http://localhost:8283 LOG_LEVEL=WARNING uv run python -m thoth api --host 0.0.0.0 --port 8000 > ./workspace/logs/api.log 2>&1 &
 	@sleep 3
 	@echo "$(CYAN)Starting MCP server...$(NC)"
-	@bash -c 'if [ -f .env.vault ]; then source .env.vault; SETTINGS="$$OBSIDIAN_VAULT/_thoth/settings.json"; else SETTINGS="./thoth.settings.json"; fi; \
-	PYTHONPATH=src THOTH_WORKSPACE_DIR="$${OBSIDIAN_VAULT:-./workspace}/_thoth" THOTH_SETTINGS_FILE="$$SETTINGS" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth mcp http --host 0.0.0.0 --port 8001 > ./workspace/logs/mcp.log 2>&1 &'
+	@PYTHONPATH=src THOTH_WORKSPACE_DIR="/mnt/c/Users/nghal/OneDrive/Documents/Obsidian Vault/_thoth" THOTH_SETTINGS_FILE="/mnt/c/Users/nghal/OneDrive/Documents/Obsidian Vault/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth mcp http --host 0.0.0.0 --port 8001 > ./workspace/logs/mcp.log 2>&1 &
 	@sleep 2
 	@echo "$(CYAN)Starting Discovery service...$(NC)"
-	@bash -c 'if [ -f .env.vault ]; then source .env.vault; SETTINGS="$$OBSIDIAN_VAULT/_thoth/settings.json"; else SETTINGS="./thoth.settings.json"; fi; \
-	PYTHONPATH=src THOTH_WORKSPACE_DIR="$${OBSIDIAN_VAULT:-./workspace}/_thoth" THOTH_SETTINGS_FILE="$$SETTINGS" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth discovery server > ./workspace/logs/discovery.log 2>&1 &'
+	@PYTHONPATH=src THOTH_WORKSPACE_DIR="/mnt/c/Users/nghal/OneDrive/Documents/Obsidian Vault/_thoth" THOTH_SETTINGS_FILE="/mnt/c/Users/nghal/OneDrive/Documents/Obsidian Vault/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth discovery server > ./workspace/logs/discovery.log 2>&1 &
 	@sleep 2
 	@echo "$(CYAN)Starting PDF Monitor (watching $(WATCH_DIR))...$(NC)"
-	@bash -c 'if [ -f .env.vault ]; then source .env.vault; SETTINGS="$$OBSIDIAN_VAULT/_thoth/settings.json"; else SETTINGS="./thoth.settings.json"; fi; \
-	PYTHONPATH=src THOTH_WORKSPACE_DIR="$${OBSIDIAN_VAULT:-./workspace}/_thoth" THOTH_SETTINGS_FILE="$$SETTINGS" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth monitor --watch-dir "$(WATCH_DIR)" --optimized --recursive > ./workspace/logs/monitor.log 2>&1 &'
+	@PYTHONPATH=src THOTH_WORKSPACE_DIR="/mnt/c/Users/nghal/OneDrive/Documents/Obsidian Vault/_thoth" THOTH_SETTINGS_FILE="/mnt/c/Users/nghal/OneDrive/Documents/Obsidian Vault/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth monitor --watch-dir "$(WATCH_DIR)" --optimized --recursive > ./workspace/logs/monitor.log 2>&1 &
 	@sleep 1
 	@echo "$(GREEN)✅ All services started:$(NC)"
 	@echo "  • Letta Memory: http://localhost:8283 $(CYAN)(Docker)$(NC)"
@@ -169,14 +165,15 @@ watch: ## Start PDF directory watcher (hot-reloads from settings.json)
 .PHONY: local-stop
 local-stop: ## Stop local services and Letta Docker containers
 	@echo "$(YELLOW)Stopping local Thoth services...$(NC)"
-	@pkill -f "thoth api" || true
-	@pkill -f "thoth mcp" || true
-	@pkill -f "thoth discovery" || true
-	@pkill -f "thoth monitor" || true
-	@pkill -f "chroma run" || true
+	-@pkill -f "python.*thoth api" 2>/dev/null || true
+	-@pkill -f "python.*thoth mcp" 2>/dev/null || true
+	-@pkill -f "python.*thoth discovery" 2>/dev/null || true
+	-@pkill -f "python.*thoth monitor" 2>/dev/null || true
+	-@pkill -f "chroma run" 2>/dev/null || true
+	@sleep 1
 	@echo "$(CYAN)Stopping Letta Docker containers...$(NC)"
-	@docker compose -f docker-compose.dev.yml stop letta letta-postgres
-	@docker compose -f docker-compose.dev.yml rm -f letta letta-postgres
+	-@docker compose -f docker-compose.dev.yml stop letta letta-postgres 2>/dev/null || true
+	-@docker compose -f docker-compose.dev.yml rm -f letta letta-postgres 2>/dev/null || true
 	@echo "$(GREEN)✅ All local services stopped$(NC)"
 
 .PHONY: restart
