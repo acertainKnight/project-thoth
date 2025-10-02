@@ -150,12 +150,12 @@ export const DEFAULT_SETTINGS: ThothSettings = {
   promptsDirectory: '',
 
   // === CONNECTION SETTINGS ===
-  remoteMode: false,
-  remoteEndpointUrl: 'http://localhost:8080',
-  endpointHost: '127.0.0.1',
-  endpointPort: 8080,
-  endpointBaseUrl: '',
-  corsOrigins: ['http://localhost:3000', 'http://127.0.0.1:8080'],
+  remoteMode: true,
+  remoteEndpointUrl: 'http://localhost:8000',
+  endpointHost: 'localhost',
+  endpointPort: 8000,
+  endpointBaseUrl: 'http://localhost:8000',
+  corsOrigins: ['http://localhost:3000', 'http://127.0.0.1:8000'],
 
   // === LLM CONFIGURATION ===
   primaryLlmModel: 'anthropic/claude-3-sonnet',
