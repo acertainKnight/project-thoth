@@ -2,8 +2,12 @@
 Citation utilities for interacting with Semantic Scholar API.
 """
 
+import hashlib
+import json
+import sqlite3
 import time
 import urllib.parse
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -26,6 +30,9 @@ class SemanticScholarAPI:
         enable_caching: bool = True,
         max_backoff_seconds: float = 30.0,  # Cap backoff at 30 seconds
         backoff_multiplier: float = 1.5,  # Gentler than 2.0
+        cache_dir: str | None = None,  # Directory for persistent cache
+        circuit_breaker_threshold: int = 10,  # Failures before circuit opens
+        circuit_breaker_timeout: float = 300.0,  # 5 min cooldown before retry
     ):
         """
         Initialize Semantic Scholar API client.
@@ -40,6 +47,9 @@ class SemanticScholarAPI:
             enable_caching: Whether to enable caching of API responses.
             max_backoff_seconds: Maximum backoff time to prevent excessive delays.
             backoff_multiplier: Multiplier for exponential backoff (gentler than 2.0).
+            cache_dir: Directory for persistent SQLite cache (default: ./cache/semanticscholar).
+            circuit_breaker_threshold: Number of consecutive failures before circuit opens.
+            circuit_breaker_timeout: Seconds to wait before attempting recovery after circuit opens.
         """  # noqa: W505
         self.base_url = base_url
         self.api_key = api_key
@@ -50,20 +60,202 @@ class SemanticScholarAPI:
         self.enable_caching = enable_caching
         self.max_backoff_seconds = max_backoff_seconds
         self.backoff_multiplier = backoff_multiplier
+        self.circuit_breaker_threshold = circuit_breaker_threshold
+        self.circuit_breaker_timeout = circuit_breaker_timeout
+
+        # In-memory caches (LRU-style)
         self._doi_cache: dict[str, Any] = {}
         self._arxiv_cache: dict[str, Any] = {}
-        self._cache_size = 1000  # Maximum number of items to cache
+        self._cache_size = 1000  # Maximum number of items to cache in memory
+
+        # Circuit breaker state
+        self._consecutive_failures = 0
+        self._circuit_open = False
+        self._circuit_opened_at = 0.0
+
+        # Cache metrics
+        self._cache_hits = 0
+        self._cache_misses = 0
+        self._api_calls = 0
+
+        # Persistent cache setup
+        self.cache_dir = (
+            Path(cache_dir) if cache_dir else Path('./cache/semanticscholar')
+        )
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.db_path = self.cache_dir / 'api_cache.db'
+        self._init_persistent_cache()
 
         self.client = httpx.Client(timeout=timeout)
         self.last_request_time = 0
-        self._consecutive_failures = (
-            0  # Track consecutive failures for circuit breaking
-        )
 
         if not api_key:
             logger.warning(
                 'No Semantic Scholar API key provided. Using public API access with lower rate limits.'
             )
+
+    def _init_persistent_cache(self) -> None:
+        """Initialize SQLite persistent cache database."""
+        try:
+            conn = sqlite3.connect(str(self.db_path))
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS api_cache (
+                    cache_key TEXT PRIMARY KEY,
+                    response_data TEXT NOT NULL,
+                    timestamp REAL NOT NULL,
+                    endpoint TEXT NOT NULL
+                )
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_timestamp ON api_cache(timestamp)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_endpoint ON api_cache(endpoint)
+            """)
+            conn.commit()
+            conn.close()
+            logger.info(f'Initialized persistent cache at {self.db_path}')
+        except Exception as e:
+            logger.error(f'Failed to initialize persistent cache: {e}')
+
+    def _generate_cache_key(
+        self,
+        endpoint: str,
+        params: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
+    ) -> str:
+        """Generate a unique cache key for an API request."""
+        key_parts = [endpoint]
+        if params:
+            key_parts.append(json.dumps(params, sort_keys=True))
+        if json_data:
+            key_parts.append(json.dumps(json_data, sort_keys=True))
+        key_string = '|'.join(key_parts)
+        return hashlib.sha256(key_string.encode()).hexdigest()
+
+    def _get_from_persistent_cache(self, cache_key: str) -> dict[str, Any] | None:
+        """Retrieve data from persistent cache."""
+        if not self.enable_caching:
+            return None
+
+        try:
+            conn = sqlite3.connect(str(self.db_path))
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT response_data FROM api_cache WHERE cache_key = ?', (cache_key,)
+            )
+            row = cursor.fetchone()
+            conn.close()
+
+            if row:
+                self._cache_hits += 1
+                logger.debug(
+                    f'Cache HIT for key {cache_key[:16]}... (Hit rate: {self.get_cache_hit_rate():.1%})'
+                )
+                return json.loads(row[0])
+
+            self._cache_misses += 1
+            return None
+        except Exception as e:
+            logger.error(f'Error reading from persistent cache: {e}')
+            return None
+
+    def _save_to_persistent_cache(
+        self, cache_key: str, endpoint: str, data: dict[str, Any]
+    ) -> None:
+        """Save data to persistent cache."""
+        if not self.enable_caching or not data:
+            return
+
+        try:
+            conn = sqlite3.connect(str(self.db_path))
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO api_cache (cache_key, response_data, timestamp, endpoint)
+                VALUES (?, ?, ?, ?)
+            """,
+                (cache_key, json.dumps(data), time.time(), endpoint),
+            )
+            conn.commit()
+            conn.close()
+            logger.debug(f'Saved to persistent cache: {cache_key[:16]}...')
+        except Exception as e:
+            logger.error(f'Error writing to persistent cache: {e}')
+
+    def _check_circuit_breaker(self) -> bool:
+        """
+        Check circuit breaker state and attempt recovery if timeout has passed.
+
+        Returns:
+            bool: True if circuit is open (API calls blocked), False if closed.
+        """
+        if not self._circuit_open:
+            return False
+
+        # Check if cooldown period has elapsed
+        time_since_opened = time.time() - self._circuit_opened_at
+        if time_since_opened >= self.circuit_breaker_timeout:
+            logger.info(
+                f'Circuit breaker recovery attempt after {time_since_opened:.1f}s cooldown. '
+                f'Resetting failure count and allowing API calls.'
+            )
+            self._circuit_open = False
+            self._consecutive_failures = 0
+            return False
+
+        logger.warning(
+            f'Circuit breaker OPEN - API calls blocked. '
+            f'{self.circuit_breaker_timeout - time_since_opened:.1f}s remaining until recovery attempt. '
+            f'Using cache-only mode.'
+        )
+        return True
+
+    def _record_failure(self) -> None:
+        """Record a failure and potentially open the circuit breaker."""
+        self._consecutive_failures += 1
+        logger.debug(
+            f'Consecutive failures: {self._consecutive_failures}/{self.circuit_breaker_threshold}'
+        )
+
+        if (
+            self._consecutive_failures >= self.circuit_breaker_threshold
+            and not self._circuit_open
+        ):
+            self._circuit_open = True
+            self._circuit_opened_at = time.time()
+            logger.error(
+                f'Circuit breaker OPENED after {self._consecutive_failures} consecutive failures. '
+                f'Entering cache-only mode for {self.circuit_breaker_timeout}s. '
+                f'This prevents further rate limit errors and API hammering.'
+            )
+
+    def _record_success(self) -> None:
+        """Record a successful API call and reset failure counter."""
+        if self._consecutive_failures > 0:
+            logger.info(
+                f'API call succeeded. Resetting failure count from {self._consecutive_failures} to 0.'
+            )
+        self._consecutive_failures = 0
+
+    def get_cache_hit_rate(self) -> float:
+        """Calculate cache hit rate."""
+        total = self._cache_hits + self._cache_misses
+        return self._cache_hits / total if total > 0 else 0.0
+
+    def get_cache_stats(self) -> dict[str, Any]:
+        """Get comprehensive cache and API statistics."""
+        return {
+            'cache_hits': self._cache_hits,
+            'cache_misses': self._cache_misses,
+            'cache_hit_rate': self.get_cache_hit_rate(),
+            'api_calls': self._api_calls,
+            'consecutive_failures': self._consecutive_failures,
+            'circuit_breaker_open': self._circuit_open,
+            'circuit_breaker_threshold': self.circuit_breaker_threshold,
+            'memory_cache_size': len(self._doi_cache) + len(self._arxiv_cache),
+        }
 
     def _make_request(
         self,
@@ -87,8 +279,21 @@ class SemanticScholarAPI:
         Raises:
             httpx.HTTPError: If the request fails after retries.
         """
-        # Rate limiting on free tier is expected - no circuit breaker needed
-        # Just rely on exponential backoff to handle rate limits gracefully
+        # Generate cache key for this request
+        cache_key = self._generate_cache_key(endpoint, params, json_data)
+
+        # Check persistent cache first (works even with circuit breaker open)
+        cached_response = self._get_from_persistent_cache(cache_key)
+        if cached_response is not None:
+            return cached_response
+
+        # Check circuit breaker - if open, return None (cache miss handled above)
+        if self._check_circuit_breaker():
+            logger.warning(
+                f'Circuit breaker OPEN - skipping API call to {endpoint}. '
+                f'No cached data available. Consider using API key for higher rate limits.'
+            )
+            return None
 
         # Implement rate limiting with adaptive delay based on API key status
         current_time = time.time()
@@ -133,9 +338,13 @@ class SemanticScholarAPI:
 
                 self.last_request_time = time.time()
                 response.raise_for_status()
-                # Reset failure counter on success
-                self._consecutive_failures = 0
-                return response.json()
+
+                # Success! Record it, increment API call counter, and cache the result
+                self._api_calls += 1
+                self._record_success()
+                result = response.json()
+                self._save_to_persistent_cache(cache_key, endpoint, result)
+                return result
             except httpx.HTTPStatusError as e:
                 logger.warning(
                     f'Semantic Scholar API request failed (Attempt {attempt + 1}/{self.max_retries + 1}): '
@@ -173,7 +382,7 @@ class SemanticScholarAPI:
                                 f'Rate limit hit (429). Retrying after {sleep_duration:.2f} seconds (capped backoff).'
                             )
                         time.sleep(sleep_duration)
-                        self._consecutive_failures += 1
+                        self._record_failure()
                     elif e.response.status_code >= 500:  # Server-side errors
                         sleep_duration = min(
                             effective_delay * (self.backoff_multiplier**attempt),
@@ -183,7 +392,7 @@ class SemanticScholarAPI:
                             f'Server error ({e.response.status_code}). Retrying after {sleep_duration:.2f} seconds.'
                         )
                         time.sleep(sleep_duration)
-                        self._consecutive_failures += 1
+                        self._record_failure()
                     else:  # Other client-side errors that might not be worth retrying or need different strategy
                         raise  # Re-raise immediately for other client errors
                 else:
@@ -202,7 +411,7 @@ class SemanticScholarAPI:
                     )
                     logger.info(f'Retrying after {sleep_duration:.2f} seconds.')
                     time.sleep(sleep_duration)
-                    self._consecutive_failures += 1
+                    self._record_failure()
                 else:
                     logger.error(
                         f'Failed to make Semantic Scholar API request after {self.max_retries + 1} attempts due to network/request error: {e}'
@@ -223,7 +432,7 @@ class SemanticScholarAPI:
                     f'Retrying after {sleep_duration:.2f} seconds due to unexpected error.'
                 )
                 time.sleep(sleep_duration)
-                self._consecutive_failures += 1
+                self._record_failure()
         return None  # Should be unreachable if max_retries is handled correctly
 
     def _cached_paper_lookup_by_doi(
@@ -718,11 +927,57 @@ class SemanticScholarAPI:
                         f'Error enhancing citation via title search "{citation.title}": {e}'
                     )
 
+        # Log comprehensive statistics
+        stats = self.get_cache_stats()
         logger.info(
-            f'Successfully enhanced {enhanced_count} out of {len(citations)} citations with Semantic Scholar'
+            f'Successfully enhanced {enhanced_count} out of {len(citations)} citations with Semantic Scholar. '
+            f'Cache stats: {stats["cache_hit_rate"]:.1%} hit rate '
+            f'({stats["cache_hits"]} hits, {stats["cache_misses"]} misses), '
+            f'{stats["api_calls"]} API calls made, '
+            f'circuit breaker: {"OPEN" if stats["circuit_breaker_open"] else "closed"}'
         )
         return citations
 
+    def clear_cache(self, older_than_days: int | None = None) -> int:
+        """
+        Clear persistent cache entries.
+
+        Args:
+            older_than_days: Only clear entries older than this many days. If None,
+            clears all.
+
+        Returns:
+            int: Number of entries deleted.
+        """
+        try:
+            conn = sqlite3.connect(str(self.db_path))
+            cursor = conn.cursor()
+
+            if older_than_days is not None:
+                cutoff_time = time.time() - (older_than_days * 86400)
+                cursor.execute(
+                    'DELETE FROM api_cache WHERE timestamp < ?', (cutoff_time,)
+                )
+            else:
+                cursor.execute('DELETE FROM api_cache')
+
+            deleted = cursor.rowcount
+            conn.commit()
+            conn.close()
+            logger.info(f'Cleared {deleted} cache entries from persistent cache')
+            return deleted
+        except Exception as e:
+            logger.error(f'Error clearing cache: {e}')
+            return 0
+
     def close(self) -> None:
-        """Close the HTTP client."""
+        """Close the HTTP client and log final statistics."""
+        stats = self.get_cache_stats()
+        logger.info(
+            f'Closing Semantic Scholar API client. Final stats: '
+            f'{stats["api_calls"]} API calls, '
+            f'{stats["cache_hit_rate"]:.1%} cache hit rate '
+            f'({stats["cache_hits"]} hits / {stats["cache_misses"]} misses), '
+            f'{stats["consecutive_failures"]} consecutive failures at close time'
+        )
         self.client.close()
