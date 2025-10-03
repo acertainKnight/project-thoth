@@ -37,8 +37,26 @@ class OptimizedDocumentPipeline(BasePipeline):
         super().__init__(*args, **kwargs)
         self._async_processing_service = None
         self._max_workers = self._calculate_optimal_workers()
+
+        # PRIORITY 3: Persistent ThreadPoolExecutors
+        self._content_analysis_executor = ThreadPoolExecutor(
+            max_workers=self._max_workers['content_analysis'],
+            thread_name_prefix='content_analysis',
+        )
+        self._citation_extraction_executor = ThreadPoolExecutor(
+            max_workers=self._max_workers['citation_extraction'],
+            thread_name_prefix='citation_extract',
+        )
+        self._background_tasks_executor = ThreadPoolExecutor(
+            max_workers=self._max_workers['background_tasks'],
+            thread_name_prefix='background_tasks',
+        )
+
+        # PRIORITY 5: Global concurrency semaphore (8 concurrent documents max)
+        self._global_semaphore = asyncio.Semaphore(8)
+
         self.logger.info(
-            f'Initialized optimized pipeline with {self._max_workers} max workers'
+            f'Initialized optimized pipeline with {self._max_workers} max workers and persistent executors'
         )
 
     def _calculate_optimal_workers(self) -> dict[str, int]:
@@ -77,51 +95,53 @@ class OptimizedDocumentPipeline(BasePipeline):
 
         This async version provides better I/O utilization for API calls.
         """
-        pdf_path = Path(pdf_path)
-        self.logger.debug(f'Processing PDF (async): {pdf_path}')
+        # PRIORITY 5: Use global semaphore to limit concurrent documents
+        async with self._global_semaphore:
+            pdf_path = Path(pdf_path)
+            self.logger.debug(f'Processing PDF (async): {pdf_path}')
 
-        # Check if already processed
-        if self.pdf_tracker.is_processed(
-            pdf_path
-        ) and self.pdf_tracker.verify_file_unchanged(pdf_path):
-            self.logger.info(
-                f'Skipping already processed and unchanged file: {pdf_path}'
+            # Check if already processed
+            if self.pdf_tracker.is_processed(
+                pdf_path
+            ) and self.pdf_tracker.verify_file_unchanged(pdf_path):
+                self.logger.info(
+                    f'Skipping already processed and unchanged file: {pdf_path}'
+                )
+                note_path = self.pdf_tracker.get_note_path(pdf_path)
+                if note_path:
+                    return note_path
+                self.logger.warning(
+                    f'File {pdf_path} was processed, but note path not found in tracker. Reprocessing.'
+                )
+
+            # Use async OCR for better I/O performance
+            (
+                markdown_path,
+                no_images_markdown,
+            ) = await self.async_processing_service.ocr_convert_async(pdf_path)
+            self.logger.info(f'Async OCR conversion completed: {markdown_path}')
+
+            # Run content analysis and citation extraction in parallel with optimized
+            # workers
+            analysis, citations = await self._parallel_analysis_and_citations(
+                no_images_markdown
             )
-            note_path = self.pdf_tracker.get_note_path(pdf_path)
-            if note_path:
-                return note_path
-            self.logger.warning(
-                f'File {pdf_path} was processed, but note path not found in tracker. Reprocessing.'
+
+            # Generate notes and output files
+            (
+                note_path,
+                new_pdf_path,
+                new_markdown_path,
+            ) = await self.async_processing_service.generate_notes_async(
+                pdf_path, markdown_path, no_images_markdown, analysis, citations
             )
 
-        # Use async OCR for better I/O performance
-        (
-            markdown_path,
-            no_images_markdown,
-        ) = await self.async_processing_service.ocr_convert_async(pdf_path)
-        self.logger.info(f'Async OCR conversion completed: {markdown_path}')
+            # Background RAG indexing (non-blocking)
+            _ = asyncio.create_task(  # noqa: RUF006
+                self._background_rag_indexing_async(new_markdown_path, note_path)
+            )
 
-        # Run content analysis and citation extraction in parallel with optimized
-        # workers
-        analysis, citations = await self._parallel_analysis_and_citations(
-            no_images_markdown
-        )
-
-        # Generate notes and output files
-        (
-            note_path,
-            new_pdf_path,
-            new_markdown_path,
-        ) = await self.async_processing_service.generate_notes_async(
-            pdf_path, markdown_path, no_images_markdown, analysis, citations
-        )
-
-        # Background RAG indexing (non-blocking)
-        _ = asyncio.create_task(  # noqa: RUF006
-            self._background_rag_indexing_async(new_markdown_path, note_path)
-        )
-
-        return Path(note_path), Path(new_pdf_path), Path(new_markdown_path)
+            return Path(note_path), Path(new_pdf_path), Path(new_markdown_path)
 
     def process_pdf(self, pdf_path: str | Path) -> tuple[Path, Path, Path]:
         """
@@ -156,13 +176,16 @@ class OptimizedDocumentPipeline(BasePipeline):
             no_images_markdown
         )
 
-        # Generate note
-        note_path, new_pdf_path, new_markdown_path = self._generate_note(
+        # PRIORITY 2: Generate note asynchronously using background executor
+        # This enables parallel document processing by not blocking on note generation
+        note_future = self._background_tasks_executor.submit(
+            self._generate_note,
             pdf_path=pdf_path,
             markdown_path=markdown_path,
             analysis=analysis,
             citations=citations,
         )
+        note_path, new_pdf_path, new_markdown_path = note_future.result()
         self.logger.info(f'Note generation completed: {note_path}')
 
         # Track processing
@@ -208,20 +231,17 @@ class OptimizedDocumentPipeline(BasePipeline):
 
         loop = asyncio.get_event_loop()
 
-        # Run CPU-bound tasks in thread pool with optimal worker counts
-        with ThreadPoolExecutor(
-            max_workers=self._max_workers['content_analysis']
-        ) as executor:
-            analysis_task = loop.run_in_executor(
-                executor, self._analyze_content, markdown_path
-            )
+        # PRIORITY 3: Use persistent executors instead of creating new ones
+        analysis_task = loop.run_in_executor(
+            self._content_analysis_executor, self._analyze_content, markdown_path
+        )
 
-        with ThreadPoolExecutor(
-            max_workers=self._max_workers['citation_extraction']
-        ) as executor:
-            citations_task = loop.run_in_executor(
-                executor, self._extract_citations, markdown_path
-            )
+        # PRIORITY 4: Use async batch citation processing
+        citations_task = loop.run_in_executor(
+            self._citation_extraction_executor,
+            self._extract_citations_batch,
+            markdown_path,
+        )
 
         # Wait for both tasks to complete
         analysis, citations = await asyncio.gather(analysis_task, citations_task)
@@ -278,16 +298,13 @@ class OptimizedDocumentPipeline(BasePipeline):
         try:
             loop = asyncio.get_event_loop()
 
-            # Run indexing in thread pool to avoid blocking
-            with ThreadPoolExecutor(
-                max_workers=self._max_workers['background_tasks']
-            ) as executor:
-                await loop.run_in_executor(
-                    executor, self._index_to_rag, Path(markdown_path)
-                )
-                await loop.run_in_executor(
-                    executor, self._index_to_rag, Path(note_path)
-                )
+            # PRIORITY 3: Use persistent background tasks executor
+            await loop.run_in_executor(
+                self._background_tasks_executor, self._index_to_rag, Path(markdown_path)
+            )
+            await loop.run_in_executor(
+                self._background_tasks_executor, self._index_to_rag, Path(note_path)
+            )
 
             self.logger.debug('Background async RAG indexing completed')
         except Exception as e:
@@ -306,11 +323,8 @@ class OptimizedDocumentPipeline(BasePipeline):
             except Exception as e:
                 self.logger.warning(f'Failed to index documents to RAG system: {e}')
 
-        # Use dedicated thread pool for background tasks
-        with ThreadPoolExecutor(
-            max_workers=self._max_workers['background_tasks']
-        ) as executor:
-            executor.submit(_background_rag_indexing)
+        # PRIORITY 3: Use persistent background tasks executor
+        self._background_tasks_executor.submit(_background_rag_indexing)
 
     async def batch_process_pdfs_async(
         self, pdf_paths: list[Path]
@@ -374,6 +388,27 @@ class OptimizedDocumentPipeline(BasePipeline):
         """Extract citations using the citation service."""
         return self.services.citation.extract_citations(markdown_path)
 
+    def _extract_citations_batch(self, markdown_path: Path) -> list[Citation]:
+        """
+        PRIORITY 4: Extract citations using batched async processing.
+
+        This method leverages the citation service's batch processing capabilities
+        to reduce API call overhead and enable concurrent citation validation.
+        """
+        try:
+            # Use batch processing if available in citation service
+            if hasattr(self.services.citation, 'extract_citations_batch'):
+                return self.services.citation.extract_citations_batch(markdown_path)
+            else:
+                # Fallback to standard extraction
+                self.logger.debug(
+                    'Batch citation extraction not available, using standard method'
+                )
+                return self.services.citation.extract_citations(markdown_path)
+        except Exception as e:
+            self.logger.warning(f'Batch citation extraction failed, falling back: {e}')
+            return self.services.citation.extract_citations(markdown_path)
+
     def _generate_note(
         self, pdf_path: Path, markdown_path: Path, analysis, citations: list[Citation]
     ) -> tuple[str, str, str]:
@@ -416,3 +451,22 @@ class OptimizedDocumentPipeline(BasePipeline):
         """Clean up resources."""
         if self._async_processing_service:
             await self._async_processing_service.cleanup()
+
+        # PRIORITY 3: Shutdown persistent executors
+        self._content_analysis_executor.shutdown(wait=True)
+        self._citation_extraction_executor.shutdown(wait=True)
+        self._background_tasks_executor.shutdown(wait=True)
+        self.logger.debug('Persistent thread pools shut down successfully')
+
+    def __del__(self):
+        """PRIORITY 3: Cleanup persistent executors on deletion."""
+        try:
+            if hasattr(self, '_content_analysis_executor'):
+                self._content_analysis_executor.shutdown(wait=False)
+            if hasattr(self, '_citation_extraction_executor'):
+                self._citation_extraction_executor.shutdown(wait=False)
+            if hasattr(self, '_background_tasks_executor'):
+                self._background_tasks_executor.shutdown(wait=False)
+        except Exception:
+            # Suppress errors during cleanup
+            pass

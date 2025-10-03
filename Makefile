@@ -6,7 +6,7 @@
 OBSIDIAN_VAULT ?= /mnt/c/Users/nghal/Documents/Obsidian Vault
 PLUGIN_SRC_DIR = obsidian-plugin/thoth-obsidian
 PLUGIN_DEST_DIR = $(OBSIDIAN_VAULT)/.obsidian/plugins/thoth-obsidian
-WATCH_DIR ?= papers
+WATCH_DIR ?= /mnt/c/Users/nghal/Documents/Obsidian Vault/thoth/papers/pdfs
 
 # Colors
 GREEN = \033[0;32m
