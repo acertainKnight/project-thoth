@@ -1,51 +1,91 @@
 # ==============================================================================
 # Thoth AI Research Assistant - Docker Compose Configuration
-# Production-ready multi-service setup
+# Multi-container production setup with independent service scaling
 # ==============================================================================
 
 version: '3.8'
 
+# ==============================================================================
+# Shared Configuration
+# ==============================================================================
+x-thoth-common: &thoth-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+    target: runtime
+  user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
+  environment: &thoth-env
+    # Database connections
+    - THOTH_CHROMADB_HOST=chromadb
+    - THOTH_CHROMADB_PORT=8003
+    - THOTH_CHROMADB_URL=http://chromadb:8003
+    - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
+
+    # Vault-relative path configuration
+    - OBSIDIAN_VAULT_PATH=/vault
+    - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
+
+    # Operational settings
+    - THOTH_LOG_LEVEL=INFO
+    - THOTH_DOCKER=1
+    - DOCKER_ENV=true
+    - PYTHONPATH=/app/src
+
+    # Fix Letta filesystem permissions
+    - LETTA_LOG_FILE=/vault/_thoth/logs/letta.log
+    - HOME=/vault/_thoth
+    - THOTH_LOG_FILE=/vault/_thoth/logs/thoth.log
+
+    # API Keys
+    - API_MISTRAL_KEY=${API_MISTRAL_KEY:-}
+    - API_OPENROUTER_KEY=${API_OPENROUTER_KEY:-}
+    - API_OPENCITATIONS_KEY=${API_OPENCITATIONS_KEY:-}
+    - API_GOOGLE_KEY=${API_GOOGLE_KEY:-}
+    - API_SEMANTIC_SCHOLAR_KEY=${API_SEMANTIC_SCHOLAR_KEY:-}
+    - API_WEB_SEARCH_KEY=${API_WEB_SEARCH_KEY:-}
+
+    # Discovery settings
+    - THOTH_DISCOVERY_AUTO_START_SCHEDULER=false
+    - THOTH_DISCOVERY_DEFAULT_MAX_ARTICLES=50
+
+    # Agent settings
+    - THOTH_RESEARCH_AGENT_MEMORY_ENABLED=true
+    - THOTH_AGENT_MAX_TOOL_CALLS=20
+    - THOTH_AGENT_TIMEOUT_SECONDS=300
+
+  volumes:
+    - ${OBSIDIAN_VAULT_PATH:?Please set OBSIDIAN_VAULT_PATH to your Obsidian vault root directory}:/vault:rw
+    - thoth-tmp-cache:/tmp/cache
+    - ./templates:/app/templates:ro
+    - thoth-app-home:/home/thoth
+
+  networks:
+    - thoth-network
+
+  restart: unless-stopped
+
 services:
   # ==============================================================================
   # Letta Memory Server
-  # Advanced persistent memory system for research agents
-  # Following Letta self-hosting best practices
   # ==============================================================================
   letta:
     image: letta/letta:latest
     container_name: thoth-letta
     environment:
-      # Core Letta server configuration
       - LETTA_SERVER_HOST=0.0.0.0
       - LETTA_SERVER_PORT=8283
       - LETTA_PG_URI=postgresql://letta:letta_password@letta-postgres:5432/letta
-
-      # PostgreSQL connection pool configuration
       - LETTA_PG_POOL_SIZE=20
       - LETTA_PG_MAX_OVERFLOW=30
       - LETTA_PG_POOL_TIMEOUT=30
       - LETTA_PG_POOL_RECYCLE=1800
-
-      # Security and production settings
       - SECURE=true
       - LETTA_SERVER_PASSWORD=${LETTA_SERVER_PASSWORD:-letta_dev_password}
-
-      # Tool execution environment
       - TOOL_EXEC_VENV_NAME=letta-tools
-
-      # Optional E2B sandbox configuration (uncomment to enable)
-      # - E2B_API_KEY=${E2B_API_KEY:-}
-      # - E2B_SANDBOX_TEMPLATE_ID=${E2B_SANDBOX_TEMPLATE_ID:-}
-
-      # API keys for LLM providers
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-
-      # Optional local LLM provider URLs
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
       - VLLM_API_BASE=${VLLM_API_BASE:-}
-
-      # Filesystem configuration for self-hosted deployment
       - LETTA_DATA_DIR=/letta/.persist
       - HOME=/letta
     volumes:
@@ -68,8 +108,7 @@ services:
       start_period: 60s
 
   # ==============================================================================
-  # PostgreSQL Database for Letta with pgvector extension
-  # Stores Letta agent states and memory data with vector support
+  # PostgreSQL Database for Letta
   # ==============================================================================
   letta-postgres:
     image: pgvector/pgvector:pg15
@@ -81,7 +120,6 @@ services:
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8
     volumes:
       - thoth-letta-postgres:/var/lib/postgresql/data
-      # Initialize pgvector extension
       - ./docker/postgres/init-vector.sql:/docker-entrypoint-initdb.d/init-vector.sql:ro
     networks:
       - thoth-network
@@ -95,7 +133,6 @@ services:
 
   # ==============================================================================
   # ChromaDB Vector Database
-  # Persistent vector storage for RAG operations
   # ==============================================================================
   chromadb:
     image: chromadb/chroma:latest
@@ -119,145 +156,150 @@ services:
       start_period: 30s
 
   # ==============================================================================
-  # Thoth Main Application
-  # Contains all core services: API server, MCP server, agent system
+  # Thoth API Server
+  # Main REST API for frontend and external integrations
   # ==============================================================================
-  thoth-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime
-    container_name: thoth-app
-    environment:
-      # Database connections
-      - THOTH_CHROMADB_HOST=chromadb
-      - THOTH_CHROMADB_PORT=8003
-      - THOTH_CHROMADB_URL=http://chromadb:8003
-
-      # Server configuration
-      - THOTH_API_HOST=0.0.0.0
-      - THOTH_API_PORT=8000
-      - THOTH_MCP_HOST=0.0.0.0
-      - THOTH_MCP_PORT=8001
-
-      # Directory paths (mounted volumes)
-      - THOTH_WORKSPACE_DIR=/workspace
-      - THOTH_PDF_DIR=/workspace/pdfs
-      - THOTH_NOTES_DIR=/workspace/notes
-      - THOTH_DATA_DIR=/workspace/data
-      - THOTH_QUERIES_DIR=/workspace/queries
-      - THOTH_DISCOVERY_SOURCES_DIR=/workspace/discovery
-      - THOTH_KNOWLEDGE_BASE_DIR=/workspace/knowledge
-      - THOTH_LOGS_DIR=/workspace/logs
-      - THOTH_CACHE_DIR=/workspace/cache
-
-      # Operational settings
-      - THOTH_LOG_LEVEL=INFO
-      - THOTH_DOCKER=1
-      - PYTHONPATH=/app/src
-
-      # Fix Letta filesystem permissions (thoth-app also imports letta)
-      - LETTA_LOG_FILE=/workspace/logs/letta.log
-      - HOME=/workspace
-
-      # API Keys (loaded from environment or .env file)
-      - API_MISTRAL_KEY=${API_MISTRAL_KEY:-}
-      - API_OPENROUTER_KEY=${API_OPENROUTER_KEY:-}
-      - API_OPENCITATIONS_KEY=${API_OPENCITATIONS_KEY:-}
-      - API_GOOGLE_KEY=${API_GOOGLE_KEY:-}
-      - API_SEMANTIC_SCHOLAR_KEY=${API_SEMANTIC_SCHOLAR_KEY:-}
-      - API_WEB_SEARCH_KEY=${API_WEB_SEARCH_KEY:-}
-
-      # Discovery settings
-      - THOTH_DISCOVERY_AUTO_START_SCHEDULER=false
-      - THOTH_DISCOVERY_DEFAULT_MAX_ARTICLES=50
-
-      # Agent settings
-      - THOTH_RESEARCH_AGENT_MEMORY_ENABLED=true
-      - THOTH_AGENT_MAX_TOOL_CALLS=20
-      - THOTH_AGENT_TIMEOUT_SECONDS=300
-
-    volumes:
-      # User's .thoth directory from their Obsidian vault (REQUIRED)
-      # Set THOTH_DATA_MOUNT to point to your Obsidian vault's .thoth directory
-      # Example: THOTH_DATA_MOUNT=/Users/john/Documents/MyVault/.thoth
-      - ${THOTH_DATA_MOUNT:?Please set THOTH_DATA_MOUNT to your Obsidian vault .thoth directory}:/workspace
-
-      # Temporary cache outside the main data volume
-      - thoth-tmp-cache:/tmp/cache
-
-      # Templates from repo for defaults (read-only)
-      - ./templates:/app/templates:ro
-
-      # Writable directory for Letta logs and configs (thoth-app imports letta)
-      - thoth-app-home:/home/thoth
-
+  thoth-api:
+    <<: *thoth-common
+    container_name: thoth-api
+    command: ["python", "-m", "thoth", "server", "start", "--api-host", "0.0.0.0", "--api-port", "8000", "--no-mcp", "--no-discovery"]
     ports:
-      - "8080:8000"  # Main API server (remapped to avoid local dev conflicts)
-      - "8081:8001"  # MCP server (remapped to avoid local dev conflicts)
-
-    networks:
-      - thoth-network
-
+      - "8080:8000"
     depends_on:
       chromadb:
         condition: service_healthy
-
-    restart: unless-stopped
-
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
 
-    # Resource limits for production
+  # ==============================================================================
+  # Thoth MCP Server
+  # Model Context Protocol server for Claude integration
+  # ==============================================================================
+  thoth-mcp:
+    <<: *thoth-common
+    container_name: thoth-mcp
+    command: ["python", "-m", "thoth", "mcp", "start", "--host", "0.0.0.0", "--port", "8001"]
+    ports:
+      - "8081:8001"
+    depends_on:
+      chromadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.connect(('localhost', 8001)); s.close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.05'
+
+  # ==============================================================================
+  # Thoth PDF Monitor
+  # Watches vault directory for new PDFs and processes them automatically
+  # ==============================================================================
+  thoth-monitor:
+    <<: *thoth-common
+    container_name: thoth-monitor
+    command: ["python", "-m", "thoth", "monitor", "--optimized", "--recursive"]
+    depends_on:
+      chromadb:
+        condition: service_healthy
+      thoth-api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "from pathlib import Path; import sys; sys.exit(0 if Path('/vault/_thoth/data/output/processed_pdfs.json').exists() else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     deploy:
       resources:
         limits:
           memory: 2G
-          cpus: '1.0'
+          cpus: '1.5'
         reservations:
           memory: 512M
           cpus: '0.25'
+
+  # ==============================================================================
+  # Thoth Discovery Dashboard
+  # Automatically exports new discovery results and imports sentiment changes
+  # ==============================================================================
+  thoth-dashboard:
+    <<: *thoth-common
+    container_name: thoth-dashboard
+    command: [
+      "python", "-m", "thoth.cli.main", "research", "start-dashboard",
+      "--check-interval", "60"
+    ]
+    depends_on:
+      chromadb:
+        condition: service_healthy
+      thoth-api:
+        condition: service_started
+    healthcheck:
+      test: [
+        "CMD", "python", "-c",
+        "from pathlib import Path; import sys; sys.exit(0 if Path('/vault/Research/Dashboard').exists() else 1)"
+      ]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.05'
 
 # ==============================================================================
 # Persistent Volumes
 # ==============================================================================
 volumes:
-  # Database volumes (Docker-managed for consistency and performance)
   thoth-letta-data:
     driver: local
     name: thoth-letta-data
 
-  # PostgreSQL database for Letta
   thoth-letta-postgres:
     driver: local
     name: thoth-letta-postgres
 
-  # Letta home directory (for logs and configs)
   thoth-letta-home:
     driver: local
     name: thoth-letta-home
 
-  # Thoth-app home directory (for letta logs when imported by main app)
   thoth-app-home:
     driver: local
     name: thoth-app-home
 
-  # ChromaDB vector database storage
   thoth-chroma-data:
     driver: local
     name: thoth-chroma-data
 
-  # Temporary cache volume (not persisted with user data)
   thoth-tmp-cache:
     driver: local
     name: thoth-tmp-cache
-
-  # NOTE: Main data directory is now a single bind mount to .thoth
-  # User can override with THOTH_DATA_MOUNT environment variable
 
 # ==============================================================================
 # Networks
