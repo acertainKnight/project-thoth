@@ -80,17 +80,20 @@ RUN mkdir -p /workspace/{pdfs,notes,data,logs,cache} \
 # Set PATH to include the virtual environment
 ENV PATH="/app/.venv/bin:$PATH" \
     THOTH_WORKSPACE_DIR=/workspace \
-    THOTH_PDF_DIR=/workspace/pdfs \
-    THOTH_NOTES_DIR=/workspace/notes \
+    THOTH_PDF_DIR=/workspace/data/pdfs \
+    THOTH_NOTES_DIR=/workspace/data/notes \
     THOTH_DATA_DIR=/workspace/data \
     THOTH_LOGS_DIR=/workspace/logs \
-    THOTH_PDF_MONITOR_INTERVAL=60 \
-    THOTH_PDF_MONITOR_BATCH_SIZE=5
+    THOTH_MARKDOWN_DIR=/workspace/data/markdown \
+    THOTH_PDF_MONITOR_INTERVAL=60
 
 # Production command - start the PDF monitor service
-CMD ["python", "-m", "thoth", "pdf", "monitor", \
-     "--interval", "60", \
-     "--batch-size", "5"]
+# NOTE: --watch-dir omitted to use config value from settings.json
+# Config resolves: vault_root + paths.pdf = /vault/thoth/papers/pdfs
+CMD ["python", "-m", "thoth", "monitor", \
+     "--polling-interval", "60", \
+     "--recursive", \
+     "--optimized"]
 
 # ==============================================================================
 # Development stage - extends production with development tools
@@ -118,7 +121,9 @@ ENV THOTH_LOG_LEVEL=DEBUG \
     THOTH_PDF_MONITOR_INTERVAL=30
 
 # Development command with more frequent monitoring
-CMD ["python", "-m", "thoth", "pdf", "monitor", \
-     "--interval", "30", \
-     "--batch-size", "3", \
-     "--debug"]
+# NOTE: --watch-dir omitted to use config value from settings.json
+# Config resolves: vault_root + paths.pdf = /vault/thoth/papers/pdfs
+CMD ["python", "-m", "thoth", "monitor", \
+     "--polling-interval", "30", \
+     "--recursive", \
+     "--optimized"]

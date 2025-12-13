@@ -14,7 +14,7 @@ dependencies = [
     # Core Dependencies
     "watchdog>=6.0.0", # For monitoring PDF folder
     "mistralai>=1.5.1", # For OCR API access
-    "openrouter>=1.0", # For LLM API access
+    "openrouter>=0.0.19", # For LLM API access
     "jinja2>=3.1.6", # For template rendering
     "pydantic>=2.9.2", # For data validation
     "pydantic-settings>=2.5.0", # For settings management
@@ -80,6 +80,8 @@ dependencies = [
     "letta-mcp-server>=0.1.0", # For MCP integration with Letta
     "alembic>=1.13.0", # For database migrations
     "sqlite-vec>=0.1.6",
+    "asyncpg",
+    "pytest-asyncio>=0.26.0",
 ]
 
 [project.optional-dependencies]

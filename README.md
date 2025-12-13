@@ -33,23 +33,40 @@ Thoth revolutionizes academic research by combining cutting-edge AI with intuiti
 ## Quick Start
 
 ### Option 1: Docker (Recommended)
+
+**New simplified setup with vault-relative configuration!**
+
 ```bash
 # Clone repository
 git clone https://github.com/acertainKnight/project-thoth.git
 cd project-thoth
 
-# Configure your Obsidian vault path
-export OBSIDIAN_VAULT="/path/to/your/obsidian/vault"
+# Set vault path (only requirement)
+export OBSIDIAN_VAULT_PATH="/path/to/your/obsidian/vault"
 
-# One-command deployment (builds plugin + starts all services)
-make deploy-and-start OBSIDIAN_VAULT="$OBSIDIAN_VAULT"
+# Start development environment (hot-reload enabled)
+make dev
+
+# OR: Start production server (optimized build)
+make prod
 ```
 
-This will:
-- ✅ Build and deploy the Obsidian plugin to your vault
-- ✅ Create complete `_thoth/` directory structure with all prompts
-- ✅ Start all services (API, MCP, ChromaDB, Letta, Discovery)
-- ✅ Services available at: `http://localhost:8000` (API), `http://localhost:8001` (MCP)
+**Quick Start Commands:**
+- `make dev` - Development mode with hot-reload and debug logging
+- `make prod` - Production mode with optimized containers
+- `make health` - Check all services are running
+- `make dev-logs` - View development logs
+
+**Services Available:**
+- **Development**: API (8000), MCP (8001), ChromaDB (8003), Letta (8283)
+- **Production**: API (8080), MCP (8081), ChromaDB (8003), Letta (8283)
+
+**Configuration:**
+- All settings in `vault/_thoth/settings.json` (syncs with Obsidian!)
+- No scattered environment variables - one file for everything
+- Hot-reload: Edit settings → changes apply in ~2 seconds (dev mode)
+
+📖 **Full Documentation**: See [Docker Quick Start Guide](docs/DOCKER-QUICKSTART.md)
 
 ### Option 2: Local Development
 ```bash
@@ -64,72 +81,89 @@ cp .env.example .env
 make dev OBSIDIAN_VAULT="/path/to/vault"
 ```
 
-### Docker Deployment
+### Docker Architecture & Management
 
-For containerized deployment:
+**Single Unified Dockerfile Approach:**
+- ✅ One Dockerfile for all services (API, MCP, Discovery, PDF Monitor)
+- ✅ Multi-stage builds (builder → runtime → development)
+- ✅ Vault-relative configuration (single settings.json)
+- ✅ Hot-reload in development mode
+- ✅ Production-optimized with resource limits
+
+**Development vs Production:**
+
+| Mode | Use Case | Command | Ports | Hot-Reload | Config |
+|------|----------|---------|-------|------------|--------|
+| **Development** | Local dev, debugging | `make dev` | 8000-8004 | ✅ Enabled | docker-compose.dev.yml |
+| **Production** | Deployment, production | `make prod` | 8080-8081 | ❌ Disabled | docker-compose.yml |
+
+**Quick Start Commands:**
 
 ```bash
-# Development
-make docker-init     # Initialize environment + local workspace
-# Edit .env.docker with your API keys
-make docker-dev      # Start development services
+# Development (Hot-Reload Enabled)
+make dev                # Start dev environment
+make dev-logs           # View logs (follow mode)
+make dev-stop           # Stop development
+make health             # Health check all services
 
-# Production
-cp .env.prod.example .env.prod
-make docker-prod     # Deploy production services
+# Production (Optimized, Stable)
+make prod               # Start production server
+make prod-logs          # View production logs
+make prod-stop          # Stop production
+make prod-restart       # Restart with zero downtime
 
-# Cloud Deployment
-# See docs/cloud-deployment.md for AWS, GCP, Azure setup
-
-# Management
-make docker-status           # Check status of all environments
-make docker-volumes          # Show persistent data volumes and sizes
-make docker-shutdown         # Shutdown ALL services and clean up
-make docker-shutdown-dev     # Shutdown only development services
-make docker-shutdown-prod    # Shutdown only production services
-make docker-shutdown-service SERVICE=<name> # Shutdown specific service
-
-# Cleanup (increasing levels of deletion)
-make docker-clean-cache      # Clean only build cache (safest)
-make docker-clean            # Clean containers + unused images (preserves data)
-make docker-clean-all        # Complete cleanup (WARNING: deletes data)
-
-| Command | Build Cache | Containers | Images | Persistent Data |
-|---------|-------------|------------|--------|-----------------|
-| `docker-clean-cache` | ✅ Delete | ❌ Keep | ❌ Keep | ✅ **SAFE** |
-| `docker-clean` | ✅ Delete | ✅ Delete | ⚠️ Unused only | ✅ **SAFE** |
-| `docker-clean-all` | ✅ Delete | ✅ Delete | ✅ Delete | ⚠️ **DELETES** |
-
-### 🔒 **Data Storage & Access**
-Your valuable data is stored locally and can be watched in real-time:
-
-#### **📁 Local Filesystem** (easily accessible)
-- **Workspace**: `./workspace/` - PDFs, notes, processed documents
-- **Application Data**: `./data/` - Embeddings, outputs, citations
-- **Logs**: `./logs/` - Application logs for monitoring
-- **Cache**: `./cache/` - Temporary cache files
-
-#### **🗄️ Database Volumes** (Docker-managed)
-- **Knowledge Base**: ChromaDB vectors → `thoth-chroma-data` volume
-- **Memory System**: Letta data → `thoth-letta-data` + `thoth-letta-postgres` volumes
-
-#### **👁️ Real-Time Monitoring**
-```bash
-# Watch files being created/processed
-tail -f logs/*.log
-ls -la workspace/data/
-find workspace -name '*.pdf' -newer yesterday
+# Hot-Reload (Development Only)
+make reload-settings    # Manually trigger reload
+make watch-settings     # Monitor settings changes
+make test-hot-reload    # Test hot-reload end-to-end
 ```
 
-**✅ SAFE commands** (`docker-clean-cache`, `docker-clean`) preserve ALL your data
-**⚠️ DANGER command** (`docker-clean-all`) requires confirmation and deletes everything
+**Service Ports:**
+
+| Service | Development | Production | Purpose |
+|---------|-------------|------------|---------|
+| **API Server** | 8000 | 8080 | REST API & document processing |
+| **MCP Server** | 8001 | 8081 | Model Context Protocol |
+| **ChromaDB** | 8003 | 8003 | Vector database (RAG) |
+| **Letta** | 8283 | 8283 | Agent memory system |
+| **Discovery** | 8004 | - | Paper discovery (dev only) |
+
+**Architecture Highlights:**
+
+- **Single Dockerfile**: All services use the same optimized image
+- **Vault-Centric**: All data in `$OBSIDIAN_VAULT_PATH/_thoth/`
+- **Settings Management**: Single `settings.json` controls everything
+- **Hot-Reload**: Development mode reloads on settings changes (~2s)
+- **Resource Limits**: Production mode includes memory/CPU limits
+- **Health Checks**: All services have health endpoints
+
+**Data Storage:**
+
+```
+Obsidian Vault/
+├── _thoth/
+│   ├── settings.json       # All configuration (hot-reloadable)
+│   ├── data/
+│   │   ├── pdfs/          # Original papers
+│   │   ├── notes/         # Generated notes
+│   │   ├── knowledge/     # Citation graphs
+│   │   └── prompts/       # AI prompt templates
+│   ├── logs/              # Application logs
+│   └── cache/             # Temporary cache
+
+Docker Volumes (managed by Docker):
+├── thoth-letta-data       # Letta agent memory
+├── thoth-letta-postgres   # PostgreSQL database
+└── thoth-chroma-data      # Vector embeddings
 ```
 
-Services will be available at:
-- API Server: http://localhost:8000
-- MCP Server: http://localhost:8001
-- ChromaDB: http://localhost:8003
-- Letta Server: http://localhost:8283
+📖 **Complete Guides:**
+- [Production Deployment](docs/PRODUCTION-DEPLOYMENT.md) - Full deployment guide
+- [Quick Start](docs/QUICK-START.md) - 5-minute setup
+- [Architecture](docs/architecture.md) - Technical details
+- [Docker Quick Reference](docs/DOCKER-QUICKSTART.md) - Docker commands
+- [Hot-Reload Guide](docs/HOT-RELOAD-GUIDE.md) - Development workflow
+- [Docker System Status](docs/DOCKER-SYSTEM-STATUS-REPORT.md) - Latest system health and bug fixes
 
 ## Key Features
 
@@ -161,42 +195,59 @@ Services will be available at:
 
 ## Architecture
 
-Thoth uses a service-oriented architecture with the `ServiceManager` as the central orchestrator:
+Thoth uses a **production-ready microservices architecture** with a single unified Dockerfile and vault-centric configuration:
 
 ```mermaid
 graph TD
-    A[ThothOrchestrator] --> B[Service Manager]
-    A --> C[SubagentFactory]
-    A --> D[LettaToolRegistry]
+    A[Obsidian Plugin] --> B[API Server :8000/:8080]
+    C[CLI/MCP Client] --> D[MCP Server :8001/:8081]
 
-    C --> E[Letta Server]
+    B --> E[ServiceManager]
     D --> E
 
-    B --> F[LLM Router]
-    B --> G[RAG System]
-    B --> H[Discovery Engine]
-    B --> I[Pipeline Processor]
+    E --> F[LLM Router]
+    E --> G[RAG System]
+    E --> H[Discovery Engine]
+    E --> I[Document Pipeline]
 
-    J[Obsidian Plugin] --> K[API Server]
-    K --> A
-    K --> B
+    F --> J[OpenRouter/Mistral]
+    G --> K[ChromaDB :8003]
+    E --> L[Letta :8283]
+    H --> M[ArXiv/Semantic Scholar]
 
-    L[CLI Interface] --> M[MCP Server]
-    M --> B
+    L --> N[PostgreSQL+pgvector]
 
-    N[External APIs] --> H
-    O[Vector Store] --> G
-    P[Agent Memory] --> E
+    O[PDF Monitor] --> B
+    P[Discovery Scheduler] --> H
+
+    Q[Vault settings.json] -.->|Hot-Reload| B
+    Q -.->|Hot-Reload| D
+
+    style Q fill:#f9f,stroke:#333,stroke-width:4px
+    style B fill:#bbf,stroke:#333,stroke-width:2px
+    style D fill:#bbf,stroke:#333,stroke-width:2px
 ```
 
 ### Core Components
 
+**Single Unified Container** (Dockerfile)
+- **Multi-Stage Build**: Optimized builder → runtime → development stages
+- **All Services**: API, MCP, Discovery, PDF Monitor in one image
+- **Security**: Non-root user, minimal attack surface
+- **Resource Limits**: Memory and CPU controls in production
+
+**Configuration System** (`src/thoth/config.py`)
+- **Vault Detection**: Auto-detects Obsidian vault via `OBSIDIAN_VAULT_PATH`
+- **Single Settings File**: `vault/_thoth/settings.json` controls everything
+- **Hot-Reload**: Development mode reloads on settings changes
+- **Path Resolution**: Converts vault-relative paths to absolute at runtime
+
 **Python Backend** (`src/thoth/`)
 - **Service Architecture**: Microservice-based with centralized ServiceManager
 - **Pipeline System**: Modular, extensible document processing stages
-- **Agent System**: LangGraph-powered with persistent memory
+- **Agent System**: Letta-powered with persistent memory and cross-session context
 - **API Layer**: FastAPI server with REST + WebSocket support
-- **MCP Integration**: Full Model Context Protocol implementation
+- **MCP Integration**: Full Model Context Protocol (52 built-in tools + plugins)
 - **CLI Tools**: Comprehensive command-line interface
 
 **Obsidian Plugin** (`obsidian-plugin/thoth-obsidian/`)
@@ -206,7 +257,15 @@ graph TD
 - **Note Integration**: Direct interaction with vault files
 - **Auto-updates**: Hot reload during development
 
-**Technology Stack**: Python, FastAPI, LangGraph, TypeScript, Obsidian, ChromaDB
+**Infrastructure Services**
+- **Letta Memory**: Persistent agent memory with salience retention
+- **ChromaDB**: Vector database for semantic search and RAG
+- **PostgreSQL**: Database backend for Letta with pgvector extension
+- **Redis** (production): Session management and caching
+
+**Technology Stack**: Python 3.11, FastAPI, Letta, ChromaDB, PostgreSQL+pgvector, TypeScript, Obsidian, Docker
+
+📖 **Architecture Details**: See [Architecture Documentation](docs/architecture.md) for technical deep-dive
 
 ## Installation
 
@@ -451,6 +510,90 @@ uv run pytest               # Run tests
 - **Async Processing**: Concurrent operations for handling multiple documents simultaneously
 - **Smart Caching**: Intelligent caching of embeddings, analysis results, and API responses
 - **Memory Management**: Efficient handling of large document collections and knowledge bases
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### 1. Callback Signature Mismatches
+**Symptom**: `TypeError: register_reload_callback() takes 2 positional arguments but 3 were given`
+
+**Solution**: Ensure all config reload callbacks accept `config: Config` parameter:
+```python
+# Correct signature
+def _on_config_reload(self, config: Config) -> None:
+    # Handle config changes
+    pass
+```
+
+**Files to check**:
+- `src/thoth/services/llm_service.py`
+- `src/thoth/services/letta_service.py`
+- `src/thoth/rag/rag_manager.py`
+
+#### 2. Slow Docker Builds
+**Symptom**: Docker build takes 10-17 minutes longer than expected
+
+**Solution**: Verify `Dockerfile` does NOT contain `chmod -R g+rX /app` (should be removed)
+- Permissions are correctly set by `COPY --chown=thoth:thoth`
+- Recursive chmod is unnecessary and slow
+
+#### 3. PDF Processing Permissions
+**Symptom**: PDFs not being processed or permission denied errors
+
+**Verification Steps**:
+```bash
+# Check PDF directory permissions
+docker exec thoth-dev-pdf-monitor ls -la /vault/thoth/papers/pdfs/
+
+# Check output directory permissions
+docker exec thoth-dev-pdf-monitor ls -la /vault/_thoth/data/markdown/
+
+# Manual PDF processing test
+docker exec thoth-dev-pdf-monitor python -m thoth process \
+  --pdf-path /vault/thoth/papers/pdfs/your-paper.pdf
+```
+
+**Requirements**:
+- PDFs directory: `/vault/thoth/papers/pdfs/`
+- Output directory: `/vault/_thoth/data/markdown/`
+- Container user (UID 1000) must have write access
+- Files owned by host user (1000:1000) work correctly
+
+#### 4. Service Health Check Failures
+**Symptom**: `curl http://localhost:8000/health` shows unhealthy services
+
+**Common Causes**:
+- **Letta Connection Refused**: Non-critical, only needed for agent memory features
+- **MCP Tools Warnings**: Non-critical, tools still functional
+- **Config Reload Callbacks**: Check for signature mismatches (see #1)
+
+**Verify Services**:
+```bash
+# Check all services are running
+docker compose -f docker-compose.dev.yml ps
+
+# View API logs
+docker logs thoth-dev-api --tail 100
+
+# View PDF monitor logs
+docker logs thoth-dev-pdf-monitor --tail 100
+```
+
+#### 5. Hot-Reload Not Working
+**Symptom**: Settings changes not applied without restart
+
+**Solution**:
+1. Verify hot-reload is enabled in development mode: `make dev`
+2. Check callbacks are registered correctly (see #1)
+3. Monitor logs: `make dev-logs`
+4. Manual trigger: `make reload-settings`
+
+### Getting Help
+
+- **System Status**: See [Docker System Status Report](docs/DOCKER-SYSTEM-STATUS-REPORT.md)
+- **Issues**: [GitHub Issues](https://github.com/acertainKnight/project-thoth/issues)
+- **Development**: Check service logs with `make dev-logs`
 
 ## License
 

@@ -1,9 +1,24 @@
 # =============================================================================
 # Thoth Research Assistant - Streamlined Makefile
 # =============================================================================
+#
+# Quick Start:
+#   1. Set vault path: export OBSIDIAN_VAULT_PATH=/path/to/vault
+#      OR set in .env.vault: OBSIDIAN_VAULT_PATH=/path/to/vault
+#   2. Development mode: make dev
+#   3. Production mode: make prod
+#   4. Check health: make health
+#   5. View logs: make dev-logs (dev) or make prod-logs (prod)
+#
+# Configuration Files:
+#   - docker-compose.dev.yml  → Development (hot-reload enabled)
+#   - docker-compose.yml      → Production (optimized, no hot-reload)
+#
+# =============================================================================
 
 # Configuration Variables
 OBSIDIAN_VAULT ?= /mnt/c/Users/nghal/Documents/Obsidian Vault
+OBSIDIAN_VAULT_PATH ?= $(OBSIDIAN_VAULT)
 PLUGIN_SRC_DIR = obsidian-plugin/thoth-obsidian
 PLUGIN_DEST_DIR = $(OBSIDIAN_VAULT)/.obsidian/plugins/thoth-obsidian
 WATCH_DIR ?= /mnt/c/Users/nghal/Documents/Obsidian Vault/thoth/papers/pdfs
@@ -25,37 +40,65 @@ help: ## Show available commands
 	@echo "=============================================="
 	@echo ""
 	@echo "$(YELLOW)🚀 Quick Start:$(NC)"
-	@echo "  $(GREEN)deploy-and-start$(NC)     Deploy plugin + start complete ecosystem"
-	@echo "  $(GREEN)deploy-plugin$(NC)        Deploy plugin with vault integration"
-	@echo "  $(GREEN)start$(NC)                Start complete Thoth ecosystem"
-	@echo "  $(GREEN)stop$(NC)                 Stop all Thoth services"
-	@echo "  $(GREEN)status$(NC)               Check status of all services"
+	@echo "  $(GREEN)dev$(NC)                  Start development environment (hot-reload)"
+	@echo "  $(GREEN)prod$(NC)                 Start production server (optimized)"
+	@echo "  $(GREEN)health$(NC)               Check health of all services"
+	@echo "  $(GREEN)deploy-and-start$(NC)     Deploy plugin + start ecosystem"
+	@echo ""
+	@echo "$(YELLOW)🔧 Development Mode:$(NC)"
+	@echo "  $(GREEN)dev$(NC)                  Start dev environment with hot-reload"
+	@echo "  $(GREEN)dev-status$(NC)           Check dev environment status"
+	@echo "  $(GREEN)dev-logs$(NC)             View development logs (follow)"
+	@echo "  $(GREEN)dev-stop$(NC)             Stop development environment"
+	@echo "  $(GREEN)test-config$(NC)          Test configuration loading"
+	@echo ""
+	@echo "$(YELLOW)🚀 Production Mode:$(NC)"
+	@echo "  $(GREEN)prod$(NC)                 Start production server"
+	@echo "  $(GREEN)prod-status$(NC)          Check production server status"
+	@echo "  $(GREEN)prod-logs$(NC)            View production logs (follow)"
+	@echo "  $(GREEN)prod-stop$(NC)            Stop production server"
+	@echo "  $(GREEN)prod-restart$(NC)         Restart production server"
+	@echo ""
+	@echo "$(YELLOW)🔍 Service Management:$(NC)"
+	@echo "  $(GREEN)start$(NC)                Start complete ecosystem (legacy)"
+	@echo "  $(GREEN)stop$(NC)                 Stop all services"
+	@echo "  $(GREEN)status$(NC)               Show service status"
+	@echo "  $(GREEN)health$(NC)               Health check all services"
+	@echo "  $(GREEN)logs$(NC)                 View service logs"
+	@echo ""
+	@echo "$(YELLOW)🔥 Hot-Reload:$(NC)"
+	@echo "  $(GREEN)reload-settings$(NC)     Manually trigger settings reload"
+	@echo "  $(GREEN)watch-settings$(NC)      Watch settings file changes live"
+	@echo "  $(GREEN)test-hot-reload$(NC)     Test hot-reload end-to-end"
+	@echo "  $(GREEN)hot-reload-status$(NC)   Check hot-reload status"
+	@echo "  $(GREEN)enable-hot-reload-prod$(NC)  Enable hot-reload in production (use with caution)"
 	@echo ""
 	@echo "$(YELLOW)💻 Local Mode (No Docker):$(NC)"
-	@echo "  $(GREEN)local-start$(NC)          Start all services locally"
+	@echo "  $(GREEN)local-start$(NC)          Start services locally"
 	@echo "  $(GREEN)local-stop$(NC)           Stop local services"
 	@echo ""
-	@echo "$(YELLOW)🔧 Development:$(NC)"
-	@echo "  $(GREEN)dev$(NC)                  Plugin development mode (watch + rebuild)"
-	@echo "  $(GREEN)logs$(NC)                 View service logs"
-	@echo "  $(GREEN)clean$(NC)                Clean build artifacts"
+	@echo "$(YELLOW)🔌 Plugin Development:$(NC)"
+	@echo "  $(GREEN)deploy-plugin$(NC)        Deploy plugin with vault integration"
+	@echo "  $(GREEN)plugin-dev$(NC)           Plugin watch mode (auto-rebuild)"
 	@echo ""
 	@echo "$(YELLOW)📚 Knowledge Base:$(NC)"
 	@echo "  $(GREEN)rebuild-kb$(NC)           Rebuild entire knowledge base"
 	@echo "  $(GREEN)agent$(NC)                Start interactive research agent"
-	@echo "  $(GREEN)watch$(NC)                Start PDF directory watcher only"
+	@echo "  $(GREEN)watch$(NC)                Start PDF directory watcher"
 	@echo ""
 	@echo "$(YELLOW)🔍 Diagnostics:$(NC)"
 	@echo "  $(GREEN)check-vault$(NC)          Check vault integration status"
 	@echo "  $(GREEN)check-deps$(NC)           Check required dependencies"
 	@echo ""
 	@echo "$(YELLOW)Configuration:$(NC)"
-	@echo "  OBSIDIAN_VAULT=$(OBSIDIAN_VAULT)"
+	@echo "  OBSIDIAN_VAULT_PATH=$(OBSIDIAN_VAULT_PATH)"
 	@echo "  WATCH_DIR=$(WATCH_DIR)"
 	@echo ""
 	@echo "$(YELLOW)Examples:$(NC)"
-	@echo '  make deploy-and-start OBSIDIAN_VAULT="/path/to/your/vault"'
-	@echo '  make local-start WATCH_DIR="/path/to/your/papers"'
+	@echo '  export OBSIDIAN_VAULT_PATH="/path/to/vault"'
+	@echo '  make dev'
+	@echo '  make health'
+	@echo '  make prod'
 
 # =============================================================================
 # QUICK START COMMANDS
@@ -93,24 +136,180 @@ deploy-plugin: _check-vault _build-plugin ## Deploy Obsidian plugin with complet
 # SERVICE MANAGEMENT
 # =============================================================================
 
-.PHONY: start
-start: ## Start complete Thoth ecosystem (Letta + ChromaDB + API + MCP)
-	@echo "$(YELLOW)Starting Thoth ecosystem...$(NC)"
-	@if [ -f .env.vault ] && [ -z "$(OBSIDIAN_VAULT)" ]; then \
-		echo "  Loading vault from .env.vault..."; \
-		export $$(cat .env.vault | xargs) && docker compose -f docker-compose.dev.yml up -d; \
-	elif [ -n "$(OBSIDIAN_VAULT)" ]; then \
-		echo "  Using vault: $(OBSIDIAN_VAULT)"; \
-		OBSIDIAN_VAULT="$(OBSIDIAN_VAULT)" docker compose -f docker-compose.dev.yml up -d; \
-	else \
-		echo "  Using default workspace"; \
-		docker compose -f docker-compose.dev.yml up -d; \
+# =============================================================================
+# DEVELOPMENT ENVIRONMENT (docker-compose.dev.yml)
+# =============================================================================
+
+.PHONY: dev
+dev: ## Start development environment with hot-reload
+	@echo "$(YELLOW)Starting Thoth development environment...$(NC)"
+	@if [ -z "$(OBSIDIAN_VAULT_PATH)" ]; then \
+		if [ -f .env.vault ]; then \
+			echo "$(CYAN)Loading vault path from .env.vault...$(NC)"; \
+			export $$(cat .env.vault | grep -v '^#' | xargs); \
+		fi; \
+	fi; \
+	if [ -z "$(OBSIDIAN_VAULT_PATH)" ] && [ -z "$$OBSIDIAN_VAULT_PATH" ]; then \
+		echo "$(RED)ERROR: OBSIDIAN_VAULT_PATH not set$(NC)"; \
+		echo ""; \
+		echo "$(YELLOW)Set it in one of these ways:$(NC)"; \
+		echo "  1. Export: export OBSIDIAN_VAULT_PATH=/path/to/vault"; \
+		echo "  2. .env.vault: echo 'OBSIDIAN_VAULT_PATH=/path/to/vault' > .env.vault"; \
+		echo "  3. Command: make dev OBSIDIAN_VAULT_PATH=/path/to/vault"; \
+		exit 1; \
+	fi; \
+	VAULT_PATH="$${OBSIDIAN_VAULT_PATH:-$(OBSIDIAN_VAULT_PATH)}"; \
+	echo "$(CYAN)Using vault: $$VAULT_PATH$(NC)"; \
+	OBSIDIAN_VAULT_PATH="$$VAULT_PATH" docker compose -f docker-compose.dev.yml up -d
+	@echo ""
+	@echo "$(GREEN)✅ Development environment started$(NC)"
+	@echo ""
+	@make dev-status
+
+.PHONY: dev-status
+dev-status: ## Check development environment status
+	@echo "$(YELLOW)Development Services Status:$(NC)"
+	@echo "============================"
+	@docker compose -f docker-compose.dev.yml ps
+	@echo ""
+	@make health
+
+.PHONY: dev-logs
+dev-logs: ## View development logs (follow)
+	@echo "$(YELLOW)Development Logs (Ctrl+C to exit)$(NC)"
+	@echo "=================================="
+	@docker compose -f docker-compose.dev.yml logs -f
+
+.PHONY: dev-stop
+dev-stop: ## Stop development environment
+	@echo "$(YELLOW)Stopping development environment...$(NC)"
+	@docker compose -f docker-compose.dev.yml down
+	@echo "$(GREEN)✅ Development environment stopped$(NC)"
+
+# =============================================================================
+# HEALTH & DIAGNOSTICS
+# =============================================================================
+
+.PHONY: health
+health: ## Check health of all services
+	@echo "$(YELLOW)Service Health Checks:$(NC)"
+	@echo "====================="
+	@echo -n "  API (8000):      "
+	@curl -sf http://localhost:8000/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
+	@echo -n "  MCP (8001):      "
+	@curl -sf http://localhost:8001/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
+	@echo -n "  ChromaDB (8003): "
+	@curl -sf http://localhost:8003/api/v1/heartbeat >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
+	@echo -n "  Letta (8283):    "
+	@curl -sf http://localhost:8283/v1/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
+
+.PHONY: test-config
+test-config: ## Test configuration loading
+	@echo "$(YELLOW)Testing configuration...$(NC)"
+	@docker compose -f docker-compose.dev.yml run --rm thoth-api python -c "\
+		from thoth.config import config; \
+		print('$(GREEN)✓ Config loaded successfully$(NC)'); \
+		print(f'  Vault root: {config.vault_root}'); \
+		print(f'  Settings file: {config.vault_root}/_thoth/settings.json'); \
+		print(f'  Workspace: {config.vault_root}/_thoth')" 2>/dev/null || \
+		echo "$(RED)✗ Configuration test failed$(NC)"
+
+# =============================================================================
+# HOT-RELOAD COMMANDS
+# =============================================================================
+
+.PHONY: reload-settings
+reload-settings: ## Manually trigger settings reload (tests hot-reload)
+	@echo "$(YELLOW)Testing hot-reload by touching settings file...$(NC)"
+	@if [ -z "$(OBSIDIAN_VAULT_PATH)" ]; then \
+		echo "$(RED)ERROR: OBSIDIAN_VAULT_PATH not set$(NC)"; \
+		exit 1; \
 	fi
-	@echo "$(GREEN)✅ Services started:$(NC)"
-	@echo "  • API Server: http://localhost:8000"
-	@echo "  • MCP Server: http://localhost:8001"
-	@echo "  • ChromaDB: http://localhost:8003"
-	@echo "  • Letta Memory: http://localhost:8283"
+	@if [ ! -f "$(OBSIDIAN_VAULT_PATH)/_thoth/settings.json" ]; then \
+		echo "$(RED)ERROR: Settings file not found$(NC)"; \
+		exit 1; \
+	fi
+	@touch "$(OBSIDIAN_VAULT_PATH)/_thoth/settings.json"
+	@echo "$(GREEN)✓ Settings file touched, watching logs for reload...$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Check logs with: make dev-logs$(NC)"
+	@sleep 3
+	@docker compose -f docker-compose.dev.yml logs --tail=20 thoth-api | grep -i "reload" || echo "$(YELLOW)No reload messages yet, may take a few seconds$(NC)"
+
+.PHONY: watch-settings
+watch-settings: ## Watch settings file for changes (live monitoring)
+	@echo "$(YELLOW)Watching settings file for changes...$(NC)"
+	@echo "$(CYAN)Edit $(OBSIDIAN_VAULT_PATH)/_thoth/settings.json in another window$(NC)"
+	@echo "$(CYAN)Logs will appear below (Ctrl+C to stop)$(NC)"
+	@echo ""
+	@docker compose -f docker-compose.dev.yml logs -f thoth-api | grep --line-buffered -i "reload\|settings"
+
+.PHONY: test-hot-reload
+test-hot-reload: ## Test hot-reload functionality end-to-end
+	@echo "$(GREEN)🧪 Testing Hot-Reload Functionality$(NC)"
+	@echo "====================================="
+	@echo ""
+	@echo "$(YELLOW)Step 1: Check hot-reload is enabled$(NC)"
+	@curl -sf http://localhost:8000/health/hot-reload | jq . || (echo "$(RED)✗ API not responding$(NC)" && exit 1)
+	@echo "$(GREEN)✓ Hot-reload endpoint responding$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Step 2: Trigger settings reload$(NC)"
+	@touch "$(OBSIDIAN_VAULT_PATH)/_thoth/settings.json"
+	@echo "$(GREEN)✓ Settings file touched$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Step 3: Wait for reload (3 seconds)$(NC)"
+	@sleep 3
+	@echo ""
+	@echo "$(YELLOW)Step 4: Check logs for reload message$(NC)"
+	@docker compose -f docker-compose.dev.yml logs --tail=10 thoth-api | grep -i "reload" && echo "$(GREEN)✓ Settings reloaded successfully!$(NC)" || echo "$(RED)✗ No reload detected$(NC)"
+	@echo ""
+	@echo "$(GREEN)✅ Hot-reload test complete!$(NC)"
+
+.PHONY: hot-reload-status
+hot-reload-status: ## Check hot-reload status for all services
+	@echo "$(YELLOW)Hot-Reload Status$(NC)"
+	@echo "================="
+	@echo ""
+	@echo "$(CYAN)API Server:$(NC)"
+	@curl -sf http://localhost:8000/health/hot-reload 2>/dev/null | jq . || echo "$(RED)Not available$(NC)"
+	@echo ""
+	@echo "$(CYAN)Settings File:$(NC)"
+	@ls -lh "$(OBSIDIAN_VAULT_PATH)/_thoth/settings.json" 2>/dev/null || echo "$(RED)Not found$(NC)"
+	@echo ""
+	@echo "$(CYAN)Environment Variables:$(NC)"
+	@docker compose -f docker-compose.dev.yml exec -T thoth-api env | grep -E "HOT_RELOAD|DOCKER_ENV" || echo "$(RED)Not set$(NC)"
+
+.PHONY: enable-hot-reload-prod
+enable-hot-reload-prod: ## Enable hot-reload in production (use with caution)
+	@echo "$(YELLOW)⚠️  Enabling hot-reload in production...$(NC)"
+	@echo "$(RED)WARNING: This is for testing/development only!$(NC)"
+	@echo ""
+	@bash -c ' \
+		if [ -f .env.production ]; then \
+			if grep -q "^THOTH_HOT_RELOAD=" .env.production; then \
+				sed -i "s/^THOTH_HOT_RELOAD=.*/THOTH_HOT_RELOAD=1/" .env.production; \
+			else \
+				echo "THOTH_HOT_RELOAD=1" >> .env.production; \
+			fi; \
+		else \
+			echo "THOTH_HOT_RELOAD=1" > .env.production; \
+		fi; \
+		echo "$(GREEN)✓ Hot-reload enabled in .env.production$(NC)"; \
+		echo ""; \
+		echo "$(YELLOW)Restart production for changes to take effect:$(NC)"; \
+		echo "  make prod-restart"; \
+	'
+
+# =============================================================================
+# LEGACY START COMMAND (redirects to dev)
+# =============================================================================
+
+.PHONY: start
+start: ## Start complete Thoth ecosystem (uses docker-compose.dev.yml)
+	@echo "$(YELLOW)Note: 'make start' uses development mode$(NC)"
+	@echo "$(CYAN)For production, use: make prod$(NC)"
+	@echo ""
+	@make dev
 
 .PHONY: local-start
 local-start: ## Start services locally (Letta in Docker, rest local)
@@ -151,10 +350,131 @@ local-start: ## Start services locally (Letta in Docker, rest local)
 	@echo "$(YELLOW)To stop: make local-stop$(NC)"
 
 .PHONY: stop
-stop: ## Stop all Thoth services
-	@echo "$(YELLOW)Stopping Thoth services...$(NC)"
-	@docker compose -f docker-compose.dev.yml down
+stop: ## Stop all Thoth services (both dev and prod)
+	@echo "$(YELLOW)Stopping all Thoth services...$(NC)"
+	@echo "$(CYAN)Stopping development services...$(NC)"
+	@docker compose -f docker-compose.dev.yml down 2>/dev/null || true
+	@echo "$(CYAN)Stopping production services...$(NC)"
+	@docker compose -f docker-compose.yml down 2>/dev/null || true
 	@echo "$(GREEN)✅ All services stopped$(NC)"
+
+# =============================================================================
+# PRODUCTION DEPLOYMENT (docker-compose.yml)
+# =============================================================================
+
+.PHONY: prod
+prod: ## Start production server (uses docker-compose.yml)
+	@echo "$(GREEN)🚀 Starting Thoth Production Server$(NC)"
+	@echo "====================================="
+	@echo ""
+	@bash -c ' \
+		if [ -z "$(OBSIDIAN_VAULT_PATH)" ]; then \
+			if [ -f .env.vault ]; then \
+				echo "$(CYAN)Loading vault path from .env.vault...$(NC)"; \
+				source .env.vault; \
+			fi; \
+		fi; \
+		if [ -f .env.production ]; then \
+			echo "$(CYAN)Loading production config from .env.production...$(NC)"; \
+			source .env.production; \
+		fi; \
+		VAULT_PATH="$${OBSIDIAN_VAULT_PATH:-$(OBSIDIAN_VAULT_PATH)}"; \
+		if [ -z "$$VAULT_PATH" ] && [ -z "$$THOTH_DATA_MOUNT" ]; then \
+			echo "$(RED)ERROR: OBSIDIAN_VAULT_PATH not set$(NC)"; \
+			echo ""; \
+			echo "$(YELLOW)Set it in one of these ways:$(NC)"; \
+			echo "  1. Export: export OBSIDIAN_VAULT_PATH=/path/to/vault"; \
+			echo "  2. .env.vault: echo \"OBSIDIAN_VAULT_PATH=/path/to/vault\" > .env.vault"; \
+			echo "  3. Command: make prod OBSIDIAN_VAULT_PATH=/path/to/vault"; \
+			echo ""; \
+			echo "$(YELLOW)For your setup:$(NC)"; \
+			echo "  OBSIDIAN_VAULT_PATH=\"/home/nick-hallmark/Documents/thoth\""; \
+			exit 1; \
+		fi; \
+		if [ -z "$$THOTH_DATA_MOUNT" ] && [ -n "$$VAULT_PATH" ]; then \
+			export THOTH_DATA_MOUNT="$$VAULT_PATH/_thoth"; \
+		fi; \
+		echo "$(CYAN)Vault: $$VAULT_PATH$(NC)"; \
+		echo "$(CYAN)Data mount: $$THOTH_DATA_MOUNT$(NC)"; \
+		if [ -f "$$THOTH_DATA_MOUNT/settings.json" ]; then \
+			echo "$(GREEN)✓ Found settings.json$(NC)"; \
+		else \
+			echo "$(YELLOW)⚠️  No settings.json at $$THOTH_DATA_MOUNT/settings.json$(NC)"; \
+			echo "$(YELLOW)   Configure API keys in vault/_thoth/settings.json$(NC)"; \
+		fi; \
+		echo ""; \
+		echo "$(CYAN)Building and starting production containers...$(NC)"; \
+		echo "$(CYAN)Using: docker-compose.yml (optimized, no hot-reload)$(NC)"; \
+		export THOTH_DATA_MOUNT; \
+		export OBSIDIAN_VAULT_PATH="$$VAULT_PATH"; \
+		USER_ID=$$(id -u) GROUP_ID=$$(id -g) docker compose -f docker-compose.yml up -d --build; \
+		echo ""; \
+		echo "$(YELLOW)Waiting for services to initialize...$(NC)"; \
+		sleep 15; \
+		echo ""; \
+		echo "$(GREEN)✅ Production Server Started!$(NC)"; \
+		echo ""; \
+		make prod-status; \
+	'
+
+.PHONY: prod-stop
+prod-stop: ## Stop production server
+	@echo "$(YELLOW)Stopping production services...$(NC)"
+	@docker compose -f docker-compose.yml down
+	@echo "$(GREEN)✅ Production services stopped$(NC)"
+
+.PHONY: prod-restart
+prod-restart: ## Restart production server
+	@echo "$(YELLOW)Restarting production services...$(NC)"
+	@make prod-stop
+	@sleep 2
+	@make prod
+
+.PHONY: prod-logs
+prod-logs: ## View production logs (follow)
+	@echo "$(YELLOW)Production Logs (Ctrl+C to exit)$(NC)"
+	@echo "================================"
+	@docker compose -f docker-compose.yml logs -f
+
+.PHONY: prod-status
+prod-status: ## Check production server status
+	@echo "$(YELLOW)Production Service Status:$(NC)"
+	@echo "=========================="
+	@docker compose -f docker-compose.yml ps
+	@echo ""
+	@echo "$(YELLOW)Health Checks:$(NC)"
+	@echo -n "  API (8080):      "
+	@curl -sf http://localhost:8080/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
+	@echo -n "  MCP (8081):      "
+	@curl -sf http://localhost:8081/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
+	@echo -n "  ChromaDB (8003): "
+	@curl -sf http://localhost:8003/api/v1/heartbeat >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
+	@echo -n "  Letta (8283):    "
+	@curl -sf http://localhost:8283/v1/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Access Points:$(NC)"
+	@echo "  • API Server:    $(CYAN)http://localhost:8080$(NC)"
+	@echo "  • MCP Server:    $(CYAN)http://localhost:8081$(NC)"
+	@echo "  • Letta Memory:  $(CYAN)http://localhost:8283$(NC)"
+	@echo "  • ChromaDB:      $(CYAN)http://localhost:8003$(NC)"
+
+.PHONY: prod-clean
+prod-clean: ## Clean production deployment (WARNING: deletes volumes)
+	@echo "$(RED)⚠️  WARNING: This will delete all database data!$(NC)"
+	@echo "$(YELLOW)This includes Letta memory and ChromaDB vectors.$(NC)"
+	@echo ""
+	@read -p "Are you sure? (type 'yes' to confirm): " confirm; \
+	if [ "$$confirm" = "yes" ]; then \
+		echo "$(YELLOW)Stopping and removing containers and volumes...$(NC)"; \
+		docker-compose --env-file .env.production down -v; \
+		echo "$(GREEN)✅ Production environment cleaned$(NC)"; \
+	else \
+		echo "$(CYAN)Cancelled.$(NC)"; \
+	fi
+
+# =============================================================================
+# DEVELOPMENT (CONTINUED)
+# =============================================================================
 
 .PHONY: watch
 watch: ## Start PDF directory watcher (hot-reloads from settings.json)
@@ -198,11 +518,11 @@ status: ## Show status of all services
 	fi
 
 # =============================================================================
-# DEVELOPMENT
+# PLUGIN DEVELOPMENT
 # =============================================================================
 
-.PHONY: dev
-dev: ## Plugin development mode (watch + auto-rebuild)
+.PHONY: plugin-dev
+plugin-dev: ## Plugin development mode (watch + auto-rebuild)
 	@echo "$(YELLOW)Starting plugin development mode...$(NC)"
 	@echo "$(YELLOW)Plugin will auto-rebuild on file changes$(NC)"
 	@cd $(PLUGIN_SRC_DIR) && npm install
