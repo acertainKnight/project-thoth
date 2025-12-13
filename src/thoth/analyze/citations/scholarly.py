@@ -30,7 +30,7 @@ class ScholarlyAPI:
     def __init__(
         self,
         timeout: int = 10,
-        max_retries: int = 9,
+        max_retries: int = 0,
         initial_delay_seconds: float = 2.0,
     ):
         """

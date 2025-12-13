@@ -28,8 +28,8 @@ class ArxivClient:
         self,
         base_url: str = 'https://export.arxiv.org/api/query',
         timeout: int = 10,
-        delay_seconds: float = 3.0,
-        max_retries: int = 9,
+        delay_seconds: float = 0.1,
+        max_retries: int = 3,
     ):
         """
         Initialize arXiv API client.
@@ -362,8 +362,13 @@ class ArxivClient:
             Optional[int]: The citation count if found, None otherwise.
         """
         try:
+            # Strip version number if present (e.g., v1, v2) as Semantic Scholar
+            # doesn't recognize version-specific IDs
+            import re
+            clean_paper_id = re.sub(r'v\d+$', '', paper_id)
+
             # Use Semantic Scholar to get citation counts for arXiv papers
-            semantic_url = f'https://api.semanticscholar.org/v1/paper/arXiv:{paper_id}'
+            semantic_url = f'https://api.semanticscholar.org/v1/paper/arXiv:{clean_paper_id}'
             response = self.client.get(semantic_url)
             response.raise_for_status()
             data = response.json()
@@ -435,30 +440,35 @@ class ArxivAPISource(BaseAPISource):
             >>> articles = source.search(config, max_results=10)
         """
         try:
-            # Build search query
-            query_parts = []
+            # Check if a pre-built search query is provided
+            # This allows discovery_manager to pass optimized queries
+            query = config.get('search_query')
 
-            # Add category filters
-            categories = config.get('categories', [])
-            if categories:
-                cat_queries = [f'cat:{cat}' for cat in categories]
-                query_parts.append(f'({" OR ".join(cat_queries)})')
+            if not query:
+                # Build search query from categories and keywords
+                query_parts = []
 
-            # Add keyword searches
-            keywords = config.get('keywords', [])
-            if keywords:
-                # Search in title, abstract, and comments
-                keyword_queries = []
-                for keyword in keywords:
-                    keyword_queries.append(f'(ti:"{keyword}" OR abs:"{keyword}")')
-                query_parts.append(f'({" OR ".join(keyword_queries)})')
+                # Add category filters
+                categories = config.get('categories', [])
+                if categories:
+                    cat_queries = [f'cat:{cat}' for cat in categories]
+                    query_parts.append(f'({" OR ".join(cat_queries)})')
 
-            # Combine query parts
-            if not query_parts:
-                # Default to recent papers in computer science if no specific criteria
-                query = 'cat:cs.*'
-            else:
-                query = ' AND '.join(query_parts)
+                # Add keyword searches
+                keywords = config.get('keywords', [])
+                if keywords:
+                    # Search in title, abstract, and comments
+                    keyword_queries = []
+                    for keyword in keywords:
+                        keyword_queries.append(f'(ti:"{keyword}" OR abs:"{keyword}")')
+                    query_parts.append(f'({" OR ".join(keyword_queries)})')
+
+                # Combine query parts
+                if not query_parts:
+                    # Default to recent papers in computer science if no specific criteria
+                    query = 'cat:cs.*'
+                else:
+                    query = ' AND '.join(query_parts)
 
             # Build parameters
             params = {
@@ -562,7 +572,7 @@ class ArxivAPISource(BaseAPISource):
                 title=title,
                 url=url,
                 authors=authors,
-                published_date=pub_date.isoformat() if pub_date else None,
+                publication_date=pub_date.isoformat() if pub_date else None,
                 abstract=abstract,
                 source='arxiv',
                 tags=categories,

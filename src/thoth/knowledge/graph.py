@@ -103,43 +103,146 @@ class CitationGraph:
 
     def _load_graph(self) -> None:
         """
-        Load the citation graph from storage if it exists.
+        Load the citation graph from PostgreSQL.
         """
-        if self.graph_storage_path.exists():
-            try:
-                # Load the graph from a JSON file
-                with open(self.graph_storage_path, encoding='utf-8') as f:
-                    graph_data = json.load(f)
+        try:
+            self._load_from_postgres()
+        except Exception as e:
+            logger.error(f'Error loading citation graph from PostgreSQL: {e}')
+            self.graph = nx.DiGraph()
 
-                # Recreate the graph from the loaded data
-                # Explicitly set edges="links" to maintain current behavior and silence
-                # deprecation warning
-                self.graph = nx.node_link_graph(graph_data, edges='links')
-                logger.info(
-                    f'Loaded citation graph with {len(self.graph.nodes)} nodes and {len(self.graph.edges)} edges'
-                )
-            except Exception as e:
-                logger.error(f'Error loading citation graph: {e}')
-                # Initialize a new graph if loading fails
-                self.graph = nx.DiGraph()
-        else:
-            logger.info('No existing citation graph found, creating new graph')
+    def _load_from_postgres(self) -> None:
+        """Load graph from PostgreSQL."""
+        import asyncpg
+        import asyncio
+        from thoth.config import Config
+
+        config = Config()
+        db_url = getattr(config.secrets, 'database_url', None) if hasattr(config, 'secrets') else None
+        if not db_url:
+            raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
+
+        async def load():
+            conn = await asyncpg.connect(db_url)
+            try:
+                # Load papers (nodes)
+                papers = await conn.fetch("SELECT * FROM papers")
+                for paper in papers:
+                    self.graph.add_node(
+                        paper['doi'] or f"title:{paper['title']}",
+                        **dict(paper)
+                    )
+
+                # Load citations (edges)
+                citations = await conn.fetch("""
+                    SELECT
+                        p1.doi as source_doi,
+                        p2.doi as target_doi,
+                        c.citation_context as context
+                    FROM citations c
+                    JOIN papers p1 ON c.citing_paper_id = p1.id
+                    JOIN papers p2 ON c.cited_paper_id = p2.id
+                """)
+                for citation in citations:
+                    self.graph.add_edge(
+                        citation['source_doi'],
+                        citation['target_doi'],
+                        context=citation['context']
+                    )
+
+                logger.info(f'Loaded {len(papers)} papers and {len(citations)} citations from PostgreSQL')
+            finally:
+                await conn.close()
+
+        asyncio.get_event_loop().run_until_complete(load())
 
     def _save_graph(self) -> None:
         """
-        Save the citation graph to storage.
+        Save the citation graph to PostgreSQL.
         """
         try:
-            os.makedirs(self.graph_storage_path.parent, exist_ok=True)
-            # Convert the graph to a serializable format
-            graph_data = nx.node_link_data(self.graph)
-            # Save the graph to a JSON file
-            with open(self.graph_storage_path, 'w', encoding='utf-8') as f:
-                json.dump(graph_data, f, indent=2)
-
-            logger.info(f'Saved citation graph to {self.graph_storage_path}')
+            self._save_to_postgres()
         except Exception as e:
             logger.error(f'Error saving citation graph: {e}')
+
+    def _save_to_postgres(self) -> None:
+        """Save graph to PostgreSQL."""
+        import asyncpg
+        import asyncio
+        from thoth.config import Config
+
+        config = Config()
+        db_url = getattr(config.secrets, 'database_url', None) if hasattr(config, 'secrets') else None
+        if not db_url:
+            raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
+
+        async def save():
+            conn = await asyncpg.connect(db_url)
+            try:
+                # Save papers (nodes) with markdown content
+                for node_id, data in self.graph.nodes(data=True):
+                    # Try to load markdown content if path exists
+                    markdown_content = None
+                    if data.get('markdown_path'):
+                        try:
+                            from pathlib import Path
+                            markdown_file = Path(data['markdown_path'])
+                            if markdown_file.exists():
+                                markdown_content = markdown_file.read_text(encoding='utf-8')
+                        except Exception:
+                            pass
+
+                    # Get metadata dict (contains doi, arxiv_id, title, etc.)
+                    metadata = data.get('metadata', {})
+
+                    # Get analysis data - stored as 'analysis' in graph, save as 'analysis_data' in DB
+                    analysis_data = data.get('analysis', {})
+
+                    await conn.execute("""
+                        INSERT INTO papers (doi, arxiv_id, title, authors, abstract, year, venue, pdf_path, note_path, markdown_content, analysis_data, llm_model)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                        ON CONFLICT (doi) DO UPDATE SET
+                            title = EXCLUDED.title,
+                            authors = EXCLUDED.authors,
+                            year = EXCLUDED.year,
+                            pdf_path = EXCLUDED.pdf_path,
+                            note_path = EXCLUDED.note_path,
+                            markdown_content = EXCLUDED.markdown_content,
+                            analysis_data = EXCLUDED.analysis_data,
+                            llm_model = EXCLUDED.llm_model,
+                            updated_at = CURRENT_TIMESTAMP
+                    """,
+                        metadata.get('doi'),
+                        metadata.get('arxiv_id'),
+                        metadata.get('title'),
+                        metadata.get('authors', []),
+                        metadata.get('abstract'),
+                        metadata.get('year'),
+                        metadata.get('venue'),
+                        data.get('pdf_path'),
+                        data.get('note_path'),
+                        markdown_content,
+                        analysis_data,
+                        data.get('llm_model')
+                    )
+
+                # Save citations (edges)
+                for source, target, data in self.graph.edges(data=True):
+                    await conn.execute("""
+                        INSERT INTO citations (citing_paper_id, cited_paper_id, citation_context)
+                        VALUES (
+                            (SELECT id FROM papers WHERE doi = $1 OR title = $1 LIMIT 1),
+                            (SELECT id FROM papers WHERE doi = $2 OR title = $2 LIMIT 1),
+                            $3
+                        )
+                        ON CONFLICT (citing_paper_id, cited_paper_id) DO NOTHING
+                    """, source, target, data.get('context'))
+
+                logger.info(f'Saved graph to PostgreSQL')
+            finally:
+                await conn.close()
+
+        asyncio.get_event_loop().run_until_complete(save())
 
     def _generate_article_id(self, citation: Citation) -> str:
         """
@@ -215,6 +318,7 @@ class CitationGraph:
         pdf_path: Path | None = None,
         markdown_path: Path | None = None,
         analysis: AnalysisResponse | dict[str, Any] | None = None,
+        llm_model: str | None = None,
     ) -> None:
         """
         Add an article to the citation graph.
@@ -226,6 +330,7 @@ class CitationGraph:
             pdf_path: Path to the article's PDF file
             markdown_path: Path to the article's markdown file
             analysis: AnalysisResponse object or dictionary containing analysis data
+            llm_model: Name of the LLM model used for analysis (e.g., "google/gemini-2.5-flash")
 
         Returns:
             None
@@ -239,6 +344,7 @@ class CitationGraph:
             ...     pdf_path=Path('papers/example.pdf'),
             ...     markdown_path=Path('notes/example.md'),
             ...     analysis={'summary': 'This is an example paper.'},
+            ...     llm_model='google/gemini-2.5-flash',
             ... )
         """
         node_data = {'metadata': metadata}
@@ -257,6 +363,8 @@ class CitationGraph:
                 node_data['analysis'] = analysis.model_dump()
             else:
                 node_data['analysis'] = analysis
+        if llm_model:
+            node_data['llm_model'] = llm_model
 
         article_title = metadata.get('title', article_id)
 
@@ -331,6 +439,7 @@ class CitationGraph:
         markdown_path: Path,
         analysis: AnalysisResponse,
         citations: list[Citation],
+        llm_model: str | None = None,
     ) -> str | None:
         """
         Process a list of citations for an article.
@@ -340,6 +449,7 @@ class CitationGraph:
             markdown_path: Path to the markdown file
             analysis: AnalysisResponse object
             citations: List of Citation objects
+            llm_model: Name of the LLM model used for analysis
 
         Returns:
             str | None: The article ID of the processed article or None if it exits early
@@ -407,6 +517,7 @@ class CitationGraph:
             pdf_path=pdf_path,  # Pass Path object, add_article will take .name
             markdown_path=markdown_path,  # Pass Path object, add_article will take .name
             analysis=analysis.model_dump(),
+            llm_model=llm_model,
         )
 
         # Process other citations (references made by the main article)

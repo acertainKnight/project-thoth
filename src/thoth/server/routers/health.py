@@ -92,7 +92,7 @@ def download_pdf_endpoint(url: str = Query(..., description='PDF URL to download
     """
     try:
         # Download the PDF using the existing downloader
-        pdf_path, metadata = download_pdf(url, pdf_dir)
+        pdf_path = download_pdf(url, pdf_dir)
 
         logger.info(f'Downloaded PDF: {pdf_path}')
 
@@ -101,7 +101,7 @@ def download_pdf_endpoint(url: str = Query(..., description='PDF URL to download
                 'status': 'success',
                 'message': f'PDF downloaded successfully to {pdf_path}',
                 'file_path': str(pdf_path),
-                'metadata': metadata,
+                'filename': pdf_path.name,
                 'base_url': base_url,
             }
         )

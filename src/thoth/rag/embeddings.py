@@ -12,7 +12,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import OpenAIEmbeddings
 from loguru import logger
 
-from thoth.utilities.config import get_config
+from thoth.config import config
 
 
 class EmbeddingManager:
@@ -39,7 +39,7 @@ class EmbeddingManager:
             openrouter_api_key: Not used for local embeddings (kept for compatibility).
             base_url: Not used for local embeddings (kept for compatibility).
         """
-        self.config = get_config()
+        self.config = config
 
         # Use provided model or fall back to config
         self.model = model or self.config.rag_config.embedding_model

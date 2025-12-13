@@ -34,10 +34,10 @@ class AsyncCitationEnhancer:
 
     def __init__(self, config, session: aiohttp.ClientSession | None = None):
         self.config = config
-        self.use_semanticscholar = config.citation_config.use_semanticscholar
-        self.use_opencitations = config.citation_config.use_opencitations
-        self.use_scholarly = config.citation_config.use_scholarly
-        self.use_arxiv = config.citation_config.use_arxiv
+        self.use_semanticscholar = config.citation_config.apis.use_semantic_scholar
+        self.use_opencitations = config.citation_config.apis.use_opencitations
+        self.use_scholarly = config.citation_config.apis.use_scholarly
+        self.use_arxiv = config.citation_config.apis.use_arxiv
 
         # HTTP session for async requests
         self._session = session

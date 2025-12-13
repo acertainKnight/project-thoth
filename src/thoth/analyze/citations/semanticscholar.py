@@ -25,7 +25,7 @@ class SemanticScholarAPI:
         api_key: str | None = None,
         timeout: int = 10,
         delay_seconds: float = 1.0,
-        max_retries: int = 3,  # Reduced from 9 to 3 for faster failures
+        max_retries: int = 0,  # Temporarily disabled retries to prevent blocking
         batch_size: int = 100,
         enable_caching: bool = True,
         max_backoff_seconds: float = 30.0,  # Cap backoff at 30 seconds

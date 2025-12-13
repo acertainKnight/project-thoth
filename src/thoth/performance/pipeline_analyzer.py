@@ -17,7 +17,7 @@ from loguru import logger
 
 from thoth.performance.metrics_collector import MetricsCollector
 from thoth.services.service_manager import ServiceManager
-from thoth.utilities.config import ThothConfig
+from thoth.config import config, Config
 
 
 @dataclass
@@ -99,7 +99,7 @@ class PipelineAnalyzer:
 
     def __init__(
         self,
-        config: ThothConfig,
+        config: Config,
         service_manager: ServiceManager,
         metrics_collector: MetricsCollector | None = None,
     ):

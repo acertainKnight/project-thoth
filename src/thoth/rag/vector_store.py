@@ -14,7 +14,7 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from loguru import logger
 
-from thoth.utilities.config import get_config
+from thoth.config import config
 
 
 class VectorStoreManager:
@@ -41,7 +41,7 @@ class VectorStoreManager:
             persist_directory: Directory for persistent storage (defaults to config).
             embedding_function: Embedding function to use (required).
         """
-        self.config = get_config()
+        self.config = config
 
         # Set collection name
         self.collection_name = collection_name or self.config.rag_config.collection_name

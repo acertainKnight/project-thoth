@@ -46,10 +46,19 @@ class QueryService(TemplateServiceMixin, BaseService):
     def llm(self) -> OpenRouterClient:
         """Get or create the LLM client for query evaluation."""
         if self._llm is None:
+            # Get model settings but exclude fields that conflict with explicit parameters
+            model_settings = self.config.llm_config.research_agent.model_settings.model_dump()
+            model_settings.pop('model', None)  # We're passing model explicitly
+            model_settings.pop('max_output_tokens', None)  # Not used by OpenRouterClient
+            model_settings.pop('max_context_length', None)  # Not used by OpenRouterClient
+            model_settings.pop('use_auto_model_selection', None)  # Not used by OpenRouterClient
+            model_settings.pop('auto_model_require_tool_calling', None)  # Not used by OpenRouterClient
+            model_settings.pop('auto_model_require_structured_output', None)  # Not used by OpenRouterClient
+
             self._llm = OpenRouterClient(
                 api_key=self.config.api_keys.openrouter_key,
-                model=self.config.research_agent_llm_config.model,
-                **self.config.research_agent_llm_config.model_settings.model_dump(),
+                model=self.config.llm_config.research_agent.model,
+                **model_settings,
             )
         return self._llm
 

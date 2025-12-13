@@ -23,7 +23,7 @@ from thoth.discovery.api_sources import (
 )
 from thoth.discovery.emulator_scraper import EmulatorScraper
 from thoth.discovery.web_scraper import WebScraper
-from thoth.utilities.config import get_config
+from thoth.config import config
 from thoth.utilities.schemas import (
     DiscoveryResult,
     DiscoverySource,
@@ -51,14 +51,17 @@ class DiscoveryManager:
     def __init__(
         self,
         sources_config_dir: str | Path | None = None,
+        source_repo=None,
     ):
         """
         Initialize the Discovery Manager.
 
         Args:
             sources_config_dir: Directory containing discovery source configurations.
+            source_repo: Optional AvailableSourceRepository for database access.
         """
-        self.config = get_config()
+        self.config = config
+        self.source_repo = source_repo
 
         # Set up sources configuration directory
         self.sources_config_dir = Path(
@@ -173,9 +176,9 @@ class DiscoveryManager:
                 f'Failed to delete source {source_name}: {e}'
             ) from e
 
-    def get_source(self, source_name: str) -> DiscoverySource | None:
+    async def get_source(self, source_name: str) -> DiscoverySource | None:
         """
-        Get a discovery source configuration by name.
+        Get a discovery source configuration by name from database.
 
         Args:
             source_name: Name of the source to retrieve.
@@ -184,8 +187,35 @@ class DiscoveryManager:
             DiscoverySource: The source configuration, or None if not found.
         """
         try:
-            source_file = self.sources_config_dir / f'{source_name}.json'
+            # Use repository if available
+            if self.source_repo:
+                source_record = await self.source_repo.get_by_name(source_name)
+                if not source_record or not source_record.get('is_active'):
+                    logger.debug(f"Source '{source_name}' not found or inactive in database")
+                    return None
 
+                # Map database record to DiscoverySource model
+                return DiscoverySource(
+                    name=source_record['name'],
+                    source_type='api',  # All current sources are API-based
+                    description=source_record.get('description', ''),
+                    is_active=source_record['is_active'],
+                    schedule_config={
+                        'interval_minutes': 1440,
+                        'max_articles_per_run': 50,
+                        'enabled': True
+                    },
+                    api_config={
+                        'source': source_record['name'],  # CRITICAL: Add source identifier
+                        **source_record.get('config', {})
+                    },
+                    scraper_config=None,
+                    browser_recording=None,
+                    query_filters=[],
+                )
+
+            # Fallback to JSON file (backward compatibility)
+            source_file = self.sources_config_dir / f'{source_name}.json'
             if not source_file.exists():
                 return None
 
@@ -327,7 +357,7 @@ class DiscoveryManager:
             raise DiscoveryManagerError(f'Discovery failed: {e}') from e
 
     def _discover_from_source(
-        self, source: DiscoverySource, max_articles: int | None = None
+        self, source: DiscoverySource, max_articles: int | None = None, question: dict[str, Any] | None = None
     ) -> list[ScrapedArticleMetadata]:
         """
         Discover articles from a specific source.
@@ -335,6 +365,7 @@ class DiscoveryManager:
         Args:
             source: DiscoverySource configuration.
             max_articles: Maximum number of articles to retrieve.
+            question: Research question with keywords, topics, and authors.
 
         Returns:
             list[ScrapedArticleMetadata]: List of discovered articles.
@@ -343,7 +374,7 @@ class DiscoveryManager:
 
         try:
             if source.source_type == 'api' and source.api_config:
-                articles = self._discover_from_api(source.api_config, max_articles)
+                articles = self._discover_from_api(source.api_config, max_articles, question)
             elif source.source_type == 'scraper' and source.scraper_config:
                 articles = self._discover_from_scraper(
                     source.scraper_config, max_articles
@@ -367,7 +398,7 @@ class DiscoveryManager:
         return articles
 
     def _discover_from_api(
-        self, api_config: dict[str, Any], max_articles: int | None = None
+        self, api_config: dict[str, Any], max_articles: int | None = None, question: dict[str, Any] | None = None
     ) -> list[ScrapedArticleMetadata]:
         """
         Discover articles from API sources.
@@ -375,6 +406,7 @@ class DiscoveryManager:
         Args:
             api_config: API configuration dictionary.
             max_articles: Maximum number of articles to retrieve.
+            question: Research question with keywords, topics, and authors.
 
         Returns:
             list[ScrapedArticleMetadata]: List of discovered articles.
@@ -392,8 +424,63 @@ class DiscoveryManager:
             'max_articles_per_run', 50
         )
 
+        # Merge research question data into API config
+        enhanced_config = api_config.copy()
+        if question:
+            # Add keywords from research question
+            if question.get('keywords'):
+                existing_keywords = enhanced_config.get('keywords', [])
+                enhanced_config['keywords'] = list(set(existing_keywords + question['keywords']))
+
+            # Add topics/categories from research question
+            if question.get('topics'):
+                existing_categories = enhanced_config.get('categories', [])
+                enhanced_config['categories'] = list(set(existing_categories + question['topics']))
+
+            # Add preferred authors from research question
+            if question.get('authors'):
+                enhanced_config['preferred_authors'] = question['authors']
+
+            # Build optimized search query for ArXiv API
+            # ArXiv needs explicit search_query parameter with proper syntax
+            if source_type == 'arxiv' and (question.get('keywords') or question.get('topics')):
+                query_parts = []
+
+                # Add category filters (topics -> ArXiv categories)
+                if question.get('topics'):
+                    # Limit to top 3 topics to avoid overly restrictive queries
+                    top_topics = question['topics'][:3]
+                    cat_queries = [f'cat:{topic}' for topic in top_topics]
+                    if cat_queries:
+                        query_parts.append(f"({' OR '.join(cat_queries)})")
+
+                # Add keyword searches (search in title and abstract)
+                if question.get('keywords'):
+                    # Limit to top 5 keywords for focused results
+                    top_keywords = question['keywords'][:5]
+                    keyword_queries = []
+                    for keyword in top_keywords:
+                        # Search in title OR abstract for each keyword
+                        keyword_queries.append(f'(ti:"{keyword}" OR abs:"{keyword}")')
+                    if keyword_queries:
+                        query_parts.append(f"({' OR '.join(keyword_queries)})")
+
+                # Combine with AND for more focused results
+                if query_parts:
+                    search_query = ' AND '.join(query_parts)
+                    enhanced_config['search_query'] = search_query
+                    logger.info(f"Built ArXiv search query: {search_query}")
+
+            logger.info(
+                f"Enhanced API config with research question data: "
+                f"keywords={enhanced_config.get('keywords', [])}, "
+                f"categories={enhanced_config.get('categories', [])}, "
+                f"authors={enhanced_config.get('preferred_authors', [])}, "
+                f"search_query={enhanced_config.get('search_query', 'N/A')}"
+            )
+
         try:
-            return api_source.search(api_config, max_articles or default_max)
+            return api_source.search(enhanced_config, max_articles or default_max)
         except Exception as e:
             logger.error(f'API search failed for {source_type}: {e}')
             return []

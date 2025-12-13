@@ -9,7 +9,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from thoth.utilities.config import get_config
+from thoth.config import config
 
 
 class TokenUsageTracker:
@@ -17,7 +17,7 @@ class TokenUsageTracker:
 
     def __init__(self, usage_file: Path | None = None) -> None:
         """Initialize the tracker and load existing usage data."""
-        self.config = get_config()
+        self.config = config
         self.usage_file = (
             usage_file or Path(self.config.output_dir) / 'token_usage.json'
         )
@@ -37,39 +37,73 @@ class TokenUsageTracker:
             self._save_usage()
 
     def _load_usage(self) -> None:
-        """Load usage data from disk."""
-        if self.usage_file.exists():
+        """Load usage data from PostgreSQL."""
+        try:
+            self._load_from_postgres()
+        except Exception as e:
+            logger.error(f'Error loading token usage from PostgreSQL: {e}')
+
+    def _load_from_postgres(self) -> None:
+        """Load token usage from PostgreSQL."""
+        import asyncpg
+        import asyncio
+
+        db_url = getattr(self.config.secrets, 'database_url', None) if hasattr(self.config, 'secrets') else None
+        if not db_url:
+            raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
+
+        async def load():
+            conn = await asyncpg.connect(db_url)
             try:
-                with open(self.usage_file) as f:
-                    data = json.load(f)
-                for user, stats in data.items():
-                    record = self._usage[user]
-                    record['prompt_tokens'] = stats.get('prompt_tokens', 0)
-                    record['completion_tokens'] = stats.get('completion_tokens', 0)
-                    record['total_tokens'] = stats.get('total_tokens', 0)
-                    record['total_cost'] = stats.get('total_cost', 0.0)
-                logger.info(
-                    f'Loaded token usage for {len(self._usage)} users from {self.usage_file}'
-                )
-            except (OSError, json.JSONDecodeError) as e:
-                logger.error(f'Error loading token usage file: {e}')
+                rows = await conn.fetch("SELECT * FROM token_usage")
+                for row in rows:
+                    record = self._usage[row['user_id']]
+                    record['prompt_tokens'] = row['prompt_tokens']
+                    record['completion_tokens'] = row['completion_tokens']
+                    record['total_tokens'] = row['total_tokens']
+                    record['total_cost'] = row['total_cost']
+                logger.info(f'Loaded token usage for {len(rows)} users from PostgreSQL')
+            finally:
+                await conn.close()
+
+        asyncio.get_event_loop().run_until_complete(load())
 
     def _save_usage(self) -> None:
-        """Persist usage data to disk."""
+        """Persist usage data to PostgreSQL."""
         try:
-            self.usage_file.parent.mkdir(parents=True, exist_ok=True)
-            temp_file = self.usage_file.with_suffix('.json.tmp')
-            data = {user: dict(stats) for user, stats in self._usage.items()}
-            with open(temp_file, 'w') as f:
-                json.dump(data, f, indent=2)
-            if os.name == 'nt':
-                if self.usage_file.exists():
-                    self.usage_file.unlink()
-                os.rename(temp_file, self.usage_file)
-            else:
-                os.rename(temp_file, self.usage_file)
+            self._save_to_postgres()
         except Exception as e:
             logger.error(f'Error saving token usage: {e}')
+
+    def _save_to_postgres(self) -> None:
+        """Save token usage to PostgreSQL."""
+        import asyncpg
+        import asyncio
+
+        db_url = getattr(self.config.secrets, 'database_url', None) if hasattr(self.config, 'secrets') else None
+        if not db_url:
+            raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
+
+        async def save():
+            conn = await asyncpg.connect(db_url)
+            try:
+                for user_id, stats in self._usage.items():
+                    await conn.execute("""
+                        INSERT INTO token_usage (user_id, prompt_tokens, completion_tokens, total_tokens, total_cost)
+                        VALUES ($1, $2, $3, $4, $5)
+                        ON CONFLICT (user_id) DO UPDATE SET
+                            prompt_tokens = EXCLUDED.prompt_tokens,
+                            completion_tokens = EXCLUDED.completion_tokens,
+                            total_tokens = EXCLUDED.total_tokens,
+                            total_cost = EXCLUDED.total_cost,
+                            updated_at = NOW()
+                    """, user_id, stats['prompt_tokens'], stats['completion_tokens'],
+                         stats['total_tokens'], stats['total_cost'])
+                logger.debug(f'Saved token usage for {len(self._usage)} users to PostgreSQL')
+            finally:
+                await conn.close()
+
+        asyncio.get_event_loop().run_until_complete(save())
 
     def add_usage(self, user_id: str, usage: dict[str, float]) -> None:
         """Add token usage for a user and persist it."""

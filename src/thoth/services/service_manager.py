@@ -4,11 +4,13 @@ from typing import Any
 
 from loguru import logger
 
+from thoth.discovery.discovery_manager import DiscoveryManager
 from thoth.knowledge.graph import CitationGraph
 from thoth.services.api_gateway import ExternalAPIGateway
 from thoth.services.article_service import ArticleService
 from thoth.services.base import BaseService
 from thoth.services.citation_service import CitationService
+from thoth.services.discovery_orchestrator import DiscoveryOrchestrator
 from thoth.services.discovery_service import DiscoveryService
 from thoth.services.letta_service import LettaService
 from thoth.services.llm_service import LLMService
@@ -17,9 +19,11 @@ from thoth.services.pdf_locator_service import PdfLocatorService
 from thoth.services.processing_service import ProcessingService
 from thoth.services.query_service import QueryService
 from thoth.services.rag_service import RAGService
+from thoth.services.research_question_service import ResearchQuestionService
 from thoth.services.tag_service import TagService
 from thoth.services.web_search_service import WebSearchService
-from thoth.utilities.config import ThothConfig, get_config
+from thoth.services.postgres_service import PostgresService
+from thoth.config import config as global_config, Config
 
 # Optional optimized services
 try:
@@ -39,14 +43,14 @@ class ServiceManager:
     handling initialization and dependency injection.
     """
 
-    def __init__(self, config: ThothConfig | None = None):
+    def __init__(self, config: Config | None = None):
         """
         Initialize the ServiceManager.
 
         Args:
             config: Optional configuration object
         """
-        self.config = config or get_config()
+        self.config = config or global_config
         self._services = {}
         self._initialized = False
 
@@ -91,6 +95,31 @@ class ServiceManager:
         # Initialize services that need dependencies
         self._services['citation'] = CitationService(config=self.config)
 
+        # Initialize postgres service for database operations
+        self._services['postgres'] = PostgresService(config=self.config)
+
+        # Initialize research question service with postgres
+        self._services['research_question'] = ResearchQuestionService(
+            config=self.config,
+            postgres_service=self._services['postgres']
+        )
+
+        # Initialize discovery manager (needed for orchestrator)
+        from thoth.repositories.available_source_repository import AvailableSourceRepository
+        source_repo = AvailableSourceRepository(self._services['postgres'])
+        self._services['discovery_manager'] = DiscoveryManager(
+            sources_config_dir=self.config.discovery_sources_dir,
+            source_repo=source_repo,
+        )
+
+        # Initialize discovery orchestrator with dependencies
+        self._services['discovery_orchestrator'] = DiscoveryOrchestrator(
+            config=self.config,
+            llm_service=self._services['llm'],
+            discovery_manager=self._services['discovery_manager'],
+            postgres_service=self._services['postgres'],
+        )
+
         # Tag service requires OpenRouter API key - initialize if available
         try:
             self._services['tag'] = TagService(
@@ -99,7 +128,12 @@ class ServiceManager:
                 citation_tracker=None,  # Will be set by pipeline
             )
         except Exception as e:
-            logger.warning(f'TagService initialization skipped: {e}')
+            # Check if this is an expected API key error during early initialization
+            error_msg = str(e)
+            if 'API key not found' in error_msg or 'OPENROUTER' in error_msg:
+                logger.debug(f'TagService initialization deferred (API keys loading): {e}')
+            else:
+                logger.warning(f'TagService initialization skipped: {e}')
             self._services['tag'] = None
 
         # Initialize optimized services if available

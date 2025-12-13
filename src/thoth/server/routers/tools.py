@@ -183,9 +183,9 @@ async def execute_download_pdf_tool(parameters: dict[str, Any]) -> dict[str, Any
 
     try:
         from thoth.ingestion.pdf_downloader import download_pdf
-        from thoth.utilities.config import get_config
+        from thoth.config import config
 
-        config = get_config()
+        config  # Already imported at module level
         pdf_path, metadata = download_pdf(url, config.pdf_dir)
 
         return {

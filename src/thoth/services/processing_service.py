@@ -50,6 +50,30 @@ class ProcessingService(BaseService):
         self._ocr_service = None
         self._citation_service = None
 
+    def _save_markdown_to_postgres(self, paper_title: str, markdown_content: str) -> None:
+        """Save markdown content directly to PostgreSQL."""
+        import asyncpg
+        import asyncio
+
+        db_url = getattr(self.config.secrets, 'database_url', None) if hasattr(self.config, 'secrets') else None
+        if not db_url:
+            raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
+
+        async def save():
+            conn = await asyncpg.connect(db_url)
+            try:
+                await conn.execute("""
+                    INSERT INTO papers (title, markdown_content, created_at, updated_at)
+                    VALUES ($1, $2, NOW(), NOW())
+                    ON CONFLICT (title) DO UPDATE SET
+                        markdown_content = EXCLUDED.markdown_content,
+                        updated_at = NOW()
+                """, paper_title, markdown_content)
+            finally:
+                await conn.close()
+
+        asyncio.get_event_loop().run_until_complete(save())
+
     @property
     def mistral_client(self) -> Mistral:
         """Get or create the Mistral client for OCR."""
@@ -125,11 +149,13 @@ class ProcessingService(BaseService):
 
             combined_markdown = self._get_combined_markdown(ocr_response)
             output_path = output_dir / f'{pdf_path.stem}.md'
-            output_path.write_text(combined_markdown)
 
             no_images_markdown = self._join_markdown_pages(ocr_response)
             no_images_output_path = output_dir / f'{pdf_path.stem}_no_images.md'
-            no_images_output_path.write_text(no_images_markdown)
+
+            # Save to PostgreSQL only
+            self._save_markdown_to_postgres(pdf_path.stem, no_images_markdown)
+            self.logger.info(f"Saved markdown to PostgreSQL for {pdf_path.stem}")
 
             self.log_operation(
                 'ocr_completed',

@@ -15,7 +15,7 @@ import websockets
 from loguru import logger
 
 from thoth.discovery.web_scraper import WebScraper
-from thoth.utilities.config import get_config
+from thoth.config import config
 from thoth.utilities.schemas import ChromeExtensionConfig, ScrapeConfiguration
 
 
@@ -35,7 +35,7 @@ class ChromeExtensionServer:
             port: Port to run the WebSocket server on.
         """
         self.port = port
-        self.config = get_config()
+        self.config = config
         self.web_scraper = WebScraper()
 
         # Configuration storage

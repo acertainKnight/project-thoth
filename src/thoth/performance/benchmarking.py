@@ -19,7 +19,7 @@ import psutil
 from loguru import logger
 
 from thoth.services.service_manager import ServiceManager
-from thoth.utilities.config import ThothConfig
+from thoth.config import config, Config
 
 
 @dataclass
@@ -131,7 +131,7 @@ class BenchmarkSuite:
 
     def __init__(
         self,
-        config: ThothConfig,
+        config: Config,
         service_manager: ServiceManager,
         output_dir: Path | None = None,
     ):

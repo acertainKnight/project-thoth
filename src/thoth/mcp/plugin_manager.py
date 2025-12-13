@@ -13,7 +13,7 @@ from typing import Any
 from loguru import logger
 from pydantic import BaseModel, Field, ValidationError
 
-from thoth.utilities.config.services import MCPConfig
+from thoth.config import MCPConfig
 
 
 class MCPPluginConfig(BaseModel):

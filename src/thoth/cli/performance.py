@@ -19,14 +19,14 @@ from thoth.pipeline import ThothPipeline
 from thoth.pipelines.optimized_document_pipeline import OptimizedDocumentPipeline
 from thoth.services.cache_service import CacheService
 from thoth.services.service_manager import ServiceManager
-from thoth.utilities.config import get_config
+from thoth.config import config
 
 
 def run_optimized_batch(args, pipeline: ThothPipeline):
     """
     Run optimized batch processing of PDFs.
     """
-    config = get_config()
+    # config imported globally from thoth.config
 
     # Load PDF list
     try:
@@ -129,7 +129,7 @@ def run_benchmark(args, pipeline: ThothPipeline):
     """
     Run performance benchmark comparing standard vs optimized processing.
     """
-    config = get_config()
+    # config imported globally from thoth.config
 
     # Get test PDFs
     if args.benchmark_files:
@@ -232,7 +232,7 @@ def run_cache_stats(args, pipeline: ThothPipeline):  # noqa: ARG001
     """
     Show cache statistics and management.
     """
-    config = get_config()
+    # config imported globally from thoth.config
     cache_service = CacheService(config)
     cache_service.initialize()
 
@@ -281,7 +281,7 @@ def run_system_info(args, pipeline: ThothPipeline):  # noqa: ARG001
 
     import psutil
 
-    config = get_config()
+    # config imported globally from thoth.config
 
     print('\n' + '=' * 50)
     print('SYSTEM INFORMATION')

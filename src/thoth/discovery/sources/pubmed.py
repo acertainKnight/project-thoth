@@ -323,7 +323,7 @@ class PubMedAPISource(BaseAPISource):
                 title=title.strip(),
                 authors=authors,
                 abstract=abstract.strip() if abstract else None,
-                published_date=pub_date,
+                publication_date=pub_date,
                 journal=journal,
                 doi=doi,
                 url=url,

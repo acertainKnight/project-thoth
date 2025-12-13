@@ -48,9 +48,9 @@ def get_memory_manager() -> LettaMemoryManager:
     """
     global memory_manager
     if memory_manager is None:
-        from thoth.utilities.config import get_config
+        from thoth.config import config
 
-        config = get_config()
+        # config imported globally from thoth.config
 
         # Use config values if available
         base_url = getattr(config, 'letta_server_url', 'http://localhost:8283')

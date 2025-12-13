@@ -11,7 +11,7 @@ from loguru import logger
 
 from thoth.services.base import BaseService
 from thoth.services.llm_service import LLMService
-from thoth.utilities.config import ThothConfig
+from thoth.config import config, Config
 from thoth.utilities.openrouter import OpenRouterClient, get_openrouter_models
 
 if TYPE_CHECKING:
@@ -26,7 +26,7 @@ class LLMRouter(BaseService):
 
     def __init__(
         self,
-        config: ThothConfig | None = None,
+        config: Config | None = None,
         llm_service: LLMService | None = None,
     ):
         """

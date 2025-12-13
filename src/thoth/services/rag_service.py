@@ -34,24 +34,27 @@ class RAGService(BaseService):
         super().__init__(config)
         self._rag_manager = rag_manager
         self._index_stats: dict[str, Any] = {}
+        self.logger.debug('RAGService.__init__() completed - embeddings NOT loaded yet')
 
     def initialize(self) -> None:
         """Initialize the RAG service."""
-        self.logger.info('RAG service initialized')
+        self.logger.info('RAG service initialized (embeddings will load on first use)')
 
     @property
     def rag_manager(self) -> RAGManager:
         """Get or create the RAG manager."""
         if self._rag_manager is None:
+            self.logger.info('Lazy-loading RAGManager (downloading embeddings model, this may take 30-120s)...')
             self._rag_manager = RAGManager(
                 embedding_model=self.config.rag_config.embedding_model,
-                llm_model=self.config.rag_config.qa_model,
+                llm_model=self.config.rag_config.qa.model,
                 collection_name=self.config.rag_config.collection_name,
                 vector_db_path=self.config.rag_config.vector_db_path,
                 chunk_size=self.config.rag_config.chunk_size,
                 chunk_overlap=self.config.rag_config.chunk_overlap,
                 openrouter_api_key=self.config.api_keys.openrouter_key,
             )
+            self.logger.info('RAGManager loaded successfully')
         return self._rag_manager
 
     def index_file(self, file_path: Path) -> list[str]:
