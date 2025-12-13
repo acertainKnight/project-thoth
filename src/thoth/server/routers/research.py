@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from thoth.server.chat_models import ChatMessage
 from thoth.services.llm_router import LLMRouter
-from thoth.utilities.config import get_config
+from thoth.config import config
 
 router = APIRouter()
 
@@ -70,7 +70,7 @@ async def research_chat(request: ChatRequest) -> ChatResponse:
 
     try:
         # Initialize router and select model based on query
-        config = get_config()
+        config  # Already imported at module level
         llm_router = LLMRouter(config)
         selected_model = llm_router.select_model(request.message)
 

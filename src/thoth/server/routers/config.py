@@ -8,9 +8,11 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from thoth.utilities.config import ThothConfig, get_config
-from thoth.utilities.config.schema_generator import SchemaGenerator
-from thoth.utilities.config.validation import EnhancedValidator
+from thoth.config import config
+
+# TODO: Re-implement SchemaGenerator and EnhancedValidator for new config system
+# from thoth.utilities.config.schema_generator import SchemaGenerator
+# from thoth.utilities.config.validation import EnhancedValidator
 
 router = APIRouter()
 
@@ -37,7 +39,7 @@ class SchemaVersionResponse(BaseModel):
 def export_config_for_obsidian():
     """Export current configuration in Obsidian plugin format."""
     try:
-        config = get_config()
+        config  # Already imported at module level
         obsidian_config = config.export_for_obsidian()
 
         return JSONResponse(
@@ -60,10 +62,10 @@ def export_config_for_obsidian():
 async def import_config_from_obsidian(obsidian_config: dict[str, Any]):
     """Import configuration from Obsidian plugin format and validate it."""
     try:
-        from thoth.utilities.config import ThothConfig
+        from thoth.config import config
 
         # Import configuration from Obsidian format
-        imported_config = ThothConfig.import_from_obsidian(obsidian_config)
+        config
 
         # Validate the imported configuration
         validation_result = imported_config.validate_for_obsidian()
@@ -102,8 +104,9 @@ async def import_config_from_obsidian(obsidian_config: dict[str, Any]):
 @router.post('/validate')
 async def validate_config(config_data: dict[str, Any] | None = None):
     """Validate configuration data with enhanced error messages and suggestions."""
+    raise HTTPException(status_code=501, detail="Validation endpoint temporarily disabled - needs migration to new config system")
     try:
-        validator = EnhancedValidator()
+        # validator = EnhancedValidator()
 
         if config_data:
             # Validate provided configuration data
@@ -111,7 +114,7 @@ async def validate_config(config_data: dict[str, Any] | None = None):
             source = 'provided'
         else:
             # Validate current configuration
-            current_config = get_config()
+            config
             config_dict = current_config.model_dump()
             validation_result = validator.validate_config(config_dict)
             source = 'current'
@@ -146,8 +149,9 @@ async def validate_config(config_data: dict[str, Any] | None = None):
 @router.post('/validate-partial')
 async def validate_partial_config(request: PartialValidationRequest):
     """Validate a single configuration field for real-time UI feedback."""
+    raise HTTPException(status_code=501, detail="Partial validation endpoint temporarily disabled - needs migration to new config system")
     try:
-        validator = EnhancedValidator()
+        # validator = EnhancedValidator()
 
         # Create partial config data for validation
         partial_data = {request.field_path: request.field_value}
@@ -186,10 +190,11 @@ def get_config_schema():
     """
     Get enhanced configuration schema with rich UI metadata for dynamic form generation.
     """
+    raise HTTPException(status_code=501, detail="Schema generation endpoint temporarily disabled - needs migration to new config system")
     try:
         # Generate comprehensive schema using SchemaGenerator
-        generator = SchemaGenerator()
-        schema = generator.generate_schema(ThothConfig)
+        # generator = SchemaGenerator()
+        # schema = generator.generate_schema(Config)
 
         # Add API metadata
         schema['generated_at'] = time.time()

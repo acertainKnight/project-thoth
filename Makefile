@@ -17,11 +17,12 @@
 # =============================================================================
 
 # Configuration Variables
-OBSIDIAN_VAULT ?= /mnt/c/Users/nghal/Documents/Obsidian Vault
-OBSIDIAN_VAULT_PATH ?= $(OBSIDIAN_VAULT)
+# Set OBSIDIAN_VAULT_PATH in your .env.vault file or export as environment variable
+OBSIDIAN_VAULT ?= $(OBSIDIAN_VAULT_PATH)
+OBSIDIAN_VAULT_PATH ?= $(error OBSIDIAN_VAULT_PATH not set. Please set it in .env.vault or export it)
 PLUGIN_SRC_DIR = obsidian-plugin/thoth-obsidian
 PLUGIN_DEST_DIR = $(OBSIDIAN_VAULT)/.obsidian/plugins/thoth-obsidian
-WATCH_DIR ?= /mnt/c/Users/nghal/Documents/Obsidian Vault/thoth/papers/pdfs
+WATCH_DIR ?= $(OBSIDIAN_VAULT_PATH)/thoth/papers/pdfs
 
 # Colors
 GREEN = \033[0;32m
@@ -322,18 +323,18 @@ local-start: ## Start services locally (Letta in Docker, rest local)
 	@uv run chroma run --host 0.0.0.0 --port 8003 --path ./workspace/data/chromadb > ./workspace/logs/chromadb.log 2>&1 &
 	@sleep 2
 	@echo "$(CYAN)Starting API server...$(NC)"
-	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT:-/mnt/c/Users/nghal/Documents/Obsidian Vault}"; \
+	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT_PATH}"; \
 	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/_thoth" THOTH_SETTINGS_FILE="$$VAULT/_thoth/settings.json" DOCKER_ENV=false THOTH_LETTA_URL=http://localhost:8283 LOG_LEVEL=WARNING uv run python -m thoth api --host 0.0.0.0 --port 8000 > ./workspace/logs/api.log 2>&1 &'
 	@sleep 3
 	@echo "$(CYAN)Starting MCP server...$(NC)"
-	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT:-/mnt/c/Users/nghal/Documents/Obsidian Vault}"; \
+	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT_PATH}"; \
 	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/_thoth" THOTH_SETTINGS_FILE="$$VAULT/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth mcp http --host 0.0.0.0 --port 8001 > ./workspace/logs/mcp.log 2>&1 &'
 	@sleep 2
 	@echo "$(CYAN)Starting Discovery service...$(NC)"
-	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT:-/mnt/c/Users/nghal/Documents/Obsidian Vault}"; \
+	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT_PATH}"; \
 	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/_thoth" THOTH_SETTINGS_FILE="$$VAULT/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth discovery server > ./workspace/logs/discovery.log 2>&1 &'
 	@sleep 2
-	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT:-/mnt/c/Users/nghal/Documents/Obsidian Vault}"; \
+	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT_PATH}"; \
 	WATCH="$(WATCH_DIR)"; \
 	echo "$(CYAN)Starting PDF Monitor (watching $$WATCH)...$(NC)"; \
 	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/_thoth" THOTH_SETTINGS_FILE="$$VAULT/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=INFO uv run python -m thoth monitor --watch-dir "$$WATCH" --optimized --recursive > ./workspace/logs/monitor.log 2>&1 &'
@@ -388,7 +389,7 @@ prod: ## Start production server (uses docker-compose.yml)
 			echo "  3. Command: make prod OBSIDIAN_VAULT_PATH=/path/to/vault"; \
 			echo ""; \
 			echo "$(YELLOW)For your setup:$(NC)"; \
-			echo "  OBSIDIAN_VAULT_PATH=\"/home/nick-hallmark/Documents/thoth\""; \
+			echo "  OBSIDIAN_VAULT_PATH=\"/path/to/your/vault\""; \
 			exit 1; \
 		fi; \
 		if [ -z "$$THOTH_DATA_MOUNT" ] && [ -n "$$VAULT_PATH" ]; then \

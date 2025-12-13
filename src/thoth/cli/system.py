@@ -7,7 +7,7 @@ from loguru import logger
 from thoth.pipeline import ThothPipeline
 from thoth.server.app import start_obsidian_server
 from thoth.server.pdf_monitor import PDFMonitor
-from thoth.utilities.config import get_config
+from thoth.config import config
 
 # Optional optimized pipeline import
 try:
@@ -23,7 +23,7 @@ def run_monitor(args, pipeline: ThothPipeline) -> int:
     """
     Run the PDF monitor with optional performance optimizations.
     """
-    config = get_config()
+    # config imported globally from thoth.config
     watch_dir = Path(args.watch_dir) if args.watch_dir else config.pdf_dir
     watch_dir.mkdir(parents=True, exist_ok=True)
 
@@ -58,10 +58,10 @@ def run_monitor(args, pipeline: ThothPipeline) -> int:
         )
         logger.info('Monitor using standard processing pipeline')
 
-    if args.api_server or config.api_server_config.auto_start:
-        api_host = args.api_host or config.api_server_config.host
-        api_port = args.api_port or config.api_server_config.port
-        api_base_url = args.api_base_url or config.api_server_config.base_url
+    if args.api_server or config.servers_config.api.auto_start:
+        api_host = args.api_host or config.servers_config.api.host
+        api_port = args.api_port or config.servers_config.api.port
+        api_base_url = args.api_base_url or getattr(config.servers_config.api, 'base_url', 'http://localhost:8000')
 
         api_thread = threading.Thread(
             target=start_obsidian_server,
@@ -126,7 +126,7 @@ def run_api_server(args, pipeline: ThothPipeline) -> int:
     """
     Run the Obsidian API server.
     """
-    config = get_config()
+    # config imported globally from thoth.config
     host = args.host or config.api_server_config.host
     port = args.port or config.api_server_config.port
     base_url = args.base_url or config.api_server_config.base_url

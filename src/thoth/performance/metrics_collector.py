@@ -17,7 +17,7 @@ import psutil
 from loguru import logger
 
 from thoth.services.service_manager import ServiceManager
-from thoth.utilities.config import ThothConfig
+from thoth.config import config
 
 
 @dataclass
@@ -128,7 +128,7 @@ class MetricsCollector:
 
     def __init__(
         self,
-        config: ThothConfig,
+        config: Config,
         service_manager: ServiceManager | None = None,
         collection_interval: int = 10,
         retention_hours: int = 24,

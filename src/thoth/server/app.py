@@ -6,11 +6,12 @@ It serves as the central entry point for the refactored API server.
 """
 
 import asyncio
+import os
 import signal
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import uvicorn
 from fastapi import FastAPI
@@ -19,18 +20,21 @@ from starlette.middleware.cors import CORSMiddleware
 
 from thoth.mcp.monitoring import mcp_health_router
 from thoth.server.chat_models import ChatPersistenceManager
+from thoth.server.hot_reload import SettingsFileWatcher
 from thoth.server.routers import (
     agent,
     chat,
-    config,
+    config as config_router,
     health,
     operations,
     research,
+    research_questions,
     tools,
     websocket,
 )
 from thoth.services.llm_router import LLMRouter
-from thoth.utilities.config import get_config
+from thoth.config import config
+from thoth.discovery.scheduler import DiscoveryScheduler
 
 # Module-level variables to store configuration
 pdf_dir: Path = None
@@ -48,6 +52,31 @@ llm_router = None
 
 # Chat persistence manager - will be initialized when server starts
 chat_manager: ChatPersistenceManager = None
+
+# Global watcher instance for settings hot-reload
+_settings_watcher: Optional[SettingsFileWatcher] = None
+
+# Global discovery scheduler instance - will be initialized when server starts
+discovery_scheduler: Optional[DiscoveryScheduler] = None
+
+
+def _should_enable_hot_reload() -> bool:
+    """Check if hot-reload should be enabled."""
+    # Enable in Docker or if explicitly requested
+    docker_env = os.getenv('DOCKER_ENV', 'false').lower() == 'true'
+    hot_reload_enabled = os.getenv('THOTH_HOT_RELOAD', '0') == '1'
+
+    return docker_env or hot_reload_enabled
+
+
+def _on_settings_reload():
+    """Callback when settings are reloaded."""
+    logger.info("Settings file changed, reloading configuration...")
+    try:
+        config.reload_settings()
+        logger.success("Configuration reloaded successfully!")
+    except Exception as e:
+        logger.error(f"Failed to reload configuration: {e}")
 
 
 async def shutdown_mcp_server(timeout: float = 10.0) -> None:
@@ -94,8 +123,97 @@ async def shutdown_mcp_server(timeout: float = 10.0) -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Handle FastAPI application lifespan events."""
+    global _settings_watcher, discovery_scheduler
+
     # Startup
     logger.info('Starting Thoth server application...')
+
+    # Initialize settings watcher if enabled
+    if _should_enable_hot_reload():
+        try:
+            settings_file = config.vault_root / '_thoth' / 'settings.json'
+
+            if settings_file.exists():
+                logger.info(f"Enabling hot-reload for {settings_file}")
+                _settings_watcher = SettingsFileWatcher(
+                    settings_file=settings_file,
+                    debounce_seconds=2.0,
+                    validate_before_reload=True
+                )
+                _settings_watcher.add_callback(_on_settings_reload)
+                _settings_watcher.start()
+                logger.success("Settings hot-reload enabled!")
+            else:
+                logger.warning(f"Settings file not found: {settings_file}")
+        except Exception as e:
+            logger.error(f"Failed to start settings watcher: {e}")
+            logger.warning("Continuing without hot-reload")
+    else:
+        logger.info("Hot-reload disabled (not in Docker environment)")
+
+    # Initialize PostgreSQL connection pool if postgres service exists
+    if service_manager and 'postgres' in service_manager._services:
+        try:
+            postgres_svc = service_manager._services['postgres']
+            await postgres_svc.initialize()
+            logger.success("PostgreSQL connection pool initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize PostgreSQL: {e}")
+            logger.warning("Continuing without PostgreSQL (some features may not work)")
+
+    # Initialize discovery scheduler after PostgreSQL is ready
+    if service_manager:
+        try:
+            from thoth.discovery.discovery_manager import DiscoveryManager
+
+            logger.info("Initializing discovery scheduler...")
+            discovery_manager = DiscoveryManager()
+
+            # Get required services for research question scheduling
+            research_question_service = None
+            discovery_orchestrator = None
+
+            try:
+                research_question_service = service_manager.get_service('research_question')
+            except Exception as e:
+                logger.warning(f"Research question service not available: {e}")
+
+            try:
+                discovery_orchestrator = service_manager.get_service('discovery_orchestrator')
+            except Exception as e:
+                logger.warning(f"Discovery orchestrator service not available: {e}")
+
+            # Get the current running event loop
+            event_loop = asyncio.get_running_loop()
+            logger.info(f"Passing event loop to scheduler: {event_loop}")
+
+            # Initialize scheduler with optional research question support and event loop
+            discovery_scheduler = DiscoveryScheduler(
+                discovery_manager=discovery_manager,
+                research_question_service=research_question_service,
+                discovery_orchestrator=discovery_orchestrator,
+                event_loop=event_loop  # Pass event loop for async operations from sync thread
+            )
+
+            # Sync scheduler with existing discovery sources
+            discovery_scheduler.sync_with_discovery_manager()
+
+            # Start the scheduler
+            discovery_scheduler.start()
+            logger.success("Discovery scheduler started successfully")
+
+            if research_question_service and discovery_orchestrator:
+                logger.info("Research question scheduling enabled")
+            else:
+                logger.info("Research question scheduling disabled (services not available)")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize discovery scheduler: {e}")
+            logger.warning("Continuing without discovery scheduler (scheduled discovery will not work)")
+            discovery_scheduler = None
+
+    logger.success("API server startup complete")
+
     try:
         yield
     except asyncio.CancelledError:
@@ -104,6 +222,25 @@ async def lifespan(_app: FastAPI):
     finally:
         # Shutdown
         logger.info('Shutting down Thoth server application...')
+
+        # Stop discovery scheduler
+        if discovery_scheduler is not None:
+            try:
+                logger.info("Stopping discovery scheduler...")
+                discovery_scheduler.stop()
+                logger.success("Discovery scheduler stopped")
+            except Exception as e:
+                logger.error(f"Error stopping discovery scheduler: {e}")
+
+        # Stop settings watcher
+        if _settings_watcher is not None:
+            try:
+                logger.info("Stopping settings watcher...")
+                _settings_watcher.stop()
+                logger.success("Settings watcher stopped")
+            except Exception as e:
+                logger.error(f"Error stopping settings watcher: {e}")
+
         try:
             await websocket.shutdown_background_tasks(timeout=5.0)
             await shutdown_mcp_server(timeout=5.0)
@@ -140,9 +277,59 @@ def create_app() -> FastAPI:
     app.include_router(chat.router, prefix='/chat', tags=['chat'])
     app.include_router(agent.router, prefix='/agents', tags=['agent'])
     app.include_router(research.router, prefix='/research', tags=['research'])
-    app.include_router(config.router, prefix='/config', tags=['config'])
+    app.include_router(research_questions.router, tags=['research-questions'])  # Week 4: Research question management
+    app.include_router(config_router.router, prefix='/config', tags=['config'])
     app.include_router(operations.router, prefix='/operations', tags=['operations'])
     app.include_router(tools.router, prefix='/tools', tags=['tools'])
+
+    # Add hot-reload health check endpoint
+    @app.get("/health/hot-reload")
+    async def health_hot_reload():
+        """Check hot-reload status."""
+        settings_file = config.vault_root / '_thoth' / 'settings.json'
+        reload_count = getattr(config, 'reload_callback_count', 0)
+
+        return {
+            "enabled": _settings_watcher is not None,
+            "settings_file": str(settings_file),
+            "callback_count": reload_count,
+            "status": "active" if _settings_watcher is not None else "disabled",
+            "docker_env": os.getenv('DOCKER_ENV', 'false').lower() == 'true',
+            "hot_reload_env": os.getenv('THOTH_HOT_RELOAD', '0') == '1'
+        }
+
+    # Add manual reload endpoint for testing
+    @app.post("/api/reload-config")
+    async def reload_config():
+        """Manually trigger config reload (for testing)."""
+        try:
+            logger.info("Manual config reload requested")
+            config.reload_settings()
+
+            # Trigger all registered callbacks if watcher is active
+            if _settings_watcher is not None:
+                _settings_watcher._trigger_reload()
+                callback_count = len(_settings_watcher._callbacks)
+                logger.success(f"Config reloaded successfully with {callback_count} callbacks")
+                return {
+                    "status": "success",
+                    "message": f"Config reloaded successfully ({callback_count} callbacks executed)",
+                    "timestamp": config._last_reload_time if hasattr(config, '_last_reload_time') else None
+                }
+            else:
+                logger.warning("Manual reload: watcher not active, only config reloaded")
+                return {
+                    "status": "success",
+                    "message": "Config reloaded (hot-reload not enabled, callbacks not executed)",
+                    "timestamp": None
+                }
+        except Exception as e:
+            logger.error(f"Manual reload failed: {e}")
+            return {
+                "status": "error",
+                "message": str(e),
+                "timestamp": None
+            }
 
     return app
 
@@ -205,8 +392,8 @@ async def start_server(
 
     try:
         # Get configuration
-        config = get_config()
-        current_config = config.model_dump()
+        # config imported globally from thoth.config
+        current_config = config.settings.model_dump() if hasattr(config, 'settings') else {}
 
         # Set up directories
         pdf_dir = config.pdf_dir
@@ -221,6 +408,7 @@ async def start_server(
         from thoth.services.service_manager import ServiceManager
 
         service_manager = ServiceManager()
+        service_manager.initialize()
 
         # Initialize LLM router
         llm_router = LLMRouter(config)  # noqa: F841

@@ -229,7 +229,9 @@ class OptimizedDocumentPipeline(BasePipeline):
             'Starting async parallel content analysis and citation extraction'
         )
 
-        loop = asyncio.get_event_loop()
+        # FIXED: Use get_running_loop() instead of get_event_loop()
+        # get_event_loop() is deprecated and can cause issues in threaded contexts
+        loop = asyncio.get_running_loop()
 
         # PRIORITY 3: Use persistent executors instead of creating new ones
         analysis_task = loop.run_in_executor(
@@ -296,7 +298,8 @@ class OptimizedDocumentPipeline(BasePipeline):
     ) -> None:
         """Background RAG indexing using async I/O."""
         try:
-            loop = asyncio.get_event_loop()
+            # FIXED: Use get_running_loop() instead of get_event_loop()
+            loop = asyncio.get_running_loop()
 
             # PRIORITY 3: Use persistent background tasks executor
             await loop.run_in_executor(
@@ -420,11 +423,15 @@ class OptimizedDocumentPipeline(BasePipeline):
             citations=citations,
         )
 
+        # Get LLM model from config for tracking
+        llm_model = getattr(self.services.config.llm_config, 'model', None)
+
         article_id = self.citation_tracker.process_citations(
             pdf_path=new_pdf_path,
             markdown_path=new_markdown_path,
             analysis=analysis,
             citations=citations,
+            llm_model=llm_model,
         )
 
         if article_id:

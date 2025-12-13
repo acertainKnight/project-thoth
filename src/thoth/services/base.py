@@ -10,7 +10,7 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader
 from loguru import logger
 
-from thoth.utilities.config import ThothConfig, get_config
+from thoth.config import config, Config
 
 
 class ServiceError(Exception):
@@ -71,7 +71,7 @@ class BaseService:
     and error handling patterns.
     """
 
-    def __init__(self, config: ThothConfig | None = None):
+    def __init__(self, thoth_config: Config | None = None):
         """
         Initialize the base service.
 
@@ -79,11 +79,12 @@ class BaseService:
             config: Optional configuration object. If not provided, will load from
                 environment.
         """
-        self._config = config or get_config()
+        from thoth.config import config as global_config
+        self._config = thoth_config or global_config
         self._logger = logger.bind(service=self.__class__.__name__)
 
     @property
-    def config(self) -> ThothConfig:
+    def config(self) -> Config:
         """Get the configuration object."""
         return self._config
 
@@ -120,7 +121,12 @@ class BaseService:
             error_msg += f' while {context}'
         error_msg += f': {error!s}'
 
-        self.logger.error(error_msg)
+        # Check if this is an expected API key error during early initialization
+        error_str = str(error)
+        if 'API key not found' in error_str or ('OPENROUTER' in error_str.upper() and 'API' in error_str.upper()):
+            self.logger.debug(error_msg)
+        else:
+            self.logger.error(error_msg)
         return error_msg
 
     def validate_input(self, **kwargs) -> None:

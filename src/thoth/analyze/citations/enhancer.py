@@ -13,10 +13,10 @@ class CitationEnhancer:
 
     def __init__(self, config):
         self.config = config
-        self.use_semanticscholar = config.citation_config.use_semanticscholar
-        self.use_opencitations = config.citation_config.use_opencitations
-        self.use_scholarly = config.citation_config.use_scholarly
-        self.use_arxiv = config.citation_config.use_arxiv
+        self.use_semanticscholar = config.citation_config.apis.use_semantic_scholar
+        self.use_opencitations = config.citation_config.apis.use_opencitations
+        self.use_scholarly = config.citation_config.apis.use_scholarly
+        self.use_arxiv = config.citation_config.apis.use_arxiv
 
         # Initialize Semantic Scholar with performance optimizations
         if self.use_semanticscholar:
@@ -137,9 +137,15 @@ class CitationEnhancer:
                     need_scholarly.append(citation)
 
         # Step 3: Process remaining APIs in parallel
-        max_workers = getattr(self.config, 'performance_config', None)
-        if max_workers:
-            max_workers = max_workers.citation_enhancement_workers
+        perf_config = getattr(self.config, 'performance_config', None)
+        if perf_config and hasattr(perf_config, 'workers'):
+            worker_config = perf_config.workers.citation_enhancement
+            # Resolve "auto" to actual worker count
+            if worker_config == 'auto':
+                import os
+                max_workers = max(1, os.cpu_count() or 3)
+            else:
+                max_workers = int(worker_config)
         else:
             max_workers = 3  # Fallback default
         with ThreadPoolExecutor(max_workers=max_workers) as executor:

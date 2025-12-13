@@ -16,7 +16,7 @@ from loguru import logger
 from thoth.rag.embeddings import EmbeddingManager
 from thoth.rag.vector_store import VectorStoreManager
 from thoth.utilities import OpenRouterClient
-from thoth.utilities.config import get_config
+from thoth.config import config
 
 
 class RAGManager:
@@ -54,11 +54,11 @@ class RAGManager:
             chunk_encoding: Encoding for token counting (defaults to config).
             openrouter_api_key: API key for OpenRouter (defaults to config).
         """
-        self.config = get_config()
+        self.config = config
 
         # Set parameters from config or arguments
         self.embedding_model = embedding_model or self.config.rag_config.embedding_model
-        self.llm_model = llm_model or self.config.rag_config.qa_model
+        self.llm_model = llm_model or self.config.rag_config.qa.model
         self.collection_name = collection_name or self.config.rag_config.collection_name
         self.vector_db_path = Path(
             vector_db_path or self.config.rag_config.vector_db_path
@@ -70,6 +70,10 @@ class RAGManager:
 
         # Initialize components
         self._init_components()
+
+        # Register for config reload notifications
+        self.config.register_reload_callback("rag_manager", self._on_config_reload)
+        logger.debug("RAGManager registered for config reload notifications")
 
         logger.info('RAGManager initialized successfully')
 
@@ -100,11 +104,59 @@ class RAGManager:
         self.llm = OpenRouterClient(
             api_key=self.api_key,
             model=self.llm_model,
-            temperature=self.config.rag_config.qa_temperature,
-            max_tokens=self.config.rag_config.qa_max_tokens,
+            temperature=self.config.rag_config.qa.temperature,
+            max_tokens=self.config.rag_config.qa.max_tokens,
         )
 
         logger.debug('All RAG components initialized')
+
+    def _on_config_reload(self, config: 'Config') -> None:
+        """
+        Handle configuration reload for RAG system.
+
+        Args:
+            config: Updated configuration object
+
+        Updates:
+        - Embedding model if changed
+        - Chunk size/overlap if changed
+        - Vector store connection if needed
+        - QA model settings
+        """
+        try:
+            logger.info("Reloading RAG configuration...")
+
+            # Track changes for logging
+            embedding_changed = self.embedding_model != self.config.rag_config.embedding_model
+            qa_model_changed = self.llm_model != self.config.rag_config.qa.model
+            chunk_size_changed = self.chunk_size != self.config.rag_config.chunk_size
+
+            # Log what's changing
+            if embedding_changed:
+                logger.info(f"Embedding model changed: {self.embedding_model} → {self.config.rag_config.embedding_model}")
+            if qa_model_changed:
+                logger.info(f"QA model changed: {self.llm_model} → {self.config.rag_config.qa.model}")
+            if chunk_size_changed:
+                logger.info(f"Chunk size changed: {self.chunk_size} → {self.config.rag_config.chunk_size}")
+
+            # Update configuration parameters
+            self.embedding_model = self.config.rag_config.embedding_model
+            self.llm_model = self.config.rag_config.qa.model
+            self.collection_name = self.config.rag_config.collection_name
+            self.vector_db_path = Path(self.config.rag_config.vector_db_path)
+            self.chunk_size = self.config.rag_config.chunk_size
+            self.chunk_overlap = self.config.rag_config.chunk_overlap
+            self.chunk_encoding = self.config.rag_config.chunk_encoding
+            self.api_key = self.config.api_keys.openrouter_key
+
+            # Reinitialize components with new config
+            # Note: This recreates embedding manager and LLM clients
+            self._init_components()
+
+            logger.success("✅ RAG config reloaded successfully")
+
+        except Exception as e:
+            logger.error(f"RAG config reload failed: {e}")
 
     def _has_images(self, content: str) -> bool:
         """

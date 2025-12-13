@@ -52,7 +52,7 @@ class CitationProcessor:
         self.llm = llm
         self.config = config
         self.enhancer = CitationEnhancer(config)
-        self.citation_batch_size = self.config.citation_config.citation_batch_size
+        self.citation_batch_size = self.config.citation_config.processing.batch_size
         self._pdf_locator = None
 
         # Set up prompts directory based on model provider
@@ -359,9 +359,15 @@ class CitationProcessor:
                 return None
 
         # Process citations in parallel with configurable concurrency
-        max_workers = getattr(self.config, 'performance_config', None)
-        if max_workers:
-            max_workers = max_workers.citation_extraction_workers
+        perf_config = getattr(self.config, 'performance_config', None)
+        if perf_config and hasattr(perf_config, 'workers'):
+            worker_config = perf_config.workers.citation_extraction
+            # Resolve "auto" to actual worker count
+            if worker_config == 'auto':
+                import os
+                max_workers = max(1, os.cpu_count() or 4)
+            else:
+                max_workers = int(worker_config)
         else:
             max_workers = 4  # Fallback default
 
@@ -638,9 +644,15 @@ class CitationProcessor:
             return False
 
         # Process PDF location in parallel with configurable concurrency
-        max_workers = getattr(self.config, 'performance_config', None)
-        if max_workers:
-            max_workers = max_workers.citation_pdf_workers
+        perf_config = getattr(self.config, 'performance_config', None)
+        if perf_config and hasattr(perf_config, 'workers'):
+            worker_config = perf_config.workers.citation_pdf
+            # Resolve "auto" to actual worker count
+            if worker_config == 'auto':
+                import os
+                max_workers = max(1, os.cpu_count() or 5)
+            else:
+                max_workers = int(worker_config)
         else:
             max_workers = 5  # Fallback default
         with ThreadPoolExecutor(max_workers=max_workers) as executor:

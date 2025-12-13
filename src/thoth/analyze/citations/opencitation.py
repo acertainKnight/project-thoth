@@ -20,7 +20,7 @@ class OpenCitationsAPI:
         access_token: str | None = None,
         timeout: int = 10,
         delay_seconds: float = 1.0,
-        max_retries: int = 9,
+        max_retries: int = 0,
     ):
         """
         Initialize OpenCitations API client.

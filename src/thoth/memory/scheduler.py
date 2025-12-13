@@ -18,7 +18,7 @@ from loguru import logger
 
 from thoth.memory.store import ThothMemoryStore
 from thoth.memory.summarization import MemorySummarizationJob
-from thoth.utilities.config import get_config
+from thoth.config import config
 
 
 class MemorySchedulerError(Exception):
@@ -73,7 +73,7 @@ class MemoryScheduler:
             memory_store: ThothMemoryStore instance
             schedule_file: Path to file for storing schedule state
         """
-        self.config = get_config()
+        self.config = config
         self.memory_store = memory_store
 
         # Schedule state file

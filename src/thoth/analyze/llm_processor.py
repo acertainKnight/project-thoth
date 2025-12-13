@@ -83,14 +83,27 @@ class LLMProcessor:
         self.map_reduce_threshold = int(
             max_context_length * map_reduce_threshold_multiplier
         )
-        model_kwargs.pop('max_tokens', None)
+
+        # Remove parameters that conflict with explicit arguments to get_client()
+        # to avoid "got multiple values for keyword argument" errors
+        client_kwargs = self.model_kwargs.copy()
+        client_kwargs.pop('model', None)  # We're passing model explicitly
+        client_kwargs.pop('max_tokens', None)  # We're passing max_tokens explicitly
+        client_kwargs.pop('max_output_tokens', None)  # Not used by get_client
+        client_kwargs.pop('max_context_length', None)  # Not used by get_client
+        client_kwargs.pop('chunk_size', None)  # Not used by get_client
+        client_kwargs.pop('chunk_overlap', None)  # Not used by get_client
+        client_kwargs.pop('doc_processing', None)  # Not used by get_client
+        client_kwargs.pop('refine_threshold_multiplier', None)  # Not used by get_client
+        client_kwargs.pop('map_reduce_threshold_multiplier', None)  # Not used by get_client
+
         # Pass provider if available in config
         provider = getattr(self.llm_service.config.llm_config, 'provider', None)
         self.llm = self.llm_service.get_client(
             model=self.model,
             max_tokens=self.max_output_tokens,
             provider=provider,
-            **self.model_kwargs,
+            **client_kwargs,
         )
 
         logger.debug(f'Refine threshold: {self.refine_threshold}')

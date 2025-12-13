@@ -169,7 +169,7 @@ class CrossRefAPISource(BaseAPISource):
             title=title,
             authors=authors,
             abstract=abstract,
-            published_date=pub_date,
+            publication_date=pub_date,
             journal=journal,
             doi=doi,
             url=url,

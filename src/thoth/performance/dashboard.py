@@ -18,7 +18,7 @@ from thoth.performance.pipeline_analyzer import PipelineAnalyzer
 from thoth.performance.reliability_analyzer import ReliabilityAnalyzer
 from thoth.performance.workflow_monitor import WorkflowMonitor
 from thoth.services.service_manager import ServiceManager
-from thoth.utilities.config import ThothConfig
+from thoth.config import config, Config
 
 
 class PerformanceDashboard:
@@ -35,7 +35,7 @@ class PerformanceDashboard:
 
     def __init__(
         self,
-        config: ThothConfig,
+        config: Config,
         service_manager: ServiceManager,
         metrics_collector: MetricsCollector | None = None,
         pipeline_analyzer: PipelineAnalyzer | None = None,

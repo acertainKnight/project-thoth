@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from pydantic import BaseModel
 
-from thoth.utilities.config import get_config
+from thoth.config import config
 
 router = APIRouter()
 
@@ -139,7 +139,7 @@ def get_agent_config():
     """Get current agent configuration."""
     try:
         # Get current config from the global config or reload it
-        config = get_config()
+        config  # Already imported at module level
 
         # Return sanitized config (without sensitive data)
         sanitized_config = {

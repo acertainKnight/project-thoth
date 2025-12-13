@@ -40,9 +40,53 @@ class LLMService(BaseService):
         self._prompt_templates: dict[str, ChatPromptTemplate] = {}
         self.factory = LLMFactory()
 
+        # Register for config reload notifications
+        if self.config:
+            from thoth.config import Config
+            Config.register_reload_callback("llm_service", self._on_config_reload)
+            self.logger.debug("LLMService registered for config reload notifications")
+
     def initialize(self) -> None:
         """Initialize the LLM service."""
         self.logger.info('LLM service initialized')
+
+    def _on_config_reload(self, config: 'Config') -> None:
+        """
+        Handle configuration reload for LLM service.
+
+        Args:
+            config: Updated configuration object
+
+        Updates:
+        - Model settings (temperature, max_tokens, etc.)
+        - Model selection if changed
+        - API keys (from config)
+        - Clears client cache to force recreation
+        """
+        try:
+            self.logger.info("Reloading LLM configuration...")
+
+            # Track what's changing
+            old_cache_size = len(self._clients)
+
+            # Clear client cache to force recreation with new config
+            self._clients.clear()
+            self._structured_clients.clear()
+
+            # Log configuration changes
+            self.logger.info(f"Cleared {old_cache_size} cached LLM clients")
+            self.logger.info(f"Default model: {self.config.llm_config.model}")
+            self.logger.info(f"Temperature: {self.config.llm_config.model_settings.temperature}")
+            self.logger.info(f"Max tokens: {self.config.llm_config.model_settings.max_tokens}")
+
+            # Log citation model if available
+            if hasattr(self.config, 'llm_config') and hasattr(self.config.llm_config, 'citation'):
+                self.logger.info(f"Citation model: {self.config.llm_config.citation.model}")
+
+            self.logger.success("✅ LLM config reloaded")
+
+        except Exception as e:
+            self.logger.error(f"LLM config reload failed: {e}")
 
     def _get_client(
         self,
@@ -106,9 +150,20 @@ class LLMService(BaseService):
             model_kwargs.update(kwargs)
 
             # Remove parameters that we're passing explicitly to avoid conflicts
+            model_kwargs.pop('model', None)  # We're passing model explicitly
             model_kwargs.pop('temperature', None)
             model_kwargs.pop('max_tokens', None)
             model_kwargs.pop('use_rate_limiter', None)
+
+            # Remove Thoth-specific parameters that are not valid LangChain/API parameters
+            thoth_specific_params = [
+                'doc_processing', 'max_output_tokens', 'max_context_length',
+                'chunk_size', 'chunk_overlap', 'refine_threshold_multiplier',
+                'map_reduce_threshold_multiplier', 'consolidate_model',
+                'suggest_model', 'map_model'
+            ]
+            for param in thoth_specific_params:
+                model_kwargs.pop(param, None)
 
             # Determine provider - ALWAYS default to openrouter
             # unless explicitly specified
@@ -363,25 +418,26 @@ class LLMService(BaseService):
                     'max_context_length': self.config.llm_config.max_context_length,
                 },
                 'citation': {
-                    'model': self.config.citation_llm_config.model,
-                    'settings': self.config.citation_llm_config.model_settings.model_dump(),
-                    'max_output_tokens': self.config.citation_llm_config.max_output_tokens,
+                    'model': self.config.llm_config.citation.model,
+                    'temperature': self.config.llm_config.citation.temperature,
+                    'max_tokens': self.config.llm_config.citation.max_tokens,
+                    'max_output_tokens': self.config.llm_config.citation.max_output_tokens,
                 },
                 'filter': {
-                    'model': self.config.scrape_filter_llm_config.model,
-                    'settings': self.config.scrape_filter_llm_config.model_settings.model_dump(),
-                    'max_output_tokens': self.config.scrape_filter_llm_config.max_output_tokens,
+                    'model': self.config.llm_config.scrape_filter.model,
+                    'settings': self.config.llm_config.scrape_filter.model_settings.model_dump(),
+                    'max_output_tokens': self.config.llm_config.scrape_filter.max_output_tokens,
                 },
                 'agent': {
-                    'model': self.config.research_agent_llm_config.model,
-                    'settings': self.config.research_agent_llm_config.model_settings.model_dump(),
-                    'max_output_tokens': self.config.research_agent_llm_config.max_output_tokens,
+                    'model': self.config.llm_config.research_agent.model,
+                    'settings': self.config.llm_config.research_agent.model_settings.model_dump(),
+                    'max_output_tokens': self.config.llm_config.research_agent.max_output_tokens,
                 },
                 'tag': {
-                    'consolidate_model': self.config.tag_consolidator_llm_config.consolidate_model,
-                    'suggest_model': self.config.tag_consolidator_llm_config.suggest_model,
-                    'map_model': self.config.tag_consolidator_llm_config.map_model,
-                    'settings': self.config.tag_consolidator_llm_config.model_settings.model_dump(),
+                    'consolidate_model': self.config.llm_config.tag_consolidator.consolidate_model,
+                    'suggest_model': self.config.llm_config.tag_consolidator.suggest_model,
+                    'map_model': self.config.llm_config.tag_consolidator.map_model,
+                    'settings': self.config.llm_config.tag_consolidator.model_dump(),
                 },
             }
 

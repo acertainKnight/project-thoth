@@ -11,7 +11,7 @@ from typing import Any
 from thoth.analyze.tag_consolidator import TagConsolidator
 from thoth.services.base import BaseService, ServiceError
 from thoth.services.llm_service import LLMService
-from thoth.utilities.config import ThothConfig
+from thoth.config import config, Config
 
 
 class TagService(BaseService):
@@ -27,7 +27,7 @@ class TagService(BaseService):
 
     def __init__(
         self,
-        config: ThothConfig | None = None,
+        config: Config | None = None,
         llm_service: LLMService | None = None,
         citation_tracker: Any | None = None,
     ):
@@ -47,7 +47,7 @@ class TagService(BaseService):
             llm_service=self.llm_service,
             prompts_dir=self.config.prompts_dir,
             config=self.config,
-            model_kwargs=self.config.tag_consolidator_llm_config.model_settings.model_dump(),
+            model_kwargs=self.config.llm_config.tag_consolidator.model_dump(),
         )
 
     def initialize(self) -> None:

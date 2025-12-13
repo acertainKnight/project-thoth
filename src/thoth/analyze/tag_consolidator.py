@@ -15,7 +15,7 @@ from loguru import logger
 
 from thoth.knowledge.graph import CitationGraph
 from thoth.services.llm_service import LLMService
-from thoth.utilities.config import ThothConfig
+from thoth.config import config, Config
 from thoth.utilities.schemas import (
     ConsolidatedTagsResponse,
     SingleTagMappingResponse,
@@ -43,7 +43,7 @@ class TagConsolidator:
         self,
         llm_service: LLMService,
         prompts_dir: str | Path,
-        config: ThothConfig,
+        config: Config,
         model_kwargs: dict[str, Any] | None = None,
     ):
         """

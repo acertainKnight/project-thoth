@@ -430,7 +430,7 @@ class SettingsService(BaseService):
 
         Args:
             settings_path: Path to the settings JSON file (optional, will auto-detect)
-            config: Optional ThothConfig instance (pass None to avoid circular deps)
+            config: Optional Config instance (pass None to avoid circular deps)
         """
         # Only call super().__init__(config) if config is not explicitly None
         # This avoids circular dependency when used by HybridConfigLoader
@@ -1098,9 +1098,9 @@ class SettingsService(BaseService):
         Returns:
             Migrated settings dictionary
         """
-        from thoth.utilities.config import get_config
+        from thoth.config import config
 
-        config = get_config()
+        config  # Already imported at module level
 
         # Build settings structure from current config
         settings = {

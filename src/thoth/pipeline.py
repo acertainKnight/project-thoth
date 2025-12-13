@@ -20,7 +20,7 @@ from thoth.pipelines.knowledge_pipeline import KnowledgePipeline
 from thoth.pipelines.optimized_document_pipeline import OptimizedDocumentPipeline
 from thoth.server.pdf_monitor import PDFTracker
 from thoth.services.service_manager import ServiceManager
-from thoth.utilities.config import get_config
+from thoth.config import config
 from thoth.utilities.schemas import SearchResult
 
 
@@ -70,7 +70,7 @@ class ThothPipeline:
         )
 
         # Load configuration
-        self.config = get_config()
+        self.config = config
 
         # Override API keys if provided
         if ocr_api_key:
@@ -93,6 +93,17 @@ class ThothPipeline:
         # Initialize service manager
         self.services = ServiceManager(config=self.config)
         self.services.initialize()
+
+        # Run automatic path migration on startup
+        # This ensures synced data from other machines works correctly
+        from thoth.services.path_migration_service import PathMigrationService
+
+        migration_service = PathMigrationService(self.config)
+        migration_results = migration_service.migrate_all()
+        if migration_results.get('tracker', {}).get('migrated') or migration_results.get(
+            'graph', {}
+        ).get('migrated'):
+            logger.info('Paths migrated to current machine configuration')
 
         # Initialize PDF tracker
         self.pdf_tracker = PDFTracker()

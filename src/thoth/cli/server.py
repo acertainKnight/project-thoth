@@ -48,10 +48,10 @@ def start_api_server(host='127.0.0.1', port=8000, base_url='/', reload=False):
         from pathlib import Path
 
         from thoth.server.app import start_obsidian_server
-        from thoth.utilities.config import get_config
+        from thoth.config import config
 
         # Get configuration
-        config = get_config()
+        # config imported globally from thoth.config
 
         # Run API server
         start_obsidian_server(
