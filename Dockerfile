@@ -38,16 +38,19 @@ ENV PYTHONUNBUFFERED=1 \
     THOTH_DOCKER=1 \
     THOTH_LOG_LEVEL=INFO
 
-# Install runtime system dependencies
+# Install runtime system dependencies including Node.js for MCP plugins
 RUN apt-get update && apt-get install -y \
     curl \
     wget \
     ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
 # Create non-root user for security
-RUN groupadd -r thoth && useradd -r -g thoth thoth
+# Use GID 1000 to match typical host user group for proper permissions when docker-compose overrides user
+RUN groupadd -g 1000 thoth && useradd -r -u 999 -g thoth thoth
 
 # Create application directories with proper permissions
 RUN mkdir -p /app /workspace /data/logs /data/cache \
@@ -59,11 +62,23 @@ COPY --from=builder --chown=thoth:thoth /app /app
 # Make sure we can run uv in the runtime (for any runtime needs)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
+# Ensure all Python files have group read permissions (docker-compose runs as UID 1000, GID 1000)
+# Both user thoth (999) and docker-compose user (1000) share group 1000
+RUN chmod -R g+r /app/src
+
 # Switch to non-root user
 USER thoth
 
 # Set working directory
 WORKDIR /app
+
+# Create cache, logs, and data directories in app with proper permissions
+# Use group-writable permissions instead of world-writable for security
+# Docker-compose will run as user 1000 which we add to the thoth group
+RUN mkdir -p /app/cache /app/logs /app/migrations /app/data/output /app/exports \
+    && chown -R thoth:thoth /app/cache /app/logs /app/migrations /app/data /app/exports \
+    && chmod -R 775 /app/cache /app/logs /app/migrations /app/data /app/exports \
+    && chmod g+s /app/cache /app/logs /app/migrations /app/data /app/exports
 
 # Create default workspace structure
 RUN mkdir -p /workspace/{pdfs,notes,data,queries,discovery,knowledge,logs,cache}
@@ -91,8 +106,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
     THOTH_MCP_HOST=0.0.0.0 \
     THOTH_MCP_PORT=8001
 
-# Default command - start the API server using server subcommand
-CMD ["python", "-m", "thoth", "server", "start", "--api-host", "0.0.0.0", "--api-port", "8000", "--no-discovery", "--no-mcp"]
+# Default command - can be overridden in docker-compose.yml
+# For multi-container setup, each service specifies its own command
+# This default starts the API server for backward compatibility
+CMD ["python", "-m", "thoth", "server", "start", "--api-host", "0.0.0.0", "--api-port", "8000"]
 
 # ==============================================================================
 # Development stage - extends runtime with development tools

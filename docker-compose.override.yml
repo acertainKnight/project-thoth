@@ -12,6 +12,12 @@ services:
   # Local development customizations
   # ==============================================================================
   thoth-app:
+    # Use development Dockerfile with UV best practices
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: runtime  # Multi-stage build: builder -> runtime
+
     # Override for local development
     environment:
       # Local development settings
@@ -19,11 +25,16 @@ services:
       - THOTH_DEV_MODE=1
 
     volumes:
+      # Mount source code for hot-reload development (no rebuild needed!)
+      # Editable install means Python picks up changes immediately!
+      - ./src:/app/src
+      - ./pyproject.toml:/app/pyproject.toml:ro
+
       # Mount local configuration if it exists
       - ./config.local.yml:/app/config.local.yml:ro
 
-      # Mount local workspace directory if it exists
-      - ./workspace:/workspace
+      # Mount local workspace directory (commented out to use main docker-compose.yml mount)
+      # - ./workspace:/workspace
 
     # Override port mappings for development (maintain remapping to avoid conflicts)
     ports:

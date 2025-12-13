@@ -154,8 +154,8 @@ services:
   thoth-api:
     build:
       context: .
-      dockerfile: docker/api/Dockerfile
-      target: production
+      dockerfile: Dockerfile
+      target: runtime
     environment:
       # Service discovery
       - THOTH_CHROMADB_URL=http://chromadb:8003
@@ -163,6 +163,7 @@ services:
       - THOTH_MCP_URL=http://thoth-mcp:8001
       - THOTH_DISCOVERY_URL=http://thoth-discovery:8004
       - THOTH_REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
 
       # Server configuration
       - THOTH_API_HOST=0.0.0.0
@@ -174,13 +175,16 @@ services:
       - THOTH_API_SECRET_KEY_FILE=/run/secrets/api_secret_key
       - THOTH_CORS_ORIGINS=https://yourdomain.com,https://api.yourdomain.com
 
-      # Directory paths
-      - THOTH_WORKSPACE_DIR=/workspace
-      - THOTH_PDF_DIR=/workspace/pdfs
-      - THOTH_NOTES_DIR=/workspace/notes
-      - THOTH_DATA_DIR=/workspace/data
+      # Vault-relative path configuration
+      # CRITICAL: Vault mount provides settings.json which controls all paths
+      # All paths are resolved at runtime from /vault/_thoth/settings.json
+      - OBSIDIAN_VAULT_PATH=/vault
+      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
+
+      # DO NOT set individual path variables - settings.json controls all paths!
     volumes:
-      - thoth-prod-workspace:/workspace
+      # Mount entire Obsidian vault (read-write for processing)
+      - ${OBSIDIAN_VAULT_PATH:?Please set OBSIDIAN_VAULT_PATH to your Obsidian vault root directory}:/vault:rw
     secrets:
       - api_secret_key
       - openai_api_key
@@ -230,25 +234,26 @@ services:
   thoth-mcp:
     build:
       context: .
-      dockerfile: docker/mcp/Dockerfile
-      target: production
+      dockerfile: Dockerfile
+      target: runtime
     environment:
       # Service discovery
       - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_LETTA_URL=http://letta:8283
       - THOTH_API_URL=http://thoth-api:8000
       - THOTH_REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
 
       # Server configuration
       - THOTH_MCP_HOST=0.0.0.0
       - THOTH_MCP_PORT=8001
       - THOTH_LOG_LEVEL=INFO
 
-      # Directory paths
-      - THOTH_WORKSPACE_DIR=/workspace
-      - THOTH_DATA_DIR=/workspace/data
+      # Vault-relative path configuration
+      - OBSIDIAN_VAULT_PATH=/vault
+      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
     volumes:
-      - thoth-prod-workspace:/workspace
+      - ${OBSIDIAN_VAULT_PATH:?Please set OBSIDIAN_VAULT_PATH to your Obsidian vault root directory}:/vault:rw
     secrets:
       - openai_api_key
       - anthropic_api_key
@@ -280,13 +285,14 @@ services:
   thoth-discovery:
     build:
       context: .
-      dockerfile: docker/discovery/Dockerfile
-      target: production
+      dockerfile: Dockerfile
+      target: runtime
     environment:
       # Service discovery
       - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_API_URL=http://thoth-api:8000
       - THOTH_REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
 
       # Server configuration
       - THOTH_DISCOVERY_HOST=0.0.0.0
@@ -299,11 +305,11 @@ services:
       - THOTH_DISCOVERY_CHECK_INTERVAL=1800
       - THOTH_DISCOVERY_RATE_LIMIT=60
 
-      # Directory paths
-      - THOTH_WORKSPACE_DIR=/workspace
-      - THOTH_DISCOVERY_SOURCES_DIR=/workspace/discovery
+      # Vault-relative path configuration
+      - OBSIDIAN_VAULT_PATH=/vault
+      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
     volumes:
-      - thoth-prod-workspace:/workspace
+      - ${OBSIDIAN_VAULT_PATH:?Please set OBSIDIAN_VAULT_PATH to your Obsidian vault root directory}:/vault:rw
     secrets:
       - semantic_scholar_api_key
       - web_search_api_key
@@ -335,25 +341,25 @@ services:
   thoth-pdf-monitor:
     build:
       context: .
-      dockerfile: docker/pdf-monitor/Dockerfile
-      target: production
+      dockerfile: Dockerfile
+      target: runtime
     environment:
       # Service discovery
       - THOTH_API_URL=http://thoth-api:8000
       - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
 
       # Monitor configuration
       - THOTH_LOG_LEVEL=INFO
       - THOTH_PDF_MONITOR_INTERVAL=60
       - THOTH_PDF_MONITOR_BATCH_SIZE=10
 
-      # Directory paths
-      - THOTH_WORKSPACE_DIR=/workspace
-      - THOTH_PDF_DIR=/workspace/pdfs
-      - THOTH_NOTES_DIR=/workspace/notes
+      # Vault-relative path configuration
+      - OBSIDIAN_VAULT_PATH=/vault
+      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
     volumes:
-      - thoth-prod-workspace:/workspace
+      - ${OBSIDIAN_VAULT_PATH:?Please set OBSIDIAN_VAULT_PATH to your Obsidian vault root directory}:/vault:rw
     secrets:
       - openai_api_key
     networks:
@@ -378,8 +384,8 @@ services:
   thoth-agent:
     build:
       context: .
-      dockerfile: docker/agent/Dockerfile
-      target: production
+      dockerfile: Dockerfile
+      target: runtime
     environment:
       # Service discovery
       - THOTH_CHROMADB_URL=http://chromadb:8003
@@ -387,6 +393,7 @@ services:
       - THOTH_MCP_URL=http://thoth-mcp:8001
       - THOTH_API_URL=http://thoth-api:8000
       - THOTH_REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
 
       # Agent configuration
       - THOTH_AGENT_HOST=0.0.0.0
@@ -399,11 +406,11 @@ services:
       - THOTH_AGENT_TIMEOUT_SECONDS=300
       - THOTH_AGENT_CONCURRENT_SESSIONS=5
 
-      # Directory paths
-      - THOTH_WORKSPACE_DIR=/workspace
-      - THOTH_DATA_DIR=/workspace/data
+      # Vault-relative path configuration
+      - OBSIDIAN_VAULT_PATH=/vault
+      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
     volumes:
-      - thoth-prod-workspace:/workspace
+      - ${OBSIDIAN_VAULT_PATH:?Please set OBSIDIAN_VAULT_PATH to your Obsidian vault root directory}:/vault:rw
     secrets:
       - openai_api_key
       - anthropic_api_key
@@ -533,6 +540,8 @@ services:
 # Production Volumes
 # ==============================================================================
 volumes:
+  # Database volumes (Docker-managed for consistency and performance)
+  # These are kept separate from the vault for database integrity
   thoth-prod-letta-data:
     driver: local
     name: thoth-prod-letta-data
@@ -565,14 +574,7 @@ volumes:
       o: bind
       device: /opt/thoth/redis
 
-  thoth-prod-workspace:
-    driver: local
-    name: thoth-prod-workspace
-    driver_opts:
-      type: none
-      o: bind
-      device: /opt/thoth/workspace
-
+  # Monitoring and logging volumes (Docker-managed for operational data)
   thoth-prod-logs:
     driver: local
     name: thoth-prod-logs
@@ -596,6 +598,11 @@ volumes:
       type: none
       o: bind
       device: /opt/thoth/grafana
+
+  # NOTE: Thoth workspace data is now vault-mounted at runtime
+  # Set OBSIDIAN_VAULT_PATH environment variable to your vault root
+  # All application data (PDFs, notes, etc.) lives in vault/_thoth/
+  # Configuration comes from vault/_thoth/settings.json
 
 # ==============================================================================
 # Production Networks

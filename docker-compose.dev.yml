@@ -110,51 +110,52 @@ services:
   thoth-api:
     build:
       context: .
-      dockerfile: docker/api/Dockerfile
+      dockerfile: Dockerfile
       target: development
     container_name: thoth-dev-api
+    user: "1000:1000"  # Run as host user for proper file permissions
     env_file:
       - .env
     environment:
-      # User permissions
-      - HOME=/workspace
+      # =============================================================================
+      # SIMPLIFIED CONFIGURATION - All paths loaded from settings.json via config.py
+      # =============================================================================
+      # Previously had 40+ environment variables that duplicated settings.json.
+      # Removed: LETTA_DIR, LETTA_LOGS_DIR, LETTA_CACHE_DIR, LETTA_CONFIG_DIR
+      #          and other path-related variables that are now managed by config.py
+      # =============================================================================
 
-      # Letta configuration - override default data directories
-      - LETTA_DIR=/workspace/data/letta
-      - LETTA_LOGS_DIR=/workspace/logs/letta
-      - LETTA_CACHE_DIR=/workspace/data/cache/letta
-      - LETTA_CONFIG_DIR=/workspace/data/letta/config
+      # Vault configuration (REQUIRED - tells config.py where to find settings)
+      - OBSIDIAN_VAULT_PATH=/vault
+      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
 
-      # Service discovery
+      # Service discovery (REQUIRED - inter-service communication URLs)
       - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_LETTA_URL=http://letta:8283
       - THOTH_MCP_URL=http://thoth-mcp:8001
       - THOTH_DISCOVERY_URL=http://thoth-discovery:8004
+      - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
 
-      # Server configuration
-      - THOTH_API_HOST=0.0.0.0
-      - THOTH_API_PORT=8000
+      # Development settings (REQUIRED - dev-specific configuration)
       - THOTH_LOG_LEVEL=DEBUG
       - THOTH_DEV_MODE=1
 
-      # Directory paths - Vault takes precedence
-      - OBSIDIAN_VAULT_PATH=${OBSIDIAN_VAULT:-}
-      - THOTH_WORKSPACE_DIR=/workspace
-      - THOTH_PDF_DIR=/workspace/data/pdfs
-      - THOTH_NOTES_DIR=/workspace/data/notes
-      - THOTH_DATA_DIR=/workspace/data
-      - THOTH_LOGS_DIR=/workspace/logs
+      # Hot-reload configuration
+      # Automatically reload when vault/_thoth/settings.json changes
+      # No container restart needed!
+      - THOTH_HOT_RELOAD=1
+      - DOCKER_ENV=true
 
-      # API Keys
+      # API Keys (REQUIRED - loaded from .env file)
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - API_MISTRAL_KEY=${API_MISTRAL_KEY:-}
       - API_OPENROUTER_KEY=${API_OPENROUTER_KEY:-}
       - API_SEMANTIC_SCHOLAR_KEY=${API_SEMANTIC_SCHOLAR_KEY:-}
     volumes:
-      - ${OBSIDIAN_VAULT:-./workspace}/_thoth:/workspace  # Vault _thoth/ becomes workspace
+      - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
       - ./src:/app/src:ro  # Mount source for development
-      - ./data/prompts:/workspace/prompts:ro  # System prompts
+      - ./data/prompts:/app/prompts:ro  # System prompts
     ports:
       - "8000:8000"
     networks:
@@ -174,40 +175,45 @@ services:
   thoth-mcp:
     build:
       context: .
-      dockerfile: docker/mcp/Dockerfile
+      dockerfile: Dockerfile
       target: development
     container_name: thoth-dev-mcp
+    user: "1000:1000"  # Run as host user for proper file permissions
     env_file:
       - .env
     environment:
-      # User permissions
-      - HOME=/workspace
+      # =============================================================================
+      # SIMPLIFIED CONFIGURATION - All paths loaded from settings.json via config.py
+      # =============================================================================
+      # Previously had 40+ environment variables that duplicated settings.json.
+      # Removed: LETTA_DIR, LETTA_LOGS_DIR, LETTA_CACHE_DIR, LETTA_CONFIG_DIR,
+      #          HOME, THOTH_MCP_HOST, THOTH_MCP_PORT (defaults handled by config.py)
+      # =============================================================================
 
-      # Letta configuration - override default data directories
-      - LETTA_DIR=/workspace/data/letta
-      - LETTA_LOGS_DIR=/workspace/logs/letta
-      - LETTA_CACHE_DIR=/workspace/data/cache/letta
-      - LETTA_CONFIG_DIR=/workspace/data/letta/config
+      # Vault configuration (REQUIRED - tells config.py where to find settings)
+      - OBSIDIAN_VAULT_PATH=/vault
+      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
 
-      # Service discovery
+      # Service discovery (REQUIRED - inter-service communication URLs)
       - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_LETTA_URL=http://letta:8283
       - THOTH_API_URL=http://thoth-api:8000
+      - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
 
-      # Server configuration
-      - THOTH_MCP_HOST=0.0.0.0
-      - THOTH_MCP_PORT=8001
+      # Development settings (REQUIRED - dev-specific configuration)
       - THOTH_LOG_LEVEL=DEBUG
 
-      # Directory paths
-      - THOTH_WORKSPACE_DIR=/workspace
-      - THOTH_DATA_DIR=/workspace/data
+      # Hot-reload configuration
+      # Automatically reload when vault/_thoth/settings.json changes
+      # No container restart needed!
+      - THOTH_HOT_RELOAD=1
+      - DOCKER_ENV=true
 
-      # API Keys
+      # API Keys (REQUIRED - loaded from .env file)
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     volumes:
-      - ./workspace:/workspace
+      - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
       - ./src:/app/src:ro  # Mount source for development
     ports:
       - "8001:8001"
@@ -228,44 +234,49 @@ services:
   thoth-discovery:
     build:
       context: .
-      dockerfile: docker/discovery/Dockerfile
+      dockerfile: Dockerfile
       target: development
     container_name: thoth-dev-discovery
+    user: "1000:1000"  # Run as host user for proper file permissions
     env_file:
       - .env
     environment:
-      # User permissions
-      - HOME=/workspace
+      # =============================================================================
+      # SIMPLIFIED CONFIGURATION - All paths loaded from settings.json via config.py
+      # =============================================================================
+      # Previously had 40+ environment variables that duplicated settings.json.
+      # Removed: LETTA_DIR, LETTA_LOGS_DIR, LETTA_CACHE_DIR, LETTA_CONFIG_DIR,
+      #          HOME, THOTH_DISCOVERY_HOST, THOTH_DISCOVERY_PORT (defaults in config.py)
+      #          THOTH_DISCOVERY_CHECK_INTERVAL (loaded from settings.json)
+      # =============================================================================
 
-      # Letta configuration - override default data directories
-      - LETTA_DIR=/workspace/data/letta
-      - LETTA_LOGS_DIR=/workspace/logs/letta
-      - LETTA_CACHE_DIR=/workspace/data/cache/letta
-      - LETTA_CONFIG_DIR=/workspace/data/letta/config
+      # Vault configuration (REQUIRED - tells config.py where to find settings)
+      - OBSIDIAN_VAULT_PATH=/vault
+      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
 
-      # Service discovery
+      # Service discovery (REQUIRED - inter-service communication URLs)
       - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_API_URL=http://thoth-api:8000
+      - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
 
-      # Server configuration
-      - THOTH_DISCOVERY_HOST=0.0.0.0
-      - THOTH_DISCOVERY_PORT=8004
+      # Development settings (REQUIRED - dev-specific configuration)
       - THOTH_LOG_LEVEL=DEBUG
 
-      # Discovery settings
+      # Hot-reload configuration
+      # Automatically reload when vault/_thoth/settings.json changes
+      # No container restart needed!
+      - THOTH_HOT_RELOAD=1
+      - DOCKER_ENV=true
+
+      # Discovery settings (REQUIRED - service-specific overrides)
       - THOTH_DISCOVERY_AUTO_START_SCHEDULER=true
       - THOTH_DISCOVERY_DEFAULT_MAX_ARTICLES=50
-      - THOTH_DISCOVERY_CHECK_INTERVAL=3600
 
-      # Directory paths
-      - THOTH_WORKSPACE_DIR=/workspace
-      - THOTH_DISCOVERY_SOURCES_DIR=/workspace/discovery
-
-      # API Keys
+      # API Keys (REQUIRED - loaded from .env file)
       - API_SEMANTIC_SCHOLAR_KEY=${API_SEMANTIC_SCHOLAR_KEY:-}
       - API_WEB_SEARCH_KEY=${API_WEB_SEARCH_KEY:-}
     volumes:
-      - ./workspace:/workspace
+      - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
       - ./src:/app/src:ro  # Mount source for development
     ports:
       - "8004:8004"
@@ -285,37 +296,51 @@ services:
   thoth-pdf-monitor:
     build:
       context: .
-      dockerfile: docker/pdf-monitor/Dockerfile
+      dockerfile: Dockerfile
       target: development
     container_name: thoth-dev-pdf-monitor
+    user: "1000:1000"  # Run as host user for proper file permissions
+    command: ["python", "-m", "thoth", "monitor"]
+    env_file:
+      - .env
     environment:
-      # User permissions
-      - HOME=/workspace
+      # =============================================================================
+      # SIMPLIFIED CONFIGURATION - All paths loaded from settings.json via config.py
+      # =============================================================================
+      # Previously had 40+ environment variables that duplicated settings.json.
+      # Removed: LETTA_DIR, LETTA_LOGS_DIR, LETTA_CACHE_DIR, LETTA_CONFIG_DIR,
+      #          HOME (all path-related variables now managed by config.py)
+      # =============================================================================
 
-      # Letta configuration - override default data directories
-      - LETTA_DIR=/workspace/data/letta
-      - LETTA_LOGS_DIR=/workspace/logs/letta
-      - LETTA_CACHE_DIR=/workspace/data/cache/letta
-      - LETTA_CONFIG_DIR=/workspace/data/letta/config
+      # Vault configuration (REQUIRED - tells config.py where to find settings)
+      - OBSIDIAN_VAULT_PATH=/vault
+      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
 
-      # Service discovery
+      # Service discovery (REQUIRED - inter-service communication URLs)
       - THOTH_API_URL=http://thoth-api:8000
       - THOTH_CHROMADB_URL=http://chromadb:8003
+      - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
 
-      # Monitor configuration
+      # Development settings (REQUIRED - dev-specific configuration)
       - THOTH_LOG_LEVEL=DEBUG
+
+      # Hot-reload configuration
+      # Automatically reload when vault/_thoth/settings.json changes
+      # No container restart needed!
+      - THOTH_HOT_RELOAD=1
+      - DOCKER_ENV=true
+
+      # Monitor settings (REQUIRED - service-specific configuration)
       - THOTH_PDF_MONITOR_INTERVAL=30
 
-      # Directory paths
-      - THOTH_WORKSPACE_DIR=/workspace
-      - THOTH_PDF_DIR=/workspace/pdfs
-      - THOTH_NOTES_DIR=/workspace/notes
-
-      # API Keys
+      # API Keys (REQUIRED - loaded from .env file)
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - API_MISTRAL_KEY=${API_MISTRAL_KEY:-}
     volumes:
-      - ./workspace:/workspace
+      - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
       - ./src:/app/src:ro  # Mount source for development
+      - ./data/prompts:/app/prompts:ro  # System prompts
     networks:
       - thoth-dev-network
     depends_on:
