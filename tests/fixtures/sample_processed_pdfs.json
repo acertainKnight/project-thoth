@@ -1,0 +1,29 @@
+{
+  "/old/path/vault/thoth/papers/pdfs/attention_is_all_you_need.pdf": {
+    "note_path": "/old/path/vault/thoth/notes/attention_is_all_you_need.md",
+    "new_pdf_path": "/old/path/vault/thoth/papers/pdfs/attention_is_all_you_need.pdf",
+    "new_markdown_path": "/old/path/data/markdown/attention_is_all_you_need_markdown.md",
+    "processed_at": "2025-11-28T10:00:00",
+    "title": "Attention Is All You Need",
+    "authors": ["Vaswani, A.", "Shazeer, N."],
+    "year": 2017
+  },
+  "C:\\Users\\test\\vault\\thoth\\papers\\pdfs\\bert.pdf": {
+    "note_path": "C:\\Users\\test\\vault\\thoth\\notes\\bert.md",
+    "new_pdf_path": "C:\\Users\\test\\vault\\thoth\\papers\\pdfs\\bert.pdf",
+    "new_markdown_path": "C:\\Users\\test\\data\\markdown\\bert_markdown.md",
+    "processed_at": "2025-11-28T11:00:00",
+    "title": "BERT: Pre-training of Deep Bidirectional Transformers",
+    "authors": ["Devlin, J.", "Chang, M-W."],
+    "year": 2019
+  },
+  "/mnt/c/Users/test/vault/thoth/papers/pdfs/gpt3.pdf": {
+    "note_path": "/mnt/c/Users/test/vault/thoth/notes/gpt3.md",
+    "new_pdf_path": "/mnt/c/Users/test/vault/thoth/papers/pdfs/gpt3.pdf",
+    "new_markdown_path": "/mnt/c/Users/test/data/markdown/gpt3_markdown.md",
+    "processed_at": "2025-11-28T12:00:00",
+    "title": "GPT-3: Language Models are Few-Shot Learners",
+    "authors": ["Brown, T.", "Mann, B."],
+    "year": 2020
+  }
+}
