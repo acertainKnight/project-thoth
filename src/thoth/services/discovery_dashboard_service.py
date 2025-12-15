@@ -406,12 +406,12 @@ class DiscoveryDashboardService:
                 arm.sentiment_recorded_at,
                 a.title,
                 a.authors,
-                a.published_date,
+                a.publication_date,
                 a.abstract,
                 a.url,
                 a.pdf_url
             FROM article_research_matches arm
-            JOIN articles a ON arm.article_id = a.id
+            JOIN papers a ON arm.article_id = a.id
             WHERE arm.question_id = $1
                 AND arm.relevance_score >= $2
             ORDER BY arm.relevance_score DESC
