@@ -471,12 +471,20 @@ class DiscoveryManager:
                     enhanced_config['search_query'] = search_query
                     logger.info(f"Built ArXiv search query: {search_query}")
 
+            # Add date filters from research question
+            if question:
+                if question.get('date_filter_start'):
+                    enhanced_config['start_date'] = str(question['date_filter_start'])
+                if question.get('date_filter_end'):
+                    enhanced_config['end_date'] = str(question['date_filter_end'])
+
             logger.info(
                 f"Enhanced API config with research question data: "
                 f"keywords={enhanced_config.get('keywords', [])}, "
                 f"categories={enhanced_config.get('categories', [])}, "
                 f"authors={enhanced_config.get('preferred_authors', [])}, "
-                f"search_query={enhanced_config.get('search_query', 'N/A')}"
+                f"search_query={enhanced_config.get('search_query', 'N/A')}, "
+                f"date_range={enhanced_config.get('start_date', 'N/A')} to {enhanced_config.get('end_date', 'present')}"
             )
 
         try:

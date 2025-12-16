@@ -33,10 +33,11 @@ class DiscoveryDashboardWatcher(FileSystemEventHandler):
     and automatically processes sentiment updates.
     """
 
-    def __init__(self, dashboard_service: 'DiscoveryDashboardService'):
-        """Initialize the watcher with reference to dashboard service."""
+    def __init__(self, dashboard_service: 'DiscoveryDashboardService', loop: asyncio.AbstractEventLoop):
+        """Initialize the watcher with reference to dashboard service and event loop."""
         super().__init__()
         self.service = dashboard_service
+        self.loop = loop  # Store reference to event loop for scheduling async tasks
         self.processing_files = set()  # Track files being processed to avoid loops
         logger.info("Dashboard file watcher initialized")
 
@@ -63,7 +64,11 @@ class DiscoveryDashboardWatcher(FileSystemEventHandler):
         logger.info(f"📝 Detected change in dashboard file: {file_path.name}")
 
         # Schedule processing (debounced to avoid rapid-fire updates)
-        asyncio.create_task(self._process_dashboard_change(file_path))
+        # Use run_coroutine_threadsafe since we're in a watchdog thread
+        asyncio.run_coroutine_threadsafe(
+            self._process_dashboard_change(file_path),
+            self.loop
+        )
 
     def _is_dashboard_file(self, file_path: Path) -> bool:
         """Check if file is in the dashboard directory."""
@@ -193,7 +198,9 @@ class DiscoveryDashboardService:
 
     async def _start_file_watcher(self):
         """Start monitoring dashboard directory for changes."""
-        self.watcher = DiscoveryDashboardWatcher(self)
+        # Get the current event loop to pass to the watcher
+        loop = asyncio.get_running_loop()
+        self.watcher = DiscoveryDashboardWatcher(self, loop)
         self.observer = PollingObserver(timeout=1)
 
         self.observer.schedule(
@@ -285,7 +292,7 @@ class DiscoveryDashboardService:
                 SELECT COUNT(*)
                 FROM article_research_matches
                 WHERE question_id = $1
-                    AND created_at > $2
+                    AND matched_at > $2
                     AND user_sentiment IS NULL
             """
             count = await self.pg.fetchval(query, question_id, last_export)
@@ -411,7 +418,7 @@ class DiscoveryDashboardService:
                 a.url,
                 a.pdf_url
             FROM article_research_matches arm
-            JOIN papers a ON arm.article_id = a.id
+            JOIN discovered_articles a ON arm.article_id = a.id
             WHERE arm.question_id = $1
                 AND arm.relevance_score >= $2
             ORDER BY arm.relevance_score DESC
