@@ -9,10 +9,8 @@ version: '3.8'
 # Shared Configuration
 # ==============================================================================
 x-thoth-common: &thoth-common
-  build:
-    context: .
-    dockerfile: Dockerfile
-    target: runtime
+  # NOTE: Individual services override build config with service-specific Dockerfiles
+  # This common config is for shared runtime settings only
   user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
   environment: &thoth-env
     # Database connections
@@ -91,7 +89,8 @@ services:
     volumes:
       - thoth-letta-data:/letta/.persist
       - thoth-letta-home:/letta
-    command: ["letta", "server", "--host", "0.0.0.0", "--port", "8283"]
+      - ./docker/letta/init-schema.sh:/init-schema.sh:ro
+    command: ["bash", "/init-schema.sh"]
     ports:
       - "8283:8283"
     networks:
@@ -105,7 +104,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 60s
+      start_period: 120s
 
   # ==============================================================================
   # PostgreSQL Database for Letta
@@ -161,6 +160,10 @@ services:
   # ==============================================================================
   thoth-api:
     <<: *thoth-common
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+      target: production
     container_name: thoth-api
     command: ["python", "-m", "thoth", "server", "start", "--api-host", "0.0.0.0", "--api-port", "8000", "--no-mcp", "--no-discovery"]
     ports:
@@ -189,6 +192,10 @@ services:
   # ==============================================================================
   thoth-mcp:
     <<: *thoth-common
+    build:
+      context: .
+      dockerfile: docker/mcp/Dockerfile
+      target: production
     container_name: thoth-mcp
     command: ["python", "-m", "thoth", "mcp", "start", "--host", "0.0.0.0", "--port", "8001"]
     ports:
@@ -217,6 +224,10 @@ services:
   # ==============================================================================
   thoth-monitor:
     <<: *thoth-common
+    build:
+      context: .
+      dockerfile: docker/pdf-monitor/Dockerfile
+      target: production
     container_name: thoth-monitor
     command: ["python", "-m", "thoth", "monitor", "--optimized", "--recursive"]
     depends_on:
@@ -245,6 +256,12 @@ services:
   # ==============================================================================
   thoth-dashboard:
     <<: *thoth-common
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+      args:
+        SERVICE_EXTRAS: "service-dashboard"
     container_name: thoth-dashboard
     command: [
       "python", "-m", "thoth.cli.main", "research", "start-dashboard",

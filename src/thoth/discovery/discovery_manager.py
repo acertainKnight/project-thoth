@@ -15,18 +15,19 @@ from typing import Any
 from loguru import logger
 
 from thoth.discovery.api_sources import (
-    ArxivAPISource,
     BioRxivAPISource,
     CrossRefAPISource,
     OpenAlexAPISource,
     PubMedAPISource,
 )
+from thoth.discovery.plugins import plugin_registry
 from thoth.discovery.emulator_scraper import EmulatorScraper
 from thoth.discovery.web_scraper import WebScraper
 from thoth.config import config
 from thoth.utilities.schemas import (
     DiscoveryResult,
     DiscoverySource,
+    ResearchQuery,
     ScrapedArticleMetadata,
 )
 
@@ -69,9 +70,11 @@ class DiscoveryManager:
         )
         self.sources_config_dir.mkdir(parents=True, exist_ok=True)
 
-        # Initialize API sources
+        # Initialize plugin registry for modern plugin-based sources
+        self.plugin_registry = plugin_registry
+
+        # Initialize legacy API sources (will be deprecated)
         self.api_sources = {
-            'arxiv': ArxivAPISource(),
             'pubmed': PubMedAPISource(),
             'crossref': CrossRefAPISource(),
             'openalex': OpenAlexAPISource(),
@@ -413,16 +416,24 @@ class DiscoveryManager:
         """
         source_type = api_config.get('source')
 
-        if source_type not in self.api_sources:
-            logger.error(f'Unknown API source type: {source_type}')
-            return []
-
-        api_source = self.api_sources[source_type]
         # Use the source's configured max_articles_per_run
         # if no explicit max_articles provided
         default_max = api_config.get('schedule_config', {}).get(
             'max_articles_per_run', 50
         )
+
+        # Check if this source has a modern plugin implementation
+        if self.plugin_registry.get(source_type):
+            return self._discover_from_plugin(
+                source_type, api_config, max_articles or default_max, question
+            )
+
+        # Fall back to legacy API sources
+        if source_type not in self.api_sources:
+            logger.error(f'Unknown API source type: {source_type}')
+            return []
+
+        api_source = self.api_sources[source_type]
 
         # Merge research question data into API config
         enhanced_config = api_config.copy()
@@ -491,6 +502,60 @@ class DiscoveryManager:
             return api_source.search(enhanced_config, max_articles or default_max)
         except Exception as e:
             logger.error(f'API search failed for {source_type}: {e}')
+            return []
+
+    def _discover_from_plugin(
+        self,
+        source_type: str,
+        api_config: dict[str, Any],
+        max_articles: int,
+        question: dict | None = None,
+    ) -> list[ScrapedArticleMetadata]:
+        """
+        Discover articles using modern plugin architecture.
+
+        Args:
+            source_type: Plugin type (e.g., 'arxiv').
+            api_config: API configuration dictionary.
+            max_articles: Maximum number of articles to retrieve.
+            question: Research question with keywords, topics, and authors.
+
+        Returns:
+            list[ScrapedArticleMetadata]: List of discovered articles.
+        """
+        try:
+            # Create plugin instance with config
+            plugin = self.plugin_registry.create(source_type, config=api_config)
+
+            # Build ResearchQuery from question data
+            if question:
+                keywords = question.get('keywords', [])
+                # Extract search query if present
+                if api_config.get('search_query'):
+                    # Plugin will use the pre-built search query from its config
+                    pass
+            else:
+                keywords = api_config.get('keywords', [])
+
+            # Create ResearchQuery for plugin
+            research_query = ResearchQuery(
+                name=api_config.get('name', source_type),
+                description=api_config.get('description', f'Discovery from {source_type}'),
+                research_question=question.get('question', '') if question else '',
+                keywords=keywords,
+                required_topics=question.get('topics', []) if question else [],
+            )
+
+            logger.info(
+                f'Using plugin {source_type} with keywords={keywords}, '
+                f'max_results={max_articles}'
+            )
+
+            # Call plugin's discover method
+            return plugin.discover(research_query, max_articles)
+
+        except Exception as e:
+            logger.error(f'Plugin discovery failed for {source_type}: {e}')
             return []
 
     def _discover_from_scraper(

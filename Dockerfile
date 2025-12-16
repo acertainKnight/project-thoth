@@ -6,6 +6,9 @@
 # Build stage - Install dependencies and build application
 FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim as builder
 
+# Build arg to specify which service extras to install (defaults to all)
+ARG SERVICE_EXTRAS="all"
+
 # Set environment variables for build optimization
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -16,17 +19,26 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 # Install dependencies first (better caching)
+# Use SERVICE_EXTRAS to install only what this service needs
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-install-project
+    if [ "$SERVICE_EXTRAS" = "all" ]; then \
+        uv sync --locked --no-install-project; \
+    else \
+        uv sync --locked --no-install-project --extra "$SERVICE_EXTRAS"; \
+    fi
 
 # Copy source code
 COPY . /app
 
-# Install the project
+# Install the project with the same extras
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked
+    if [ "$SERVICE_EXTRAS" = "all" ]; then \
+        uv sync --locked; \
+    else \
+        uv sync --locked --extra "$SERVICE_EXTRAS"; \
+    fi
 
 # ==============================================================================
 # Runtime stage - Minimal production image

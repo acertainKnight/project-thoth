@@ -16,17 +16,18 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 # Install dependencies first (better caching)
+# Agent service: FULL STACK with memory (~4GB)
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-install-project
+    uv sync --locked --no-install-project --extra service-agent
 
 # Copy source code
 COPY . /app
 
-# Install the project
+# Install the project with service-agent extras (includes Letta + nvidia libs)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked
+    uv sync --locked --extra service-agent
 
 # ==============================================================================
 # Production stage - Minimal production image

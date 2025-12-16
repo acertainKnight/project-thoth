@@ -16,17 +16,18 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 # Install dependencies first (better caching)
+# MCP service: mcp + langchain + vectordb + embeddings (~2.5GB)
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-install-project
+    uv sync --locked --no-install-project --extra service-mcp
 
 # Copy source code
 COPY . /app
 
-# Install the project
+# Install the project with service-mcp extras
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked
+    uv sync --locked --extra service-mcp
 
 # ==============================================================================
 # Production stage - Minimal production image
