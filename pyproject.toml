@@ -112,14 +112,16 @@ memory = [
 # Service-Specific Composite Groups (for Docker containers)
 # ==============================================================================
 
-# thoth-api: REST API server (~200MB)
+# thoth-api: REST API server (~1.5GB)
+# Needs langchain for AnthropicClient + vectordb for cachetools (BaseRepository)
 service-api = [
-    "thoth[api,discovery]",
+    "thoth[api,discovery,langchain,vectordb]",
 ]
 
-# thoth-dashboard: Dashboard sync (~200MB)
+# thoth-dashboard: Dashboard sync (~1.5GB)
+# Needs vectordb for cachetools (BaseRepository), but NOT embeddings
 service-dashboard = [
-    "thoth[api,discovery,pdf,langchain,vectordb,embeddings]",
+    "thoth[api,discovery,pdf,langchain,vectordb]",
 ]
 
 # thoth-discovery: Discovery scheduler (~300MB)
@@ -132,9 +134,9 @@ service-mcp = [
     "thoth[mcp,langchain,vectordb,embeddings]",
 ]
 
-# thoth-monitor: PDF processing with embeddings (~2.5GB)
+# thoth-monitor: PDF processing with embeddings (~13GB with OCR tools)
 service-monitor = [
-    "thoth[pdf,langchain,vectordb,embeddings]",
+    "thoth[pdf,discovery,langchain,vectordb,embeddings]",
 ]
 
 # thoth-agent: Full agent with memory (~4GB)
