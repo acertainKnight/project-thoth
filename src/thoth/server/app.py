@@ -18,7 +18,14 @@ from fastapi import FastAPI
 from loguru import logger
 from starlette.middleware.cors import CORSMiddleware
 
-from thoth.mcp.monitoring import mcp_health_router
+# Optional: MCP monitoring (requires mcp extras)
+try:
+    from thoth.mcp.monitoring import mcp_health_router
+    MCP_HEALTH_AVAILABLE = True
+except ImportError:
+    mcp_health_router = None  # type: ignore
+    MCP_HEALTH_AVAILABLE = False
+
 from thoth.server.chat_models import ChatPersistenceManager
 from thoth.server.hot_reload import SettingsFileWatcher
 from thoth.server.routers import (
@@ -270,9 +277,16 @@ def create_app() -> FastAPI:
 
     # Include routers with proper prefixes
     app.include_router(health.router, tags=['health'])
-    app.include_router(
-        mcp_health_router, tags=['mcp-health']
-    )  # Enterprise MCP monitoring
+
+    # Include MCP health router if available (requires mcp extras)
+    if MCP_HEALTH_AVAILABLE:
+        app.include_router(
+            mcp_health_router, tags=['mcp-health']
+        )  # Enterprise MCP monitoring
+        logger.debug("MCP health monitoring enabled")
+    else:
+        logger.debug("MCP health monitoring not available (requires mcp extras)")
+
     app.include_router(websocket.router, tags=['websocket'])
     app.include_router(chat.router, prefix='/chat', tags=['chat'])
     app.include_router(agent.router, prefix='/agents', tags=['agent'])

@@ -12,13 +12,35 @@ from thoth.services.base import BaseService
 from thoth.services.citation_service import CitationService
 from thoth.services.discovery_orchestrator import DiscoveryOrchestrator
 from thoth.services.discovery_service import DiscoveryService
-from thoth.services.letta_service import LettaService
 from thoth.services.llm_service import LLMService
+
+# Optional: Letta service (requires memory extras)
+try:
+    from thoth.services.letta_service import LettaService
+    LETTA_AVAILABLE = True
+except ImportError:
+    LettaService = None  # type: ignore
+    LETTA_AVAILABLE = False
+
+# Optional: Processing service (requires pdf extras with mistralai)
+try:
+    from thoth.services.processing_service import ProcessingService
+    PROCESSING_AVAILABLE = True
+except ImportError:
+    ProcessingService = None  # type: ignore
+    PROCESSING_AVAILABLE = False
+
+# Optional: RAG service (requires embeddings extras)
+try:
+    from thoth.services.rag_service import RAGService
+    RAG_AVAILABLE = True
+except ImportError:
+    RAGService = None  # type: ignore
+    RAG_AVAILABLE = False
+
 from thoth.services.note_service import NoteService
 from thoth.services.pdf_locator_service import PdfLocatorService
-from thoth.services.processing_service import ProcessingService
 from thoth.services.query_service import QueryService
-from thoth.services.rag_service import RAGService
 from thoth.services.research_question_service import ResearchQuestionService
 from thoth.services.tag_service import TagService
 from thoth.services.web_search_service import WebSearchService
@@ -61,9 +83,17 @@ class ServiceManager:
 
         # Initialize core services first
         self._services['llm'] = LLMService(config=self.config)
-        self._services['processing'] = ProcessingService(
-            config=self.config, llm_service=self._services['llm']
-        )
+
+        # Initialize Processing service (optional - requires pdf extras)
+        if PROCESSING_AVAILABLE:
+            self._services['processing'] = ProcessingService(
+                config=self.config, llm_service=self._services['llm']
+            )
+            logger.debug("Processing service initialized")
+        else:
+            self._services['processing'] = None
+            logger.debug("Processing service not available (requires pdf extras)")
+
         self._services['article'] = ArticleService(
             config=self.config, llm_service=self._services['llm']
         )
@@ -81,7 +111,13 @@ class ServiceManager:
             results_dir=self.config.discovery_results_dir,
         )
 
-        self._services['rag'] = RAGService(config=self.config)
+        # Initialize RAG service (optional - requires embeddings extras)
+        if RAG_AVAILABLE:
+            self._services['rag'] = RAGService(config=self.config)
+            logger.debug("RAG service initialized")
+        else:
+            self._services['rag'] = None
+            logger.debug("RAG service not available (requires embeddings extras)")
 
         self._services['web_search'] = WebSearchService(config=self.config)
 
@@ -89,8 +125,13 @@ class ServiceManager:
 
         self._services['api_gateway'] = ExternalAPIGateway(config=self.config)
 
-        # Initialize Letta service for agent management
-        self._services['letta'] = LettaService(config=self.config)
+        # Initialize Letta service for agent management (optional)
+        if LETTA_AVAILABLE:
+            self._services['letta'] = LettaService(config=self.config)
+            logger.debug("Letta service initialized")
+        else:
+            self._services['letta'] = None
+            logger.debug("Letta service not available (requires memory extras)")
 
         # Initialize services that need dependencies
         self._services['citation'] = CitationService(config=self.config)

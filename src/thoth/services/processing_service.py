@@ -153,7 +153,8 @@ class ProcessingService(BaseService):
             no_images_markdown = self._join_markdown_pages(ocr_response)
             no_images_output_path = output_dir / f'{pdf_path.stem}_no_images.md'
 
-            # Save to PostgreSQL only
+            # Save to both disk and PostgreSQL
+            no_images_output_path.write_text(no_images_markdown)
             self._save_markdown_to_postgres(pdf_path.stem, no_images_markdown)
             self.logger.info(f"Saved markdown to PostgreSQL for {pdf_path.stem}")
 

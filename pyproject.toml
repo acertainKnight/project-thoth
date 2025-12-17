@@ -113,9 +113,9 @@ memory = [
 # ==============================================================================
 
 # thoth-api: REST API server (~1.5GB)
-# Needs langchain for AnthropicClient + vectordb for cachetools (BaseRepository)
+# Needs langchain for AnthropicClient + vectordb for cachetools (BaseRepository) + pdf for watchdog
 service-api = [
-    "thoth[api,discovery,langchain,vectordb]",
+    "thoth[api,discovery,pdf,langchain,vectordb]",
 ]
 
 # thoth-dashboard: Dashboard sync (~1.5GB)
@@ -129,14 +129,16 @@ service-discovery = [
     "thoth[api,discovery]",
 ]
 
-# thoth-mcp: MCP with RAG (~2.5GB)
+# thoth-mcp: MCP with RAG (~10GB)
+# Needs discovery for bs4 (BeautifulSoup)
 service-mcp = [
-    "thoth[mcp,langchain,vectordb,embeddings]",
+    "thoth[mcp,discovery,langchain,vectordb,embeddings]",
 ]
 
 # thoth-monitor: PDF processing with embeddings (~13GB with OCR tools)
+# Needs api for asyncpg (PostgresService) + mcp for langchain_mcp_adapters
 service-monitor = [
-    "thoth[pdf,discovery,langchain,vectordb,embeddings]",
+    "thoth[api,pdf,discovery,mcp,langchain,vectordb,embeddings]",
 ]
 
 # thoth-agent: Full agent with memory (~4GB)
