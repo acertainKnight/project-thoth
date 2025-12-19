@@ -373,7 +373,8 @@ class DiscoveryDashboardService:
         Import sentiment changes from dashboard file to database.
 
         Reads the dashboard markdown file, extracts sentiment decisions
-        from YAML frontmatter, and updates the database.
+        from YAML frontmatter, and updates the database. After importing,
+        regenerates the dashboard with updated statistics and filtered articles.
 
         Args:
             dashboard_file: Path to the dashboard markdown file
@@ -384,13 +385,26 @@ class DiscoveryDashboardService:
             # Use ObsidianReviewService to parse and apply changes
             results = await self.review_service.apply_review_decisions(dashboard_file)
 
-            if results:
+            if results and results.get('updated', 0) > 0:
                 logger.success(
                     f"✅ Imported sentiment changes:\n"
                     f"   Liked: {results.get('liked', 0)}\n"
                     f"   Disliked: {results.get('disliked', 0)}\n"
                     f"   Skipped: {results.get('skipped', 0)}"
                 )
+
+                # Extract question info from dashboard frontmatter
+                question_info = await self._extract_dashboard_metadata(dashboard_file)
+
+                if question_info:
+                    # Regenerate dashboard with updated stats and filtered articles
+                    logger.info(f"🔄 Regenerating dashboard with updated data...")
+                    await self.export_to_dashboard(
+                        question_id=question_info['question_id'],
+                        question_name=question_info['question_name']
+                    )
+                    logger.success(f"✅ Dashboard regenerated successfully")
+
             else:
                 logger.debug(f"No changes detected in {dashboard_file.name}")
 
@@ -403,7 +417,7 @@ class DiscoveryDashboardService:
         min_relevance: float,
         limit: int
     ) -> list[dict]:
-        """Fetch article matches for a research question."""
+        """Fetch article matches for a research question (pending only)."""
         query = """
             SELECT
                 arm.id,
@@ -411,6 +425,7 @@ class DiscoveryDashboardService:
                 arm.relevance_score,
                 arm.user_sentiment,
                 arm.sentiment_recorded_at,
+                arm.user_rating,
                 a.title,
                 a.authors,
                 a.publication_date,
@@ -421,12 +436,56 @@ class DiscoveryDashboardService:
             JOIN discovered_articles a ON arm.article_id = a.id
             WHERE arm.question_id = $1
                 AND arm.relevance_score >= $2
-            ORDER BY arm.relevance_score DESC
+                AND arm.user_sentiment IS NULL
+            ORDER BY
+                arm.relevance_score DESC,
+                COALESCE(arm.user_rating, 0) DESC,
+                a.publication_date DESC NULLS LAST
             LIMIT $3
         """
 
         matches = await self.pg.fetch(query, question_id, min_relevance, limit)
         return [dict(match) for match in matches]
+
+    async def _extract_dashboard_metadata(self, dashboard_file: Path) -> Optional[dict]:
+        """
+        Extract question_id and question_name from dashboard YAML frontmatter.
+
+        Args:
+            dashboard_file: Path to the dashboard markdown file
+
+        Returns:
+            dict with 'question_id' and 'question_name', or None if not found
+        """
+        try:
+            content = dashboard_file.read_text(encoding='utf-8')
+
+            if not content.startswith('---'):
+                return None
+
+            parts = content.split('---', 2)
+            if len(parts) < 3:
+                return None
+
+            import yaml
+            frontmatter = yaml.safe_load(parts[1].strip())
+
+            if not isinstance(frontmatter, dict):
+                return None
+
+            question_id = frontmatter.get('question_id')
+            question_name = frontmatter.get('question_name')
+
+            if question_id and question_name:
+                return {
+                    'question_id': question_id,
+                    'question_name': question_name
+                }
+
+        except Exception as e:
+            logger.warning(f"Could not extract metadata from {dashboard_file.name}: {e}")
+
+        return None
 
     async def _get_statistics(self, question_id: str) -> dict:
         """Get sentiment statistics for a research question."""
