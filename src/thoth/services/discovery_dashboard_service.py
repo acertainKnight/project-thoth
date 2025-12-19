@@ -56,6 +56,11 @@ class DiscoveryDashboardWatcher(FileSystemEventHandler):
         if not self._is_dashboard_file(file_path):
             return
 
+        # Skip if we're currently writing this file (auto-export/regeneration)
+        if str(file_path) in self.service.writing_files:
+            logger.debug(f"Skipping {file_path.name} - we're writing it")
+            return
+
         # Avoid processing the same file multiple times
         if str(file_path) in self.processing_files:
             logger.debug(f"Skipping {file_path.name} - already processing")
@@ -156,6 +161,9 @@ class DiscoveryDashboardService:
         # File watcher for automatic import
         self.observer: Optional[PollingObserver] = None
         self.watcher: Optional[DiscoveryDashboardWatcher] = None
+
+        # Track files we're writing to prevent file watcher loops
+        self.writing_files: set[str] = set()
 
         logger.info(
             f"Discovery dashboard service initialized:\n"
@@ -355,8 +363,15 @@ class DiscoveryDashboardService:
             stats=stats
         )
 
-        # Write dashboard file
-        dashboard_file.write_text(content, encoding='utf-8')
+        # Write dashboard file (mark as writing to prevent file watcher loop)
+        self.writing_files.add(str(dashboard_file))
+        try:
+            dashboard_file.write_text(content, encoding='utf-8')
+
+            # Wait briefly for file watcher to process (if it does)
+            await asyncio.sleep(0.5)
+        finally:
+            self.writing_files.discard(str(dashboard_file))
 
         logger.success(
             f"✅ Dashboard exported: {dashboard_file.name}\n"
