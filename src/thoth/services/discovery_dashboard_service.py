@@ -96,12 +96,6 @@ class DiscoveryDashboardWatcher(FileSystemEventHandler):
             # Debounce: wait 2 seconds for rapid edits to settle
             await asyncio.sleep(2)
 
-            # Check modification time - only process if recently changed
-            mtime = file_path.stat().st_mtime
-            if datetime.now().timestamp() - mtime > 5:
-                logger.debug(f"Skipping {file_path.name} - not recently modified")
-                return
-
             # Import sentiment changes from the dashboard file
             await self.service.import_dashboard_changes(file_path)
 
