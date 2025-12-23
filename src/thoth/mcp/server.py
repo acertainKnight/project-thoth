@@ -79,13 +79,13 @@ class MCPServer:
         transport = StdioTransport(self.protocol_handler)
         self.transport_manager.add_transport('stdio', transport)
 
-    def add_http_transport(self, host: str = 'localhost', port: int = 8000) -> None:
+    def add_http_transport(self, host: str = 'localhost', port: int = 8002) -> None:
         """Add HTTP transport for web integration."""
         transport = HTTPTransport(self.protocol_handler, host, port)
         self.transport_manager.add_transport('http', transport)
 
     def add_sse_transport(self, host: str = 'localhost', port: int = 8001) -> None:
-        """Add SSE transport for streaming."""
+        """Add SSE transport for streaming (primary transport)."""
         transport = SSETransport(self.protocol_handler, host, port)
         self.transport_manager.add_transport('sse', transport)
 
@@ -143,6 +143,8 @@ class MCPServer:
                 return await self._handle_prompts_get(message_id, params)
             elif method == 'logging/setLevel':
                 return await self._handle_logging_set_level(message_id, params)
+            elif method == 'health':
+                return await self._handle_health(message_id)
             else:
                 if is_notification:
                     # Unknown notification - just log and ignore
@@ -316,6 +318,43 @@ class MCPServer:
                 f'Error setting log level: {e}',
             )
 
+    async def _handle_health(self, request_id: Any) -> JSONRPCResponse:
+        """Handle health check request."""
+        try:
+            # Get tool count
+            tools_count = len(self.tool_registry.get_tool_names())
+
+            # Get active transports
+            active_transports = list(self.transport_manager.transports.keys())
+
+            health_data = {
+                'status': 'healthy',
+                'server': {
+                    'name': self.server_info.name,
+                    'version': self.server_info.version,
+                },
+                'tools': {
+                    'count': tools_count,
+                    'registered': tools_count > 0,
+                },
+                'transports': {
+                    'active': active_transports,
+                    'count': len(active_transports),
+                },
+                'protocol': {
+                    'initialized': self.protocol_handler.initialized,
+                },
+            }
+
+            return self.protocol_handler.create_response(request_id, health_data)
+
+        except Exception as e:
+            return self.protocol_handler.create_error_response(
+                request_id,
+                MCPErrorCodes.INTERNAL_ERROR,
+                f'Error getting health status: {e}',
+            )
+
     def register_tool_class(self, tool_class):
         """Register a tool class with the server."""
         self.tool_registry.register_class(tool_class)
@@ -334,10 +373,10 @@ async def start_mcp_server(
     enable_stdio: bool = True,
     enable_http: bool = True,
     http_host: str = 'localhost',
-    http_port: int = 8001,
-    enable_sse: bool = False,
+    http_port: int = 8002,
+    enable_sse: bool = True,
     sse_host: str = 'localhost',
-    sse_port: int = 8002,
+    sse_port: int = 8001,
 ) -> None:
     """
     Start the MCP server with the specified transports.
@@ -346,11 +385,11 @@ async def start_mcp_server(
         service_manager: ServiceManager instance. If None, creates a default one.
         enable_stdio: Enable stdio transport for CLI
         enable_http: Enable HTTP transport for web APIs
-        http_host: HTTP server host
-        http_port: HTTP server port
-        enable_sse: Enable Server-Sent Events transport
-        sse_host: SSE server host
-        sse_port: SSE server port
+        http_host: HTTP server host (default: 8002)
+        http_port: HTTP server port (default: 8002)
+        enable_sse: Enable Server-Sent Events transport (default: True, primary transport)
+        sse_host: SSE server host (default: localhost)
+        sse_port: SSE server port (default: 8001, primary port)
     """
     if service_manager is None:
         from thoth.services.service_manager import ServiceManager
@@ -375,7 +414,13 @@ async def start_mcp_server(
     register_all_mcp_tools(server.tool_registry)
     logger.info(f'Registered {len(server.tool_registry.get_tool_names())} MCP tools')
 
-    logger.info(f'MCP server will start on http://{http_host}:{http_port}')
+    # Log all active transports
+    if enable_sse:
+        logger.info(f'MCP SSE transport (primary): http://{sse_host}:{sse_port}')
+    if enable_http:
+        logger.info(f'MCP HTTP transport: http://{http_host}:{http_port}')
+    if enable_stdio:
+        logger.info('MCP stdio transport enabled')
 
     await server.start()
     logger.info('MCP server started successfully')
@@ -387,10 +432,10 @@ def create_mcp_server(
     enable_stdio: bool = True,
     enable_http: bool = True,
     http_host: str = 'localhost',
-    http_port: int = 8001,
-    enable_sse: bool = False,
+    http_port: int = 8002,
+    enable_sse: bool = True,
     sse_host: str = 'localhost',
-    sse_port: int = 8002,
+    sse_port: int = 8001,
 ) -> MCPServer:
     """
     Create and configure an MCP server with transports.
@@ -398,12 +443,12 @@ def create_mcp_server(
     Args:
         service_manager: ServiceManager instance
         enable_stdio: Enable stdio transport for CLI
-        enable_http: Enable HTTP transport for web APIs
+        enable_http: Enable HTTP transport for web APIs (port 8002)
         http_host: HTTP server host
-        http_port: HTTP server port
-        enable_sse: Enable Server-Sent Events transport
+        http_port: HTTP server port (default: 8002)
+        enable_sse: Enable Server-Sent Events transport (default: True, port 8001)
         sse_host: SSE server host
-        sse_port: SSE server port
+        sse_port: SSE server port (default: 8001, primary)
 
     Returns:
         Configured MCPServer instance

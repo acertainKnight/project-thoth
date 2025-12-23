@@ -87,6 +87,7 @@ langchain = [
     "instructor>=1.8.3",
     "tiktoken>=0.9.0",
     "websockets>=15.0.1",
+    "grandalf>=0.8",
 ]
 
 # Vector database (HEAVY: ~500MB)
@@ -102,6 +103,8 @@ embeddings = [
 ]
 
 # Advanced memory (EXTREMELY HEAVY: ~3GB with nvidia libs)
+# NOTE: Letta agents run as separate service (port 8283), not bundled with Thoth
+# Keep dependencies for type hints and optional Letta proxy endpoints
 memory = [
     "letta>=0.9,<1.0",
     "letta-mcp-server>=0.1.0",
@@ -129,8 +132,10 @@ service-discovery = [
     "thoth[api,discovery]",
 ]
 
-# thoth-mcp: MCP with RAG (~10GB)
-# Needs discovery for bs4 (BeautifulSoup)
+# thoth-mcp: MCP server with 60+ research tools (~10GB)
+# Provides MCP protocol interface to Thoth research tools
+# Includes RAG, discovery, and document processing capabilities
+# Agent management handled separately by Letta platform (port 8283)
 service-mcp = [
     "thoth[mcp,discovery,langchain,vectordb,embeddings]",
 ]
@@ -141,7 +146,9 @@ service-monitor = [
     "thoth[api,pdf,discovery,mcp,langchain,vectordb,embeddings]",
 ]
 
-# thoth-agent: Full agent with memory (~4GB)
+# thoth-agent: DEPRECATED - Agent management moved to Letta platform
+# Use Letta REST API (port 8283) or Letta MCP server instead
+# This service definition kept for backward compatibility only
 service-agent = [
     "thoth[api,discovery,pdf,langchain,vectordb,embeddings,memory]",
 ]
