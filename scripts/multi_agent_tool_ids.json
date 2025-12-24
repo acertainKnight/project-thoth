@@ -1,0 +1,5 @@
+{
+  "send_message_to_agent_and_wait_for_reply": "tool-85848c67-6187-456b-b5e5-71a8f0cbcb41",
+  "send_message_to_agent_async": "tool-640603e9-1be0-4ddb-abbf-ff58bd08b047",
+  "send_message_to_agents_matching_tags": "tool-526ffa7b-5938-4eb2-a705-472d09eb390f"
+}
