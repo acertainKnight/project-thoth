@@ -725,3 +725,38 @@ _setup-vault-integration:
 
 # Set default target
 .DEFAULT_GOAL := help
+
+# =============================================================================
+# Tailscale Serve Commands
+# =============================================================================
+
+.PHONY: tailscale-serve-reset
+tailscale-serve-reset: ## Reset Tailscale serve configuration
+	@echo "🔄 Resetting Tailscale serve..."
+	sudo tailscale serve reset
+	@echo "✅ Tailscale serve reset complete"
+
+.PHONY: tailscale-serve-start
+tailscale-serve-start: ## Start Tailscale serve for Letta (HTTPS on port 443)
+	@echo "🚀 Starting Tailscale serve for Letta..."
+	sudo tailscale serve --bg --https=443 8283
+	@echo "✅ Tailscale serve started"
+	@echo ""
+	@echo "Available at: https://lambda-workstation.tail71634c.ts.net/"
+	@echo ""
+	@tailscale serve status
+
+.PHONY: tailscale-serve-restart
+tailscale-serve-restart: tailscale-serve-reset tailscale-serve-start ## Reset and restart Tailscale serve
+	@echo "✅ Tailscale serve restarted"
+
+.PHONY: tailscale-serve-status
+tailscale-serve-status: ## Show Tailscale serve status
+	@tailscale serve status
+
+.PHONY: tailscale-serve-stop
+tailscale-serve-stop: ## Stop Tailscale serve
+	@echo "🛑 Stopping Tailscale serve..."
+	sudo tailscale serve --https=443 off
+	@echo "✅ Tailscale serve stopped"
+

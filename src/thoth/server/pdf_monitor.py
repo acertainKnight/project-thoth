@@ -555,6 +555,10 @@ class PDFMonitor:
         This method initiates the file system monitor and begins watching
         for new PDF files.
         """
+        if not WATCHDOG_AVAILABLE:
+            logger.warning('Watchdog not available, PDF monitoring disabled')
+            return
+
         # Process existing files first
         self._process_existing_files()
 

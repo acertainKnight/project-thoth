@@ -1058,6 +1058,10 @@ class Config:
         self.discovery_results_dir = resolve_path(paths.discovery.results)
         self.discovery_chrome_configs_dir = resolve_path(paths.discovery.chrome_configs)
 
+        # Resolve RAG vector_db_path (avoid relative path permission errors)
+        rag_config = self.settings.rag
+        rag_config.vector_db_path = str(resolve_path(rag_config.vector_db_path))
+
         # Create directories if they don't exist
         for dir_path in [
             self.workspace_dir,

@@ -40,4 +40,4 @@ else:
 EOF
 
 echo "==> Starting Letta server..."
-exec letta server --host 0.0.0.0 --port 8283
+exec letta server --host 0.0.0.0 --port 8283 --secure --ade

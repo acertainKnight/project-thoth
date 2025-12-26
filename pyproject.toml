@@ -147,13 +147,6 @@ service-monitor = [
     "thoth[api,pdf,discovery,mcp,langchain,vectordb,embeddings]",
 ]
 
-# thoth-agent: DEPRECATED - Agent management moved to Letta platform
-# Use Letta REST API (port 8283) or Letta MCP server instead
-# This service definition kept for backward compatibility only
-service-agent = [
-    "thoth[api,discovery,pdf,langchain,vectordb,embeddings,memory]",
-]
-
 # ==============================================================================
 # Development and Testing
 # ==============================================================================
@@ -200,7 +193,7 @@ utils = [
 
 # Full local development
 all = [
-    "thoth[service-api,service-dashboard,service-discovery,service-mcp,service-monitor,service-agent,dev,test,viz,utils]",
+    "thoth[service-api,service-dashboard,service-discovery,service-mcp,service-monitor,dev,test,viz,utils]",
 ]
 
 [tool.setuptools.packages.find]

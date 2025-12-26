@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Letta ADE Reset</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        .status {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+        }
+        .success {
+            background: #e8f5e9;
+            border-left-color: #4CAF50;
+        }
+        button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            margin: 10px 0;
+        }
+        button:hover {
+            background: #1976D2;
+        }
+        .danger {
+            background: #f44336;
+        }
+        .danger:hover {
+            background: #d32f2f;
+        }
+        ul {
+            text-align: left;
+            line-height: 1.8;
+        }
+        .code {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Letta ADE Storage Reset</h1>
+
+        <p>This page will clear ALL browser storage for the Letta ADE, including:</p>
+        <ul>
+            <li>localStorage (agent IDs, settings)</li>
+            <li>sessionStorage (temporary data)</li>
+            <li>IndexedDB (structured data)</li>
+            <li>Cookies (session tokens)</li>
+            <li>Cache (cached responses)</li>
+        </ul>
+
+        <div id="status" class="status">
+            Ready to reset. Click the button below to clear all storage.
+        </div>
+
+        <button onclick="clearAllStorage()">🗑️ Clear All Storage</button>
+
+        <button onclick="window.location.href='https://lambda-workstation.tail71634c.ts.net/'" style="margin-top: 20px;">
+            ↗️ Go to Letta ADE
+        </button>
+
+        <h3 style="margin-top: 40px;">What this does:</h3>
+        <div class="code" id="actions">
+            Waiting...
+        </div>
+    </div>
+
+    <script>
+        async function clearAllStorage() {
+            const statusDiv = document.getElementById('status');
+            const actionsDiv = document.getElementById('actions');
+            let actions = [];
+
+            try {
+                // Clear localStorage
+                try {
+                    const lsKeys = Object.keys(localStorage);
+                    localStorage.clear();
+                    actions.push(`✅ Cleared localStorage (${lsKeys.length} items)`);
+                    lsKeys.forEach(key => actions.push(`   - Removed: ${key}`));
+                } catch (e) {
+                    actions.push(`❌ localStorage: ${e.message}`);
+                }
+
+                // Clear sessionStorage
+                try {
+                    const ssKeys = Object.keys(sessionStorage);
+                    sessionStorage.clear();
+                    actions.push(`✅ Cleared sessionStorage (${ssKeys.length} items)`);
+                } catch (e) {
+                    actions.push(`❌ sessionStorage: ${e.message}`);
+                }
+
+                // Clear IndexedDB
+                try {
+                    const dbs = await indexedDB.databases();
+                    for (const db of dbs) {
+                        indexedDB.deleteDatabase(db.name);
+                        actions.push(`✅ Deleted IndexedDB: ${db.name}`);
+                    }
+                } catch (e) {
+                    actions.push(`⚠️ IndexedDB: ${e.message}`);
+                }
+
+                // Clear cookies
+                try {
+                    const cookies = document.cookie.split(';');
+                    cookies.forEach(cookie => {
+                        const name = cookie.split('=')[0].trim();
+                        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+                        actions.push(`✅ Cleared cookie: ${name}`);
+                    });
+                } catch (e) {
+                    actions.push(`❌ Cookies: ${e.message}`);
+                }
+
+                // Clear cache
+                try {
+                    if ('caches' in window) {
+                        const cacheNames = await caches.keys();
+                        await Promise.all(cacheNames.map(name => caches.delete(name)));
+                        actions.push(`✅ Cleared ${cacheNames.length} caches`);
+                    }
+                } catch (e) {
+                    actions.push(`⚠️ Cache API: ${e.message}`);
+                }
+
+                // Unregister service workers
+                try {
+                    if ('serviceWorker' in navigator) {
+                        const registrations = await navigator.serviceWorker.getRegistrations();
+                        await Promise.all(registrations.map(r => r.unregister()));
+                        actions.push(`✅ Unregistered ${registrations.length} service workers`);
+                    }
+                } catch (e) {
+                    actions.push(`⚠️ Service Workers: ${e.message}`);
+                }
+
+                statusDiv.className = 'status success';
+                statusDiv.innerHTML = '<strong>✅ Success!</strong><br>All storage cleared. You can now go to the Letta ADE and it will load fresh.';
+
+            } catch (error) {
+                statusDiv.className = 'status';
+                statusDiv.style.background = '#ffebee';
+                statusDiv.style.borderLeftColor = '#f44336';
+                statusDiv.innerHTML = `<strong>❌ Error:</strong><br>${error.message}`;
+                actions.push(`❌ General error: ${error.message}`);
+            }
+
+            actionsDiv.textContent = actions.join('\n');
+        }
+    </script>
+</body>
+</html>
