@@ -136,8 +136,9 @@ service-discovery = [
 # Provides MCP protocol interface to Thoth research tools
 # Includes RAG, discovery, and document processing capabilities
 # Agent management handled separately by Letta platform (port 8283)
+# Requires api extra for asyncpg (PostgreSQL access)
 service-mcp = [
-    "thoth[mcp,discovery,langchain,vectordb,embeddings]",
+    "thoth[api,mcp,discovery,langchain,vectordb,embeddings]",
 ]
 
 # thoth-monitor: PDF processing with embeddings (~13GB with OCR tools)
