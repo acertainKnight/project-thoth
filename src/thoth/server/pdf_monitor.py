@@ -11,11 +11,25 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from loguru import logger
-from watchdog.events import FileCreatedEvent, FileSystemEventHandler
-from watchdog.observers.polling import PollingObserver
 
 from thoth.config import config
 from thoth.utilities.vault_path_resolver import VaultPathResolver
+
+# Optional watchdog dependency for PDF monitoring
+# Not required for MCP service
+try:
+    from watchdog.events import FileCreatedEvent, FileSystemEventHandler
+    from watchdog.observers.polling import PollingObserver
+    WATCHDOG_AVAILABLE = True
+except ImportError:
+    WATCHDOG_AVAILABLE = False
+    # Define stub classes for type hints
+    class FileSystemEventHandler:  # type: ignore
+        pass
+    class FileCreatedEvent:  # type: ignore
+        pass
+    class PollingObserver:  # type: ignore
+        pass
 
 if TYPE_CHECKING:
     from thoth.pipeline import ThothPipeline
