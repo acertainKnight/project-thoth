@@ -1,59 +1,47 @@
 """
-Vector store manager for Thoth RAG system.
+Vector store manager for Thoth RAG system using PostgreSQL + pgvector.
 
-This module provides a wrapper around ChromaDB for document storage and retrieval
-using vector embeddings for similarity search.
+This module provides database-only vector storage with no file system dependencies.
 """
 
-import os
-from pathlib import Path
+import asyncio
 from typing import Any
+from uuid import UUID
 
-import chromadb
-from langchain_chroma import Chroma
+import asyncpg
 from langchain_core.documents import Document
 from loguru import logger
 
-from thoth.config import config
+from thoth.config import Config
 
 
 class VectorStoreManager:
     """
-    Manages vector storage and retrieval for the RAG system.
+    Manages vector storage and retrieval using PostgreSQL + pgvector.
 
     This class provides functionality to:
-    - Store document embeddings in ChromaDB
-    - Perform similarity searches
-    - Manage persistent storage
+    - Store document embeddings in PostgreSQL with pgvector
+    - Perform similarity searches using HNSW index
+    - Manage document chunks with metadata
+
+    100% database-backed - no file system dependencies.
     """
 
     def __init__(
         self,
         collection_name: str | None = None,
-        persist_directory: str | Path | None = None,
+        persist_directory: str | None = None,  # Deprecated, kept for compatibility
         embedding_function: Any | None = None,
     ):
         """
-        Initialize the vector store manager.
+        Initialize the vector store manager with pgvector.
 
         Args:
-            collection_name: Name of the collection (defaults to config).
-            persist_directory: Directory for persistent storage (defaults to config).
+            collection_name: DEPRECATED - pgvector uses single document_chunks table
+            persist_directory: DEPRECATED - database-only, no file storage
             embedding_function: Embedding function to use (required).
         """
-        self.config = config
-
-        # Set collection name
-        self.collection_name = collection_name or self.config.rag_config.collection_name
-
-        # Set persist directory
-        if persist_directory:
-            self.persist_directory = Path(persist_directory)
-        else:
-            self.persist_directory = Path(self.config.rag_config.vector_db_path)
-
-        # Create directory if it doesn't exist
-        self.persist_directory.mkdir(parents=True, exist_ok=True)
+        self.config = Config()
 
         # Store embedding function
         if embedding_function is None:
@@ -61,270 +49,245 @@ class VectorStoreManager:
             raise ValueError(msg)
         self.embedding_function = embedding_function
 
-        # Configure safe environment for ChromaDB
-        self._configure_safe_environment()
+        # Get database URL
+        self.db_url = getattr(self.config.secrets, 'database_url', None)
+        if not self.db_url:
+            raise ValueError('DATABASE_URL not configured')
 
-        # Initialize ChromaDB client
-        self._init_client()
+        # Connection pool for async operations
+        self._pool: asyncpg.Pool | None = None
 
-        # Initialize vector store
-        self._init_vector_store()
+        logger.info('VectorStoreManager initialized (PostgreSQL + pgvector)')
 
-        logger.info(
-            f'VectorStoreManager initialized with collection: {self.collection_name}'
-        )
-
-    def _configure_safe_environment(self) -> None:
-        """Configure environment variables to prevent segmentation faults."""
-        # Disable problematic multiprocessing features
-        os.environ['CHROMA_MAX_BATCH_SIZE'] = '100'
-        os.environ['CHROMA_SUBMIT_BATCH_SIZE'] = '100'
-
-        # Set SQLite to be safer
-        os.environ['SQLITE_ENABLE_PREUPDATE_HOOK'] = '0'
-        os.environ['SQLITE_ENABLE_FTS5'] = '0'
-
-        logger.debug('Configured safe environment variables for ChromaDB')
-
-    def _init_client(self) -> None:
-        """Initialize the ChromaDB client with safe settings."""
-        try:
-            # Use the new ChromaDB client initialization format (v0.5.0+)
-            # No longer need chromadb.config.Settings - it's deprecated
-            self.client = chromadb.PersistentClient(path=str(self.persist_directory))
-            logger.debug(f'ChromaDB client initialized at: {self.persist_directory}')
-        except Exception as e:
-            logger.error(f'Failed to initialize ChromaDB client: {e}')
-            raise
-
-    def _init_vector_store(self) -> None:
-        """Initialize the vector store."""
-        try:
-            self.vector_store = Chroma(
-                collection_name=self.collection_name,
-                embedding_function=self.embedding_function,
-                persist_directory=str(self.persist_directory),
-                client=self.client,
+    async def _get_pool(self) -> asyncpg.Pool:
+        """Get or create connection pool."""
+        if self._pool is None:
+            self._pool = await asyncpg.create_pool(
+                self.db_url,
+                min_size=2,
+                max_size=10,
+                command_timeout=60
             )
-            logger.debug(
-                f'Vector store initialized for collection: {self.collection_name}'
-            )
-        except Exception as e:
-            logger.error(f'Failed to initialize vector store: {e}')
-            raise
+        return self._pool
+
+    async def _ensure_extension(self) -> None:
+        """Ensure pgvector extension is enabled."""
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute('CREATE EXTENSION IF NOT EXISTS vector')
+            logger.debug('Ensured pgvector extension is enabled')
 
     def add_documents(
         self,
         documents: list[Document],
-        ids: list[str] | None = None,
+        paper_id: UUID | None = None,
+        **kwargs: Any
     ) -> list[str]:
         """
-        Add documents to the vector store with safe batch processing.
+        Add documents to the vector store.
 
         Args:
-            documents: List of LangChain Document objects to add.
-            ids: Optional list of IDs for the documents.
+            documents: List of LangChain Document objects
+            paper_id: UUID of the paper these chunks belong to
+            **kwargs: Additional metadata
 
         Returns:
-            List of IDs for the added documents.
+            List of document IDs (UUIDs as strings)
         """
-        try:
-            logger.info(f'Adding {len(documents)} documents to vector store')
+        return asyncio.run(self._add_documents_async(documents, paper_id, **kwargs))
 
-            # Process documents in smaller batches to prevent segfaults
-            batch_size = 50  # Smaller batch size to prevent memory issues
-            all_doc_ids = []
+    async def _add_documents_async(
+        self,
+        documents: list[Document],
+        paper_id: UUID | None = None,
+        **kwargs: Any
+    ) -> list[str]:
+        """Add documents asynchronously."""
+        if not paper_id:
+            raise ValueError('paper_id is required for document chunks')
 
-            for i in range(0, len(documents), batch_size):
-                batch_docs = documents[i : i + batch_size]
-                batch_ids = ids[i : i + batch_size] if ids else None
+        # Generate embeddings
+        texts = [doc.page_content for doc in documents]
+        embeddings = self.embedding_function.embed_documents(texts)
 
-                logger.debug(
-                    f'Processing batch {i // batch_size + 1} with {len(batch_docs)} documents'
+        pool = await self._get_pool()
+        ids = []
+
+        async with pool.acquire() as conn:
+            for idx, (doc, embedding) in enumerate(zip(documents, embeddings)):
+                metadata = {**doc.metadata, **kwargs}
+
+                result = await conn.fetchrow("""
+                    INSERT INTO document_chunks
+                    (paper_id, content, chunk_index, chunk_type, metadata, embedding, token_count)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    ON CONFLICT (paper_id, chunk_index)
+                    DO UPDATE SET
+                        content = EXCLUDED.content,
+                        embedding = EXCLUDED.embedding,
+                        metadata = EXCLUDED.metadata,
+                        updated_at = CURRENT_TIMESTAMP
+                    RETURNING id
+                """,
+                    paper_id,
+                    doc.page_content,
+                    idx,
+                    metadata.get('chunk_type', 'content'),
+                    metadata,
+                    embedding,
+                    len(doc.page_content.split())  # Rough token count
                 )
 
-                try:
-                    # Add documents with progress tracking
-                    doc_ids = self.vector_store.add_documents(
-                        documents=batch_docs,
-                        ids=batch_ids,
-                    )
-                    all_doc_ids.extend(doc_ids)
+                ids.append(str(result['id']))
 
-                    # Force a small delay to prevent overwhelming the system
-                    import time
-
-                    time.sleep(0.1)
-
-                except Exception as batch_e:
-                    logger.error(f'Error in batch {i // batch_size + 1}: {batch_e}')
-                    # Continue with next batch rather than failing completely
-                    continue
-
-            logger.info(f'Successfully added {len(all_doc_ids)} documents')
-            return all_doc_ids
-
-        except Exception as e:
-            logger.error(f'Error adding documents to vector store: {e}')
-            raise
+        logger.debug(f'Added {len(ids)} document chunks for paper {paper_id}')
+        return ids
 
     def similarity_search(
         self,
         query: str,
         k: int = 4,
         filter: dict[str, Any] | None = None,
+        **kwargs: Any
     ) -> list[Document]:
         """
-        Perform similarity search on the vector store.
+        Perform similarity search.
 
         Args:
-            query: Query text to search for.
-            k: Number of results to return.
-            filter: Optional metadata filter.
+            query: Search query text
+            k: Number of results to return
+            filter: Metadata filter (not yet implemented)
+            **kwargs: Additional search parameters
 
         Returns:
-            List of similar documents.
+            List of similar documents
         """
-        try:
-            logger.debug(f'Performing similarity search for query: {query[:100]}...')
+        return asyncio.run(self._similarity_search_async(query, k, filter, **kwargs))
 
-            results = self.vector_store.similarity_search(
-                query=query,
-                k=k,
-                filter=filter,
-            )
+    async def _similarity_search_async(
+        self,
+        query: str,
+        k: int = 4,
+        filter: dict[str, Any] | None = None,
+        **kwargs: Any
+    ) -> list[Document]:
+        """Perform similarity search asynchronously."""
+        # Generate query embedding
+        query_embedding = self.embedding_function.embed_query(query)
 
-            logger.debug(f'Found {len(results)} similar documents')
-            return results
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            # Use pgvector cosine similarity search with HNSW index
+            # The <=> operator uses the HNSW index automatically
+            rows = await conn.fetch("""
+                SELECT
+                    dc.id,
+                    dc.content,
+                    dc.metadata,
+                    dc.chunk_type,
+                    p.title,
+                    p.doi,
+                    p.authors,
+                    1 - (dc.embedding <=> $1) as similarity
+                FROM document_chunks dc
+                JOIN papers p ON dc.paper_id = p.id
+                WHERE dc.embedding IS NOT NULL
+                ORDER BY dc.embedding <=> $1
+                LIMIT $2
+            """, query_embedding, k)
 
-        except Exception as e:
-            logger.error(f'Error performing similarity search: {e}')
-            raise
+            documents = []
+            for row in rows:
+                metadata = dict(row['metadata']) if row['metadata'] else {}
+                metadata.update({
+                    'chunk_id': str(row['id']),
+                    'chunk_type': row['chunk_type'],
+                    'paper_title': row['title'],
+                    'doi': row['doi'],
+                    'authors': row['authors'],
+                    'similarity': float(row['similarity'])
+                })
+
+                documents.append(Document(
+                    page_content=row['content'],
+                    metadata=metadata
+                ))
+
+            logger.debug(f'Found {len(documents)} similar documents for query')
+            return documents
 
     def similarity_search_with_score(
         self,
         query: str,
         k: int = 4,
         filter: dict[str, Any] | None = None,
+        **kwargs: Any
     ) -> list[tuple[Document, float]]:
         """
-        Perform similarity search with relevance scores.
+        Perform similarity search with scores.
 
         Args:
-            query: Query text to search for.
-            k: Number of results to return.
-            filter: Optional metadata filter.
+            query: Search query text
+            k: Number of results to return
+            filter: Metadata filter
+            **kwargs: Additional parameters
 
         Returns:
-            List of tuples (document, score).
+            List of (Document, score) tuples
         """
-        try:
-            logger.debug(
-                f'Performing similarity search with scores for query: {query[:100]}...'
-            )
+        documents = self.similarity_search(query, k, filter, **kwargs)
+        return [(doc, doc.metadata.get('similarity', 0.0)) for doc in documents]
 
-            results = self.vector_store.similarity_search_with_score(
-                query=query,
-                k=k,
-                filter=filter,
-            )
-
-            logger.debug(f'Found {len(results)} similar documents with scores')
-            return results
-
-        except Exception as e:
-            logger.error(f'Error performing similarity search with scores: {e}')
-            raise
-
-    def delete_documents(self, ids: list[str]) -> None:
+    def delete_documents(self, paper_id: UUID) -> None:
         """
-        Delete documents from the vector store by ID.
+        Delete all document chunks for a paper.
 
         Args:
-            ids: List of document IDs to delete.
+            paper_id: UUID of the paper to delete chunks for
         """
-        try:
-            logger.info(f'Deleting {len(ids)} documents from vector store')
-            self.vector_store.delete(ids=ids)
-            logger.info('Documents deleted successfully')
-        except Exception as e:
-            logger.error(f'Error deleting documents: {e}')
-            raise
+        asyncio.run(self._delete_documents_async(paper_id))
 
-    def get_all_documents(self) -> list[Document]:
-        """
-        Get all documents from the vector store.
-
-        Returns:
-            List of all documents in the store.
-        """
-        try:
-            # Get all documents by doing a large similarity search
-            # This is a workaround as ChromaDB doesn't have a direct "get all"
-            # method in LangChain
-            collection = self.client.get_collection(self.collection_name)
-            results = collection.get()
-
-            # Convert to LangChain documents
-            documents = []
-            if results and 'documents' in results:
-                for i, doc_text in enumerate(results['documents']):
-                    metadata = results.get('metadatas', [{}])[i] or {}
-                    doc = Document(page_content=doc_text, metadata=metadata)
-                    documents.append(doc)
-
-            logger.debug(f'Retrieved {len(documents)} documents from vector store')
-            return documents
-
-        except Exception as e:
-            logger.error(f'Error getting all documents: {e}')
-            raise
-
-    def clear_collection(self) -> None:
-        """Clear all documents from the current collection."""
-        try:
-            logger.warning(
-                f'Clearing all documents from collection: {self.collection_name}'
+    async def _delete_documents_async(self, paper_id: UUID) -> None:
+        """Delete documents asynchronously."""
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            result = await conn.execute(
+                "DELETE FROM document_chunks WHERE paper_id = $1",
+                paper_id
             )
-            self.client.delete_collection(self.collection_name)
-            self._init_vector_store()  # Reinitialize empty collection
-            logger.info('Collection cleared successfully')
-        except Exception as e:
-            logger.error(f'Error clearing collection: {e}')
-            raise
+            logger.debug(f'Deleted chunks for paper {paper_id}: {result}')
 
-    def get_collection_stats(self) -> dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
-        Get statistics about the current collection.
+        Get statistics about the vector store.
 
         Returns:
-            Dictionary with collection statistics.
+            Dictionary with collection statistics
         """
-        try:
-            collection = self.client.get_collection(self.collection_name)
-            count = collection.count()
+        return asyncio.run(self._get_stats_async())
 
-            stats = {
-                'collection_name': self.collection_name,
-                'document_count': count,
-                'persist_directory': str(self.persist_directory),
+    async def _get_stats_async(self) -> dict[str, Any]:
+        """Get statistics asynchronously."""
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow("""
+                SELECT
+                    COUNT(*) as total_chunks,
+                    COUNT(DISTINCT paper_id) as total_papers,
+                    COUNT(CASE WHEN embedding IS NOT NULL THEN 1 END) as indexed_chunks
+                FROM document_chunks
+            """)
+
+            return {
+                'total_chunks': row['total_chunks'],
+                'total_papers': row['total_papers'],
+                'indexed_chunks': row['indexed_chunks'],
+                'collection_name': 'document_chunks (pgvector)',
+                'backend': 'PostgreSQL + pgvector'
             }
 
-            logger.debug(f'Collection stats: {stats}')
-            return stats
-
-        except Exception as e:
-            logger.error(f'Error getting collection stats: {e}')
-            raise
-
-    def get_retriever(self, **kwargs) -> Any:
-        """
-        Get a retriever instance for use with LangChain.
-
-        Args:
-            **kwargs: Additional arguments for the retriever.
-
-        Returns:
-            A LangChain retriever instance.
-        """
-        return self.vector_store.as_retriever(**kwargs)
+    async def close(self) -> None:
+        """Close connection pool."""
+        if self._pool:
+            await self._pool.close()
+            logger.debug('Closed pgvector connection pool')

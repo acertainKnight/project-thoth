@@ -52,8 +52,8 @@ class CitationGraph:
 
     def __init__(
         self,
-        knowledge_base_dir: str | Path,
-        graph_storage_path: str | Path | None = None,
+        knowledge_base_dir: str | Path | None = None,  # Deprecated, kept for compatibility
+        graph_storage_path: str | Path | None = None,  # Deprecated, kept for compatibility
         note_generator: Any | None = None,  # Deprecated
         pdf_dir: Path | None = None,
         markdown_dir: Path | None = None,
@@ -61,12 +61,11 @@ class CitationGraph:
         service_manager: 'ServiceManager | None' = None,
     ) -> None:
         """
-        Initialize the CitationGraph.
+        Initialize the CitationGraph (database-only, no file system dependencies).
 
         Args:
-            knowledge_base_dir: Base directory for the knowledge base
-            graph_storage_path: Path to save the citation graph. If None, defaults to
-                knowledge_base_dir / 'citation_graph.pkl'
+            knowledge_base_dir: DEPRECATED - No longer used (database-only)
+            graph_storage_path: DEPRECATED - No longer used (database-only)
             note_generator: Deprecated - use service_manager instead
             pdf_dir: Directory where PDF files are stored
             markdown_dir: Directory where markdown files are stored
@@ -77,17 +76,10 @@ class CitationGraph:
             None
 
         Example:
-            >>> from pathlib import Path
-            >>> tracker = CitationGraph(Path('/home/user/knowledge_base'))
+            >>> tracker = CitationGraph()  # Loads from PostgreSQL automatically
         """
-        self.knowledge_base_dir = Path(knowledge_base_dir)
-        self.knowledge_base_dir.mkdir(parents=True, exist_ok=True)
-
-        if graph_storage_path:
-            self.graph_storage_path = Path(graph_storage_path)
-        else:
-            self.graph_storage_path = self.knowledge_base_dir / 'citation_graph.pkl'
-
+        # Legacy parameters kept for backward compatibility but not used
+        # All data is loaded from PostgreSQL - no file system dependencies
         self.note_generator = note_generator  # Keep for backward compatibility
         self.service_manager = service_manager
         self.pdf_dir = pdf_dir
@@ -97,9 +89,7 @@ class CitationGraph:
         self.graph: nx.DiGraph = nx.DiGraph()
         self._load_graph()
 
-        logger.info(
-            f'CitationGraph initialized with knowledge base at {knowledge_base_dir}'
-        )
+        logger.info('CitationGraph initialized (database-only mode)')
 
     def _load_graph(self) -> None:
         """

@@ -25,9 +25,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Copy source code
 COPY . /app
 
-# Install the project with service-monitor extras
+# Install the project with service-monitor extras (non-editable for production)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --extra service-monitor
+    uv sync --frozen --no-editable --extra service-monitor
 
 # ==============================================================================
 # Production stage - Minimal production image

@@ -25,9 +25,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Copy source code
 COPY . /app
 
-# Install the project with service-mcp extras
+# Install the project with service-mcp extras (non-editable for production)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --extra service-mcp
+    uv sync --frozen --no-editable --extra service-mcp
 
 # ==============================================================================
 # Production stage - Minimal production image
