@@ -27,7 +27,12 @@ except ImportError:
     MCP_HEALTH_AVAILABLE = False
 
 from thoth.server.chat_models import ChatPersistenceManager
-from thoth.server.hot_reload import SettingsFileWatcher
+
+# Optional hot reload for development (requires watchdog package)
+try:
+    from thoth.server.hot_reload import SettingsFileWatcher
+except ImportError:
+    SettingsFileWatcher = None  # Not available in all service configurations
 from thoth.server.routers import (
     agent,
     chat,
