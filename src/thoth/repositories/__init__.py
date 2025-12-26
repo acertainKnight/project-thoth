@@ -12,6 +12,13 @@ from thoth.repositories.tag_repository import TagRepository
 from thoth.repositories.cache_repository import CacheRepository
 from thoth.repositories.discovery_source_repository import DiscoverySourceRepository
 from thoth.repositories.paper_discovery_repository import PaperDiscoveryRepository
+from thoth.repositories.workflow_actions_repository import WorkflowActionsRepository
+from thoth.repositories.workflow_search_config_repository import (
+    WorkflowSearchConfigRepository,
+)
+from thoth.repositories.workflow_executions_repository import (
+    WorkflowExecutionsRepository,
+)
 
 __all__ = [
     'BaseRepository',
@@ -21,4 +28,7 @@ __all__ = [
     'CacheRepository',
     'DiscoverySourceRepository',
     'PaperDiscoveryRepository',
+    'WorkflowActionsRepository',
+    'WorkflowSearchConfigRepository',
+    'WorkflowExecutionsRepository',
 ]
