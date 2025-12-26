@@ -49,6 +49,7 @@ discovery = [
     "scholarly>=1.7.11",
     "bibtexparser>=1.4.2",
     "selenium>=4.29.0",
+    "playwright>=1.48.0", # Browser automation for workflows
     "fake-useragent>=2.1.0",
     "duckduckgo-search>=5.2",
     "roman-numerals-py>=3.1.0",
