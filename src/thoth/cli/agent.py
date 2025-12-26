@@ -2,14 +2,31 @@ import time
 
 from loguru import logger
 
-from thoth.ingestion.agent_v2 import create_research_assistant
 from thoth.pipeline import ThothPipeline
+
+# Agent management moved to Letta platform - this CLI command is deprecated
+try:
+    from thoth.ingestion.agent_v2 import create_research_assistant
+    AGENT_V2_AVAILABLE = True
+except ImportError:
+    AGENT_V2_AVAILABLE = False
+    create_research_assistant = None  # type: ignore
 
 
 async def run_agent_chat(_args, pipeline: ThothPipeline):
     """
     Start an interactive chat with the research assistant agent.
+
+    NOTE: Agent management has been moved to Letta platform (port 8283).
+    This command is deprecated. Use Letta REST API or Letta MCP server instead.
     """
+    if not AGENT_V2_AVAILABLE:
+        logger.error(
+            'Agent CLI command is deprecated. Agent management has been moved to '
+            'Letta platform (port 8283). Use Letta REST API or Letta MCP server instead.'
+        )
+        return
+
     try:
         logger.info('Starting modern research assistant agent chat...')
         agent = create_research_assistant(
