@@ -10,9 +10,23 @@ from typing import Callable, Optional, List
 import asyncio
 import json
 import threading
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileSystemEvent
 from loguru import logger
+
+# Optional watchdog dependency for hot-reload functionality
+# Not required for production MCP service
+try:
+    from watchdog.observers import Observer
+    from watchdog.events import FileSystemEventHandler, FileSystemEvent
+    WATCHDOG_AVAILABLE = True
+except ImportError:
+    WATCHDOG_AVAILABLE = False
+    # Define stub classes for type hints
+    class Observer:  # type: ignore
+        pass
+    class FileSystemEventHandler:  # type: ignore
+        pass
+    class FileSystemEvent:  # type: ignore
+        pass
 
 
 class SettingsFileWatcher:
@@ -87,6 +101,10 @@ class SettingsFileWatcher:
 
     def start(self) -> None:
         """Start watching the settings file."""
+        if not WATCHDOG_AVAILABLE:
+            logger.warning("Watchdog not available, hot-reload disabled")
+            return
+
         if self._is_running:
             logger.warning("Settings watcher is already running")
             return
