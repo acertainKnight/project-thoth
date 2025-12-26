@@ -3,6 +3,9 @@ Memory CLI commands for managing memory jobs and summarization.
 
 Provides command-line interface for memory management tasks including
 episodic summarization scheduling and memory maintenance operations.
+
+NOTE: Memory management has been moved to Letta platform (port 8283).
+These commands are deprecated. Use Letta REST API or Letta MCP server instead.
 """
 
 import json
@@ -10,7 +13,15 @@ import json
 import click
 from loguru import logger
 
-from thoth.memory import MemoryJobConfig, get_shared_scheduler, get_shared_store
+# Memory management moved to Letta platform - these CLI commands are deprecated
+try:
+    from thoth.memory import MemoryJobConfig, get_shared_scheduler, get_shared_store
+    MEMORY_AVAILABLE = True
+except ImportError:
+    MEMORY_AVAILABLE = False
+    MemoryJobConfig = None  # type: ignore
+    get_shared_scheduler = None  # type: ignore
+    get_shared_store = None  # type: ignore
 
 
 @click.group(name='memory')
