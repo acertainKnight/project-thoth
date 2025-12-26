@@ -14,9 +14,6 @@ x-thoth-common: &thoth-common
   user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
   environment: &thoth-env
     # Database connections
-    - THOTH_CHROMADB_HOST=chromadb
-    - THOTH_CHROMADB_PORT=8003
-    - THOTH_CHROMADB_URL=http://chromadb:8003
     - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
 
     # Vault-relative path configuration
@@ -156,30 +153,6 @@ services:
       start_period: 30s
 
   # ==============================================================================
-  # ChromaDB Vector Database
-  # ==============================================================================
-  chromadb:
-    image: chromadb/chroma:latest
-    container_name: thoth-chromadb
-    environment:
-      - CHROMA_SERVER_HOST=0.0.0.0
-      - IS_PERSISTENT=TRUE
-      - PERSIST_DIRECTORY=/data
-    volumes:
-      - thoth-chroma-data:/data
-    ports:
-      - "8003:8000"
-    networks:
-      - thoth-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "sh", "-c", "grep -q ':1F40 ' /proc/net/tcp && echo ChromaDB healthy || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-
-  # ==============================================================================
   # Thoth API Server
   # Main REST API for frontend and external integrations
   # ==============================================================================
@@ -193,9 +166,6 @@ services:
     command: ["python", "-m", "thoth", "server", "start", "--api-host", "0.0.0.0", "--api-port", "8000", "--no-mcp", "--no-discovery"]
     ports:
       - "8080:8000"
-    depends_on:
-      chromadb:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
       interval: 30s
@@ -246,9 +216,6 @@ services:
     ports:
       - "8082:8000"  # HTTP transport
       - "8081:8001"  # SSE transport
-    depends_on:
-      chromadb:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.connect(('localhost', 8001)); s.close()"]
       interval: 30s
@@ -277,8 +244,6 @@ services:
     container_name: thoth-monitor
     command: ["python", "-m", "thoth", "monitor", "--optimized", "--recursive"]
     depends_on:
-      chromadb:
-        condition: service_healthy
       thoth-api:
         condition: service_started
     healthcheck:
@@ -314,8 +279,6 @@ services:
       "--check-interval", "60"
     ]
     depends_on:
-      chromadb:
-        condition: service_healthy
       thoth-api:
         condition: service_started
     healthcheck:
@@ -356,9 +319,6 @@ volumes:
     driver: local
     name: thoth-app-home
 
-  thoth-chroma-data:
-    driver: local
-    name: thoth-chroma-data
 
   thoth-tmp-cache:
     driver: local
