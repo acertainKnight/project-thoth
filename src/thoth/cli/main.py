@@ -28,10 +28,8 @@ _configure_safe_environment()
 from thoth.pipeline import ThothPipeline  # noqa: E402
 
 from . import (  # noqa: E402
-    agent,
     discovery,
     mcp,
-    memory,
     notes,
     pdf,
     performance,
@@ -52,10 +50,10 @@ def main() -> None:
     )
 
     # Register sub-commands from modules
-    agent.configure_subparser(subparsers)
+    # agent.configure_subparser(subparsers)  # DEPRECATED: Use Letta REST API (port 8283)
     discovery.configure_subparser(subparsers)
     mcp.configure_subparser(subparsers)
-    memory.configure_subparser(subparsers)
+    # memory.configure_subparser(subparsers)  # DEPRECATED: Use Letta REST API (port 8283)
     notes.configure_subparser(subparsers)
     pdf.configure_subparser(subparsers)
     performance.configure_subparser(subparsers)
