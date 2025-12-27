@@ -15,6 +15,7 @@ from playwright.async_api import Page, ElementHandle, TimeoutError as Playwright
 from thoth.utilities.schemas.browser_workflow import (
     WorkflowAction,
     ElementSelector,
+    WaitCondition,
 )
 
 logger = logging.getLogger(__name__)
@@ -376,7 +377,7 @@ class ActionExecutor:
 
     async def _wait_for_strategy(
         self,
-        strategy: WaitStrategy,
+        strategy: WaitCondition,
         timeout: int,
     ) -> None:
         """
