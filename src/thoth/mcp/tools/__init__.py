@@ -75,6 +75,16 @@ from .tag_tools import (
 from .web_search_tool import (
     WebSearchMCPTool,
 )
+from .browser_workflow_tools import (
+    CreateBrowserWorkflowMCPTool,
+    AddWorkflowActionMCPTool,
+    ConfigureSearchMCPTool,
+    ExecuteWorkflowMCPTool,
+    ListWorkflowsMCPTool,
+    GetWorkflowDetailsMCPTool,
+    UpdateWorkflowStatusMCPTool,
+    DeleteWorkflowMCPTool,
+)
 
 # List of all available MCP tool classes
 MCP_TOOL_CLASSES = [
@@ -134,6 +144,15 @@ MCP_TOOL_CLASSES = [
     ReindexCollectionMCPTool,
     OptimizeSearchMCPTool,
     CreateCustomIndexMCPTool,
+    # Browser workflow tools
+    CreateBrowserWorkflowMCPTool,
+    AddWorkflowActionMCPTool,
+    ConfigureSearchMCPTool,
+    ExecuteWorkflowMCPTool,
+    ListWorkflowsMCPTool,
+    GetWorkflowDetailsMCPTool,
+    UpdateWorkflowStatusMCPTool,
+    DeleteWorkflowMCPTool,
 ]
 
 
@@ -150,12 +169,15 @@ def register_all_mcp_tools(registry: MCPToolRegistry) -> None:
 
 __all__ = [
     'MCP_TOOL_CLASSES',
+    'AddWorkflowActionMCPTool',
     'AnalyzeTopicMCPTool',
     'BackupCollectionMCPTool',
     'BatchProcessPdfsMCPTool',
     'CollectionStatsMCPTool',
+    'ConfigureSearchMCPTool',
     'ConsolidateAndRetagMCPTool',
     'ConsolidateTagsMCPTool',
+    'CreateBrowserWorkflowMCPTool',
     'CreateArxivSourceMCPTool',
     'CreateBiorxivSourceMCPTool',
     'CreateCrossrefSourceMCPTool',
@@ -166,8 +188,10 @@ __all__ = [
     'DeleteArticleMCPTool',
     'DeleteDiscoverySourceMCPTool',
     'DeleteQueryMCPTool',
+    'DeleteWorkflowMCPTool',
     'DownloadPdfMCPTool',
     'EvaluateArticleMCPTool',
+    'ExecuteWorkflowMCPTool',
     'ExportArticleDataMCPTool',
     'ExportBibliographyMCPTool',
     'ExtractCitationsMCPTool',
@@ -179,9 +203,11 @@ __all__ = [
     'GetArticleDetailsMCPTool',
     'GetDiscoverySourceMCPTool',
     'GetQueryMCPTool',
+    'GetWorkflowDetailsMCPTool',
     'ListArticlesMCPTool',
     'ListDiscoverySourcesMCPTool',
     'ListQueriesMCPTool',
+    'ListWorkflowsMCPTool',
     'LocatePdfMCPTool',
     'MCPTool',
     'MCPToolCallResult',
@@ -196,6 +222,7 @@ __all__ = [
     'SyncWithObsidianMCPTool',
     'UpdateArticleMetadataMCPTool',
     'UpdateQueryMCPTool',
+    'UpdateWorkflowStatusMCPTool',
     'ValidatePdfSourcesMCPTool',
     'WebSearchMCPTool',
     'register_all_mcp_tools',

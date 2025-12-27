@@ -1,0 +1,637 @@
+"""Browser workflow management API endpoints.
+
+This module provides RESTful API endpoints for managing browser-based discovery workflows,
+including CRUD operations, workflow execution, and execution history tracking.
+"""
+
+from datetime import datetime
+from typing import Any, Optional
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from loguru import logger
+from pydantic import BaseModel, Field
+
+from thoth.discovery.browser.workflow_execution_service import (
+    WorkflowExecutionService,
+    WorkflowExecutionServiceError,
+)
+from thoth.repositories.browser_workflow_repository import BrowserWorkflowRepository
+from thoth.repositories.workflow_actions_repository import WorkflowActionsRepository
+from thoth.repositories.workflow_executions_repository import (
+    WorkflowExecutionsRepository,
+)
+from thoth.repositories.workflow_search_config_repository import (
+    WorkflowSearchConfigRepository,
+)
+from thoth.services.postgres_service import PostgresService
+from thoth.utilities.schemas.browser_workflow import (
+    BrowserWorkflowCreate,
+    BrowserWorkflowUpdate,
+    ExecutionParameters,
+    ExecutionTrigger,
+    WorkflowAction,
+)
+
+router = APIRouter(prefix="/api/workflows", tags=["browser_workflows"])
+
+# Module-level dependencies (set by app initialization)
+postgres_service: Optional[PostgresService] = None
+workflow_execution_service: Optional[WorkflowExecutionService] = None
+
+
+def set_dependencies(postgres: PostgresService, execution_service: WorkflowExecutionService):
+    """Set module-level dependencies for dependency injection."""
+    global postgres_service, workflow_execution_service
+    postgres_service = postgres
+    workflow_execution_service = execution_service
+
+
+# Dependency injection helpers
+async def get_workflow_repo() -> BrowserWorkflowRepository:
+    """Get browser workflow repository dependency."""
+    if postgres_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service not initialized",
+        )
+    return BrowserWorkflowRepository(postgres_service)
+
+
+async def get_executions_repo() -> WorkflowExecutionsRepository:
+    """Get workflow executions repository dependency."""
+    if postgres_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service not initialized",
+        )
+    return WorkflowExecutionsRepository(postgres_service)
+
+
+async def get_actions_repo() -> WorkflowActionsRepository:
+    """Get workflow actions repository dependency."""
+    if postgres_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service not initialized",
+        )
+    return WorkflowActionsRepository(postgres_service)
+
+
+async def get_search_config_repo() -> WorkflowSearchConfigRepository:
+    """Get workflow search config repository dependency."""
+    if postgres_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service not initialized",
+        )
+    return WorkflowSearchConfigRepository(postgres_service)
+
+
+async def get_execution_service() -> WorkflowExecutionService:
+    """Get workflow execution service dependency."""
+    if workflow_execution_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Workflow execution service not initialized",
+        )
+    return workflow_execution_service
+
+
+# Request/Response models
+class WorkflowCreateRequest(BaseModel):
+    """Request model for creating a new workflow."""
+
+    name: str = Field(..., description="Unique workflow name")
+    description: Optional[str] = Field(None, description="Workflow description")
+    website_domain: str = Field(..., description="Target website domain")
+    start_url: str = Field(..., description="Starting URL for workflow")
+    extraction_rules: dict[str, Any] = Field(..., description="Article extraction rules")
+    requires_authentication: bool = Field(default=False)
+    authentication_type: Optional[str] = Field(default=None)
+    pagination_config: Optional[dict[str, Any]] = Field(default=None)
+    max_articles_per_run: int = Field(default=100, ge=1)
+    timeout_seconds: int = Field(default=60, ge=1)
+
+
+class WorkflowUpdateRequest(BaseModel):
+    """Request model for updating a workflow."""
+
+    name: Optional[str] = Field(None)
+    description: Optional[str] = Field(None)
+    website_domain: Optional[str] = Field(None)
+    start_url: Optional[str] = Field(None)
+    extraction_rules: Optional[dict[str, Any]] = Field(None)
+    requires_authentication: Optional[bool] = Field(None)
+    authentication_type: Optional[str] = Field(None)
+    pagination_config: Optional[dict[str, Any]] = Field(None)
+    max_articles_per_run: Optional[int] = Field(None, ge=1)
+    timeout_seconds: Optional[int] = Field(None, ge=1)
+    is_active: Optional[bool] = Field(None)
+
+
+class WorkflowResponse(BaseModel):
+    """Response model for workflow data."""
+
+    id: UUID
+    name: str
+    description: Optional[str]
+    website_domain: str
+    start_url: str
+    requires_authentication: bool
+    extraction_rules: dict[str, Any]
+    pagination_config: Optional[dict[str, Any]]
+    max_articles_per_run: int
+    timeout_seconds: int
+    is_active: bool
+    health_status: str
+    total_executions: int
+    successful_executions: int
+    failed_executions: int
+    total_articles_extracted: int
+    average_execution_time_ms: Optional[int]
+    last_executed_at: Optional[datetime]
+    last_success_at: Optional[datetime]
+    last_failure_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+
+
+class WorkflowDetailResponse(WorkflowResponse):
+    """Detailed workflow response with search config."""
+
+    search_config: Optional[dict[str, Any]] = Field(None)
+
+
+class WorkflowExecutionRequest(BaseModel):
+    """Request model for executing a workflow."""
+
+    keywords: list[str] = Field(default_factory=list)
+    date_range: Optional[str] = Field(None)
+    date_from: Optional[str] = Field(None)
+    date_to: Optional[str] = Field(None)
+    subject: Optional[str] = Field(None)
+    custom_filters: dict[str, Any] = Field(default_factory=dict)
+    max_articles: Optional[int] = Field(None, ge=1)
+
+
+class WorkflowExecutionResponse(BaseModel):
+    """Response model for workflow execution initiation."""
+
+    execution_id: UUID
+    workflow_id: UUID
+    status: str
+    message: str
+
+
+class ExecutionHistoryResponse(BaseModel):
+    """Response model for execution history."""
+
+    id: UUID
+    workflow_id: UUID
+    status: str
+    started_at: datetime
+    completed_at: Optional[datetime]
+    duration_ms: Optional[int]
+    articles_extracted: int
+    pages_visited: int
+    error_message: Optional[str]
+    execution_parameters: dict[str, Any]
+    triggered_by: str
+
+
+class WorkflowActionRequest(BaseModel):
+    """Request model for adding an action to a workflow."""
+
+    step_number: int = Field(..., ge=0)
+    action_type: str = Field(...)
+    target_selector: Optional[dict[str, Any]] = Field(None)
+    target_description: Optional[str] = Field(None)
+    action_value: Optional[str] = Field(None)
+    is_parameterized: bool = Field(default=False)
+    parameter_name: Optional[str] = Field(None)
+    wait_condition: Optional[str] = Field(None)
+    wait_timeout_ms: int = Field(default=30000, ge=0)
+    retry_on_failure: bool = Field(default=True)
+    max_retries: int = Field(default=3, ge=0)
+    continue_on_error: bool = Field(default=False)
+
+
+class WorkflowActionResponse(BaseModel):
+    """Response model for workflow action."""
+
+    action_id: UUID
+    workflow_id: UUID
+    message: str
+
+
+# Endpoints
+
+@router.post("", response_model=dict[str, UUID], status_code=status.HTTP_201_CREATED)
+async def create_workflow(
+    request: WorkflowCreateRequest,
+    repo: BrowserWorkflowRepository = Depends(get_workflow_repo),
+):
+    """Create a new browser workflow.
+
+    Args:
+        request: Workflow creation parameters
+        repo: Browser workflow repository
+
+    Returns:
+        Dictionary with workflow_id
+
+    Raises:
+        HTTPException: If creation fails
+    """
+    try:
+        workflow_data = {
+            "name": request.name,
+            "description": request.description,
+            "website_domain": request.website_domain,
+            "start_url": request.start_url,
+            "extraction_rules": request.extraction_rules,
+            "requires_authentication": request.requires_authentication,
+            "authentication_type": request.authentication_type,
+            "pagination_config": request.pagination_config,
+            "max_articles_per_run": request.max_articles_per_run,
+            "timeout_seconds": request.timeout_seconds,
+            "is_active": True,
+            "health_status": "unknown",
+            "total_executions": 0,
+            "successful_executions": 0,
+            "failed_executions": 0,
+            "total_articles_extracted": 0,
+        }
+
+        workflow_id = await repo.create(workflow_data)
+
+        if workflow_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create workflow",
+            )
+
+        logger.info(f"Created workflow: {workflow_id} ({request.name})")
+        return {"workflow_id": workflow_id}
+
+    except Exception as e:
+        logger.error(f"Error creating workflow: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create workflow: {str(e)}",
+        )
+
+
+@router.get("", response_model=list[WorkflowResponse])
+async def list_workflows(
+    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    domain: Optional[str] = Query(None, description="Filter by website domain"),
+    repo: BrowserWorkflowRepository = Depends(get_workflow_repo),
+):
+    """List all workflows with optional filters.
+
+    Args:
+        is_active: Filter by active status
+        domain: Filter by website domain
+        repo: Browser workflow repository
+
+    Returns:
+        List of workflows
+    """
+    try:
+        if domain:
+            workflows = await repo.get_by_domain(domain)
+        elif is_active is not None:
+            if is_active:
+                workflows = await repo.get_active_workflows()
+            else:
+                # Get all and filter inactive
+                all_workflows = await repo.fetch_all()
+                workflows = [w for w in all_workflows if not w.get("is_active", True)]
+        else:
+            workflows = await repo.fetch_all()
+
+        return [WorkflowResponse(**w) for w in workflows]
+
+    except Exception as e:
+        logger.error(f"Error listing workflows: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list workflows: {str(e)}",
+        )
+
+
+@router.get("/{workflow_id}", response_model=WorkflowDetailResponse)
+async def get_workflow(
+    workflow_id: UUID,
+    workflow_repo: BrowserWorkflowRepository = Depends(get_workflow_repo),
+    search_repo: WorkflowSearchConfigRepository = Depends(get_search_config_repo),
+):
+    """Get workflow details including search configuration.
+
+    Args:
+        workflow_id: Workflow UUID
+        workflow_repo: Browser workflow repository
+        search_repo: Search config repository
+
+    Returns:
+        Workflow details with search config
+
+    Raises:
+        HTTPException: If workflow not found
+    """
+    try:
+        workflow = await workflow_repo.get_by_id(workflow_id)
+
+        if workflow is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Workflow {workflow_id} not found",
+            )
+
+        # Get search config
+        search_config = await search_repo.get_by_workflow_id(workflow_id)
+
+        response_data = {**workflow, "search_config": search_config}
+        return WorkflowDetailResponse(**response_data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting workflow {workflow_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get workflow: {str(e)}",
+        )
+
+
+@router.put("/{workflow_id}", response_model=WorkflowResponse)
+async def update_workflow(
+    workflow_id: UUID,
+    request: WorkflowUpdateRequest,
+    repo: BrowserWorkflowRepository = Depends(get_workflow_repo),
+):
+    """Update a workflow's configuration.
+
+    Args:
+        workflow_id: Workflow UUID
+        request: Update parameters
+        repo: Browser workflow repository
+
+    Returns:
+        Updated workflow data
+
+    Raises:
+        HTTPException: If workflow not found or update fails
+    """
+    try:
+        # Check if workflow exists
+        existing = await repo.get_by_id(workflow_id)
+        if existing is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Workflow {workflow_id} not found",
+            )
+
+        # Build updates dict (exclude None values)
+        updates = {
+            k: v for k, v in request.model_dump().items() if v is not None
+        }
+
+        if not updates:
+            # No updates provided, return existing
+            return WorkflowResponse(**existing)
+
+        success = await repo.update(workflow_id, updates)
+
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update workflow",
+            )
+
+        # Fetch updated workflow
+        updated = await repo.get_by_id(workflow_id)
+        logger.info(f"Updated workflow: {workflow_id}")
+
+        return WorkflowResponse(**updated)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating workflow {workflow_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update workflow: {str(e)}",
+        )
+
+
+@router.delete("/{workflow_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_workflow(
+    workflow_id: UUID,
+    repo: BrowserWorkflowRepository = Depends(get_workflow_repo),
+):
+    """Delete a workflow.
+
+    Args:
+        workflow_id: Workflow UUID
+        repo: Browser workflow repository
+
+    Raises:
+        HTTPException: If workflow not found or deletion fails
+    """
+    try:
+        # Check if workflow exists
+        existing = await repo.get_by_id(workflow_id)
+        if existing is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Workflow {workflow_id} not found",
+            )
+
+        success = await repo.delete(workflow_id)
+
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete workflow",
+            )
+
+        logger.info(f"Deleted workflow: {workflow_id}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting workflow {workflow_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete workflow: {str(e)}",
+        )
+
+
+@router.post("/{workflow_id}/execute", response_model=WorkflowExecutionResponse)
+async def execute_workflow(
+    workflow_id: UUID,
+    request: WorkflowExecutionRequest,
+    workflow_repo: BrowserWorkflowRepository = Depends(get_workflow_repo),
+    executions_repo: WorkflowExecutionsRepository = Depends(get_executions_repo),
+):
+    """Execute a workflow asynchronously with provided parameters.
+
+    Args:
+        workflow_id: Workflow UUID
+        request: Execution parameters
+        workflow_repo: Browser workflow repository
+        executions_repo: Workflow executions repository
+
+    Returns:
+        Execution ID and status
+
+    Raises:
+        HTTPException: If workflow not found or execution fails
+    """
+    try:
+        # Verify workflow exists and is active
+        workflow = await workflow_repo.get_by_id(workflow_id)
+        if workflow is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Workflow {workflow_id} not found",
+            )
+
+        if not workflow.get("is_active", False):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Workflow {workflow_id} is not active",
+            )
+
+        # Create execution record
+        execution_data = {
+            "workflow_id": workflow_id,
+            "status": "pending",
+            "execution_parameters": request.model_dump(),
+            "triggered_by": ExecutionTrigger.MANUAL.value,
+            "started_at": datetime.utcnow(),
+        }
+
+        execution_id = await executions_repo.create(execution_data)
+
+        if execution_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create execution record",
+            )
+
+        logger.info(f"Created execution {execution_id} for workflow {workflow_id}")
+
+        # TODO: Queue execution task asynchronously (e.g., with Celery, background task)
+        # For now, return the execution ID immediately
+        # The actual execution would happen in a background worker
+
+        return WorkflowExecutionResponse(
+            execution_id=execution_id,
+            workflow_id=workflow_id,
+            status="pending",
+            message="Workflow execution queued successfully",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error executing workflow {workflow_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to execute workflow: {str(e)}",
+        )
+
+
+@router.get("/{workflow_id}/executions", response_model=list[ExecutionHistoryResponse])
+async def get_workflow_executions(
+    workflow_id: UUID,
+    limit: int = Query(default=10, ge=1, le=100, description="Maximum results"),
+    repo: WorkflowExecutionsRepository = Depends(get_executions_repo),
+):
+    """Get execution history for a workflow.
+
+    Args:
+        workflow_id: Workflow UUID
+        limit: Maximum number of executions to return
+        repo: Workflow executions repository
+
+    Returns:
+        List of workflow executions
+    """
+    try:
+        executions = await repo.get_by_workflow_id(workflow_id, limit=limit)
+
+        return [ExecutionHistoryResponse(**exec_data) for exec_data in executions]
+
+    except Exception as e:
+        logger.error(f"Error getting executions for workflow {workflow_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get workflow executions: {str(e)}",
+        )
+
+
+@router.post("/{workflow_id}/actions", response_model=WorkflowActionResponse)
+async def add_workflow_action(
+    workflow_id: UUID,
+    request: WorkflowActionRequest,
+    workflow_repo: BrowserWorkflowRepository = Depends(get_workflow_repo),
+    actions_repo: WorkflowActionsRepository = Depends(get_actions_repo),
+):
+    """Add an action step to a workflow.
+
+    Args:
+        workflow_id: Workflow UUID
+        request: Action configuration
+        workflow_repo: Browser workflow repository
+        actions_repo: Workflow actions repository
+
+    Returns:
+        Action ID and confirmation
+
+    Raises:
+        HTTPException: If workflow not found or action creation fails
+    """
+    try:
+        # Verify workflow exists
+        workflow = await workflow_repo.get_by_id(workflow_id)
+        if workflow is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Workflow {workflow_id} not found",
+            )
+
+        # Create action data
+        action_data = {
+            "workflow_id": workflow_id,
+            **request.model_dump(),
+        }
+
+        action_id = await actions_repo.create(action_data)
+
+        if action_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create workflow action",
+            )
+
+        logger.info(f"Created action {action_id} for workflow {workflow_id}")
+
+        return WorkflowActionResponse(
+            action_id=action_id,
+            workflow_id=workflow_id,
+            message="Workflow action created successfully",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating action for workflow {workflow_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create workflow action: {str(e)}",
+        )

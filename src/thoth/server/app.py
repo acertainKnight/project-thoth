@@ -35,6 +35,7 @@ except ImportError:
     SettingsFileWatcher = None  # Not available in all service configurations
 from thoth.server.routers import (
     agent,
+    browser_workflows,
     chat,
     config as config_router,
     health,
@@ -297,6 +298,7 @@ def create_app() -> FastAPI:
     app.include_router(agent.router, prefix='/agents', tags=['agent'])
     app.include_router(research.router, prefix='/research', tags=['research'])
     app.include_router(research_questions.router, tags=['research-questions'])  # Week 4: Research question management
+    app.include_router(browser_workflows.router, prefix='/api/workflows', tags=['workflows'])  # Browser workflow management
     app.include_router(config_router.router, prefix='/config', tags=['config'])
     app.include_router(operations.router, prefix='/operations', tags=['operations'])
     app.include_router(tools.router, prefix='/tools', tags=['tools'])
