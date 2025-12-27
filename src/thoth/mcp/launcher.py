@@ -108,6 +108,16 @@ async def launch_mcp_server(
 
         await server.start()
 
+        # Keep the server running indefinitely
+        logger.info('MCP server is running. Press Ctrl+C to stop.')
+        try:
+            # Wait forever - this keeps the event loop running for background tasks
+            stop_event = asyncio.Event()
+            await stop_event.wait()
+        except asyncio.CancelledError:
+            logger.info('Server cancelled, shutting down gracefully...')
+            await server.stop()
+
     except KeyboardInterrupt:
         logger.info('Received interrupt signal, shutting down...')
         await server.stop()
@@ -168,6 +178,7 @@ def run_full_server(
         sse_port: SSE server port
         enable_file_access: Enable file system resource access
     """
+    import os
 
     async def main():
         # Setup file access paths if enabled
@@ -179,8 +190,11 @@ def run_full_server(
                 str(Path.home() / 'Documents'),  # User documents (if exists)
             ]
 
+        # Disable stdio in Docker to avoid permission errors
+        enable_stdio = os.getenv('THOTH_DOCKER', '').lower() not in ('1', 'true', 'yes')
+
         await launch_mcp_server(
-            stdio=True,
+            stdio=enable_stdio,
             http=True,
             http_host=http_host,
             http_port=http_port,

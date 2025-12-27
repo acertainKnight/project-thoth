@@ -196,12 +196,17 @@ class HTTPTransport(MCPTransport):
             app=self.app, host=self.host, port=self.port, log_level='info'
         )
         self.server = uvicorn.Server(config)
-        await self.server.serve()
+        # Create background task instead of blocking
+        self._server_task = asyncio.create_task(self.server.serve())
+        # Wait a moment for server to start
+        await asyncio.sleep(0.5)
 
     async def stop(self):
         """Stop the HTTP server."""
         if self.server:
             self.server.should_exit = True
+            if hasattr(self, '_server_task'):
+                await self._server_task
 
     async def send_message(self, message: JSONRPCResponse):
         """HTTP transport doesn't send unsolicited messages."""
@@ -332,12 +337,17 @@ class SSETransport(MCPTransport):
             app=self.app, host=self.host, port=self.port, log_level='info'
         )
         self.server = uvicorn.Server(config)
-        await self.server.serve()
+        # Create background task instead of blocking
+        self._server_task = asyncio.create_task(self.server.serve())
+        # Wait a moment for server to start
+        await asyncio.sleep(0.5)
 
     async def stop(self):
         """Stop the SSE server."""
         if self.server:
             self.server.should_exit = True
+            if hasattr(self, '_server_task'):
+                await self._server_task
 
     async def send_message(
         self, message: JSONRPCResponse, client_id: str | None = None
