@@ -73,6 +73,10 @@ make prod
 # Install dependencies (requires Python 3.10+)
 uv venv && uv sync
 
+# Install Playwright browsers (required for browser-based discovery)
+source .venv/bin/activate
+python -m playwright install chromium
+
 # Configure API keys
 cp .env.example .env
 # Edit .env with your API keys
