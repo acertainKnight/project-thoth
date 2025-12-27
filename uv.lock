@@ -2594,20 +2594,6 @@ wheels = [
 ]
 
 [[package]]
-name = "langchain-mcp-adapters"
-version = "0.1.9"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "langchain-core" },
-    { name = "mcp" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/b9/74/e36003a43136f9095a5f968c730fbfe894f94284ebe6d2b50bb17d41b8b5/langchain_mcp_adapters-0.1.9.tar.gz", hash = "sha256:0018cf7b5f7bc4c044e05ec20fcb9ebe345311c8d1060c61d411188001ab3aab", size = 22101, upload-time = "2025-07-09T15:56:14.455Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a4/eb/9e98822d3db22beff44449a8f61fca208d4f59d592a7ce67ce4c400b8f8f/langchain_mcp_adapters-0.1.9-py3-none-any.whl", hash = "sha256:fd131009c60c9e5a864f96576bbe757fc1809abd604891cb2e5d6e8aebd6975c", size = 15300, upload-time = "2025-07-09T15:56:13.316Z" },
-]
-
-[[package]]
 name = "langchain-openai"
 version = "0.3.9"
 source = { registry = "https://pypi.org/simple" }
@@ -6225,6 +6211,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
+    { name = "cryptography" },
     { name = "deprecated" },
     { name = "loguru" },
     { name = "pydantic" },
@@ -6245,6 +6232,7 @@ all = [
     { name = "build" },
     { name = "chromadb" },
     { name = "codespell" },
+    { name = "cryptography" },
     { name = "duckduckgo-search" },
     { name = "fake-useragent" },
     { name = "fastapi" },
@@ -6260,7 +6248,6 @@ all = [
     { name = "langchain-chroma" },
     { name = "langchain-core" },
     { name = "langchain-huggingface" },
-    { name = "langchain-mcp-adapters" },
     { name = "langchain-openai" },
     { name = "langchain-text-splitters" },
     { name = "langgraph" },
@@ -6303,6 +6290,7 @@ api = [
     { name = "alembic" },
     { name = "arrow" },
     { name = "asyncpg" },
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "jinja2" },
@@ -6368,8 +6356,6 @@ langchain = [
 ]
 mcp = [
     { name = "fastapi" },
-    { name = "langchain-core" },
-    { name = "langchain-mcp-adapters" },
     { name = "uvicorn" },
 ]
 memory = [
@@ -6392,6 +6378,7 @@ service-api = [
     { name = "beautifulsoup4" },
     { name = "bibtexparser" },
     { name = "chromadb" },
+    { name = "cryptography" },
     { name = "duckduckgo-search" },
     { name = "fake-useragent" },
     { name = "fastapi" },
@@ -6438,6 +6425,7 @@ service-dashboard = [
     { name = "beautifulsoup4" },
     { name = "bibtexparser" },
     { name = "chromadb" },
+    { name = "cryptography" },
     { name = "duckduckgo-search" },
     { name = "fake-useragent" },
     { name = "fastapi" },
@@ -6483,6 +6471,7 @@ service-discovery = [
     { name = "asyncpg" },
     { name = "beautifulsoup4" },
     { name = "bibtexparser" },
+    { name = "cryptography" },
     { name = "duckduckgo-search" },
     { name = "fake-useragent" },
     { name = "fastapi" },
@@ -6509,6 +6498,7 @@ service-mcp = [
     { name = "beautifulsoup4" },
     { name = "bibtexparser" },
     { name = "chromadb" },
+    { name = "cryptography" },
     { name = "duckduckgo-search" },
     { name = "fake-useragent" },
     { name = "fastapi" },
@@ -6523,7 +6513,6 @@ service-mcp = [
     { name = "langchain-chroma" },
     { name = "langchain-core" },
     { name = "langchain-huggingface" },
-    { name = "langchain-mcp-adapters" },
     { name = "langchain-openai" },
     { name = "langchain-text-splitters" },
     { name = "langgraph" },
@@ -6558,6 +6547,7 @@ service-monitor = [
     { name = "beautifulsoup4" },
     { name = "bibtexparser" },
     { name = "chromadb" },
+    { name = "cryptography" },
     { name = "duckduckgo-search" },
     { name = "fake-useragent" },
     { name = "fastapi" },
@@ -6572,7 +6562,6 @@ service-monitor = [
     { name = "langchain-chroma" },
     { name = "langchain-core" },
     { name = "langchain-huggingface" },
-    { name = "langchain-mcp-adapters" },
     { name = "langchain-openai" },
     { name = "langchain-text-splitters" },
     { name = "langgraph" },
@@ -6638,6 +6627,8 @@ requires-dist = [
     { name = "chromadb", marker = "extra == 'vectordb'", specifier = ">=0.5.0" },
     { name = "click", specifier = ">=8.1.8" },
     { name = "codespell", marker = "extra == 'dev'", specifier = ">=2.4.1" },
+    { name = "cryptography", specifier = ">=45.0.2" },
+    { name = "cryptography", marker = "extra == 'api'", specifier = ">=44.0.0" },
     { name = "deprecated", specifier = ">=1.2.18" },
     { name = "duckduckgo-search", marker = "extra == 'discovery'", specifier = ">=5.2" },
     { name = "fake-useragent", marker = "extra == 'discovery'", specifier = ">=2.1.0" },
@@ -6657,9 +6648,7 @@ requires-dist = [
     { name = "langchain-anthropic", marker = "extra == 'langchain'", specifier = ">=0.1.8" },
     { name = "langchain-chroma", marker = "extra == 'vectordb'", specifier = ">=0.1.0" },
     { name = "langchain-core", marker = "extra == 'langchain'", specifier = ">=0.3.45" },
-    { name = "langchain-core", marker = "extra == 'mcp'", specifier = ">=0.3.45" },
     { name = "langchain-huggingface", marker = "extra == 'embeddings'", specifier = ">=0.1.0" },
-    { name = "langchain-mcp-adapters", marker = "extra == 'mcp'" },
     { name = "langchain-openai", marker = "extra == 'langchain'", specifier = ">=0.3.9" },
     { name = "langchain-text-splitters", marker = "extra == 'langchain'", specifier = ">=0.3.7" },
     { name = "langgraph", marker = "extra == 'langchain'", specifier = ">=0.4.7" },

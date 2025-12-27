@@ -12,8 +12,6 @@ from fastapi import APIRouter, HTTPException
 from loguru import logger
 from pydantic import BaseModel
 
-from .langchain_integration import mcp_tools_manager
-
 
 class MCPHealthStatus(BaseModel):
     """Health status model for API responses."""
@@ -60,49 +58,34 @@ class MCPMonitor:
         }
 
     async def get_health_status(self) -> MCPHealthStatus:
-        """Get comprehensive health status."""
+        """Get comprehensive health status by checking MCP server directly."""
         try:
+            import httpx
+
             errors = []
-
-            # Check MCP tools manager first
             manager_healthy = False
-            server_count = 0
 
-            if (
-                hasattr(mcp_tools_manager, 'initialized')
-                and mcp_tools_manager.initialized
-            ):
-                manager_healthy = True
-                # Get connection statistics if available
-                stats = getattr(mcp_tools_manager, 'get_connection_stats', lambda: {})()
-                server_count = len(stats) if stats else 0
-            else:
-                # Check if we have a running MCP server (stdio mode)
-                # This is a fallback check for stdio-based MCP servers
-                try:
-                    import subprocess
-
-                    # Check if there's a process running MCP server
-                    result = subprocess.run(
-                        ['pgrep', '-f', 'mcp.*stdio'],
-                        capture_output=True,
-                        text=True,
-                        timeout=2,
-                    )
-                    if result.returncode == 0 and result.stdout.strip():
+            # Check MCP server via HTTP health endpoint
+            try:
+                async with httpx.AsyncClient(timeout=2.0) as client:
+                    response = await client.get('http://localhost:8000/health')
+                    if response.status_code == 200:
                         manager_healthy = True
-                        server_count = 1  # STDIO server running
                     else:
-                        errors.append('MCP tools manager not initialized')
-                except Exception as e:
-                    errors.append(f'MCP health check error: {e!s}')
+                        errors.append(f'MCP server returned status {response.status_code}')
+            except httpx.ConnectError:
+                errors.append('Cannot connect to MCP server at localhost:8000')
+            except httpx.TimeoutException:
+                errors.append('MCP server health check timed out')
+            except Exception as e:
+                errors.append(f'MCP health check error: {e!s}')
 
-            # If we have a healthy manager or running server, report success
+            # If we have a healthy server, report success
             if manager_healthy:
                 return MCPHealthStatus(
                     healthy=True,
-                    server_count=server_count or 1,  # At least 1 if healthy
-                    total_connections=1,  # Assume stdio connection
+                    server_count=1,
+                    total_connections=1,
                     active_connections=1,
                     success_rate=100.0,
                     avg_response_time=0.1,
@@ -140,35 +123,26 @@ class MCPMonitor:
 
     async def get_server_details(self) -> list[MCPServerStats]:
         """Get detailed statistics for each MCP server."""
-        if not mcp_tools_manager.initialized:
+        # Return basic stats for the MCP server
+        # Without adapter layer, we check the server directly via HTTP
+        health_status = await self.get_health_status()
+
+        if not health_status.healthy:
             return []
 
-        stats = mcp_tools_manager.get_connection_stats()
-        server_details = []
-
-        for server_name, stat in stats.items():
-            # Determine circuit breaker state (simplified)
-            circuit_state = 'closed'
-            if stat['success_rate'] < 0.5:
-                circuit_state = 'open'
-            elif stat['success_rate'] < 0.8:
-                circuit_state = 'half-open'
-
-            server_details.append(
-                MCPServerStats(
-                    server_name=server_name,
-                    active_connections=stat['active_connections'],
-                    total_requests=stat['total_requests'],
-                    failed_requests=stat['failed_requests'],
-                    success_rate=stat['success_rate'],
-                    avg_response_time=stat['avg_response_time'],
-                    last_health_check=stat['last_health_check'],
-                    circuit_breaker_state=circuit_state,
-                    healthy=stat['success_rate'] > 0.9,
-                )
+        return [
+            MCPServerStats(
+                server_name='thoth-mcp',
+                active_connections=health_status.active_connections,
+                total_requests=0,  # Not tracked without adapter layer
+                failed_requests=0,
+                success_rate=health_status.success_rate,
+                avg_response_time=health_status.avg_response_time,
+                last_health_check=health_status.last_check,
+                circuit_breaker_state='closed',
+                healthy=health_status.healthy,
             )
-
-        return server_details
+        ]
 
     def should_alert(self, status: MCPHealthStatus) -> bool:
         """Determine if an alert should be triggered."""
@@ -181,11 +155,12 @@ class MCPMonitor:
 
     async def refresh_tools_cache(self) -> dict[str, Any]:
         """Force refresh of MCP tools cache."""
+        # Without adapter layer, tools are registered directly with Letta
+        # No cache to refresh
         try:
-            tools = await mcp_tools_manager.refresh_tools()
             return {
                 'success': True,
-                'tools_loaded': len(tools),
+                'message': 'Tools are registered directly with Letta - no cache to refresh',
                 'timestamp': time.time(),
             }
         except Exception as e:
