@@ -15,9 +15,11 @@ from uuid import UUID
 from loguru import logger
 from playwright.async_api import BrowserContext, Error as PlaywrightError, Page
 
+from thoth.discovery.browser.action_executor import ActionExecutor
 from thoth.discovery.browser.browser_manager import BrowserManager, BrowserManagerError
 from thoth.discovery.browser.extraction_service import ExtractionService
 from thoth.repositories.browser_workflow_repository import BrowserWorkflowRepository
+from thoth.repositories.workflow_actions_repository import WorkflowActionsRepository
 from thoth.repositories.workflow_credentials_repository import (
     WorkflowCredentialsRepository,
 )
@@ -113,6 +115,7 @@ class WorkflowEngine:
         search_config_repo: WorkflowSearchConfigRepository,
         executions_repo: WorkflowExecutionsRepository,
         credentials_repo: WorkflowCredentialsRepository,
+        actions_repo: WorkflowActionsRepository,
         max_retries: int = 3,
     ):
         """
@@ -124,6 +127,7 @@ class WorkflowEngine:
             search_config_repo: Repository for search configurations
             executions_repo: Repository for execution tracking
             credentials_repo: Repository for encrypted credentials
+            actions_repo: Repository for workflow action steps
             max_retries: Maximum retry attempts for failed actions
         """
         self.browser_manager = browser_manager
@@ -131,6 +135,7 @@ class WorkflowEngine:
         self.search_config_repo = search_config_repo
         self.executions_repo = executions_repo
         self.credentials_repo = credentials_repo
+        self.actions_repo = actions_repo
         self.max_retries = max_retries
 
         logger.info(
@@ -240,12 +245,17 @@ class WorkflowEngine:
                     page, search_config, parameters, execution_log
                 )
 
-            # 7. Extract articles
+            # 7. Execute workflow actions if defined
+            await self._execute_workflow_actions(
+                page, workflow_id, parameters, execution_log
+            )
+
+            # 8. Extract articles
             articles = await self._extract_articles(
                 page, workflow, parameters, execution_log
             )
 
-            # 8. Calculate duration and mark success
+            # 9. Calculate duration and mark success
             duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
 
             await self.executions_repo.update_status(
@@ -532,6 +542,140 @@ class WorkflowEngine:
 
         except Exception as e:
             raise WorkflowEngineError(f'Failed to inject search parameters: {e}') from e
+
+    async def _execute_workflow_actions(
+        self,
+        page: Page,
+        workflow_id: UUID,
+        parameters: ExecutionParameters,
+        execution_log: list[dict[str, Any]],
+    ) -> None:
+        """
+        Execute recorded workflow actions using ActionExecutor.
+
+        Loads workflow_actions from database and executes them in step_number order.
+        Supports parameter substitution for dynamic values.
+
+        Args:
+            page: Browser page
+            workflow_id: UUID of the workflow
+            parameters: Execution parameters for substitution
+            execution_log: Execution log to append to
+
+        Raises:
+            WorkflowEngineError: If action execution fails
+        """
+        try:
+            # Load workflow actions ordered by step_number
+            actions_data = await self.actions_repo.get_by_workflow_id(workflow_id)
+
+            if not actions_data or len(actions_data) == 0:
+                logger.debug(f'No workflow actions defined for workflow {workflow_id}')
+                execution_log.append({
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'action': 'workflow_actions_skipped',
+                    'reason': 'no_actions_defined',
+                })
+                return
+
+            logger.info(f'Executing {len(actions_data)} workflow actions for workflow {workflow_id}')
+
+            # Initialize ActionExecutor with page and retry settings
+            action_executor = ActionExecutor(
+                page=page,
+                default_timeout=30000,
+                max_retries=self.max_retries,
+            )
+
+            # Build parameter dict for substitution
+            param_dict = {}
+            if parameters.keywords:
+                param_dict['keywords'] = ' '.join(parameters.keywords)
+                param_dict['keyword'] = parameters.keywords[0] if parameters.keywords else ''
+            if parameters.date_range:
+                param_dict['date_range'] = parameters.date_range
+            if parameters.subject:
+                param_dict['subject'] = parameters.subject
+            if parameters.custom_filters:
+                param_dict.update(parameters.custom_filters)
+
+            # Execute each action in sequence
+            for action_data in actions_data:
+                step_num = action_data.get('step_number', 0)
+                action_type = action_data.get('action_type', 'unknown')
+
+                logger.info(f'Executing action step {step_num}: {action_type}')
+
+                try:
+                    # Convert action_data to WorkflowAction schema
+                    from thoth.utilities.schemas.browser_workflow import WorkflowAction
+
+                    workflow_action = WorkflowAction(
+                        action_type=ActionType(action_type),
+                        selector=action_data.get('selector'),
+                        value=action_data.get('action_config', {}).get('value'),
+                        timeout=action_data.get('action_config', {}).get('timeout'),
+                        wait_condition=action_data.get('action_config', {}).get('wait_condition'),
+                    )
+
+                    # Execute action with parameter substitution
+                    result = await action_executor.execute_action(
+                        action=workflow_action,
+                        parameters=param_dict,
+                    )
+
+                    if result.success:
+                        execution_log.append({
+                            'timestamp': datetime.utcnow().isoformat(),
+                            'action': 'workflow_action_executed',
+                            'step_number': step_num,
+                            'action_type': action_type,
+                            'success': True,
+                        })
+                        logger.info(f'Action step {step_num} completed successfully')
+                    else:
+                        execution_log.append({
+                            'timestamp': datetime.utcnow().isoformat(),
+                            'action': 'workflow_action_failed',
+                            'step_number': step_num,
+                            'action_type': action_type,
+                            'error': result.error,
+                        })
+                        logger.warning(f'Action step {step_num} failed: {result.error}')
+                        # Continue execution unless it's a critical failure
+                        if action_data.get('is_required', True):
+                            raise WorkflowEngineError(
+                                f'Required action step {step_num} failed: {result.error}'
+                            )
+
+                except Exception as e:
+                    logger.error(f'Error executing action step {step_num}: {e}')
+                    execution_log.append({
+                        'timestamp': datetime.utcnow().isoformat(),
+                        'action': 'workflow_action_error',
+                        'step_number': step_num,
+                        'error': str(e),
+                    })
+                    # Re-raise if it's a required action
+                    if action_data.get('is_required', True):
+                        raise
+
+            execution_log.append({
+                'timestamp': datetime.utcnow().isoformat(),
+                'action': 'workflow_actions_completed',
+                'total_actions': len(actions_data),
+            })
+
+            logger.info(f'Completed execution of {len(actions_data)} workflow actions')
+
+        except Exception as e:
+            logger.error(f'Workflow actions execution failed: {e}')
+            execution_log.append({
+                'timestamp': datetime.utcnow().isoformat(),
+                'action': 'workflow_actions_failed',
+                'error': str(e),
+            })
+            raise WorkflowEngineError(f'Workflow actions execution failed: {e}') from e
 
     async def _extract_articles(
         self,
