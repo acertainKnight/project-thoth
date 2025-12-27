@@ -164,7 +164,7 @@ services:
       dockerfile: docker/api/Dockerfile
       target: production
     container_name: thoth-api
-    command: ["python", "-m", "thoth", "server", "start", "--api-host", "0.0.0.0", "--api-port", "8000", "--no-mcp", "--no-discovery"]
+    command: ["python", "-m", "thoth", "server", "start", "--api-host", "0.0.0.0", "--api-port", "8000", "--no-discovery"]
     ports:
       - "8080:8000"
     depends_on:
@@ -196,6 +196,7 @@ services:
       dockerfile: docker/mcp/Dockerfile
       target: production
     container_name: thoth-mcp
+    # Full mode with concurrent HTTP and SSE transports (blocking bug FIXED)
     command: ["python", "-m", "thoth", "mcp", "full", "--host", "0.0.0.0", "--http-port", "8000", "--sse-port", "8001"]
     depends_on:
       letta-postgres:
@@ -224,7 +225,7 @@ services:
       - "8082:8000"  # HTTP transport
       - "8081:8001"  # SSE transport
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.connect(('localhost', 8001)); s.close()"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 5
