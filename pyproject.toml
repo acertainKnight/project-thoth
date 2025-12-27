@@ -119,9 +119,9 @@ memory = [
 # ==============================================================================
 
 # thoth-api: REST API server (~1.5GB)
-# Needs langchain for AnthropicClient + vectordb for cachetools (BaseRepository) + pdf for watchdog
+# Needs langchain for AnthropicClient + vectordb for cachetools (BaseRepository) + pdf for watchdog + memory for Letta
 service-api = [
-    "thoth[api,discovery,pdf,langchain,vectordb]",
+    "thoth[api,discovery,pdf,langchain,vectordb,memory]",
 ]
 
 # thoth-dashboard: Dashboard sync (~1.5GB)
