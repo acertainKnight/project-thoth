@@ -516,7 +516,7 @@ async def start_server(
         health.set_directories(pdf_dir, notes_dir, base_url)
         websocket.set_dependencies(service_manager, research_agent, chat_manager)
         chat.set_chat_manager(chat_manager)
-        agent.set_dependencies(research_agent, current_config, thoth_orchestrator)
+        # agent.set_dependencies(research_agent, current_config, thoth_orchestrator)  # Disabled: agent router doesn't have set_dependencies
         research.set_dependencies(research_agent, chat_manager)
         operations.set_service_manager(service_manager)
         tools.set_dependencies(research_agent, service_manager)

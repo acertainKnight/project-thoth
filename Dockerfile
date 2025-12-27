@@ -94,9 +94,9 @@ COPY --from=builder --chown=thoth:thoth /app /app
 # Make sure we can run uv in the runtime (for any runtime needs)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy entrypoint script
-COPY --chown=thoth:thoth docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# Copy entrypoint script with execute permissions
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod 755 /entrypoint.sh && chown root:root /entrypoint.sh
 
 # Ensure all Python files have group read permissions (docker-compose runs as UID 1000, GID 1000)
 # Both user thoth (999) and docker-compose user (1000) share group 1000

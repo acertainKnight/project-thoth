@@ -80,9 +80,13 @@ COPY --from=builder --chown=thoth:thoth /app /app
 # Make sure we can run uv in the runtime
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy entrypoint script
-COPY --chown=thoth:thoth docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# Copy entrypoint script with execute permissions
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod 755 /entrypoint.sh && chown root:root /entrypoint.sh
+
+# Ensure all Python files are readable by all users (docker-compose runs as UID 1000)
+RUN chmod -R a+r /app/src && \
+    find /app/src -type d -exec chmod a+rx {} \;
 
 # Switch to non-root user temporarily for Playwright install
 USER thoth
@@ -108,7 +112,7 @@ USER thoth
 
 # Health check for container orchestration
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8001/health || exit 1
+    CMD curl -f http://localhost:8000/health || exit 1
 
 # Expose MCP port
 EXPOSE 8001

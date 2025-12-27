@@ -60,7 +60,17 @@ RUN mkdir -p /app /workspace /data/logs \
     && chown -R thoth:thoth /app /workspace /data
 
 # Copy the application and virtual environment from builder stage
-COPY --from=builder --chown=thoth:thoth /app /app
+COPY --from=builder /app /app
+
+# Copy entrypoint script with execute permissions (for migrations)
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod 755 /entrypoint.sh && chown root:root /entrypoint.sh
+
+# Ensure all Python files are readable by all users (docker-compose runs as UID 1000)
+# MUST run AFTER copying files, not before
+RUN chmod -R a+r /app/src && \
+    find /app/src -type d -exec chmod a+rx {} \; && \
+    chown -R thoth:thoth /app
 
 # Make sure we can run uv in the runtime
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
