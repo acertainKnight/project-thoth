@@ -422,3 +422,53 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             bool: True if successful
         """
         return await self.update(workflow_id, {'is_active': True})
+
+    async def get_workflows_due_for_run(
+        self, hours_since_last_run: int = 24
+    ) -> list[dict[str, Any]]:
+        """
+        Get workflows that are due for execution based on time since last run.
+
+        Returns active workflows where last_executed_at is older than the specified
+        hours, or workflows that have never been executed.
+
+        Args:
+            hours_since_last_run: Number of hours since last execution to consider
+                                 a workflow due for run (default: 24 hours for daily schedule)
+
+        Returns:
+            list[dict[str, Any]]: List of workflows due for execution
+        """
+        cache_key = self._cache_key('due_for_run', str(hours_since_last_run))
+        cached = self._get_from_cache(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            query = '''
+                SELECT * FROM browser_workflows
+                WHERE is_active = true
+                  AND (
+                    last_executed_at IS NULL
+                    OR last_executed_at < NOW() - ($1 || ' hours')::INTERVAL
+                  )
+                ORDER BY
+                    last_executed_at ASC NULLS FIRST,
+                    name ASC
+            '''
+
+            results = await self.postgres.fetch(query, hours_since_last_run)
+            data = [dict(row) for row in results]
+
+            # Cache for shorter time since this is time-sensitive
+            self._set_in_cache(cache_key, data, ttl=300)  # 5 minutes
+
+            logger.debug(
+                f'Found {len(data)} workflows due for run '
+                f'(>{hours_since_last_run}h since last execution)'
+            )
+            return data
+
+        except Exception as e:
+            logger.error(f'Failed to get workflows due for run: {e}')
+            return []

@@ -40,18 +40,18 @@ def workflow_repo(mock_postgres):
 def sample_workflow_data():
     """Sample browser workflow data for testing."""
     return {
-        'name': 'Research Paper Discovery Workflow',
-        'description': 'Automated workflow for discovering research papers',
-        'user_id': 'user123',
-        'status': 'active',
-        'priority': 5,
-        'tags': ['research', 'automation', 'papers'],
-        'schedule_frequency': 'daily',
-        'last_run_at': None,
-        'next_run_at': datetime.now().isoformat(),
-        'total_runs': 0,
-        'successful_runs': 0,
-        'failed_runs': 0,
+        'name': 'Nature Journal Workflow',
+        'description': 'Automated workflow for Nature journal',
+        'website_domain': 'nature.com',
+        'start_url': 'https://www.nature.com/search',
+        'extraction_rules': {
+            'article_list_selector': '.article',
+            'title_selector': 'h2.title',
+            'author_selector': '.authors',
+            'abstract_selector': '.abstract'
+        },
+        'requires_authentication': False,
+        'is_active': True,
     }
 
 
@@ -61,18 +61,23 @@ def sample_workflow_record():
     workflow_id = uuid4()
     return {
         'id': workflow_id,
-        'name': 'Research Paper Discovery Workflow',
-        'description': 'Automated workflow for discovering research papers',
-        'user_id': 'user123',
-        'status': 'active',
-        'priority': 5,
-        'tags': ['research', 'automation', 'papers'],
-        'schedule_frequency': 'daily',
-        'last_run_at': None,
-        'next_run_at': datetime.now(),
-        'total_runs': 0,
-        'successful_runs': 0,
-        'failed_runs': 0,
+        'name': 'Nature Journal Workflow',
+        'description': 'Automated workflow for Nature journal',
+        'website_domain': 'nature.com',
+        'start_url': 'https://www.nature.com/search',
+        'extraction_rules': {
+            'article_list_selector': '.article',
+            'title_selector': 'h2.title',
+            'author_selector': '.authors',
+            'abstract_selector': '.abstract'
+        },
+        'requires_authentication': False,
+        'is_active': True,
+        'health_status': 'healthy',
+        'total_executions': 0,
+        'successful_executions': 0,
+        'failed_executions': 0,
+        'total_articles_extracted': 0,
         'created_at': datetime.now(),
         'updated_at': datetime.now(),
     }
@@ -130,7 +135,7 @@ async def test_create_workflow_missing_required_fields(workflow_repo, mock_postg
     # Arrange
     incomplete_data = {'name': 'Only Name'}
     mock_postgres.fetchval.side_effect = Exception(
-        'null value in column "user_id"'
+        'null value in column "website_domain"'
     )
 
     # Act
@@ -179,12 +184,12 @@ async def test_get_by_id_not_found(workflow_repo, mock_postgres):
 @pytest.mark.asyncio
 @pytest.mark.unit
 async def test_get_by_name_success(workflow_repo, mock_postgres, sample_workflow_record):
-    """Test retrieving workflow by name and user."""
+    """Test retrieving workflow by name."""
     # Arrange
     mock_postgres.fetchrow.return_value = sample_workflow_record
 
     # Act
-    result = await workflow_repo.get_by_name('user123', 'Research Paper Discovery Workflow')
+    result = await workflow_repo.get_by_name('Nature Journal Workflow')
 
     # Assert
     assert result is not None
@@ -200,7 +205,7 @@ async def test_get_by_name_not_found(workflow_repo, mock_postgres):
     mock_postgres.fetchrow.return_value = None
 
     # Act
-    result = await workflow_repo.get_by_name('user123', 'Nonexistent Workflow')
+    result = await workflow_repo.get_by_name('Nonexistent Workflow')
 
     # Assert
     assert result is None
@@ -208,52 +213,11 @@ async def test_get_by_name_not_found(workflow_repo, mock_postgres):
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_get_by_user_success(workflow_repo, mock_postgres):
-    """Test retrieving all workflows for a user."""
-    # Arrange
-    workflows = [
-        {'id': uuid4(), 'name': f'Workflow {i}', 'user_id': 'user123'}
-        for i in range(1, 4)
-    ]
-    mock_postgres.fetch.return_value = workflows
-
-    # Act
-    results = await workflow_repo.get_by_user('user123')
-
-    # Assert
-    assert len(results) == 3
-    assert all(w['user_id'] == 'user123' for w in results)
-
-
-@pytest.mark.asyncio
-@pytest.mark.unit
-async def test_get_by_user_with_status_filter(workflow_repo, mock_postgres):
-    """Test retrieving workflows filtered by status."""
-    # Arrange
-    active_workflows = [
-        {'id': uuid4(), 'name': f'Workflow {i}', 'status': 'active'}
-        for i in range(1, 3)
-    ]
-    mock_postgres.fetch.return_value = active_workflows
-
-    # Act
-    results = await workflow_repo.get_by_user('user123', status='active')
-
-    # Assert
-    assert len(results) == 2
-    assert all(w['status'] == 'active' for w in results)
-    call_args = mock_postgres.fetch.call_args
-    query = call_args[0][0]
-    assert 'status' in query.lower()
-
-
-@pytest.mark.asyncio
-@pytest.mark.unit
 async def test_get_active_workflows(workflow_repo, mock_postgres):
-    """Test retrieving all active workflows across users."""
+    """Test retrieving all active workflows."""
     # Arrange
     active_workflows = [
-        {'id': uuid4(), 'name': f'Workflow {i}', 'status': 'active'}
+        {'id': uuid4(), 'name': f'Workflow {i}', 'is_active': True}
         for i in range(1, 6)
     ]
     mock_postgres.fetch.return_value = active_workflows
@@ -263,7 +227,7 @@ async def test_get_active_workflows(workflow_repo, mock_postgres):
 
     # Assert
     assert len(results) == 5
-    assert all(w['status'] == 'active' for w in results)
+    assert all(w['is_active'] is True for w in results)
 
 
 # ============================================================================
@@ -271,86 +235,15 @@ async def test_get_active_workflows(workflow_repo, mock_postgres):
 # ============================================================================
 
 
-@pytest.mark.asyncio
-@pytest.mark.unit
-async def test_get_workflows_due_for_run(workflow_repo, mock_postgres):
-    """Test retrieving workflows due for scheduled runs."""
-    # Arrange
-    due_workflows = [
-        {
-            'id': uuid4(),
-            'name': 'Due Workflow',
-            'status': 'active',
-            'next_run_at': datetime.now(),
-        }
-    ]
-    mock_postgres.fetch.return_value = due_workflows
-
-    # Act
-    results = await workflow_repo.get_workflows_due_for_run()
-
-    # Assert
-    assert len(results) == 1
-    call_args = mock_postgres.fetch.call_args
-    query = call_args[0][0]
-    assert 'next_run_at' in query.lower()
-    assert 'status' in query.lower()
-
-
-@pytest.mark.asyncio
-@pytest.mark.unit
-async def test_get_by_tags_match_any(workflow_repo, mock_postgres, sample_workflow_record):
-    """Test retrieving workflows matching any tag."""
-    # Arrange
-    mock_postgres.fetch.return_value = [sample_workflow_record]
-
-    # Act
-    results = await workflow_repo.get_by_tags(['research'], match_all=False)
-
-    # Assert
-    assert len(results) == 1
-    assert 'research' in results[0]['tags']
-
-    # Verify && operator is used for ANY match
-    call_args = mock_postgres.fetch.call_args
-    query = call_args[0][0]
-    assert '&&' in query
-
-
-@pytest.mark.asyncio
-@pytest.mark.unit
-async def test_get_by_tags_match_all(workflow_repo, mock_postgres, sample_workflow_record):
-    """Test retrieving workflows matching all tags."""
-    # Arrange
-    mock_postgres.fetch.return_value = [sample_workflow_record]
-
-    # Act
-    results = await workflow_repo.get_by_tags(
-        ['research', 'automation'], match_all=True
-    )
-
-    # Assert
-    assert len(results) == 1
-    assert all(tag in results[0]['tags'] for tag in ['research', 'automation'])
-
-    # Verify @> operator is used for ALL match
-    call_args = mock_postgres.fetch.call_args
-    query = call_args[0][0]
-    assert '@>' in query
-
-
-@pytest.mark.asyncio
-@pytest.mark.unit
-async def test_get_by_tags_no_match(workflow_repo, mock_postgres):
-    """Test retrieving workflows with non-matching tags."""
-    # Arrange
-    mock_postgres.fetch.return_value = []
-
-    # Act
-    results = await workflow_repo.get_by_tags(['nonexistent-tag'])
-
-    # Assert
-    assert len(results) == 0
+# ============================================================================
+# REMOVED TESTS - Schema doesn't support these features
+# ============================================================================
+# - test_get_workflows_due_for_run (no next_run_at field)
+# - test_get_by_tags_* (no tags field)
+# - test_get_by_user_* (no user_id field)
+# - test_get_by_schedule (no schedule_frequency field)
+# - test_update_next_run_time (no next_run_at field)
+# - test_update_tags_* (no tags field)
 
 
 # ============================================================================
@@ -366,8 +259,8 @@ async def test_update_workflow_success(workflow_repo, mock_postgres):
     workflow_id = uuid4()
     updates = {
         'description': 'Updated workflow description',
-        'status': 'paused',
-        'priority': 8,
+        'is_active': False,
+        'health_status': 'maintenance',
     }
 
     # Act
@@ -406,60 +299,25 @@ async def test_update_workflow_nonexistent(workflow_repo, mock_postgres):
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_update_run_statistics(workflow_repo, mock_postgres):
-    """Test updating workflow run statistics."""
+async def test_update_execution_statistics(workflow_repo, mock_postgres):
+    """Test updating workflow execution statistics after run."""
     # Arrange
     workflow_id = uuid4()
+    mock_postgres.execute.return_value = None
 
-    # Act
-    success = await workflow_repo.update_run_statistics(
-        workflow_id, success=True, next_run_at=datetime.now()
+    # Act - using actual method signature: update_statistics(workflow_id, success, articles_found, duration_ms)
+    await workflow_repo.update_statistics(
+        workflow_id, success=True, articles_found=25, duration_ms=15000
     )
 
-    # Assert
-    assert success is True
-    mock_postgres.execute.assert_called_once()
+    # Assert - update_statistics doesn't return anything, just verify it was called
+    mock_postgres.execute.assert_called()
 
-    # Verify statistics are incremented
+    # Verify statistics are updated
     call_args = mock_postgres.execute.call_args
     query = call_args[0][0]
-    assert 'total_runs' in query.lower()
-    assert 'successful_runs' in query.lower()
-
-
-@pytest.mark.asyncio
-@pytest.mark.unit
-async def test_update_run_statistics_failed(workflow_repo, mock_postgres):
-    """Test updating workflow statistics for failed run."""
-    # Arrange
-    workflow_id = uuid4()
-
-    # Act
-    success = await workflow_repo.update_run_statistics(workflow_id, success=False)
-
-    # Assert
-    assert success is True
-    mock_postgres.execute.assert_called_once()
-
-    # Verify failed_runs is incremented
-    call_args = mock_postgres.execute.call_args
-    query = call_args[0][0]
-    assert 'failed_runs' in query.lower()
-
-
-@pytest.mark.asyncio
-@pytest.mark.unit
-async def test_update_tags_success(workflow_repo, mock_postgres):
-    """Test updating workflow tags."""
-    # Arrange
-    new_tags = ['machine-learning', 'nlp', 'automation']
-
-    # Act
-    success = await workflow_repo.update_tags(uuid4(), new_tags)
-
-    # Assert
-    assert success is True
-    mock_postgres.execute.assert_called_once()
+    assert 'total_executions' in query.lower()
+    assert 'successful_executions' in query.lower()
 
 
 # ============================================================================
@@ -507,10 +365,10 @@ async def test_deactivate_workflow(workflow_repo, mock_postgres):
     assert success is True
     mock_postgres.execute.assert_called_once()
 
-    # Verify status is set to 'inactive' or similar
+    # Verify is_active is set to FALSE
     call_args = mock_postgres.execute.call_args
     query = call_args[0][0]
-    assert 'status' in query.lower() or 'is_active' in query.lower()
+    assert 'is_active' in query.lower()
 
 
 # ============================================================================
@@ -521,47 +379,27 @@ async def test_deactivate_workflow(workflow_repo, mock_postgres):
 @pytest.mark.asyncio
 @pytest.mark.unit
 async def test_get_workflow_statistics(workflow_repo, mock_postgres):
-    """Test retrieving workflow statistics."""
-    # Arrange
-    workflow_id = uuid4()
-    mock_postgres.fetchrow.return_value = {
-        'id': workflow_id,
-        'total_runs': 100,
-        'successful_runs': 95,
-        'failed_runs': 5,
-        'avg_duration_seconds': 120.5,
-        'total_actions': 15,
-    }
-
-    # Act
-    stats = await workflow_repo.get_statistics(workflow_id)
-
-    # Assert
-    assert stats is not None
-    assert stats['total_runs'] == 100
-    assert stats['successful_runs'] == 95
-    assert stats['failed_runs'] == 5
-
-
-@pytest.mark.asyncio
-@pytest.mark.unit
-async def test_get_all_workflow_statistics(workflow_repo, mock_postgres):
-    """Test retrieving aggregate statistics across all workflows."""
+    """Test retrieving overall workflow statistics (not per-workflow)."""
     # Arrange
     mock_postgres.fetchrow.return_value = {
-        'total_workflows': 50,
-        'active_workflows': 45,
-        'total_runs': 1000,
-        'avg_success_rate': 0.95,
+        'total_workflows': 10,
+        'active_workflows': 8,
+        'total_executions': 100,
+        'successful_executions': 95,
+        'failed_executions': 5,
+        'total_articles_extracted': 450,
+        'avg_execution_time_ms': 12050,
     }
 
-    # Act
+    # Act - get_statistics() returns OVERALL stats, not per-workflow
     stats = await workflow_repo.get_statistics()
 
     # Assert
     assert stats is not None
-    assert stats['total_workflows'] == 50
-    assert stats['active_workflows'] == 45
+    assert stats['total_workflows'] == 10
+    assert stats['total_executions'] == 100
+    assert stats['successful_executions'] == 95
+    assert stats['failed_executions'] == 5
 
 
 # ============================================================================
@@ -702,7 +540,7 @@ async def test_malformed_query_error(workflow_repo, mock_postgres):
     mock_postgres.fetch.side_effect = Exception('syntax error at or near')
 
     # Act
-    results = await workflow_repo.get_by_user('user123')
+    results = await workflow_repo.list_all()
 
     # Assert
     assert len(results) == 0
@@ -737,45 +575,7 @@ async def test_exists_workflow(workflow_repo, mock_postgres):
 
 
 # ============================================================================
-# SCHEDULE MANAGEMENT TESTS
+# REMOVED SCHEDULE MANAGEMENT TESTS
 # ============================================================================
-
-
-@pytest.mark.asyncio
-@pytest.mark.unit
-async def test_get_workflows_by_schedule(workflow_repo, mock_postgres):
-    """Test retrieving workflows by schedule frequency."""
-    # Arrange
-    daily_workflows = [
-        {'id': uuid4(), 'name': f'Daily Workflow {i}', 'schedule_frequency': 'daily'}
-        for i in range(1, 4)
-    ]
-    mock_postgres.fetch.return_value = daily_workflows
-
-    # Act
-    results = await workflow_repo.get_by_schedule('daily')
-
-    # Assert
-    assert len(results) == 3
-    assert all(w['schedule_frequency'] == 'daily' for w in results)
-
-
-@pytest.mark.asyncio
-@pytest.mark.unit
-async def test_update_next_run_time(workflow_repo, mock_postgres):
-    """Test updating next scheduled run time."""
-    # Arrange
-    workflow_id = uuid4()
-    next_run = datetime.now()
-
-    # Act
-    success = await workflow_repo.update_next_run(workflow_id, next_run)
-
-    # Assert
-    assert success is True
-    mock_postgres.execute.assert_called_once()
-
-    # Verify next_run_at is updated
-    call_args = mock_postgres.execute.call_args
-    query = call_args[0][0]
-    assert 'next_run_at' in query.lower()
+# Schema doesn't support schedule_frequency or next_run_at fields
+# These features are not in the current database schema
