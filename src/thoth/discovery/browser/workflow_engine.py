@@ -16,7 +16,11 @@ from loguru import logger
 from playwright.async_api import BrowserContext, Error as PlaywrightError, Page
 
 from thoth.discovery.browser.browser_manager import BrowserManager, BrowserManagerError
+from thoth.discovery.browser.extraction_service import ExtractionService
 from thoth.repositories.browser_workflow_repository import BrowserWorkflowRepository
+from thoth.repositories.workflow_credentials_repository import (
+    WorkflowCredentialsRepository,
+)
 from thoth.repositories.workflow_executions_repository import (
     WorkflowExecutionsRepository,
 )
@@ -54,6 +58,7 @@ class WorkflowExecutionResult:
         error_message: str | None = None,
         error_step: int | None = None,
         execution_log: list[dict[str, Any]] | None = None,
+        articles: list[Any] | None = None,
     ):
         """Initialize execution result."""
         self.success = success
@@ -64,6 +69,7 @@ class WorkflowExecutionResult:
         self.error_message = error_message
         self.error_step = error_step
         self.execution_log = execution_log or []
+        self.articles = articles or []
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -106,6 +112,7 @@ class WorkflowEngine:
         workflow_repo: BrowserWorkflowRepository,
         search_config_repo: WorkflowSearchConfigRepository,
         executions_repo: WorkflowExecutionsRepository,
+        credentials_repo: WorkflowCredentialsRepository,
         max_retries: int = 3,
     ):
         """
@@ -116,12 +123,14 @@ class WorkflowEngine:
             workflow_repo: Repository for browser workflows
             search_config_repo: Repository for search configurations
             executions_repo: Repository for execution tracking
+            credentials_repo: Repository for encrypted credentials
             max_retries: Maximum retry attempts for failed actions
         """
         self.browser_manager = browser_manager
         self.workflow_repo = workflow_repo
         self.search_config_repo = search_config_repo
         self.executions_repo = executions_repo
+        self.credentials_repo = credentials_repo
         self.max_retries = max_retries
 
         logger.info(
@@ -232,7 +241,7 @@ class WorkflowEngine:
                 )
 
             # 7. Extract articles
-            articles_extracted = await self._extract_articles(
+            articles = await self._extract_articles(
                 page, workflow, parameters, execution_log
             )
 
@@ -245,21 +254,22 @@ class WorkflowEngine:
 
             # Update workflow statistics
             await self.workflow_repo.update_statistics(
-                workflow_id, success=True, articles_found=articles_extracted, duration_ms=duration_ms
+                workflow_id, success=True, articles_found=len(articles), duration_ms=duration_ms
             )
 
             logger.info(
                 f'Workflow execution completed: {workflow_id} '
-                f'(articles={articles_extracted}, duration={duration_ms}ms)'
+                f'(articles={len(articles)}, duration={duration_ms}ms)'
             )
 
             return WorkflowExecutionResult(
                 success=True,
                 execution_id=execution_id,
-                articles_extracted=articles_extracted,
+                articles_extracted=len(articles),
                 pages_visited=1,
                 duration_ms=duration_ms,
                 execution_log=execution_log,
+                articles=articles,
             )
 
         except Exception as e:
@@ -317,20 +327,133 @@ class WorkflowEngine:
         Raises:
             WorkflowEngineError: If authentication fails
         """
-        # TODO: Implement authentication logic
-        # For now, just log that authentication would be performed
-        auth_type = workflow.get('authentication_type', 'unknown')
+        workflow_id = workflow['id']
+        auth_type = workflow.get('authentication_type', 'form')
+
+        # Get credentials from repository
+        creds_data = await self.credentials_repo.get_by_workflow_id(workflow_id)
+        if not creds_data:
+            raise WorkflowEngineError(
+                f'Authentication required but no credentials found for workflow {workflow_id}'
+            )
+
+        credentials = creds_data['credentials']
+        stored_auth_type = creds_data['credential_type']
+
+        logger.info(f'Authenticating with type: {stored_auth_type}')
+
+        try:
+            if stored_auth_type == 'form':
+                # Form-based authentication (most common)
+                await self._authenticate_form(page, credentials, execution_log)
+            elif stored_auth_type == 'basic_auth':
+                # HTTP Basic Authentication
+                await self._authenticate_basic(page, credentials, execution_log)
+            elif stored_auth_type == 'api_key':
+                # API key in headers or URL
+                await self._authenticate_api_key(page, credentials, execution_log)
+            else:
+                raise WorkflowEngineError(f'Unsupported authentication type: {stored_auth_type}')
+
+            execution_log.append({
+                'timestamp': datetime.utcnow().isoformat(),
+                'action': 'authentication_success',
+                'auth_type': stored_auth_type,
+            })
+
+            logger.info(f'Authentication successful for workflow {workflow_id}')
+
+        except Exception as e:
+            execution_log.append({
+                'timestamp': datetime.utcnow().isoformat(),
+                'action': 'authentication_failed',
+                'auth_type': stored_auth_type,
+                'error': str(e),
+            })
+            raise WorkflowEngineError(f'Authentication failed: {e}') from e
+
+    async def _authenticate_form(
+        self,
+        page: Page,
+        credentials: dict[str, str],
+        execution_log: list[dict[str, Any]],
+    ) -> None:
+        """Perform form-based authentication."""
+        username = credentials.get('username')
+        password = credentials.get('password')
+        username_selector = credentials.get('username_selector', 'input[name="username"], input[type="email"]')
+        password_selector = credentials.get('password_selector', 'input[name="password"], input[type="password"]')
+        submit_selector = credentials.get('submit_selector', 'button[type="submit"], input[type="submit"]')
+
+        if not username or not password:
+            raise WorkflowEngineError('Username and password required for form authentication')
+
+        # Fill username
+        username_input = await page.wait_for_selector(username_selector, timeout=10000)
+        await username_input.fill(username)
+
+        # Fill password
+        password_input = await page.wait_for_selector(password_selector, timeout=10000)
+        await password_input.fill(password)
+
+        # Submit form
+        submit_button = await page.wait_for_selector(submit_selector, timeout=10000)
+        await submit_button.click()
+
+        # Wait for navigation to complete
+        await page.wait_for_load_state('networkidle', timeout=30000)
 
         execution_log.append({
             'timestamp': datetime.utcnow().isoformat(),
-            'action': 'authentication_skipped',
-            'auth_type': auth_type,
-            'note': 'Authentication not yet implemented',
+            'action': 'form_authentication_completed',
         })
 
-        logger.warning(
-            f'Authentication required but not implemented: {auth_type}'
-        )
+    async def _authenticate_basic(
+        self,
+        page: Page,
+        credentials: dict[str, str],
+        execution_log: list[dict[str, Any]],
+    ) -> None:
+        """Perform HTTP Basic Authentication."""
+        username = credentials.get('username')
+        password = credentials.get('password')
+
+        if not username or not password:
+            raise WorkflowEngineError('Username and password required for basic authentication')
+
+        # Set authentication header
+        await page.context.set_extra_http_headers({
+            'Authorization': f'Basic {username}:{password}'
+        })
+
+        execution_log.append({
+            'timestamp': datetime.utcnow().isoformat(),
+            'action': 'basic_auth_header_set',
+        })
+
+    async def _authenticate_api_key(
+        self,
+        page: Page,
+        credentials: dict[str, str],
+        execution_log: list[dict[str, Any]],
+    ) -> None:
+        """Perform API key authentication."""
+        api_key = credentials.get('api_key')
+        header_name = credentials.get('header_name', 'X-API-Key')
+
+        if not api_key:
+            raise WorkflowEngineError('API key required for API key authentication')
+
+        # Set API key header
+        await page.context.set_extra_http_headers({
+            header_name: api_key
+        })
+
+        execution_log.append({
+            'timestamp': datetime.utcnow().isoformat(),
+            'action': 'api_key_header_set',
+            'header_name': header_name,
+        })
 
     async def _inject_search_parameters(
         self,
@@ -416,9 +539,9 @@ class WorkflowEngine:
         workflow: dict[str, Any],
         parameters: ExecutionParameters,
         execution_log: list[dict[str, Any]],
-    ) -> int:
+    ) -> list[Any]:
         """
-        Extract articles from the page.
+        Extract articles from the page using ExtractionService.
 
         Args:
             page: Browser page
@@ -427,18 +550,70 @@ class WorkflowEngine:
             execution_log: Execution log to append to
 
         Returns:
-            Number of articles extracted
+            List of extracted article metadata objects
         """
-        # TODO: Implement article extraction logic
-        # This would use the extraction_rules from the workflow
-        # For now, return 0
-        execution_log.append({
-            'timestamp': datetime.utcnow().isoformat(),
-            'action': 'extraction_skipped',
-            'note': 'Article extraction not yet implemented',
-        })
+        try:
+            extraction_rules = workflow.get('extraction_rules', {})
+            if not extraction_rules:
+                logger.warning(f'No extraction rules defined for workflow {workflow["id"]}')
+                execution_log.append({
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'action': 'extraction_skipped',
+                    'reason': 'no_extraction_rules',
+                })
+                return []
 
-        return 0
+            max_articles = parameters.custom_filters.get(
+                'max_articles',
+                workflow.get('max_articles_per_run', 100)
+            )
+
+            # Initialize extraction service
+            extraction_service = ExtractionService(
+                page=page,
+                source_name=workflow.get('name', 'browser_workflow'),
+                existing_dois=set(),  # Could load from database for deduplication
+                existing_titles=set(),
+            )
+
+            execution_log.append({
+                'timestamp': datetime.utcnow().isoformat(),
+                'action': 'extraction_started',
+                'max_articles': max_articles,
+            })
+
+            # Extract articles
+            articles = await extraction_service.extract_articles(
+                extraction_rules=extraction_rules,
+                max_articles=max_articles,
+            )
+
+            # Get extraction statistics
+            stats = extraction_service.extraction_stats
+
+            execution_log.append({
+                'timestamp': datetime.utcnow().isoformat(),
+                'action': 'extraction_completed',
+                'articles_extracted': stats['extracted'],
+                'articles_skipped': stats['skipped'],
+                'articles_errors': stats['errors'],
+            })
+
+            logger.info(
+                f'Extracted {len(articles)} articles for workflow {workflow["id"]} '
+                f'(extracted={stats["extracted"]}, skipped={stats["skipped"]}, errors={stats["errors"]})'
+            )
+
+            return articles
+
+        except Exception as e:
+            execution_log.append({
+                'timestamp': datetime.utcnow().isoformat(),
+                'action': 'extraction_failed',
+                'error': str(e),
+            })
+            logger.error(f'Article extraction failed: {e}')
+            raise WorkflowEngineError(f'Article extraction failed: {e}') from e
 
     async def _find_element(
         self,

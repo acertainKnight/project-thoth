@@ -427,28 +427,18 @@ class ExecuteWorkflowMCPTool(MCPTool):
     async def execute(self, arguments: dict[str, Any]) -> MCPToolCallResult:
         """Execute a browser workflow."""
         try:
+            from thoth.discovery.browser.workflow_execution_service import (
+                WorkflowExecutionService,
+            )
             from thoth.repositories.browser_workflow_repository import (
                 BrowserWorkflowRepository,
             )
-            from thoth.repositories.workflow_actions_repository import (
-                WorkflowActionsRepository,
-            )
-            from thoth.repositories.workflow_search_config_repository import (
-                WorkflowSearchConfigRepository,
-            )
-            from thoth.repositories.workflow_executions_repository import (
-                WorkflowExecutionsRepository,
-            )
-            import time
+            from thoth.utilities.schemas.browser_workflow import ExecutionParameters
 
             postgres_service = self.service_manager.postgres
             workflow_repo = BrowserWorkflowRepository(postgres_service)
-            actions_repo = WorkflowActionsRepository(postgres_service)
-            config_repo = WorkflowSearchConfigRepository(postgres_service)
-            executions_repo = WorkflowExecutionsRepository(postgres_service)
 
             workflow_id = UUID(arguments['workflow_id'])
-            start_time = time.time()
 
             # Get workflow details
             workflow = await workflow_repo.get_by_id(workflow_id)
@@ -475,59 +465,83 @@ class ExecuteWorkflowMCPTool(MCPTool):
                     isError=True,
                 )
 
-            # Get actions
-            actions = await actions_repo.get_by_workflow_id(workflow_id)
-            if not actions:
-                return MCPToolCallResult(
-                    content=[
-                        {
-                            'type': 'text',
-                            'text': '✗ No actions defined for workflow. Add actions first.',
-                        }
-                    ],
-                    isError=True,
+            # Initialize execution service
+            execution_service = WorkflowExecutionService(postgres_service)
+            await execution_service.initialize()
+
+            try:
+                # Build execution parameters
+                keywords = arguments.get('keywords', [])
+                max_articles = arguments.get('max_articles', 50)
+                date_range_obj = arguments.get('date_range', {})
+
+                # Convert date_range object to string if provided
+                date_range = None
+                if date_range_obj:
+                    start = date_range_obj.get('start')
+                    end = date_range_obj.get('end')
+                    if start and end:
+                        date_range = f'{start}_{end}'
+
+                parameters = ExecutionParameters(
+                    keywords=keywords,
+                    date_range=date_range,
+                    custom_filters={'max_articles': max_articles}
                 )
 
-            # Get search config
-            search_config = await config_repo.get_by_workflow_id(workflow_id)
+                # Execute workflow
+                logger.info(f'MCP tool executing workflow {workflow_id}')
+                result = await execution_service.execute_workflow(
+                    workflow_id=workflow_id,
+                    parameters=parameters,
+                    max_articles=max_articles,
+                )
 
-            # TODO: This is a placeholder for actual browser automation
-            # In production, this would use Playwright/Selenium to execute the workflow
-            result_text = f"""✓ Workflow execution initiated!
+                # Format results
+                if result.stats.success:
+                    articles_text = []
+                    for i, article in enumerate(result.articles[:10], 1):  # Show first 10
+                        articles_text.append(
+                            f"{i}. **{article.title}**\n"
+                            f"   Authors: {', '.join(article.authors[:3]) if article.authors else 'N/A'}\n"
+                            f"   URL: {article.url or 'N/A'}\n"
+                        )
+
+                    result_text = f"""✓ Workflow execution completed successfully!
 
 **Workflow:** {workflow['name']}
 **Domain:** {workflow['website_domain']}
-**Actions:** {len(actions)} steps
-**Search Config:** {'Configured' if search_config else 'Not configured'}
+**Execution ID:** {result.stats.execution_id}
 
-⚠️ Note: Full browser automation requires Playwright integration.
-This is a placeholder response. Actual execution would:
-1. Launch browser session
-2. Execute {len(actions)} action steps
-3. Extract articles using search config
-4. Store results in database
+**Results:**
+- Articles Extracted: {result.stats.articles_count}
+- Duration: {result.stats.duration_ms}ms
+- Pages Visited: {result.stats.pages_visited}
 
-**Execution Parameters:**
-- Keywords: {arguments.get('keywords', [])}
-- Max Articles: {arguments.get('max_articles', 50)}
+**First {min(10, len(result.articles))} Articles:**
+
+{''.join(articles_text) if articles_text else 'No articles extracted'}
+"""
+                    if len(result.articles) > 10:
+                        result_text += f"\n... and {len(result.articles) - 10} more articles"
+
+                else:
+                    result_text = f"""✗ Workflow execution failed
+
+**Workflow:** {workflow['name']}
+**Execution ID:** {result.stats.execution_id}
+**Error:** {result.stats.error_message}
+**Duration:** {result.stats.duration_ms}ms
 """
 
-            # Record execution (placeholder)
-            duration_ms = int((time.time() - start_time) * 1000)
-            articles_found = 0  # Placeholder
+                return MCPToolCallResult(content=[{'type': 'text', 'text': result_text}])
 
-            # Update workflow statistics
-            await workflow_repo.update_statistics(
-                workflow_id, success=True, articles_found=articles_found, duration_ms=duration_ms
-            )
-
-            result_text += f"\n**Duration:** {duration_ms}ms"
-            result_text += f"\n**Articles Found:** {articles_found}"
-
-            return MCPToolCallResult(content=[{'type': 'text', 'text': result_text}])
+            finally:
+                # Always shutdown execution service
+                await execution_service.shutdown()
 
         except Exception as e:
-            logger.error(f'Error executing workflow: {e}')
+            logger.error(f'Error executing workflow: {e}', exc_info=True)
             return self.handle_error(e)
 
 

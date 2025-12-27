@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from loguru import logger
 from pydantic import BaseModel, Field
 
@@ -470,20 +470,74 @@ async def delete_workflow(
         )
 
 
+async def _execute_workflow_background(
+    workflow_id: UUID,
+    execution_id: UUID,
+    parameters: ExecutionParameters,
+    execution_service: WorkflowExecutionService,
+    executions_repo: WorkflowExecutionsRepository,
+):
+    """Background task to execute workflow."""
+    try:
+        logger.info(f"Starting background execution for workflow {workflow_id}")
+
+        # Execute workflow
+        result = await execution_service.execute_workflow(
+            workflow_id=workflow_id,
+            parameters=parameters,
+            trigger=ExecutionTrigger.MANUAL,
+        )
+
+        # Update execution status
+        if result.stats.success:
+            await executions_repo.update_status(
+                execution_id,
+                ExecutionStatus.SUCCESS.value,
+            )
+            logger.info(
+                f"Workflow execution {execution_id} completed successfully: "
+                f"{result.stats.articles_count} articles extracted"
+            )
+        else:
+            await executions_repo.update_status(
+                execution_id,
+                ExecutionStatus.FAILED.value,
+                error_message=result.stats.error_message,
+            )
+            logger.error(
+                f"Workflow execution {execution_id} failed: {result.stats.error_message}"
+            )
+
+    except Exception as e:
+        logger.error(f"Background execution failed for workflow {workflow_id}: {e}", exc_info=True)
+        try:
+            await executions_repo.update_status(
+                execution_id,
+                ExecutionStatus.FAILED.value,
+                error_message=str(e),
+            )
+        except Exception as update_error:
+            logger.error(f"Failed to update execution status: {update_error}")
+
+
 @router.post("/{workflow_id}/execute", response_model=WorkflowExecutionResponse)
 async def execute_workflow(
     workflow_id: UUID,
     request: WorkflowExecutionRequest,
+    background_tasks: BackgroundTasks,
     workflow_repo: BrowserWorkflowRepository = Depends(get_workflow_repo),
     executions_repo: WorkflowExecutionsRepository = Depends(get_executions_repo),
+    execution_service: WorkflowExecutionService = Depends(get_execution_service),
 ):
     """Execute a workflow asynchronously with provided parameters.
 
     Args:
         workflow_id: Workflow UUID
         request: Execution parameters
+        background_tasks: FastAPI background tasks
         workflow_repo: Browser workflow repository
         executions_repo: Workflow executions repository
+        execution_service: Workflow execution service
 
     Returns:
         Execution ID and status
@@ -509,7 +563,7 @@ async def execute_workflow(
         # Create execution record
         execution_data = {
             "workflow_id": workflow_id,
-            "status": "pending",
+            "status": ExecutionStatus.RUNNING.value,
             "execution_parameters": request.model_dump(),
             "triggered_by": ExecutionTrigger.MANUAL.value,
             "started_at": datetime.utcnow(),
@@ -525,24 +579,41 @@ async def execute_workflow(
 
         logger.info(f"Created execution {execution_id} for workflow {workflow_id}")
 
-        # TODO: Queue execution task asynchronously (e.g., with Celery, background task)
-        # For now, return the execution ID immediately
-        # The actual execution would happen in a background worker
+        # Convert request to ExecutionParameters
+        parameters = ExecutionParameters(
+            keywords=request.keywords,
+            date_range=request.date_range,
+            subject=request.subject,
+            custom_filters={
+                **request.custom_filters,
+                'max_articles': request.max_articles or 100,
+            }
+        )
+
+        # Queue background execution
+        background_tasks.add_task(
+            _execute_workflow_background,
+            workflow_id,
+            execution_id,
+            parameters,
+            execution_service,
+            executions_repo,
+        )
 
         return WorkflowExecutionResponse(
             execution_id=execution_id,
             workflow_id=workflow_id,
-            status="pending",
-            message="Workflow execution queued successfully",
+            status=ExecutionStatus.RUNNING.value,
+            message="Workflow execution started in background",
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error executing workflow {workflow_id}: {e}")
+        logger.error(f"Error starting workflow execution {workflow_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to execute workflow: {str(e)}",
+            detail=f"Failed to start workflow execution: {str(e)}",
         )
 
 

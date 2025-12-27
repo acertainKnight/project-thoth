@@ -18,6 +18,9 @@ from thoth.discovery.browser.browser_manager import BrowserManager
 from thoth.discovery.browser.extraction_service import ExtractionService
 from thoth.discovery.browser.workflow_engine import WorkflowEngine, WorkflowExecutionResult
 from thoth.repositories.browser_workflow_repository import BrowserWorkflowRepository
+from thoth.repositories.workflow_credentials_repository import (
+    WorkflowCredentialsRepository,
+)
 from thoth.repositories.workflow_executions_repository import WorkflowExecutionsRepository
 from thoth.repositories.workflow_search_config_repository import (
     WorkflowSearchConfigRepository,
@@ -110,6 +113,7 @@ class WorkflowExecutionService:
         self.workflow_repo = BrowserWorkflowRepository(postgres_service)
         self.search_config_repo = WorkflowSearchConfigRepository(postgres_service)
         self.executions_repo = WorkflowExecutionsRepository(postgres_service)
+        self.credentials_repo = WorkflowCredentialsRepository(postgres_service)
 
         # Browser manager configuration
         self.browser_manager = BrowserManager(
@@ -152,6 +156,7 @@ class WorkflowExecutionService:
                 workflow_repo=self.workflow_repo,
                 search_config_repo=self.search_config_repo,
                 executions_repo=self.executions_repo,
+                credentials_repo=self.credentials_repo,
                 max_retries=self.max_retries,
             )
 
@@ -223,8 +228,6 @@ class WorkflowExecutionService:
             )
 
             # Execute workflow through engine
-            # Note: WorkflowEngine currently doesn't extract articles yet
-            # (based on TODO comments in the code)
             workflow_result = await self.workflow_engine.execute_workflow(
                 workflow_id=workflow_id,
                 parameters=parameters,
@@ -235,22 +238,21 @@ class WorkflowExecutionService:
             # Calculate duration
             duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
 
-            # Build statistics
+            # Extract articles from workflow result
+            articles: list[ScrapedArticleMetadata] = workflow_result.articles
+
+            # Build statistics from workflow result
             stats = WorkflowExecutionStats(
                 execution_id=workflow_result.execution_id,
                 success=workflow_result.success,
-                articles_count=workflow_result.articles_extracted,
+                articles_count=len(articles),
                 articles_extracted=workflow_result.articles_extracted,
-                articles_skipped=0,  # Will be populated when extraction is implemented
+                articles_skipped=0,
                 articles_errors=0,
                 duration_ms=workflow_result.duration_ms or duration_ms,
                 pages_visited=workflow_result.pages_visited,
                 error_message=workflow_result.error_message,
             )
-
-            # For now, return empty articles list since extraction is not yet implemented
-            # When extraction is implemented in WorkflowEngine, this will contain actual articles
-            articles: list[ScrapedArticleMetadata] = []
 
             logger.info(
                 f'Workflow execution completed: {workflow_id} '
