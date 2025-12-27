@@ -50,11 +50,31 @@ ENV PYTHONUNBUFFERED=1 \
     THOTH_DOCKER=1 \
     THOTH_LOG_LEVEL=INFO
 
-# Install runtime system dependencies including Node.js for MCP plugins
+# Install runtime system dependencies including Node.js for MCP plugins and browser automation
 RUN apt-get update && apt-get install -y \
     curl \
     wget \
     ca-certificates \
+    # Playwright browser dependencies
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    libatspi2.0-0 \
+    libxshmfence1 \
+    # Install Node.js
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/* \
@@ -74,15 +94,25 @@ COPY --from=builder --chown=thoth:thoth /app /app
 # Make sure we can run uv in the runtime (for any runtime needs)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
+# Copy entrypoint script
+COPY --chown=thoth:thoth docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # Ensure all Python files have group read permissions (docker-compose runs as UID 1000, GID 1000)
 # Both user thoth (999) and docker-compose user (1000) share group 1000
 RUN chmod -R g+r /app/src
 
-# Switch to non-root user
+# Switch to non-root user temporarily for Playwright install
 USER thoth
 
 # Set working directory
 WORKDIR /app
+
+# Install Playwright browsers (run as thoth user to store in user home)
+RUN /app/.venv/bin/playwright install --with-deps chromium || echo "Playwright install skipped"
+
+# Switch back to root for remaining setup
+USER root
 
 # Create cache, logs, and data directories in app with proper permissions
 # Use group-writable permissions instead of world-writable for security
@@ -94,6 +124,9 @@ RUN mkdir -p /app/cache /app/logs /app/migrations /app/data/output /app/exports 
 
 # Create default workspace structure
 RUN mkdir -p /workspace/{pdfs,notes,data,queries,discovery,knowledge,logs,cache}
+
+# Switch back to thoth user for runtime
+USER thoth
 
 # Health check for container orchestration
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
@@ -117,6 +150,9 @@ ENV PATH="/app/.venv/bin:$PATH" \
     THOTH_API_PORT=8000 \
     THOTH_MCP_HOST=0.0.0.0 \
     THOTH_MCP_PORT=8001
+
+# Set entrypoint to handle migrations
+ENTRYPOINT ["/entrypoint.sh"]
 
 # Default command - can be overridden in docker-compose.yml
 # For multi-container setup, each service specifies its own command

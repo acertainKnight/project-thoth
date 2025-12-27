@@ -141,12 +141,13 @@ services:
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8
     volumes:
       - thoth-letta-postgres:/var/lib/postgresql/data
-      - ./docker/postgres/init-vector.sql:/docker-entrypoint-initdb.d/init-vector.sql:ro
+      - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/01-init-databases.sh:ro
+      - ./docker/postgres/init-vector.sql:/docker-entrypoint-initdb.d/02-init-vector.sql:ro
     networks:
       - thoth-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U letta -d letta"]
+      test: ["CMD-SHELL", "pg_isready -U letta -d letta && pg_isready -U thoth -d thoth"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -166,6 +167,9 @@ services:
     command: ["python", "-m", "thoth", "server", "start", "--api-host", "0.0.0.0", "--api-port", "8000", "--no-mcp", "--no-discovery"]
     ports:
       - "8080:8000"
+    depends_on:
+      letta-postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
       interval: 30s
@@ -193,6 +197,9 @@ services:
       target: production
     container_name: thoth-mcp
     command: ["python", "-m", "thoth", "mcp", "full", "--host", "0.0.0.0", "--http-port", "8000", "--sse-port", "8001"]
+    depends_on:
+      letta-postgres:
+        condition: service_healthy
     environment:
       # Base Thoth environment
       - THOTH_CHROMADB_HOST=chromadb

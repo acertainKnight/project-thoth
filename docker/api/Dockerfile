@@ -40,11 +40,30 @@ ENV PYTHONUNBUFFERED=1 \
     THOTH_SERVICE=api \
     THOTH_LOG_LEVEL=INFO
 
-# Install runtime system dependencies
+# Install runtime system dependencies including Playwright browser dependencies
 RUN apt-get update && apt-get install -y \
     curl \
     wget \
     ca-certificates \
+    # Playwright browser dependencies
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    libatspi2.0-0 \
+    libxshmfence1 \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -61,11 +80,21 @@ COPY --from=builder --chown=thoth:thoth /app /app
 # Make sure we can run uv in the runtime
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Switch to non-root user
+# Copy entrypoint script
+COPY --chown=thoth:thoth docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Switch to non-root user temporarily for Playwright install
 USER thoth
 
 # Set working directory
 WORKDIR /app
+
+# Install Playwright browsers
+RUN /app/.venv/bin/playwright install --with-deps chromium || echo "Playwright install skipped"
+
+# Switch back to root for remaining setup
+USER root
 
 # Create default workspace structure with Letta directories
 RUN mkdir -p /workspace/{pdfs,notes,data,queries,discovery,knowledge,logs,cache} \
@@ -73,6 +102,9 @@ RUN mkdir -p /workspace/{pdfs,notes,data,queries,discovery,knowledge,logs,cache}
     && mkdir -p /workspace/data/cache/letta \
     && mkdir -p /workspace/logs/letta \
     && chown -R thoth:thoth /workspace
+
+# Switch back to thoth user for runtime
+USER thoth
 
 # Health check for container orchestration
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
@@ -90,6 +122,9 @@ ENV PATH="/app/.venv/bin:$PATH" \
     THOTH_LOGS_DIR=/workspace/logs \
     THOTH_API_HOST=0.0.0.0 \
     THOTH_API_PORT=8000
+
+# Set entrypoint to handle migrations
+ENTRYPOINT ["/entrypoint.sh"]
 
 # Production command - start the API server only
 CMD ["python", "-m", "thoth", "server", "start", \
