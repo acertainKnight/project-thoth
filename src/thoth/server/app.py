@@ -72,6 +72,9 @@ _settings_watcher: Optional[SettingsFileWatcher] = None
 # Global discovery scheduler instance - will be initialized when server starts
 discovery_scheduler: Optional[DiscoveryScheduler] = None
 
+# Global workflow execution service - will be initialized when server starts
+workflow_execution_service = None
+
 
 def _should_enable_hot_reload() -> bool:
     """Check if hot-reload should be enabled."""
@@ -136,7 +139,7 @@ async def shutdown_mcp_server(timeout: float = 10.0) -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Handle FastAPI application lifespan events."""
-    global _settings_watcher, discovery_scheduler
+    global _settings_watcher, discovery_scheduler, workflow_execution_service
 
     # Startup
     logger.info('Starting Thoth server application...')
@@ -173,6 +176,26 @@ async def lifespan(_app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to initialize PostgreSQL: {e}")
             logger.warning("Continuing without PostgreSQL (some features may not work)")
+
+    # Initialize WorkflowExecutionService after PostgreSQL is ready
+    if service_manager and 'postgres' in service_manager._services:
+        try:
+            from thoth.discovery.browser.workflow_execution_service import WorkflowExecutionService
+
+            logger.info("Initializing workflow execution service...")
+            postgres_svc = service_manager._services['postgres']
+            workflow_execution_service = WorkflowExecutionService(
+                postgres_service=postgres_svc,
+                max_concurrent_browsers=5,
+                default_timeout=30000,
+                max_retries=3,
+            )
+            await workflow_execution_service.initialize()
+            logger.success("Workflow execution service initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize workflow execution service: {e}")
+            logger.warning("Continuing without workflow execution service (browser workflows will not work)")
+            workflow_execution_service = None
 
     # Initialize discovery scheduler after PostgreSQL is ready
     if service_manager:
@@ -235,6 +258,15 @@ async def lifespan(_app: FastAPI):
     finally:
         # Shutdown
         logger.info('Shutting down Thoth server application...')
+
+        # Shutdown workflow execution service
+        if workflow_execution_service is not None:
+            try:
+                logger.info("Shutting down workflow execution service...")
+                await workflow_execution_service.shutdown()
+                logger.success("Workflow execution service shutdown complete")
+            except Exception as e:
+                logger.error(f"Error shutting down workflow execution service: {e}")
 
         # Stop discovery scheduler
         if discovery_scheduler is not None:
@@ -488,6 +520,17 @@ async def start_server(
         research.set_dependencies(research_agent, chat_manager)
         operations.set_service_manager(service_manager)
         tools.set_dependencies(research_agent, service_manager)
+
+        # Initialize browser workflow dependencies
+        if workflow_execution_service is not None:
+            postgres_svc = service_manager._services.get('postgres')
+            if postgres_svc:
+                browser_workflows.set_dependencies(postgres_svc, workflow_execution_service)
+                logger.info('Browser workflow dependencies initialized')
+            else:
+                logger.warning('PostgreSQL service not available for browser workflows')
+        else:
+            logger.warning('Workflow execution service not available')
 
         logger.info('Thoth server initialization completed successfully')
 
