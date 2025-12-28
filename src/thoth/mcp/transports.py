@@ -294,6 +294,40 @@ class SSETransport(MCPTransport):
                     self.protocol_handler.serialize_message(error_response)
                 )
 
+        @self.app.get('/sse')
+        async def sse_endpoint_standard():
+            """Standard SSE endpoint for MCP clients (Letta compatibility)."""
+            import uuid
+            client_id = str(uuid.uuid4())
+
+            async def event_stream():
+                # Create client queue
+                queue = asyncio.Queue()
+                self.clients[client_id] = queue
+
+                try:
+                    while True:
+                        # Wait for messages
+                        message = await queue.get()
+                        yield f'data: {json.dumps(message)}\n\n'
+                except asyncio.CancelledError:
+                    pass
+                finally:
+                    # Clean up client
+                    if client_id in self.clients:
+                        del self.clients[client_id]
+
+            return StreamingResponse(
+                event_stream(),
+                media_type='text/event-stream',
+                headers={
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Cache-Control',
+                },
+            )
+
         @self.app.get('/events/{client_id}')
         async def sse_endpoint(client_id: str):
             """Server-Sent Events endpoint for real-time updates."""
