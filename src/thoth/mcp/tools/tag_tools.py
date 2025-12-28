@@ -8,6 +8,7 @@ and suggesting new tags for articles.
 from typing import Any
 
 from ..base_tools import MCPTool, MCPToolCallResult, NoInputTool
+from ...services.background_tasks import BackgroundTaskManager, TaskStatus
 
 
 class ConsolidateTagsMCPTool(NoInputTool):
@@ -301,52 +302,153 @@ class ConsolidateAndRetagMCPTool(NoInputTool):
 
     @property
     def description(self) -> str:
-        return 'Perform comprehensive tag consolidation and suggest additional tags for all articles in one operation'
+        return 'Trigger comprehensive tag consolidation and retagging as a background operation. This operation may take several minutes for large collections. Returns immediately with a task ID to track progress.'
 
     async def execute(self, _arguments: dict[str, Any]) -> MCPToolCallResult:
-        """Consolidate tags and suggest additional tags."""
+        """Trigger tag consolidation and retagging in the background."""
         try:
-            # Use the tag service's comprehensive consolidation and retagging
-            result = self.service_manager.tag.consolidate_and_retag()
+            # Get or create background task manager
+            if not hasattr(self.service_manager, 'background_tasks'):
+                self.service_manager.background_tasks = BackgroundTaskManager()
 
-            response_text = '**Comprehensive Tag Management Complete**\n\n'
-            response_text += '**Summary:**\n'
-            response_text += f'  - Articles processed: {result["articles_processed"]}\n'
-            response_text += f'  - Articles updated: {result["articles_updated"]}\n'
-            response_text += f'  - Tags consolidated: {result["tags_consolidated"]}\n'
-            response_text += f'  - Additional tags added: {result["tags_added"]}\n'
-            response_text += f'  - Original tag count: {result["original_tag_count"]}\n'
-            response_text += f'  - Final tag count: {result["final_tag_count"]}\n\n'
-
-            # Show some consolidation mappings
-            if result.get('consolidation_mappings'):
-                mappings = result['consolidation_mappings']
-                if mappings:
-                    response_text += '🔄 **Sample Tag Consolidations:**\n'
-                    for old_tag, new_tag in list(mappings.items())[:5]:
-                        response_text += f"  - '{old_tag}' → '{new_tag}'\n"
-
-                    if len(mappings) > 5:
-                        response_text += (
-                            f'  ... and {len(mappings) - 5} more consolidations\n'
-                        )
-                    response_text += '\n'
-
-            efficiency_improvement = 0
-            if result['original_tag_count'] > 0:
-                efficiency_improvement = (
-                    (result['original_tag_count'] - result['final_tag_count'])
-                    / result['original_tag_count']
-                ) * 100
-
-            response_text += '📈 **Impact:**\n'
-            response_text += (
-                f'  - Tag vocabulary reduced by {efficiency_improvement:.1f}%\n'
+            # Create a background task that calls the tag service
+            task_id = self.service_manager.background_tasks.create_task(
+                name='consolidate_and_retag',
+                func=self.service_manager.tag.consolidate_and_retag,
             )
-            response_text += '  - Improved organization and searchability\n'
-            response_text += '  - Enhanced tag consistency across collection\n\n'
 
-            response_text += 'Your research collection now has a clean, consolidated tag vocabulary with AI-suggested enhancements.'
+            response_text = '✅ **Tag Consolidation and Retagging Triggered**\n\n'
+            response_text += f'**Task ID:** `{task_id}`\n\n'
+            response_text += '**What happens next:**\n'
+            response_text += '  1. Analyzing all tags in your collection\n'
+            response_text += '  2. Identifying similar tags for consolidation\n'
+            response_text += '  3. Suggesting additional relevant tags\n'
+            response_text += '  4. Updating all affected articles\n\n'
+            response_text += '⏱️ **This operation is running in the background.**\n'
+            response_text += 'Use `get_task_status` tool with this task ID to check progress.\n\n'
+            response_text += '**Note:** Depending on your collection size, this may take several minutes.'
+
+            return MCPToolCallResult(content=[{'type': 'text', 'text': response_text}])
+
+        except Exception as e:
+            return self.handle_error(e)
+
+
+class GetTaskStatusMCPTool(MCPTool):
+    """MCP tool for checking the status of background tasks."""
+
+    @property
+    def name(self) -> str:
+        return 'get_task_status'
+
+    @property
+    def description(self) -> str:
+        return 'Check the status of a background task using its task ID. Returns current status, progress, and results if completed.'
+
+    @property
+    def input_schema(self) -> dict[str, Any]:
+        return {
+            'type': 'object',
+            'properties': {
+                'task_id': {
+                    'type': 'string',
+                    'description': 'The task ID returned when the background operation was triggered',
+                },
+            },
+            'required': ['task_id'],
+        }
+
+    async def execute(self, arguments: dict[str, Any]) -> MCPToolCallResult:
+        """Get the status of a background task."""
+        try:
+            task_id = arguments.get('task_id')
+
+            if not task_id:
+                return MCPToolCallResult(
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': 'Error: task_id parameter is required',
+                        }
+                    ],
+                    isError=True,
+                )
+
+            # Get or create background task manager
+            if not hasattr(self.service_manager, 'background_tasks'):
+                self.service_manager.background_tasks = BackgroundTaskManager()
+
+            # Get task status
+            task = self.service_manager.background_tasks.get_task_status(task_id)
+
+            if not task:
+                return MCPToolCallResult(
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': f'❌ Task not found: {task_id}\n\nThis task may have expired or the task ID is invalid.',
+                        }
+                    ],
+                    isError=True,
+                )
+
+            # Build response based on status
+            response_text = f'**Task Status: {task.name}**\n\n'
+            response_text += f'**Task ID:** `{task_id}`\n'
+            response_text += f'**Status:** {task.status.value.upper()}\n'
+            response_text += f'**Created:** {task.created_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
+
+            if task.started_at:
+                response_text += f'**Started:** {task.started_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
+
+            if task.status == TaskStatus.RUNNING:
+                # Show running status
+                if task.started_at:
+                    elapsed = (task.started_at.timestamp() - task.created_at.timestamp())
+                    response_text += f'**Running for:** {elapsed:.1f} seconds\n\n'
+                response_text += '⏳ **The task is currently running...**\n'
+                response_text += 'Check again in a few moments for completion status.'
+
+            elif task.status == TaskStatus.COMPLETED:
+                # Show completion with results
+                if task.completed_at and task.started_at:
+                    duration = task.completed_at.timestamp() - task.started_at.timestamp()
+                    response_text += f'**Completed:** {task.completed_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
+                    response_text += f'**Duration:** {duration:.2f} seconds\n\n'
+
+                response_text += '✅ **Task completed successfully!**\n\n'
+
+                # Show results if available
+                if task.result:
+                    result = task.result
+                    response_text += '**Results:**\n'
+                    response_text += f'  - Articles processed: {result.get("articles_processed", 0)}\n'
+                    response_text += f'  - Articles updated: {result.get("articles_updated", 0)}\n'
+                    response_text += f'  - Tags consolidated: {result.get("tags_consolidated", 0)}\n'
+                    response_text += f'  - Additional tags added: {result.get("tags_added", 0)}\n'
+                    response_text += f'  - Original tag count: {result.get("original_tag_count", 0)}\n'
+                    response_text += f'  - Final tag count: {result.get("final_tag_count", 0)}\n\n'
+
+                    # Show consolidation mappings
+                    if result.get('consolidation_mappings'):
+                        mappings = result['consolidation_mappings']
+                        if mappings:
+                            response_text += '🔄 **Sample Tag Consolidations:**\n'
+                            for old_tag, new_tag in list(mappings.items())[:5]:
+                                response_text += f"  - '{old_tag}' → '{new_tag}'\n"
+
+                            if len(mappings) > 5:
+                                response_text += f'  ... and {len(mappings) - 5} more consolidations\n'
+
+            elif task.status == TaskStatus.FAILED:
+                # Show failure with error
+                if task.completed_at:
+                    response_text += f'**Failed at:** {task.completed_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
+
+                response_text += f'\n❌ **Task failed with error:**\n```\n{task.error}\n```\n'
+
+            elif task.status == TaskStatus.PENDING:
+                response_text += '\n⏸️ **Task is pending and has not started yet.**'
 
             return MCPToolCallResult(content=[{'type': 'text', 'text': response_text}])
 

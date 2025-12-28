@@ -69,6 +69,7 @@ from .query_tools import (
 from .tag_tools import (
     ConsolidateAndRetagMCPTool,
     ConsolidateTagsMCPTool,
+    GetTaskStatusMCPTool,
     ManageTagVocabularyMCPTool,
     SuggestTagsMCPTool,
 )
@@ -119,6 +120,7 @@ MCP_TOOL_CLASSES = [
     SuggestTagsMCPTool,
     ManageTagVocabularyMCPTool,
     ConsolidateAndRetagMCPTool,
+    GetTaskStatusMCPTool,
     # Citation and bibliography tools
     FormatCitationsMCPTool,
     ExportBibliographyMCPTool,
@@ -203,6 +205,7 @@ __all__ = [
     'GetArticleDetailsMCPTool',
     'GetDiscoverySourceMCPTool',
     'GetQueryMCPTool',
+    'GetTaskStatusMCPTool',
     'GetWorkflowDetailsMCPTool',
     'ListArticlesMCPTool',
     'ListDiscoverySourcesMCPTool',
