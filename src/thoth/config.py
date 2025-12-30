@@ -665,6 +665,11 @@ class CitationConfig(BaseModel):
     processing: CitationProcessingConfig = Field(
         default_factory=CitationProcessingConfig
     )
+    use_resolution_chain: bool = Field(
+        default=True,
+        alias='useResolutionChain',
+        description='Enable improved citation resolution chain with Crossref, ArXiv, OpenAlex, and Semantic Scholar'
+    )
 
     class Config:
         populate_by_name = True

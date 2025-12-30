@@ -1,7 +1,17 @@
+import asyncio
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List
 
+from loguru import logger
+
+from thoth.analyze.citations.enrichment_service import CitationEnrichmentService
 from thoth.analyze.citations.opencitation import OpenCitationsAPI
+from thoth.analyze.citations.resolution_chain import CitationResolutionChain
+from thoth.analyze.citations.resolution_types import (
+    CitationResolutionStatus,
+    ResolutionResult,
+)
 from thoth.analyze.citations.scholarly import ScholarlyAPI
 from thoth.analyze.citations.semanticscholar import SemanticScholarAPI
 from thoth.discovery.api_sources import ArxivClient
@@ -17,6 +27,11 @@ class CitationEnhancer:
         self.use_opencitations = config.citation_config.apis.use_opencitations
         self.use_scholarly = config.citation_config.apis.use_scholarly
         self.use_arxiv = config.citation_config.apis.use_arxiv
+
+        # New resolution system configuration
+        self.use_resolution_chain = getattr(
+            config.citation_config, 'use_resolution_chain', False
+        )
 
         # Initialize Semantic Scholar with performance optimizations
         if self.use_semanticscholar:
@@ -42,6 +57,10 @@ class CitationEnhancer:
         )
         self.scholarly_tool = ScholarlyAPI() if self.use_scholarly else None
         self.arxiv_tool = ArxivClient() if self.use_arxiv else None
+
+        # Initialize new resolution system components (lazy initialization)
+        self._resolution_chain = None
+        self._enrichment_service = None
 
     def enhance(self, citations: list[Citation]) -> list[Citation]:
         """
@@ -98,14 +117,20 @@ class CitationEnhancer:
         Enhanced parallel processing of citations using existing APIs.
 
         This method optimizes the citation enhancement by:
-        1. Using Semantic Scholar's batch processing first
-        2. Grouping remaining citations by API needs
-        3. Processing API calls in parallel using ThreadPoolExecutor
+        1. Checking if new resolution chain should be used
+        2. Using Semantic Scholar's batch processing first (legacy path)
+        3. Grouping remaining citations by API needs
+        4. Processing API calls in parallel using ThreadPoolExecutor
         """
         if not citations:
             return []
 
-        # Step 1: Use Semantic Scholar's existing batch processing first
+        # Check if we should use new resolution chain
+        if self.use_resolution_chain:
+            logger.info('Using new resolution chain for parallel enhancement')
+            return self.enhance_with_resolution_chain(citations)
+
+        # Legacy path: Use Semantic Scholar's existing batch processing first
         if self.use_semanticscholar and self.semanticscholar_tool:
             citations = self.semanticscholar_tool.semantic_scholar_lookup(citations)
 
@@ -279,3 +304,217 @@ class CitationEnhancer:
         if self.scholarly_tool:
             self.scholarly_tool.find_doi_sync(citations[0])
             self.scholarly_tool.find_pdf_url_sync(citations[0])
+
+    def _get_resolution_chain(self) -> CitationResolutionChain:
+        """
+        Get or initialize the resolution chain (lazy initialization).
+
+        Returns:
+            CitationResolutionChain instance
+        """
+        if self._resolution_chain is None:
+            from thoth.analyze.citations.arxiv_resolver import ArxivResolver
+            from thoth.analyze.citations.crossref_resolver import CrossrefResolver
+            from thoth.analyze.citations.openalex_resolver import OpenAlexResolver
+
+            # Initialize resolvers (including ArXiv for preprints)
+            crossref_resolver = CrossrefResolver()
+            arxiv_resolver = ArxivResolver()
+            openalex_resolver = OpenAlexResolver()
+
+            self._resolution_chain = CitationResolutionChain(
+                crossref_resolver=crossref_resolver,
+                arxiv_resolver=arxiv_resolver,
+                openalex_resolver=openalex_resolver,
+                semanticscholar_resolver=self.semanticscholar_tool,
+            )
+            logger.info('Initialized CitationResolutionChain with ArXiv support')
+
+        return self._resolution_chain
+
+    def _get_enrichment_service(self) -> CitationEnrichmentService:
+        """
+        Get or initialize the enrichment service (lazy initialization).
+
+        Returns:
+            CitationEnrichmentService instance
+        """
+        if self._enrichment_service is None:
+            # Extract API keys from config
+            crossref_api_key = getattr(self.config.api_keys, 'crossref_api_key', None)
+            openalex_email = getattr(self.config.api_keys, 'openalex_email', None)
+            s2_api_key = getattr(self.config.api_keys, 'semanticscholar_api_key', None)
+
+            self._enrichment_service = CitationEnrichmentService(
+                crossref_api_key=crossref_api_key,
+                openalex_email=openalex_email,
+                s2_api_key=s2_api_key,
+            )
+            logger.info('Initialized CitationEnrichmentService')
+
+        return self._enrichment_service
+
+    def enhance_with_resolution_chain(
+        self, citations: List[Citation]
+    ) -> List[Citation]:
+        """
+        Enhance citations using the new resolution chain and enrichment service.
+
+        This method provides improved citation resolution by:
+        1. Using CitationResolutionChain to resolve DOIs first
+        2. Using CitationEnrichmentService to fetch full metadata
+        3. Maintaining backward compatibility with existing enhance() methods
+        4. Logging resolution statistics
+
+        Args:
+            citations: List of citations to enhance
+
+        Returns:
+            List of enhanced citations with resolved metadata
+        """
+        if not citations:
+            return []
+
+        logger.info(
+            f'Starting enhanced citation resolution for {len(citations)} citations '
+            f'using new resolution chain'
+        )
+
+        # Get resolution chain and enrichment service
+        resolution_chain = self._get_resolution_chain()
+        enrichment_service = self._get_enrichment_service()
+
+        try:
+            # Run async resolution in a new event loop
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            try:
+                # Step 1: Resolve DOIs using resolution chain
+                logger.info('Step 1: Resolving citations through resolution chain...')
+                resolution_results = loop.run_until_complete(
+                    resolution_chain.batch_resolve(citations, parallel=True)
+                )
+
+                # Log resolution statistics
+                stats = resolution_chain.get_statistics()
+                logger.info(
+                    f'Resolution chain statistics:\n'
+                    f'  Total processed: {stats["total_processed"]}\n'
+                    f'  Already has DOI: {stats["already_has_doi"]}\n'
+                    f'  Resolved via Crossref: {stats["resolved_crossref"]}\n'
+                    f'  Resolved via OpenAlex: {stats["resolved_openalex"]}\n'
+                    f'  Resolved via Semantic Scholar: {stats["resolved_semanticscholar"]}\n'
+                    f'  Unresolved: {stats["unresolved"]}\n'
+                    f'  High confidence: {stats["high_confidence"]}\n'
+                    f'  Medium confidence: {stats["medium_confidence"]}\n'
+                    f'  Low confidence: {stats["low_confidence"]}'
+                )
+
+                # Step 2: Apply resolved data back to citations
+                logger.info('Step 2: Applying resolved data to citations...')
+                enhanced_citations = self._apply_resolution_results(
+                    citations, resolution_results
+                )
+
+                # Step 3: Enrich with full metadata using enrichment service
+                logger.info('Step 3: Enriching citations with full metadata...')
+                enriched_citations = loop.run_until_complete(
+                    enrichment_service.batch_enrich(resolution_results)
+                )
+
+                # Log enrichment statistics
+                enrich_stats = enrichment_service.get_statistics()
+                logger.info(
+                    f'Enrichment service statistics:\n'
+                    f'  Total enriched: {enrich_stats["total_enriched"]}\n'
+                    f'  Crossref enrichments: {enrich_stats["crossref_enrichments"]}\n'
+                    f'  OpenAlex enrichments: {enrich_stats["openalex_enrichments"]}\n'
+                    f'  Semantic Scholar enrichments: {enrich_stats["s2_enrichments"]}\n'
+                    f'  Errors: {enrich_stats["errors"]}\n'
+                    f'  Retries: {enrich_stats["retries"]}'
+                )
+
+                # Close async resources
+                loop.run_until_complete(resolution_chain.close())
+                loop.run_until_complete(enrichment_service.close())
+
+                logger.info(
+                    f'Enhanced citation resolution complete: {len(enriched_citations)} '
+                    f'citations processed'
+                )
+
+                return enriched_citations
+
+            finally:
+                loop.close()
+
+        except Exception as e:
+            logger.error(
+                f'Error in enhanced citation resolution: {e}',
+                exc_info=True
+            )
+            # Fallback to original citations
+            return citations
+
+    def _apply_resolution_results(
+        self,
+        citations: List[Citation],
+        results: List[ResolutionResult]
+    ) -> List[Citation]:
+        """
+        Apply resolution results back to original citations.
+
+        Args:
+            citations: Original citations
+            results: Resolution results from resolution chain
+
+        Returns:
+            Citations with resolved data applied
+        """
+        for citation, result in zip(citations, results):
+            if result.status in (
+                CitationResolutionStatus.RESOLVED,
+                CitationResolutionStatus.PARTIAL
+            ) and result.matched_data:
+                # Update citation with resolved data (only non-None fields)
+                if result.matched_data.get('doi') and not citation.doi:
+                    citation.doi = result.matched_data['doi']
+
+                if result.matched_data.get('title') and not citation.title:
+                    citation.title = result.matched_data['title']
+
+                if result.matched_data.get('authors') and not citation.authors:
+                    citation.authors = result.matched_data['authors']
+
+                if result.matched_data.get('year') and not citation.year:
+                    citation.year = result.matched_data['year']
+
+                if result.matched_data.get('journal') and not citation.journal:
+                    citation.journal = result.matched_data['journal']
+
+                if result.matched_data.get('volume') and not citation.volume:
+                    citation.volume = result.matched_data['volume']
+
+                if result.matched_data.get('issue') and not citation.issue:
+                    citation.issue = result.matched_data['issue']
+
+                if result.matched_data.get('pages') and not citation.pages:
+                    citation.pages = result.matched_data['pages']
+
+                if result.matched_data.get('url') and not citation.url:
+                    citation.url = result.matched_data['url']
+
+                if result.matched_data.get('abstract') and not citation.abstract:
+                    citation.abstract = result.matched_data['abstract']
+
+                if result.matched_data.get('citation_count') and not citation.citation_count:
+                    citation.citation_count = result.matched_data['citation_count']
+
+                logger.debug(
+                    f'Applied resolution result to citation: '
+                    f'status={result.status}, confidence={result.confidence_score:.2f}, '
+                    f'source={result.source}'
+                )
+
+        return citations
