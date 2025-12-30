@@ -91,15 +91,90 @@ class CitationGraph:
 
         logger.info('CitationGraph initialized (database-only mode)')
 
+    def _run_async(self, coro):
+        """
+        Run async function in appropriate context.
+
+        Detects if we're already in an async context and handles accordingly:
+        - If in async context: schedules task in existing loop
+        - If not: creates new loop with asyncio.run()
+
+        Args:
+            coro: Coroutine to execute
+
+        Returns:
+            Result of the coroutine execution
+        """
+        import asyncio
+
+        try:
+            # Try to get the running loop
+            loop = asyncio.get_running_loop()
+            # We're in an async context - need to handle this carefully
+            # We can't use run_until_complete on a running loop, so we'll
+            # need to use a different approach
+            import concurrent.futures
+            import threading
+
+            # Create a new thread with its own event loop
+            result = [None]
+            exception = [None]
+
+            def run_in_thread():
+                try:
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+                    result[0] = new_loop.run_until_complete(coro)
+                    new_loop.close()
+                except Exception as e:
+                    exception[0] = e
+
+            thread = threading.Thread(target=run_in_thread)
+            thread.start()
+            thread.join()
+
+            if exception[0]:
+                raise exception[0]
+            return result[0]
+
+        except RuntimeError:
+            # No running loop - safe to use asyncio.run()
+            return asyncio.run(coro)
+
     def _load_graph(self) -> None:
         """
-        Load the citation graph from PostgreSQL.
+        Load the citation graph from PostgreSQL, with fallback to legacy JSON file.
         """
         try:
             self._load_from_postgres()
         except Exception as e:
             logger.error(f'Error loading citation graph from PostgreSQL: {e}')
-            self.graph = nx.DiGraph()
+            # Try loading from legacy JSON file as fallback
+            try:
+                self._load_from_json_legacy()
+            except Exception as json_error:
+                logger.warning(f'Failed to load from legacy JSON file: {json_error}')
+                self.graph = nx.DiGraph()
+
+    def _load_from_json_legacy(self) -> None:
+        """Load graph from legacy JSON file (fallback for migration)."""
+        from thoth.config import Config
+
+        config = Config()
+        json_path = config.graph_storage_path
+
+        if not Path(json_path).exists():
+            raise FileNotFoundError(f'Legacy graph file not found: {json_path}')
+
+        logger.info(f'Loading graph from legacy JSON file: {json_path}')
+
+        with open(json_path) as f:
+            data = json.load(f)
+
+        # Convert node-link JSON to NetworkX graph
+        self.graph = nx.node_link_graph(data, edges='links')
+
+        logger.success(f'Loaded {len(self.graph.nodes)} nodes and {len(self.graph.edges)} edges from legacy JSON file')
 
     def _load_from_postgres(self) -> None:
         """Load graph from PostgreSQL."""
@@ -144,7 +219,7 @@ class CitationGraph:
             finally:
                 await conn.close()
 
-        asyncio.get_event_loop().run_until_complete(load())
+        self._run_async(load())
 
     def _save_graph(self) -> None:
         """
@@ -159,6 +234,7 @@ class CitationGraph:
         """Save graph to PostgreSQL."""
         import asyncpg
         import asyncio
+        import json as json_lib
         from thoth.config import Config
 
         config = Config()
@@ -169,89 +245,357 @@ class CitationGraph:
         async def save():
             conn = await asyncpg.connect(db_url)
             try:
+                # Track successes and failures
+                nodes_processed = 0
+                nodes_inserted = 0
+                nodes_updated = 0
+                nodes_skipped = 0
+
                 # Save papers (nodes) with markdown content
                 for node_id, data in self.graph.nodes(data=True):
-                    # Try to load markdown content if path exists
-                    markdown_content = None
-                    if data.get('markdown_path'):
-                        try:
-                            from pathlib import Path
-                            markdown_file = Path(data['markdown_path'])
-                            if markdown_file.exists():
-                                markdown_content = markdown_file.read_text(encoding='utf-8')
-                        except Exception:
-                            pass
+                    try:
+                        nodes_processed += 1
+                        # Get metadata dict (contains doi, arxiv_id, title, etc.)
+                        metadata = data.get('metadata', {})
 
-                    # Get metadata dict (contains doi, arxiv_id, title, etc.)
-                    metadata = data.get('metadata', {})
+                        # Skip nodes without title (required field)
+                        if not metadata.get('title'):
+                            nodes_skipped += 1
+                            continue
 
-                    # Get analysis data - stored as 'analysis' in graph, save as 'analysis_data' in DB
-                    analysis_data = data.get('analysis', {})
+                        # Try to load markdown content if path exists
+                        markdown_content = None
+                        if data.get('markdown_path'):
+                            try:
+                                from pathlib import Path
+                                markdown_file = Path(data['markdown_path'])
+                                if markdown_file.exists():
+                                    markdown_content = markdown_file.read_text(encoding='utf-8')
+                            except Exception:
+                                pass
 
-                    await conn.execute("""
-                        INSERT INTO papers (doi, arxiv_id, title, authors, abstract, year, venue, pdf_path, note_path, markdown_content, analysis_data, llm_model)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-                        ON CONFLICT (doi) DO UPDATE SET
-                            title = EXCLUDED.title,
-                            authors = EXCLUDED.authors,
-                            year = EXCLUDED.year,
-                            pdf_path = EXCLUDED.pdf_path,
-                            note_path = EXCLUDED.note_path,
-                            markdown_content = EXCLUDED.markdown_content,
-                            analysis_data = EXCLUDED.analysis_data,
-                            llm_model = EXCLUDED.llm_model,
-                            updated_at = CURRENT_TIMESTAMP
-                    """,
-                        metadata.get('doi'),
-                        metadata.get('arxiv_id'),
-                        metadata.get('title'),
-                        metadata.get('authors', []),
-                        metadata.get('abstract'),
-                        metadata.get('year'),
-                        metadata.get('venue'),
-                        data.get('pdf_path'),
-                        data.get('note_path'),
-                        markdown_content,
-                        analysis_data,
-                        data.get('llm_model')
-                    )
+                        # Get analysis data - stored as 'analysis' in graph, save as 'analysis_data' in DB
+                        analysis_data = data.get('analysis', {})
 
-                # Save citations (edges)
-                for source, target, data in self.graph.edges(data=True):
-                    await conn.execute("""
-                        INSERT INTO citations (citing_paper_id, cited_paper_id, citation_context)
-                        VALUES (
-                            (SELECT id FROM papers WHERE doi = $1 OR title = $1 LIMIT 1),
-                            (SELECT id FROM papers WHERE doi = $2 OR title = $2 LIMIT 1),
-                            $3
-                        )
-                        ON CONFLICT (citing_paper_id, cited_paper_id) DO NOTHING
-                    """, source, target, data.get('context'))
+                        # Extract tags from analysis_data to also store in keywords field
+                        keywords = analysis_data.get('tags', []) if isinstance(analysis_data, dict) else []
 
-                logger.info(f'Saved graph to PostgreSQL')
+                        # Convert lists and dicts to JSON strings for JSONB columns
+                        authors_json = json_lib.dumps(metadata.get('authors', []))
+                        analysis_json = json_lib.dumps(analysis_data) if analysis_data else None
+                        keywords_json = json_lib.dumps(keywords) if keywords else None
+
+                        # Handle multiple unique constraints (doi, arxiv_id, title) by checking for existing paper first
+                        doi = metadata.get('doi')
+                        arxiv_id = metadata.get('arxiv_id')
+                        title = metadata.get('title')
+
+                        # Validate year - must be >= 1900 per database constraint
+                        year = metadata.get('year')
+                        if year and (year < 1900 or year > 2100):
+                            year = None  # Set to NULL if outside valid range
+
+                        # Try to find existing paper by any identifier (check all unique constraints)
+                        existing = await conn.fetchrow("""
+                            SELECT id FROM papers
+                            WHERE ($1::text IS NOT NULL AND $1 != '' AND doi = $1)
+                               OR ($2::text IS NOT NULL AND $2 != '' AND arxiv_id = $2)
+                               OR ($3::text IS NOT NULL AND title = $3)
+                            LIMIT 1
+                        """, doi, arxiv_id, title)
+
+                        if existing:
+                            # Update existing paper
+                            await conn.execute("""
+                                UPDATE papers SET
+                                    doi = COALESCE(NULLIF($1, ''), doi),
+                                    arxiv_id = COALESCE(NULLIF($2, ''), arxiv_id),
+                                    title = $3,
+                                    authors = $4::jsonb,
+                                    abstract = COALESCE($5, abstract),
+                                    year = COALESCE($6, year),
+                                    venue = COALESCE($7, venue),
+                                    pdf_path = COALESCE($8, pdf_path),
+                                    note_path = COALESCE($9, note_path),
+                                    markdown_content = COALESCE($10, markdown_content),
+                                    analysis_data = $11::jsonb,
+                                    llm_model = COALESCE($12, llm_model),
+                                    keywords = $13::jsonb,
+                                    updated_at = CURRENT_TIMESTAMP
+                                WHERE id = $14
+                            """,
+                                doi, arxiv_id, title, authors_json,
+                                metadata.get('abstract'), year, metadata.get('venue'),
+                                data.get('pdf_path'), data.get('note_path'), markdown_content,
+                                analysis_json, data.get('llm_model'), keywords_json,
+                                existing['id']
+                            )
+                            nodes_updated += 1
+                        else:
+                            # Try to insert new paper - may still fail due to unique constraints
+                            try:
+                                await conn.execute("""
+                                    INSERT INTO papers (doi, arxiv_id, title, authors, abstract, year, venue, pdf_path, note_path, markdown_content, analysis_data, llm_model, keywords)
+                                    VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13::jsonb)
+                                """,
+                                    doi, arxiv_id, title, authors_json,
+                                    metadata.get('abstract'), year, metadata.get('venue'),
+                                    data.get('pdf_path'), data.get('note_path'), markdown_content,
+                                    analysis_json, data.get('llm_model'), keywords_json
+                                )
+                                nodes_inserted += 1
+                            except asyncpg.exceptions.UniqueViolationError:
+                                # If insert fails due to unique constraint, find and update the conflicting paper
+                                existing = await conn.fetchrow("""
+                                    SELECT id FROM papers
+                                    WHERE ($1::text IS NOT NULL AND $1 != '' AND doi = $1)
+                                       OR ($2::text IS NOT NULL AND $2 != '' AND arxiv_id = $2)
+                                       OR ($3::text IS NOT NULL AND title = $3)
+                                    LIMIT 1
+                                """, doi, arxiv_id, title)
+                                if existing:
+                                    await conn.execute("""
+                                        UPDATE papers SET
+                                            doi = COALESCE(NULLIF($1, ''), doi),
+                                            arxiv_id = COALESCE(NULLIF($2, ''), arxiv_id),
+                                            title = $3,
+                                            authors = $4::jsonb,
+                                            abstract = COALESCE($5, abstract),
+                                            year = COALESCE($6, year),
+                                            venue = COALESCE($7, venue),
+                                            pdf_path = COALESCE($8, pdf_path),
+                                            note_path = COALESCE($9, note_path),
+                                            markdown_content = COALESCE($10, markdown_content),
+                                            analysis_data = $11::jsonb,
+                                            llm_model = COALESCE($12, llm_model),
+                                            keywords = $13::jsonb,
+                                            updated_at = CURRENT_TIMESTAMP
+                                        WHERE id = $14
+                                    """,
+                                        doi, arxiv_id, title, authors_json,
+                                        metadata.get('abstract'), year, metadata.get('venue'),
+                                        data.get('pdf_path'), data.get('note_path'), markdown_content,
+                                        analysis_json, data.get('llm_model'), keywords_json,
+                                        existing['id']
+                                    )
+                                    nodes_updated += 1
+                    except Exception as e:
+                        # Log error but continue processing other nodes
+                        logger.debug(f'Error processing node {node_id}: {e}')
+                        nodes_skipped += 1
+                        continue
+
+                # Save citations (edges) with full metadata
+                for source, target, edge_data in self.graph.edges(data=True):
+                    try:
+                        # Extract all citation metadata from edge data
+                        citation_text = edge_data.get('citation_text') or edge_data.get('data', {}).get('citation_text')
+                        citation_context = edge_data.get('context') or edge_data.get('citation_context')
+                        extracted_title = edge_data.get('extracted_title') or edge_data.get('data', {}).get('extracted_title')
+                        extracted_authors = edge_data.get('extracted_authors') or edge_data.get('data', {}).get('extracted_authors')
+                        extracted_year = edge_data.get('extracted_year') or edge_data.get('data', {}).get('extracted_year')
+                        extracted_venue = edge_data.get('extracted_venue') or edge_data.get('data', {}).get('extracted_venue')
+                        is_influential = edge_data.get('is_influential') or edge_data.get('data', {}).get('is_influential')
+                        section = edge_data.get('section') or edge_data.get('data', {}).get('section')
+                        citation_order = edge_data.get('citation_order') or edge_data.get('data', {}).get('citation_order')
+
+                        # Convert authors list to JSON if present
+                        authors_json = json_lib.dumps(extracted_authors) if extracted_authors else None
+
+                        # Get node metadata to access all available identifiers
+                        source_node_data = self.graph.nodes[source]
+                        target_node_data = self.graph.nodes[target]
+
+                        source_metadata = source_node_data.get('metadata', {})
+                        target_metadata = target_node_data.get('metadata', {})
+
+                        # Extract identifiers with priority: DOI > ArXiv > Title
+                        # Strip version suffixes from arxiv IDs (e.g., 1802.04223v2 -> 1802.04223)
+                        import re
+
+                        def get_identifiers(node_id, metadata):
+                            """Extract all available identifiers from node metadata."""
+                            identifiers = {}
+
+                            # DOI (highest priority)
+                            doi = metadata.get('doi')
+                            if doi:
+                                identifiers['doi'] = doi
+
+                            # ArXiv ID
+                            arxiv_id = metadata.get('arxiv_id')
+                            if arxiv_id:
+                                # Strip version suffix
+                                identifiers['arxiv'] = re.sub(r'v\d+$', '', arxiv_id)
+
+                            # Title (fallback)
+                            title = metadata.get('title')
+                            if title:
+                                identifiers['title'] = title
+
+                            return identifiers
+
+                        source_ids = get_identifiers(source, source_metadata)
+                        target_ids = get_identifiers(target, target_metadata)
+
+                        # Build SQL query that tries DOI > ArXiv > Title for each node
+                        # This ensures we find papers even if they were indexed by title but now have DOI
+                        source_query = """(
+                            SELECT id FROM papers
+                            WHERE ($1::text IS NOT NULL AND doi = $1)
+                               OR ($2::text IS NOT NULL AND arxiv_id = $2)
+                               OR ($3::text IS NOT NULL AND title = $3)
+                            LIMIT 1
+                        )"""
+
+                        target_query = """(
+                            SELECT id FROM papers
+                            WHERE ($4::text IS NOT NULL AND doi = $4)
+                               OR ($5::text IS NOT NULL AND arxiv_id = $5)
+                               OR ($6::text IS NOT NULL AND title = $6)
+                            LIMIT 1
+                        )"""
+
+                        await conn.execute(f"""
+                            INSERT INTO citations (
+                                citing_paper_id,
+                                cited_paper_id,
+                                citation_text,
+                                citation_context,
+                                extracted_title,
+                                extracted_authors,
+                                extracted_year,
+                                extracted_venue,
+                                is_influential,
+                                section,
+                                citation_order
+                            )
+                            VALUES (
+                                {source_query},
+                                {target_query},
+                                $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15
+                            )
+                            ON CONFLICT (citing_paper_id, cited_paper_id) DO UPDATE SET
+                                citation_text = COALESCE(EXCLUDED.citation_text, citations.citation_text),
+                                citation_context = COALESCE(EXCLUDED.citation_context, citations.citation_context),
+                                extracted_title = COALESCE(EXCLUDED.extracted_title, citations.extracted_title),
+                                extracted_authors = COALESCE(EXCLUDED.extracted_authors, citations.extracted_authors),
+                                extracted_year = COALESCE(EXCLUDED.extracted_year, citations.extracted_year),
+                                extracted_venue = COALESCE(EXCLUDED.extracted_venue, citations.extracted_venue),
+                                is_influential = COALESCE(EXCLUDED.is_influential, citations.is_influential),
+                                section = COALESCE(EXCLUDED.section, citations.section),
+                                citation_order = COALESCE(EXCLUDED.citation_order, citations.citation_order),
+                                updated_at = CURRENT_TIMESTAMP
+                        """,
+                        source_ids.get('doi'), source_ids.get('arxiv'), source_ids.get('title'),
+                        target_ids.get('doi'), target_ids.get('arxiv'), target_ids.get('title'),
+                        citation_text, citation_context, extracted_title,
+                        authors_json, extracted_year, extracted_venue, is_influential,
+                        section, citation_order)
+                    except Exception as e:
+                        # Log error but continue processing other citations
+                        logger.debug(f'Error saving citation from {source} to {target}: {e}')
+                        continue
+
+                logger.info(f'Saved graph to PostgreSQL: {nodes_inserted} inserted, {nodes_updated} updated, {nodes_skipped} skipped from {nodes_processed} nodes')
             finally:
                 await conn.close()
 
-        asyncio.get_event_loop().run_until_complete(save())
+        self._run_async(save())
+
+    def _save_markdown_content_to_postgres(self, article_id: str, markdown_content: str, markdown_path: str) -> None:
+        """
+        Save markdown_content to papers table for embeddings generation.
+
+        Args:
+            article_id: The article ID (doi:xxx, arxiv:xxx, or title:xxx)
+            markdown_content: Full markdown text without images (for embeddings)
+            markdown_path: Path to markdown file (for reference)
+        """
+        import asyncpg
+        import asyncio
+        from thoth.config import Config
+
+        config = Config()
+        db_url = getattr(config.secrets, 'database_url', None)
+
+        if not db_url:
+            logger.warning("No database_url configured, skipping markdown_content save")
+            return
+
+        async def save():
+            conn = await asyncpg.connect(db_url)
+            try:
+                # Extract identifier from article_id (format: "doi:10.1234" or "arxiv:1234.5678" or "title:xxx")
+                id_type, id_value = article_id.split(':', 1) if ':' in article_id else ('title', article_id)
+
+                # Find paper by identifier
+                if id_type == 'doi':
+                    result = await conn.execute("""
+                        UPDATE papers
+                        SET markdown_content = $1,
+                            markdown_path = $2
+                        WHERE doi = $3
+                    """, markdown_content, markdown_path, id_value)
+                elif id_type == 'arxiv':
+                    result = await conn.execute("""
+                        UPDATE papers
+                        SET markdown_content = $1,
+                            markdown_path = $2
+                        WHERE arxiv_id = $3
+                    """, markdown_content, markdown_path, id_value)
+                else:  # title-based
+                    result = await conn.execute("""
+                        UPDATE papers
+                        SET markdown_content = $1,
+                            markdown_path = $2
+                        WHERE title = $3
+                    """, markdown_content, markdown_path, id_value)
+
+                if result.split()[-1] == '0':
+                    logger.warning(f"No paper found with {id_type}={id_value}, markdown_content not saved")
+                else:
+                    logger.info(f"Saved markdown_content for {article_id} ({len(markdown_content)} chars)")
+
+            except Exception as e:
+                logger.error(f'Error saving markdown_content to PostgreSQL: {e}')
+            finally:
+                await conn.close()
+
+        self._run_async(save())
 
     def _generate_article_id(self, citation: Citation) -> str:
         """
-        Generate a consistent article ID from a citation.
+        Generate a consistent article ID from a citation using ID hierarchy.
+
+        Priority: DOI > ArXiv ID > backup_id > Title
+        This ensures we use the most reliable and standardized identifier first.
 
         Args:
             citation: Citation object containing article metadata
 
         Returns:
-            str: The generated article ID
+            str: The generated article ID (e.g., 'doi:10.1234/example', 'arxiv:2301.12345', 'title:Paper Title')
         """
+        # Priority 1: DOI (most reliable, globally unique)
         if citation.doi:
             return f'doi:{citation.doi}'
-        elif hasattr(citation, 'backup_id') and citation.backup_id:
-            return citation.backup_id
-        else:
-            return f'title:{self._sanitize_title(citation.title or citation.text)}'
 
-    def add_article_from_citation(self, citation: Citation) -> str:
+        # Priority 2: ArXiv ID (reliable for preprints)
+        if hasattr(citation, 'arxiv_id') and citation.arxiv_id:
+            # Strip version suffix if present (e.g., 2301.12345v2 -> 2301.12345)
+            import re
+            arxiv_id = re.sub(r'v\d+$', '', citation.arxiv_id)
+            return f'arxiv:{arxiv_id}'
+
+        # Priority 3: backup_id (from external services like Semantic Scholar)
+        if hasattr(citation, 'backup_id') and citation.backup_id:
+            return citation.backup_id
+
+        # Priority 4: Title (fallback, least reliable due to variations)
+        return f'title:{self._sanitize_title(citation.title or citation.text)}'
+
+    def add_article_from_citation(self, citation: Citation, batch_mode: bool = False) -> str:
         """
         Add an article to the citation graph using a Citation object.
 
@@ -281,7 +625,7 @@ class CitationGraph:
         # Add article to graph
         # For articles added this way, pdf_path and markdown_path are not directly known from citation obj.  # noqa: W505
         # They are typically set for the main processed article.
-        self.add_article(article_id, metadata, citation.obsidian_uri)
+        self.add_article(article_id, metadata, citation.obsidian_uri, batch_mode=batch_mode)
 
         return article_id
 
@@ -309,6 +653,7 @@ class CitationGraph:
         markdown_path: Path | None = None,
         analysis: AnalysisResponse | dict[str, Any] | None = None,
         llm_model: str | None = None,
+        batch_mode: bool = False,
     ) -> None:
         """
         Add an article to the citation graph.
@@ -343,11 +688,9 @@ class CitationGraph:
                 obsidian_path  # Should be the note stub/filename
             )
         if pdf_path:
-            node_data['pdf_path'] = pdf_path.name  # Store as string (name/stub)
+            node_data['pdf_path'] = str(pdf_path)  # Store full path as string
         if markdown_path:
-            node_data['markdown_path'] = (
-                markdown_path.name
-            )  # Store as string (name/stub)
+            node_data['markdown_path'] = str(markdown_path)  # Store full path as string
         if analysis:
             if isinstance(analysis, AnalysisResponse):
                 node_data['analysis'] = analysis.model_dump()
@@ -371,13 +714,15 @@ class CitationGraph:
 
             logger.info(f'Updated article in citation graph: {article_title}')
 
-        self._save_graph()
+        if not batch_mode:
+            self._save_graph()
 
     def add_citation(
         self,
         source_id: str,
         target_id: str,
         citation_data: dict[str, Any] | None = None,
+        batch_mode: bool = False,
     ) -> None:
         """
         Add a citation relationship between two articles.
@@ -421,7 +766,8 @@ class CitationGraph:
             logger.info(f'Updated citation from {source_id} to {target_id}')
 
         # Save the updated graph
-        self._save_graph()
+        if not batch_mode:
+            self._save_graph()
 
     def process_citations(
         self,
@@ -430,6 +776,7 @@ class CitationGraph:
         analysis: AnalysisResponse,
         citations: list[Citation],
         llm_model: str | None = None,
+        no_images_markdown: str | None = None,
     ) -> str | None:
         """
         Process a list of citations for an article.
@@ -440,6 +787,7 @@ class CitationGraph:
             analysis: AnalysisResponse object
             citations: List of Citation objects
             llm_model: Name of the LLM model used for analysis
+            no_images_markdown: Full markdown content without images (for embeddings)
 
         Returns:
             str | None: The article ID of the processed article or None if it exits early
@@ -510,16 +858,36 @@ class CitationGraph:
             llm_model=llm_model,
         )
 
+        # Save markdown_content to papers table for embeddings
+        if no_images_markdown:
+            self._save_markdown_content_to_postgres(article_id, no_images_markdown, str(markdown_path))
+
         # Process other citations (references made by the main article)
+        # Use batch mode to defer saves until all citations are processed
+        logger.info(f'Processing {len(citations) - 1} reference citations in batch mode')
         for citation in citations:
             if citation is article_citation:  # Skip the main article itself
                 continue
 
-            # Add the cited article to the graph and get its ID
-            target_id = self.add_article_from_citation(citation)
+            # Add the cited article to the graph and get its ID (batch mode)
+            target_id = self.add_article_from_citation(citation, batch_mode=True)
 
-            # Add the citation relationship from the main article to the cited article
-            self.add_citation(article_id, target_id, {'citation_text': citation.text})
+            # Add the citation relationship with full metadata (batch mode)
+            citation_data = {
+                'citation_text': citation.text,
+                'extracted_title': citation.title,
+                'extracted_authors': citation.authors,
+                'extracted_year': citation.year,
+                'extracted_venue': citation.venue or citation.journal,
+                'is_influential': citation.influential_citation_count and citation.influential_citation_count > 0,
+                # Note: citation_context, section, and citation_order would need to come from text analysis
+                # These are not available in the Citation object itself
+            }
+            self.add_citation(article_id, target_id, citation_data, batch_mode=True)
+
+        # Save once after all citations are processed
+        logger.info(f'Batch processing complete, saving {len(citations) - 1} citations to database')
+        self._save_graph()
 
         # After processing all citations for the current article, regenerate notes for connected articles  # noqa: W505
         if self.service_manager or self.note_generator:
@@ -1017,19 +1385,19 @@ class CitationGraph:
         node_data = self.graph.nodes[article_id]
         updated_paths = False
         if new_pdf_path and new_pdf_path.exists():
-            node_data['pdf_path'] = new_pdf_path.name
+            node_data['pdf_path'] = str(new_pdf_path)  # Store full path
             updated_paths = True
-            logger.info(f'Updated pdf_path for {article_id} to {new_pdf_path.name}')
+            logger.info(f'Updated pdf_path for {article_id} to {new_pdf_path}')
         else:
             logger.warning(
                 f'New PDF path for {article_id} is invalid or file does not exist: {new_pdf_path}. Path not updated.'
             )
 
         if new_markdown_path and new_markdown_path.exists():
-            node_data['markdown_path'] = new_markdown_path.name
+            node_data['markdown_path'] = str(new_markdown_path)  # Store full path
             updated_paths = True
             logger.info(
-                f'Updated markdown_path for {article_id} to {new_markdown_path.name}'
+                f'Updated markdown_path for {article_id} to {new_markdown_path}'
             )
         else:
             logger.warning(

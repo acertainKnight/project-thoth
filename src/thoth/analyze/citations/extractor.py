@@ -91,7 +91,8 @@ class ReferenceExtractor:
         logger.debug('Extracting references section text')
         if not heading:
             logger.warning('No references section heading found to extract text.')
-            return ''
+            # Fallback: Look for plain text "References" (common in OCR markdowns)
+            return self._extract_references_plain_text(content)
 
         heading_positions = []
         for match in self.HEADING_REGEX.finditer(content):
@@ -114,7 +115,8 @@ class ReferenceExtractor:
 
         if not target_heading_info:
             logger.warning(f"References heading '{heading}' not located in document")
-            return ''
+            # Fallback: Look for plain text "References" (common in OCR markdowns)
+            return self._extract_references_plain_text(content)
 
         _, heading_end_pos, _ = target_heading_info
 
@@ -126,3 +128,36 @@ class ReferenceExtractor:
             f'Extracted references section with {len(section_text)} characters'
         )
         return section_text
+
+    def _extract_references_plain_text(self, content: str) -> str:
+        """
+        Fallback method to extract references when no markdown heading is found.
+        Common in OCR-processed markdowns where 'References' appears as plain text.
+        """
+        import re
+
+        # Try to find "References" or "REFERENCES" or "Bibliography" as standalone text
+        patterns = [
+            r'\n(References)\n',
+            r'\n(REFERENCES)\n',
+            r'\n(Bibliography)\n',
+            r'\n(BIBLIOGRAPHY)\n'
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, content)
+            if match:
+                start_pos = match.end()
+                logger.info(f'Found plain text references section at position {start_pos}')
+
+                # Extract from this position to end of document
+                # (or to next major section if we can identify it)
+                section_text = content[start_pos:].strip()
+
+                logger.debug(
+                    f'Extracted plain text references section with {len(section_text)} characters'
+                )
+                return section_text
+
+        logger.warning('No references section found in markdown headings or plain text')
+        return ''

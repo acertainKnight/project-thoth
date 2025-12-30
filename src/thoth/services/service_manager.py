@@ -234,8 +234,12 @@ class ServiceManager:
             citation_tracker: CitationGraph instance
         """
         self._ensure_initialized()
+        logger.info(f'Setting citation tracker with {len(citation_tracker.graph.nodes) if citation_tracker else 0} nodes')
         if self._services['tag'] is not None:
             self._services['tag']._citation_tracker = citation_tracker
+            logger.info(f'Citation tracker set in TagService: {len(citation_tracker.graph.nodes) if citation_tracker else 0} nodes')
+        else:
+            logger.warning('TagService is None, cannot set citation tracker')
         self._services['citation']._citation_tracker = citation_tracker
 
     def set_filter_function(self, filter_func: Any) -> None:

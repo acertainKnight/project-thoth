@@ -77,14 +77,15 @@ class VectorStoreManager:
             await conn.execute('CREATE EXTENSION IF NOT EXISTS vector')
             logger.debug('Ensured pgvector extension is enabled')
 
-    def add_documents(
+    async def add_documents_async(
         self,
         documents: list[Document],
         paper_id: UUID | None = None,
         **kwargs: Any
     ) -> list[str]:
         """
-        Add documents to the vector store.
+        Add documents to the vector store (async version).
+        Use this from async contexts to avoid event loop conflicts.
 
         Args:
             documents: List of LangChain Document objects
@@ -94,7 +95,39 @@ class VectorStoreManager:
         Returns:
             List of document IDs (UUIDs as strings)
         """
-        return asyncio.run(self._add_documents_async(documents, paper_id, **kwargs))
+        return await self._add_documents_async(documents, paper_id, **kwargs)
+
+    def add_documents(
+        self,
+        documents: list[Document],
+        paper_id: UUID | None = None,
+        **kwargs: Any
+    ) -> list[str]:
+        """
+        Add documents to the vector store (sync wrapper).
+        Detects if running in async context and provides helpful error.
+
+        Args:
+            documents: List of LangChain Document objects
+            paper_id: UUID of the paper these chunks belong to
+            **kwargs: Additional metadata
+
+        Returns:
+            List of document IDs (UUIDs as strings)
+        """
+        try:
+            loop = asyncio.get_running_loop()
+            raise RuntimeError(
+                "add_documents() called from async context. "
+                "Use 'await add_documents_async()' instead to avoid event loop conflicts."
+            )
+        except RuntimeError as e:
+            if "no running event loop" in str(e).lower():
+                # Safe to use asyncio.run() - no loop running
+                return asyncio.run(self._add_documents_async(documents, paper_id, **kwargs))
+            else:
+                # Already in async context - raise helpful error
+                raise
 
     async def _add_documents_async(
         self,

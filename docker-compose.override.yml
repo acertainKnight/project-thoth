@@ -42,3 +42,13 @@ services:
       - "8081:8001"  # MCP server (remapped to avoid local dev conflicts)
       - "5678:5678"  # Debug port
 
+  # ==============================================================================
+  # Thoth Monitor Overrides
+  # Mount source code for hot-reload development
+  # ==============================================================================
+  thoth-monitor:
+    volumes:
+      # Mount source code for hot-reload development
+      - ./src:/app/src
+      - ./pyproject.toml:/app/pyproject.toml:ro
+

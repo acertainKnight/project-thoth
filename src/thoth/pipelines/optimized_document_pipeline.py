@@ -168,12 +168,15 @@ class OptimizedDocumentPipeline(BasePipeline):
             )
 
         # OCR conversion (potentially cached)
-        markdown_path, no_images_markdown = self._ocr_convert_optimized(pdf_path)
+        markdown_path, no_images_markdown_path = self._ocr_convert_optimized(pdf_path)
         self.logger.info(f'OCR conversion completed: {markdown_path}')
+
+        # Read no_images markdown content for embedding generation
+        no_images_markdown_content = no_images_markdown_path.read_text(encoding='utf-8')
 
         # Parallel analysis with dynamic worker scaling
         analysis, citations = self._parallel_analysis_and_citations_sync(
-            no_images_markdown
+            no_images_markdown_path
         )
 
         # PRIORITY 2: Generate note asynchronously using background executor
@@ -184,6 +187,7 @@ class OptimizedDocumentPipeline(BasePipeline):
             markdown_path=markdown_path,
             analysis=analysis,
             citations=citations,
+            no_images_markdown=no_images_markdown_content,
         )
         note_path, new_pdf_path, new_markdown_path = note_future.result()
         self.logger.info(f'Note generation completed: {note_path}')
@@ -198,8 +202,8 @@ class OptimizedDocumentPipeline(BasePipeline):
             },
         )
 
-        # Background RAG indexing with optimized thread pool
-        self._schedule_background_rag_indexing(new_markdown_path, note_path)
+        # Background RAG indexing with optimized thread pool (use no_images version for embeddings)
+        self._schedule_background_rag_indexing(no_images_markdown_path, note_path)
 
         return Path(note_path), Path(new_pdf_path), Path(new_markdown_path)
 
@@ -314,7 +318,7 @@ class OptimizedDocumentPipeline(BasePipeline):
             self.logger.warning(f'Failed to index documents to RAG system: {e}')
 
     def _schedule_background_rag_indexing(
-        self, markdown_path: str, note_path: str
+        self, markdown_path: str | Path, note_path: str | Path
     ) -> None:
         """Schedule background RAG indexing with optimized thread pool."""
 
@@ -413,7 +417,7 @@ class OptimizedDocumentPipeline(BasePipeline):
             return self.services.citation.extract_citations(markdown_path)
 
     def _generate_note(
-        self, pdf_path: Path, markdown_path: Path, analysis, citations: list[Citation]
+        self, pdf_path: Path, markdown_path: Path, analysis, citations: list[Citation], no_images_markdown: str | None = None
     ) -> tuple[str, str, str]:
         """Generate note using the note service."""
         note_path, new_pdf_path, new_markdown_path = self.services.note.create_note(
@@ -432,6 +436,7 @@ class OptimizedDocumentPipeline(BasePipeline):
             analysis=analysis,
             citations=citations,
             llm_model=llm_model,
+            no_images_markdown=no_images_markdown,
         )
 
         if article_id:
