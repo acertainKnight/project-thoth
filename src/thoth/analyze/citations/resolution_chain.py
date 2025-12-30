@@ -29,6 +29,10 @@ from typing import Any, Dict, List
 
 from loguru import logger
 
+from thoth.analyze.citations.arxiv_resolver import (
+    ArxivResolver,
+    ArxivMatch,
+)
 from thoth.analyze.citations.crossref_resolver import (
     CrossrefResolver,
     MatchCandidate as CrossrefMatch,
@@ -71,6 +75,7 @@ class CitationResolutionChain:
     def __init__(
         self,
         crossref_resolver: CrossrefResolver | None = None,
+        arxiv_resolver: ArxivResolver | None = None,
         openalex_resolver: OpenAlexResolver | None = None,
         semanticscholar_resolver: SemanticScholarAPI | None = None,
     ):
@@ -79,11 +84,13 @@ class CitationResolutionChain:
 
         Args:
             crossref_resolver: CrossRef API resolver instance
+            arxiv_resolver: ArXiv API resolver instance
             openalex_resolver: OpenAlex API resolver instance
             semanticscholar_resolver: Semantic Scholar API instance
         """
         # Initialize resolvers with defaults if not provided
         self.crossref_resolver = crossref_resolver or CrossrefResolver()
+        self.arxiv_resolver = arxiv_resolver or ArxivResolver()
         self.openalex_resolver = openalex_resolver or OpenAlexResolver()
         self.semanticscholar_resolver = semanticscholar_resolver or SemanticScholarAPI()
 
@@ -92,6 +99,7 @@ class CitationResolutionChain:
             'total_processed': 0,
             'already_has_doi': 0,
             'resolved_crossref': 0,
+            'resolved_arxiv': 0,
             'resolved_openalex': 0,
             'resolved_semanticscholar': 0,
             'unresolved': 0,
@@ -177,7 +185,21 @@ class CitationResolutionChain:
             self._stats['total_processed'] += 1
             return result
 
-        # Step 4: Try OpenAlex (better fuzzy matching than Crossref)
+        # Step 4: Try ArXiv (excellent for preprints and ML/AI papers)
+        logger.debug('Trying ArXiv resolver...')
+        result = await self._try_arxiv(citation, metadata, candidates)
+        if result and result.confidence_score >= HIGH_CONFIDENCE_THRESHOLD:
+            logger.info(
+                f'Found high-confidence match via ArXiv: '
+                f'score={result.confidence_score:.2f}, arxiv_id={result.matched_data.get("arxiv_id") if result.matched_data else None}'
+            )
+            result.metadata.processing_time_ms = (time.time() - start_time) * 1000
+            self._stats['resolved_arxiv'] += 1
+            self._stats['high_confidence'] += 1
+            self._stats['total_processed'] += 1
+            return result
+
+        # Step 5: Try OpenAlex (better fuzzy matching than Crossref)
         logger.debug('Trying OpenAlex resolver...')
         result = await self._try_openalex(citation, metadata, candidates)
         if result and result.confidence_score >= HIGH_CONFIDENCE_THRESHOLD:
@@ -191,7 +213,7 @@ class CitationResolutionChain:
             self._stats['total_processed'] += 1
             return result
 
-        # Step 5: Try Semantic Scholar (if not already tried for ArXiv)
+        # Step 6: Try Semantic Scholar (if not already tried for ArXiv)
         if not (
             citation.arxiv_id
             or (citation.backup_id and citation.backup_id.startswith('arxiv:'))
@@ -212,7 +234,7 @@ class CitationResolutionChain:
                 self._stats['total_processed'] += 1
                 return result
 
-        # Step 6: No good matches found - return UNRESOLVED
+        # Step 7: No good matches found - return UNRESOLVED
         logger.warning(
             f'No suitable matches found for citation: {citation_text[:80]}...'
         )
@@ -263,11 +285,14 @@ class CitationResolutionChain:
             confidence = self._calculate_crossref_confidence(best_match, citation)
 
             # Convert to standard MatchCandidate
+            # Normalize Crossref score from 0-100+ range to 0.0-1.0
+            # Note: Crossref can return scores > 100 for very strong matches
+            normalized_crossref_score = min((best_match.score or 0.0) / 100.0, 1.0)
             candidate = MatchCandidate(
                 candidate_data=self._crossref_match_to_dict(best_match),
                 raw_score=confidence,
                 component_scores={
-                    'crossref_score': best_match.score or 0.0,
+                    'crossref_score': normalized_crossref_score,
                 },
                 source=APISource.CROSSREF,
             )
@@ -300,6 +325,76 @@ class CitationResolutionChain:
         except Exception as e:
             logger.error(f'Error in Crossref resolution: {e}')
             metadata.error_message = f'Crossref error: {str(e)}'
+            return None
+
+    async def _try_arxiv(
+        self,
+        citation: Citation,
+        metadata: ResolutionMetadata,
+        candidates: List[MatchCandidate],
+    ) -> ResolutionResult | None:
+        """
+        Try resolving citation via ArXiv API.
+
+        Args:
+            citation: Citation to resolve
+            metadata: Resolution metadata to update
+            candidates: List to append match candidates to
+
+        Returns:
+            ResolutionResult if successful match found, None otherwise
+        """
+        try:
+            metadata.api_sources_tried.append(APISource.ARXIV)
+            matches = await self.arxiv_resolver.resolve_citation(citation)
+
+            if not matches:
+                logger.debug('No ArXiv matches found')
+                return None
+
+            # Take best match
+            best_match = matches[0]
+            confidence = self._calculate_arxiv_confidence(best_match, citation)
+
+            # Convert to standard MatchCandidate
+            candidate = MatchCandidate(
+                candidate_data=self._arxiv_match_to_dict(best_match),
+                raw_score=confidence,
+                component_scores={
+                    'title_match': 0.9,  # ArXiv title matching is generally reliable
+                    'has_doi': 1.0 if best_match.doi else 0.0,
+                },
+                source=APISource.ARXIV,
+            )
+            candidates.append(candidate)
+
+            if confidence >= MEDIUM_CONFIDENCE_THRESHOLD:
+                status = (
+                    CitationResolutionStatus.RESOLVED
+                    if confidence >= HIGH_CONFIDENCE_THRESHOLD
+                    else CitationResolutionStatus.PARTIAL
+                )
+
+                return ResolutionResult(
+                    citation=citation.text or citation.title or 'Unknown',
+                    status=status,
+                    confidence_score=confidence,
+                    confidence_level=(
+                        ConfidenceLevel.HIGH
+                        if confidence >= HIGH_CONFIDENCE_THRESHOLD
+                        else ConfidenceLevel.MEDIUM
+                    ),
+                    source=APISource.ARXIV,
+                    matched_data=self._arxiv_match_to_dict(best_match),
+                    candidates=candidates.copy(),
+                    metadata=metadata,
+                )
+
+            return None
+
+        except Exception as e:
+            logger.error(f'Error in ArXiv resolution: {e}')
+            metadata.error_message = f'ArXiv error: {str(e)}'
             return None
 
     async def _try_openalex(
@@ -677,6 +772,82 @@ class CitationResolutionChain:
             'url': match.url,
             'abstract': match.abstract,
             'citation_count': match.citation_count,
+        }
+
+    def _calculate_arxiv_confidence(
+        self, match: ArxivMatch, citation: Citation
+    ) -> float:
+        """
+        Calculate confidence score for ArXiv match.
+
+        Uses weighted scoring similar to other sources:
+        - Title: 45% weight (must be ≥ 0.80)
+        - Authors: 25% weight
+        - Year: 15% weight (±1 acceptable)
+        - Quality: 15% weight (has DOI)
+
+        Args:
+            match: ArXiv match candidate
+            citation: Original citation
+
+        Returns:
+            Confidence score between 0.0 and 1.0
+        """
+        # Calculate title similarity (45% weight)
+        title_sim = 0.0
+        if citation.title and match.title:
+            title_sim = self._simple_title_similarity(citation.title, match.title)
+
+        # Reject if title similarity below threshold
+        if title_sim < TITLE_THRESHOLD:
+            return 0.0
+
+        # Calculate year score (15% weight)
+        year_score = 0.0
+        if citation.year and match.year:
+            year_diff = abs(citation.year - match.year)
+            if year_diff == 0:
+                year_score = 1.0
+            elif year_diff == 1:
+                year_score = 0.8
+            elif year_diff == 2:
+                year_score = 0.4
+
+        # Calculate author overlap (25% weight)
+        author_score = 0.5  # Default
+        if citation.authors and match.authors:
+            if len(citation.authors) > 0 and len(match.authors) > 0:
+                first_input = citation.authors[0].lower()
+                first_match = match.authors[0].lower()
+                if first_input in first_match or first_match in first_input:
+                    author_score = 0.8
+
+        # Quality score (15% weight) - has DOI is a good indicator
+        quality_score = 1.0 if match.doi else 0.5
+
+        # Weighted combination
+        final_score = (
+            0.45 * title_sim +
+            0.25 * author_score +
+            0.15 * year_score +
+            0.15 * quality_score
+        )
+
+        return min(final_score, 1.0)
+
+    def _arxiv_match_to_dict(self, match: ArxivMatch) -> Dict[str, Any]:
+        """Convert ArXiv match to dict."""
+        return {
+            'arxiv_id': match.arxiv_id,
+            'doi': match.doi,
+            'title': match.title,
+            'authors': match.authors,
+            'year': match.year,
+            'abstract': match.abstract,
+            'pdf_url': match.pdf_url,
+            'categories': match.categories,
+            'published': match.published,
+            'updated': match.updated,
         }
 
     def _openalex_match_to_dict(self, match: OpenAlexMatch) -> Dict[str, Any]:

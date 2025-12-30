@@ -313,19 +313,22 @@ class CitationEnhancer:
             CitationResolutionChain instance
         """
         if self._resolution_chain is None:
+            from thoth.analyze.citations.arxiv_resolver import ArxivResolver
             from thoth.analyze.citations.crossref_resolver import CrossrefResolver
             from thoth.analyze.citations.openalex_resolver import OpenAlexResolver
 
-            # Initialize resolvers
+            # Initialize resolvers (including ArXiv for preprints)
             crossref_resolver = CrossrefResolver()
+            arxiv_resolver = ArxivResolver()
             openalex_resolver = OpenAlexResolver()
 
             self._resolution_chain = CitationResolutionChain(
                 crossref_resolver=crossref_resolver,
+                arxiv_resolver=arxiv_resolver,
                 openalex_resolver=openalex_resolver,
                 semanticscholar_resolver=self.semanticscholar_tool,
             )
-            logger.info('Initialized CitationResolutionChain')
+            logger.info('Initialized CitationResolutionChain with ArXiv support')
 
         return self._resolution_chain
 
