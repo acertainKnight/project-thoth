@@ -98,3 +98,34 @@ htmlcov/
 
 # Workspace files
 workspace/
+
+# Analysis, reports, and status files (should NEVER be committed)
+docs/*SUMMARY*.md
+docs/*STATUS*.md
+docs/*ASSESSMENT*.md
+docs/*RESULTS*.md
+docs/*REPORT*.md
+docs/*ANALYSIS*.md
+docs/*FINDINGS*.md
+docs/*INCIDENT*.md
+docs/*REVIEW*.md
+docs/*COMPLETE*.md
+docs/*READY*.md
+docs/*INTEGRATION*.md
+docs/*SOLUTION*.md
+docs/*DIAGNOSIS*.md
+docs/*PLAN*.md
+docs/*BUGFIX*.md
+docs/*BACKFILL*.md
+docs/*IMPLEMENTATION*.md
+*SUMMARY*.md
+*STATUS*.md
+*ASSESSMENT*.md
+*RESULTS*.md
+*REPORT*.md
+*ANALYSIS*.md
+*-analysis.md
+*-report.md
+*-summary.md
+*-status.md
+implementation-plan.md
