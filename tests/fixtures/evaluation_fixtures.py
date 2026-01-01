@@ -265,8 +265,8 @@ def multiple_resolution_results() -> List[ResolutionResult]:
             citation='"Attention Is All You Need".',
             status=CitationResolutionStatus.FAILED,
             confidence_score=0.0,
-            confidence_level=ConfidenceLevel.NONE,
-            source='none',
+            confidence_level=ConfidenceLevel.LOW,
+            source='crossref',  # Tried crossref but failed
             matched_data=None,
             metadata=ResolutionMetadata(
                 api_sources_tried=['crossref', 'semantic_scholar', 'openalex'],
@@ -285,16 +285,16 @@ def edge_case_empty_results() -> List[ResolutionResult]:
             citation='Citation 1',
             status=CitationResolutionStatus.FAILED,
             confidence_score=0.0,
-            confidence_level=ConfidenceLevel.NONE,
-            source='none',
+            confidence_level=ConfidenceLevel.LOW,
+            source='crossref',
             matched_data=None
         ),
         ResolutionResult(
             citation='Citation 2',
             status=CitationResolutionStatus.FAILED,
             confidence_score=0.0,
-            confidence_level=ConfidenceLevel.NONE,
-            source='none',
+            confidence_level=ConfidenceLevel.LOW,
+            source='crossref',
             matched_data=None
         )
     ]
