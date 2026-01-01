@@ -77,3 +77,24 @@ htmlcov/
 *.tmp
 *.bak
 *.swp
+
+# Agent coordination (auto-generated, should NOT be in git)
+.claude-flow/
+.swarm/
+.hive-mind/
+memory/
+coordination/
+knowledge/
+
+# MCP and Claude Code config (user-specific)
+.mcp.json
+.claude/settings.local.json
+claude-flow
+
+# Test results and coverage
+evaluation_results/
+coverage.xml
+htmlcov/
+
+# Workspace files
+workspace/
