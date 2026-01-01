@@ -42,7 +42,7 @@ import pytest
 from loguru import logger
 
 from thoth.analyze.citations.resolution_chain import CitationResolutionChain
-from thoth.analyze.citations.fuzzy_matcher import calculate_weighted_similarity
+from thoth.analyze.citations.fuzzy_matcher import calculate_fuzzy_score
 from thoth.utilities.schemas.citations import Citation
 
 
@@ -222,7 +222,7 @@ def test_fuzzy_matching_performance(
     )
 
     def match():
-        return calculate_weighted_similarity(citation1, citation2)
+        return calculate_fuzzy_score(citation1, citation2)
 
     result = benchmark(match)
 
@@ -252,7 +252,7 @@ def test_fuzzy_matching_batch_performance(
         for i, cit1 in enumerate(benchmark_data_medium):
             for j, cit2 in enumerate(benchmark_data_medium):
                 if i != j:
-                    score = calculate_weighted_similarity(cit1, cit2)
+                    score = calculate_fuzzy_score(cit1, cit2)
                     scores.append(score)
         return scores
 

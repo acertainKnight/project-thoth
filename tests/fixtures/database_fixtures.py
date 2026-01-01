@@ -49,46 +49,36 @@ async def mock_postgres_service():
         """Mock pool closure."""
         service._pool = None
 
-    async def mock_execute(query: str, *args, timeout=None, retry_count=3):
-        """Mock query execution."""
-        service.executed_queries.append({
-            'type': 'execute',
-            'query': query,
-            'args': args,
-            'timeout': timeout
-        })
-        return 'EXECUTED'
+    # Create tracking side effects that respect return_value
+    def make_tracking_side_effect(mock_obj, query_type, default_return=None):
+        """Create a side effect that tracks queries and returns configurable values."""
+        async def side_effect(query: str, *args, **kwargs):
+            service.executed_queries.append({
+                'type': query_type,
+                'query': query,
+                'args': args,
+                **{k: v for k, v in kwargs.items() if k in ['timeout', 'column']}
+            })
+            # Return configured return_value if set, otherwise default
+            # AsyncMock stores configured return_value in _mock_return_value
+            if hasattr(mock_obj, '_mock_return_value'):
+                return mock_obj._mock_return_value
+            return default_return
+        return side_effect
 
-    async def mock_fetch(query: str, *args, timeout=None, retry_count=3):
-        """Mock fetch multiple rows."""
-        service.executed_queries.append({
-            'type': 'fetch',
-            'query': query,
-            'args': args,
-            'timeout': timeout
-        })
-        return []
+    # Create AsyncMocks with tracking side effects
+    # Tests can override .return_value and side_effect will use it
+    mock_execute = AsyncMock()
+    mock_execute.side_effect = make_tracking_side_effect(mock_execute, 'execute', 'EXECUTED')
 
-    async def mock_fetchrow(query: str, *args, timeout=None, retry_count=3):
-        """Mock fetch single row."""
-        service.executed_queries.append({
-            'type': 'fetchrow',
-            'query': query,
-            'args': args,
-            'timeout': timeout
-        })
-        return None
+    mock_fetch = AsyncMock()
+    mock_fetch.side_effect = make_tracking_side_effect(mock_fetch, 'fetch', [])
 
-    async def mock_fetchval(query: str, *args, column=0, timeout=None, retry_count=3):
-        """Mock fetch single value."""
-        service.executed_queries.append({
-            'type': 'fetchval',
-            'query': query,
-            'args': args,
-            'column': column,
-            'timeout': timeout
-        })
-        return None
+    mock_fetchrow = AsyncMock()
+    mock_fetchrow.side_effect = make_tracking_side_effect(mock_fetchrow, 'fetchrow', None)
+
+    mock_fetchval = AsyncMock()
+    mock_fetchval.side_effect = make_tracking_side_effect(mock_fetchval, 'fetchval', None)
 
     @asynccontextmanager
     async def mock_acquire():
@@ -173,23 +163,31 @@ def create_mock_record(**kwargs) -> asyncpg.Record:
     Returns:
         Mock Record that behaves like asyncpg.Record
     """
-    record = MagicMock(spec=asyncpg.Record)
+    class MockRecord:
+        """Mock implementation of asyncpg.Record."""
 
-    # Support both dict() and subscript access
-    record.__getitem__ = lambda self, key: kwargs[key]
-    record.keys = lambda: kwargs.keys()
-    record.values = lambda: kwargs.values()
-    record.items = lambda: kwargs.items()
-    record.get = lambda key, default=None: kwargs.get(key, default)
+        def __getitem__(self, key):
+            return kwargs[key]
 
-    # Support iteration and dict conversion
-    def mock_iter():
-        return iter(kwargs.items())
+        def keys(self):
+            return kwargs.keys()
 
-    record.__iter__ = mock_iter
-    record.__len__ = lambda: len(kwargs)
+        def values(self):
+            return kwargs.values()
 
-    return record
+        def items(self):
+            return kwargs.items()
+
+        def get(self, key, default=None):
+            return kwargs.get(key, default)
+
+        def __iter__(self):
+            return iter(kwargs.items())
+
+        def __len__(self):
+            return len(kwargs)
+
+    return MockRecord()
 
 
 @pytest.fixture
