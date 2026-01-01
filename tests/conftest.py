@@ -320,11 +320,12 @@ Future work will extend to LLM-based content analysis pipelines.
 
 
 @pytest.fixture
-def sample_ground_truth():
+def sample_evaluation_data():
     """
     Create sample ground truth data for evaluation testing.
 
     Includes annotated citation resolutions with confidence scores.
+    Returns dict format (not GroundTruthCitation object).
     """
     return {
         'citations': [
