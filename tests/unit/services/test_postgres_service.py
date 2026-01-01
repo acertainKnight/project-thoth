@@ -31,7 +31,7 @@ class TestPostgresService:
         assert service._pool is None
         assert service._connection_lock is not None
 
-    @patch('asyncpg.create_pool')
+    @patch('asyncpg.create_pool', new_callable=AsyncMock)
     async def test_initialize_pool(self, mock_create_pool):
         """Test connection pool initialization."""
         config = Mock()
@@ -43,7 +43,7 @@ class TestPostgresService:
         mock_conn = AsyncMock()
         mock_conn.fetchval = AsyncMock(return_value='PostgreSQL 15.0')
 
-        async def mock_acquire():
+        def mock_acquire():
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
@@ -51,7 +51,7 @@ class TestPostgresService:
                     pass
             return MockAcquire()
 
-        mock_pool.acquire.return_value = mock_acquire()
+        mock_pool.acquire = Mock(side_effect=mock_acquire)
         mock_create_pool.return_value = mock_pool
 
         service = PostgresService(config)
@@ -66,7 +66,7 @@ class TestPostgresService:
         assert call_kwargs['max_size'] == 20
         assert call_kwargs['command_timeout'] == 60.0
 
-    @patch('asyncpg.create_pool')
+    @patch('asyncpg.create_pool', new_callable=AsyncMock)
     async def test_initialize_pool_race_condition(self, mock_create_pool):
         """
         Test that connection pool race condition is prevented.
@@ -91,7 +91,7 @@ class TestPostgresService:
             mock_conn = AsyncMock()
             mock_conn.fetchval = AsyncMock(return_value='PostgreSQL 15.0')
 
-            async def mock_acquire():
+            def mock_acquire():
                 class MockAcquire:
                     async def __aenter__(self):
                         return mock_conn
@@ -99,7 +99,7 @@ class TestPostgresService:
                         pass
                 return MockAcquire()
 
-            mock_pool.acquire.return_value = mock_acquire()
+            mock_pool.acquire = Mock(side_effect=mock_acquire)
             return mock_pool
 
         mock_create_pool.side_effect = mock_create
@@ -117,7 +117,7 @@ class TestPostgresService:
         assert creation_count == 1
         assert service._pool is not None
 
-    @patch('asyncpg.create_pool')
+    @patch('asyncpg.create_pool', new_callable=AsyncMock)
     async def test_initialize_pool_error(self, mock_create_pool):
         """Test error handling during pool initialization."""
         config = Mock()
@@ -141,12 +141,13 @@ class TestPostgresService:
         config.secrets.database_url = 'postgresql://localhost/test'
 
         service = PostgresService(config)
-        service._pool = AsyncMock()
-        service._pool.close = AsyncMock()
+        mock_pool = AsyncMock()
+        mock_pool.close = AsyncMock()
+        service._pool = mock_pool
 
         await service.close()
 
-        service._pool.close.assert_called_once()
+        mock_pool.close.assert_called_once()
         assert service._pool is None
 
     async def test_close_pool_none(self):
@@ -161,7 +162,7 @@ class TestPostgresService:
         # Should not raise error
         await service.close()
 
-    @patch('asyncpg.create_pool')
+    @patch('asyncpg.create_pool', new_callable=AsyncMock)
     async def test_acquire_connection(self, mock_create_pool):
         """Test acquiring connection from pool."""
         config = Mock()
@@ -172,7 +173,7 @@ class TestPostgresService:
         mock_conn = AsyncMock()
         mock_conn.fetchval = AsyncMock(return_value='PostgreSQL 15.0')
 
-        async def mock_acquire():
+        def mock_acquire():
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
@@ -180,7 +181,7 @@ class TestPostgresService:
                     pass
             return MockAcquire()
 
-        mock_pool.acquire.return_value = mock_acquire()
+        mock_pool.acquire = Mock(side_effect=mock_acquire)
         mock_create_pool.return_value = mock_pool
 
         service = PostgresService(config)
@@ -189,7 +190,7 @@ class TestPostgresService:
         async with service.acquire() as conn:
             assert conn is mock_conn
 
-    @patch('asyncpg.create_pool')
+    @patch('asyncpg.create_pool', new_callable=AsyncMock)
     async def test_transaction_context(self, mock_create_pool):
         """Test transaction context manager."""
         config = Mock()
@@ -203,7 +204,7 @@ class TestPostgresService:
         # Track transaction usage
         transaction_started = False
 
-        async def mock_transaction():
+        def mock_transaction():
             class MockTransaction:
                 async def __aenter__(self):
                     nonlocal transaction_started
@@ -215,7 +216,7 @@ class TestPostgresService:
 
         mock_conn.transaction = mock_transaction
 
-        async def mock_acquire():
+        def mock_acquire():
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
@@ -223,7 +224,7 @@ class TestPostgresService:
                     pass
             return MockAcquire()
 
-        mock_pool.acquire.return_value = mock_acquire()
+        mock_pool.acquire = Mock(side_effect=mock_acquire)
         mock_create_pool.return_value = mock_pool
 
         service = PostgresService(config)
@@ -233,7 +234,7 @@ class TestPostgresService:
             assert conn is mock_conn
             assert transaction_started is True
 
-    @patch('asyncpg.create_pool')
+    @patch('asyncpg.create_pool', new_callable=AsyncMock)
     async def test_execute_query(self, mock_create_pool):
         """Test executing a query."""
         config = Mock()
@@ -245,7 +246,7 @@ class TestPostgresService:
         mock_conn.fetchval = AsyncMock(return_value='PostgreSQL 15.0')
         mock_conn.execute = AsyncMock(return_value='INSERT 0 1')
 
-        async def mock_acquire():
+        def mock_acquire():
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
@@ -253,7 +254,7 @@ class TestPostgresService:
                     pass
             return MockAcquire()
 
-        mock_pool.acquire.return_value = mock_acquire()
+        mock_pool.acquire = Mock(side_effect=mock_acquire)
         mock_create_pool.return_value = mock_pool
 
         service = PostgresService(config)
@@ -264,7 +265,7 @@ class TestPostgresService:
         assert result == 'INSERT 0 1'
         mock_conn.execute.assert_called_once()
 
-    @patch('asyncpg.create_pool')
+    @patch('asyncpg.create_pool', new_callable=AsyncMock)
     async def test_execute_with_retry(self, mock_create_pool):
         """Test query execution with retry logic."""
         config = Mock()
@@ -286,7 +287,7 @@ class TestPostgresService:
 
         mock_conn.execute = mock_execute
 
-        async def mock_acquire():
+        def mock_acquire():
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
@@ -294,7 +295,7 @@ class TestPostgresService:
                     pass
             return MockAcquire()
 
-        mock_pool.acquire.return_value = mock_acquire()
+        mock_pool.acquire = Mock(side_effect=mock_acquire)
         mock_create_pool.return_value = mock_pool
 
         service = PostgresService(config)
@@ -305,7 +306,7 @@ class TestPostgresService:
         assert result == 'SUCCESS'
         assert attempt_count == 3
 
-    @patch('asyncpg.create_pool')
+    @patch('asyncpg.create_pool', new_callable=AsyncMock)
     async def test_execute_retry_exhausted(self, mock_create_pool):
         """Test query execution when retries are exhausted."""
         config = Mock()
@@ -319,7 +320,7 @@ class TestPostgresService:
             side_effect=asyncpg.exceptions.PostgresError('Permanent error')
         )
 
-        async def mock_acquire():
+        def mock_acquire():
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
@@ -327,7 +328,7 @@ class TestPostgresService:
                     pass
             return MockAcquire()
 
-        mock_pool.acquire.return_value = mock_acquire()
+        mock_pool.acquire = Mock(side_effect=mock_acquire)
         mock_create_pool.return_value = mock_pool
 
         service = PostgresService(config)
@@ -336,7 +337,7 @@ class TestPostgresService:
         with pytest.raises(ServiceError):
             await service.execute('SELECT 1', retry_count=3)
 
-    @patch('asyncpg.create_pool')
+    @patch('asyncpg.create_pool', new_callable=AsyncMock)
     async def test_fetch_rows(self, mock_create_pool):
         """Test fetching multiple rows."""
         config = Mock()
@@ -348,7 +349,7 @@ class TestPostgresService:
         mock_conn.fetchval = AsyncMock(return_value='PostgreSQL 15.0')
         mock_conn.fetch = AsyncMock(return_value=[{'id': 1}, {'id': 2}])
 
-        async def mock_acquire():
+        def mock_acquire():
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
@@ -356,7 +357,7 @@ class TestPostgresService:
                     pass
             return MockAcquire()
 
-        mock_pool.acquire.return_value = mock_acquire()
+        mock_pool.acquire = Mock(side_effect=mock_acquire)
         mock_create_pool.return_value = mock_pool
 
         service = PostgresService(config)
@@ -367,7 +368,7 @@ class TestPostgresService:
         assert len(results) == 2
         mock_conn.fetch.assert_called_once()
 
-    @patch('asyncpg.create_pool')
+    @patch('asyncpg.create_pool', new_callable=AsyncMock)
     async def test_fetchrow(self, mock_create_pool):
         """Test fetching single row."""
         config = Mock()
@@ -379,7 +380,7 @@ class TestPostgresService:
         mock_conn.fetchval = AsyncMock(return_value='PostgreSQL 15.0')
         mock_conn.fetchrow = AsyncMock(return_value={'id': 1, 'title': 'Test'})
 
-        async def mock_acquire():
+        def mock_acquire():
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
@@ -387,7 +388,7 @@ class TestPostgresService:
                     pass
             return MockAcquire()
 
-        mock_pool.acquire.return_value = mock_acquire()
+        mock_pool.acquire = Mock(side_effect=mock_acquire)
         mock_create_pool.return_value = mock_pool
 
         service = PostgresService(config)
@@ -399,7 +400,7 @@ class TestPostgresService:
         assert row['id'] == 1
         mock_conn.fetchrow.assert_called_once()
 
-    @patch('asyncpg.create_pool')
+    @patch('asyncpg.create_pool', new_callable=AsyncMock)
     async def test_fetchval(self, mock_create_pool):
         """Test fetching single value."""
         config = Mock()
@@ -413,7 +414,7 @@ class TestPostgresService:
             42  # For actual query
         ])
 
-        async def mock_acquire():
+        def mock_acquire():
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
@@ -421,7 +422,7 @@ class TestPostgresService:
                     pass
             return MockAcquire()
 
-        mock_pool.acquire.return_value = mock_acquire()
+        mock_pool.acquire = Mock(side_effect=mock_acquire)
         mock_create_pool.return_value = mock_pool
 
         service = PostgresService(config)
@@ -431,7 +432,7 @@ class TestPostgresService:
 
         assert value == 42
 
-    @patch('asyncpg.create_pool')
+    @patch('asyncpg.create_pool', new_callable=AsyncMock)
     async def test_executemany(self, mock_create_pool):
         """Test batch query execution."""
         config = Mock()
@@ -443,7 +444,7 @@ class TestPostgresService:
         mock_conn.fetchval = AsyncMock(return_value='PostgreSQL 15.0')
         mock_conn.executemany = AsyncMock()
 
-        async def mock_acquire():
+        def mock_acquire():
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
@@ -451,7 +452,7 @@ class TestPostgresService:
                     pass
             return MockAcquire()
 
-        mock_pool.acquire.return_value = mock_acquire()
+        mock_pool.acquire = Mock(side_effect=mock_acquire)
         mock_create_pool.return_value = mock_pool
 
         service = PostgresService(config)
@@ -465,7 +466,7 @@ class TestPostgresService:
 
         mock_conn.executemany.assert_called_once()
 
-    @patch('asyncpg.create_pool')
+    @patch('asyncpg.create_pool', new_callable=AsyncMock)
     async def test_health_check_healthy(self, mock_create_pool):
         """Test health check when service is healthy."""
         config = Mock()
@@ -479,7 +480,7 @@ class TestPostgresService:
         mock_conn = AsyncMock()
         mock_conn.fetchval = AsyncMock(return_value='PostgreSQL 15.0')
 
-        async def mock_acquire():
+        def mock_acquire():
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
@@ -487,7 +488,7 @@ class TestPostgresService:
                     pass
             return MockAcquire()
 
-        mock_pool.acquire.return_value = mock_acquire()
+        mock_pool.acquire = Mock(side_effect=mock_acquire)
         mock_create_pool.return_value = mock_pool
 
         service = PostgresService(config)
