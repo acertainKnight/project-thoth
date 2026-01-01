@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/mcp/transports.py
+# hypothesis_version: 6.148.9
+
+[0.5, -32603, -32600, 204, 8000, 8001, '*', '/events/{client_id}', '/health', '/mcp', '/sse', '1.0.0', '2025-06-18', 'Cache-Control', 'Connection', 'Invalid request', 'MCP', 'MCP-SSE', 'Thoth MCP SSE Server', 'Thoth MCP Server', '__self__', '_server_task', 'info', 'initialized', 'keep-alive', 'localhost', 'method', 'no-cache', 'notification', 'ok', 'params', 'protocol', 'protocol_handler', 'status', 'text/event-stream', 'type', 'version']

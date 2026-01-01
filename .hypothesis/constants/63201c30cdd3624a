@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/repositories/research_question_repository.py
+# hypothesis_version: 6.148.9
+
+[0.5, 0.7, 'active', 'authors', 'daily', 'description', 'is_active', 'keywords', 'last_run_at', 'min_relevance_score', 'name', 'next_run_at', 'research_questions', 'schedule_frequency', 'schedule_time', 'selected_sources', 'topics', 'user', 'user_id', 'user_name']

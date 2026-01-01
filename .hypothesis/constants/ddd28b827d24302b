@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/server/routers/chat.py
+# hypothesis_version: 6.148.9
+
+[1.0, 100, 404, 500, 503, '/search', '/sessions', 'New Chat', 'Session not found', 'content', 'created_at', 'id', 'is_active', 'last_message_preview', 'message', 'message_count', 'metadata', 'relevance_score', 'role', 'session', 'session_id', 'status', 'success', 'timestamp', 'title', 'updated_at']

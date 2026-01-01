@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/repositories/article_research_match_repository.py
+# hypothesis_version: 6.148.9
+
+[0.7, 'article', 'article_id', 'discovery_run_id', 'dislike', 'disliked', 'is_bookmarked', 'is_viewed', 'like', 'liked', 'matched_authors', 'matched_keywords', 'matched_topics', 'pending', 'question', 'question_id', 'relevance_score', 'skip', 'skipped', 'user_notes', 'user_rating', 'user_sentiment', 'viewed_at']

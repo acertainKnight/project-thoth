@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/server/routers/websocket.py
+# hypothesis_version: 6.148.9
+
+[0.0, 10.0, '/ws/chat', '/ws/progress', '/ws/status', 'Message is required', 'assistant', 'error', 'id', 'message', 'operation_id', 'progress', 'response', 'result', 'running', 'session_id', 'status', 'timestamp', 'tool_calls', 'type', 'user']

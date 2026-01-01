@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/mcp/tools/web_search_tool.py
+# hypothesis_version: 6.148.9
+
+[0.0, 0.05, 0.1, 1.0, 200, '**Next Steps:**\n', '**Search Tips:**\n', '---\n\n', '0', '1', '2', 'Accept', 'Accept-Encoding', 'BRAVE_SEARCH_API_KEY', 'Untitled', 'X-Subscription-Token', 'any', 'application/json', 'auto', 'backend', 'body', 'brave', 'content', 'count', 'country', 'd', 'day', 'default', 'description', 'duckduckgo', 'enum', 'format', 'freshness', 'gzip', 'href', 'integer', 'json', 'language', 'm', 'max_results', 'maximum', 'minimum', 'moderate', 'month', 'object', 'off', 'on', 'pageno', 'pd', 'pm', 'properties', 'pw', 'py', 'q', 'query', 'region', 'relevance_score', 'required', 'results', 'safe_search', 'safesearch', 'search_engine', 'search_time', 'searxng', 'snippet', 'strict', 'string', 'text', 'time_range', 'title', 'type', 'url', 'us', 'w', 'web', 'web_search', 'week', 'y', 'year']

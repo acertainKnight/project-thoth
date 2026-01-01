@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/utilities/openrouter.py
+# hypothesis_version: 6.148.9
+
+[0.1, 0.7, 1.0, 200, 500, 3600, 'API_OPENROUTER_KEY', 'Authorization', 'HTTP-Referer', 'OPENROUTER_API_KEY', 'X-Title', 'data', 'extra_headers', 'limit', 'model_kwargs', 'openai/gpt-4', 'rate_limiter', 'usage', 'use_rate_limiter']

@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/server/routers/browser_workflows.py
+# hypothesis_version: 6.148.9
+
+[100, 30000, '/api/workflows', '/{workflow_id}', 'Maximum results', 'Unique workflow name', 'Workflow description', 'authentication_type', 'browser_workflows', 'description', 'execution_parameters', 'extraction_rules', 'failed_executions', 'health_status', 'is_active', 'max_articles', 'max_articles_per_run', 'name', 'pagination_config', 'search_config', 'start_url', 'started_at', 'status', 'timeout_seconds', 'total_executions', 'triggered_by', 'unknown', 'website_domain', 'workflow_id']

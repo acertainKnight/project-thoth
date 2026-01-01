@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/utilities/schemas/discovery.py
+# hypothesis_version: 6.148.9
+
+[0.0, 3600, 'AnalysisResponse', 'Enable health checks', 'ScheduleConfig', 'ScrapeConfiguration', 'Type of source', '[^\\w\\-_.]', '_', 'api', 'emulator', 'name', 'scraper']

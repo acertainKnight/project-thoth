@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/mcp/tools/browser_workflow_tools.py
+# hypothesis_version: 6.148.9
+
+[100, 'Type of action', 'UUID of the workflow', 'action_config', 'action_type', 'activated', 'add_workflow_action', 'array', 'boolean', 'click', 'configure_search', 'date_range', 'deactivated', 'default', 'delete_workflow', 'description', 'end', 'enum', 'execute_workflow', 'extract', 'extraction_rules', 'get_workflow_details', 'integer', 'is_active', 'items', 'keywords', 'list_workflows', 'max_articles', 'max_results', 'minimum', 'name', 'navigate', 'object', 'pagination_config', 'properties', 'required', 'result_selector', 'screenshot', 'scroll', 'selector', 'snippet_selector', 'start', 'start_url', 'step_number', 'string', 'text', 'title_selector', 'type', 'url_selector', 'value', 'wait', 'website_domain', 'workflow_id']

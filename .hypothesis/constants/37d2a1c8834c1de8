@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/mcp/tools/tag_tools.py
+# hypothesis_version: 6.148.9
+
+[100, 1000, '**Overview:**\n', '**Results:**\n', '**Summary:**\n', 'Unknown', 'article_identifier', 'articles_updated', 'background_tasks', 'boolean', 'consolidate_tags', 'content', 'default', 'description', 'force_all', 'get_task_status', 'metadata', 'object', 'properties', 'reasoning', 'required', 'string', 'suggest_tags', 'suggested_tags', 'tags', 'task_id', 'text', 'title', 'type']

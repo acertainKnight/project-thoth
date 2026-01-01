@@ -179,6 +179,11 @@ test = [
     "pytest-cov>=6.1.1",
     "pytest-mock>=3.14.0",
     "pytest-timeout>=2.1.0",
+    "pytest-benchmark>=5.1.0", # Performance benchmarking
+    "hypothesis>=6.122.0", # Property-based testing
+    "psutil>=7.0.0", # Memory profiling
+    "respx>=0.22.0",
+    "freezegun>=1.5.5",
 ]
 
 jupyter = [

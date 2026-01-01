@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/discovery/sources/arxiv.py
+# hypothesis_version: 6.148.9
+
+[0.0, 0.1, 3.0, 1000, ' AND ', '+00:00', ',', '/abs/', 'User-Agent', 'Z', 'application/pdf', 'arxiv', 'arxiv:comment', 'arxiv:doi', 'arxiv:journal_ref', 'arxiv_id', 'author', 'cat:cs.*', 'categories', 'category', 'citationCount', 'citation_count', 'descending', 'end_date', 'entry', 'entry_id', 'href', 'id', 'id_list', 'keywords', 'lastUpdatedDate', 'link', 'max_results', 'name', 'pdf', 'published', 'relevance', 'search_query', 'sortBy', 'sortOrder', 'sort_by', 'sort_order', 'start', 'start_date', 'summary', 'term', 'ti', 'title', 'type', 'updated', 'v\\d+$', 'venue', 'xml']

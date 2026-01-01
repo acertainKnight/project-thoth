@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/services/rag_service.py
+# hypothesis_version: 6.148.9
+
+['*.md', '.md', 'Unknown', 'clearing RAG index', 'content', 'directory_indexed', 'document_type', 'errors', 'file_indexed', 'index_cleared', 'markdown_files', 'metadata', 'note_files', 'question_answered', 'score', 'search_completed', 'source', 'sources', 'title', 'total_chunks', 'total_files', 'vector_store']

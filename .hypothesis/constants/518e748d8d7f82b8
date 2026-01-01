@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/services/tag_service.py
+# hypothesis_version: 6.148.9
+
+['abstract', 'all_available_tags', 'analysis', 'articles_processed', 'articles_updated', 'consolidated_tags', 'consolidating tags', 'extracting tags', 'final_tag_count', 'metadata', 'original_tag_count', 'reasoning', 'suggested_tags', 'tag_mappings', 'tags', 'tags_added', 'tags_consolidated', 'tags_extracted', 'tags_suggested', 'title', 'vocabulary_size']

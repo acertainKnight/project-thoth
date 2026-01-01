@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/utilities/openai_client.py
+# hypothesis_version: 6.148.9
+
+[0.7, 10.0, 'API_OPENAI_KEY', 'OPENAI_API_KEY', 'gpt-4o', 'rate_limiter', 'use_rate_limiter']

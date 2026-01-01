@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/citations/opencitation.py
+# hypothesis_version: 6.148.9
+
+[0.1, 1.0, 429, 500, 'Accept', 'Retry-After', '__', 'application/json', 'arxiv', 'authorization', 'format', 'json']

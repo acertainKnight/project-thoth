@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/discovery/browser/browser_manager.py
+# hypothesis_version: 6.148.9
+
+[1080, 1920, 30000, '*.json', '--no-sandbox', 'America/New_York', 'browser_sessions', 'en-US', 'height', 'width']

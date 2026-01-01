@@ -17,7 +17,7 @@ import psutil
 from loguru import logger
 
 from thoth.services.service_manager import ServiceManager
-from thoth.config import config
+from thoth.config import config, Config
 
 
 @dataclass

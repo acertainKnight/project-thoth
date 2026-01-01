@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/discovery/sources/crossref.py
+# hypothesis_version: 6.148.9
+
+[0.0, 1.0, 100, ',', '-', 'DOI', 'URL', 'abstract', 'application/pdf', 'author', 'container-title', 'content-type', 'crossref', 'date-parts', 'desc', 'end_date', 'family', 'filter', 'given', 'items', 'keywords', 'link', 'message', 'order', 'published-online', 'published-print', 'query', 'relevance', 'rows', 'sort', 'sort_by', 'sort_order', 'start_date', 'subject', 'title', 'type']

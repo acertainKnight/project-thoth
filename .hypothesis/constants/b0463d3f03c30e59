@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/citations/evaluation/visualizations.py
+# hypothesis_version: 6.148.9
+
+[1e-10, 0.01, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.8, 0.9, 1.05, 1.1, 100, 300, '#1f77b4', '#2ca02c', '#ff7f0e', '-', '--', '=', 'Actual Accuracy', 'Blues', 'Confusion Matrix', 'Correct', 'Count', 'Difficulty Level', 'F1 Score', 'Ground Truth', 'Incorrect', 'Model', 'Not Resolved', 'Overconfident', 'Perfect Calibration', 'Precision', 'Predicted Confidence', 'Prediction', 'Recall', 'Resolved', 'Score', 'Underconfident', 'any', 'b-o', 'blue', 'bold', 'bottom', 'center', 'confusion_matrix.png', 'd', 'easy', 'gray', 'hard', 'label', 'medium', 'offset points', 'r--', 'red', 'tight', 'w', 'y']

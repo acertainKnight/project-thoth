@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/mcp/tools/download_pdf_tool.py
+# hypothesis_version: 6.148.9
+
+[b'%PDF', 100, 300, 1024, 8192, '**Download Stats:**\n', '**File Details:**\n', '**Next Steps:**\n', '**Type:** DOI\n', '-', '.pdf', '/', '10.', 'Accept', 'Unknown', 'User-Agent', '_', 'arxiv_id', 'boolean', 'content-length', 'content-type', 'default', 'description', 'doi', 'download_pdf', 'downloaded_pdfs', 'filename', 'http://', 'https://', 'integer', 'maximum', 'metadata', 'minimum', 'object', 'octet-stream', 'output_directory', 'overwrite', 'pdf', 'pdf_url', 'properties', 'required', 'source', 'string', 'success', 'text', 'timeout', 'title', 'type', 'url', 'wb']

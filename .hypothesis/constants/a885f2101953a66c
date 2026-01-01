@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/citations/arxiv_resolver.py
+# hypothesis_version: 6.148.9
+
+['<entry>(.*?)</entry>', '<id>(.*?)</id>', '<title>(.*?)</title>', 'arXiv:(\\d+\\.\\d+)', 'descending', 'max_results', 'relevance', 'search_query', 'sortBy', 'sortOrder', 'start']

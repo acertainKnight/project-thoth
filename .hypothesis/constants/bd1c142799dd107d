@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/mcp/protocol.py
+# hypothesis_version: 6.148.9
+
+[-32700, -32603, -32602, -32601, -32600, -32004, -32003, -32002, -32001, -32000, '2.0', '2025-06-18', 'Not initialized', 'after', 'error', 'id', 'jsonrpc', 'method', 'result', 'unknown']

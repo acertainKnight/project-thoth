@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/discovery/sources/openalex.py
+# hypothesis_version: 6.148.9
+
+[0.0, 1.0, 200, ',', 'abstract', 'author', 'authorships', 'concepts', 'display_name', 'doi', 'end_date', 'filter', 'host_venue', 'id', 'keywords', 'openalex', 'pdf_url', 'per-page', 'publication_date', 'relevance', 'results', 'search', 'sort', 'sort_by', 'start_date', 'title', 'url']
