@@ -397,16 +397,16 @@ def create_ground_truth_with_confidence(confidence: float, is_correct: bool) -> 
 
     result = ResolutionResult(
         citation=gt.citation.text,
-        status=CitationResolutionStatus.RESOLVED if is_correct else CitationResolutionStatus.RESOLVED,
+        status=CitationResolutionStatus.RESOLVED,  # Always RESOLVED (correct or incorrect match)
         confidence_score=confidence,
         confidence_level=ConfidenceLevel.HIGH,
         source='crossref',
         matched_data={
-            'doi': '10.1234/test' if is_correct else '10.9999/wrong',
+            'doi': '10.1234/test' if is_correct else '10.9999/wrong',  # Wrong DOI when incorrect
             'title': 'Test Title',
             'authors': ['Test Author'],
             'year': 2020
-        } if is_correct or not is_correct else None
+        }  # Always provide matched_data (correct or incorrect)
     )
 
     return gt, result
