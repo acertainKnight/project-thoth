@@ -243,8 +243,10 @@ class BatchCitationProcessor:
             for api, rate in config.rate_limits.items()
         }
 
-        # In-memory cache for resolved citations
-        self._cache: dict[str, ResolutionResult] = {}
+        # In-memory cache for resolved citations with bounded size
+        # Using LRUCache to prevent unbounded growth during batch processing
+        from cachetools import LRUCache
+        self._cache: LRUCache = LRUCache(maxsize=5000)  # 5000 citations max
 
         # Statistics tracking
         self.statistics = BatchStatistics()

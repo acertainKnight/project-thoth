@@ -1,12 +1,8 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -20,231 +16,64 @@ parts/
 sdist/
 var/
 wheels/
-pip-wheel-metadata/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-.python-version
-
-# celery beat schedule file
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Pycharm files
-.idea
-
-# Rope project settings
-.ropeproject
-
-# Mr Developer
-.mr.developer.cfg
-.project
-.pydevproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# Virtual Environment
+# Virtual environments
 venv/
 env/
 ENV/
 
-# IDE
-.idea/
+# IDEs
 .vscode/
+.idea/
 *.swp
 *.swo
+*~
+
+# Environment variables and secrets (CRITICAL: Never commit these!)
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.crt
+secrets/
+credentials/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Ruff
-.ruff_cache/
-
-# Pytest
-.pytest_cache/
-
-# Code agents
-.claude/
-CLAUDE.md
-CLAUDE.md.backup
-.cursor/
-.cursorrules
-.cursorignore
-qdrant_storage/
-.roo/
-.claude-flow/
-.hive-mind/
-
-# Planning and backup files
-/planning/*
-*plan*.md
-*.backup
-README-docker.md
-
-# Logs
+# Project specific
+data/
 logs/
+*.log
+.cache/
+tmp/
 
-# Node
-node_modules/
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
 
-# Data directories (should NEVER exist in repo)
-/knowledge/
-/cache/
-/data/
-/workspace/
-/exports/
-/prompts/
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
 
-# .thoth directory should NEVER be in repo - belongs in user's Obsidian vault
-/.thoth/
+# MyPy
+.mypy_cache/
 
-# Prevent accidental commits of user .thoth directories
-**/.thoth/
-
-# Generated reports
-*_report.json
-*_results.json
-*_diagnostic.json
-
-# Test and mock data
-MagicMock/
-mock_*/
-*.mock
-
-# Configuration files
-.thoth.settings.json
-qdrant_storage/raft_state.json
-
-
-# Removed Windows wrapper files per user request
-hive-mind-prompt-*.txt
-
-
-# Removed Windows wrapper files per user request
-hive-mind-prompt-*.txt
-
-
-# Removed Windows wrapper files per user request
-hive-mind-prompt-*.txt
-
-# Claude Flow generated files
-.claude/settings.local.json
-.mcp.json
-claude-flow.config.json
-.swarm/
-.hive-mind/
-.claude-flow/
-memory/
-coordination/
-memory/claude-flow-data.json
-memory/sessions/*
-!memory/sessions/README.md
-memory/agents/*
-!memory/agents/README.md
-coordination/memory_bank/*
-coordination/subtasks/*
-coordination/orchestration/*
+# Database
 *.db
-*.db-journal
-*.db-wal
 *.sqlite
-*.sqlite-journal
-*.sqlite-wal
-claude-flow
-# Removed Windows wrapper files per user request
-hive-mind-prompt-*.txt
+*.sqlite3
+
+# Docker
+.docker-data/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp

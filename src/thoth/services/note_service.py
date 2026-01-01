@@ -66,7 +66,10 @@ class NoteService(BaseService):
             lstrip_blocks=True,
         )
 
-        self._notes_cache: dict[str, Path] = {}
+        # Use LRUCache with bounded size to prevent unbounded memory growth
+        # Limits cache to 500 most recently used notes
+        from cachetools import LRUCache
+        self._notes_cache: LRUCache = LRUCache(maxsize=500)
 
     def _get_markdown_content(self, title: str, markdown_path: Path) -> str:
         """Get markdown content from PostgreSQL."""
@@ -91,14 +94,17 @@ class NoteService(BaseService):
         # Use asyncio.run() to handle event loop creation in background threads
         try:
             content = asyncio.run(fetch())
-        except RuntimeError:
-            # Fallback for environments where asyncio.run() isn't available
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                content = loop.run_until_complete(fetch())
-            finally:
-                loop.close()
+        except RuntimeError as e:
+            # Fallback only if there's already a running loop in this thread
+            # (this happens when called from async context)
+            if "asyncio.run() cannot be called from a running event loop" in str(e):
+                # We're in an async context - run in a separate thread to avoid blocking
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(asyncio.run, fetch())
+                    content = future.result()
+            else:
+                raise
 
         self.logger.debug(f"Loaded markdown from PostgreSQL for: {title}")
         return content
@@ -127,14 +133,17 @@ class NoteService(BaseService):
         # Use asyncio.run() to handle event loop creation in background threads
         try:
             asyncio.run(save())
-        except RuntimeError:
-            # Fallback for environments where asyncio.run() isn't available
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(save())
-            finally:
-                loop.close()
+        except RuntimeError as e:
+            # Fallback only if there's already a running loop in this thread
+            # (this happens when called from async context)
+            if "asyncio.run() cannot be called from a running event loop" in str(e):
+                # We're in an async context - run in a separate thread to avoid blocking
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(asyncio.run, save())
+                    future.result()
+            else:
+                raise
 
     def create_note(
         self,

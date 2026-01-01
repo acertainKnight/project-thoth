@@ -1,0 +1,63 @@
+Citation Resolution System - Evaluation Report
+============================================================
+
+
+Citation Resolution Metrics:
+============================
+Precision: 0.000
+Recall: 0.000
+F1 Score: 0.000
+Accuracy: 0.000
+
+Total Citations: 5
+Resolved: 0 (0.0%)
+Unresolved: 5 (100.0%)
+
+Confidence: 0.000
+Calibration Error: 0.050
+API Calls/Citation: 4.0
+
+By Difficulty:
+  Easy: P=0.000, R=0.000
+  Medium: P=0.000, R=0.000
+  Hard: P=0.000, R=0.000
+
+
+Metrics by Confidence Threshold:
+------------------------------------------------------------
+
+Threshold: 0.30
+  Precision: 0.000
+  Recall: 0.000
+  F1 Score: 0.000
+  Resolved: 0/5
+
+Threshold: 0.50
+  Precision: 0.000
+  Recall: 0.000
+  F1 Score: 0.000
+  Resolved: 0/5
+
+Threshold: 0.60
+  Precision: 0.000
+  Recall: 0.000
+  F1 Score: 0.000
+  Resolved: 0/5
+
+Threshold: 0.70
+  Precision: 0.000
+  Recall: 0.000
+  F1 Score: 0.000
+  Resolved: 0/5
+
+Threshold: 0.80
+  Precision: 0.000
+  Recall: 0.000
+  F1 Score: 0.000
+  Resolved: 0/5
+
+Threshold: 0.90
+  Precision: 0.000
+  Recall: 0.000
+  F1 Score: 0.000
+  Resolved: 0/5

@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, AsyncIterator, Dict, Optional
 from uuid import UUID
 
 from loguru import logger
@@ -172,6 +173,48 @@ class BrowserManager:
             # Release semaphore on error
             self._semaphore.release()
             raise BrowserManagerError(f'Failed to create browser context: {e}') from e
+
+    @asynccontextmanager
+    async def browser_context(
+        self,
+        headless: bool = True,
+        viewport: Optional[Dict[str, int]] = None,
+        user_agent: Optional[str] = None,
+        session_id: Optional[UUID] = None,
+    ) -> AsyncIterator[BrowserContext]:
+        """
+        Context manager for safely acquiring and releasing browser contexts.
+
+        This ensures the semaphore is always released, even if the workflow fails.
+
+        Example:
+            >>> async with manager.browser_context() as context:
+            ...     page = await context.new_page()
+            ...     # Use the browser context
+            ...     # Automatic cleanup happens here
+
+        Args:
+            headless: Whether to run browser in headless mode
+            viewport: Custom viewport dimensions
+            user_agent: Custom user agent string
+            session_id: Optional session ID to restore saved state
+
+        Yields:
+            BrowserContext: A ready-to-use browser context
+
+        Raises:
+            BrowserManagerError: If browser context cannot be created
+        """
+        if session_id:
+            context = await self.load_session(session_id, headless, viewport, user_agent)
+        else:
+            context = await self.get_browser(headless, viewport, user_agent)
+
+        try:
+            yield context
+        finally:
+            # Always cleanup, even if workflow fails
+            await self.cleanup(context)
 
     async def save_session(
         self,

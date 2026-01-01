@@ -128,7 +128,8 @@ class CitationEnhancer:
         # Check if we should use new resolution chain
         if self.use_resolution_chain:
             logger.info('Using new resolution chain for parallel enhancement')
-            return self.enhance_with_resolution_chain(citations)
+            # enhance_with_resolution_chain is now async, so we need to run it
+            return asyncio.run(self.enhance_with_resolution_chain(citations))
 
         # Legacy path: Use Semantic Scholar's existing batch processing first
         if self.use_semanticscholar and self.semanticscholar_tool:
@@ -354,7 +355,7 @@ class CitationEnhancer:
 
         return self._enrichment_service
 
-    def enhance_with_resolution_chain(
+    async def enhance_with_resolution_chain(
         self, citations: List[Citation]
     ) -> List[Citation]:
         """
@@ -385,69 +386,57 @@ class CitationEnhancer:
         enrichment_service = self._get_enrichment_service()
 
         try:
-            # Run async resolution in a new event loop
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            # Step 1: Resolve DOIs using resolution chain
+            logger.info('Step 1: Resolving citations through resolution chain...')
+            resolution_results = await resolution_chain.batch_resolve(citations, parallel=True)
 
-            try:
-                # Step 1: Resolve DOIs using resolution chain
-                logger.info('Step 1: Resolving citations through resolution chain...')
-                resolution_results = loop.run_until_complete(
-                    resolution_chain.batch_resolve(citations, parallel=True)
-                )
+            # Log resolution statistics
+            stats = resolution_chain.get_statistics()
+            logger.info(
+                f'Resolution chain statistics:\n'
+                f'  Total processed: {stats["total_processed"]}\n'
+                f'  Already has DOI: {stats["already_has_doi"]}\n'
+                f'  Resolved via Crossref: {stats["resolved_crossref"]}\n'
+                f'  Resolved via OpenAlex: {stats["resolved_openalex"]}\n'
+                f'  Resolved via Semantic Scholar: {stats["resolved_semanticscholar"]}\n'
+                f'  Unresolved: {stats["unresolved"]}\n'
+                f'  High confidence: {stats["high_confidence"]}\n'
+                f'  Medium confidence: {stats["medium_confidence"]}\n'
+                f'  Low confidence: {stats["low_confidence"]}'
+            )
 
-                # Log resolution statistics
-                stats = resolution_chain.get_statistics()
-                logger.info(
-                    f'Resolution chain statistics:\n'
-                    f'  Total processed: {stats["total_processed"]}\n'
-                    f'  Already has DOI: {stats["already_has_doi"]}\n'
-                    f'  Resolved via Crossref: {stats["resolved_crossref"]}\n'
-                    f'  Resolved via OpenAlex: {stats["resolved_openalex"]}\n'
-                    f'  Resolved via Semantic Scholar: {stats["resolved_semanticscholar"]}\n'
-                    f'  Unresolved: {stats["unresolved"]}\n'
-                    f'  High confidence: {stats["high_confidence"]}\n'
-                    f'  Medium confidence: {stats["medium_confidence"]}\n'
-                    f'  Low confidence: {stats["low_confidence"]}'
-                )
+            # Step 2: Apply resolved data back to citations
+            logger.info('Step 2: Applying resolved data to citations...')
+            enhanced_citations = self._apply_resolution_results(
+                citations, resolution_results
+            )
 
-                # Step 2: Apply resolved data back to citations
-                logger.info('Step 2: Applying resolved data to citations...')
-                enhanced_citations = self._apply_resolution_results(
-                    citations, resolution_results
-                )
+            # Step 3: Enrich with full metadata using enrichment service
+            logger.info('Step 3: Enriching citations with full metadata...')
+            enriched_citations = await enrichment_service.batch_enrich(resolution_results)
 
-                # Step 3: Enrich with full metadata using enrichment service
-                logger.info('Step 3: Enriching citations with full metadata...')
-                enriched_citations = loop.run_until_complete(
-                    enrichment_service.batch_enrich(resolution_results)
-                )
+            # Log enrichment statistics
+            enrich_stats = enrichment_service.get_statistics()
+            logger.info(
+                f'Enrichment service statistics:\n'
+                f'  Total enriched: {enrich_stats["total_enriched"]}\n'
+                f'  Crossref enrichments: {enrich_stats["crossref_enrichments"]}\n'
+                f'  OpenAlex enrichments: {enrich_stats["openalex_enrichments"]}\n'
+                f'  Semantic Scholar enrichments: {enrich_stats["s2_enrichments"]}\n'
+                f'  Errors: {enrich_stats["errors"]}\n'
+                f'  Retries: {enrich_stats["retries"]}'
+            )
 
-                # Log enrichment statistics
-                enrich_stats = enrichment_service.get_statistics()
-                logger.info(
-                    f'Enrichment service statistics:\n'
-                    f'  Total enriched: {enrich_stats["total_enriched"]}\n'
-                    f'  Crossref enrichments: {enrich_stats["crossref_enrichments"]}\n'
-                    f'  OpenAlex enrichments: {enrich_stats["openalex_enrichments"]}\n'
-                    f'  Semantic Scholar enrichments: {enrich_stats["s2_enrichments"]}\n'
-                    f'  Errors: {enrich_stats["errors"]}\n'
-                    f'  Retries: {enrich_stats["retries"]}'
-                )
+            # Close async resources
+            await resolution_chain.close()
+            await enrichment_service.close()
 
-                # Close async resources
-                loop.run_until_complete(resolution_chain.close())
-                loop.run_until_complete(enrichment_service.close())
+            logger.info(
+                f'Enhanced citation resolution complete: {len(enriched_citations)} '
+                f'citations processed'
+            )
 
-                logger.info(
-                    f'Enhanced citation resolution complete: {len(enriched_citations)} '
-                    f'citations processed'
-                )
-
-                return enriched_citations
-
-            finally:
-                loop.close()
+            return enriched_citations
 
         except Exception as e:
             logger.error(

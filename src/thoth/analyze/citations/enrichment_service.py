@@ -586,33 +586,40 @@ class CitationEnrichmentService:
         logger.info(f"Batch enriching {len(results)} citations from resolution results")
 
         enriched_citations: List[Citation] = []
-        tasks = []
 
-        for result in results:
-            # Create base Citation from matched_data
-            if result.matched_data:
-                citation = Citation(**result.matched_data)
-            else:
-                # Create minimal citation from original citation text
-                citation = Citation(text=result.citation)
+        # Limit concurrent enrichment requests to prevent API rate limit exhaustion
+        # and resource contention (50 concurrent enrichments max)
+        semaphore = asyncio.Semaphore(50)
 
-            # Determine enrichment strategy based on available identifiers
-            if result.source == APISource.CROSSREF and result.matched_data.get("doi"):
-                # DOI available - use Crossref as primary source
-                tasks.append(self._enrich_citation_prioritized(citation, result))
-            elif result.source == APISource.OPENALEX and result.matched_data.get("openalex_id"):
-                # OpenAlex ID available
-                openalex_id = result.matched_data["openalex_id"]
-                tasks.append(self.enrich_from_openalex(citation, openalex_id))
-            elif result.source == APISource.SEMANTIC_SCHOLAR and result.matched_data.get("s2_id"):
-                # Semantic Scholar ID available
-                s2_id = result.matched_data["s2_id"]
-                tasks.append(self.enrich_from_semantic_scholar(citation, s2_id))
-            else:
-                # No good identifier - add as-is
-                tasks.append(asyncio.sleep(0, result=citation))
+        async def enrich_with_limit(result):
+            """Enrich a single citation with concurrency control."""
+            async with semaphore:
+                # Create base Citation from matched_data
+                if result.matched_data:
+                    citation = Citation(**result.matched_data)
+                else:
+                    # Create minimal citation from original citation text
+                    citation = Citation(text=result.citation)
 
-        # Execute enrichments in parallel
+                # Determine enrichment strategy based on available identifiers
+                if result.source == APISource.CROSSREF and result.matched_data.get("doi"):
+                    # DOI available - use Crossref as primary source
+                    return await self._enrich_citation_prioritized(citation, result)
+                elif result.source == APISource.OPENALEX and result.matched_data.get("openalex_id"):
+                    # OpenAlex ID available
+                    openalex_id = result.matched_data["openalex_id"]
+                    return await self.enrich_from_openalex(citation, openalex_id)
+                elif result.source == APISource.SEMANTIC_SCHOLAR and result.matched_data.get("s2_id"):
+                    # Semantic Scholar ID available
+                    s2_id = result.matched_data["s2_id"]
+                    return await self.enrich_from_semantic_scholar(citation, s2_id)
+                else:
+                    # No good identifier - return as-is
+                    return citation
+
+        tasks = [enrich_with_limit(result) for result in results]
+
+        # Execute enrichments in parallel with bounded concurrency
         enriched_citations = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Filter out exceptions

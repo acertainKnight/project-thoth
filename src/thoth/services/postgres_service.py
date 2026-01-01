@@ -43,8 +43,14 @@ class PostgresService(BaseService):
 
     async def initialize(self) -> None:
         """Initialize the PostgreSQL connection pool."""
-        try:
-            if self._pool is None:
+        # Use lock to prevent race condition where multiple threads
+        # could simultaneously create multiple connection pools
+        async with self._connection_lock:
+            # Double-check pattern: verify pool is still None after acquiring lock
+            if self._pool is not None:
+                return  # Another thread already initialized the pool
+
+            try:
                 self._pool = await asyncpg.create_pool(
                     self.database_url,
                     min_size=5,
@@ -60,10 +66,12 @@ class PostgresService(BaseService):
                     version = await conn.fetchval('SELECT version()')
                     self.logger.info(f'Connected to PostgreSQL: {version}')
 
-        except Exception as e:
-            raise ServiceError(
-                self.handle_error(e, 'initializing PostgreSQL connection pool')
-            ) from e
+            except Exception as e:
+                # Clear pool on error to allow retry
+                self._pool = None
+                raise ServiceError(
+                    self.handle_error(e, 'initializing PostgreSQL connection pool')
+                ) from e
 
     async def close(self) -> None:
         """Close the connection pool."""

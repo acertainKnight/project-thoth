@@ -59,9 +59,11 @@ class CacheService(BaseService):
         ]:
             cache_path.mkdir(parents=True, exist_ok=True)
 
-        # In-memory cache for frequently accessed items
-        self._memory_cache = {}
-        self._memory_cache_timestamps = {}
+        # In-memory cache for frequently accessed items with bounded size
+        # Using LRUCache to enforce the size limit automatically
+        from cachetools import LRUCache
+        self._memory_cache: LRUCache = LRUCache(maxsize=100)
+        self._memory_cache_timestamps: dict[str, float] = {}
 
         # Cache configuration
         self._memory_cache_size_limit = 100  # Max items in memory

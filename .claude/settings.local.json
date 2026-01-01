@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__ruv-swarm",
+      "mcp__claude-flow@alpha",
+      "mcp__flow-nexus",
+      "Bash(python -m thoth.migration.migrate:*)",
+      "Bash(uv run python:*)",
+      "Bash(uv add:*)",
+      "Bash(uv sync:*)",
+      "Bash(rm:*)",
+      "Bash(docker compose build:*)",
+      "Bash(timeout 180 bash -c 'while ps aux | grep -q \"\"\"\"[d]ocker compose build\"\"\"\"; do sleep 5; done')",
+      "Bash(docker compose:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker ps:*)"
+    ],
+    "deny": []
+  },
+  "enabledMcpjsonServers": [
+    "claude-flow",
+    "ruv-swarm",
+    "claude-flow@alpha",
+    "flow-nexus"
+  ]
+}

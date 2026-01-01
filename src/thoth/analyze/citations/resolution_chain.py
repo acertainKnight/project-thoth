@@ -890,8 +890,15 @@ class CitationResolutionChain:
         start_time = time.time()
 
         if parallel:
-            # Process citations concurrently
-            tasks = [self.resolve(citation) for citation in citations]
+            # Process citations concurrently with bounded parallelism
+            # Limit to 50 concurrent tasks to prevent resource exhaustion
+            semaphore = asyncio.Semaphore(50)
+
+            async def resolve_with_limit(citation):
+                async with semaphore:
+                    return await self.resolve(citation)
+
+            tasks = [resolve_with_limit(citation) for citation in citations]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Handle any exceptions

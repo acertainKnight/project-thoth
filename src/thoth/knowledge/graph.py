@@ -122,10 +122,14 @@ class CitationGraph:
 
             def run_in_thread():
                 try:
+                    # Create a fresh event loop for this thread (threads don't share loops)
                     new_loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(new_loop)
-                    result[0] = new_loop.run_until_complete(coro)
-                    new_loop.close()
+                    try:
+                        result[0] = new_loop.run_until_complete(coro)
+                    finally:
+                        # Always close the loop even if coroutine fails
+                        new_loop.close()
                 except Exception as e:
                     exception[0] = e
 

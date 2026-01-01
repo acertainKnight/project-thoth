@@ -311,3 +311,28 @@ class BaseRepository(Generic[T]):
         except Exception as e:
             logger.error(f"Failed to check {self.table_name} existence: {e}")
             return False
+
+    async def transaction(self):
+        """
+        Create a database transaction context for multi-step operations.
+
+        This ensures ACID guarantees for operations that span multiple queries.
+        All queries within the transaction will either all succeed or all fail.
+
+        Usage:
+            async with repository.transaction() as conn:
+                # All queries in this block are atomic
+                await conn.execute("INSERT INTO ...")
+                await conn.execute("UPDATE ...")
+                # If any query fails, all changes are rolled back
+
+        Example:
+            >>> async with paper_repo.transaction() as conn:
+            ...     paper_id = await conn.fetchval("INSERT INTO papers (...) RETURNING id")
+            ...     await conn.execute("INSERT INTO citations (paper_id, ...) VALUES ($1, ...)", paper_id)
+            ...     # Both operations succeed together or fail together
+
+        Returns:
+            AsyncContextManager yielding a database connection within a transaction
+        """
+        return self.postgres.transaction()
