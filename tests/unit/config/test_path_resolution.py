@@ -8,15 +8,14 @@ Tests all path resolution scenarios:
 - Special cases and edge cases
 """
 
-from pathlib import Path  # noqa: I001
+from pathlib import Path
 from unittest.mock import patch  # noqa: F401
 
 import pytest  # noqa: F401
 
 from tests.fixtures.config_fixtures import (
-    get_full_settings_json,
     get_minimal_settings_json,
-)  # noqa: F401
+)
 from thoth.config import Config
 
 

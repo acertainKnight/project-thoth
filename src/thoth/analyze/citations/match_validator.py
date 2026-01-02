@@ -428,7 +428,7 @@ class MatchValidator:
         ...     print(
         ...         f'Best match from {best.source} with score {best.overall_score:.2f}'
         ...     )
-        """  # noqa: W505
+        """
         if not candidates:
             logger.debug('No candidates provided to get_best_match')
             return None

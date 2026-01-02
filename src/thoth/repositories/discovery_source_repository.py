@@ -100,8 +100,8 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
             return []
 
     async def get_sources_due_for_run(
-        self, current_time: Optional[datetime] = None
-    ) -> List[Dict[str, Any]]:  # noqa: UP006, UP007
+        self, current_time: datetime | None = None
+    ) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get sources that are due for their scheduled run.
 

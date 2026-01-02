@@ -31,9 +31,9 @@ class ResearchQuestionCreate(BaseModel):
         max_length=255,
         description='Descriptive name for the research question',
     )
-    description: Optional[str] = Field(
+    description: str | None = Field(
         None, description='Optional detailed description'
-    )  # noqa: UP007
+    )
     keywords: list[str] = Field(
         default_factory=list, description='Keywords to search for'
     )
@@ -48,14 +48,14 @@ class ResearchQuestionCreate(BaseModel):
         default='daily',
         description='Schedule frequency: daily, weekly, monthly, on-demand',
     )
-    schedule_time: Optional[str] = Field(
+    schedule_time: str | None = Field(
         None,
         pattern=r'^\d{2}:\d{2}$',
         description='Preferred run time in HH:MM format (24-hour)',
-    )  # noqa: UP007
-    schedule_days_of_week: Optional[list[str]] = Field(
+    )
+    schedule_days_of_week: list[str] | None = Field(
         None, description="Days for weekly schedule: ['monday', 'tuesday', ...]"
-    )  # noqa: UP007
+    )
     min_relevance_score: float = Field(
         default=0.5, ge=0.0, le=1.0, description='Minimum relevance threshold (0.0-1.0)'
     )
@@ -305,7 +305,7 @@ async def _get_article_match_repository():
 
     from thoth.repositories.article_research_match_repository import (
         ArticleResearchMatchRepository,
-    )  # noqa: I001
+    )
 
     return ArticleResearchMatchRepository(service_manager.postgres)
 
@@ -760,13 +760,13 @@ async def trigger_discovery_run(
 async def get_matched_articles(
     question_id: UUID,
     request: Request,
-    min_relevance: Optional[float] = Query(
+    min_relevance: float | None = Query(
         None, ge=0.0, le=1.0, description='Minimum relevance score filter'
-    ),  # noqa: UP007
+    ),
     is_viewed: Optional[bool] = Query(None, description='Filter by viewed status'),  # noqa: UP007
-    is_bookmarked: Optional[bool] = Query(
+    is_bookmarked: bool | None = Query(
         None, description='Filter by bookmarked status'
-    ),  # noqa: UP007
+    ),
     limit: int = Query(50, ge=1, le=500, description='Maximum number of results'),
     offset: int = Query(0, ge=0, description='Number of records to skip'),
 ) -> ArticleMatchList:

@@ -183,7 +183,7 @@ async def lifespan(_app: FastAPI):
         try:
             from thoth.discovery.browser.workflow_execution_service import (
                 WorkflowExecutionService,
-            )  # noqa: I001
+            )
 
             logger.info('Initializing workflow execution service...')
             postgres_svc = service_manager._services['postgres']

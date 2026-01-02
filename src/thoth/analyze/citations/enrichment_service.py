@@ -123,7 +123,7 @@ class CitationEnrichmentService:
     async def _make_request(
         self,
         url: str,
-        params: Optional[Dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
         headers: Optional[Dict[str, str]] = None,  # noqa: UP006, UP007
     ) -> Optional[Dict[str, Any]]:  # noqa: UP006, UP007
         """
@@ -283,8 +283,8 @@ class CitationEnrichmentService:
     def _merge_metadata(
         self,
         citation: Citation,
-        metadata_dict: Dict[str, Any],
-        source: APISource,  # noqa: UP006
+        metadata_dict: dict[str, Any],
+        source: APISource,
     ) -> Citation:
         """
         Merge metadata from API into Citation object.

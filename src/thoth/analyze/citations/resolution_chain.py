@@ -673,8 +673,8 @@ class CitationResolutionChain:
 
     def _calculate_semanticscholar_confidence(
         self,
-        paper_data: Dict[str, Any],
-        citation: Citation,  # noqa: UP006
+        paper_data: dict[str, Any],
+        citation: Citation,
     ) -> float:
         """
         Calculate confidence score for Semantic Scholar match with spec-compliant validation.
@@ -905,8 +905,8 @@ class CitationResolutionChain:
 
     async def batch_resolve(
         self,
-        citations: List[Citation],
-        parallel: bool = True,  # noqa: UP006
+        citations: list[Citation],
+        parallel: bool = True,
     ) -> List[ResolutionResult]:  # noqa: UP006
         """
         Resolve multiple citations in batch.
@@ -981,8 +981,8 @@ class CitationResolutionChain:
 
     def _log_batch_summary(
         self,
-        results: List[ResolutionResult],
-        elapsed: float,  # noqa: UP006
+        results: list[ResolutionResult],
+        elapsed: float,
     ) -> None:
         """
         Log summary statistics for batch resolution.

@@ -354,10 +354,10 @@ class TestEvaluationReport:
     )
     def test_create_evaluation_report_creates_text_report(
         self,
-        mock_plot_diff,
-        mock_plot_conf,
-        mock_plot_pr,
-        tmp_path,  # noqa: ARG002
+        mock_plot_diff,  # noqa: ARG002
+        mock_plot_conf,  # noqa: ARG002
+        mock_plot_pr,  # noqa: ARG002
+        tmp_path,
     ):
         """Test text report is created with metrics."""
         metrics = CitationMetrics(
@@ -406,10 +406,10 @@ class TestEvaluationReport:
     )
     def test_create_evaluation_report_custom_system_name(
         self,
-        mock_plot_diff,
-        mock_plot_conf,
-        mock_plot_pr,
-        tmp_path,  # noqa: ARG002
+        mock_plot_diff,  # noqa: ARG002
+        mock_plot_conf,  # noqa: ARG002
+        mock_plot_pr,  # noqa: ARG002
+        tmp_path,
     ):
         """Test custom system name is used in report."""
         metrics = CitationMetrics(

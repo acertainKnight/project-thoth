@@ -71,8 +71,8 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
             return None
 
     async def is_paper_discovered(
-        self, paper_id: str, source_id: Optional[str] = None
-    ) -> bool:  # noqa: UP007
+        self, paper_id: str, source_id: str | None = None
+    ) -> bool:
         """
         Check if a paper has been discovered.
 

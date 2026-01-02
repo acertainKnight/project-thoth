@@ -357,7 +357,7 @@ class DiscoveryServiceV2(DiscoveryService):
 
     async def is_article_processed(
         self,
-        doi: Optional[str] = None,
+        doi: str | None = None,  # noqa: ARG002
         arxiv_id: Optional[str] = None,  # noqa: ARG002, UP007
     ) -> bool:
         """

@@ -128,7 +128,7 @@ class BrowserWorkflowPlugin(BaseDiscoveryPlugin):
 
     def discover(
         self,
-        query: ResearchQuery,
+        query: ResearchQuery,  # noqa: ARG002
         max_results: int,  # noqa: ARG002
     ) -> list[ScrapedArticleMetadata]:
         """

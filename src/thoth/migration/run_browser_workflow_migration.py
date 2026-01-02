@@ -72,8 +72,8 @@ async def run_browser_workflow_migration():
                 except Exception as e:
                     if 'already exists' in str(e).lower():
                         console.print(
-                            f'[yellow]⚠ Tables already exist (this is OK)[/yellow]'
-                        )  # noqa: F541
+                            '[yellow]⚠ Tables already exist (this is OK)[/yellow]'
+                        )
                     else:
                         raise
 
@@ -120,8 +120,8 @@ async def run_browser_workflow_migration():
 
     except asyncpg.exceptions.InvalidPasswordError:
         console.print(
-            f'[red]✗ Database authentication failed. Check your credentials.[/red]'
-        )  # noqa: F541
+            '[red]✗ Database authentication failed. Check your credentials.[/red]'
+        )
         return False
 
     except Exception as e:

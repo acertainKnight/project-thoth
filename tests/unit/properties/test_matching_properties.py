@@ -185,8 +185,8 @@ def test_author_matching_symmetry(authors1: List[str], authors2: List[str]):  # 
     journal=st.text(min_size=5, max_size=100),
 )
 def test_citation_self_match_perfect(
-    title: str, authors: List[str], year: int, journal: str
-):  # noqa: UP006
+    title: str, authors: list[str], year: int, journal: str
+):
     """
     Property: Citation should match itself perfectly.
 

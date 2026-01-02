@@ -22,12 +22,10 @@ import httpx
 
 from thoth.analyze.citations.crossref_resolver import (
     CrossrefResolver,
-    MatchCandidate as CrossrefMatch,
-)  # noqa: F401
+)
 from thoth.analyze.citations.openalex_resolver import (
     OpenAlexResolver,
-    MatchCandidate as OpenAlexMatch,
-)  # noqa: F401
+)
 from thoth.analyze.citations.semanticscholar import SemanticScholarAPI
 from thoth.utilities.schemas.citations import Citation
 

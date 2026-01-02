@@ -5,7 +5,7 @@ This module provides a simple, unified interface for executing browser workflows
 by coordinating the BrowserManager, WorkflowEngine, and ExtractionService.
 """
 
-from __future__ import annotations  # noqa: I001
+from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -18,8 +18,7 @@ from thoth.discovery.browser.browser_manager import BrowserManager
 from thoth.discovery.browser.extraction_service import ExtractionService  # noqa: F401
 from thoth.discovery.browser.workflow_engine import (
     WorkflowEngine,
-    WorkflowExecutionResult,
-)  # noqa: F401
+)
 from thoth.repositories.browser_workflow_repository import BrowserWorkflowRepository
 from thoth.repositories.workflow_actions_repository import WorkflowActionsRepository
 from thoth.repositories.workflow_credentials_repository import (

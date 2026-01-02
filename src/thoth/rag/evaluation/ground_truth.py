@@ -46,8 +46,8 @@ class GroundTruthGenerator:
     def __init__(
         self,
         postgres_service: PostgresService,
-        llm_client: Optional[OpenRouterClient] = None,
-    ):  # noqa: UP007
+        llm_client: OpenRouterClient | None = None,
+    ):
         """
         Initialize ground truth generator.
 

@@ -107,9 +107,9 @@ class PaperRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
 
     async def get_by_tags(
         self,
-        tags: List[str],
+        tags: list[str],
         match_all: bool = False,
-        limit: int = 50,  # noqa: UP006
+        limit: int = 50,
     ) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get papers with specific tags.

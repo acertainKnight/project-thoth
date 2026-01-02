@@ -31,11 +31,11 @@ Ground Truth Generation:
 from thoth.analyze.evaluation.ground_truth import (
     AnalysisGroundTruthGenerator,
     AnalysisGroundTruthPair,
-)  # noqa: I001
+)
 from thoth.analyze.evaluation.metrics import (
     AnalysisMetrics,
-    ExtractionMetrics,
     ContentQualityMetrics,
+    ExtractionMetrics,
     calculate_analysis_metrics,
 )
 from thoth.analyze.evaluation.runner import run_analysis_evaluation

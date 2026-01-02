@@ -371,8 +371,8 @@ class ReliabilityAnalyzer:
     def _classify_error_severity(
         self,
         error_message: str,
-        error_type: str,
-        service: str,  # noqa: ARG002
+        error_type: str,  # noqa: ARG002
+        service: str,
     ) -> FailureSeverity:
         """Classify error severity based on impact."""
         message_lower = error_message.lower()

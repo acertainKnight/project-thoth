@@ -150,7 +150,7 @@ class ServiceManager:
         # Initialize discovery manager (needed for orchestrator)
         from thoth.repositories.available_source_repository import (
             AvailableSourceRepository,
-        )  # noqa: I001
+        )
 
         source_repo = AvailableSourceRepository(self._services['postgres'])
         self._services['discovery_manager'] = DiscoveryManager(

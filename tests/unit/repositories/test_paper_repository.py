@@ -151,8 +151,8 @@ class TestPaperRepository:
         assert 'LIMIT' in query_info['query']
 
     async def test_get_by_tags_match_all(
-        self, mock_postgres_service, sample_papers_batch
-    ):  # noqa: F811
+        self, mock_postgres_service, sample_papers_batch  # noqa: F811
+    ):
         """Test getting papers matching all tags."""
         mock_records = [
             create_mock_record(**paper) for paper in sample_papers_batch[:2]
@@ -168,8 +168,8 @@ class TestPaperRepository:
         assert '@>' in query_info['query']  # Contains operator for match_all
 
     async def test_get_by_tags_match_any(
-        self, mock_postgres_service, sample_papers_batch
-    ):  # noqa: F811
+        self, mock_postgres_service, sample_papers_batch  # noqa: F811
+    ):
         """Test getting papers matching any tag."""
         mock_records = [
             create_mock_record(**paper) for paper in sample_papers_batch[:5]

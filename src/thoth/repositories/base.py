@@ -339,5 +339,5 @@ class BaseRepository(Generic[T]):
 
         Returns:
             AsyncContextManager yielding a database connection within a transaction
-        """  # noqa: W505
+        """
         return self.postgres.transaction()

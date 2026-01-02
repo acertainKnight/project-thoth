@@ -8,7 +8,7 @@ Tests:
 - Thread-safety with lock
 """
 
-import json  # noqa: I001
+import json
 import threading
 from pathlib import Path
 
@@ -16,8 +16,7 @@ import pytest
 
 from tests.fixtures.config_fixtures import (
     get_full_settings_json,
-    get_minimal_settings_json,
-)  # noqa: F401
+)
 from thoth.config import Config
 
 

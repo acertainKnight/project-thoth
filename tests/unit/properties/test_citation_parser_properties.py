@@ -145,8 +145,8 @@ def test_citation_parsing_never_crashes(citation_text: str):
 
     except Exception as e:
         pytest.fail(
-            f'Parser crashed on input: {repr(citation_text[:100])} with error: {e}'
-        )  # noqa: RUF010
+            f'Parser crashed on input: {citation_text[:100]!r} with error: {e}'
+        )
 
 
 @pytest.mark.property
@@ -368,8 +368,8 @@ def test_citation_handles_malformed_input_gracefully(text: str):
 
     except Exception as e:
         pytest.fail(
-            f'Parser failed on malformed input: {repr(text[:100])} with error: {e}'
-        )  # noqa: RUF010
+            f'Parser failed on malformed input: {text[:100]!r} with error: {e}'
+        )
 
 
 @pytest.mark.property

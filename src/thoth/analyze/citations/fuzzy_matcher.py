@@ -318,7 +318,7 @@ def match_authors(authors1: List[str], authors2: List[str]) -> float:  # noqa: U
         0.82  # First author strong match + good overlap
         >>> match_authors(['J. Smith', 'A. Doe'], ['John Smith', 'Alice Doe'])
         0.88  # Handles initial/full name variations
-    """  # noqa: W505
+    """
     if not authors1 or not authors2:
         return 0.0
 
@@ -479,7 +479,7 @@ def match_journal(journal1: str, journal2: str) -> float:
         0.72  # Moderate score due to abbreviation
         >>> match_journal('Nature', 'Nature Reviews')
         0.65  # Partial match
-    """  # noqa: W505
+    """
     if not journal1 or not journal2:
         return 0.0
 

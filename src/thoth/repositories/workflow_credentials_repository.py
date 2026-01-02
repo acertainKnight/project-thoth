@@ -19,8 +19,8 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
     """Repository for managing encrypted workflow credentials."""
 
     def __init__(
-        self, postgres_service, encryption_key: Optional[str] = None, **kwargs
-    ):  # noqa: UP007
+        self, postgres_service, encryption_key: str | None = None, **kwargs
+    ):
         """
         Initialize workflow credentials repository.
 

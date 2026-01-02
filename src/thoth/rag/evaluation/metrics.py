@@ -64,9 +64,9 @@ class RAGMetrics:
     retrieval: RetrievalMetrics
     answer_quality: AnswerQualityMetrics
     performance: PerformanceMetrics
-    by_difficulty: Dict[
+    by_difficulty: dict[
         str, 'RAGMetrics'
-    ]  # Metrics stratified by difficulty  # noqa: UP006
+    ]  # Metrics stratified by difficulty
     by_question_type: Dict[str, 'RAGMetrics']  # Metrics by question type  # noqa: UP006
 
 

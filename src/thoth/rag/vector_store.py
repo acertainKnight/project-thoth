@@ -30,8 +30,8 @@ class VectorStoreManager:
     def __init__(
         self,
         collection_name: str | None = None,  # noqa: ARG002
-        persist_directory: str
-        | None = None,  # Deprecated, kept for compatibility  # noqa: ARG002
+        persist_directory: str  # noqa: ARG002
+        | None = None,  # Deprecated, kept for compatibility
         embedding_function: Any | None = None,
     ):
         """

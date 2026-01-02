@@ -408,8 +408,8 @@ class TestCallbackCount:
         def register_callbacks():
             for i in range(10):
                 Config.register_reload_callback(
-                    f'thread_{threading.current_thread().ident}_{i}', lambda c: None
-                )  # noqa: ARG005
+                    f'thread_{threading.current_thread().ident}_{i}', lambda c: None  # noqa: ARG005
+                )
 
         threads = []
         for _ in range(3):

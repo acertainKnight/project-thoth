@@ -70,8 +70,8 @@ class ElementSelector(BaseModel):
 
     @field_validator('priority')
     def validate_priority(
-        cls,
-        priority: list[SelectorStrategy],  # noqa: N805
+        cls,  # noqa: N805
+        priority: list[SelectorStrategy],
     ) -> list[SelectorStrategy]:  # noqa: N805, RUF100
         """Ensure priority list contains at least one strategy."""
         if not priority:

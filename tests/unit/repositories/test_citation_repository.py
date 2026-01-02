@@ -56,7 +56,7 @@ class TestCitationRepository:
     async def test_get_citations_for_paper(
         self,
         mock_postgres_service,
-        sample_citation_data,
+        sample_citation_data,  # noqa: F811
         sample_paper_data,  # noqa: F811
     ):
         """Test getting all citations made by a paper."""
@@ -79,7 +79,7 @@ class TestCitationRepository:
     async def test_get_citing_papers(
         self,
         mock_postgres_service,
-        sample_citation_data,
+        sample_citation_data,  # noqa: F811
         sample_paper_data,  # noqa: F811
     ):
         """Test getting all papers that cite a paper."""

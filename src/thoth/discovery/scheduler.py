@@ -775,7 +775,7 @@ class DiscoveryScheduler:
                 # Calculate next run time based on schedule
                 from thoth.services.research_question_service import (
                     ResearchQuestionService,
-                )  # noqa: I001
+                )
 
                 next_run = ResearchQuestionService(self.config)._calculate_next_run(
                     frequency=question.get('schedule_frequency', 'daily'),
