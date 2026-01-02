@@ -11,13 +11,14 @@ RUN apt-get update && apt-get install -y \
 
 # Install uv for fast dependency management
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.cargo/bin:$PATH"
+ENV PATH="/root/.local/bin:$PATH"
 
 WORKDIR /app
 
 # Copy dependency files
 COPY pyproject.toml ./
 COPY README.md ./
+COPY src/ ./src/
 
 # Install dependencies
 RUN uv pip install --system --no-cache -e ".[api,discovery,vector,test]"

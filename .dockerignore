@@ -51,6 +51,7 @@ htmlcov/
 # Documentation
 docs/_build/
 *.md
+!README.md
 
 # OS
 .DS_Store
