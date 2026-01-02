@@ -1,6 +1,6 @@
 """Research and chat endpoints."""
 
-from datetime import datetime
+from datetime import datetime  # noqa: I001
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -70,7 +70,7 @@ async def research_chat(request: ChatRequest) -> ChatResponse:
 
     try:
         # Initialize router and select model based on query
-        config  # Already imported at module level
+        config  # Already imported at module level  # noqa: B018
         llm_router = LLMRouter(config)
         selected_model = llm_router.select_model(request.message)
 

@@ -5,8 +5,8 @@ This module provides scheduling functionality for running discovery
 sources on configurable cadences and managing the discovery workflow.
 """
 
-import asyncio
-import json
+import asyncio  # noqa: I001
+import json  # noqa: F401
 import threading
 import time
 from datetime import datetime, timedelta
@@ -52,7 +52,7 @@ class DiscoveryScheduler:
             discovery_orchestrator: DiscoveryOrchestrator for running question-based discovery.
             event_loop: Event loop to use for async operations from sync thread.
                        If None, will use asyncio.run() (creates new loop per call).
-        """
+        """  # noqa: W505
         self.config = config
         self.discovery_manager = discovery_manager or DiscoveryManager()
         self.research_question_service = research_question_service
@@ -74,7 +74,9 @@ class DiscoveryScheduler:
             f'Discovery scheduler initialized with schedule file: {self.schedule_file}'
         )
         if self.event_loop:
-            logger.info('Scheduler configured to use provided event loop for async operations')
+            logger.info(
+                'Scheduler configured to use provided event loop for async operations'
+            )
 
     def start(self) -> None:
         """
@@ -432,17 +434,21 @@ class DiscoveryScheduler:
 
     def _load_from_postgres(self) -> dict[str, Any]:
         """Load discovery schedule from PostgreSQL."""
-        import asyncpg
+        import asyncpg  # noqa: I001
         import asyncio
 
-        db_url = getattr(self.config.secrets, 'database_url', None) if hasattr(self.config, 'secrets') else None
+        db_url = (
+            getattr(self.config.secrets, 'database_url', None)
+            if hasattr(self.config, 'secrets')
+            else None
+        )
         if not db_url:
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
         async def load():
             conn = await asyncpg.connect(db_url)
             try:
-                rows = await conn.fetch("SELECT * FROM discovery_schedule")
+                rows = await conn.fetch('SELECT * FROM discovery_schedule')
                 schedule_state = {}
                 for row in rows:
                     schedule_state[row['source_name']] = {
@@ -452,9 +458,11 @@ class DiscoveryScheduler:
                         'interval_minutes': row['interval_minutes'],
                         'max_articles_per_run': row['max_articles_per_run'],
                         'time_of_day': row['time_of_day'],
-                        'days_of_week': row['days_of_week']
+                        'days_of_week': row['days_of_week'],
                     }
-                logger.info(f'Loaded discovery schedule for {len(rows)} sources from PostgreSQL')
+                logger.info(
+                    f'Loaded discovery schedule for {len(rows)} sources from PostgreSQL'
+                )
                 return schedule_state
             finally:
                 await conn.close()
@@ -465,6 +473,7 @@ class DiscoveryScheduler:
         except RuntimeError:
             # If there's already an event loop running, create a new one in a thread
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(lambda: asyncio.run(load()))
                 return future.result()
@@ -480,10 +489,14 @@ class DiscoveryScheduler:
 
     def _save_to_postgres(self) -> None:
         """Save discovery schedule to PostgreSQL."""
-        import asyncpg
+        import asyncpg  # noqa: I001
         import asyncio
 
-        db_url = getattr(self.config.secrets, 'database_url', None) if hasattr(self.config, 'secrets') else None
+        db_url = (
+            getattr(self.config.secrets, 'database_url', None)
+            if hasattr(self.config, 'secrets')
+            else None
+        )
         if not db_url:
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
@@ -491,7 +504,8 @@ class DiscoveryScheduler:
             conn = await asyncpg.connect(db_url)
             try:
                 for source_name, schedule_info in self.schedule_state.items():
-                    await conn.execute("""
+                    await conn.execute(
+                        """
                         INSERT INTO discovery_schedule (
                             source_name, last_run, next_run, enabled,
                             interval_minutes, max_articles_per_run, time_of_day, days_of_week
@@ -513,9 +527,11 @@ class DiscoveryScheduler:
                         schedule_info.get('interval_minutes'),
                         schedule_info.get('max_articles_per_run'),
                         schedule_info.get('time_of_day'),
-                        schedule_info.get('days_of_week')
+                        schedule_info.get('days_of_week'),
                     )
-                logger.debug(f'Saved discovery schedule for {len(self.schedule_state)} sources to PostgreSQL')
+                logger.debug(
+                    f'Saved discovery schedule for {len(self.schedule_state)} sources to PostgreSQL'
+                )
             finally:
                 await conn.close()
 
@@ -525,6 +541,7 @@ class DiscoveryScheduler:
         except RuntimeError:
             # If there's already an event loop running, create a new one in a thread
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(lambda: asyncio.run(save()))
                 future.result()
@@ -624,10 +641,12 @@ class DiscoveryScheduler:
         Check for research questions that need to run and execute them.
 
         This method bridges sync thread → async methods using asyncio.run_coroutine_threadsafe.
-        """
+        """  # noqa: W505
         # Skip if research question service not configured
         if not self.research_question_service or not self.discovery_orchestrator:
-            logger.debug('Research question scheduling disabled (services not configured)')
+            logger.debug(
+                'Research question scheduling disabled (services not configured)'
+            )
             return
 
         try:
@@ -636,7 +655,7 @@ class DiscoveryScheduler:
                 # Use run_coroutine_threadsafe with provided event loop
                 future = asyncio.run_coroutine_threadsafe(
                     self.research_question_service.get_questions_due_for_discovery(),
-                    self.event_loop
+                    self.event_loop,
                 )
                 try:
                     questions_due = future.result(timeout=30)  # 30 second timeout
@@ -656,7 +675,9 @@ class DiscoveryScheduler:
                 logger.debug('No research questions due for discovery')
                 return
 
-            logger.info(f'Found {len(questions_due)} research questions due for discovery')
+            logger.info(
+                f'Found {len(questions_due)} research questions due for discovery'
+            )
 
             # Run discovery for each question
             for question in questions_due:
@@ -674,22 +695,23 @@ class DiscoveryScheduler:
                         # Use run_coroutine_threadsafe with provided event loop
                         future = asyncio.run_coroutine_threadsafe(
                             self._run_question_discovery_async(question_id, question),
-                            self.event_loop
+                            self.event_loop,
                         )
                         try:
-                            result = future.result(timeout=600)  # 10 minute timeout for discovery
+                            result = future.result(
+                                timeout=600
+                            )  # 10 minute timeout for discovery
                         except TimeoutError:
-                            logger.error(f'Timeout running discovery for question {question_name} (10 min)')
+                            logger.error(
+                                f'Timeout running discovery for question {question_name} (10 min)'
+                            )
                             result = {
                                 'success': False,
-                                'error': 'Discovery execution timeout (10 minutes)'
+                                'error': 'Discovery execution timeout (10 minutes)',
                             }
                         except Exception as e:
                             logger.error(f'Error running discovery: {e}', exc_info=True)
-                            result = {
-                                'success': False,
-                                'error': str(e)
-                            }
+                            result = {'success': False, 'error': str(e)}
                     else:
                         # Fallback: Create new event loop
                         result = asyncio.run(
@@ -711,17 +733,17 @@ class DiscoveryScheduler:
                 except Exception as e:
                     logger.error(
                         f'Error running scheduled question {question.get("name", question.get("id"))}: {e}',
-                        exc_info=True
+                        exc_info=True,
                     )
                     # Continue with next question
 
         except Exception as e:
-            logger.error(f'Error in _check_and_run_scheduled_questions: {e}', exc_info=True)
+            logger.error(
+                f'Error in _check_and_run_scheduled_questions: {e}', exc_info=True
+            )
 
     async def _run_question_discovery_async(
-        self,
-        question_id: str,
-        question: dict[str, Any]
+        self, question_id: str, question: dict[str, Any]
     ) -> dict[str, Any]:
         """
         Async helper method to run discovery and update statistics.
@@ -751,7 +773,10 @@ class DiscoveryScheduler:
             # Update question statistics and schedule
             if result.get('success'):
                 # Calculate next run time based on schedule
-                from thoth.services.research_question_service import ResearchQuestionService
+                from thoth.services.research_question_service import (
+                    ResearchQuestionService,
+                )  # noqa: I001
+
                 next_run = ResearchQuestionService(self.config)._calculate_next_run(
                     frequency=question.get('schedule_frequency', 'daily'),
                     schedule_time=question.get('schedule_time'),
@@ -784,8 +809,7 @@ class DiscoveryScheduler:
         except Exception as e:
             execution_time = time.time() - start_time
             logger.error(
-                f'Discovery failed for question {question_id}: {e}',
-                exc_info=True
+                f'Discovery failed for question {question_id}: {e}', exc_info=True
             )
 
             # Log failed execution
@@ -812,7 +836,7 @@ class DiscoveryScheduler:
         articles_found: int,
         articles_matched: int,
         execution_time: float,
-        error_message: str = None,
+        error_message: str = None,  # noqa: RUF013
     ) -> None:
         """
         Log discovery execution to PostgreSQL discovery_execution_log table.
@@ -828,14 +852,19 @@ class DiscoveryScheduler:
         try:
             import asyncpg
 
-            db_url = getattr(self.config.secrets, 'database_url', None) if hasattr(self.config, 'secrets') else None
+            db_url = (
+                getattr(self.config.secrets, 'database_url', None)
+                if hasattr(self.config, 'secrets')
+                else None
+            )
             if not db_url:
                 logger.warning('DATABASE_URL not configured - skipping execution log')
                 return
 
             conn = await asyncpg.connect(db_url)
             try:
-                await conn.execute("""
+                await conn.execute(
+                    """
                     INSERT INTO discovery_execution_log (
                         question_id,
                         executed_at,
@@ -860,4 +889,3 @@ class DiscoveryScheduler:
 
         except Exception as e:
             logger.error(f'Failed to log discovery execution: {e}', exc_info=True)
-

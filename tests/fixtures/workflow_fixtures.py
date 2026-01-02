@@ -4,7 +4,7 @@ Test fixtures for workflow monitoring tests.
 Provides reusable test data and factory functions for workflow monitoring components.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta  # noqa: I001
 from typing import Any
 
 from thoth.performance.workflow_monitor import (

@@ -5,7 +5,7 @@ This module provides automated benchmarking capabilities for all Thoth component
 including performance regression testing, load testing, and comparative analysis.
 """
 
-import asyncio
+import asyncio  # noqa: I001
 import json
 import statistics
 import time
@@ -19,7 +19,7 @@ import psutil
 from loguru import logger
 
 from thoth.services.service_manager import ServiceManager
-from thoth.config import config, Config
+from thoth.config import config, Config  # noqa: F401
 
 
 @dataclass
@@ -131,7 +131,7 @@ class BenchmarkSuite:
 
     def __init__(
         self,
-        config: Config,
+        config: Config,  # noqa: F811
         service_manager: ServiceManager,
         output_dir: Path | None = None,
     ):
@@ -528,7 +528,9 @@ class BenchmarkSuite:
             await asyncio.sleep(processing_time)
 
     async def _benchmark_llm_query(
-        self, test_data: dict[str, Any], warmup: bool = False
+        self,
+        test_data: dict[str, Any],
+        warmup: bool = False,  # noqa: ARG002
     ) -> None:
         """Benchmark LLM query performance."""
         query_type = test_data.get('query_type', 'simple')
@@ -547,7 +549,9 @@ class BenchmarkSuite:
         await asyncio.sleep(delay)
 
     async def _benchmark_llm_analysis(
-        self, test_data: dict[str, Any], warmup: bool = False
+        self,
+        test_data: dict[str, Any],
+        warmup: bool = False,  # noqa: ARG002
     ) -> None:
         """Benchmark LLM document analysis."""
         analysis_type = test_data.get('analysis_type', 'simple')
@@ -586,7 +590,9 @@ class BenchmarkSuite:
         await asyncio.sleep(total_delay)
 
     async def _benchmark_rag_search(
-        self, test_data: dict[str, Any], warmup: bool = False
+        self,
+        test_data: dict[str, Any],
+        warmup: bool = False,  # noqa: ARG002
     ) -> None:
         """Benchmark RAG similarity search."""
         query_complexity = test_data.get('query_complexity', 'simple')
@@ -606,7 +612,9 @@ class BenchmarkSuite:
         await asyncio.sleep(total_delay)
 
     async def _benchmark_citation_extraction(
-        self, test_data: dict[str, Any], warmup: bool = False
+        self,
+        test_data: dict[str, Any],
+        warmup: bool = False,  # noqa: ARG002
     ) -> None:
         """Benchmark citation extraction."""
         document_type = test_data.get('document_type', 'research_paper')
@@ -629,7 +637,9 @@ class BenchmarkSuite:
         await asyncio.sleep(total_delay)
 
     async def _benchmark_paper_discovery(
-        self, test_data: dict[str, Any], warmup: bool = False
+        self,
+        test_data: dict[str, Any],
+        warmup: bool = False,  # noqa: ARG002
     ) -> None:
         """Benchmark paper discovery from multiple sources."""
         query_complexity = test_data.get('query_complexity', 'medium')

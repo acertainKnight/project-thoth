@@ -20,7 +20,7 @@ Decision Logic:
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional  # noqa: UP035
 
 from .resolution_types import (
     APISource,
@@ -48,7 +48,7 @@ class DecisionEngine:
         LOW_CONFIDENCE (float): Threshold for low-confidence manual review (0.50)
         REJECT_THRESHOLD (float): Threshold below which matches are rejected (0.50)
         CLEAR_WINNER_GAP (float): Score gap required to distinguish clear winner (0.15)
-    """
+    """  # noqa: W505
 
     # Confidence thresholds
     HIGH_CONFIDENCE = 0.85
@@ -62,16 +62,16 @@ class DecisionEngine:
     def __init__(self):
         """Initialize the decision engine with logging."""
         logger.info(
-            "DecisionEngine initialized with thresholds: "
-            f"HIGH={self.HIGH_CONFIDENCE}, MEDIUM={self.MEDIUM_CONFIDENCE}, "
-            f"LOW={self.LOW_CONFIDENCE}, REJECT={self.REJECT_THRESHOLD}"
+            'DecisionEngine initialized with thresholds: '
+            f'HIGH={self.HIGH_CONFIDENCE}, MEDIUM={self.MEDIUM_CONFIDENCE}, '
+            f'LOW={self.LOW_CONFIDENCE}, REJECT={self.REJECT_THRESHOLD}'
         )
 
     def decide(
         self,
         input_citation: str,
-        candidates: List[MatchCandidate],
-        metadata: Optional[ResolutionMetadata] = None,
+        candidates: List[MatchCandidate],  # noqa: UP006
+        metadata: Optional[ResolutionMetadata] = None,  # noqa: UP007
     ) -> ResolutionResult:
         """
         Make a resolution decision based on match candidates and scores.
@@ -99,7 +99,7 @@ class DecisionEngine:
         """
         logger.info(
             f"Making decision for citation: '{input_citation[:100]}...' "
-            f"with {len(candidates)} candidates"
+            f'with {len(candidates)} candidates'
         )
 
         # Initialize metadata if not provided
@@ -108,7 +108,7 @@ class DecisionEngine:
 
         # Handle case with no candidates
         if not candidates:
-            logger.warning("No candidates provided for decision-making")
+            logger.warning('No candidates provided for decision-making')
             return self._create_resolution_result(
                 citation=input_citation,
                 status=CitationResolutionStatus.UNRESOLVED,
@@ -118,28 +118,25 @@ class DecisionEngine:
                 matched_data=None,
                 candidates=[],
                 metadata=metadata,
-                decision_rationale="No candidates available for matching",
+                decision_rationale='No candidates available for matching',
             )
 
         # Sort candidates by score (descending)
-        sorted_candidates = sorted(
-            candidates, key=lambda c: c.raw_score, reverse=True
-        )
+        sorted_candidates = sorted(candidates, key=lambda c: c.raw_score, reverse=True)
 
         best_candidate = sorted_candidates[0]
         best_score = best_candidate.raw_score
 
         logger.info(
-            f"Best candidate score: {best_score:.3f} "
-            f"(source: {best_candidate.source})"
+            f'Best candidate score: {best_score:.3f} (source: {best_candidate.source})'
         )
 
         # Log component scores for debugging
         if best_candidate.component_scores:
-            component_breakdown = ", ".join(
-                f"{k}={v:.3f}" for k, v in best_candidate.component_scores.items()
+            component_breakdown = ', '.join(
+                f'{k}={v:.3f}' for k, v in best_candidate.component_scores.items()
             )
-            logger.debug(f"Component scores: {component_breakdown}")
+            logger.debug(f'Component scores: {component_breakdown}')
 
         # Apply decision logic based on score thresholds
         if best_score >= self.HIGH_CONFIDENCE:
@@ -182,7 +179,7 @@ class DecisionEngine:
         self,
         citation: str,
         candidate: MatchCandidate,
-        candidates: List[MatchCandidate],
+        candidates: List[MatchCandidate],  # noqa: UP006
         metadata: ResolutionMetadata,
     ) -> ResolutionResult:
         """
@@ -191,13 +188,13 @@ class DecisionEngine:
         These matches are automatically resolved with HIGH confidence.
         """
         logger.info(
-            f"HIGH confidence match: score={candidate.raw_score:.3f}, "
-            f"source={candidate.source}"
+            f'HIGH confidence match: score={candidate.raw_score:.3f}, '
+            f'source={candidate.source}'
         )
 
         rationale = (
-            f"High confidence match (score: {candidate.raw_score:.3f} ≥ "
-            f"{self.HIGH_CONFIDENCE}). Match meets threshold for automatic resolution."
+            f'High confidence match (score: {candidate.raw_score:.3f} ≥ '
+            f'{self.HIGH_CONFIDENCE}). Match meets threshold for automatic resolution.'
         )
 
         return self._create_resolution_result(
@@ -216,7 +213,7 @@ class DecisionEngine:
         self,
         citation: str,
         best_candidate: MatchCandidate,
-        candidates: List[MatchCandidate],
+        candidates: List[MatchCandidate],  # noqa: UP006
         metadata: ResolutionMetadata,
     ) -> ResolutionResult:
         """
@@ -227,21 +224,19 @@ class DecisionEngine:
         - Ambiguous: MANUAL_REVIEW due to multiple strong candidates
         """
         logger.info(
-            f"MEDIUM confidence match: score={best_candidate.raw_score:.3f}, "
-            f"checking for clear winner..."
+            f'MEDIUM confidence match: score={best_candidate.raw_score:.3f}, '
+            f'checking for clear winner...'
         )
 
         if self._is_clear_winner(candidates):
             # Clear winner exists
             gap = self._get_score_gap(candidates)
-            logger.info(
-                f"Clear winner detected with gap={gap:.3f} to second place"
-            )
+            logger.info(f'Clear winner detected with gap={gap:.3f} to second place')
 
             rationale = (
-                f"Medium confidence match (score: {best_candidate.raw_score:.3f}) "
-                f"with clear winner (gap: {gap:.3f} ≥ {self.CLEAR_WINNER_GAP}). "
-                f"No ambiguity detected."
+                f'Medium confidence match (score: {best_candidate.raw_score:.3f}) '
+                f'with clear winner (gap: {gap:.3f} ≥ {self.CLEAR_WINNER_GAP}). '
+                f'No ambiguity detected.'
             )
 
             return self._create_resolution_result(
@@ -259,15 +254,15 @@ class DecisionEngine:
             # Ambiguous result - multiple strong candidates
             gap = self._get_score_gap(candidates)
             logger.warning(
-                f"Ambiguous result: gap={gap:.3f} < {self.CLEAR_WINNER_GAP}, "
-                f"sending to manual review"
+                f'Ambiguous result: gap={gap:.3f} < {self.CLEAR_WINNER_GAP}, '
+                f'sending to manual review'
             )
 
             rationale = (
-                f"Ambiguous result with medium confidence score "
-                f"({best_candidate.raw_score:.3f}). Multiple strong candidates "
-                f"detected (gap: {gap:.3f} < {self.CLEAR_WINNER_GAP}). "
-                f"Manual review required to resolve ambiguity."
+                f'Ambiguous result with medium confidence score '
+                f'({best_candidate.raw_score:.3f}). Multiple strong candidates '
+                f'detected (gap: {gap:.3f} < {self.CLEAR_WINNER_GAP}). '
+                f'Manual review required to resolve ambiguity.'
             )
 
             return self._create_resolution_result(
@@ -286,7 +281,7 @@ class DecisionEngine:
         self,
         citation: str,
         best_candidate: MatchCandidate,
-        candidates: List[MatchCandidate],
+        candidates: List[MatchCandidate],  # noqa: UP006
         metadata: ResolutionMetadata,
     ) -> ResolutionResult:
         """
@@ -295,15 +290,15 @@ class DecisionEngine:
         These matches require manual review due to uncertainty.
         """
         logger.warning(
-            f"LOW confidence match: score={best_candidate.raw_score:.3f}, "
-            f"manual review required"
+            f'LOW confidence match: score={best_candidate.raw_score:.3f}, '
+            f'manual review required'
         )
 
         rationale = (
-            f"Low confidence match (score: {best_candidate.raw_score:.3f}). "
-            f"Score is above rejection threshold ({self.REJECT_THRESHOLD}) but "
-            f"below medium confidence threshold ({self.MEDIUM_CONFIDENCE}). "
-            f"Manual review required to validate match."
+            f'Low confidence match (score: {best_candidate.raw_score:.3f}). '
+            f'Score is above rejection threshold ({self.REJECT_THRESHOLD}) but '
+            f'below medium confidence threshold ({self.MEDIUM_CONFIDENCE}). '
+            f'Manual review required to validate match.'
         )
 
         return self._create_resolution_result(
@@ -322,7 +317,7 @@ class DecisionEngine:
         self,
         citation: str,
         best_score: float,
-        candidates: List[MatchCandidate],
+        candidates: List[MatchCandidate],  # noqa: UP006
         metadata: ResolutionMetadata,
     ) -> ResolutionResult:
         """
@@ -331,14 +326,14 @@ class DecisionEngine:
         These matches are below the acceptable threshold and should remain unresolved.
         """
         logger.warning(
-            f"Match REJECTED: best_score={best_score:.3f} < "
-            f"reject_threshold={self.REJECT_THRESHOLD}"
+            f'Match REJECTED: best_score={best_score:.3f} < '
+            f'reject_threshold={self.REJECT_THRESHOLD}'
         )
 
         rationale = (
-            f"Match rejected due to low score ({best_score:.3f} < "
-            f"{self.REJECT_THRESHOLD}). No candidates meet minimum confidence "
-            f"threshold for resolution or manual review."
+            f'Match rejected due to low score ({best_score:.3f} < '
+            f'{self.REJECT_THRESHOLD}). No candidates meet minimum confidence '
+            f'threshold for resolution or manual review.'
         )
 
         return self._create_resolution_result(
@@ -353,7 +348,7 @@ class DecisionEngine:
             decision_rationale=rationale,
         )
 
-    def _is_clear_winner(self, candidates: List[MatchCandidate]) -> bool:
+    def _is_clear_winner(self, candidates: List[MatchCandidate]) -> bool:  # noqa: UP006
         """
         Check if there's a clear winner among candidates.
 
@@ -374,13 +369,13 @@ class DecisionEngine:
         is_clear = gap >= self.CLEAR_WINNER_GAP
 
         logger.debug(
-            f"Clear winner check: gap={gap:.3f}, "
-            f"threshold={self.CLEAR_WINNER_GAP}, result={is_clear}"
+            f'Clear winner check: gap={gap:.3f}, '
+            f'threshold={self.CLEAR_WINNER_GAP}, result={is_clear}'
         )
 
         return is_clear
 
-    def _get_score_gap(self, candidates: List[MatchCandidate]) -> float:
+    def _get_score_gap(self, candidates: List[MatchCandidate]) -> float:  # noqa: UP006
         """
         Calculate the score gap between first and second place.
 
@@ -389,7 +384,7 @@ class DecisionEngine:
 
         Returns:
             Score gap between best and second-best candidates, or 1.0 if only one candidate
-        """
+        """  # noqa: W505
         if len(candidates) < 2:
             return 1.0  # Maximum gap if only one candidate
 
@@ -401,9 +396,9 @@ class DecisionEngine:
         status: CitationResolutionStatus,
         confidence_score: float,
         confidence_level: ConfidenceLevel,
-        source: Optional[APISource],
-        matched_data: Optional[Dict[str, Any]],
-        candidates: List[MatchCandidate],
+        source: Optional[APISource],  # noqa: UP007
+        matched_data: Optional[Dict[str, Any]],  # noqa: UP006, UP007
+        candidates: List[MatchCandidate],  # noqa: UP006
         metadata: ResolutionMetadata,
         decision_rationale: str,
     ) -> ResolutionResult:
@@ -426,13 +421,13 @@ class DecisionEngine:
         """
         # Add decision rationale to metadata
         metadata.additional_info = metadata.additional_info or {}
-        metadata.additional_info["decision_rationale"] = decision_rationale
-        metadata.additional_info["decision_engine_version"] = "1.0.0"
-        metadata.additional_info["thresholds"] = {
-            "high": self.HIGH_CONFIDENCE,
-            "medium": self.MEDIUM_CONFIDENCE,
-            "low": self.LOW_CONFIDENCE,
-            "reject": self.REJECT_THRESHOLD,
+        metadata.additional_info['decision_rationale'] = decision_rationale
+        metadata.additional_info['decision_engine_version'] = '1.0.0'
+        metadata.additional_info['thresholds'] = {
+            'high': self.HIGH_CONFIDENCE,
+            'medium': self.MEDIUM_CONFIDENCE,
+            'low': self.LOW_CONFIDENCE,
+            'reject': self.REJECT_THRESHOLD,
         }
 
         result = ResolutionResult(
@@ -447,10 +442,10 @@ class DecisionEngine:
         )
 
         logger.info(
-            f"Decision result: status={status}, confidence={confidence_level} "
-            f"({confidence_score:.3f}), source={source}"
+            f'Decision result: status={status}, confidence={confidence_level} '
+            f'({confidence_score:.3f}), source={source}'
         )
-        logger.debug(f"Decision rationale: {decision_rationale}")
+        logger.debug(f'Decision rationale: {decision_rationale}')
 
         return result
 
@@ -458,8 +453,8 @@ class DecisionEngine:
 # Convenience function for direct usage
 def make_decision(
     citation: str,
-    candidates: List[MatchCandidate],
-    metadata: Optional[ResolutionMetadata] = None,
+    candidates: List[MatchCandidate],  # noqa: UP006
+    metadata: Optional[ResolutionMetadata] = None,  # noqa: UP007
 ) -> ResolutionResult:
     """
     Convenience function to make a citation resolution decision.
@@ -477,7 +472,7 @@ def make_decision(
 
     Example:
         >>> candidates = [MatchCandidate(...), MatchCandidate(...)]
-        >>> result = make_decision("Smith et al. (2024)", candidates)
+        >>> result = make_decision('Smith et al. (2024)', candidates)
         >>> print(result.status, result.confidence_level)
     """
     engine = DecisionEngine()

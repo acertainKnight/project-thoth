@@ -32,10 +32,10 @@ Tools:
 - cProfile: Code-level profiling
 """
 
-import asyncio
-import time
+import asyncio  # noqa: I001
+import time  # noqa: F401
 from pathlib import Path
-from typing import List
+from typing import List  # noqa: UP035
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -50,21 +50,25 @@ from thoth.utilities.schemas.citations import Citation
 # Benchmark Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def mock_fast_resolver():
     """Create mock resolver with minimal latency for baseline benchmarks."""
     mock = MagicMock()
-    mock.resolve = AsyncMock(return_value={
-        'doi': '10.1234/test.doi',
-        'title': 'Test Paper',
-        'confidence': 0.95,
-    })
+    mock.resolve = AsyncMock(
+        return_value={
+            'doi': '10.1234/test.doi',
+            'title': 'Test Paper',
+            'confidence': 0.95,
+        }
+    )
     return mock
 
 
 # ============================================================================
 # Throughput Benchmarks
 # ============================================================================
+
 
 @pytest.mark.benchmark
 def test_single_citation_resolution_latency(
@@ -79,22 +83,24 @@ def test_single_citation_resolution_latency(
 
     Target: <500ms per citation
     """
+
     def resolve():
         return asyncio.run(resolution_chain.resolve(sample_citation))
 
-    result = benchmark(resolve)
+    result = benchmark(resolve)  # noqa: F841
 
     # Log statistics
     logger.info(
         f'Single citation latency: '
-        f'mean={benchmark.stats.mean*1000:.1f}ms, '
-        f'median={benchmark.stats.median*1000:.1f}ms, '
-        f'stddev={benchmark.stats.stddev*1000:.1f}ms'
+        f'mean={benchmark.stats.mean * 1000:.1f}ms, '
+        f'median={benchmark.stats.median * 1000:.1f}ms, '
+        f'stddev={benchmark.stats.stddev * 1000:.1f}ms'
     )
 
     # Verify target met
-    assert benchmark.stats.mean < 0.5, \
+    assert benchmark.stats.mean < 0.5, (
         f'Single citation resolution too slow: {benchmark.stats.mean:.3f}s (target: <0.5s)'
+    )
 
 
 @pytest.mark.benchmark
@@ -102,7 +108,7 @@ def test_single_citation_resolution_latency(
 def test_batch_resolution_throughput_small(
     benchmark,
     resolution_chain: CitationResolutionChain,
-    benchmark_data_small: List[Citation],
+    benchmark_data_small: List[Citation],  # noqa: UP006
 ):
     """
     Benchmark: Small batch (10 citations) throughput.
@@ -111,6 +117,7 @@ def test_batch_resolution_throughput_small(
 
     Target: <3 seconds total
     """
+
     async def resolve_batch():
         tasks = [resolution_chain.resolve(c) for c in benchmark_data_small]
         return await asyncio.gather(*tasks)
@@ -118,7 +125,7 @@ def test_batch_resolution_throughput_small(
     def run():
         return asyncio.run(resolve_batch())
 
-    result = benchmark(run)
+    result = benchmark(run)  # noqa: F841
 
     throughput = len(benchmark_data_small) / benchmark.stats.mean
     logger.info(
@@ -126,8 +133,9 @@ def test_batch_resolution_throughput_small(
         f'(total: {benchmark.stats.mean:.2f}s for {len(benchmark_data_small)} citations)'
     )
 
-    assert benchmark.stats.mean < 3.0, \
+    assert benchmark.stats.mean < 3.0, (
         f'Small batch too slow: {benchmark.stats.mean:.2f}s (target: <3s)'
+    )
 
 
 @pytest.mark.benchmark
@@ -135,7 +143,7 @@ def test_batch_resolution_throughput_small(
 def test_batch_resolution_throughput_medium(
     benchmark,
     resolution_chain: CitationResolutionChain,
-    benchmark_data_medium: List[Citation],
+    benchmark_data_medium: List[Citation],  # noqa: UP006
 ):
     """
     Benchmark: Medium batch (100 citations) throughput.
@@ -144,6 +152,7 @@ def test_batch_resolution_throughput_medium(
 
     Target: <30 seconds total (300ms avg per citation)
     """
+
     async def resolve_batch():
         tasks = [resolution_chain.resolve(c) for c in benchmark_data_medium]
         return await asyncio.gather(*tasks)
@@ -151,7 +160,7 @@ def test_batch_resolution_throughput_medium(
     def run():
         return asyncio.run(resolve_batch())
 
-    result = benchmark.pedantic(run, iterations=3, rounds=1)
+    result = benchmark.pedantic(run, iterations=3, rounds=1)  # noqa: F841
 
     throughput = len(benchmark_data_medium) / benchmark.stats.mean
     logger.info(
@@ -159,8 +168,9 @@ def test_batch_resolution_throughput_medium(
         f'(total: {benchmark.stats.mean:.2f}s for {len(benchmark_data_medium)} citations)'
     )
 
-    assert benchmark.stats.mean < 30.0, \
+    assert benchmark.stats.mean < 30.0, (
         f'Medium batch too slow: {benchmark.stats.mean:.2f}s (target: <30s)'
+    )
 
 
 @pytest.mark.benchmark
@@ -169,7 +179,7 @@ def test_batch_resolution_throughput_medium(
 def test_batch_resolution_throughput_large(
     benchmark,
     resolution_chain: CitationResolutionChain,
-    benchmark_data_large: List[Citation],
+    benchmark_data_large: List[Citation],  # noqa: UP006
 ):
     """
     Benchmark: Large batch (1000 citations) throughput.
@@ -178,6 +188,7 @@ def test_batch_resolution_throughput_large(
 
     Target: <5 minutes total (300ms avg per citation)
     """
+
     async def resolve_batch():
         tasks = [resolution_chain.resolve(c) for c in benchmark_data_large]
         return await asyncio.gather(*tasks)
@@ -185,7 +196,7 @@ def test_batch_resolution_throughput_large(
     def run():
         return asyncio.run(resolve_batch())
 
-    result = benchmark.pedantic(run, iterations=1, rounds=1)
+    result = benchmark.pedantic(run, iterations=1, rounds=1)  # noqa: F841
 
     throughput = len(benchmark_data_large) / benchmark.stats.mean
     logger.info(
@@ -193,13 +204,15 @@ def test_batch_resolution_throughput_large(
         f'(total: {benchmark.stats.mean:.2f}s for {len(benchmark_data_large)} citations)'
     )
 
-    assert benchmark.stats.mean < 300.0, \
+    assert benchmark.stats.mean < 300.0, (
         f'Large batch too slow: {benchmark.stats.mean:.2f}s (target: <300s)'
+    )
 
 
 # ============================================================================
 # Fuzzy Matching Performance
 # ============================================================================
+
 
 @pytest.mark.benchmark
 def test_fuzzy_matching_performance(
@@ -224,21 +237,22 @@ def test_fuzzy_matching_performance(
     def match():
         return calculate_fuzzy_score(citation1, citation2)
 
-    result = benchmark(match)
+    result = benchmark(match)  # noqa: F841
 
     logger.info(
-        f'Fuzzy matching latency: {benchmark.stats.mean*1000:.3f}ms '
-        f'(min: {benchmark.stats.min*1000:.3f}ms, max: {benchmark.stats.max*1000:.3f}ms)'
+        f'Fuzzy matching latency: {benchmark.stats.mean * 1000:.3f}ms '
+        f'(min: {benchmark.stats.min * 1000:.3f}ms, max: {benchmark.stats.max * 1000:.3f}ms)'
     )
 
-    assert benchmark.stats.mean < 0.01, \
-        f'Fuzzy matching too slow: {benchmark.stats.mean*1000:.1f}ms (target: <10ms)'
+    assert benchmark.stats.mean < 0.01, (
+        f'Fuzzy matching too slow: {benchmark.stats.mean * 1000:.1f}ms (target: <10ms)'
+    )
 
 
 @pytest.mark.benchmark
 def test_fuzzy_matching_batch_performance(
     benchmark,
-    benchmark_data_medium: List[Citation],
+    benchmark_data_medium: List[Citation],  # noqa: UP006
 ):
     """
     Benchmark: Batch fuzzy matching for deduplication.
@@ -247,6 +261,7 @@ def test_fuzzy_matching_batch_performance(
 
     Target: <10 seconds for 100x100 comparisons
     """
+
     def match_all():
         scores = []
         for i, cit1 in enumerate(benchmark_data_medium):
@@ -256,7 +271,7 @@ def test_fuzzy_matching_batch_performance(
                     scores.append(score)
         return scores
 
-    result = benchmark.pedantic(match_all, iterations=1, rounds=1)
+    result = benchmark.pedantic(match_all, iterations=1, rounds=1)  # noqa: F841
 
     num_comparisons = len(benchmark_data_medium) * (len(benchmark_data_medium) - 1)
     comparisons_per_sec = num_comparisons / benchmark.stats.mean
@@ -266,20 +281,22 @@ def test_fuzzy_matching_batch_performance(
         f'({num_comparisons} comparisons in {benchmark.stats.mean:.2f}s)'
     )
 
-    assert benchmark.stats.mean < 10.0, \
+    assert benchmark.stats.mean < 10.0, (
         f'Batch matching too slow: {benchmark.stats.mean:.2f}s (target: <10s)'
+    )
 
 
 # ============================================================================
 # Cache Performance
 # ============================================================================
 
+
 @pytest.mark.benchmark
 @pytest.mark.requires_db
 def test_database_query_performance(
     benchmark,
     postgres_service,
-    empty_database,
+    empty_database,  # noqa: ARG001
 ):
     """
     Benchmark: Database query performance for duplicate detection.
@@ -288,15 +305,16 @@ def test_database_query_performance(
 
     Target: <50ms per query
     """
+
     # Insert test citations
     async def setup():
         async with postgres_service.pool.acquire() as conn:
             for i in range(100):
                 await conn.execute(
-                    '''
+                    """
                     INSERT INTO citations (title, doi, authors, year)
                     VALUES ($1, $2, $3, $4)
-                    ''',
+                    """,
                     f'Test Paper {i}',
                     f'10.1234/test.{i}',
                     [f'Author {i}'],
@@ -316,19 +334,20 @@ def test_database_query_performance(
     def run():
         return asyncio.run(query())
 
-    result = benchmark(run)
+    result = benchmark(run)  # noqa: F841
 
     logger.info(
-        f'Database query latency: {benchmark.stats.mean*1000:.3f}ms '
-        f'(P95: {benchmark.stats.percentiles.percentile_95*1000:.3f}ms)'
+        f'Database query latency: {benchmark.stats.mean * 1000:.3f}ms '
+        f'(P95: {benchmark.stats.percentiles.percentile_95 * 1000:.3f}ms)'
     )
 
-    assert benchmark.stats.mean < 0.05, \
-        f'Database query too slow: {benchmark.stats.mean*1000:.1f}ms (target: <50ms)'
+    assert benchmark.stats.mean < 0.05, (
+        f'Database query too slow: {benchmark.stats.mean * 1000:.1f}ms (target: <50ms)'
+    )
 
 
 @pytest.mark.benchmark
-def test_cache_hit_rate_simulation(benchmark_data_medium: List[Citation]):
+def test_cache_hit_rate_simulation(benchmark_data_medium: List[Citation]):  # noqa: UP006
     """
     Test: Simulate cache hit rate with duplicate citations.
 
@@ -365,18 +384,18 @@ def test_cache_hit_rate_simulation(benchmark_data_medium: List[Citation]):
         f'({hits} hits, {misses} misses, {len(dataset)} total)'
     )
 
-    assert hit_rate >= 0.25, \
-        f'Cache hit rate too low: {hit_rate:.2%} (target: >25%)'
+    assert hit_rate >= 0.25, f'Cache hit rate too low: {hit_rate:.2%} (target: >25%)'
 
 
 # ============================================================================
 # Memory Usage Benchmarks
 # ============================================================================
 
+
 @pytest.mark.benchmark
 @pytest.mark.slow
 def test_memory_usage_batch_processing(
-    benchmark_data_medium: List[Citation],
+    benchmark_data_medium: List[Citation],  # noqa: UP006
 ):
     """
     Benchmark: Memory usage during batch processing.
@@ -385,7 +404,7 @@ def test_memory_usage_batch_processing(
 
     Target: <100MB for 100 citations
     """
-    import psutil
+    import psutil  # noqa: I001
     import os
 
     process = psutil.Process(os.getpid())
@@ -397,12 +416,14 @@ def test_memory_usage_batch_processing(
     results = []
     for citation in benchmark_data_medium:
         # Simulate resolution result
-        results.append({
-            'citation': citation,
-            'doi': '10.1234/test.doi',
-            'confidence': 0.85,
-            'metadata': {'source': 'crossref'},
-        })
+        results.append(
+            {
+                'citation': citation,
+                'doi': '10.1234/test.doi',
+                'confidence': 0.85,
+                'metadata': {'source': 'crossref'},
+            }
+        )
 
     # Measure peak memory
     peak_memory = process.memory_info().rss / 1024 / 1024  # MB
@@ -410,21 +431,23 @@ def test_memory_usage_batch_processing(
 
     logger.info(
         f'Memory usage: {memory_used:.1f}MB for {len(benchmark_data_medium)} citations '
-        f'({memory_used/len(benchmark_data_medium)*1000:.1f}KB per citation)'
+        f'({memory_used / len(benchmark_data_medium) * 1000:.1f}KB per citation)'
     )
 
-    assert memory_used < 100.0, \
+    assert memory_used < 100.0, (
         f'Memory usage too high: {memory_used:.1f}MB (target: <100MB)'
+    )
 
 
 # ============================================================================
 # API Efficiency Benchmarks
 # ============================================================================
 
+
 @pytest.mark.benchmark
 def test_api_call_efficiency(
     resolution_chain: CitationResolutionChain,
-    sample_citations: List[Citation],
+    sample_citations: List[Citation],  # noqa: UP006
 ):
     """
     Test: Measure API call efficiency.
@@ -471,12 +494,13 @@ def test_api_call_efficiency(
     # Calculate efficiency
     total_calls = sum(call_counts.values())
     successful_resolutions = sum(
-        1 for r in results
-        if r.matched_data is not None and r.matched_data.get('doi')
+        1 for r in results if r.matched_data is not None and r.matched_data.get('doi')
     )
 
     calls_per_resolution = (
-        total_calls / successful_resolutions if successful_resolutions > 0 else float('inf')
+        total_calls / successful_resolutions
+        if successful_resolutions > 0
+        else float('inf')
     )
 
     logger.info(
@@ -485,13 +509,15 @@ def test_api_call_efficiency(
     )
     logger.info(f'API breakdown: {call_counts}')
 
-    assert calls_per_resolution < 3.0, \
+    assert calls_per_resolution < 3.0, (
         f'Too many API calls per resolution: {calls_per_resolution:.2f} (target: <3.0)'
+    )
 
 
 # ============================================================================
 # Scalability Benchmarks
 # ============================================================================
+
 
 @pytest.mark.benchmark
 @pytest.mark.parametrize('batch_size', [10, 50, 100, 200])
@@ -524,7 +550,7 @@ def test_scalability_with_batch_size(
     def run():
         return asyncio.run(resolve_batch())
 
-    result = benchmark.pedantic(run, iterations=3, rounds=1)
+    result = benchmark.pedantic(run, iterations=3, rounds=1)  # noqa: F841
 
     throughput = batch_size / benchmark.stats.mean
     avg_time_per_citation = benchmark.stats.mean / batch_size
@@ -532,24 +558,26 @@ def test_scalability_with_batch_size(
     logger.info(
         f'Batch size {batch_size}: '
         f'throughput={throughput:.2f} citations/sec, '
-        f'avg={avg_time_per_citation*1000:.1f}ms per citation'
+        f'avg={avg_time_per_citation * 1000:.1f}ms per citation'
     )
 
     # Verify linear scaling (within 20% tolerance)
     expected_time_per_citation = 0.3  # 300ms baseline
-    assert avg_time_per_citation < expected_time_per_citation * 1.2, \
+    assert avg_time_per_citation < expected_time_per_citation * 1.2, (
         f'Throughput degraded at batch size {batch_size}'
+    )
 
 
 # ============================================================================
 # Profiling Helpers
 # ============================================================================
 
+
 @pytest.mark.benchmark
 @pytest.mark.skip(reason='Profiling tool - run manually')
 def test_profile_resolution_chain(
     resolution_chain: CitationResolutionChain,
-    benchmark_data_medium: List[Citation],
+    benchmark_data_medium: List[Citation],  # noqa: UP006
     temp_directory: Path,
 ):
     """
@@ -559,7 +587,7 @@ def test_profile_resolution_chain(
 
     Usage:
         pytest tests/benchmarks/test_resolution_performance.py::test_profile_resolution_chain -v
-    """
+    """  # noqa: W505
     import cProfile
     import pstats
 

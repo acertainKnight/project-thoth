@@ -1,4 +1,4 @@
-import threading
+import threading  # noqa: I001
 import warnings
 from pathlib import Path
 
@@ -61,7 +61,9 @@ def run_monitor(args, pipeline: ThothPipeline) -> int:
     if args.api_server or config.servers_config.api.auto_start:
         api_host = args.api_host or config.servers_config.api.host
         api_port = args.api_port or config.servers_config.api.port
-        api_base_url = args.api_base_url or getattr(config.servers_config.api, 'base_url', 'http://localhost:8000')
+        api_base_url = args.api_base_url or getattr(
+            config.servers_config.api, 'base_url', 'http://localhost:8000'
+        )
 
         api_thread = threading.Thread(
             target=start_obsidian_server,

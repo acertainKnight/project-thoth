@@ -5,7 +5,7 @@ This module handles the consolidation of existing tags across the citation graph
 and the suggestion of additional relevant tags for articles based on their abstracts.
 """
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed  # noqa: I001
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +15,7 @@ from loguru import logger
 
 from thoth.knowledge.graph import CitationGraph
 from thoth.services.llm_service import LLMService
-from thoth.config import config, Config
+from thoth.config import config, Config  # noqa: F401
 from thoth.utilities.schemas import (
     ConsolidatedTagsResponse,
     SingleTagMappingResponse,
@@ -43,7 +43,7 @@ class TagConsolidator:
         self,
         llm_service: LLMService,
         prompts_dir: str | Path,
-        config: Config,
+        config: Config,  # noqa: F811
         model_kwargs: dict[str, Any] | None = None,
     ):
         """

@@ -59,7 +59,7 @@ from .tags import (
     TagSuggestionResponse,
 )
 
-__all__ = [
+__all__ = [  # noqa: RUF022
     # Analysis
     'AnalysisResponse',
     'AnalysisState',

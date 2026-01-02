@@ -1,6 +1,6 @@
 """Backfill embeddings from existing no_images markdown files."""
 
-import sys
+import sys  # noqa: I001
 from pathlib import Path
 from loguru import logger
 
@@ -12,22 +12,22 @@ from thoth.services.service_manager import ServiceManager
 
 def backfill_from_markdown_files():
     """Backfill embeddings from no_images markdown files."""
-    logger.info("Starting embeddings backfill")
+    logger.info('Starting embeddings backfill')
 
     services = ServiceManager(config=config)
     services.initialize()
 
     if services.rag is None:
-        logger.error("RAG service not available")
+        logger.error('RAG service not available')
         return False
 
     markdown_dir = Path(config.markdown_dir)
-    no_images_files = list(markdown_dir.glob("*_no_images.md"))
+    no_images_files = list(markdown_dir.glob('*_no_images.md'))
 
-    logger.info(f"Found {len(no_images_files)} no_images files")
+    logger.info(f'Found {len(no_images_files)} no_images files')
 
     if not no_images_files:
-        logger.warning("No files found")
+        logger.warning('No files found')
         return False
 
     indexed = 0
@@ -36,46 +36,48 @@ def backfill_from_markdown_files():
 
     for file_path in no_images_files:
         try:
-            paper_name = file_path.stem.replace("_no_images", "")
-            logger.info(f"Processing: {paper_name}")
+            paper_name = file_path.stem.replace('_no_images', '')
+            logger.info(f'Processing: {paper_name}')
 
             doc_ids = services.rag.index_file(file_path)
 
             if doc_ids and len(doc_ids) > 0:
-                logger.success(f"Indexed {len(doc_ids)} chunks: {paper_name}")
+                logger.success(f'Indexed {len(doc_ids)} chunks: {paper_name}')
                 indexed += 1
             else:
-                logger.warning(f"No chunks: {paper_name}")
+                logger.warning(f'No chunks: {paper_name}')
                 skipped += 1
 
         except Exception as e:
-            logger.error(f"Failed {file_path.name}: {e}")
+            logger.error(f'Failed {file_path.name}: {e}')
             failed += 1
 
-    logger.info(f"\nIndexed: {indexed}, Skipped: {skipped}, Failed: {failed}")
+    logger.info(f'\nIndexed: {indexed}, Skipped: {skipped}, Failed: {failed}')
 
-    import asyncpg, asyncio
+    import asyncpg, asyncio  # noqa: I001, E401
 
     async def verify():
         conn = await asyncpg.connect(config.secrets.database_url)
         try:
-            total = await conn.fetchval("SELECT COUNT(*) FROM document_chunks")
-            papers = await conn.fetchval("SELECT COUNT(DISTINCT paper_id) FROM document_chunks")
-            logger.info(f"Total chunks: {total}, Papers: {papers}")
+            total = await conn.fetchval('SELECT COUNT(*) FROM document_chunks')
+            papers = await conn.fetchval(
+                'SELECT COUNT(DISTINCT paper_id) FROM document_chunks'
+            )
+            logger.info(f'Total chunks: {total}, Papers: {papers}')
         finally:
             await conn.close()
 
     try:
         asyncio.run(verify())
-    except:
+    except:  # noqa: E722
         pass
 
     return True
 
 
 if __name__ == '__main__':
-    logger.info("=" * 60)
+    logger.info('=' * 60)
     success = backfill_from_markdown_files()
-    logger.success("COMPLETED!" if success else "FAILED!")
-    logger.info("=" * 60)
+    logger.success('COMPLETED!' if success else 'FAILED!')
+    logger.info('=' * 60)
     sys.exit(0 if success else 1)

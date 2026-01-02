@@ -109,6 +109,10 @@ class IntelligentCache:
         self._access_patterns: dict[str, list[datetime]] = defaultdict(list)
         self._frequency_scores: dict[str, float] = defaultdict(float)
 
+    def _get_now(self) -> datetime:
+        """Get current time - extracted for easier mocking."""
+        return datetime.now()
+
     def get(self, key: str) -> Any | None:
         """Get value from cache."""
         entry = self._cache.get(key)
@@ -118,13 +122,16 @@ class IntelligentCache:
             return None
 
         # Check TTL expiration
-        if entry.ttl and (datetime.now() - entry.timestamp).total_seconds() > entry.ttl:
+        if (
+            entry.ttl
+            and (self._get_now() - entry.timestamp).total_seconds() > entry.ttl
+        ):
             self._cache.pop(key, None)
             self._miss_count += 1
             return None
 
         # Update access metadata
-        entry.last_accessed = datetime.now()
+        entry.last_accessed = self._get_now()
         entry.access_count += 1
 
         # Track access patterns
@@ -137,6 +144,10 @@ class IntelligentCache:
 
     def put(self, key: str, value: Any, ttl: float | None = None) -> None:
         """Put value in cache."""
+        # For TTL strategy, always clean expired entries first
+        if self.strategy == CacheStrategy.TTL:
+            self._evict_expired()
+
         # Calculate value size (rough estimate)
         size_bytes = self._estimate_size(value)
 
@@ -144,14 +155,14 @@ class IntelligentCache:
         entry = CacheEntry(
             key=key,
             value=value,
-            timestamp=datetime.now(),
+            timestamp=self._get_now(),
             access_count=1,
-            last_accessed=datetime.now(),
+            last_accessed=self._get_now(),
             ttl=ttl or self.default_ttl,
             size_bytes=size_bytes,
         )
 
-        # Check if we need to evict entries
+        # Check if we need to evict entries (for non-TTL strategies or if still full)
         if len(self._cache) >= self.max_size:
             self._evict_entries()
 
@@ -203,7 +214,7 @@ class IntelligentCache:
 
     def _track_access_pattern(self, key: str) -> None:
         """Track access patterns for adaptive caching."""
-        now = datetime.now()
+        now = self._get_now()
         self._access_patterns[key].append(now)
 
         # Keep only recent accesses (last hour)
@@ -251,17 +262,22 @@ class IntelligentCache:
         self._eviction_count += 1
 
     def _evict_expired(self) -> None:
-        """Evict expired TTL entries."""
-        now = datetime.now()
+        """Evict expired TTL entries, fall back to LRU if needed."""
+        now = self._get_now()
         expired_keys = []
 
         for key, entry in self._cache.items():
             if entry.ttl and (now - entry.timestamp).total_seconds() > entry.ttl:
                 expired_keys.append(key)
 
+        # Evict expired entries
         for key in expired_keys:
             self._cache.pop(key, None)
             self._eviction_count += 1
+
+        # If still at or over max_size, fall back to LRU eviction
+        if len(self._cache) >= self.max_size:
+            self._evict_lru()
 
     def _evict_adaptive(self) -> None:
         """Evict entries using adaptive strategy."""
@@ -270,7 +286,7 @@ class IntelligentCache:
 
         # Calculate composite score (recency + frequency)
         scores = {}
-        now = datetime.now()
+        now = self._get_now()
 
         for key, entry in self._cache.items():
             recency_score = 1.0 / max((now - entry.last_accessed).total_seconds(), 1.0)
@@ -285,14 +301,14 @@ class IntelligentCache:
     def _estimate_size(self, value: Any) -> int:
         """Estimate memory size of value in bytes."""
         try:
-            if isinstance(value, str):
+            if isinstance(value, bool):
+                return 1
+            elif isinstance(value, str):
                 return len(value.encode('utf-8'))
             elif isinstance(value, dict | list):
                 return len(json.dumps(value).encode('utf-8'))
             elif isinstance(value, int | float):
                 return 8  # Rough estimate
-            elif isinstance(value, bool):
-                return 1
             else:
                 return len(str(value).encode('utf-8'))
         except Exception:

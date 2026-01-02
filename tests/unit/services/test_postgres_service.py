@@ -5,9 +5,9 @@ Tests connection pool management, query execution, transaction handling,
 retry logic, and the connection pool race condition fix.
 """
 
-import asyncio
+import asyncio  # noqa: I001
 import pytest
-from unittest.mock import AsyncMock, Mock, patch, MagicMock
+from unittest.mock import AsyncMock, Mock, patch, MagicMock  # noqa: F401
 
 import asyncpg
 
@@ -47,8 +47,10 @@ class TestPostgresService:
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_pool.acquire = Mock(side_effect=mock_acquire)
@@ -81,7 +83,7 @@ class TestPostgresService:
         # Track number of pool creations
         creation_count = 0
 
-        async def mock_create(*args, **kwargs):
+        async def mock_create(*args, **kwargs):  # noqa: ARG001
             nonlocal creation_count
             creation_count += 1
             # Simulate delay that could cause race condition
@@ -95,8 +97,10 @@ class TestPostgresService:
                 class MockAcquire:
                     async def __aenter__(self):
                         return mock_conn
+
                     async def __aexit__(self, *args):
                         pass
+
                 return MockAcquire()
 
             mock_pool.acquire = Mock(side_effect=mock_acquire)
@@ -108,9 +112,7 @@ class TestPostgresService:
 
         # Simulate multiple concurrent initialization attempts
         await asyncio.gather(
-            service.initialize(),
-            service.initialize(),
-            service.initialize()
+            service.initialize(), service.initialize(), service.initialize()
         )
 
         # Only one pool should be created due to lock protection
@@ -177,8 +179,10 @@ class TestPostgresService:
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_pool.acquire = Mock(side_effect=mock_acquire)
@@ -210,8 +214,10 @@ class TestPostgresService:
                     nonlocal transaction_started
                     transaction_started = True
                     return None
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockTransaction()
 
         mock_conn.transaction = mock_transaction
@@ -220,8 +226,10 @@ class TestPostgresService:
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_pool.acquire = Mock(side_effect=mock_acquire)
@@ -250,8 +258,10 @@ class TestPostgresService:
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_pool.acquire = Mock(side_effect=mock_acquire)
@@ -278,7 +288,8 @@ class TestPostgresService:
 
         # Fail first two attempts, succeed on third
         attempt_count = 0
-        async def mock_execute(*args, **kwargs):
+
+        async def mock_execute(*args, **kwargs):  # noqa: ARG001
             nonlocal attempt_count
             attempt_count += 1
             if attempt_count < 3:
@@ -291,8 +302,10 @@ class TestPostgresService:
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_pool.acquire = Mock(side_effect=mock_acquire)
@@ -324,8 +337,10 @@ class TestPostgresService:
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_pool.acquire = Mock(side_effect=mock_acquire)
@@ -353,8 +368,10 @@ class TestPostgresService:
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_pool.acquire = Mock(side_effect=mock_acquire)
@@ -384,8 +401,10 @@ class TestPostgresService:
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_pool.acquire = Mock(side_effect=mock_acquire)
@@ -409,17 +428,21 @@ class TestPostgresService:
 
         mock_pool = AsyncMock()
         mock_conn = AsyncMock()
-        mock_conn.fetchval = AsyncMock(side_effect=[
-            'PostgreSQL 15.0',  # For initialization
-            42  # For actual query
-        ])
+        mock_conn.fetchval = AsyncMock(
+            side_effect=[
+                'PostgreSQL 15.0',  # For initialization
+                42,  # For actual query
+            ]
+        )
 
         def mock_acquire():
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_pool.acquire = Mock(side_effect=mock_acquire)
@@ -448,8 +471,10 @@ class TestPostgresService:
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_pool.acquire = Mock(side_effect=mock_acquire)
@@ -460,8 +485,7 @@ class TestPostgresService:
 
         args = [(1, 'Paper 1'), (2, 'Paper 2'), (3, 'Paper 3')]
         await service.executemany(
-            'INSERT INTO papers (id, title) VALUES ($1, $2)',
-            args
+            'INSERT INTO papers (id, title) VALUES ($1, $2)', args
         )
 
         mock_conn.executemany.assert_called_once()
@@ -484,8 +508,10 @@ class TestPostgresService:
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_pool.acquire = Mock(side_effect=mock_acquire)

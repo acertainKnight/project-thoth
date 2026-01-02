@@ -26,10 +26,10 @@ Success Criteria:
 - Performance meets targets
 """
 
-import asyncio
-import json
+import asyncio  # noqa: I001, F401
+import json  # noqa: F401
 from pathlib import Path
-from typing import List
+from typing import List  # noqa: F401, UP035
 
 import pytest
 import pytest_asyncio
@@ -44,13 +44,14 @@ from thoth.analyze.evaluation.metrics import (
     calculate_analysis_metrics,
 )
 from thoth.analyze.evaluation.runner import run_analysis_evaluation
-from thoth.config import Config
+from thoth.config import Config  # noqa: F401
 from thoth.services.postgres_service import PostgresService
 
 
 # ============================================================================
 # Test Fixtures
 # ============================================================================
+
 
 @pytest_asyncio.fixture
 async def ground_truth_generator(postgres_service: PostgresService):
@@ -64,7 +65,7 @@ def mock_paper_data():
     return {
         'paper_id': 'test_paper_001',
         'title': 'Property-Based Testing for Research Software',
-        'content': '''
+        'content': """
 # Abstract
 We present a comprehensive framework for property-based testing in research software.
 
@@ -79,7 +80,7 @@ Our approach discovered 15 edge cases that unit tests missed.
 
 # Conclusion
 Property-based testing significantly improves research software robustness.
-        ''',
+        """,
         'metadata': {
             'authors': ['John Doe', 'Jane Smith'],
             'year': 2023,
@@ -92,13 +93,14 @@ Property-based testing significantly improves research software robustness.
 # Test Cases: Ground Truth Generation
 # ============================================================================
 
+
 @pytest.mark.e2e
 @pytest.mark.requires_db
 @pytest.mark.asyncio
 async def test_ground_truth_generation_from_database(
     ground_truth_generator: AnalysisGroundTruthGenerator,
     postgres_service: PostgresService,
-    empty_database,
+    empty_database,  # noqa: ARG001
 ):
     """
     Test generating ground truth pairs from database papers.
@@ -112,13 +114,13 @@ async def test_ground_truth_generation_from_database(
     # Insert test papers into database
     async with postgres_service.pool.acquire() as conn:
         await conn.execute(
-            '''
+            """
             INSERT INTO papers (title, content, authors, year)
             VALUES
                 ('Paper 1', 'Test content 1', ARRAY['Author 1'], 2023),
                 ('Paper 2', 'Test content 2 with more words and sentences', ARRAY['Author 2'], 2022),
                 ('Paper 3', 'Very long content ' || repeat('test ', 1000), ARRAY['Author 3'], 2021)
-            '''
+            """
         )
 
     # Generate ground truth
@@ -181,6 +183,7 @@ async def test_ground_truth_save_and_load(
 # ============================================================================
 # Test Cases: Metrics Calculation
 # ============================================================================
+
 
 @pytest.mark.e2e
 @pytest.mark.asyncio
@@ -357,6 +360,7 @@ async def test_strategy_efficiency_metrics():
 # Test Cases: Complete Evaluation Pipeline
 # ============================================================================
 
+
 @pytest.mark.e2e
 @pytest.mark.slow
 @pytest.mark.requires_db
@@ -364,7 +368,7 @@ async def test_strategy_efficiency_metrics():
 async def test_complete_evaluation_pipeline_run(
     postgres_service: PostgresService,
     temp_directory: Path,
-    empty_database,
+    empty_database,  # noqa: ARG001
 ):
     """
     Test complete evaluation pipeline from start to finish.
@@ -381,10 +385,10 @@ async def test_complete_evaluation_pipeline_run(
     async with postgres_service.pool.acquire() as conn:
         for i in range(5):
             await conn.execute(
-                '''
+                """
                 INSERT INTO papers (title, content, authors, year)
                 VALUES ($1, $2, $3, $4)
-                ''',
+                """,
                 f'Test Paper {i}',
                 f'Abstract: Test content for paper {i}.\n\n'
                 f'Introduction: Background information.\n\n'
@@ -399,7 +403,7 @@ async def test_complete_evaluation_pipeline_run(
     with pytest.MonkeyPatch.context() as m:
         m.setattr(
             'thoth.analyze.llm_processor.LLMProcessor.analyze_content',
-            lambda self, markdown_path: {
+            lambda self, markdown_path: {  # noqa: ARG005
                 'summary': f'Auto-generated summary for {markdown_path}',
                 'key_points': ['Point 1', 'Point 2', 'Point 3'],
                 'methodology': 'Test methodology',
@@ -431,6 +435,7 @@ async def test_complete_evaluation_pipeline_run(
 # Test Cases: Report Generation
 # ============================================================================
 
+
 @pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_evaluation_report_format(temp_directory: Path):
@@ -442,7 +447,7 @@ async def test_evaluation_report_format(temp_directory: Path):
     - Metrics are properly formatted
     - Human-readable output
     """
-    from thoth.analyze.evaluation.metrics import (
+    from thoth.analyze.evaluation.metrics import (  # noqa: I001
         ExtractionMetrics,
         ContentQualityMetrics,
         StrategyEfficiencyMetrics,
@@ -488,7 +493,7 @@ async def test_evaluation_report_format(temp_directory: Path):
     )
 
     # Generate report
-    report_path = temp_directory / 'test_report.txt'
+    report_path = temp_directory / 'test_report.txt'  # noqa: F841
     from thoth.analyze.evaluation.runner import _save_analysis_report
 
     await _save_analysis_report(metrics, temp_directory)
@@ -514,13 +519,14 @@ async def test_evaluation_report_format(temp_directory: Path):
 # Test Cases: Error Handling
 # ============================================================================
 
+
 @pytest.mark.e2e
 @pytest.mark.requires_db
 @pytest.mark.asyncio
 async def test_evaluation_with_analysis_failures(
     postgres_service: PostgresService,
     temp_directory: Path,
-    empty_database,
+    empty_database,  # noqa: ARG001
 ):
     """
     Test evaluation pipeline handles LLM analysis failures gracefully.
@@ -531,17 +537,17 @@ async def test_evaluation_with_analysis_failures(
     # Insert test papers
     async with postgres_service.pool.acquire() as conn:
         await conn.execute(
-            '''
+            """
             INSERT INTO papers (title, content, authors, year)
             VALUES
                 ('Paper 1', 'Content 1', ARRAY['Author 1'], 2023),
                 ('Paper 2', 'Content 2', ARRAY['Author 2'], 2022),
                 ('Paper 3', 'Content 3', ARRAY['Author 3'], 2021)
-            '''
+            """
         )
 
     # Mock LLM service to fail on second paper
-    def mock_analyze(self, markdown_path):
+    def mock_analyze(self, markdown_path):  # noqa: ARG001
         if '2' in markdown_path:
             raise Exception('LLM API timeout')
         return {

@@ -53,8 +53,9 @@ class CitationService(BaseService):
         # Register for config reload notifications
         if self.config:
             from thoth.config import Config
-            Config.register_reload_callback("citation_service", self._on_config_reload)
-            logger.debug("CitationService registered for config reload notifications")
+
+            Config.register_reload_callback('citation_service', self._on_config_reload)
+            logger.debug('CitationService registered for config reload notifications')
 
     @property
     def citation_processor(self) -> CitationProcessor:
@@ -113,36 +114,40 @@ class CitationService(BaseService):
         - PDF locator settings
         """
         try:
-            logger.info("Reloading Citation configuration...")
+            logger.info('Reloading Citation configuration...')
 
             # Clear cached processors to force recreation with new config
             self._citation_processor = None
             self._pdf_locator_service = None
 
             # Log configuration changes
-            if hasattr(self.config, 'llm_config') and hasattr(self.config.llm_config, 'citation'):
-                logger.info(f"Citation model: {self.config.llm_config.citation.model}")
+            if hasattr(self.config, 'llm_config') and hasattr(
+                self.config.llm_config, 'citation'
+            ):
+                logger.info(f'Citation model: {self.config.llm_config.citation.model}')
 
             # Log citation config if available
             if hasattr(self.config, 'citation_config'):
                 citation_config = self.config.citation_config
                 if hasattr(citation_config, 'style'):
-                    logger.info(f"Citation style: {citation_config.style}")
+                    logger.info(f'Citation style: {citation_config.style}')
                 if hasattr(citation_config, 'link_format'):
-                    logger.info(f"Link format: {citation_config.link_format}")
+                    logger.info(f'Link format: {citation_config.link_format}')
 
                 # Log API usage settings
                 if hasattr(citation_config, 'apis'):
                     apis = citation_config.apis
-                    logger.info(f"Citation APIs enabled: "
-                              f"OpenCitations={getattr(apis, 'use_opencitations', False)}, "
-                              f"Scholarly={getattr(apis, 'use_scholarly', False)}, "
-                              f"SemanticScholar={getattr(apis, 'use_semantic_scholar', False)}")
+                    logger.info(
+                        f'Citation APIs enabled: '
+                        f'OpenCitations={getattr(apis, "use_opencitations", False)}, '
+                        f'Scholarly={getattr(apis, "use_scholarly", False)}, '
+                        f'SemanticScholar={getattr(apis, "use_semantic_scholar", False)}'
+                    )
 
-            logger.success("✅ Citation config reloaded")
+            logger.success('✅ Citation config reloaded')
 
         except Exception as e:
-            logger.error(f"Citation config reload failed: {e}")
+            logger.error(f'Citation config reload failed: {e}')
 
     def extract_citations(
         self, markdown_path: Path | str, style: str = 'ieee'
@@ -579,7 +584,7 @@ class CitationService(BaseService):
 
             if not hasattr(self, '_service_manager') or not self._service_manager:
                 # Get service manager from global if not set
-                from thoth.services.service_manager import ServiceManager
+                from thoth.services.service_manager import ServiceManager  # noqa: I001
                 from thoth.config import config
 
                 self._service_manager = ServiceManager(config)

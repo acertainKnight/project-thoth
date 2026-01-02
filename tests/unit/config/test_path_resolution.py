@@ -8,12 +8,15 @@ Tests all path resolution scenarios:
 - Special cases and edge cases
 """
 
-from pathlib import Path
-from unittest.mock import patch
+from pathlib import Path  # noqa: I001
+from unittest.mock import patch  # noqa: F401
 
-import pytest
+import pytest  # noqa: F401
 
-from tests.fixtures.config_fixtures import get_full_settings_json, get_minimal_settings_json
+from tests.fixtures.config_fixtures import (
+    get_full_settings_json,
+    get_minimal_settings_json,
+)  # noqa: F401
 from thoth.config import Config
 
 
@@ -22,7 +25,7 @@ class TestVaultRelativePaths:
 
     def test_relative_paths_resolved_to_vault(self, temp_vault: Path, monkeypatch):
         """Test relative paths are resolved relative to vault."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         # Reset singleton
         Config._instance = None
@@ -36,7 +39,7 @@ class TestVaultRelativePaths:
 
     def test_paths_are_absolute(self, temp_vault: Path, monkeypatch):
         """Test all resolved paths are absolute."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
@@ -49,13 +52,13 @@ class TestVaultRelativePaths:
 
     def test_nested_relative_paths(self, temp_vault: Path, monkeypatch):
         """Test nested relative paths are resolved correctly."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
         # data/pdf should resolve to vault_root/data/pdf
-        expected_pdf = temp_vault / "data" / "pdf"
+        expected_pdf = temp_vault / 'data' / 'pdf'
         assert config.pdf_dir == expected_pdf.resolve()
 
 
@@ -64,7 +67,7 @@ class TestDockerAbsolutePaths:
 
     def test_workspace_maps_to_vault_root(self, temp_vault: Path, monkeypatch):
         """Test /workspace maps to vault root."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
@@ -74,24 +77,24 @@ class TestDockerAbsolutePaths:
 
     def test_thoth_notes_maps_to_vault_notes(self, temp_vault: Path, monkeypatch):
         """Test /thoth/notes maps to vault_root/notes."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
         # /thoth/notes should map to vault_root/notes
-        expected_notes = temp_vault / "notes"
+        expected_notes = temp_vault / 'notes'
         assert config.notes_dir == expected_notes.resolve()
 
     def test_workspace_logs_maps_to_vault_logs(self, temp_vault: Path, monkeypatch):
         """Test /workspace/logs maps to vault_root/logs."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
         # logs path should be under vault
-        expected_logs = temp_vault / "logs"
+        expected_logs = temp_vault / 'logs'
         assert config.logs_dir == expected_logs.resolve()
 
     def test_thoth_prefix_stripped(self, temp_vault: Path, monkeypatch):
@@ -100,68 +103,64 @@ class TestDockerAbsolutePaths:
 
         # Create custom settings with /thoth/ paths
         settings_data = get_minimal_settings_json()
-        settings_data["paths"] = {
-            "workspace": "/workspace",
-            "notes": "/thoth/notes",
-            "pdf": "/thoth/data/pdf",
-            "markdown": "/thoth/data/markdown"
+        settings_data['paths'] = {
+            'workspace': '/workspace',
+            'notes': '/thoth/notes',
+            'pdf': '/thoth/data/pdf',
+            'markdown': '/thoth/data/markdown',
         }
 
-        settings_file = temp_vault / "_thoth" / "settings.json"
+        settings_file = temp_vault / '_thoth' / 'settings.json'
         settings_file.write_text(json.dumps(settings_data))
 
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
         # Should strip /thoth/ and resolve to vault
-        assert config.notes_dir == (temp_vault / "notes").resolve()
-        assert config.pdf_dir == (temp_vault / "data" / "pdf").resolve()
+        assert config.notes_dir == (temp_vault / 'notes').resolve()
+        assert config.pdf_dir == (temp_vault / 'data' / 'pdf').resolve()
 
 
 class TestAbsolutePathsOutsideVault:
     """Test handling of absolute paths outside vault."""
 
-    def test_absolute_path_outside_vault_warning(self, temp_vault: Path, monkeypatch, caplog):
+    def test_absolute_path_outside_vault_warning(
+        self, temp_vault: Path, monkeypatch, caplog
+    ):
         """Test warning logged for absolute path outside vault."""
         import json
 
-        outside_path = "/absolute/outside/vault"
+        outside_path = '/absolute/outside/vault'
 
         settings_data = get_minimal_settings_json()
-        settings_data["paths"] = {
-            "workspace": "/workspace",
-            "pdf": outside_path
-        }
+        settings_data['paths'] = {'workspace': '/workspace', 'pdf': outside_path}
 
-        settings_file = temp_vault / "_thoth" / "settings.json"
+        settings_file = temp_vault / '_thoth' / 'settings.json'
         settings_file.write_text(json.dumps(settings_data))
 
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
-        config = Config()
+        config = Config()  # noqa: F841
 
         # Should log warning
-        assert "Absolute path outside vault" in caplog.text
+        assert 'Absolute path outside vault' in caplog.text
 
     def test_absolute_path_used_as_is(self, temp_vault: Path, monkeypatch):
         """Test absolute path outside vault is used as-is."""
         import json
 
-        outside_path = "/tmp/outside_vault"
+        outside_path = '/tmp/outside_vault'
 
         settings_data = get_minimal_settings_json()
-        settings_data["paths"] = {
-            "workspace": "/workspace",
-            "pdf": outside_path
-        }
+        settings_data['paths'] = {'workspace': '/workspace', 'pdf': outside_path}
 
-        settings_file = temp_vault / "_thoth" / "settings.json"
+        settings_file = temp_vault / '_thoth' / 'settings.json'
         settings_file.write_text(json.dumps(settings_data))
 
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
@@ -175,7 +174,7 @@ class TestPathCreation:
 
     def test_directories_created_on_init(self, temp_vault: Path, monkeypatch):
         """Test all configured directories are created."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
@@ -194,31 +193,31 @@ class TestPathCreation:
         import json
 
         settings_data = get_minimal_settings_json()
-        settings_data["paths"] = {
-            "workspace": "/workspace",
-            "pdf": "data/nested/deep/pdf"
+        settings_data['paths'] = {
+            'workspace': '/workspace',
+            'pdf': 'data/nested/deep/pdf',
         }
 
-        settings_file = temp_vault / "_thoth" / "settings.json"
+        settings_file = temp_vault / '_thoth' / 'settings.json'
         settings_file.write_text(json.dumps(settings_data))
 
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
         # Nested path should exist
-        expected_path = temp_vault / "data" / "nested" / "deep" / "pdf"
+        expected_path = temp_vault / 'data' / 'nested' / 'deep' / 'pdf'
         assert expected_path.exists()
         assert config.pdf_dir == expected_path.resolve()
 
     def test_existing_directories_not_error(self, temp_vault: Path, monkeypatch):
         """Test existing directories don't cause errors."""
         # Pre-create some directories
-        (temp_vault / "data" / "pdf").mkdir(parents=True)
-        (temp_vault / "logs").mkdir(parents=True)
+        (temp_vault / 'data' / 'pdf').mkdir(parents=True)
+        (temp_vault / 'logs').mkdir(parents=True)
 
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
@@ -233,7 +232,7 @@ class TestRAGVectorDBPath:
 
     def test_rag_vector_db_path_resolved(self, temp_vault: Path, monkeypatch):
         """Test RAG vector_db_path is resolved to absolute."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
@@ -248,19 +247,17 @@ class TestRAGVectorDBPath:
         import json
 
         settings_data = get_minimal_settings_json()
-        settings_data["rag"] = {
-            "vectorDbPath": "custom/vector_db"
-        }
+        settings_data['rag'] = {'vectorDbPath': 'custom/vector_db'}
 
-        settings_file = temp_vault / "_thoth" / "settings.json"
+        settings_file = temp_vault / '_thoth' / 'settings.json'
         settings_file.write_text(json.dumps(settings_data))
 
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
-        expected_path = temp_vault / "custom" / "vector_db"
+        expected_path = temp_vault / 'custom' / 'vector_db'
         assert Path(config.settings.rag.vector_db_path) == expected_path.resolve()
 
 
@@ -269,7 +266,7 @@ class TestGraphStoragePath:
 
     def test_graph_storage_path_resolved(self, temp_vault: Path, monkeypatch):
         """Test graph storage path is resolved correctly."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
@@ -282,20 +279,20 @@ class TestGraphStoragePath:
         import json
 
         settings_data = get_minimal_settings_json()
-        settings_data["paths"] = {
-            "workspace": "/workspace",
-            "graphStorage": "custom/citations.graphml"
+        settings_data['paths'] = {
+            'workspace': '/workspace',
+            'graphStorage': 'custom/citations.graphml',
         }
 
-        settings_file = temp_vault / "_thoth" / "settings.json"
+        settings_file = temp_vault / '_thoth' / 'settings.json'
         settings_file.write_text(json.dumps(settings_data))
 
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
-        expected = temp_vault / "custom" / "citations.graphml"
+        expected = temp_vault / 'custom' / 'citations.graphml'
         assert config.graph_storage_path == expected.resolve()
 
 
@@ -304,7 +301,7 @@ class TestDiscoveryPaths:
 
     def test_discovery_paths_resolved(self, temp_vault: Path, monkeypatch):
         """Test all discovery paths are resolved."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
@@ -319,7 +316,7 @@ class TestDiscoveryPaths:
 
     def test_discovery_paths_created(self, temp_vault: Path, monkeypatch):
         """Test discovery directories are created."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
@@ -337,15 +334,15 @@ class TestPathResolutionEdgeCases:
         import json
 
         settings_data = get_minimal_settings_json()
-        settings_data["paths"] = {
-            "workspace": "",  # Empty path
-            "pdf": "data/pdf"
+        settings_data['paths'] = {
+            'workspace': '',  # Empty path
+            'pdf': 'data/pdf',
         }
 
-        settings_file = temp_vault / "_thoth" / "settings.json"
+        settings_file = temp_vault / '_thoth' / 'settings.json'
         settings_file.write_text(json.dumps(settings_data))
 
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
@@ -358,15 +355,12 @@ class TestPathResolutionEdgeCases:
         import json
 
         settings_data = get_minimal_settings_json()
-        settings_data["paths"] = {
-            "workspace": ".",
-            "pdf": "data/pdf"
-        }
+        settings_data['paths'] = {'workspace': '.', 'pdf': 'data/pdf'}
 
-        settings_file = temp_vault / "_thoth" / "settings.json"
+        settings_file = temp_vault / '_thoth' / 'settings.json'
         settings_file.write_text(json.dumps(settings_data))
 
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
@@ -378,21 +372,18 @@ class TestPathResolutionEdgeCases:
         import json
 
         settings_data = get_minimal_settings_json()
-        settings_data["paths"] = {
-            "workspace": "/workspace",
-            "pdf": "data/../other/pdf"
-        }
+        settings_data['paths'] = {'workspace': '/workspace', 'pdf': 'data/../other/pdf'}
 
-        settings_file = temp_vault / "_thoth" / "settings.json"
+        settings_file = temp_vault / '_thoth' / 'settings.json'
         settings_file.write_text(json.dumps(settings_data))
 
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
         # Should resolve to vault_root/other/pdf
-        expected = temp_vault / "other" / "pdf"
+        expected = temp_vault / 'other' / 'pdf'
         assert config.pdf_dir == expected.resolve()
 
     def test_trailing_slash_handled(self, temp_vault: Path, monkeypatch):
@@ -400,21 +391,18 @@ class TestPathResolutionEdgeCases:
         import json
 
         settings_data = get_minimal_settings_json()
-        settings_data["paths"] = {
-            "workspace": "/workspace",
-            "pdf": "data/pdf/"
-        }
+        settings_data['paths'] = {'workspace': '/workspace', 'pdf': 'data/pdf/'}
 
-        settings_file = temp_vault / "_thoth" / "settings.json"
+        settings_file = temp_vault / '_thoth' / 'settings.json'
         settings_file.write_text(json.dumps(settings_data))
 
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
         # Trailing slash should be handled
-        expected = temp_vault / "data" / "pdf"
+        expected = temp_vault / 'data' / 'pdf'
         assert config.pdf_dir == expected.resolve()
 
 
@@ -423,7 +411,7 @@ class TestPathResolutionCaseSensitivity:
 
     def test_workspace_lowercase(self, temp_vault: Path, monkeypatch):
         """Test /workspace in lowercase."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
@@ -436,20 +424,17 @@ class TestPathResolutionCaseSensitivity:
         import json
 
         settings_data = get_minimal_settings_json()
-        settings_data["paths"] = {
-            "workspace": "/workspace",
-            "notes": "/thoth/notes"
-        }
+        settings_data['paths'] = {'workspace': '/workspace', 'notes': '/thoth/notes'}
 
-        settings_file = temp_vault / "_thoth" / "settings.json"
+        settings_file = temp_vault / '_thoth' / 'settings.json'
         settings_file.write_text(json.dumps(settings_data))
 
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
-        assert config.notes_dir == (temp_vault / "notes").resolve()
+        assert config.notes_dir == (temp_vault / 'notes').resolve()
 
 
 class TestPathResolutionLogging:
@@ -457,30 +442,30 @@ class TestPathResolutionLogging:
 
     def test_directory_creation_logged(self, temp_vault: Path, monkeypatch, caplog):
         """Test directory creation is logged."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
-        config = Config()
+        config = Config()  # noqa: F841
 
         # Should log directory ensured messages
-        assert "Ensured directory exists" in caplog.text
+        assert 'Ensured directory exists' in caplog.text
 
     def test_absolute_path_warning_logged(self, temp_vault: Path, monkeypatch, caplog):
         """Test warning for absolute paths outside vault."""
         import json
 
         settings_data = get_minimal_settings_json()
-        settings_data["paths"] = {
-            "workspace": "/workspace",
-            "pdf": "/absolute/outside/path"
+        settings_data['paths'] = {
+            'workspace': '/workspace',
+            'pdf': '/absolute/outside/path',
         }
 
-        settings_file = temp_vault / "_thoth" / "settings.json"
+        settings_file = temp_vault / '_thoth' / 'settings.json'
         settings_file.write_text(json.dumps(settings_data))
 
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
-        config = Config()
+        config = Config()  # noqa: F841
 
-        assert "Absolute path outside vault" in caplog.text
+        assert 'Absolute path outside vault' in caplog.text

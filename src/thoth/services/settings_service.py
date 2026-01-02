@@ -1100,7 +1100,7 @@ class SettingsService(BaseService):
         """
         from thoth.config import config
 
-        config  # Already imported at module level
+        config  # Already imported at module level  # noqa: B018
 
         # Build settings structure from current config
         settings = {

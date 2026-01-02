@@ -8,7 +8,7 @@ This module contains the main pipeline that orchestrates the processing of PDF d
 4. Note generation for Obsidian
 """  # noqa: W505
 
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 from pathlib import Path
 from typing import Any
@@ -100,9 +100,9 @@ class ThothPipeline:
 
         migration_service = PathMigrationService(self.config)
         migration_results = migration_service.migrate_all()
-        if migration_results.get('tracker', {}).get('migrated') or migration_results.get(
-            'graph', {}
-        ).get('migrated'):
+        if migration_results.get('tracker', {}).get(
+            'migrated'
+        ) or migration_results.get('graph', {}).get('migrated'):
             logger.info('Paths migrated to current machine configuration')
 
         # Initialize PDF tracker

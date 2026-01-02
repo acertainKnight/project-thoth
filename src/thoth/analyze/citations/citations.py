@@ -365,6 +365,7 @@ class CitationProcessor:
             # Resolve "auto" to actual worker count
             if worker_config == 'auto':
                 import os
+
                 max_workers = max(1, os.cpu_count() or 4)
             else:
                 max_workers = int(worker_config)
@@ -650,6 +651,7 @@ class CitationProcessor:
             # Resolve "auto" to actual worker count
             if worker_config == 'auto':
                 import os
+
                 max_workers = max(1, os.cpu_count() or 5)
             else:
                 max_workers = int(worker_config)

@@ -8,7 +8,7 @@ This service provides centralized Letta client management with support for:
 - Memory management and consolidation
 """
 
-import os
+import os  # noqa: I001
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -17,7 +17,7 @@ from typing import Any
 from loguru import logger
 
 from thoth.services.base import BaseService
-from thoth.config import config, Config
+from thoth.config import config, Config  # noqa: F401
 
 try:
     from letta_client import AgentState
@@ -49,7 +49,7 @@ class LettaService(BaseService):
     - Health monitoring and connection pooling
     """
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config):  # noqa: F811
         """
         Initialize the Letta service.
 
@@ -69,8 +69,8 @@ class LettaService(BaseService):
         self.connection_config = self._get_connection_config()
 
         # Register for config reload notifications
-        Config.register_reload_callback("letta_service", self._on_config_reload)
-        logger.debug("LettaService registered for config reload notifications")
+        Config.register_reload_callback('letta_service', self._on_config_reload)
+        logger.debug('LettaService registered for config reload notifications')
 
         logger.info(f'LettaService initialized in {self.mode.value} mode')
 
@@ -111,7 +111,7 @@ class LettaService(BaseService):
                 'server_pool': [],  # Will be populated with server instances
             }
 
-    def _on_config_reload(self, config: Config) -> None:
+    def _on_config_reload(self, config: Config) -> None:  # noqa: ARG002, F811
         """
         Handle configuration reload for Letta service.
 
@@ -124,7 +124,7 @@ class LettaService(BaseService):
         - Connection URL (requires restart warning)
         """
         try:
-            logger.info("Reloading Letta configuration...")
+            logger.info('Reloading Letta configuration...')
 
             # Update connection config based on mode
             new_config = self._get_connection_config()
@@ -135,22 +135,24 @@ class LettaService(BaseService):
                 old_url = self.connection_config.get('base_url')
 
                 if new_url != old_url:
-                    logger.warning(f"Letta URL changed: {old_url} → {new_url}")
-                    logger.warning("Note: Letta reconnection requires service restart")
+                    logger.warning(f'Letta URL changed: {old_url} → {new_url}')
+                    logger.warning('Note: Letta reconnection requires service restart')
                     self.connection_config = new_config
 
                     # Mark client as needing reinitialization
                     # Next operation will trigger reconnect via initialize()
-                    logger.info("Letta connection config updated - reconnect on next operation")
+                    logger.info(
+                        'Letta connection config updated - reconnect on next operation'
+                    )
 
             # Update other settings that can change dynamically
             if hasattr(self.config.memory_config.letta, 'core_memory_limit'):
-                logger.info(f"Memory limits updated")
+                logger.info(f'Memory limits updated')  # noqa: F541
 
-            logger.success("✅ Letta config reloaded")
+            logger.success('✅ Letta config reloaded')
 
         except Exception as e:
-            logger.error(f"Letta config reload failed: {e}")
+            logger.error(f'Letta config reload failed: {e}')
 
     async def initialize(self) -> None:
         """Initialize the Letta client connection."""

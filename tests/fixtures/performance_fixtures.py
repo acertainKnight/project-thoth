@@ -7,7 +7,7 @@ for testing the performance monitoring system.
 
 from datetime import datetime, timedelta
 from typing import Any
-from unittest.mock import Mock
+from unittest.mock import Mock  # noqa: F401
 
 import pytest
 

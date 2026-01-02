@@ -30,19 +30,19 @@ def backfill_embeddings():
     3. Call RAGService.index_file() to generate embeddings
     4. Embeddings are stored in document_chunks table
     """
-    logger.info("Starting embeddings backfill for existing papers")
+    logger.info('Starting embeddings backfill for existing papers')
 
     # Initialize service manager
     services = ServiceManager(config=config)
     services.initialize()
 
     if services.rag is None:
-        logger.error("RAG service not available - requires embeddings extras")
-        logger.error("Install with: uv sync --extra embeddings")
+        logger.error('RAG service not available - requires embeddings extras')
+        logger.error('Install with: uv sync --extra embeddings')
         return False
 
     # Connect to database to get papers with markdown
-    import asyncpg
+    import asyncpg  # noqa: I001
     import asyncio
 
     async def process_papers():
@@ -61,7 +61,7 @@ def backfill_embeddings():
                 ORDER BY created_at DESC
             """)
 
-            logger.info(f"Found {len(papers)} papers with markdown to index")
+            logger.info(f'Found {len(papers)} papers with markdown to index')
 
             indexed = 0
             skipped = 0
@@ -75,13 +75,16 @@ def backfill_embeddings():
 
                 try:
                     # Check if already indexed
-                    existing = await conn.fetchval("""
+                    existing = await conn.fetchval(
+                        """
                         SELECT COUNT(*) FROM document_chunks
                         WHERE paper_id = $1
-                    """, paper_id)
+                    """,
+                        paper_id,
+                    )
 
                     if existing > 0:
-                        logger.debug(f"Already indexed: {title} ({existing} chunks)")
+                        logger.debug(f'Already indexed: {title} ({existing} chunks)')
                         skipped += 1
                         continue
 
@@ -89,54 +92,62 @@ def backfill_embeddings():
                     if markdown_path:
                         file_path = Path(markdown_path)
                         if file_path.exists():
-                            logger.info(f"Indexing from file: {title}")
+                            logger.info(f'Indexing from file: {title}')
                             doc_ids = services.rag.index_file(file_path)
-                            logger.success(f"Indexed {len(doc_ids)} chunks for: {title}")
+                            logger.success(
+                                f'Indexed {len(doc_ids)} chunks for: {title}'
+                            )
                             indexed += 1
                             continue
                         else:
-                            logger.warning(f"File not found: {markdown_path}")
+                            logger.warning(f'File not found: {markdown_path}')
 
                     # Fall back to markdown_content if file doesn't exist
                     if markdown_content:
-                        logger.info(f"Indexing from content: {title}")
+                        logger.info(f'Indexing from content: {title}')
                         # Create temporary file with markdown content
                         import tempfile
-                        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as tmp:
+
+                        with tempfile.NamedTemporaryFile(
+                            mode='w', suffix='.md', delete=False
+                        ) as tmp:
                             tmp.write(markdown_content)
                             tmp_path = Path(tmp.name)
 
                         try:
                             doc_ids = services.rag.index_file(tmp_path)
-                            logger.success(f"Indexed {len(doc_ids)} chunks for: {title}")
+                            logger.success(
+                                f'Indexed {len(doc_ids)} chunks for: {title}'
+                            )
                             indexed += 1
                         finally:
                             tmp_path.unlink()
                         continue
 
-                    logger.warning(f"No markdown available for: {title}")
+                    logger.warning(f'No markdown available for: {title}')
                     skipped += 1
 
                 except Exception as e:
-                    logger.error(f"Failed to index {title}: {e}")
+                    logger.error(f'Failed to index {title}: {e}')
                     import traceback
+
                     traceback.print_exc()
                     failed += 1
 
-            logger.info(f"\n=== Backfill Summary ===")
-            logger.info(f"Total papers: {len(papers)}")
-            logger.info(f"Indexed: {indexed}")
-            logger.info(f"Skipped (already indexed): {skipped}")
-            logger.info(f"Failed: {failed}")
+            logger.info(f'\n=== Backfill Summary ===')  # noqa: F541
+            logger.info(f'Total papers: {len(papers)}')
+            logger.info(f'Indexed: {indexed}')
+            logger.info(f'Skipped (already indexed): {skipped}')
+            logger.info(f'Failed: {failed}')
 
             # Verify document_chunks table
-            total_chunks = await conn.fetchval("SELECT COUNT(*) FROM document_chunks")
+            total_chunks = await conn.fetchval('SELECT COUNT(*) FROM document_chunks')
             papers_with_chunks = await conn.fetchval("""
                 SELECT COUNT(DISTINCT paper_id) FROM document_chunks
             """)
-            logger.info(f"\n=== Database Status ===")
-            logger.info(f"Total document chunks: {total_chunks}")
-            logger.info(f"Papers with embeddings: {papers_with_chunks}")
+            logger.info(f'\n=== Database Status ===')  # noqa: F541
+            logger.info(f'Total document chunks: {total_chunks}')
+            logger.info(f'Papers with embeddings: {papers_with_chunks}')
 
             return True
 
@@ -148,28 +159,29 @@ def backfill_embeddings():
         success = asyncio.run(process_papers())
         return success
     except Exception as e:
-        logger.error(f"Backfill failed: {e}")
+        logger.error(f'Backfill failed: {e}')
         import traceback
+
         traceback.print_exc()
         return False
 
 
 if __name__ == '__main__':
-    logger.info("=" * 60)
-    logger.info("EMBEDDINGS BACKFILL TO POSTGRESQL DOCUMENT_CHUNKS")
-    logger.info("=" * 60)
+    logger.info('=' * 60)
+    logger.info('EMBEDDINGS BACKFILL TO POSTGRESQL DOCUMENT_CHUNKS')
+    logger.info('=' * 60)
 
     success = backfill_embeddings()
 
-    logger.info("=" * 60)
+    logger.info('=' * 60)
     if success:
-        logger.success("BACKFILL COMPLETED SUCCESSFULLY!")
-        logger.info("\nTo verify embeddings:")
-        logger.info("  SELECT COUNT(*) as total_chunks,")
-        logger.info("         COUNT(DISTINCT paper_id) as papers_with_embeddings")
-        logger.info("  FROM document_chunks;")
+        logger.success('BACKFILL COMPLETED SUCCESSFULLY!')
+        logger.info('\nTo verify embeddings:')
+        logger.info('  SELECT COUNT(*) as total_chunks,')
+        logger.info('         COUNT(DISTINCT paper_id) as papers_with_embeddings')
+        logger.info('  FROM document_chunks;')
     else:
-        logger.error("BACKFILL FAILED!")
-    logger.info("=" * 60)
+        logger.error('BACKFILL FAILED!')
+    logger.info('=' * 60)
 
     sys.exit(0 if success else 1)

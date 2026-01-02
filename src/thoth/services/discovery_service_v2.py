@@ -5,12 +5,12 @@ This module extends the original DiscoveryService to use PostgreSQL repositories
 while maintaining backward compatibility with file-based storage.
 """
 
-import json
+import json  # noqa: F401
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from loguru import logger
+from loguru import logger  # noqa: F401
 
 from thoth.repositories.discovery_source_repository import DiscoverySourceRepository
 from thoth.repositories.paper_discovery_repository import PaperDiscoveryRepository
@@ -33,7 +33,7 @@ class DiscoveryServiceV2(DiscoveryService):
         sources_dir: Path | None = None,
         results_dir: Path | None = None,
         article_service=None,
-        postgres_service: Optional[PostgresService] = None,
+        postgres_service: Optional[PostgresService] = None,  # noqa: UP007
         use_postgres: bool = True,
     ):
         """
@@ -53,13 +53,15 @@ class DiscoveryServiceV2(DiscoveryService):
         self.use_postgres = use_postgres and postgres_service is not None
 
         # Initialize repositories if PostgreSQL is available
-        self.source_repo: Optional[DiscoverySourceRepository] = None
-        self.discovery_repo: Optional[PaperDiscoveryRepository] = None
+        self.source_repo: Optional[DiscoverySourceRepository] = None  # noqa: UP007
+        self.discovery_repo: Optional[PaperDiscoveryRepository] = None  # noqa: UP007
 
         if self.use_postgres:
             self.source_repo = DiscoverySourceRepository(self.postgres)
             self.discovery_repo = PaperDiscoveryRepository(self.postgres)
-            self.logger.info('DiscoveryService initialized with PostgreSQL repositories')
+            self.logger.info(
+                'DiscoveryService initialized with PostgreSQL repositories'
+            )
         else:
             self.logger.info('DiscoveryService initialized with file-based storage')
 
@@ -188,7 +190,9 @@ class DiscoveryServiceV2(DiscoveryService):
         else:
             return super().list_sources(active_only)
 
-    def _list_sources_postgres(self, active_only: bool = False) -> list[DiscoverySource]:
+    def _list_sources_postgres(
+        self, active_only: bool = False
+    ) -> list[DiscoverySource]:
         """List sources from PostgreSQL repository."""
         try:
             import asyncio
@@ -231,7 +235,9 @@ class DiscoveryServiceV2(DiscoveryService):
             loop = asyncio.get_event_loop()
 
             # Get existing source to get ID
-            existing = loop.run_until_complete(self.source_repo.get_by_name(source.name))
+            existing = loop.run_until_complete(
+                self.source_repo.get_by_name(source.name)
+            )
             if not existing:
                 self.logger.warning(f"Source '{source.name}' not found in database")
                 return super().update_source(source)
@@ -314,7 +320,7 @@ class DiscoveryServiceV2(DiscoveryService):
         paper_id: str,
         source_id: str,
         metadata: ScrapedArticleMetadata,
-    ) -> Optional[str]:
+    ) -> Optional[str]:  # noqa: UP007
         """
         Record that an article was discovered by a source.
 
@@ -350,7 +356,9 @@ class DiscoveryServiceV2(DiscoveryService):
             return None
 
     async def is_article_processed(
-        self, doi: Optional[str] = None, arxiv_id: Optional[str] = None
+        self,
+        doi: Optional[str] = None,
+        arxiv_id: Optional[str] = None,  # noqa: ARG002, UP007
     ) -> bool:
         """
         Check if an article has already been processed.

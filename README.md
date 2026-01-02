@@ -3,8 +3,13 @@
 An advanced AI-powered research assistant system designed for academic research paper processing, knowledge management, and intelligent document analysis. Thoth combines a powerful Python backend with an Obsidian plugin for seamless integration into research workflows.
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://python.org)
+[![CI](https://github.com/YOUR_ORG/project-thoth/workflows/CI/badge.svg)](https://github.com/YOUR_ORG/project-thoth/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/YOUR_ORG/project-thoth/branch/main/graph/badge.svg)](https://codecov.io/gh/YOUR_ORG/project-thoth)
+[![Docker](https://img.shields.io/badge/Docker-Available-blue)](https://github.com/YOUR_ORG/project-thoth/pkgs/container/project-thoth)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![Security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green)](LICENSE)
-[![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen)](CONTRIBUTING.md)
+[![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen)](docs/CONTRIBUTING.md)
 
 [Quick Start](#quick-start) • [Installation](#installation) • [Usage](#usage-examples) • [Contributing](#contributing)
 

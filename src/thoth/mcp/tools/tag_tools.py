@@ -5,7 +5,7 @@ This module provides tools for managing tags, consolidating similar tags,
 and suggesting new tags for articles.
 """
 
-from typing import Any
+from typing import Any  # noqa: I001
 
 from ..base_tools import MCPTool, MCPToolCallResult, NoInputTool
 from ...services.background_tasks import BackgroundTaskManager, TaskStatus
@@ -325,7 +325,9 @@ class ConsolidateAndRetagMCPTool(NoInputTool):
             response_text += '  3. Suggesting additional relevant tags\n'
             response_text += '  4. Updating all affected articles\n\n'
             response_text += '⏱️ **This operation is running in the background.**\n'
-            response_text += 'Use `get_task_status` tool with this task ID to check progress.\n\n'
+            response_text += (
+                'Use `get_task_status` tool with this task ID to check progress.\n\n'
+            )
             response_text += '**Note:** Depending on your collection size, this may take several minutes.'
 
             return MCPToolCallResult(content=[{'type': 'text', 'text': response_text}])
@@ -396,7 +398,9 @@ class GetTaskStatusMCPTool(MCPTool):
             response_text = f'**Task Status: {task.name}**\n\n'
             response_text += f'**Task ID:** `{task_id}`\n'
             response_text += f'**Status:** {task.status.value.upper()}\n'
-            response_text += f'**Created:** {task.created_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
+            response_text += (
+                f'**Created:** {task.created_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
+            )
 
             if task.started_at:
                 response_text += f'**Started:** {task.started_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
@@ -404,7 +408,7 @@ class GetTaskStatusMCPTool(MCPTool):
             if task.status == TaskStatus.RUNNING:
                 # Show running status
                 if task.started_at:
-                    elapsed = (task.started_at.timestamp() - task.created_at.timestamp())
+                    elapsed = task.started_at.timestamp() - task.created_at.timestamp()
                     response_text += f'**Running for:** {elapsed:.1f} seconds\n\n'
                 response_text += '⏳ **The task is currently running...**\n'
                 response_text += 'Check again in a few moments for completion status.'
@@ -412,7 +416,9 @@ class GetTaskStatusMCPTool(MCPTool):
             elif task.status == TaskStatus.COMPLETED:
                 # Show completion with results
                 if task.completed_at and task.started_at:
-                    duration = task.completed_at.timestamp() - task.started_at.timestamp()
+                    duration = (
+                        task.completed_at.timestamp() - task.started_at.timestamp()
+                    )
                     response_text += f'**Completed:** {task.completed_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
                     response_text += f'**Duration:** {duration:.2f} seconds\n\n'
 
@@ -423,11 +429,19 @@ class GetTaskStatusMCPTool(MCPTool):
                     result = task.result
                     response_text += '**Results:**\n'
                     response_text += f'  - Articles processed: {result.get("articles_processed", 0)}\n'
-                    response_text += f'  - Articles updated: {result.get("articles_updated", 0)}\n'
-                    response_text += f'  - Tags consolidated: {result.get("tags_consolidated", 0)}\n'
-                    response_text += f'  - Additional tags added: {result.get("tags_added", 0)}\n'
+                    response_text += (
+                        f'  - Articles updated: {result.get("articles_updated", 0)}\n'
+                    )
+                    response_text += (
+                        f'  - Tags consolidated: {result.get("tags_consolidated", 0)}\n'
+                    )
+                    response_text += (
+                        f'  - Additional tags added: {result.get("tags_added", 0)}\n'
+                    )
                     response_text += f'  - Original tag count: {result.get("original_tag_count", 0)}\n'
-                    response_text += f'  - Final tag count: {result.get("final_tag_count", 0)}\n\n'
+                    response_text += (
+                        f'  - Final tag count: {result.get("final_tag_count", 0)}\n\n'
+                    )
 
                     # Show consolidation mappings
                     if result.get('consolidation_mappings'):
@@ -445,7 +459,9 @@ class GetTaskStatusMCPTool(MCPTool):
                 if task.completed_at:
                     response_text += f'**Failed at:** {task.completed_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
 
-                response_text += f'\n❌ **Task failed with error:**\n```\n{task.error}\n```\n'
+                response_text += (
+                    f'\n❌ **Task failed with error:**\n```\n{task.error}\n```\n'
+                )
 
             elif task.status == TaskStatus.PENDING:
                 response_text += '\n⏸️ **Task is pending and has not started yet.**'

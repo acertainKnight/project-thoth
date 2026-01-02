@@ -5,14 +5,14 @@ Tests citation relationship management, network traversal,
 and citation counting functionality.
 """
 
-import pytest
+import pytest  # noqa: I001
 from unittest.mock import AsyncMock
 
 from thoth.repositories.citation_repository import CitationRepository
 from tests.fixtures.database_fixtures import (
     create_mock_record,
-    sample_citation_data,
-    sample_paper_data
+    sample_citation_data,  # noqa: F401
+    sample_paper_data,  # noqa: F401
 )
 
 
@@ -30,13 +30,11 @@ class TestCitationRepository:
 
     async def test_create_citation(self, mock_postgres_service):
         """Test creating a citation relationship."""
-        mock_postgres_service.fetchval = AsyncMock(return_value=1)
+        mock_postgres_service.fetchval.return_value = 1
 
         repo = CitationRepository(mock_postgres_service)
         citation_id = await repo.create_citation(
-            citing_paper_id=1,
-            cited_paper_id=2,
-            metadata={'context': 'Related work'}
+            citing_paper_id=1, cited_paper_id=2, metadata={'context': 'Related work'}
         )
 
         assert citation_id == 1
@@ -48,24 +46,24 @@ class TestCitationRepository:
     async def test_create_citation_duplicate(self, mock_postgres_service):
         """Test that duplicate citations are handled gracefully."""
         # ON CONFLICT DO NOTHING returns None for duplicates
-        mock_postgres_service.fetchval = AsyncMock(return_value=None)
+        mock_postgres_service.fetchval.return_value = None
 
         repo = CitationRepository(mock_postgres_service)
-        citation_id = await repo.create_citation(
-            citing_paper_id=1,
-            cited_paper_id=2
-        )
+        citation_id = await repo.create_citation(citing_paper_id=1, cited_paper_id=2)
 
         assert citation_id is None
 
     async def test_get_citations_for_paper(
-        self, mock_postgres_service, sample_citation_data, sample_paper_data
+        self,
+        mock_postgres_service,
+        sample_citation_data,
+        sample_paper_data,  # noqa: F811
     ):
         """Test getting all citations made by a paper."""
         # Mock citation with cited paper details
         combined_data = {**sample_citation_data, **sample_paper_data}
         mock_records = [create_mock_record(**combined_data)]
-        mock_postgres_service.fetch = AsyncMock(return_value=mock_records)
+        mock_postgres_service.fetch.return_value = mock_records
 
         repo = CitationRepository(mock_postgres_service)
         citations = await repo.get_citations_for_paper(1)
@@ -79,12 +77,15 @@ class TestCitationRepository:
         assert 'citing_paper_id = $1' in query_info['query']
 
     async def test_get_citing_papers(
-        self, mock_postgres_service, sample_citation_data, sample_paper_data
+        self,
+        mock_postgres_service,
+        sample_citation_data,
+        sample_paper_data,  # noqa: F811
     ):
         """Test getting all papers that cite a paper."""
         combined_data = {**sample_citation_data, **sample_paper_data}
         mock_records = [create_mock_record(**combined_data)]
-        mock_postgres_service.fetch = AsyncMock(return_value=mock_records)
+        mock_postgres_service.fetch.return_value = mock_records
 
         repo = CitationRepository(mock_postgres_service)
         citing_papers = await repo.get_citing_papers(2)
@@ -97,7 +98,7 @@ class TestCitationRepository:
 
     async def test_get_citation_count(self, mock_postgres_service):
         """Test counting citations for a paper."""
-        mock_postgres_service.fetchval = AsyncMock(return_value=42)
+        mock_postgres_service.fetchval.return_value = 42
 
         repo = CitationRepository(mock_postgres_service)
         count = await repo.get_citation_count(1)
@@ -110,7 +111,7 @@ class TestCitationRepository:
 
     async def test_get_citation_count_zero(self, mock_postgres_service):
         """Test citation count for uncited paper."""
-        mock_postgres_service.fetchval = AsyncMock(return_value=0)
+        mock_postgres_service.fetchval.return_value = 0
 
         repo = CitationRepository(mock_postgres_service)
         count = await repo.get_citation_count(999)
@@ -120,18 +121,10 @@ class TestCitationRepository:
     async def test_get_citation_network_depth_1(self, mock_postgres_service):
         """Test getting citation network at depth 1."""
         mock_records = [
-            create_mock_record(
-                citing_paper_id=1,
-                cited_paper_id=2,
-                depth=1
-            ),
-            create_mock_record(
-                citing_paper_id=1,
-                cited_paper_id=3,
-                depth=1
-            )
+            create_mock_record(citing_paper_id=1, cited_paper_id=2, depth=1),
+            create_mock_record(citing_paper_id=1, cited_paper_id=3, depth=1),
         ]
-        mock_postgres_service.fetch = AsyncMock(return_value=mock_records)
+        mock_postgres_service.fetch.return_value = mock_records
 
         repo = CitationRepository(mock_postgres_service)
         network = await repo.get_citation_network(1, depth=1)
@@ -152,7 +145,7 @@ class TestCitationRepository:
             create_mock_record(citing_paper_id=1, cited_paper_id=2, depth=1),
             create_mock_record(citing_paper_id=2, cited_paper_id=3, depth=2),
         ]
-        mock_postgres_service.fetch = AsyncMock(return_value=mock_records)
+        mock_postgres_service.fetch.return_value = mock_records
 
         repo = CitationRepository(mock_postgres_service)
         network = await repo.get_citation_network(1, depth=2)
@@ -167,7 +160,7 @@ class TestCitationRepository:
 
     async def test_get_citation_network_empty(self, mock_postgres_service):
         """Test getting citation network for paper with no citations."""
-        mock_postgres_service.fetch = AsyncMock(return_value=[])
+        mock_postgres_service.fetch.return_value = []
 
         repo = CitationRepository(mock_postgres_service)
         network = await repo.get_citation_network(999, depth=1)
@@ -176,7 +169,9 @@ class TestCitationRepository:
         assert network['edges'] == []
 
     async def test_get_most_cited(
-        self, mock_postgres_service, sample_paper_data
+        self,
+        mock_postgres_service,
+        sample_paper_data,  # noqa: F811
     ):
         """Test getting most cited papers."""
         papers = [
@@ -184,7 +179,7 @@ class TestCitationRepository:
             for i in range(1, 6)
         ]
         mock_records = [create_mock_record(**paper) for paper in papers]
-        mock_postgres_service.fetch = AsyncMock(return_value=mock_records)
+        mock_postgres_service.fetch.return_value = mock_records
 
         repo = CitationRepository(mock_postgres_service)
         most_cited = await repo.get_most_cited(limit=5)
@@ -201,7 +196,7 @@ class TestCitationRepository:
 
     async def test_delete_citation(self, mock_postgres_service):
         """Test deleting a citation."""
-        mock_postgres_service.execute = AsyncMock(return_value='DELETE 1')
+        mock_postgres_service.execute.return_value = 'DELETE 1'
 
         repo = CitationRepository(mock_postgres_service)
         success = await repo.delete(1)
@@ -224,9 +219,7 @@ class TestCitationRepository:
 
     async def test_error_handling_network(self, mock_postgres_service):
         """Test error handling during network traversal."""
-        mock_postgres_service.fetch = AsyncMock(
-            side_effect=Exception('Database error')
-        )
+        mock_postgres_service.fetch = AsyncMock(side_effect=Exception('Database error'))
 
         repo = CitationRepository(mock_postgres_service)
         network = await repo.get_citation_network(1, depth=2)
@@ -237,7 +230,7 @@ class TestCitationRepository:
 
     async def test_cache_invalidation(self, mock_postgres_service):
         """Test cache invalidation after creating citation."""
-        mock_postgres_service.fetchval = AsyncMock(return_value=1)
+        mock_postgres_service.fetchval.return_value = 1
 
         repo = CitationRepository(mock_postgres_service, cache_ttl=60)
 

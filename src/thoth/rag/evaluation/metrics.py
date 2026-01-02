@@ -1,9 +1,9 @@
 """Metrics calculation for RAG pipeline evaluation."""
 
-from dataclasses import dataclass
-from typing import List, Dict, Optional, Tuple
+from dataclasses import dataclass  # noqa: I001
+from typing import List, Dict, Optional, Tuple  # noqa: F401, UP035
 import numpy as np
-from loguru import logger
+from loguru import logger  # noqa: F401
 
 
 @dataclass
@@ -13,9 +13,10 @@ class RetrievalMetrics:
 
     Measures how well the vector search retrieves relevant documents.
     """
-    precision_at_k: Dict[int, float]  # Precision@1, @3, @5, @10
-    recall_at_k: Dict[int, float]  # Recall@1, @3, @5, @10
-    ndcg_at_k: Dict[int, float]  # NDCG@1, @3, @5, @10
+
+    precision_at_k: Dict[int, float]  # Precision@1, @3, @5, @10  # noqa: UP006
+    recall_at_k: Dict[int, float]  # Recall@1, @3, @5, @10  # noqa: UP006
+    ndcg_at_k: Dict[int, float]  # NDCG@1, @3, @5, @10  # noqa: UP006
     mean_reciprocal_rank: float  # MRR
     mean_average_precision: float  # MAP
     total_queries: int
@@ -29,6 +30,7 @@ class AnswerQualityMetrics:
 
     Measures accuracy and relevance of generated answers.
     """
+
     exact_match_score: float  # Percentage of exact matches
     token_overlap_score: float  # F1 score of token overlap
     semantic_similarity_score: float  # Cosine similarity of answer embeddings
@@ -44,6 +46,7 @@ class PerformanceMetrics:
     """
     System performance metrics for RAG evaluation.
     """
+
     avg_retrieval_latency_ms: float
     avg_generation_latency_ms: float
     avg_total_latency_ms: float
@@ -57,17 +60,20 @@ class RAGMetrics:
     """
     Comprehensive RAG evaluation metrics.
     """
+
     retrieval: RetrievalMetrics
     answer_quality: AnswerQualityMetrics
     performance: PerformanceMetrics
-    by_difficulty: Dict[str, 'RAGMetrics']  # Metrics stratified by difficulty
-    by_question_type: Dict[str, 'RAGMetrics']  # Metrics by question type
+    by_difficulty: Dict[
+        str, 'RAGMetrics'
+    ]  # Metrics stratified by difficulty  # noqa: UP006
+    by_question_type: Dict[str, 'RAGMetrics']  # Metrics by question type  # noqa: UP006
 
 
 def calculate_precision_at_k(
-    retrieved_doc_ids: List[str],
-    relevant_doc_ids: List[str],
-    k: int
+    retrieved_doc_ids: List[str],  # noqa: UP006
+    relevant_doc_ids: List[str],  # noqa: UP006
+    k: int,
 ) -> float:
     """
     Calculate Precision@K: Fraction of top-K results that are relevant.
@@ -90,9 +96,9 @@ def calculate_precision_at_k(
 
 
 def calculate_recall_at_k(
-    retrieved_doc_ids: List[str],
-    relevant_doc_ids: List[str],
-    k: int
+    retrieved_doc_ids: List[str],  # noqa: UP006
+    relevant_doc_ids: List[str],  # noqa: UP006
+    k: int,
 ) -> float:
     """
     Calculate Recall@K: Fraction of relevant docs found in top-K results.
@@ -118,10 +124,10 @@ def calculate_recall_at_k(
 
 
 def calculate_ndcg_at_k(
-    retrieved_doc_ids: List[str],
-    relevant_doc_ids: List[str],
+    retrieved_doc_ids: List[str],  # noqa: UP006
+    relevant_doc_ids: List[str],  # noqa: UP006
     k: int,
-    relevance_scores: Optional[Dict[str, float]] = None
+    relevance_scores: Optional[Dict[str, float]] = None,  # noqa: UP006, UP007
 ) -> float:
     """
     Calculate NDCG@K: Normalized Discounted Cumulative Gain.
@@ -141,7 +147,7 @@ def calculate_ndcg_at_k(
     if not retrieved_doc_ids or not relevant_doc_ids:
         return 0.0
 
-    def dcg(doc_ids: List[str], k: int) -> float:
+    def dcg(doc_ids: List[str], k: int) -> float:  # noqa: UP006
         """Calculate Discounted Cumulative Gain."""
         gain = 0.0
         for i, doc_id in enumerate(doc_ids[:k], start=1):
@@ -162,9 +168,7 @@ def calculate_ndcg_at_k(
     if relevance_scores:
         # Sort by relevance score descending
         ideal_ranking = sorted(
-            relevance_scores.items(),
-            key=lambda x: x[1],
-            reverse=True
+            relevance_scores.items(), key=lambda x: x[1], reverse=True
         )
         ideal_doc_ids = [doc_id for doc_id, _ in ideal_ranking]
     else:
@@ -180,8 +184,8 @@ def calculate_ndcg_at_k(
 
 
 def calculate_mrr(
-    retrieved_doc_ids_list: List[List[str]],
-    relevant_doc_ids_list: List[List[str]]
+    retrieved_doc_ids_list: List[List[str]],  # noqa: UP006
+    relevant_doc_ids_list: List[List[str]],  # noqa: UP006
 ) -> float:
     """
     Calculate Mean Reciprocal Rank across multiple queries.
@@ -200,7 +204,7 @@ def calculate_mrr(
 
     reciprocal_ranks = []
 
-    for retrieved, relevant in zip(retrieved_doc_ids_list, relevant_doc_ids_list):
+    for retrieved, relevant in zip(retrieved_doc_ids_list, relevant_doc_ids_list):  # noqa: B905
         if not relevant:
             continue
 
@@ -223,8 +227,8 @@ def calculate_mrr(
 
 
 def calculate_map(
-    retrieved_doc_ids_list: List[List[str]],
-    relevant_doc_ids_list: List[List[str]]
+    retrieved_doc_ids_list: List[List[str]],  # noqa: UP006
+    relevant_doc_ids_list: List[List[str]],  # noqa: UP006
 ) -> float:
     """
     Calculate Mean Average Precision across multiple queries.
@@ -243,7 +247,7 @@ def calculate_map(
 
     average_precisions = []
 
-    for retrieved, relevant in zip(retrieved_doc_ids_list, relevant_doc_ids_list):
+    for retrieved, relevant in zip(retrieved_doc_ids_list, relevant_doc_ids_list):  # noqa: B905
         if not relevant:
             continue
 
@@ -304,7 +308,9 @@ def calculate_token_overlap_f1(prediction: str, reference: str) -> float:
     return f1
 
 
-def calculate_exact_match(prediction: str, reference: str, normalize: bool = True) -> bool:
+def calculate_exact_match(
+    prediction: str, reference: str, normalize: bool = True
+) -> bool:
     """
     Check if prediction exactly matches reference.
 
@@ -328,9 +334,9 @@ def calculate_exact_match(prediction: str, reference: str, normalize: bool = Tru
 
 def calculate_rag_metrics(
     ground_truth_list,
-    retrieval_results_list,
-    answer_results_list,
-    latency_data: Optional[List[Dict[str, float]]] = None
+    retrieval_results_list,  # noqa: ARG001
+    answer_results_list,  # noqa: ARG001
+    latency_data: Optional[List[Dict[str, float]]] = None,  # noqa: ARG001, UP006, UP007
 ) -> RAGMetrics:
     """
     Calculate comprehensive RAG metrics from evaluation results.
@@ -354,7 +360,7 @@ def calculate_rag_metrics(
         mean_reciprocal_rank=0.0,
         mean_average_precision=0.0,
         total_queries=len(ground_truth_list),
-        avg_relevant_docs_per_query=0.0
+        avg_relevant_docs_per_query=0.0,
     )
 
     answer_quality_metrics = AnswerQualityMetrics(
@@ -365,7 +371,7 @@ def calculate_rag_metrics(
         context_utilization_score=0.0,
         hallucination_rate=0.0,
         avg_answer_length=0.0,
-        total_queries=len(ground_truth_list)
+        total_queries=len(ground_truth_list),
     )
 
     performance_metrics = PerformanceMetrics(
@@ -374,7 +380,7 @@ def calculate_rag_metrics(
         avg_total_latency_ms=0.0,
         avg_tokens_per_query=0.0,
         avg_cost_per_query=0.0,
-        total_queries=len(ground_truth_list)
+        total_queries=len(ground_truth_list),
     )
 
     return RAGMetrics(
@@ -382,5 +388,5 @@ def calculate_rag_metrics(
         answer_quality=answer_quality_metrics,
         performance=performance_metrics,
         by_difficulty={},
-        by_question_type={}
+        by_question_type={},
     )

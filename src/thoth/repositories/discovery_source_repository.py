@@ -5,21 +5,21 @@ This module provides specialized methods for discovery source data access,
 including scheduling, statistics, and active source queries.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional  # noqa: I001, UP035
 from datetime import datetime
 from loguru import logger
 
 from thoth.repositories.base import BaseRepository
 
 
-class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):
+class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
     """Repository for managing discovery source records."""
 
     def __init__(self, postgres_service, **kwargs):
         """Initialize discovery source repository."""
         super().__init__(postgres_service, table_name='discovery_sources', **kwargs)
 
-    async def get_by_name(self, source_name: str) -> Optional[Dict[str, Any]]:
+    async def get_by_name(self, source_name: str) -> Optional[Dict[str, Any]]:  # noqa: UP006, UP007
         """
         Get a discovery source by name.
 
@@ -29,13 +29,13 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):
         Returns:
             Optional[Dict[str, Any]]: Source data or None
         """
-        cache_key = self._cache_key("name", source_name)
+        cache_key = self._cache_key('name', source_name)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
 
         try:
-            query = "SELECT * FROM discovery_sources WHERE source_name = $1"
+            query = 'SELECT * FROM discovery_sources WHERE source_name = $1'
             result = await self.postgres.fetchrow(query, source_name)
 
             if result:
@@ -46,17 +46,17 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):
             return None
 
         except Exception as e:
-            logger.error(f"Failed to get discovery source by name {source_name}: {e}")
+            logger.error(f'Failed to get discovery source by name {source_name}: {e}')
             return None
 
-    async def get_active_sources(self) -> List[Dict[str, Any]]:
+    async def get_active_sources(self) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get all active discovery sources.
 
         Returns:
             List[Dict[str, Any]]: List of active sources
         """
-        cache_key = self._cache_key("active")
+        cache_key = self._cache_key('active')
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
@@ -73,10 +73,10 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):
             return data
 
         except Exception as e:
-            logger.error(f"Failed to get active discovery sources: {e}")
+            logger.error(f'Failed to get active discovery sources: {e}')
             return []
 
-    async def get_sources_by_type(self, source_type: str) -> List[Dict[str, Any]]:
+    async def get_sources_by_type(self, source_type: str) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get discovery sources by type.
 
@@ -96,10 +96,12 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):
             return [dict(row) for row in results]
 
         except Exception as e:
-            logger.error(f"Failed to get discovery sources by type {source_type}: {e}")
+            logger.error(f'Failed to get discovery sources by type {source_type}: {e}')
             return []
 
-    async def get_sources_due_for_run(self, current_time: Optional[datetime] = None) -> List[Dict[str, Any]]:
+    async def get_sources_due_for_run(
+        self, current_time: Optional[datetime] = None
+    ) -> List[Dict[str, Any]]:  # noqa: UP006, UP007
         """
         Get sources that are due for their scheduled run.
 
@@ -124,15 +126,15 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):
             return [dict(row) for row in results]
 
         except Exception as e:
-            logger.error(f"Failed to get sources due for run: {e}")
+            logger.error(f'Failed to get sources due for run: {e}')
             return []
 
     async def update_run_statistics(
         self,
         source_id: str,
         papers_discovered: int,
-        last_run_at: Optional[datetime] = None,
-        next_run_at: Optional[datetime] = None
+        last_run_at: Optional[datetime] = None,  # noqa: UP007
+        next_run_at: Optional[datetime] = None,  # noqa: UP007
     ) -> bool:
         """
         Update run statistics for a source.
@@ -160,29 +162,25 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):
                 WHERE id = $4
             """
             await self.postgres.execute(
-                query,
-                papers_discovered,
-                last_run_at,
-                next_run_at,
-                source_id
+                query, papers_discovered, last_run_at, next_run_at, source_id
             )
 
             # Invalidate cache
             self._invalidate_cache()
 
-            logger.debug(f"Updated run statistics for source {source_id}")
+            logger.debug(f'Updated run statistics for source {source_id}')
             return True
 
         except Exception as e:
-            logger.error(f"Failed to update run statistics for source {source_id}: {e}")
+            logger.error(f'Failed to update run statistics for source {source_id}: {e}')
             return False
 
     async def update_schedule(
         self,
         source_id: str,
-        schedule_interval_minutes: Optional[int] = None,
-        next_run_at: Optional[datetime] = None,
-        enabled: Optional[bool] = None
+        schedule_interval_minutes: Optional[int] = None,  # noqa: UP007
+        next_run_at: Optional[datetime] = None,  # noqa: UP007
+        enabled: Optional[bool] = None,  # noqa: UP007
     ) -> bool:
         """
         Update scheduling configuration for a source.
@@ -211,10 +209,10 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):
             return await self.update(source_id, updates)
 
         except Exception as e:
-            logger.error(f"Failed to update schedule for source {source_id}: {e}")
+            logger.error(f'Failed to update schedule for source {source_id}: {e}')
             return False
 
-    async def get_statistics(self) -> Dict[str, Any]:
+    async def get_statistics(self) -> Dict[str, Any]:  # noqa: UP006
         """
         Get overall discovery source statistics.
 
@@ -247,11 +245,11 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):
                 'active_sources': 0,
                 'total_papers': 0,
                 'total_runs': 0,
-                'by_type': {}
+                'by_type': {},
             }
 
         except Exception as e:
-            logger.error(f"Failed to get discovery source statistics: {e}")
+            logger.error(f'Failed to get discovery source statistics: {e}')
             return {}
 
     async def disable_source(self, source_id: str) -> bool:

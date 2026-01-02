@@ -22,7 +22,7 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
             postgres_service, table_name='workflow_search_config', **kwargs
         )
 
-    async def create(self, config_data: dict[str, Any]) -> Optional[UUID]:
+    async def create(self, config_data: dict[str, Any]) -> Optional[UUID]:  # noqa: UP007
         """
         Create a new workflow search configuration.
 
@@ -41,7 +41,7 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
         """
         try:
             columns = list(config_data.keys())
-            placeholders = [f"${i+1}" for i in range(len(columns))]
+            placeholders = [f'${i + 1}' for i in range(len(columns))]
 
             query = f"""
                 INSERT INTO {self.table_name} ({', '.join(columns)})
@@ -55,16 +55,14 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
             if 'workflow_id' in config_data:
                 self._invalidate_cache(str(config_data['workflow_id']))
 
-            logger.debug(f"Created workflow search config: {result}")
+            logger.debug(f'Created workflow search config: {result}')
             return result
 
         except Exception as e:
-            logger.error(f"Failed to create workflow search config: {e}")
+            logger.error(f'Failed to create workflow search config: {e}')
             return None
 
-    async def get_by_workflow_id(
-        self, workflow_id: UUID
-    ) -> Optional[dict[str, Any]]:
+    async def get_by_workflow_id(self, workflow_id: UUID) -> Optional[dict[str, Any]]:  # noqa: UP007
         """
         Get search configuration for a workflow.
 
@@ -76,7 +74,7 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
         Returns:
             Optional[dict[str, Any]]: Search config data or None
         """
-        cache_key = self._cache_key("workflow", str(workflow_id))
+        cache_key = self._cache_key('workflow', str(workflow_id))
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
@@ -96,14 +94,10 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
             return None
 
         except Exception as e:
-            logger.error(
-                f"Failed to get search config for workflow {workflow_id}: {e}"
-            )
+            logger.error(f'Failed to get search config for workflow {workflow_id}: {e}')
             return None
 
-    async def update(
-        self, config_id: UUID, updates: dict[str, Any]
-    ) -> bool:
+    async def update(self, config_id: UUID, updates: dict[str, Any]) -> bool:
         """
         Update a workflow search configuration.
 
@@ -119,8 +113,8 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
                 return True
 
             # Build SET clause
-            set_clauses = [f"{col} = ${i+2}" for i, col in enumerate(updates.keys())]
-            values = [config_id] + list(updates.values())
+            set_clauses = [f'{col} = ${i + 2}' for i, col in enumerate(updates.keys())]
+            values = [config_id] + list(updates.values())  # noqa: RUF005
 
             query = f"""
                 UPDATE {self.table_name}
@@ -136,11 +130,11 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
             if workflow_id:
                 self._invalidate_cache(str(workflow_id))
 
-            logger.debug(f"Updated workflow search config: {config_id}")
+            logger.debug(f'Updated workflow search config: {config_id}')
             return True
 
         except Exception as e:
-            logger.error(f"Failed to update workflow search config {config_id}: {e}")
+            logger.error(f'Failed to update workflow search config {config_id}: {e}')
             return False
 
     async def delete(self, config_id: UUID) -> bool:
@@ -156,11 +150,11 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
         try:
             # Get workflow_id before deletion for cache invalidation
             workflow_id_query = (
-                f"SELECT workflow_id FROM {self.table_name} WHERE id = $1"
+                f'SELECT workflow_id FROM {self.table_name} WHERE id = $1'
             )
             workflow_id = await self.postgres.fetchval(workflow_id_query, config_id)
 
-            query = f"DELETE FROM {self.table_name} WHERE id = $1"
+            query = f'DELETE FROM {self.table_name} WHERE id = $1'
             await self.postgres.execute(query, config_id)
 
             # Invalidate cache
@@ -168,16 +162,14 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
             if workflow_id:
                 self._invalidate_cache(str(workflow_id))
 
-            logger.debug(f"Deleted workflow search config: {config_id}")
+            logger.debug(f'Deleted workflow search config: {config_id}')
             return True
 
         except Exception as e:
-            logger.error(f"Failed to delete workflow search config {config_id}: {e}")
+            logger.error(f'Failed to delete workflow search config {config_id}: {e}')
             return False
 
-    async def validate_selectors(
-        self, config_id: UUID
-    ) -> dict[str, bool]:
+    async def validate_selectors(self, config_id: UUID) -> dict[str, bool]:
         """
         Validate that all required selectors are present in the configuration.
 
@@ -218,14 +210,10 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
             return validation
 
         except Exception as e:
-            logger.error(
-                f"Failed to validate selectors for config {config_id}: {e}"
-            )
+            logger.error(f'Failed to validate selectors for config {config_id}: {e}')
             return {}
 
-    async def get_all_configs_with_pagination(
-        self
-    ) -> list[dict[str, Any]]:
+    async def get_all_configs_with_pagination(self) -> list[dict[str, Any]]:
         """
         Get all search configurations that have pagination configured.
 
@@ -241,8 +229,8 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
             results = await self.postgres.fetch(query)
             return [dict(row) for row in results]
 
-        except Exception as e:
-            logger.error("Failed to get configs with pagination: {e}")
+        except Exception as e:  # noqa: F841
+            logger.error('Failed to get configs with pagination: {e}')
             return []
 
     async def update_selector(
@@ -267,7 +255,7 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
         ]
 
         if selector_name not in valid_selectors:
-            logger.error(f"Invalid selector name: {selector_name}")
+            logger.error(f'Invalid selector name: {selector_name}')
             return False
 
         return await self.update(config_id, {selector_name: selector_value})

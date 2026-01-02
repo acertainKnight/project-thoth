@@ -6,7 +6,7 @@ executing user-recorded workflows to discover articles from sources that
 require authentication or don't provide public APIs.
 """
 
-from thoth.discovery.browser.browser_manager import BrowserManager, BrowserManagerError
+from thoth.discovery.browser.browser_manager import BrowserManager, BrowserManagerError  # noqa: I001
 from thoth.discovery.browser.extraction_service import (
     ExtractionService,
     ExtractionServiceError,
@@ -18,7 +18,7 @@ from thoth.discovery.browser.workflow_execution_service import (
     WorkflowExecutionStats,
 )
 
-__all__ = [
+__all__ = [  # noqa: RUF022
     'BrowserManager',
     'BrowserManagerError',
     'ExtractionService',

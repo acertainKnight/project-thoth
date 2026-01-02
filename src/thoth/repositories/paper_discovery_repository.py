@@ -5,14 +5,14 @@ This module tracks which papers were discovered by which sources,
 enabling deduplication and source attribution.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional  # noqa: I001, UP035
 from datetime import datetime, timedelta
 from loguru import logger
 
 from thoth.repositories.base import BaseRepository
 
 
-class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):
+class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
     """Repository for managing paper discovery tracking records."""
 
     def __init__(self, postgres_service, **kwargs):
@@ -23,9 +23,9 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):
         self,
         paper_id: str,
         source_id: str,
-        source_metadata: Optional[Dict[str, Any]] = None,
-        discovered_at: Optional[datetime] = None
-    ) -> Optional[str]:
+        source_metadata: Optional[Dict[str, Any]] = None,  # noqa: UP006, UP007
+        discovered_at: Optional[datetime] = None,  # noqa: UP007
+    ) -> Optional[str]:  # noqa: UP007
         """
         Record that a paper was discovered by a source.
 
@@ -49,28 +49,30 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):
                 RETURNING id
             """
             result = await self.postgres.fetchval(
-                query,
-                paper_id,
-                source_id,
-                discovered_at,
-                source_metadata
+                query, paper_id, source_id, discovered_at, source_metadata
             )
 
             # Invalidate cache
             self._invalidate_cache()
 
             if result:
-                logger.debug(f"Recorded discovery of paper {paper_id} by source {source_id}")
+                logger.debug(
+                    f'Recorded discovery of paper {paper_id} by source {source_id}'
+                )
                 return str(result)
             else:
-                logger.debug(f"Paper {paper_id} already recorded for source {source_id}")
+                logger.debug(
+                    f'Paper {paper_id} already recorded for source {source_id}'
+                )
                 return None
 
         except Exception as e:
-            logger.error(f"Failed to record discovery: {e}")
+            logger.error(f'Failed to record discovery: {e}')
             return None
 
-    async def is_paper_discovered(self, paper_id: str, source_id: Optional[str] = None) -> bool:
+    async def is_paper_discovered(
+        self, paper_id: str, source_id: Optional[str] = None
+    ) -> bool:  # noqa: UP007
         """
         Check if a paper has been discovered.
 
@@ -81,7 +83,7 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):
         Returns:
             bool: True if paper has been discovered
         """
-        cache_key = self._cache_key("discovered", paper_id, source_id or "any")
+        cache_key = self._cache_key('discovered', paper_id, source_id or 'any')
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
@@ -109,10 +111,10 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):
             return discovered
 
         except Exception as e:
-            logger.error(f"Failed to check if paper is discovered: {e}")
+            logger.error(f'Failed to check if paper is discovered: {e}')
             return False
 
-    async def get_discoveries_for_paper(self, paper_id: str) -> List[Dict[str, Any]]:
+    async def get_discoveries_for_paper(self, paper_id: str) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get all discovery records for a paper.
 
@@ -134,7 +136,7 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):
             return [dict(row) for row in results]
 
         except Exception as e:
-            logger.error(f"Failed to get discoveries for paper {paper_id}: {e}")
+            logger.error(f'Failed to get discoveries for paper {paper_id}: {e}')
             return []
 
     async def get_discoveries_for_source(
@@ -142,8 +144,8 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):
         source_id: str,
         limit: int = 100,
         offset: int = 0,
-        since: Optional[datetime] = None
-    ) -> List[Dict[str, Any]]:
+        since: Optional[datetime] = None,  # noqa: UP007
+    ) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get papers discovered by a specific source.
 
@@ -166,7 +168,9 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):
                     ORDER BY pd.discovered_at DESC
                     LIMIT $3 OFFSET $4
                 """
-                results = await self.postgres.fetch(query, source_id, since, limit, offset)
+                results = await self.postgres.fetch(
+                    query, source_id, since, limit, offset
+                )
             else:
                 query = """
                     SELECT pd.*, p.title, p.doi, p.arxiv_id
@@ -181,14 +185,12 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):
             return [dict(row) for row in results]
 
         except Exception as e:
-            logger.error(f"Failed to get discoveries for source {source_id}: {e}")
+            logger.error(f'Failed to get discoveries for source {source_id}: {e}')
             return []
 
     async def get_recent_discoveries(
-        self,
-        hours: int = 24,
-        limit: int = 100
-    ) -> List[Dict[str, Any]]:
+        self, hours: int = 24, limit: int = 100
+    ) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get recent paper discoveries across all sources.
 
@@ -215,13 +217,13 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):
             return [dict(row) for row in results]
 
         except Exception as e:
-            logger.error(f"Failed to get recent discoveries: {e}")
+            logger.error(f'Failed to get recent discoveries: {e}')
             return []
 
     async def count_discoveries_by_source(
         self,
         source_id: str,
-        since: Optional[datetime] = None
+        since: Optional[datetime] = None,  # noqa: UP007
     ) -> int:
         """
         Count discoveries for a specific source.
@@ -248,13 +250,10 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):
                 return await self.postgres.fetchval(query, source_id) or 0
 
         except Exception as e:
-            logger.error(f"Failed to count discoveries for source {source_id}: {e}")
+            logger.error(f'Failed to count discoveries for source {source_id}: {e}')
             return 0
 
-    async def get_discovery_statistics(
-        self,
-        days: int = 30
-    ) -> Dict[str, Any]:
+    async def get_discovery_statistics(self, days: int = 30) -> Dict[str, Any]:  # noqa: UP006
         """
         Get discovery statistics for the last N days.
 
@@ -294,17 +293,14 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):
                 'active_sources': 0,
                 'by_source': {},
                 'days': days,
-                'since': since.isoformat()
+                'since': since.isoformat(),
             }
 
         except Exception as e:
-            logger.error(f"Failed to get discovery statistics: {e}")
+            logger.error(f'Failed to get discovery statistics: {e}')
             return {}
 
-    async def find_duplicate_discoveries(
-        self,
-        paper_id: str
-    ) -> List[Dict[str, Any]]:
+    async def find_duplicate_discoveries(self, paper_id: str) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Find all sources that discovered the same paper.
 
@@ -326,14 +322,16 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):
             return [dict(row) for row in results]
 
         except Exception as e:
-            logger.error(f"Failed to find duplicate discoveries for paper {paper_id}: {e}")
+            logger.error(
+                f'Failed to find duplicate discoveries for paper {paper_id}: {e}'
+            )
             return []
 
     async def get_papers_not_in_vault(
         self,
-        source_id: Optional[str] = None,
-        limit: int = 100
-    ) -> List[Dict[str, Any]]:
+        source_id: Optional[str] = None,  # noqa: UP007
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get discovered papers that haven't been added to the vault yet.
 
@@ -370,5 +368,5 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):
             return [dict(row) for row in results]
 
         except Exception as e:
-            logger.error(f"Failed to get papers not in vault: {e}")
+            logger.error(f'Failed to get papers not in vault: {e}')
             return []

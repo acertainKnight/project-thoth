@@ -16,12 +16,12 @@ try:
     import yaml
 except ImportError:
     logger.error(
-        "PyYAML is required for Obsidian review parsing. "
-        "Install it with: pip install pyyaml"
+        'PyYAML is required for Obsidian review parsing. '
+        'Install it with: pip install pyyaml'
     )
     raise
 
-from thoth.ingestion.pdf_downloader import download_pdf
+from thoth.ingestion.pdf_downloader import download_pdf  # noqa: I001
 from thoth.config import Config
 
 
@@ -37,9 +37,7 @@ class ObsidianReviewService:
         """
         self.match_repo = article_match_repository
 
-    async def apply_review_decisions(
-        self, review_file_path: Path
-    ) -> dict[str, int]:
+    async def apply_review_decisions(self, review_file_path: Path) -> dict[str, int]:
         """
         Parse Obsidian review file and apply user decisions to database.
 
@@ -68,20 +66,18 @@ class ObsidianReviewService:
         Example:
             >>> service = ObsidianReviewService(match_repo)
             >>> stats = await service.apply_review_decisions(
-            ...     Path("vault/reviews/memory-systems.md")
+            ...     Path('vault/reviews/memory-systems.md')
             ... )
-            >>> print(f"Updated {stats['updated']} articles")
+            >>> print(f'Updated {stats["updated"]} articles')
         """
         if not review_file_path.exists():
-            raise FileNotFoundError(
-                f"Review file not found: {review_file_path}"
-            )
+            raise FileNotFoundError(f'Review file not found: {review_file_path}')
 
         try:
             content = review_file_path.read_text(encoding='utf-8')
         except Exception as e:
-            logger.error(f"Failed to read review file {review_file_path}: {e}")
-            raise ValueError(f"Could not read review file: {e}")
+            logger.error(f'Failed to read review file {review_file_path}: {e}')
+            raise ValueError(f'Could not read review file: {e}')  # noqa: B904
 
         # Initialize statistics
         stats = {
@@ -110,18 +106,16 @@ class ObsidianReviewService:
             data = yaml.safe_load(frontmatter)
 
             if not isinstance(data, dict):
-                raise ValueError(
-                    "Invalid YAML frontmatter: Expected a dictionary"
-                )
+                raise ValueError('Invalid YAML frontmatter: Expected a dictionary')
 
         except yaml.YAMLError as e:
-            logger.error(f"Failed to parse YAML frontmatter: {e}")
-            raise ValueError(f"Invalid YAML format: {e}")
+            logger.error(f'Failed to parse YAML frontmatter: {e}')
+            raise ValueError(f'Invalid YAML format: {e}')  # noqa: B904
 
         # Extract question_id if present
         question_id = data.get('question_id')
         if question_id:
-            logger.info(f"Processing reviews for question: {question_id}")
+            logger.info(f'Processing reviews for question: {question_id}')
 
         # Extract articles array from YAML frontmatter
         articles = data.get('articles', [])
@@ -129,23 +123,23 @@ class ObsidianReviewService:
         # If no articles in frontmatter, try parsing markdown body (dashboard format)
         if not articles:
             logger.info(
-                f"No articles in YAML frontmatter, attempting to parse markdown body..."
+                f'No articles in YAML frontmatter, attempting to parse markdown body...'  # noqa: F541
             )
-            markdown_body = parts[2] if len(parts) > 2 else ""
-            articles = self._parse_dashboard_markdown(markdown_body, data.get('question_id'))
+            markdown_body = parts[2] if len(parts) > 2 else ''
+            articles = self._parse_dashboard_markdown(
+                markdown_body, data.get('question_id')
+            )
 
         if not articles:
-            logger.warning(
-                f"No articles found in review file: {review_file_path}"
-            )
+            logger.warning(f'No articles found in review file: {review_file_path}')
             return stats
 
-        logger.info(f"Processing {len(articles)} article reviews")
+        logger.info(f'Processing {len(articles)} article reviews')
 
         # Process each article
         for idx, article in enumerate(articles):
             try:
-                # Check if this is dashboard format (title-based) or YAML format (ID-based)
+                # Check if this is dashboard format (title-based) or YAML format (ID-based)  # noqa: W505
                 is_dashboard_format = article.get('format') == 'dashboard'
 
                 if is_dashboard_format:
@@ -153,15 +147,13 @@ class ObsidianReviewService:
                     title = article.get('title')
                     if not title:
                         logger.warning(
-                            f"Dashboard article at index {idx} missing title, skipping"
+                            f'Dashboard article at index {idx} missing title, skipping'
                         )
                         stats['errors'] += 1
                         continue
 
                     # Look up match ID from database by title
-                    match_id = await self._lookup_match_id_by_title(
-                        title, question_id
-                    )
+                    match_id = await self._lookup_match_id_by_title(title, question_id)
 
                     if not match_id:
                         logger.warning(
@@ -191,7 +183,7 @@ class ObsidianReviewService:
                             match_id = UUID(article_id_str)
                     except (ValueError, TypeError) as e:
                         logger.warning(
-                            f"Invalid UUID format for article {article_id_str}: {e}"
+                            f'Invalid UUID format for article {article_id_str}: {e}'
                         )
                         stats['errors'] += 1
                         continue
@@ -218,7 +210,7 @@ class ObsidianReviewService:
                         stats['liked'] += 1
                         stats['updated'] += 1
                         logger.debug(
-                            f"Marked article {match_id} as liked (bookmarked + rating 5)"
+                            f'Marked article {match_id} as liked (bookmarked + rating 5)'
                         )
 
                         # Attempt to download PDF automatically
@@ -228,18 +220,16 @@ class ObsidianReviewService:
                                 await self._download_article_pdf(
                                     article_info['pdf_url'],
                                     article_info.get('title', 'unknown'),
-                                    match_id
+                                    match_id,
                                 )
                         except Exception as e:
                             logger.warning(
-                                f"Could not download PDF for article {match_id}: {e}"
+                                f'Could not download PDF for article {match_id}: {e}'
                             )
                             # Don't fail the like operation if PDF download fails
 
                     else:
-                        logger.warning(
-                            f"Failed to fully update article {match_id}"
-                        )
+                        logger.warning(f'Failed to fully update article {match_id}')
                         stats['errors'] += 1
 
                 elif status == 'disliked':
@@ -252,12 +242,10 @@ class ObsidianReviewService:
                         stats['disliked'] += 1
                         stats['updated'] += 1
                         logger.debug(
-                            f"Marked article {match_id} as disliked (rating 1)"
+                            f'Marked article {match_id} as disliked (rating 1)'
                         )
                     else:
-                        logger.warning(
-                            f"Failed to update article {match_id}"
-                        )
+                        logger.warning(f'Failed to update article {match_id}')
                         stats['errors'] += 1
 
                 elif status == 'skip':
@@ -267,11 +255,9 @@ class ObsidianReviewService:
                     if success:
                         stats['skipped'] += 1
                         stats['updated'] += 1
-                        logger.debug(f"Marked article {match_id} as skipped")
+                        logger.debug(f'Marked article {match_id} as skipped')
                     else:
-                        logger.warning(
-                            f"Failed to mark article {match_id} as viewed"
-                        )
+                        logger.warning(f'Failed to mark article {match_id} as viewed')
                         stats['errors'] += 1
 
                 else:
@@ -282,22 +268,24 @@ class ObsidianReviewService:
 
             except Exception as e:
                 logger.error(
-                    f"Error processing article at index {idx}: {e}",
+                    f'Error processing article at index {idx}: {e}',
                     exc_info=True,
                 )
                 stats['errors'] += 1
 
         # Log summary
         logger.info(
-            f"Review processing complete: {stats['updated']} updated, "
-            f"{stats['liked']} liked, {stats['disliked']} disliked, "
-            f"{stats['skipped']} skipped, {stats['errors']} errors"
+            f'Review processing complete: {stats["updated"]} updated, '
+            f'{stats["liked"]} liked, {stats["disliked"]} disliked, '
+            f'{stats["skipped"]} skipped, {stats["errors"]} errors'
         )
 
         return stats
 
     def _parse_dashboard_markdown(
-        self, markdown_body: str, question_id: Optional[str] = None
+        self,
+        markdown_body: str,
+        question_id: Optional[str] = None,  # noqa: ARG002, UP007
     ) -> list[dict]:
         """
         Parse dashboard markdown format for article reviews.
@@ -320,7 +308,7 @@ class ObsidianReviewService:
             list[dict]: Parsed articles with 'id', 'status', 'title' fields
         """
         import re
-        from uuid import UUID
+        from uuid import UUID  # noqa: F401
 
         articles = []
 
@@ -333,7 +321,7 @@ class ObsidianReviewService:
             r'###\s+\d+\.\s+(?P<title>[^\n]+)\n'  # Header: ### 1. Title
             r'.*?'  # Any content between
             r'\*\*Status:\*\*\s+`(?P<status>\w+)`',  # Status field
-            re.DOTALL | re.MULTILINE
+            re.DOTALL | re.MULTILINE,
         )
 
         matches = article_pattern.finditer(markdown_body)
@@ -353,21 +341,23 @@ class ObsidianReviewService:
             # For dashboard format, we need to look up match IDs by title
             # This requires querying the database, which we'll defer to the caller
             # For now, store title and let the processing loop look it up
-            articles.append({
-                'title': title,
-                'status': status,
-                'format': 'dashboard',  # Flag to indicate this needs title-based lookup
-            })
+            articles.append(
+                {
+                    'title': title,
+                    'status': status,
+                    'format': 'dashboard',  # Flag to indicate this needs title-based lookup
+                }
+            )
 
-        logger.info(
-            f"Parsed {len(articles)} articles from dashboard markdown format"
-        )
+        logger.info(f'Parsed {len(articles)} articles from dashboard markdown format')
 
         return articles
 
     async def _lookup_match_id_by_title(
-        self, title: str, question_id: Optional[str] = None
-    ) -> Optional[UUID]:
+        self,
+        title: str,
+        question_id: Optional[str] = None,  # noqa: UP007
+    ) -> Optional[UUID]:  # noqa: UP007
         """
         Look up article_research_matches.id by article title.
 
@@ -378,7 +368,7 @@ class ObsidianReviewService:
         Returns:
             Match UUID if found, None otherwise
         """
-        from thoth.services.postgres_service import PostgresService
+        from thoth.services.postgres_service import PostgresService  # noqa: F401
 
         # We need access to PostgreSQL to query for match IDs
         # The repository pattern doesn't expose this, so we'll need to query directly
@@ -386,9 +376,7 @@ class ObsidianReviewService:
         if hasattr(self.match_repo, 'postgres'):
             pg = self.match_repo.postgres
         else:
-            logger.error(
-                "Cannot look up match ID: repository missing postgres service"
-            )
+            logger.error('Cannot look up match ID: repository missing postgres service')
             return None
 
         try:
@@ -421,7 +409,7 @@ class ObsidianReviewService:
             logger.error(f"Error looking up match ID for title '{title}': {e}")
             return None
 
-    async def _get_article_info(self, match_id: UUID) -> Optional[dict]:
+    async def _get_article_info(self, match_id: UUID) -> Optional[dict]:  # noqa: UP007
         """
         Get article information (title, pdf_url) from a match ID.
 
@@ -432,7 +420,7 @@ class ObsidianReviewService:
             dict with title, pdf_url, etc. or None
         """
         if not hasattr(self.match_repo, 'postgres'):
-            logger.error("Cannot get article info: repository missing postgres service")
+            logger.error('Cannot get article info: repository missing postgres service')
             return None
 
         try:
@@ -450,12 +438,12 @@ class ObsidianReviewService:
                     'title': result['title'],
                     'pdf_url': result['pdf_url'],
                     'url': result['url'],
-                    'authors': result['authors']
+                    'authors': result['authors'],
                 }
             return None
 
         except Exception as e:
-            logger.error(f"Error getting article info for match {match_id}: {e}")
+            logger.error(f'Error getting article info for match {match_id}: {e}')
             return None
 
     async def _download_article_pdf(
@@ -470,9 +458,7 @@ class ObsidianReviewService:
             match_id: Match ID (for logging)
         """
         if not pdf_url or not pdf_url.lower().endswith('.pdf'):
-            logger.debug(
-                f"Article {match_id} has no valid PDF URL, skipping download"
-            )
+            logger.debug(f'Article {match_id} has no valid PDF URL, skipping download')
             return
 
         try:
@@ -481,33 +467,25 @@ class ObsidianReviewService:
             pdf_dir = config.pdf_dir
 
             # Sanitize filename from title
-            safe_title = "".join(
+            safe_title = ''.join(
                 c for c in title if c.isalnum() or c in (' ', '-', '_')
             ).strip()
             safe_title = safe_title[:100]  # Limit length
 
             # Download PDF (runs synchronously in executor)
             import asyncio
+
             pdf_path = await asyncio.to_thread(
-                download_pdf,
-                pdf_url,
-                pdf_dir,
-                f"{safe_title}.pdf"
+                download_pdf, pdf_url, pdf_dir, f'{safe_title}.pdf'
             )
 
-            logger.success(
-                f"📥 Downloaded PDF for '{title}' to {pdf_path}"
-            )
+            logger.success(f"📥 Downloaded PDF for '{title}' to {pdf_path}")
 
         except Exception as e:
-            logger.error(
-                f"Failed to download PDF for article {match_id}: {e}"
-            )
+            logger.error(f'Failed to download PDF for article {match_id}: {e}')
             raise
 
-    async def validate_review_file(
-        self, review_file_path: Path
-    ) -> dict[str, Any]:
+    async def validate_review_file(self, review_file_path: Path) -> dict[str, Any]:
         """
         Validate an Obsidian review file without applying changes.
 
@@ -524,7 +502,7 @@ class ObsidianReviewService:
         Example:
             >>> service = ObsidianReviewService(match_repo)
             >>> validation = await service.validate_review_file(
-            ...     Path("vault/reviews/test.md")
+            ...     Path('vault/reviews/test.md')
             ... )
             >>> if validation['valid']:
             ...     await service.apply_review_decisions(review_file_path)
@@ -538,13 +516,13 @@ class ObsidianReviewService:
 
         # Check file exists
         if not review_file_path.exists():
-            result['errors'].append(f"File not found: {review_file_path}")
+            result['errors'].append(f'File not found: {review_file_path}')
             return result
 
         try:
             content = review_file_path.read_text(encoding='utf-8')
         except Exception as e:
-            result['errors'].append(f"Could not read file: {e}")
+            result['errors'].append(f'Could not read file: {e}')
             return result
 
         # Validate YAML frontmatter
@@ -566,19 +544,17 @@ class ObsidianReviewService:
             data = yaml.safe_load(frontmatter)
 
             if not isinstance(data, dict):
-                result['errors'].append(
-                    "Invalid YAML: Expected a dictionary"
-                )
+                result['errors'].append('Invalid YAML: Expected a dictionary')
                 return result
 
         except yaml.YAMLError as e:
-            result['errors'].append(f"Invalid YAML format: {e}")
+            result['errors'].append(f'Invalid YAML format: {e}')
             return result
 
         # Validate articles array
         articles = data.get('articles', [])
         if not articles:
-            result['warnings'].append("No articles found in file")
+            result['warnings'].append('No articles found in file')
 
         result['article_count'] = len(articles)
 
@@ -586,9 +562,7 @@ class ObsidianReviewService:
         valid_statuses = {'pending', 'liked', 'disliked', 'skip'}
         for idx, article in enumerate(articles):
             if not isinstance(article, dict):
-                result['errors'].append(
-                    f"Article at index {idx} is not a dictionary"
-                )
+                result['errors'].append(f'Article at index {idx} is not a dictionary')
                 continue
 
             # Check for required fields
@@ -604,7 +578,7 @@ class ObsidianReviewService:
                     UUID(article_id)
                 except (ValueError, TypeError):
                     result['errors'].append(
-                        f"Article at index {idx} has invalid UUID: {article_id}"
+                        f'Article at index {idx} has invalid UUID: {article_id}'
                     )
 
             # Validate status

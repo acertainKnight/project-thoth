@@ -22,8 +22,8 @@ Benefits of Property-Based Testing:
 - Provides stronger correctness guarantees than unit tests
 """
 
-import re
-from typing import Any, Dict, List, Optional
+import re  # noqa: I001, F401
+from typing import Any, Dict, List, Optional  # noqa: F401, UP035
 
 import pytest
 from hypothesis import given, assume, strategies as st, settings, HealthCheck
@@ -36,11 +36,20 @@ from thoth.utilities.schemas.citations import Citation, CitationExtraction
 # Hypothesis Strategies (Input Generators)
 # ============================================================================
 
+
 @st.composite
 def valid_author_name(draw):
     """Generate realistic author names."""
-    first = draw(st.text(alphabet=st.characters(whitelist_categories=('L',)), min_size=2, max_size=15))
-    last = draw(st.text(alphabet=st.characters(whitelist_categories=('L',)), min_size=2, max_size=20))
+    first = draw(
+        st.text(
+            alphabet=st.characters(whitelist_categories=('L',)), min_size=2, max_size=15
+        )
+    )
+    last = draw(
+        st.text(
+            alphabet=st.characters(whitelist_categories=('L',)), min_size=2, max_size=20
+        )
+    )
     return f'{first} {last}'
 
 
@@ -85,7 +94,11 @@ def valid_citation(draw):
         volume=draw(st.one_of(st.none(), st.text(min_size=1, max_size=10))),
         issue=draw(st.one_of(st.none(), st.text(min_size=1, max_size=10))),
         pages=draw(st.one_of(st.none(), st.text(min_size=1, max_size=20))),
-        doi=draw(st.one_of(st.none(), st.from_regex(r'10\.\d{4,}/[a-zA-Z0-9.-]+', fullmatch=True))),
+        doi=draw(
+            st.one_of(
+                st.none(), st.from_regex(r'10\.\d{4,}/[a-zA-Z0-9.-]+', fullmatch=True)
+            )
+        ),
     )
 
 
@@ -96,7 +109,9 @@ def malformed_citation_text(draw):
         st.text(max_size=5),  # Too short
         st.just(''),  # Empty
         st.just(' ' * 100),  # Whitespace only
-        st.text(min_size=10000),  # Extremely long
+        st.text(
+            min_size=1000, max_size=5000
+        ),  # Very long (reduced from 10000 to stay within Hypothesis limits)
         st.from_regex(r'[^\x00-\x7F]{50,}', fullmatch=True),  # Non-ASCII only
         st.just('(' * 50 + ')' * 50),  # Unbalanced parentheses
         st.just('1234567890' * 50),  # Numbers only
@@ -108,6 +123,7 @@ def malformed_citation_text(draw):
 # ============================================================================
 # Property Tests: Robustness
 # ============================================================================
+
 
 @pytest.mark.property
 @given(citation_text=st.text(max_size=5000))
@@ -128,7 +144,9 @@ def test_citation_parsing_never_crashes(citation_text: str):
         assert citation.text == citation_text
 
     except Exception as e:
-        pytest.fail(f'Parser crashed on input: {repr(citation_text[:100])} with error: {e}')
+        pytest.fail(
+            f'Parser crashed on input: {repr(citation_text[:100])} with error: {e}'
+        )  # noqa: RUF010
 
 
 @pytest.mark.property
@@ -151,6 +169,7 @@ def test_citation_pydantic_validation(citation: Citation):
 # ============================================================================
 # Property Tests: Idempotency
 # ============================================================================
+
 
 @pytest.mark.property
 @given(citation=valid_citation())
@@ -189,6 +208,7 @@ def test_citation_text_field_idempotency(text: str):
 # Property Tests: Field Validation
 # ============================================================================
 
+
 @pytest.mark.property
 @given(
     title=valid_title(),
@@ -197,7 +217,7 @@ def test_citation_text_field_idempotency(text: str):
 )
 def test_citation_required_fields_always_valid(
     title: str,
-    authors: List[str],
+    authors: List[str],  # noqa: UP006
     year: int,
 ):
     """
@@ -232,9 +252,7 @@ def test_year_range_validation(year: int):
 
 
 @pytest.mark.property
-@given(
-    doi=st.from_regex(r'10\.\d{4,}/[a-zA-Z0-9.-]+', fullmatch=True)
-)
+@given(doi=st.from_regex(r'10\.\d{4,}/[a-zA-Z0-9.-]+', fullmatch=True))
 def test_doi_format_validation(doi: str):
     """
     Property: DOI should follow standard format (10.xxxx/yyyy).
@@ -252,17 +270,20 @@ def test_doi_format_validation(doi: str):
 # Property Tests: Unicode and International Characters
 # ============================================================================
 
+
 @pytest.mark.property
 @given(
     title=st.text(
-        alphabet=st.characters(blacklist_categories=('Cc', 'Cs')),  # Allow all printable Unicode
+        alphabet=st.characters(
+            blacklist_categories=('Cc', 'Cs')
+        ),  # Allow all printable Unicode
         min_size=5,
         max_size=200,
     )
 )
 @example(title='Über die Quantenmechanik')  # German
 @example(title='量子力学について')  # Japanese
-@example(title='О квантовой механике')  # Russian
+@example(title='О квантовой механике')  # Russian  # noqa: RUF001
 @example(title='关于量子力学')  # Chinese
 def test_citation_handles_unicode_titles(title: str):
     """
@@ -287,19 +308,21 @@ def test_citation_handles_unicode_titles(title: str):
 
 
 @pytest.mark.property
-@given(authors=st.lists(
-    st.text(
-        alphabet=st.characters(whitelist_categories=('L', 'Zs')),
-        min_size=2,
-        max_size=50,
-    ),
-    min_size=1,
-    max_size=20,
-))
+@given(
+    authors=st.lists(
+        st.text(
+            alphabet=st.characters(whitelist_categories=('L', 'Zs')),
+            min_size=2,
+            max_size=50,
+        ),
+        min_size=1,
+        max_size=20,
+    )
+)
 @example(authors=['José García', 'François Dupont'])  # Accented names
 @example(authors=['김철수', '박영희'])  # Korean names
 @example(authors=['محمد علي', 'أحمد حسن'])  # Arabic names
-def test_citation_handles_international_author_names(authors: List[str]):
+def test_citation_handles_international_author_names(authors: List[str]):  # noqa: UP006
     """
     Property: Parser should handle international author names.
 
@@ -318,6 +341,7 @@ def test_citation_handles_international_author_names(authors: List[str]):
 # ============================================================================
 # Property Tests: Malformed Input Handling
 # ============================================================================
+
 
 @pytest.mark.property
 @given(text=malformed_citation_text())
@@ -343,7 +367,9 @@ def test_citation_handles_malformed_input_gracefully(text: str):
         assert citation.text == text
 
     except Exception as e:
-        pytest.fail(f'Parser failed on malformed input: {repr(text[:100])} with error: {e}')
+        pytest.fail(
+            f'Parser failed on malformed input: {repr(text[:100])} with error: {e}'
+        )  # noqa: RUF010
 
 
 @pytest.mark.property
@@ -353,9 +379,9 @@ def test_citation_handles_malformed_input_gracefully(text: str):
     year=st.one_of(st.none(), st.just(0), st.integers(max_value=1000)),
 )
 def test_citation_handles_missing_fields(
-    title: Optional[str],
-    authors: Optional[List[str]],
-    year: Optional[int],
+    title: Optional[str],  # noqa: UP007
+    authors: Optional[List[str]],  # noqa: UP006, UP007
+    year: Optional[int],  # noqa: UP007
 ):
     """
     Property: Parser should handle citations with missing/invalid fields.
@@ -373,12 +399,15 @@ def test_citation_handles_missing_fields(
         assert isinstance(citation, Citation)
 
     except Exception as e:
-        pytest.fail(f'Parser failed on missing fields: title={title}, authors={authors}, year={year} with error: {e}')
+        pytest.fail(
+            f'Parser failed on missing fields: title={title}, authors={authors}, year={year} with error: {e}'
+        )
 
 
 # ============================================================================
 # Property Tests: Citation Extraction Roundtrip
 # ============================================================================
+
 
 @pytest.mark.property
 @given(
@@ -389,7 +418,7 @@ def test_citation_handles_missing_fields(
 )
 def test_citation_extraction_roundtrip(
     title: str,
-    authors: List[str],
+    authors: List[str],  # noqa: UP006
     year: int,
     journal: str,
 ):
@@ -427,6 +456,7 @@ def test_citation_extraction_roundtrip(
 # ============================================================================
 # Property Tests: Edge Cases
 # ============================================================================
+
 
 @pytest.mark.property
 @given(
@@ -500,6 +530,7 @@ def test_citation_handles_partial_data(data):
 # ============================================================================
 # Regression Tests (Specific Bugs Found by Hypothesis)
 # ============================================================================
+
 
 @pytest.mark.property
 def test_citation_regression_empty_author_list():

@@ -2,7 +2,7 @@
 LLM Router Service for dynamically selecting the best model for a given query.
 """
 
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 from typing import TYPE_CHECKING
 
@@ -11,7 +11,7 @@ from loguru import logger
 
 from thoth.services.base import BaseService
 from thoth.services.llm_service import LLMService
-from thoth.config import config, Config
+from thoth.config import config, Config  # noqa: F401
 from thoth.utilities.openrouter import OpenRouterClient, get_openrouter_models
 
 if TYPE_CHECKING:
@@ -26,7 +26,7 @@ class LLMRouter(BaseService):
 
     def __init__(
         self,
-        config: Config | None = None,
+        config: Config | None = None,  # noqa: F811
         llm_service: LLMService | None = None,
     ):
         """

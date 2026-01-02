@@ -26,9 +26,9 @@ Success Criteria:
 - No data loss on API failures
 """
 
-import asyncio
-from pathlib import Path
-from typing import List
+import asyncio  # noqa: I001
+from pathlib import Path  # noqa: F401
+from typing import List  # noqa: UP035
 
 import pytest
 import pytest_asyncio
@@ -46,6 +46,7 @@ from thoth.utilities.schemas.citations import Citation
 # ============================================================================
 # Test Fixtures
 # ============================================================================
+
 
 @pytest_asyncio.fixture
 async def resolution_chain(
@@ -78,6 +79,7 @@ async def resolution_chain(
 # ============================================================================
 # Test Cases: Single Citation Resolution
 # ============================================================================
+
 
 @pytest.mark.e2e
 @pytest.mark.asyncio
@@ -177,11 +179,12 @@ async def test_citation_resolution_unresolved(
 # Test Cases: Batch Resolution
 # ============================================================================
 
+
 @pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_batch_citation_resolution(
     resolution_chain: CitationResolutionChain,
-    sample_citations: List[Citation],
+    sample_citations: List[Citation],  # noqa: UP006
 ):
     """
     Test batch resolution of multiple citations concurrently.
@@ -240,7 +243,7 @@ async def test_large_batch_performance(
     logger.info(
         f'Batch resolution: {successful}/{len(benchmark_data_medium)} '
         f'resolved in {elapsed_time:.2f}s '
-        f'({elapsed_time/len(benchmark_data_medium)*1000:.1f}ms avg)'
+        f'({elapsed_time / len(benchmark_data_medium) * 1000:.1f}ms avg)'
     )
 
     # Performance validation
@@ -251,6 +254,7 @@ async def test_large_batch_performance(
 # ============================================================================
 # Test Cases: API Fallback Chain
 # ============================================================================
+
 
 @pytest.mark.e2e
 @pytest.mark.asyncio
@@ -282,7 +286,7 @@ async def test_fallback_chain_crossref_fails(
 @pytest.mark.asyncio
 async def test_confidence_based_early_stopping(
     resolution_chain: CitationResolutionChain,
-    mock_crossref_client,
+    mock_crossref_client,  # noqa: ARG001
     sample_citation: Citation,
 ):
     """
@@ -302,6 +306,7 @@ async def test_confidence_based_early_stopping(
 # Test Cases: Database Persistence
 # ============================================================================
 
+
 @pytest.mark.e2e
 @pytest.mark.requires_db
 @pytest.mark.asyncio
@@ -320,14 +325,14 @@ async def test_citation_storage_and_retrieval(
     # Store citation
     async with postgres_service.pool.acquire() as conn:
         citation_id = await conn.fetchval(
-            '''
+            """
             INSERT INTO citations (
                 title, authors, year, journal, doi,
                 volume, issue, pages, citation_text
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id
-            ''',
+            """,
             sample_citation.title,
             sample_citation.authors,
             sample_citation.year,
@@ -358,7 +363,7 @@ async def test_citation_storage_and_retrieval(
 @pytest.mark.asyncio
 async def test_duplicate_citation_detection(
     postgres_service: PostgresService,
-    empty_database,
+    empty_database,  # noqa: ARG001
 ):
     """
     Test that duplicate citations are detected and not re-resolved.
@@ -377,11 +382,11 @@ async def test_duplicate_citation_detection(
     # Store citation first time
     async with postgres_service.pool.acquire() as conn:
         first_id = await conn.fetchval(
-            '''
+            """
             INSERT INTO citations (title, authors, year, doi)
             VALUES ($1, $2, $3, $4)
             RETURNING id
-            ''',
+            """,
             citation.title,
             citation.authors,
             citation.year,
@@ -390,9 +395,9 @@ async def test_duplicate_citation_detection(
 
         # Try to store duplicate (same DOI)
         duplicate_id = await conn.fetchval(
-            '''
+            """
             SELECT id FROM citations WHERE doi = $1
-            ''',
+            """,
             citation.doi,
         )
 
@@ -402,6 +407,7 @@ async def test_duplicate_citation_detection(
 # ============================================================================
 # Test Cases: Error Handling
 # ============================================================================
+
 
 @pytest.mark.e2e
 @pytest.mark.asyncio
@@ -450,7 +456,7 @@ async def test_api_rate_limiting_handling(
     citation = Citation(title='Test Paper', authors=['John Doe'], year=2023)
 
     # Should eventually succeed after retry
-    result = await resolution_chain.resolve(citation)
+    result = await resolution_chain.resolve(citation)  # noqa: F841
 
     # Verify retry was attempted
     assert mock_crossref_client.search.call_count >= 1
@@ -460,14 +466,15 @@ async def test_api_rate_limiting_handling(
 # Test Cases: Workflow Integration
 # ============================================================================
 
+
 @pytest.mark.e2e
 @pytest.mark.requires_db
 @pytest.mark.asyncio
 async def test_complete_resolution_workflow_integration(
     resolution_chain: CitationResolutionChain,
     postgres_service: PostgresService,
-    empty_database,
-    sample_citations: List[Citation],
+    empty_database,  # noqa: ARG001
+    sample_citations: List[Citation],  # noqa: UP006
 ):
     """
     Test complete end-to-end workflow: Input → Resolution → Storage.
@@ -486,17 +493,17 @@ async def test_complete_resolution_workflow_integration(
     # Step 2: Store resolved citations
     stored_ids = []
     async with postgres_service.pool.acquire() as conn:
-        for citation, result in zip(sample_citations, resolution_results):
+        for citation, result in zip(sample_citations, resolution_results):  # noqa: B905
             if result.status == CitationResolutionStatus.RESOLVED:
                 citation_id = await conn.fetchval(
-                    '''
+                    """
                     INSERT INTO citations (
                         title, authors, year, doi,
                         citation_text, confidence_score
                     )
                     VALUES ($1, $2, $3, $4, $5, $6)
                     RETURNING id
-                    ''',
+                    """,
                     citation.title or result.matched_data.get('title'),
                     citation.authors or result.matched_data.get('authors'),
                     citation.year or result.matched_data.get('year'),
@@ -516,7 +523,9 @@ async def test_complete_resolution_workflow_integration(
             stored_ids,
         )
 
-    assert retrieved_count == len(stored_ids), 'All stored citations should be retrievable'
+    assert retrieved_count == len(stored_ids), (
+        'All stored citations should be retrievable'
+    )
     logger.info(
         f'✅ Complete workflow: {len(stored_ids)} citations '
         f'resolved and stored successfully'

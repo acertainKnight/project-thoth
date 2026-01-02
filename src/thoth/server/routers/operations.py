@@ -64,7 +64,7 @@ async def get_collection_stats():
 
     except Exception as e:
         logger.error(f'Error getting collection stats: {e}')
-        raise HTTPException(
+        raise HTTPException(  # noqa: B904
             status_code=500, detail=f'Error getting collection stats: {e}'
         )
 
@@ -97,7 +97,7 @@ async def list_articles(limit: int = 10, offset: int = 0):
 
     except Exception as e:
         logger.error(f'Error listing articles: {e}')
-        raise HTTPException(status_code=500, detail=f'Error listing articles: {e}')
+        raise HTTPException(status_code=500, detail=f'Error listing articles: {e}')  # noqa: B904
 
 
 def set_service_manager(sm):

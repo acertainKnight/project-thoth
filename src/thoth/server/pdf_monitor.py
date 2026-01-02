@@ -20,16 +20,21 @@ from thoth.utilities.vault_path_resolver import VaultPathResolver
 try:
     from watchdog.events import FileCreatedEvent, FileSystemEventHandler
     from watchdog.observers.polling import PollingObserver
+
     WATCHDOG_AVAILABLE = True
 except ImportError:
     WATCHDOG_AVAILABLE = False
+
     # Define stub classes for type hints
     class FileSystemEventHandler:  # type: ignore
         pass
+
     class FileCreatedEvent:  # type: ignore
         pass
+
     class PollingObserver:  # type: ignore
         pass
+
 
 if TYPE_CHECKING:
     from thoth.pipeline import ThothPipeline
@@ -103,7 +108,10 @@ class PDFTracker:
                         key_path = Path(key)
 
                         # Check if key is absolute and within vault
-                        if key_path.is_absolute() and self.vault_resolver.is_vault_relative(key):
+                        if (
+                            key_path.is_absolute()
+                            and self.vault_resolver.is_vault_relative(key)
+                        ):
                             try:
                                 # Convert to vault-relative
                                 relative_key = self.vault_resolver.make_relative(key)
@@ -114,16 +122,32 @@ class PDFTracker:
                                 # Migrate paths in metadata too
                                 if 'new_pdf_path' in value:
                                     pdf_path = Path(value['new_pdf_path'])
-                                    if pdf_path.is_absolute() and self.vault_resolver.is_vault_relative(pdf_path):
-                                        value['new_pdf_path'] = self.vault_resolver.make_relative(pdf_path)
+                                    if (
+                                        pdf_path.is_absolute()
+                                        and self.vault_resolver.is_vault_relative(
+                                            pdf_path
+                                        )
+                                    ):
+                                        value['new_pdf_path'] = (
+                                            self.vault_resolver.make_relative(pdf_path)
+                                        )
 
                                 if 'note_path' in value:
                                     note_path = Path(value['note_path'])
-                                    if note_path.is_absolute() and self.vault_resolver.is_vault_relative(note_path):
-                                        value['note_path'] = self.vault_resolver.make_relative(note_path)
+                                    if (
+                                        note_path.is_absolute()
+                                        and self.vault_resolver.is_vault_relative(
+                                            note_path
+                                        )
+                                    ):
+                                        value['note_path'] = (
+                                            self.vault_resolver.make_relative(note_path)
+                                        )
                             except ValueError as e:
                                 # Path not in vault, keep as-is
-                                logger.warning(f'Cannot migrate path outside vault: {key} - {e}')
+                                logger.warning(
+                                    f'Cannot migrate path outside vault: {key} - {e}'
+                                )
                                 migrated_data[key] = value
                         else:
                             # Already relative or not absolute, keep as-is
@@ -132,13 +156,20 @@ class PDFTracker:
                     self.processed_files = migrated_data
 
                     if migrated_count > 0:
-                        logger.info(f'Migrated {migrated_count} absolute paths to vault-relative')
+                        logger.info(
+                            f'Migrated {migrated_count} absolute paths to vault-relative'
+                        )
                         # Create backup before saving migrated data
-                        backup_path = self.track_file.with_suffix('.json.pre-migration-bak')
+                        backup_path = self.track_file.with_suffix(
+                            '.json.pre-migration-bak'
+                        )
                         try:
                             import shutil
+
                             shutil.copy2(self.track_file, backup_path)
-                            logger.info(f'Created pre-migration backup at {backup_path}')
+                            logger.info(
+                                f'Created pre-migration backup at {backup_path}'
+                            )
                         except Exception as e:
                             logger.error(f'Failed to create backup: {e}')
 
@@ -172,19 +203,25 @@ class PDFTracker:
 
     def _load_from_postgres(self) -> None:
         """Load processed PDFs tracking from PostgreSQL."""
-        import asyncpg
+        import asyncpg  # noqa: I001
         import asyncio
 
-        db_url = getattr(self.config.secrets, 'database_url', None) if hasattr(self.config, 'secrets') else None
+        db_url = (
+            getattr(self.config.secrets, 'database_url', None)
+            if hasattr(self.config, 'secrets')
+            else None
+        )
         if not db_url:
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
         async def load():
             conn = await asyncpg.connect(db_url)
             try:
-                rows = await conn.fetch("SELECT pdf_path, new_pdf_path, note_path FROM processed_pdfs")
+                rows = await conn.fetch(
+                    'SELECT pdf_path, new_pdf_path, note_path FROM processed_pdfs'
+                )
                 for row in rows:
-                    # Stored paths are already relative (e.g., "thoth/papers/pdfs/file.pdf")
+                    # Stored paths are already relative (e.g., "thoth/papers/pdfs/file.pdf")  # noqa: W505
                     pdf_path_key = row['pdf_path']
 
                     # Get file stats if the file exists (resolve relative to absolute)
@@ -196,15 +233,17 @@ class PDFTracker:
                                 stats = absolute_path.stat()
                                 file_stats = {
                                     'size': stats.st_size,
-                                    'mtime': stats.st_mtime
+                                    'mtime': stats.st_mtime,
                                 }
                         except Exception as e:
-                            logger.debug(f"Could not get file stats for {pdf_path_key}: {e}")
+                            logger.debug(
+                                f'Could not get file stats for {pdf_path_key}: {e}'
+                            )
 
                     self.processed_files[str(pdf_path_key)] = {
                         'new_pdf_path': row['new_pdf_path'],
                         'note_path': row['note_path'],
-                        **file_stats  # Add size and mtime if available
+                        **file_stats,  # Add size and mtime if available
                     }
                 logger.info(f'Loaded {len(rows)} processed PDFs from PostgreSQL')
             finally:
@@ -223,10 +262,14 @@ class PDFTracker:
 
     def _save_to_postgres(self) -> None:
         """Save processed PDFs tracking to PostgreSQL."""
-        import asyncpg
+        import asyncpg  # noqa: I001
         import asyncio
 
-        db_url = getattr(self.config.secrets, 'database_url', None) if hasattr(self.config, 'secrets') else None
+        db_url = (
+            getattr(self.config.secrets, 'database_url', None)
+            if hasattr(self.config, 'secrets')
+            else None
+        )
         if not db_url:
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
@@ -238,19 +281,28 @@ class PDFTracker:
                     pdf_path = pdf_path_key
                     if self.vault_resolver and Path(pdf_path_key).is_absolute():
                         try:
-                            pdf_path = self.vault_resolver.make_relative(Path(pdf_path_key))
+                            pdf_path = self.vault_resolver.make_relative(
+                                Path(pdf_path_key)
+                            )
                         except (ValueError, Exception):
                             # If can't normalize, store as-is
                             pass
-                    await conn.execute("""
+                    await conn.execute(
+                        """
                         INSERT INTO processed_pdfs (pdf_path, new_pdf_path, note_path, processed_at)
                         VALUES ($1, $2, $3, NOW())
                         ON CONFLICT (pdf_path) DO UPDATE SET
                             new_pdf_path = EXCLUDED.new_pdf_path,
                             note_path = EXCLUDED.note_path,
                             processed_at = NOW()
-                    """, str(pdf_path), metadata.get('new_pdf_path'), metadata.get('note_path'))
-                logger.info(f'Saved {len(self.processed_files)} processed PDFs to PostgreSQL')
+                    """,
+                        str(pdf_path),
+                        metadata.get('new_pdf_path'),
+                        metadata.get('note_path'),
+                    )
+                logger.info(
+                    f'Saved {len(self.processed_files)} processed PDFs to PostgreSQL'
+                )
             finally:
                 await conn.close()
 
@@ -272,14 +324,16 @@ class PDFTracker:
             try:
                 relative_path = self.vault_resolver.make_relative(resolved)
                 is_in_cache = relative_path in self.processed_files
-                logger.debug(f"Checking processed: {file_path} -> {relative_path} -> {is_in_cache}")
+                logger.debug(
+                    f'Checking processed: {file_path} -> {relative_path} -> {is_in_cache}'
+                )
                 if not is_in_cache:
                     # Log sample of keys for debugging
                     sample_keys = list(self.processed_files.keys())[:3]
-                    logger.debug(f"Sample cache keys: {sample_keys}")
+                    logger.debug(f'Sample cache keys: {sample_keys}')
                 return is_in_cache
             except ValueError as e:
-                logger.debug(f"Could not normalize path {file_path}: {e}")
+                logger.debug(f'Could not normalize path {file_path}: {e}')
                 pass
 
         # Fallback to absolute path
@@ -303,7 +357,9 @@ class PDFTracker:
                 try:
                     relative_path = self.vault_resolver.make_relative(resolved)
                     if relative_path in self.processed_files:
-                        note_path_str = self.processed_files[relative_path].get('note_path')
+                        note_path_str = self.processed_files[relative_path].get(
+                            'note_path'
+                        )
                         if note_path_str:
                             # If note path is relative, resolve it to absolute
                             note_path = Path(note_path_str)
@@ -380,16 +436,22 @@ class PDFTracker:
             if 'new_pdf_path' in processed_data and self.vault_resolver:
                 pdf_path = Path(processed_data['new_pdf_path']).resolve()
                 try:
-                    processed_data['new_pdf_path'] = self.vault_resolver.make_relative(pdf_path)
+                    processed_data['new_pdf_path'] = self.vault_resolver.make_relative(
+                        pdf_path
+                    )
                 except ValueError:
                     pass  # Keep absolute if conversion fails
 
             # Convert note_path to vault-relative
             if 'note_path' in processed_data:
                 note_path = Path(processed_data['note_path']).resolve()
-                if self.vault_resolver and self.vault_resolver.is_vault_relative(note_path):
+                if self.vault_resolver and self.vault_resolver.is_vault_relative(
+                    note_path
+                ):
                     try:
-                        processed_data['note_path'] = self.vault_resolver.make_relative(note_path)
+                        processed_data['note_path'] = self.vault_resolver.make_relative(
+                            note_path
+                        )
                     except ValueError:
                         pass  # Keep absolute if conversion fails
 
@@ -541,8 +603,9 @@ class PDFMonitor:
         # Register for config reload notifications
         if hasattr(self.config, 'register_reload_callback'):
             from thoth.config import Config
-            Config.register_reload_callback("pdf_monitor", self._on_config_reload)
-            logger.debug("PDFMonitor registered for config reload notifications")
+
+            Config.register_reload_callback('pdf_monitor', self._on_config_reload)
+            logger.debug('PDFMonitor registered for config reload notifications')
 
         logger.info(
             f'PDF monitor initialized to watch: {self.watch_dir} (recursive: {self.recursive})'
@@ -688,6 +751,7 @@ class PDFMonitor:
 
         # Update last check time
         from datetime import datetime
+
         self.last_check = datetime.now()
 
     def _start_observer(self):
@@ -711,19 +775,21 @@ class PDFMonitor:
         - Polling interval
         """
         try:
-            logger.info("Reloading PDF monitor configuration...")
+            logger.info('Reloading PDF monitor configuration...')
 
             # Get new watch directory from config
             new_pdf_dir = self.config.pdf_dir
 
             # Check if directory changed
             if self._current_watch_dir != new_pdf_dir:
-                logger.info(f"PDF directory changed: {self._current_watch_dir} → {new_pdf_dir}")
-                logger.warning("PDF directory change requires monitor restart")
+                logger.info(
+                    f'PDF directory changed: {self._current_watch_dir} → {new_pdf_dir}'
+                )
+                logger.warning('PDF directory change requires monitor restart')
 
                 # Stop current observer if running
                 if self.observer is not None and self.is_running:
-                    logger.info("Stopping current observer...")
+                    logger.info('Stopping current observer...')
                     self.observer.stop()
                     self.observer.join(timeout=5)
 
@@ -736,36 +802,42 @@ class PDFMonitor:
 
                 # Restart observer with new directory if monitor was running
                 if self.is_running:
-                    logger.info("Restarting observer with new directory...")
+                    logger.info('Restarting observer with new directory...')
                     # Create new observer instance
                     self.observer = PollingObserver(timeout=self.polling_interval)
                     self._start_observer()
 
-                logger.success(f"✅ PDF monitor now watching {new_pdf_dir}")
+                logger.success(f'✅ PDF monitor now watching {new_pdf_dir}')
             else:
-                logger.debug("Watch directory unchanged")
+                logger.debug('Watch directory unchanged')
 
             # Update processing settings if available
-            if hasattr(self.config, 'servers_config') and hasattr(self.config.servers_config, 'monitor'):
+            if hasattr(self.config, 'servers_config') and hasattr(
+                self.config.servers_config, 'monitor'
+            ):
                 monitor_config = self.config.servers_config.monitor
                 if hasattr(monitor_config, 'watch_interval'):
-                    logger.info(f"Watch interval: {monitor_config.watch_interval}s")
+                    logger.info(f'Watch interval: {monitor_config.watch_interval}s')
                 if hasattr(monitor_config, 'bulk_process_size'):
-                    logger.info(f"Bulk process size: {monitor_config.bulk_process_size}")
+                    logger.info(
+                        f'Bulk process size: {monitor_config.bulk_process_size}'
+                    )
 
-            logger.success("✅ PDF monitor config reloaded")
+            logger.success('✅ PDF monitor config reloaded')
 
         except Exception as e:
-            logger.error(f"PDF monitor config reload failed: {e}")
-            logger.warning("Continuing with current watch directory")
+            logger.error(f'PDF monitor config reload failed: {e}')
+            logger.warning('Continuing with current watch directory')
 
     def get_status(self) -> dict:
         """Get monitor status including watch directory."""
         return {
-            "is_running": self.is_running,
-            "watch_directory": str(self._current_watch_dir) if self._current_watch_dir else None,
-            "files_processed": self.files_processed,
-            "last_check": self.last_check.isoformat() if self.last_check else None,
+            'is_running': self.is_running,
+            'watch_directory': str(self._current_watch_dir)
+            if self._current_watch_dir
+            else None,
+            'files_processed': self.files_processed,
+            'last_check': self.last_check.isoformat() if self.last_check else None,
         }
 
 

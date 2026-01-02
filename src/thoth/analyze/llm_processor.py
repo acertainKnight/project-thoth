@@ -95,7 +95,9 @@ class LLMProcessor:
         client_kwargs.pop('chunk_overlap', None)  # Not used by get_client
         client_kwargs.pop('doc_processing', None)  # Not used by get_client
         client_kwargs.pop('refine_threshold_multiplier', None)  # Not used by get_client
-        client_kwargs.pop('map_reduce_threshold_multiplier', None)  # Not used by get_client
+        client_kwargs.pop(
+            'map_reduce_threshold_multiplier', None
+        )  # Not used by get_client
 
         # Pass provider if available in config
         provider = getattr(self.llm_service.config.llm_config, 'provider', None)

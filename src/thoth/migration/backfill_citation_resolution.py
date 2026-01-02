@@ -18,7 +18,7 @@ Features:
 - Resume capability after interruption
 - Dry-run mode for testing
 - Detailed logging and reporting
-"""
+"""  # noqa: W505
 
 import argparse
 import asyncio
@@ -96,7 +96,9 @@ class CitationBackfillManager:
     ):
         self.config = config
         self.dry_run = dry_run
-        self.checkpoint_dir = checkpoint_dir or (config.vault_root / '_thoth/data/backfill_checkpoints')
+        self.checkpoint_dir = checkpoint_dir or (
+            config.vault_root / '_thoth/data/backfill_checkpoints'
+        )
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
         self.stats = BackfillStats()
@@ -106,8 +108,7 @@ class CitationBackfillManager:
         logger.info('Initializing citation resolution system...')
         cache_dir = config.vault_root / '_thoth/data/api_cache'
         self.crossref_resolver = CrossrefResolver(
-            enable_caching=False,
-            cache_dir=str(cache_dir / 'crossref')
+            enable_caching=False, cache_dir=str(cache_dir / 'crossref')
         )
         self.openalex_resolver = OpenAlexResolver()  # No caching parameter
         self.s2_api = SemanticScholarAPI(cache_dir=str(cache_dir / 'semanticscholar'))
@@ -130,7 +131,7 @@ class CitationBackfillManager:
         """Fetch citations from database that need resolution."""
         conn = await asyncpg.connect(self.db_url)
         try:
-            query = '''
+            query = """
                 SELECT
                     c.id,
                     c.citation_text,
@@ -145,7 +146,7 @@ class CitationBackfillManager:
                 LEFT JOIN papers p ON c.cited_paper_id = p.id
                 WHERE c.extracted_title IS NOT NULL
                 ORDER BY c.id
-            '''
+            """
 
             if limit:
                 query += f' LIMIT {limit}'
@@ -169,7 +170,9 @@ class CitationBackfillManager:
     ) -> None:
         """Update a citation record with resolution results."""
         if self.dry_run:
-            logger.info(f'[DRY RUN] Would update citation {citation_id} with DOI: {doi}')
+            logger.info(
+                f'[DRY RUN] Would update citation {citation_id} with DOI: {doi}'
+            )
             return
 
         conn = await asyncpg.connect(self.db_url)
@@ -182,7 +185,7 @@ class CitationBackfillManager:
                     paper_id = paper['id']
                     # Update existing paper
                     await conn.execute(
-                        '''
+                        """
                         UPDATE papers SET
                             title = COALESCE($1, title),
                             authors = COALESCE($2::jsonb, authors),
@@ -191,7 +194,7 @@ class CitationBackfillManager:
                             abstract = COALESCE($5, abstract),
                             updated_at = CURRENT_TIMESTAMP
                         WHERE id = $6
-                        ''',
+                        """,
                         title,
                         json.dumps(authors) if authors else None,
                         year,
@@ -202,11 +205,11 @@ class CitationBackfillManager:
                 else:
                     # Create new paper
                     paper_id = await conn.fetchval(
-                        '''
+                        """
                         INSERT INTO papers (doi, title, authors, year, venue, abstract)
                         VALUES ($1, $2, $3::jsonb, $4, $5, $6)
                         RETURNING id
-                        ''',
+                        """,
                         doi,
                         title,
                         json.dumps(authors) if authors else None,
@@ -217,7 +220,7 @@ class CitationBackfillManager:
 
                 # Update citation to link to resolved paper
                 await conn.execute(
-                    '''
+                    """
                     UPDATE citations SET
                         cited_paper_id = $1,
                         extracted_title = COALESCE($2, extracted_title),
@@ -226,7 +229,7 @@ class CitationBackfillManager:
                         extracted_venue = COALESCE($5, extracted_venue),
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = $6
-                    ''',
+                    """,
                     paper_id,
                     title,
                     json.dumps(authors) if authors else None,
@@ -235,7 +238,9 @@ class CitationBackfillManager:
                     citation_id,
                 )
 
-                logger.debug(f'Updated citation {citation_id} with paper {paper_id} (DOI: {doi})')
+                logger.debug(
+                    f'Updated citation {citation_id} with paper {paper_id} (DOI: {doi})'
+                )
         finally:
             await conn.close()
 
@@ -254,7 +259,9 @@ class CitationBackfillManager:
                 # Skip if cited paper already has DOI
                 if citation_record['cited_paper_doi']:
                     self.stats.skipped += 1
-                    logger.debug(f'Citation {citation_id} already has DOI: {citation_record["cited_paper_doi"]}')
+                    logger.debug(
+                        f'Citation {citation_id} already has DOI: {citation_record["cited_paper_doi"]}'
+                    )
                     continue
 
                 # Create Citation object from extracted metadata
@@ -264,7 +271,9 @@ class CitationBackfillManager:
                     try:
                         authors = json.loads(authors)
                     except json.JSONDecodeError:
-                        logger.warning(f'Failed to parse authors JSON for citation {citation_id}: {authors}')
+                        logger.warning(
+                            f'Failed to parse authors JSON for citation {citation_id}: {authors}'
+                        )
                         authors = []
                 elif not authors:
                     authors = []
@@ -321,11 +330,17 @@ class CitationBackfillManager:
                         title=result.matched_data.get('title') or enriched.title,
                         authors=result.matched_data.get('authors') or enriched.authors,
                         year=result.matched_data.get('year') or enriched.year,
-                        venue=result.matched_data.get('venue') or result.matched_data.get('journal') or enriched.venue or enriched.journal,
-                        abstract=result.matched_data.get('abstract') or enriched.abstract,
+                        venue=result.matched_data.get('venue')
+                        or result.matched_data.get('journal')
+                        or enriched.venue
+                        or enriched.journal,
+                        abstract=result.matched_data.get('abstract')
+                        or enriched.abstract,
                     )
 
-                    identifier = doi or f"arxiv:{arxiv_id}" if arxiv_id else "metadata-only"
+                    identifier = (
+                        doi or f'arxiv:{arxiv_id}' if arxiv_id else 'metadata-only'
+                    )
                     logger.info(
                         f'Citation {citation_id} resolved: {identifier}, confidence={result.confidence_score:.3f}'
                     )
@@ -340,11 +355,17 @@ class CitationBackfillManager:
 
             except Exception as e:
                 self.stats.failed += 1
-                logger.error(f'Error processing citation {citation_record["id"]}: {e}', exc_info=True)
+                logger.error(
+                    f'Error processing citation {citation_record["id"]}: {e}',
+                    exc_info=True,
+                )
 
     def save_checkpoint(self, offset: int) -> None:
         """Save checkpoint for resume capability."""
-        checkpoint_file = self.checkpoint_dir / f'checkpoint_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+        checkpoint_file = (
+            self.checkpoint_dir
+            / f'checkpoint_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+        )
         checkpoint_data = {
             'offset': offset,
             'timestamp': datetime.now().isoformat(),
@@ -391,7 +412,9 @@ class CitationBackfillManager:
         # Fetch total count
         conn = await asyncpg.connect(self.db_url)
         try:
-            total = await conn.fetchval('SELECT COUNT(*) FROM citations WHERE extracted_title IS NOT NULL')
+            total = await conn.fetchval(
+                'SELECT COUNT(*) FROM citations WHERE extracted_title IS NOT NULL'
+            )
             self.stats.total_citations = total
             logger.info(f'Total citations to process: {total}')
         finally:
@@ -428,7 +451,10 @@ class CitationBackfillManager:
         logger.info('=' * 80)
 
         # Save final report
-        report_file = self.checkpoint_dir / f'report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+        report_file = (
+            self.checkpoint_dir
+            / f'report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+        )
         with report_file.open('w') as f:
             json.dump(self.stats.to_dict(), f, indent=2)
         logger.info(f'Final report saved: {report_file}')

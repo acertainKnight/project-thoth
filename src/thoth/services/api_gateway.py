@@ -36,6 +36,7 @@ class ExternalAPIGateway(BaseService):
         # Use LRUCache with bounded size to prevent unbounded memory growth
         # Limits cache to 1000 most recently used entries
         from cachetools import LRUCache
+
         self._cache: LRUCache = LRUCache(maxsize=1000)
 
     def initialize(self) -> None:

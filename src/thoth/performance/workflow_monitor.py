@@ -5,7 +5,7 @@ This module provides end-to-end monitoring and optimization of research workflow
 tracking user interactions, query patterns, and research task completion metrics.
 """
 
-import json
+import json  # noqa: I001
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
@@ -15,7 +15,7 @@ from loguru import logger
 
 from thoth.performance.metrics_collector import MetricsCollector
 from thoth.services.service_manager import ServiceManager
-from thoth.config import config, Config
+from thoth.config import config, Config  # noqa: F401
 
 
 class WorkflowStage(Enum):
@@ -141,7 +141,7 @@ class WorkflowMonitor:
 
     def __init__(
         self,
-        config: Config,
+        config: Config,  # noqa: F811
         service_manager: ServiceManager,
         metrics_collector: MetricsCollector | None = None,
     ):

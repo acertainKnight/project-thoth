@@ -16,7 +16,7 @@ Key Types:
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional  # noqa: UP035
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -33,12 +33,13 @@ class CitationResolutionStatus(str, Enum):
         FAILED: Resolution attempt failed due to errors
         PENDING: Resolution not yet attempted or in progress
     """
-    RESOLVED = "resolved"
-    PARTIAL = "partial"
-    MANUAL_REVIEW = "manual_review"
-    UNRESOLVED = "unresolved"
-    FAILED = "failed"
-    PENDING = "pending"
+
+    RESOLVED = 'resolved'
+    PARTIAL = 'partial'
+    MANUAL_REVIEW = 'manual_review'
+    UNRESOLVED = 'unresolved'
+    FAILED = 'failed'
+    PENDING = 'pending'
 
 
 class ConfidenceLevel(str, Enum):
@@ -50,9 +51,10 @@ class ConfidenceLevel(str, Enum):
         MEDIUM: 0.60-0.84
         LOW: 0.0-0.59
     """
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
+
+    HIGH = 'high'
+    MEDIUM = 'medium'
+    LOW = 'low'
 
 
 class APISource(str, Enum):
@@ -65,10 +67,11 @@ class APISource(str, Enum):
         SEMANTIC_SCHOLAR: Semantic Scholar API for ML-enhanced matching
         ARXIV: arXiv API for preprints and technical papers
     """
-    CROSSREF = "crossref"
-    OPENALEX = "openalex"
-    SEMANTIC_SCHOLAR = "semantic_scholar"
-    ARXIV = "arxiv"
+
+    CROSSREF = 'crossref'
+    OPENALEX = 'openalex'
+    SEMANTIC_SCHOLAR = 'semantic_scholar'
+    ARXIV = 'arxiv'
 
 
 class MatchCandidate(BaseModel):
@@ -86,54 +89,47 @@ class MatchCandidate(BaseModel):
         source: API source that provided this candidate
         matched_at: Timestamp when match was evaluated
     """
-    candidate_data: Dict[str, Any] = Field(
-        description="Raw candidate data from the API source"
+
+    candidate_data: Dict[str, Any] = Field(  # noqa: UP006
+        description='Raw candidate data from the API source'
     )
     raw_score: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="Overall matching score between 0.0 and 1.0"
+        ge=0.0, le=1.0, description='Overall matching score between 0.0 and 1.0'
     )
-    component_scores: Dict[str, float] = Field(
+    component_scores: Dict[str, float] = Field(  # noqa: UP006
         default_factory=dict,
-        description="Individual component scores (title, author, year, etc.)"
+        description='Individual component scores (title, author, year, etc.)',
     )
-    source: APISource = Field(
-        description="API source that provided this candidate"
-    )
+    source: APISource = Field(description='API source that provided this candidate')
     matched_at: datetime = Field(
         default_factory=datetime.utcnow,
-        description="Timestamp when match was evaluated"
+        description='Timestamp when match was evaluated',
     )
 
     @field_validator('component_scores')
     @classmethod
-    def validate_component_scores(cls, v: Dict[str, float]) -> Dict[str, float]:
+    def validate_component_scores(cls, v: Dict[str, float]) -> Dict[str, float]:  # noqa: UP006
         """Validate that all component scores are in valid range [0.0, 1.0]."""
         for component, score in v.items():
             if not 0.0 <= score <= 1.0:
                 raise ValueError(
                     f"Component score '{component}' must be between 0.0 and 1.0, "
-                    f"got {score}"
+                    f'got {score}'
                 )
         return v
 
     class Config:
-        json_schema_extra = {
-            "example": {
-                "candidate_data": {
-                    "doi": "10.1234/example",
-                    "title": "Example Research Paper",
-                    "authors": ["Smith, J.", "Doe, A."]
+        json_schema_extra = {  # noqa: RUF012
+            'example': {
+                'candidate_data': {
+                    'doi': '10.1234/example',
+                    'title': 'Example Research Paper',
+                    'authors': ['Smith, J.', 'Doe, A.'],
                 },
-                "raw_score": 0.87,
-                "component_scores": {
-                    "title": 0.92,
-                    "author": 0.85,
-                    "year": 1.0
-                },
-                "source": "crossref",
-                "matched_at": "2025-12-29T10:30:00Z"
+                'raw_score': 0.87,
+                'component_scores': {'title': 0.92, 'author': 0.85, 'year': 1.0},
+                'source': 'crossref',
+                'matched_at': '2025-12-29T10:30:00Z',
             }
         }
 
@@ -153,45 +149,37 @@ class ResolutionMetadata(BaseModel):
         processing_time_ms: Time taken for resolution in milliseconds
         additional_info: Arbitrary additional diagnostic information
     """
+
     attempt_count: int = Field(
-        default=0,
-        ge=0,
-        description="Number of resolution attempts made"
+        default=0, ge=0, description='Number of resolution attempts made'
     )
-    last_attempt_time: Optional[datetime] = Field(
-        default=None,
-        description="Timestamp of most recent resolution attempt"
+    last_attempt_time: Optional[datetime] = Field(  # noqa: UP007
+        default=None, description='Timestamp of most recent resolution attempt'
     )
-    error_message: Optional[str] = Field(
-        default=None,
-        description="Error message if resolution failed"
+    error_message: Optional[str] = Field(  # noqa: UP007
+        default=None, description='Error message if resolution failed'
     )
-    api_sources_tried: List[APISource] = Field(
+    api_sources_tried: List[APISource] = Field(  # noqa: UP006
         default_factory=list,
-        description="List of API sources consulted during resolution"
+        description='List of API sources consulted during resolution',
     )
-    processing_time_ms: Optional[float] = Field(
-        default=None,
-        ge=0.0,
-        description="Processing time in milliseconds"
+    processing_time_ms: Optional[float] = Field(  # noqa: UP007
+        default=None, ge=0.0, description='Processing time in milliseconds'
     )
-    additional_info: Dict[str, Any] = Field(
+    additional_info: Dict[str, Any] = Field(  # noqa: UP006
         default_factory=dict,
-        description="Additional diagnostic or contextual information"
+        description='Additional diagnostic or contextual information',
     )
 
     class Config:
-        json_schema_extra = {
-            "example": {
-                "attempt_count": 2,
-                "last_attempt_time": "2025-12-29T10:30:00Z",
-                "error_message": None,
-                "api_sources_tried": ["crossref", "openalex"],
-                "processing_time_ms": 245.3,
-                "additional_info": {
-                    "cache_hit": False,
-                    "rate_limited": False
-                }
+        json_schema_extra = {  # noqa: RUF012
+            'example': {
+                'attempt_count': 2,
+                'last_attempt_time': '2025-12-29T10:30:00Z',
+                'error_message': None,
+                'api_sources_tried': ['crossref', 'openalex'],
+                'processing_time_ms': 245.3,
+                'additional_info': {'cache_hit': False, 'rate_limited': False},
             }
         }
 
@@ -215,39 +203,32 @@ class ResolutionResult(BaseModel):
         metadata: Resolution attempt metadata and diagnostics
         resolved_at: Timestamp when resolution completed
     """
-    citation: str = Field(
-        description="Original citation text to be resolved"
-    )
-    status: CitationResolutionStatus = Field(
-        description="Resolution outcome status"
-    )
+
+    citation: str = Field(description='Original citation text to be resolved')
+    status: CitationResolutionStatus = Field(description='Resolution outcome status')
     confidence_score: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="Numerical confidence score between 0.0 and 1.0"
+        ge=0.0, le=1.0, description='Numerical confidence score between 0.0 and 1.0'
     )
     confidence_level: ConfidenceLevel = Field(
-        description="Categorized confidence level (HIGH/MEDIUM/LOW)"
+        description='Categorized confidence level (HIGH/MEDIUM/LOW)'
     )
-    source: Optional[APISource] = Field(
-        default=None,
-        description="Primary API source used for resolution"
+    source: Optional[APISource] = Field(  # noqa: UP007
+        default=None, description='Primary API source used for resolution'
     )
-    matched_data: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="Resolved citation data if successful"
+    matched_data: Optional[Dict[str, Any]] = Field(  # noqa: UP006, UP007
+        default=None, description='Resolved citation data if successful'
     )
-    candidates: List[MatchCandidate] = Field(
+    candidates: List[MatchCandidate] = Field(  # noqa: UP006
         default_factory=list,
-        description="All candidate matches considered during resolution"
+        description='All candidate matches considered during resolution',
     )
     metadata: ResolutionMetadata = Field(
         default_factory=ResolutionMetadata,
-        description="Resolution attempt metadata and diagnostics"
+        description='Resolution attempt metadata and diagnostics',
     )
     resolved_at: datetime = Field(
         default_factory=datetime.utcnow,
-        description="Timestamp when resolution completed"
+        description='Timestamp when resolution completed',
     )
 
     @field_validator('confidence_level', mode='before')
@@ -275,36 +256,36 @@ class ResolutionResult(BaseModel):
             return ConfidenceLevel.LOW
 
     class Config:
-        json_schema_extra = {
-            "example": {
-                "citation": "Smith, J. et al. (2024). Example Paper. Nature 123:456-789.",
-                "status": "resolved",
-                "confidence_score": 0.87,
-                "confidence_level": "high",
-                "source": "crossref",
-                "matched_data": {
-                    "doi": "10.1038/nature12345",
-                    "title": "Example Paper",
-                    "authors": ["Smith, J.", "Doe, A.", "Johnson, B."],
-                    "year": 2024,
-                    "journal": "Nature",
-                    "volume": "123",
-                    "pages": "456-789"
+        json_schema_extra = {  # noqa: RUF012
+            'example': {
+                'citation': 'Smith, J. et al. (2024). Example Paper. Nature 123:456-789.',
+                'status': 'resolved',
+                'confidence_score': 0.87,
+                'confidence_level': 'high',
+                'source': 'crossref',
+                'matched_data': {
+                    'doi': '10.1038/nature12345',
+                    'title': 'Example Paper',
+                    'authors': ['Smith, J.', 'Doe, A.', 'Johnson, B.'],
+                    'year': 2024,
+                    'journal': 'Nature',
+                    'volume': '123',
+                    'pages': '456-789',
                 },
-                "candidates": [],
-                "metadata": {
-                    "attempt_count": 1,
-                    "api_sources_tried": ["crossref"],
-                    "processing_time_ms": 180.5
+                'candidates': [],
+                'metadata': {
+                    'attempt_count': 1,
+                    'api_sources_tried': ['crossref'],
+                    'processing_time_ms': 180.5,
                 },
-                "resolved_at": "2025-12-29T10:30:00Z"
+                'resolved_at': '2025-12-29T10:30:00Z',
             }
         }
 
 
 # Type aliases for common use cases
-CitationDict = Dict[str, Any]
+CitationDict = Dict[str, Any]  # noqa: UP006
 """Type alias for citation dictionaries"""
 
-ScoreDict = Dict[str, float]
+ScoreDict = Dict[str, float]  # noqa: UP006
 """Type alias for score dictionaries"""

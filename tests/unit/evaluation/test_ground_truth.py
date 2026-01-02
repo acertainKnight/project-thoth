@@ -8,17 +8,17 @@ Tests:
 4. Round-trip testing logic
 """
 
-import pytest
+import pytest  # noqa: I001
 import json
-from unittest.mock import AsyncMock, Mock, patch
-from hypothesis import given, strategies as st, settings
+from unittest.mock import AsyncMock, Mock, patch  # noqa: F401
+from hypothesis import given, strategies as st, settings, HealthCheck
 
-from thoth.analyze.citations.citations import Citation
+from thoth.analyze.citations.citations import Citation  # noqa: F401
 from thoth.analyze.citations.evaluation.ground_truth import (
     CitationDegradation,
     GroundTruthCitation,
     GroundTruthGenerator,
-    load_ground_truth_from_file
+    load_ground_truth_from_file,
 )
 
 
@@ -28,8 +28,13 @@ class TestCitationDegradation:
     def test_degradation_enum_values(self):
         """Test all degradation types are defined."""
         expected_types = {
-            'CLEAN', 'AUTHOR_VARIATION', 'TITLE_TRUNCATION',
-            'MISSING_YEAR', 'MISSING_AUTHORS', 'TYPOS', 'JOURNAL_MISSING'
+            'CLEAN',
+            'AUTHOR_VARIATION',
+            'TITLE_TRUNCATION',
+            'MISSING_YEAR',
+            'MISSING_AUTHORS',
+            'TYPOS',
+            'JOURNAL_MISSING',
         }
         actual_types = {d.name for d in CitationDegradation}
         assert actual_types == expected_types
@@ -51,7 +56,7 @@ class TestGroundTruthCitation:
             ground_truth_doi='10.1234/test',
             ground_truth_title='Test Title',
             ground_truth_authors=['Author One'],
-            ground_truth_year=2020
+            ground_truth_year=2020,
         )
 
         assert gt.citation == sample_citation
@@ -70,7 +75,7 @@ class TestGroundTruthCitation:
             ground_truth_title='Test Title',
             ground_truth_authors=['Author One'],
             ground_truth_year=2020,
-            metadata=metadata
+            metadata=metadata,
         )
 
         assert gt.metadata == metadata
@@ -82,7 +87,7 @@ class TestGroundTruthCitation:
             ground_truth_doi=None,
             ground_truth_title='Test',
             ground_truth_authors=[],
-            ground_truth_year=None
+            ground_truth_year=None,
         )
 
         assert gt.metadata == {}
@@ -104,9 +109,7 @@ class TestGroundTruthGenerator:
         generator = GroundTruthGenerator(mock_postgres)
 
         ground_truth = await generator.generate_from_database(
-            num_samples=2,
-            stratify_by_difficulty=False,
-            require_doi=True
+            num_samples=2, stratify_by_difficulty=False, require_doi=True
         )
 
         # Verify query was called
@@ -125,9 +128,7 @@ class TestGroundTruthGenerator:
         generator = GroundTruthGenerator(mock_postgres)
 
         ground_truth = await generator.generate_from_database(
-            num_samples=3,
-            stratify_by_difficulty=True,
-            require_doi=True
+            num_samples=3, stratify_by_difficulty=True, require_doi=True
         )
 
         # Check difficulty levels are assigned
@@ -139,13 +140,13 @@ class TestGroundTruthGenerator:
             if gt.difficulty == 'easy':
                 assert gt.degradation_type in [
                     CitationDegradation.CLEAN,
-                    CitationDegradation.AUTHOR_VARIATION
+                    CitationDegradation.AUTHOR_VARIATION,
                 ]
             elif gt.difficulty == 'hard':
                 assert gt.degradation_type in [
                     CitationDegradation.MISSING_YEAR,
                     CitationDegradation.MISSING_AUTHORS,
-                    CitationDegradation.TYPOS
+                    CitationDegradation.TYPOS,
                 ]
 
     @pytest.mark.asyncio
@@ -154,8 +155,7 @@ class TestGroundTruthGenerator:
         generator = GroundTruthGenerator(mock_postgres)
 
         await generator.generate_from_database(
-            num_samples=2,
-            require_cross_validation=True
+            num_samples=2, require_cross_validation=True
         )
 
         # Verify query includes cross-validation constraints
@@ -233,7 +233,7 @@ class TestDegradationApplication:
                 changed = True
                 break
 
-        assert changed, "Author variation should change format sometimes"
+        assert changed, 'Author variation should change format sometimes'
 
     def test_title_truncation_limits_length(self, mock_postgres, sample_papers):
         """Test TITLE_TRUNCATION truncates long titles."""
@@ -299,7 +299,7 @@ class TestDegradationApplication:
                 assert len(citation.title) <= len(paper['title']) + 5
                 break
 
-        assert modified, "Typos should modify title"
+        assert modified, 'Typos should modify title'
 
 
 class TestAuthorFormatVariation:
@@ -310,7 +310,7 @@ class TestAuthorFormatVariation:
         generator = GroundTruthGenerator(mock_postgres)
 
         # Test with comma format: "Last, First Middle"
-        author = "Murphy, Kevin P."
+        author = 'Murphy, Kevin P.'
 
         # Run multiple times to see different formats
         formats_seen = set()
@@ -325,7 +325,7 @@ class TestAuthorFormatVariation:
         """Test author format variation when no comma present."""
         generator = GroundTruthGenerator(mock_postgres)
 
-        author = "Kevin Murphy"
+        author = 'Kevin Murphy'
         varied = generator._vary_author_format(author)
 
         # Should return original if can't parse
@@ -339,7 +339,7 @@ class TestTypoIntroduction:
         """Test typos are introduced into text."""
         generator = GroundTruthGenerator(mock_postgres)
 
-        text = "This is a long test sentence with many words"
+        text = 'This is a long test sentence with many words'
 
         # Run multiple times
         modified = False
@@ -351,13 +351,13 @@ class TestTypoIntroduction:
                 assert abs(len(typo_text) - len(text)) <= 2
                 break
 
-        assert modified, "Should introduce at least one typo"
+        assert modified, 'Should introduce at least one typo'
 
     def test_introduce_typos_short_text(self, mock_postgres):
         """Test typo introduction on short text."""
         generator = GroundTruthGenerator(mock_postgres)
 
-        text = "Hi"
+        text = 'Hi'
         typo_text = generator._introduce_typos(text, num_typos=1)
 
         # Too short, should return unchanged
@@ -367,15 +367,19 @@ class TestTypoIntroduction:
         text=st.text(
             alphabet=st.characters(whitelist_categories=('Lu', 'Ll')),
             min_size=10,
-            max_size=100
+            max_size=100,
         ),
-        num_typos=st.integers(min_value=1, max_value=3)
+        num_typos=st.integers(min_value=1, max_value=3),
     )
-    @settings(max_examples=50, deadline=None)
+    @settings(
+        max_examples=50,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
     def test_introduce_typos_property_length(self, mock_postgres, text, num_typos):
         """Property test: typos don't drastically change length."""
         if len(text.split()) < 3:
-            pytest.skip("Text too short")
+            pytest.skip('Text too short')
 
         generator = GroundTruthGenerator(mock_postgres)
         typo_text = generator._introduce_typos(text, num_typos=num_typos)
@@ -392,56 +396,53 @@ class TestCitationTextFormatting:
         generator = GroundTruthGenerator(mock_postgres)
 
         text = generator._format_citation_text(
-            title="Test Title",
-            authors=["Author One"],
+            title='Test Title',
+            authors=['Author One'],
             year=2020,
-            journal="Test Journal"
+            journal='Test Journal',
         )
 
-        assert "Author One" in text
-        assert "(2020)" in text
-        assert "Test Title" in text
-        assert "Test Journal" in text
+        assert 'Author One' in text
+        assert '(2020)' in text
+        assert 'Test Title' in text
+        assert 'Test Journal' in text
 
     def test_format_citation_two_authors(self, mock_postgres):
         """Test formatting with two authors."""
         generator = GroundTruthGenerator(mock_postgres)
 
         text = generator._format_citation_text(
-            title="Test Title",
-            authors=["Author One", "Author Two"],
+            title='Test Title',
+            authors=['Author One', 'Author Two'],
             year=2020,
-            journal=None
+            journal=None,
         )
 
-        assert "Author One and Author Two" in text
-        assert "(2020)" in text
+        assert 'Author One and Author Two' in text
+        assert '(2020)' in text
 
     def test_format_citation_many_authors(self, mock_postgres):
         """Test formatting with et al. for many authors."""
         generator = GroundTruthGenerator(mock_postgres)
 
         text = generator._format_citation_text(
-            title="Test Title",
-            authors=["Author One", "Author Two", "Author Three"],
+            title='Test Title',
+            authors=['Author One', 'Author Two', 'Author Three'],
             year=2020,
-            journal=None
+            journal=None,
         )
 
-        assert "Author One et al." in text
+        assert 'Author One et al.' in text
 
     def test_format_citation_minimal_info(self, mock_postgres):
         """Test formatting with minimal information."""
         generator = GroundTruthGenerator(mock_postgres)
 
         text = generator._format_citation_text(
-            title="Test Title",
-            authors=[],
-            year=None,
-            journal=None
+            title='Test Title', authors=[], year=None, journal=None
         )
 
-        assert "Test Title" in text
+        assert 'Test Title' in text
         assert text.endswith('.')
 
 
@@ -459,11 +460,11 @@ async def test_load_ground_truth_from_file_success(tmp_path):
             'ground_truth_title': 'Title 1',
             'ground_truth_authors': ['Author 1'],
             'ground_truth_year': 2020,
-            'difficulty': 'easy'
+            'difficulty': 'easy',
         }
     ]
 
-    file_path = tmp_path / "ground_truth.json"
+    file_path = tmp_path / 'ground_truth.json'
     with open(file_path, 'w') as f:
         json.dump(test_data, f)
 
@@ -490,11 +491,11 @@ async def test_load_ground_truth_from_file_with_metadata(tmp_path):
             'citation_text': 'Test citation',
             'ground_truth_title': 'Title',
             'ground_truth_authors': ['Author'],
-            'metadata': {'test_key': 'test_value'}
+            'metadata': {'test_key': 'test_value'},
         }
     ]
 
-    file_path = tmp_path / "ground_truth.json"
+    file_path = tmp_path / 'ground_truth.json'
     with open(file_path, 'w') as f:
         json.dump(test_data, f)
 

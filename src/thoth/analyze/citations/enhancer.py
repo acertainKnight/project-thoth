@@ -1,7 +1,7 @@
 import asyncio
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List
+from typing import List  # noqa: UP035
 
 from loguru import logger
 
@@ -127,7 +127,7 @@ class CitationEnhancer:
 
         # Check if we should use new resolution chain
         if self.use_resolution_chain:
-            logger.info('Using new resolution chain for parallel enhancement')
+            logger.info('Using new resolution chain for parallel enhancement')  # noqa: F823
             # enhance_with_resolution_chain is now async, so we need to run it
             return asyncio.run(self.enhance_with_resolution_chain(citations))
 
@@ -169,6 +169,7 @@ class CitationEnhancer:
             # Resolve "auto" to actual worker count
             if worker_config == 'auto':
                 import os
+
                 max_workers = max(1, os.cpu_count() or 3)
             else:
                 max_workers = int(worker_config)
@@ -356,8 +357,9 @@ class CitationEnhancer:
         return self._enrichment_service
 
     async def enhance_with_resolution_chain(
-        self, citations: List[Citation]
-    ) -> List[Citation]:
+        self,
+        citations: List[Citation],  # noqa: UP006
+    ) -> List[Citation]:  # noqa: UP006
         """
         Enhance citations using the new resolution chain and enrichment service.
 
@@ -388,7 +390,9 @@ class CitationEnhancer:
         try:
             # Step 1: Resolve DOIs using resolution chain
             logger.info('Step 1: Resolving citations through resolution chain...')
-            resolution_results = await resolution_chain.batch_resolve(citations, parallel=True)
+            resolution_results = await resolution_chain.batch_resolve(
+                citations, parallel=True
+            )
 
             # Log resolution statistics
             stats = resolution_chain.get_statistics()
@@ -407,13 +411,15 @@ class CitationEnhancer:
 
             # Step 2: Apply resolved data back to citations
             logger.info('Step 2: Applying resolved data to citations...')
-            enhanced_citations = self._apply_resolution_results(
+            enhanced_citations = self._apply_resolution_results(  # noqa: F841
                 citations, resolution_results
             )
 
             # Step 3: Enrich with full metadata using enrichment service
             logger.info('Step 3: Enriching citations with full metadata...')
-            enriched_citations = await enrichment_service.batch_enrich(resolution_results)
+            enriched_citations = await enrichment_service.batch_enrich(
+                resolution_results
+            )
 
             # Log enrichment statistics
             enrich_stats = enrichment_service.get_statistics()
@@ -439,18 +445,15 @@ class CitationEnhancer:
             return enriched_citations
 
         except Exception as e:
-            logger.error(
-                f'Error in enhanced citation resolution: {e}',
-                exc_info=True
-            )
+            logger.error(f'Error in enhanced citation resolution: {e}', exc_info=True)
             # Fallback to original citations
             return citations
 
     def _apply_resolution_results(
         self,
-        citations: List[Citation],
-        results: List[ResolutionResult]
-    ) -> List[Citation]:
+        citations: List[Citation],  # noqa: UP006
+        results: List[ResolutionResult],  # noqa: UP006
+    ) -> List[Citation]:  # noqa: UP006
         """
         Apply resolution results back to original citations.
 
@@ -461,11 +464,12 @@ class CitationEnhancer:
         Returns:
             Citations with resolved data applied
         """
-        for citation, result in zip(citations, results):
-            if result.status in (
-                CitationResolutionStatus.RESOLVED,
-                CitationResolutionStatus.PARTIAL
-            ) and result.matched_data:
+        for citation, result in zip(citations, results):  # noqa: B905
+            if (
+                result.status
+                in (CitationResolutionStatus.RESOLVED, CitationResolutionStatus.PARTIAL)
+                and result.matched_data
+            ):
                 # Update citation with resolved data (only non-None fields)
                 if result.matched_data.get('doi') and not citation.doi:
                     citation.doi = result.matched_data['doi']
@@ -497,7 +501,10 @@ class CitationEnhancer:
                 if result.matched_data.get('abstract') and not citation.abstract:
                     citation.abstract = result.matched_data['abstract']
 
-                if result.matched_data.get('citation_count') and not citation.citation_count:
+                if (
+                    result.matched_data.get('citation_count')
+                    and not citation.citation_count
+                ):
                     citation.citation_count = result.matched_data['citation_count']
 
                 logger.debug(

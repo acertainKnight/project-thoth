@@ -8,13 +8,13 @@ Provides comprehensive fixtures for testing MCP monitoring capabilities includin
 - Prometheus metrics validation fixtures
 """
 
-import time
+import time  # noqa: I001
 from typing import Any
 from unittest.mock import AsyncMock, Mock
 
 import httpx
 import pytest
-import respx
+import respx  # noqa: F401
 
 from thoth.mcp.monitoring import MCPHealthStatus, MCPServerStats
 
@@ -22,6 +22,7 @@ from thoth.mcp.monitoring import MCPHealthStatus, MCPServerStats
 # ============================================================================
 # Health Status Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def healthy_status() -> MCPHealthStatus:
@@ -106,6 +107,7 @@ def multiple_errors_status() -> MCPHealthStatus:
 # Server Stats Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def healthy_server_stats() -> MCPServerStats:
     """Create healthy server statistics."""
@@ -182,6 +184,7 @@ def multiple_servers_stats() -> list[MCPServerStats]:
 # HTTP Response Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def mock_healthy_http_response():
     """Create mock HTTP response for healthy MCP server."""
@@ -198,11 +201,13 @@ def mock_unhealthy_http_response():
     response = Mock(spec=httpx.Response)
     response.status_code = 503
     response.json.return_value = {'status': 'unhealthy', 'error': 'Service unavailable'}
-    response.raise_for_status = Mock(side_effect=httpx.HTTPStatusError(
-        'Service unavailable',
-        request=Mock(),
-        response=response,
-    ))
+    response.raise_for_status = Mock(
+        side_effect=httpx.HTTPStatusError(
+            'Service unavailable',
+            request=Mock(),
+            response=response,
+        )
+    )
     return response
 
 
@@ -227,6 +232,7 @@ def mock_network_error():
 # ============================================================================
 # Respx Mock Fixtures (HTTP Client Mocking)
 # ============================================================================
+
 
 @pytest.fixture
 def respx_mock_healthy_server(respx_mock):
@@ -276,6 +282,7 @@ def respx_mock_network_error(respx_mock):
 # ============================================================================
 # Prometheus Metrics Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def expected_prometheus_metrics_healthy() -> list[str]:
@@ -336,6 +343,7 @@ mcp_server_healthy{server="thoth-mcp-2"} 1"""
 # Alert Threshold Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def default_alert_thresholds() -> dict[str, float]:
     """Default alert thresholds matching MCPMonitor configuration."""
@@ -370,6 +378,7 @@ def relaxed_alert_thresholds() -> dict[str, float]:
 # Cache Refresh Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def successful_cache_refresh() -> dict[str, Any]:
     """Successful cache refresh result."""
@@ -394,6 +403,7 @@ def failed_cache_refresh() -> dict[str, Any]:
 # Time-based Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def recent_timestamp() -> float:
     """Timestamp from 5 seconds ago."""
@@ -415,6 +425,7 @@ def future_timestamp() -> float:
 # ============================================================================
 # Mock AsyncClient Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def mock_async_client_healthy():

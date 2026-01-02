@@ -64,12 +64,12 @@ class DiscoveryOrchestrator(BaseService):
         self.article_repo = ArticleRepository(postgres_service or config)
         self.match_repo = ArticleResearchMatchRepository(postgres_service or config)
 
-        logger.info("DiscoveryOrchestrator initialized")
+        logger.info('DiscoveryOrchestrator initialized')
 
     async def run_discovery_for_question(
         self,
         question_id: UUID,
-        max_articles: Optional[int] = None,
+        max_articles: Optional[int] = None,  # noqa: UP007
     ) -> dict[str, Any]:
         """
         Run discovery workflow for a single research question.
@@ -88,10 +88,10 @@ class DiscoveryOrchestrator(BaseService):
         # Load research question
         question = await self.question_repo.get_by_id(question_id)
         if not question:
-            logger.error(f"Research question {question_id} not found")
+            logger.error(f'Research question {question_id} not found')
             return self._error_result(
                 question_id=question_id,
-                error="Research question not found",
+                error='Research question not found',
                 execution_time=time.time() - start_time,
             )
 
@@ -103,14 +103,16 @@ class DiscoveryOrchestrator(BaseService):
             # Step 1: Resolve source selection
             sources = await self._resolve_sources(question['selected_sources'])
             if not sources:
-                logger.warning(f"No active sources available for question {question_id}")
+                logger.warning(
+                    f'No active sources available for question {question_id}'
+                )
                 return self._empty_result(
                     question_id=question_id,
                     question_name=question['name'],
                     execution_time=time.time() - start_time,
                 )
 
-            logger.info(f"Resolved {len(sources)} sources: {sources}")
+            logger.info(f'Resolved {len(sources)} sources: {sources}')
 
             # Step 2: Query sources in parallel
             max_per_run = max_articles or question.get('max_articles_per_run', 50)
@@ -121,14 +123,14 @@ class DiscoveryOrchestrator(BaseService):
             )
 
             if not articles:
-                logger.info(f"No articles found for question {question_id}")
+                logger.info(f'No articles found for question {question_id}')
                 return self._empty_result(
                     question_id=question_id,
                     question_name=question['name'],
                     execution_time=time.time() - start_time,
                 )
 
-            logger.info(f"Found {len(articles)} articles from {len(sources)} sources")
+            logger.info(f'Found {len(articles)} articles from {len(sources)} sources')
 
             # Step 3: Deduplicate and process articles
             matched_count, processed_count = await self._process_and_match_articles(
@@ -140,8 +142,8 @@ class DiscoveryOrchestrator(BaseService):
 
             logger.info(
                 f"Discovery completed for '{question['name']}': "
-                f"{len(articles)} found, {processed_count} processed, "
-                f"{matched_count} matched in {execution_time:.2f}s"
+                f'{len(articles)} found, {processed_count} processed, '
+                f'{matched_count} matched in {execution_time:.2f}s'
             )
 
             return {
@@ -157,7 +159,9 @@ class DiscoveryOrchestrator(BaseService):
             }
 
         except Exception as e:
-            logger.error(f"Discovery failed for question {question_id}: {e}", exc_info=True)
+            logger.error(
+                f'Discovery failed for question {question_id}: {e}', exc_info=True
+            )
             return self._error_result(
                 question_id=question_id,
                 error=str(e),
@@ -181,12 +185,11 @@ class DiscoveryOrchestrator(BaseService):
         """
         start_time = time.time()
 
-        logger.info(f"Starting batch discovery for {len(question_ids)} questions")
+        logger.info(f'Starting batch discovery for {len(question_ids)} questions')
 
         # Run discoveries in parallel
         tasks = [
-            self.run_discovery_for_question(question_id)
-            for question_id in question_ids
+            self.run_discovery_for_question(question_id) for question_id in question_ids
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -200,7 +203,7 @@ class DiscoveryOrchestrator(BaseService):
         for result in results:
             if isinstance(result, Exception):
                 failed += 1
-                logger.error(f"Batch discovery task failed: {result}")
+                logger.error(f'Batch discovery task failed: {result}')
             elif result.get('success'):
                 successful += 1
                 total_found += result.get('articles_found', 0)
@@ -212,9 +215,9 @@ class DiscoveryOrchestrator(BaseService):
         execution_time = time.time() - start_time
 
         logger.info(
-            f"Batch discovery completed: {successful} successful, {failed} failed, "
-            f"{total_found} found, {total_processed} processed, {total_matched} matched "
-            f"in {execution_time:.2f}s"
+            f'Batch discovery completed: {successful} successful, {failed} failed, '
+            f'{total_found} found, {total_processed} processed, {total_matched} matched '
+            f'in {execution_time:.2f}s'
         )
 
         return {
@@ -260,13 +263,11 @@ class DiscoveryOrchestrator(BaseService):
             if source in available_set:
                 valid_sources.append(source)
             else:
-                logger.warning(
-                    f"Source '{source}' not available in registry, skipping"
-                )
+                logger.warning(f"Source '{source}' not available in registry, skipping")
 
         if not valid_sources:
             logger.warning(
-                f"None of the selected sources {selected_sources} are available"
+                f'None of the selected sources {selected_sources} are available'
             )
 
         return valid_sources
@@ -290,7 +291,9 @@ class DiscoveryOrchestrator(BaseService):
         Returns:
             Combined list of articles from all sources
         """
-        logger.info(f"Querying {len(sources)} sources in parallel (max {max_articles} per source)")
+        logger.info(
+            f'Querying {len(sources)} sources in parallel (max {max_articles} per source)'
+        )
 
         # Create tasks for parallel execution
         tasks = [
@@ -303,7 +306,7 @@ class DiscoveryOrchestrator(BaseService):
 
         # Combine results and handle errors
         all_articles = []
-        for source, result in zip(sources, results):
+        for source, result in zip(sources, results):  # noqa: B905
             if isinstance(result, Exception):
                 logger.error(f"Source '{source}' query failed: {result}")
                 # Update source health status
@@ -317,7 +320,7 @@ class DiscoveryOrchestrator(BaseService):
                     articles_found=len(result),
                 )
 
-        logger.info(f"Parallel querying completed: {len(all_articles)} total articles")
+        logger.info(f'Parallel querying completed: {len(all_articles)} total articles')
 
         return all_articles
 
@@ -386,7 +389,7 @@ class DiscoveryOrchestrator(BaseService):
         for article_meta in articles:
             try:
                 # Step 1: FAST CHECK - Does article already exist and is it matched?
-                # This prevents expensive LLM scoring of articles we've already processed
+                # This prevents expensive LLM scoring of articles we've already processed  # noqa: W505
                 existing_article_id = await self.article_repo.find_duplicate(
                     doi=article_meta.doi,
                     arxiv_id=article_meta.arxiv_id,
@@ -412,9 +415,13 @@ class DiscoveryOrchestrator(BaseService):
                     was_created = False
                 else:
                     # Step 2: Create new article (only if not found above)
-                    article_id, was_created = await self._get_or_create_article(article_meta)
+                    article_id, was_created = await self._get_or_create_article(
+                        article_meta
+                    )
                     if not article_id:
-                        logger.warning(f"Failed to create article: {article_meta.title}")
+                        logger.warning(
+                            f'Failed to create article: {article_meta.title}'
+                        )
                         continue
 
                 processed_count += 1
@@ -428,7 +435,7 @@ class DiscoveryOrchestrator(BaseService):
                 if relevance_result['score'] < min_score:
                     logger.debug(
                         f"Article '{article_meta.title}' relevance {relevance_result['score']:.3f} "
-                        f"below threshold {min_score}, skipping"
+                        f'below threshold {min_score}, skipping'
                     )
                     continue
 
@@ -445,10 +452,10 @@ class DiscoveryOrchestrator(BaseService):
                     matched_count += 1
                     logger.info(
                         f"Matched article '{article_meta.title}' to question '{question['name']}' "
-                        f"(relevance: {relevance_result['score']:.3f})"
+                        f'(relevance: {relevance_result["score"]:.3f})'
                     )
                 else:
-                    logger.error(f"Failed to store match for article {article_id}")
+                    logger.error(f'Failed to store match for article {article_id}')
 
             except Exception as e:
                 logger.error(
@@ -461,7 +468,7 @@ class DiscoveryOrchestrator(BaseService):
     async def _get_or_create_article(
         self,
         article_meta: ScrapedArticleMetadata,
-    ) -> tuple[Optional[UUID], bool]:
+    ) -> tuple[Optional[UUID], bool]:  # noqa: UP007
         """
         Get or create article with deduplication.
 
@@ -473,7 +480,7 @@ class DiscoveryOrchestrator(BaseService):
         Returns:
             Tuple of (article_id, was_created) where article_id is UUID or None if creation failed,
             and was_created is True if new article was created
-        """
+        """  # noqa: W505
         try:
             # Use repository's get_or_create pattern
             article_id, was_created = await self.article_repo.get_or_create_article(
@@ -489,7 +496,7 @@ class DiscoveryOrchestrator(BaseService):
             return article_id, was_created
 
         except Exception as e:
-            logger.error(f"Failed to get/create article: {e}", exc_info=True)
+            logger.error(f'Failed to get/create article: {e}', exc_info=True)
             return None, False
 
     # ==================== LLM Relevance Scoring ====================
@@ -517,7 +524,7 @@ class DiscoveryOrchestrator(BaseService):
         # Build prompt for LLM evaluation
         prompt = self._build_relevance_prompt(
             article_title=article_meta.title,
-            article_abstract=article_meta.abstract or "No abstract available",
+            article_abstract=article_meta.abstract or 'No abstract available',
             article_authors=article_meta.authors or [],
             question_name=question['name'],
             keywords=question.get('keywords', []),
@@ -541,25 +548,27 @@ class DiscoveryOrchestrator(BaseService):
             )
 
             # Extract content from response
-            response_content = response.content if hasattr(response, 'content') else str(response)
+            response_content = (
+                response.content if hasattr(response, 'content') else str(response)
+            )
 
             # Parse LLM response
             result = self._parse_relevance_response(response_content)
 
             logger.debug(
                 f"LLM relevance for '{article_meta.title}': "
-                f"score={result['score']:.3f}, matched={result.get('matched_keywords', [])}"
+                f'score={result["score"]:.3f}, matched={result.get("matched_keywords", [])}'
             )
 
             return result
 
         except Exception as e:
-            logger.error(f"LLM relevance scoring failed: {e}", exc_info=True)
+            logger.error(f'LLM relevance scoring failed: {e}', exc_info=True)
             # Return low score on error to skip article
             return {
                 'score': 0.0,
                 'matched_keywords': [],
-                'reasoning': f"Error during scoring: {e}",
+                'reasoning': f'Error during scoring: {e}',
             }
 
     def _build_relevance_prompt(
@@ -640,9 +649,11 @@ Your response (JSON only):"""
             if markdown_match:
                 response_text = markdown_match.group(1).strip()
             elif response_text.startswith('```'):
-                # Fallback: Remove lines that start with ``` (after stripping whitespace)
+                # Fallback: Remove lines that start with ``` (after stripping whitespace)  # noqa: W505
                 lines = response_text.split('\n')
-                json_lines = [l for l in lines if l.strip() and not l.strip().startswith('```')]
+                json_lines = [
+                    l for l in lines if l.strip() and not l.strip().startswith('```')
+                ]  # noqa: E741
                 response_text = '\n'.join(json_lines)
 
             # Parse JSON
@@ -665,12 +676,12 @@ Your response (JSON only):"""
             }
 
         except Exception as e:
-            logger.error(f"Failed to parse LLM relevance response: {e}")
-            logger.debug(f"Raw response: {llm_response}")
+            logger.error(f'Failed to parse LLM relevance response: {e}')
+            logger.debug(f'Raw response: {llm_response}')
             return {
                 'score': 0.0,
                 'matched_keywords': [],
-                'reasoning': f"Failed to parse LLM response: {e}",
+                'reasoning': f'Failed to parse LLM response: {e}',
             }
 
     # ==================== Result Helpers ====================

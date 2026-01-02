@@ -1,9 +1,9 @@
 """Metrics calculation for Analysis pipeline evaluation."""
 
-from dataclasses import dataclass
-from typing import List, Dict, Optional
+from dataclasses import dataclass  # noqa: I001
+from typing import List, Dict, Optional  # noqa: UP035
 import numpy as np
-from loguru import logger
+from loguru import logger  # noqa: F401
 
 from thoth.utilities.schemas.analysis import AnalysisResponse
 
@@ -15,8 +15,9 @@ class ExtractionMetrics:
 
     Measures completeness and correctness of structured field extraction.
     """
+
     field_completeness: float  # % of fields populated
-    field_accuracy: Dict[str, float]  # Accuracy per field
+    field_accuracy: Dict[str, float]  # Accuracy per field  # noqa: UP006
     required_fields_completeness: float  # % of required fields populated
     optional_fields_completeness: float  # % of optional fields populated
     avg_field_confidence: float  # Average confidence in extractions
@@ -30,6 +31,7 @@ class ContentQualityMetrics:
 
     Measures quality of generated summaries and analyses.
     """
+
     summary_coherence: float  # Readability and logical flow
     summary_completeness: float  # Coverage of main points
     key_points_relevance: float  # Relevance of extracted key points
@@ -45,9 +47,10 @@ class StrategyEfficiencyMetrics:
     """
     Strategy selection and efficiency metrics.
     """
+
     strategy_selection_accuracy: float  # % correct strategy chosen
-    avg_processing_time_by_strategy: Dict[str, float]  # ms per strategy
-    quality_by_strategy: Dict[str, float]  # Quality score per strategy
+    avg_processing_time_by_strategy: Dict[str, float]  # ms per strategy  # noqa: UP006
+    quality_by_strategy: Dict[str, float]  # Quality score per strategy  # noqa: UP006
     direct_strategy_usage: float  # % using direct
     map_reduce_strategy_usage: float  # % using map-reduce
     refine_strategy_usage: float  # % using refine
@@ -59,16 +62,16 @@ class AnalysisMetrics:
     """
     Comprehensive Analysis pipeline evaluation metrics.
     """
+
     extraction: ExtractionMetrics
     content_quality: ContentQualityMetrics
     strategy_efficiency: StrategyEfficiencyMetrics
-    by_complexity: Dict[str, 'AnalysisMetrics']  # Metrics by complexity
-    by_content_length: Dict[str, 'AnalysisMetrics']  # Metrics by length
+    by_complexity: Dict[str, 'AnalysisMetrics']  # Metrics by complexity  # noqa: UP006
+    by_content_length: Dict[str, 'AnalysisMetrics']  # Metrics by length  # noqa: UP006
 
 
 def calculate_field_completeness(
-    predicted: AnalysisResponse,
-    ground_truth: AnalysisResponse
+    predicted: AnalysisResponse, ground_truth: AnalysisResponse
 ) -> float:
     """
     Calculate field completeness: % of ground truth fields that are populated.
@@ -92,18 +95,13 @@ def calculate_field_completeness(
 
     # Count how many of those fields are populated in prediction
     pred_dict = predicted.model_dump()
-    populated_count = sum(
-        1 for field in gt_fields
-        if pred_dict.get(field) is not None
-    )
+    populated_count = sum(1 for field in gt_fields if pred_dict.get(field) is not None)
 
     return populated_count / len(gt_fields)
 
 
 def calculate_field_accuracy(
-    predicted: AnalysisResponse,
-    ground_truth: AnalysisResponse,
-    field_name: str
+    predicted: AnalysisResponse, ground_truth: AnalysisResponse, field_name: str
 ) -> float:
     """
     Calculate accuracy for a specific field.
@@ -228,8 +226,16 @@ def calculate_summary_coherence(summary: str) -> float:
         score += 0.15
 
     # Check for transition words (indicates logical flow)
-    transition_words = ['however', 'therefore', 'furthermore', 'additionally',
-                       'moreover', 'consequently', 'thus', 'hence']
+    transition_words = [
+        'however',
+        'therefore',
+        'furthermore',
+        'additionally',
+        'moreover',
+        'consequently',
+        'thus',
+        'hence',
+    ]
     if any(word in summary.lower() for word in transition_words):
         score += 0.2
 
@@ -241,9 +247,9 @@ def calculate_summary_coherence(summary: str) -> float:
 
 
 def calculate_key_points_relevance(
-    key_points: Optional[str],
+    key_points: Optional[str],  # noqa: UP007
     paper_content: str,
-    abstract: Optional[str] = None
+    abstract: Optional[str] = None,  # noqa: UP007
 ) -> float:
     """
     Calculate relevance of key points to paper content.
@@ -288,9 +294,9 @@ def calculate_key_points_relevance(
 
 
 def calculate_analysis_metrics(
-    ground_truth_list: List,
-    predicted_list: List,
-    timing_data: Optional[List[Dict[str, any]]] = None
+    ground_truth_list: List,  # noqa: UP006
+    predicted_list: List,  # noqa: ARG001, UP006
+    timing_data: Optional[List[Dict[str, any]]] = None,  # noqa: ARG001, UP006, UP007
 ) -> AnalysisMetrics:
     """
     Calculate comprehensive Analysis pipeline metrics.
@@ -312,7 +318,7 @@ def calculate_analysis_metrics(
         required_fields_completeness=0.0,
         optional_fields_completeness=0.0,
         avg_field_confidence=0.0,
-        total_samples=len(ground_truth_list)
+        total_samples=len(ground_truth_list),
     )
 
     content_quality_metrics = ContentQualityMetrics(
@@ -323,7 +329,7 @@ def calculate_analysis_metrics(
         methodology_extraction_quality=0.0,
         tag_appropriateness=0.0,
         avg_summary_length=0.0,
-        total_samples=len(ground_truth_list)
+        total_samples=len(ground_truth_list),
     )
 
     strategy_efficiency_metrics = StrategyEfficiencyMetrics(
@@ -333,7 +339,7 @@ def calculate_analysis_metrics(
         direct_strategy_usage=0.0,
         map_reduce_strategy_usage=0.0,
         refine_strategy_usage=0.0,
-        total_samples=len(ground_truth_list)
+        total_samples=len(ground_truth_list),
     )
 
     return AnalysisMetrics(
@@ -341,5 +347,5 @@ def calculate_analysis_metrics(
         content_quality=content_quality_metrics,
         strategy_efficiency=strategy_efficiency_metrics,
         by_complexity={},
-        by_content_length={}
+        by_content_length={},
     )

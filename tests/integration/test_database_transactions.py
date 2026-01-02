@@ -5,16 +5,16 @@ Tests transaction atomicity, rollback behavior, commit handling,
 and async resource cleanup across repository operations.
 """
 
-import asyncio
+import asyncio  # noqa: I001
 import pytest
 from unittest.mock import AsyncMock, Mock
 
 from thoth.repositories.paper_repository import PaperRepository
 from thoth.repositories.citation_repository import CitationRepository
 from tests.fixtures.database_fixtures import (
-    create_mock_record,
-    sample_paper_data,
-    sample_citation_data
+    create_mock_record,  # noqa: F401
+    sample_paper_data,  # noqa: F401
+    sample_citation_data,  # noqa: F401
 )
 
 
@@ -34,12 +34,14 @@ class TestDatabaseTransactions:
             class MockTransaction:
                 async def __aenter__(self):
                     return None
+
                 async def __aexit__(self, exc_type, exc_val, exc_tb):
                     nonlocal transaction_committed
                     # Commit if no exception
                     if exc_type is None:
                         transaction_committed = True
                     return False
+
             return MockTransaction()
 
         mock_conn.transaction = mock_transaction
@@ -48,8 +50,10 @@ class TestDatabaseTransactions:
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_postgres_service.transaction = mock_acquire
@@ -77,12 +81,14 @@ class TestDatabaseTransactions:
             class MockTransaction:
                 async def __aenter__(self):
                     return None
+
                 async def __aexit__(self, exc_type, exc_val, exc_tb):
                     nonlocal rollback_occurred
                     # Rollback if exception
                     if exc_type is not None:
                         rollback_occurred = True
                     return False
+
             return MockTransaction()
 
         mock_conn.transaction = mock_transaction
@@ -91,8 +97,10 @@ class TestDatabaseTransactions:
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_postgres_service.transaction = mock_acquire
@@ -100,9 +108,11 @@ class TestDatabaseTransactions:
         paper_repo = PaperRepository(mock_postgres_service)
 
         # Execute in transaction with error
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017
             async with paper_repo.transaction() as conn:
-                await conn.fetchval('INSERT INTO papers (...) VALUES (...) RETURNING id')
+                await conn.fetchval(
+                    'INSERT INTO papers (...) VALUES (...) RETURNING id'
+                )
                 await conn.execute('INSERT INTO citations (...) VALUES (...)')
 
         # Verify rollback occurred
@@ -114,13 +124,13 @@ class TestDatabaseTransactions:
 
         operations_executed = []
 
-        async def mock_execute(query, *args):
+        async def mock_execute(query, *args):  # noqa: ARG001
             operations_executed.append('execute')
             if len(operations_executed) > 2:
                 raise Exception('Third operation fails')
             return 'SUCCESS'
 
-        async def mock_fetchval(query, *args):
+        async def mock_fetchval(query, *args):  # noqa: ARG001
             operations_executed.append('fetchval')
             return 1
 
@@ -131,11 +141,13 @@ class TestDatabaseTransactions:
             class MockTransaction:
                 async def __aenter__(self):
                     return None
+
                 async def __aexit__(self, exc_type, exc_val, exc_tb):
                     if exc_type is not None:
                         # Simulate rollback clearing operations
                         operations_executed.clear()
                     return False
+
             return MockTransaction()
 
         mock_conn.transaction = mock_transaction
@@ -144,8 +156,10 @@ class TestDatabaseTransactions:
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_postgres_service.transaction = mock_acquire
@@ -153,7 +167,7 @@ class TestDatabaseTransactions:
         paper_repo = PaperRepository(mock_postgres_service)
 
         # Try transaction with multiple operations
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017
             async with paper_repo.transaction() as conn:
                 await conn.fetchval('INSERT INTO papers ...')
                 await conn.execute('UPDATE papers ...')
@@ -162,7 +176,7 @@ class TestDatabaseTransactions:
         # All operations should be rolled back
         assert len(operations_executed) == 0
 
-    async def test_concurrent_transaction_isolation(self, mock_postgres_service):
+    async def test_concurrent_transaction_isolation(self, mock_postgres_service):  # noqa: ARG002
         """Test that concurrent transactions are properly isolated."""
         transaction_1_data = []
         transaction_2_data = []
@@ -171,11 +185,11 @@ class TestDatabaseTransactions:
             """Create connection with isolated data."""
             conn = AsyncMock()
 
-            async def isolated_fetchval(query, *args):
+            async def isolated_fetchval(query, *args):  # noqa: ARG001
                 data_store.append('read')
                 return len(data_store)
 
-            async def isolated_execute(query, *args):
+            async def isolated_execute(query, *args):  # noqa: ARG001
                 data_store.append('write')
                 return 'SUCCESS'
 
@@ -186,8 +200,10 @@ class TestDatabaseTransactions:
                 class MockTransaction:
                     async def __aenter__(self):
                         return None
+
                     async def __aexit__(self, *args):
                         pass
+
                 return MockTransaction()
 
             conn.transaction = mock_transaction
@@ -196,8 +212,10 @@ class TestDatabaseTransactions:
                 class MockAcquire:
                     async def __aenter__(self):
                         return conn
+
                     async def __aexit__(self, *args):
                         pass
+
                 return MockAcquire()
 
             return mock_acquire
@@ -246,10 +264,12 @@ class TestDatabaseTransactions:
                     nonlocal connection_acquired
                     connection_acquired = True
                     return None
+
                 async def __aexit__(self, *args):
                     nonlocal connection_released
                     connection_released = True
                     return False
+
             return MockTransaction()
 
         mock_conn.transaction = mock_transaction
@@ -258,8 +278,10 @@ class TestDatabaseTransactions:
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_postgres_service.transaction = mock_acquire
@@ -278,7 +300,7 @@ class TestDatabaseTransactions:
         """Test transaction timeout handling."""
         mock_conn = AsyncMock()
 
-        async def slow_operation(*args, **kwargs):
+        async def slow_operation(*args, **kwargs):  # noqa: ARG001
             await asyncio.sleep(10)  # Simulate slow operation
             return 'SUCCESS'
 
@@ -288,8 +310,10 @@ class TestDatabaseTransactions:
             class MockTransaction:
                 async def __aenter__(self):
                     return None
+
                 async def __aexit__(self, *args):
                     return False
+
             return MockTransaction()
 
         mock_conn.transaction = mock_transaction
@@ -298,8 +322,10 @@ class TestDatabaseTransactions:
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_postgres_service.transaction = mock_acquire
@@ -318,11 +344,11 @@ class TestDatabaseTransactions:
 
         mock_conn = AsyncMock()
 
-        async def log_execute(query, *args):
+        async def log_execute(query, *args):  # noqa: ARG001
             operations_log.append(('execute', query))
             return 'SUCCESS'
 
-        async def log_fetchval(query, *args):
+        async def log_fetchval(query, *args):  # noqa: ARG001
             operations_log.append(('fetchval', query))
             return 1
 
@@ -333,10 +359,12 @@ class TestDatabaseTransactions:
             class MockTransaction:
                 async def __aenter__(self):
                     return None
+
                 async def __aexit__(self, exc_type, *args):
                     if exc_type:
                         operations_log.clear()
                     return False
+
             return MockTransaction()
 
         mock_conn.transaction = mock_transaction
@@ -345,14 +373,16 @@ class TestDatabaseTransactions:
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_postgres_service.transaction = mock_acquire
 
         paper_repo = PaperRepository(mock_postgres_service)
-        citation_repo = CitationRepository(mock_postgres_service)
+        citation_repo = CitationRepository(mock_postgres_service)  # noqa: F841
 
         # Execute operations across multiple repositories
         async with paper_repo.transaction() as conn:
@@ -389,10 +419,12 @@ class TestDatabaseTransactions:
             class MockTransaction:
                 async def __aenter__(self):
                     return None
+
                 async def __aexit__(self, *args):
                     nonlocal cleanup_called
                     cleanup_called = True
                     return False
+
             return MockTransaction()
 
         mock_conn.transaction = mock_transaction
@@ -401,8 +433,10 @@ class TestDatabaseTransactions:
             class MockAcquire:
                 async def __aenter__(self):
                     return mock_conn
+
                 async def __aexit__(self, *args):
                     pass
+
             return MockAcquire()
 
         mock_postgres_service.transaction = mock_acquire
@@ -410,7 +444,7 @@ class TestDatabaseTransactions:
         paper_repo = PaperRepository(mock_postgres_service)
 
         # Execute with error
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017
             async with paper_repo.transaction() as conn:
                 await conn.execute('INSERT ...')
 

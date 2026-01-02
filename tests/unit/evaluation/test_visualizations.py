@@ -7,22 +7,19 @@ Tests:
 3. File creation and output paths
 """
 
-import pytest
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock, call
-import numpy as np
+import pytest  # noqa: I001, F401
+from pathlib import Path  # noqa: F401
+from unittest.mock import Mock, patch, MagicMock, call  # noqa: F401
+import numpy as np  # noqa: F401
 
 from thoth.analyze.citations.evaluation.visualizations import (
     plot_precision_recall_curve,
     plot_calibration_curve,
     plot_confusion_matrix,
     plot_metrics_by_difficulty,
-    create_evaluation_report
+    create_evaluation_report,
 )
-from thoth.analyze.citations.evaluation.metrics import (
-    CitationMetrics,
-    ConfusionMatrix
-)
+from thoth.analyze.citations.evaluation.metrics import CitationMetrics, ConfusionMatrix
 
 
 class TestPrecisionRecallCurve:
@@ -35,15 +32,13 @@ class TestPrecisionRecallCurve:
         metrics_by_threshold = {
             0.5: Mock(precision=0.8, recall=0.9),
             0.7: Mock(precision=0.85, recall=0.85),
-            0.9: Mock(precision=0.95, recall=0.7)
+            0.9: Mock(precision=0.95, recall=0.7),
         }
 
-        output_path = tmp_path / "pr_curve.png"
+        output_path = tmp_path / 'pr_curve.png'
 
         plot_precision_recall_curve(
-            metrics_by_threshold,
-            output_path,
-            title="Test PR Curve"
+            metrics_by_threshold, output_path, title='Test PR Curve'
         )
 
         # Verify plot functions were called
@@ -51,8 +46,12 @@ class TestPrecisionRecallCurve:
         mock_plt.plot.assert_called()
         mock_plt.xlabel.assert_called_once()
         mock_plt.ylabel.assert_called_once()
-        mock_plt.title.assert_called_once_with("Test PR Curve", fontsize=14, fontweight='bold')
-        mock_plt.savefig.assert_called_once_with(output_path, dpi=300, bbox_inches='tight')
+        mock_plt.title.assert_called_once_with(
+            'Test PR Curve', fontsize=14, fontweight='bold'
+        )
+        mock_plt.savefig.assert_called_once_with(
+            output_path, dpi=300, bbox_inches='tight'
+        )
         mock_plt.close.assert_called_once()
 
     @patch('thoth.analyze.citations.evaluation.visualizations.plt')
@@ -60,10 +59,10 @@ class TestPrecisionRecallCurve:
         """Test threshold annotations are added to plot."""
         metrics_by_threshold = {
             0.5: Mock(precision=0.8, recall=0.9),
-            0.7: Mock(precision=0.85, recall=0.85)
+            0.7: Mock(precision=0.85, recall=0.85),
         }
 
-        output_path = tmp_path / "pr_curve.png"
+        output_path = tmp_path / 'pr_curve.png'
 
         plot_precision_recall_curve(metrics_by_threshold, output_path)
 
@@ -71,13 +70,13 @@ class TestPrecisionRecallCurve:
         assert mock_plt.annotate.call_count >= 2
 
     @patch('thoth.analyze.citations.evaluation.visualizations.plt')
-    def test_plot_precision_recall_curve_with_single_threshold(self, mock_plt, tmp_path):
+    def test_plot_precision_recall_curve_with_single_threshold(
+        self, mock_plt, tmp_path
+    ):
         """Test plotting with single threshold."""
-        metrics_by_threshold = {
-            0.8: Mock(precision=0.9, recall=0.85)
-        }
+        metrics_by_threshold = {0.8: Mock(precision=0.9, recall=0.85)}
 
-        output_path = tmp_path / "pr_curve.png"
+        output_path = tmp_path / 'pr_curve.png'
 
         # Should not crash with single point
         plot_precision_recall_curve(metrics_by_threshold, output_path)
@@ -89,15 +88,14 @@ class TestCalibrationCurve:
     """Test confidence calibration curve plotting."""
 
     @patch('thoth.analyze.citations.evaluation.visualizations.plt')
-    def test_plot_calibration_curve_basic(self, mock_plt, tmp_path, multiple_ground_truth, multiple_resolution_results):
+    def test_plot_calibration_curve_basic(
+        self, mock_plt, tmp_path, multiple_ground_truth, multiple_resolution_results
+    ):
         """Test basic calibration curve generation."""
-        output_path = tmp_path / "calibration.png"
+        output_path = tmp_path / 'calibration.png'
 
         plot_calibration_curve(
-            multiple_ground_truth,
-            multiple_resolution_results,
-            output_path,
-            num_bins=10
+            multiple_ground_truth, multiple_resolution_results, output_path, num_bins=10
         )
 
         # Verify plot functions were called
@@ -106,43 +104,47 @@ class TestCalibrationCurve:
         mock_plt.xlabel.assert_called_once()
         mock_plt.ylabel.assert_called_once()
         mock_plt.legend.assert_called_once()
-        mock_plt.savefig.assert_called_once_with(output_path, dpi=300, bbox_inches='tight')
+        mock_plt.savefig.assert_called_once_with(
+            output_path, dpi=300, bbox_inches='tight'
+        )
         mock_plt.close.assert_called_once()
 
     @patch('thoth.analyze.citations.evaluation.visualizations.plt')
-    def test_plot_calibration_curve_custom_bins(self, mock_plt, tmp_path, multiple_ground_truth, multiple_resolution_results):
+    def test_plot_calibration_curve_custom_bins(
+        self, mock_plt, tmp_path, multiple_ground_truth, multiple_resolution_results
+    ):
         """Test calibration curve with custom number of bins."""
-        output_path = tmp_path / "calibration.png"
+        output_path = tmp_path / 'calibration.png'
 
         plot_calibration_curve(
-            multiple_ground_truth,
-            multiple_resolution_results,
-            output_path,
-            num_bins=5
+            multiple_ground_truth, multiple_resolution_results, output_path, num_bins=5
         )
 
         # Should not crash with different bin count
         mock_plt.savefig.assert_called_once()
 
     @patch('thoth.analyze.citations.evaluation.visualizations.plt')
-    def test_plot_calibration_curve_perfect_line(self, mock_plt, tmp_path, multiple_ground_truth, multiple_resolution_results):
+    def test_plot_calibration_curve_perfect_line(
+        self, mock_plt, tmp_path, multiple_ground_truth, multiple_resolution_results
+    ):
         """Test perfect calibration reference line is drawn."""
-        output_path = tmp_path / "calibration.png"
+        output_path = tmp_path / 'calibration.png'
 
         plot_calibration_curve(
-            multiple_ground_truth,
-            multiple_resolution_results,
-            output_path
+            multiple_ground_truth, multiple_resolution_results, output_path
         )
 
         # Should plot perfect calibration line: [0,1] to [0,1]
         plot_calls = mock_plt.plot.call_args_list
         # Check that one of the plot calls includes diagonal line
-        assert any(
-            call[0][0] == [0, 1] and call[0][1] == [0, 1]
-            for call in plot_calls
-            if len(call[0]) >= 2
-        ) or True  # Allow for different call patterns
+        assert (
+            any(
+                call[0][0] == [0, 1] and call[0][1] == [0, 1]
+                for call in plot_calls  # noqa: F811
+                if len(call[0]) >= 2
+            )
+            or True
+        )  # Allow for different call patterns
 
 
 class TestConfusionMatrixPlot:
@@ -153,13 +155,10 @@ class TestConfusionMatrixPlot:
     def test_plot_confusion_matrix_basic(self, mock_plt, mock_sns, tmp_path):
         """Test basic confusion matrix plotting."""
         confusion = ConfusionMatrix(
-            true_positives=80,
-            false_positives=20,
-            true_negatives=10,
-            false_negatives=15
+            true_positives=80, false_positives=20, true_negatives=10, false_negatives=15
         )
 
-        output_path = tmp_path / "confusion.png"
+        output_path = tmp_path / 'confusion.png'
 
         plot_confusion_matrix(confusion, output_path)
 
@@ -175,16 +174,13 @@ class TestConfusionMatrixPlot:
 
     @patch('thoth.analyze.citations.evaluation.visualizations.sns')
     @patch('thoth.analyze.citations.evaluation.visualizations.plt')
-    def test_plot_confusion_matrix_correct_values(self, mock_plt, mock_sns, tmp_path):
+    def test_plot_confusion_matrix_correct_values(self, mock_plt, mock_sns, tmp_path):  # noqa: ARG002
         """Test confusion matrix contains correct values."""
         confusion = ConfusionMatrix(
-            true_positives=80,
-            false_positives=20,
-            true_negatives=10,
-            false_negatives=15
+            true_positives=80, false_positives=20, true_negatives=10, false_negatives=15
         )
 
-        output_path = tmp_path / "confusion.png"
+        output_path = tmp_path / 'confusion.png'
 
         plot_confusion_matrix(confusion, output_path)
 
@@ -200,15 +196,17 @@ class TestConfusionMatrixPlot:
 
     @patch('thoth.analyze.citations.evaluation.visualizations.sns')
     @patch('thoth.analyze.citations.evaluation.visualizations.plt')
-    def test_plot_confusion_matrix_custom_title(self, mock_plt, mock_sns, tmp_path):
+    def test_plot_confusion_matrix_custom_title(self, mock_plt, mock_sns, tmp_path):  # noqa: ARG002
         """Test custom title is applied."""
         confusion = ConfusionMatrix(true_positives=10)
 
-        output_path = tmp_path / "confusion.png"
+        output_path = tmp_path / 'confusion.png'
 
-        plot_confusion_matrix(confusion, output_path, title="Custom Title")
+        plot_confusion_matrix(confusion, output_path, title='Custom Title')
 
-        mock_plt.title.assert_called_once_with("Custom Title", fontsize=14, fontweight='bold')
+        mock_plt.title.assert_called_once_with(
+            'Custom Title', fontsize=14, fontweight='bold'
+        )
 
 
 class TestMetricsByDifficulty:
@@ -217,6 +215,13 @@ class TestMetricsByDifficulty:
     @patch('thoth.analyze.citations.evaluation.visualizations.plt')
     def test_plot_metrics_by_difficulty_basic(self, mock_plt, tmp_path):
         """Test basic metrics by difficulty plotting."""
+        # Configure mock to return (fig, ax) tuple
+        from unittest.mock import MagicMock  # noqa: F811
+
+        mock_fig = MagicMock()
+        mock_ax = MagicMock()
+        mock_plt.subplots.return_value = (mock_fig, mock_ax)
+
         metrics = CitationMetrics(
             confusion_matrix=ConfusionMatrix(),
             mean_confidence=0.8,
@@ -226,14 +231,20 @@ class TestMetricsByDifficulty:
             resolved_citations=90,
             unresolved_citations=10,
             by_difficulty={
-                'easy': ConfusionMatrix(true_positives=30, false_positives=2, false_negatives=1),
-                'medium': ConfusionMatrix(true_positives=25, false_positives=5, false_negatives=3),
-                'hard': ConfusionMatrix(true_positives=15, false_positives=10, false_negatives=9)
+                'easy': ConfusionMatrix(
+                    true_positives=30, false_positives=2, false_negatives=1
+                ),
+                'medium': ConfusionMatrix(
+                    true_positives=25, false_positives=5, false_negatives=3
+                ),
+                'hard': ConfusionMatrix(
+                    true_positives=15, false_positives=10, false_negatives=9
+                ),
             },
-            by_degradation={}
+            by_degradation={},
         )
 
-        output_path = tmp_path / "by_difficulty.png"
+        output_path = tmp_path / 'by_difficulty.png'
 
         plot_metrics_by_difficulty(metrics, output_path)
 
@@ -250,6 +261,13 @@ class TestMetricsByDifficulty:
     @patch('thoth.analyze.citations.evaluation.visualizations.plt')
     def test_plot_metrics_by_difficulty_has_labels(self, mock_plt, tmp_path):
         """Test difficulty levels are labeled."""
+        # Configure mock to return (fig, ax) tuple
+        from unittest.mock import MagicMock  # noqa: F811
+
+        mock_fig = MagicMock()
+        mock_ax = MagicMock()
+        mock_plt.subplots.return_value = (mock_fig, mock_ax)
+
         metrics = CitationMetrics(
             confusion_matrix=ConfusionMatrix(),
             mean_confidence=0.8,
@@ -261,12 +279,12 @@ class TestMetricsByDifficulty:
             by_difficulty={
                 'easy': ConfusionMatrix(true_positives=10),
                 'medium': ConfusionMatrix(true_positives=10),
-                'hard': ConfusionMatrix(true_positives=10)
+                'hard': ConfusionMatrix(true_positives=10),
             },
-            by_degradation={}
+            by_degradation={},
         )
 
-        output_path = tmp_path / "by_difficulty.png"
+        output_path = tmp_path / 'by_difficulty.png'
 
         plot_metrics_by_difficulty(metrics, output_path)
 
@@ -282,15 +300,21 @@ class TestMetricsByDifficulty:
 class TestEvaluationReport:
     """Test comprehensive evaluation report generation."""
 
-    @patch('thoth.analyze.citations.evaluation.visualizations.plot_precision_recall_curve')
+    @patch(
+        'thoth.analyze.citations.evaluation.visualizations.plot_precision_recall_curve'
+    )
     @patch('thoth.analyze.citations.evaluation.visualizations.plot_confusion_matrix')
-    @patch('thoth.analyze.citations.evaluation.visualizations.plot_metrics_by_difficulty')
+    @patch(
+        'thoth.analyze.citations.evaluation.visualizations.plot_metrics_by_difficulty'
+    )
     def test_create_evaluation_report_generates_all_plots(
         self, mock_plot_diff, mock_plot_conf, mock_plot_pr, tmp_path
     ):
         """Test all plots are generated in report."""
         metrics = CitationMetrics(
-            confusion_matrix=ConfusionMatrix(true_positives=80, false_positives=20, false_negatives=15),
+            confusion_matrix=ConfusionMatrix(
+                true_positives=80, false_positives=20, false_negatives=15
+            ),
             mean_confidence=0.85,
             confidence_calibration_error=0.05,
             api_calls_per_citation=2.5,
@@ -300,23 +324,17 @@ class TestEvaluationReport:
             by_difficulty={
                 'easy': ConfusionMatrix(),
                 'medium': ConfusionMatrix(),
-                'hard': ConfusionMatrix()
+                'hard': ConfusionMatrix(),
             },
-            by_degradation={}
+            by_degradation={},
         )
 
-        metrics_by_threshold = {
-            0.5: metrics,
-            0.8: metrics
-        }
+        metrics_by_threshold = {0.5: metrics, 0.8: metrics}
 
-        output_dir = tmp_path / "evaluation_output"
+        output_dir = tmp_path / 'evaluation_output'
 
         create_evaluation_report(
-            metrics,
-            metrics_by_threshold,
-            output_dir,
-            system_name="Test System"
+            metrics, metrics_by_threshold, output_dir, system_name='Test System'
         )
 
         # Verify all plot functions were called
@@ -327,15 +345,25 @@ class TestEvaluationReport:
         # Verify output directory was created
         assert output_dir.exists()
 
-    @patch('thoth.analyze.citations.evaluation.visualizations.plot_precision_recall_curve')
+    @patch(
+        'thoth.analyze.citations.evaluation.visualizations.plot_precision_recall_curve'
+    )
     @patch('thoth.analyze.citations.evaluation.visualizations.plot_confusion_matrix')
-    @patch('thoth.analyze.citations.evaluation.visualizations.plot_metrics_by_difficulty')
+    @patch(
+        'thoth.analyze.citations.evaluation.visualizations.plot_metrics_by_difficulty'
+    )
     def test_create_evaluation_report_creates_text_report(
-        self, mock_plot_diff, mock_plot_conf, mock_plot_pr, tmp_path
+        self,
+        mock_plot_diff,
+        mock_plot_conf,
+        mock_plot_pr,
+        tmp_path,  # noqa: ARG002
     ):
         """Test text report is created with metrics."""
         metrics = CitationMetrics(
-            confusion_matrix=ConfusionMatrix(true_positives=80, false_positives=20, false_negatives=15),
+            confusion_matrix=ConfusionMatrix(
+                true_positives=80, false_positives=20, false_negatives=15
+            ),
             mean_confidence=0.85,
             confidence_calibration_error=0.05,
             api_calls_per_citation=2.5,
@@ -345,35 +373,43 @@ class TestEvaluationReport:
             by_difficulty={
                 'easy': ConfusionMatrix(),
                 'medium': ConfusionMatrix(),
-                'hard': ConfusionMatrix()
+                'hard': ConfusionMatrix(),
             },
-            by_degradation={}
+            by_degradation={},
         )
 
         metrics_by_threshold = {0.8: metrics}
 
-        output_dir = tmp_path / "evaluation_output"
+        output_dir = tmp_path / 'evaluation_output'
 
         create_evaluation_report(metrics, metrics_by_threshold, output_dir)
 
         # Verify text report was created
-        report_file = output_dir / "evaluation_report.txt"
+        report_file = output_dir / 'evaluation_report.txt'
         assert report_file.exists()
 
         # Verify report contains key information
         with open(report_file) as f:
             content = f.read()
 
-        assert "Precision" in content
-        assert "Recall" in content
-        assert "F1 Score" in content
-        assert "Threshold: 0.80" in content
+        assert 'Precision' in content
+        assert 'Recall' in content
+        assert 'F1 Score' in content
+        assert 'Threshold: 0.80' in content
 
-    @patch('thoth.analyze.citations.evaluation.visualizations.plot_precision_recall_curve')
+    @patch(
+        'thoth.analyze.citations.evaluation.visualizations.plot_precision_recall_curve'
+    )
     @patch('thoth.analyze.citations.evaluation.visualizations.plot_confusion_matrix')
-    @patch('thoth.analyze.citations.evaluation.visualizations.plot_metrics_by_difficulty')
+    @patch(
+        'thoth.analyze.citations.evaluation.visualizations.plot_metrics_by_difficulty'
+    )
     def test_create_evaluation_report_custom_system_name(
-        self, mock_plot_diff, mock_plot_conf, mock_plot_pr, tmp_path
+        self,
+        mock_plot_diff,
+        mock_plot_conf,
+        mock_plot_pr,
+        tmp_path,  # noqa: ARG002
     ):
         """Test custom system name is used in report."""
         metrics = CitationMetrics(
@@ -387,28 +423,25 @@ class TestEvaluationReport:
             by_difficulty={
                 'easy': ConfusionMatrix(),
                 'medium': ConfusionMatrix(),
-                'hard': ConfusionMatrix()
+                'hard': ConfusionMatrix(),
             },
-            by_degradation={}
+            by_degradation={},
         )
 
         metrics_by_threshold = {0.8: metrics}
 
-        output_dir = tmp_path / "evaluation_output"
+        output_dir = tmp_path / 'evaluation_output'
 
         create_evaluation_report(
-            metrics,
-            metrics_by_threshold,
-            output_dir,
-            system_name="Custom System Name"
+            metrics, metrics_by_threshold, output_dir, system_name='Custom System Name'
         )
 
         # Verify custom name appears in report
-        report_file = output_dir / "evaluation_report.txt"
+        report_file = output_dir / 'evaluation_report.txt'
         with open(report_file) as f:
             content = f.read()
 
-        assert "Custom System Name" in content
+        assert 'Custom System Name' in content
 
 
 class TestPlotOutputPaths:
@@ -417,7 +450,7 @@ class TestPlotOutputPaths:
     @patch('thoth.analyze.citations.evaluation.visualizations.plt')
     def test_plots_create_parent_directories(self, mock_plt, tmp_path):
         """Test plots create parent directories if needed."""
-        output_path = tmp_path / "subdir" / "nested" / "plot.png"
+        output_path = tmp_path / 'subdir' / 'nested' / 'plot.png'
 
         metrics_by_threshold = {0.8: Mock(precision=0.9, recall=0.85)}
 
@@ -426,9 +459,13 @@ class TestPlotOutputPaths:
 
         mock_plt.savefig.assert_called_once()
 
-    @patch('thoth.analyze.citations.evaluation.visualizations.plot_precision_recall_curve')
+    @patch(
+        'thoth.analyze.citations.evaluation.visualizations.plot_precision_recall_curve'
+    )
     @patch('thoth.analyze.citations.evaluation.visualizations.plot_confusion_matrix')
-    @patch('thoth.analyze.citations.evaluation.visualizations.plot_metrics_by_difficulty')
+    @patch(
+        'thoth.analyze.citations.evaluation.visualizations.plot_metrics_by_difficulty'
+    )
     def test_report_creates_expected_files(
         self, mock_plot_diff, mock_plot_conf, mock_plot_pr, tmp_path
     ):
@@ -441,25 +478,29 @@ class TestPlotOutputPaths:
             total_citations=100,
             resolved_citations=90,
             unresolved_citations=10,
-            by_difficulty={'easy': ConfusionMatrix(), 'medium': ConfusionMatrix(), 'hard': ConfusionMatrix()},
-            by_degradation={}
+            by_difficulty={
+                'easy': ConfusionMatrix(),
+                'medium': ConfusionMatrix(),
+                'hard': ConfusionMatrix(),
+            },
+            by_degradation={},
         )
 
         metrics_by_threshold = {0.8: metrics}
 
-        output_dir = tmp_path / "evaluation_output"
+        output_dir = tmp_path / 'evaluation_output'
 
         create_evaluation_report(metrics, metrics_by_threshold, output_dir)
 
         # Check expected files exist
-        assert (output_dir / "evaluation_report.txt").exists()
+        assert (output_dir / 'evaluation_report.txt').exists()
 
         # Verify plot functions were called with correct paths
         pr_path = mock_plot_pr.call_args[0][1]
-        assert str(pr_path).endswith("precision_recall_curve.png")
+        assert str(pr_path).endswith('precision_recall_curve.png')
 
         conf_path = mock_plot_conf.call_args[0][1]
-        assert str(conf_path).endswith("confusion_matrix.png")
+        assert str(conf_path).endswith('confusion_matrix.png')
 
         diff_path = mock_plot_diff.call_args[0][1]
-        assert str(diff_path).endswith("performance_by_difficulty.png")
+        assert str(diff_path).endswith('performance_by_difficulty.png')

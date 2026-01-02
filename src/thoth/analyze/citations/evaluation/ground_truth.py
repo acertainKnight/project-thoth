@@ -9,8 +9,8 @@ This module creates test datasets with known ground truth by:
 This "round-trip" approach provides realistic ground truth without manual labeling.
 """
 
-from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from dataclasses import dataclass  # noqa: I001
+from typing import List, Optional, Dict, Any  # noqa: UP035
 from enum import Enum
 import random
 from loguru import logger
@@ -20,13 +20,14 @@ from thoth.analyze.citations.citations import Citation
 
 class CitationDegradation(Enum):
     """Types of degradation to apply to citation strings for realistic testing."""
-    CLEAN = "clean"  # Perfect citation string
-    AUTHOR_VARIATION = "author_variation"  # "Murphy, K.P." vs "Kevin P. Murphy"
-    TITLE_TRUNCATION = "title_truncation"  # First 50 chars only
-    MISSING_YEAR = "missing_year"  # Year not provided
-    MISSING_AUTHORS = "missing_authors"  # Only title + year
-    TYPOS = "typos"  # Introduce spelling errors
-    JOURNAL_MISSING = "journal_missing"  # No journal/venue info
+
+    CLEAN = 'clean'  # Perfect citation string
+    AUTHOR_VARIATION = 'author_variation'  # "Murphy, K.P." vs "Kevin P. Murphy"
+    TITLE_TRUNCATION = 'title_truncation'  # First 50 chars only
+    MISSING_YEAR = 'missing_year'  # Year not provided
+    MISSING_AUTHORS = 'missing_authors'  # Only title + year
+    TYPOS = 'typos'  # Introduce spelling errors
+    JOURNAL_MISSING = 'journal_missing'  # No journal/venue info
 
 
 @dataclass
@@ -44,17 +45,18 @@ class GroundTruthCitation:
         difficulty: Easy/Medium/Hard classification
         source_paper_id: ID of paper this citation came from
     """
+
     citation: Citation
-    ground_truth_doi: Optional[str]
+    ground_truth_doi: Optional[str]  # noqa: UP007
     ground_truth_title: str
-    ground_truth_authors: List[str]
-    ground_truth_year: Optional[int]
-    ground_truth_openalex_id: Optional[str] = None
-    ground_truth_s2_id: Optional[str] = None
+    ground_truth_authors: List[str]  # noqa: UP006
+    ground_truth_year: Optional[int]  # noqa: UP007
+    ground_truth_openalex_id: Optional[str] = None  # noqa: UP007
+    ground_truth_s2_id: Optional[str] = None  # noqa: UP007
     degradation_type: CitationDegradation = CitationDegradation.CLEAN
-    difficulty: str = "medium"  # easy, medium, hard
-    source_paper_id: Optional[int] = None
-    metadata: Dict[str, Any] = None
+    difficulty: str = 'medium'  # easy, medium, hard
+    source_paper_id: Optional[int] = None  # noqa: UP007
+    metadata: Dict[str, Any] = None  # noqa: UP006
 
     def __post_init__(self):
         if self.metadata is None:
@@ -87,8 +89,8 @@ class GroundTruthGenerator:
         num_samples: int = 500,
         stratify_by_difficulty: bool = True,
         require_doi: bool = True,
-        require_cross_validation: bool = False
-    ) -> List[GroundTruthCitation]:
+        require_cross_validation: bool = False,
+    ) -> List[GroundTruthCitation]:  # noqa: UP006
         """
         Generate ground truth test set from papers already in database.
 
@@ -101,7 +103,7 @@ class GroundTruthGenerator:
         Returns:
             List of ground truth citations for testing
         """
-        logger.info(f"Generating {num_samples} ground truth citations from database")
+        logger.info(f'Generating {num_samples} ground truth citations from database')
 
         # Build query constraints
         constraints = []
@@ -109,10 +111,10 @@ class GroundTruthGenerator:
             constraints.append("doi IS NOT NULL AND doi != ''")
         if require_cross_validation:
             # Papers with multiple identifiers (highest confidence)
-            constraints.append("(doi IS NOT NULL OR arxiv_id IS NOT NULL)")
-            constraints.append("backup_id IS NOT NULL")
+            constraints.append('(doi IS NOT NULL OR arxiv_id IS NOT NULL)')
+            constraints.append('backup_id IS NOT NULL')
 
-        where_clause = " AND ".join(constraints) if constraints else "1=1"
+        where_clause = ' AND '.join(constraints) if constraints else '1=1'
 
         # Query papers from database
         query = f"""
@@ -135,13 +137,15 @@ class GroundTruthGenerator:
             LIMIT $1
         """
 
-        papers = await self.postgres.fetch(query, num_samples * 2)  # Get extra for filtering
+        papers = await self.postgres.fetch(
+            query, num_samples * 2
+        )  # Get extra for filtering
 
         if not papers:
-            logger.warning("No papers found matching criteria")
+            logger.warning('No papers found matching criteria')
             return []
 
-        logger.info(f"Found {len(papers)} candidate papers for ground truth")
+        logger.info(f'Found {len(papers)} candidate papers for ground truth')
 
         # Generate citations with different degradation levels
         ground_truth_citations = []
@@ -149,6 +153,7 @@ class GroundTruthGenerator:
         for paper in papers[:num_samples]:
             # Parse authors from JSON if needed
             import json
+
             authors_raw = paper['authors']
             if isinstance(authors_raw, str):
                 authors = json.loads(authors_raw) if authors_raw else []
@@ -158,16 +163,15 @@ class GroundTruthGenerator:
             # Determine difficulty and degradation strategy
             if stratify_by_difficulty:
                 # Distribute across difficulty levels
-                difficulty = random.choice(["easy", "medium", "hard"])
+                difficulty = random.choice(['easy', 'medium', 'hard'])
                 degradation = self._choose_degradation_for_difficulty(difficulty)
             else:
-                difficulty = "medium"
+                difficulty = 'medium'
                 degradation = CitationDegradation.CLEAN
 
             # Generate citation from paper metadata
             citation = self._generate_citation_from_paper(
-                paper=paper,
-                degradation=degradation
+                paper=paper, degradation=degradation
             )
 
             # Create ground truth object
@@ -186,17 +190,17 @@ class GroundTruthGenerator:
                     'journal': paper.get('journal'),
                     'arxiv_id': paper.get('arxiv_id'),
                     'backup_id': paper.get('backup_id'),
-                    'has_abstract': bool(paper.get('abstract'))
-                }
+                    'has_abstract': bool(paper.get('abstract')),
+                },
             )
 
             ground_truth_citations.append(gt_citation)
 
         logger.info(
-            f"Generated {len(ground_truth_citations)} ground truth citations "
-            f"(easy={sum(1 for c in ground_truth_citations if c.difficulty == 'easy')}, "
-            f"medium={sum(1 for c in ground_truth_citations if c.difficulty == 'medium')}, "
-            f"hard={sum(1 for c in ground_truth_citations if c.difficulty == 'hard')})"
+            f'Generated {len(ground_truth_citations)} ground truth citations '
+            f'(easy={sum(1 for c in ground_truth_citations if c.difficulty == "easy")}, '
+            f'medium={sum(1 for c in ground_truth_citations if c.difficulty == "medium")}, '
+            f'hard={sum(1 for c in ground_truth_citations if c.difficulty == "hard")})'
         )
 
         return ground_truth_citations
@@ -205,31 +209,34 @@ class GroundTruthGenerator:
         self, difficulty: str
     ) -> CitationDegradation:
         """Choose appropriate degradation type for difficulty level."""
-        if difficulty == "easy":
+        if difficulty == 'easy':
             # Easy: Clean or minimal degradation
-            return random.choice([
-                CitationDegradation.CLEAN,
-                CitationDegradation.AUTHOR_VARIATION
-            ])
-        elif difficulty == "medium":
+            return random.choice(
+                [CitationDegradation.CLEAN, CitationDegradation.AUTHOR_VARIATION]
+            )
+        elif difficulty == 'medium':
             # Medium: Some missing info
-            return random.choice([
-                CitationDegradation.TITLE_TRUNCATION,
-                CitationDegradation.JOURNAL_MISSING,
-                CitationDegradation.AUTHOR_VARIATION
-            ])
+            return random.choice(
+                [
+                    CitationDegradation.TITLE_TRUNCATION,
+                    CitationDegradation.JOURNAL_MISSING,
+                    CitationDegradation.AUTHOR_VARIATION,
+                ]
+            )
         else:  # hard
             # Hard: Multiple issues
-            return random.choice([
-                CitationDegradation.MISSING_YEAR,
-                CitationDegradation.MISSING_AUTHORS,
-                CitationDegradation.TYPOS
-            ])
+            return random.choice(
+                [
+                    CitationDegradation.MISSING_YEAR,
+                    CitationDegradation.MISSING_AUTHORS,
+                    CitationDegradation.TYPOS,
+                ]
+            )
 
     def _generate_citation_from_paper(
         self,
-        paper: Dict[str, Any],
-        degradation: CitationDegradation
+        paper: Dict[str, Any],  # noqa: UP006
+        degradation: CitationDegradation,
     ) -> Citation:
         """
         Generate a citation string from paper metadata with controlled degradation.
@@ -265,7 +272,7 @@ class GroundTruthGenerator:
         elif degradation == CitationDegradation.TITLE_TRUNCATION:
             # Truncate title to first 50 characters
             if len(title) > 50:
-                title = title[:50] + "..."
+                title = title[:50] + '...'
 
         elif degradation == CitationDegradation.MISSING_YEAR:
             year = None
@@ -286,7 +293,7 @@ class GroundTruthGenerator:
             title=title,
             authors=authors,
             year=year,
-            journal=journal
+            journal=journal,
         )
 
         return citation
@@ -304,11 +311,11 @@ class GroundTruthGenerator:
                 # Randomly choose format
                 choice = random.choice(['full', 'initials', 'original'])
                 if choice == 'full':
-                    return f"{first_middle} {last}"
+                    return f'{first_middle} {last}'
                 elif choice == 'initials':
                     # Keep only first initial
                     initials = ' '.join([p[0] + '.' for p in first_middle.split() if p])
-                    return f"{initials} {last}"
+                    return f'{initials} {last}'
 
         return author  # Return original if can't parse
 
@@ -333,20 +340,20 @@ class GroundTruthGenerator:
                     word_list = list(word)
                     word_list[char_idx], word_list[char_idx + 1] = (
                         word_list[char_idx + 1],
-                        word_list[char_idx]
+                        word_list[char_idx],
                     )
                     words[word_idx] = ''.join(word_list)
 
                 elif typo_type == 'delete':
                     # Delete a character
                     char_idx = random.randint(0, len(word) - 1)
-                    words[word_idx] = word[:char_idx] + word[char_idx + 1:]
+                    words[word_idx] = word[:char_idx] + word[char_idx + 1 :]
 
                 elif typo_type == 'duplicate':
                     # Duplicate a character
                     char_idx = random.randint(0, len(word) - 1)
                     words[word_idx] = (
-                        word[:char_idx + 1] + word[char_idx] + word[char_idx + 1:]
+                        word[: char_idx + 1] + word[char_idx] + word[char_idx + 1 :]
                     )
 
         return ' '.join(words)
@@ -354,9 +361,9 @@ class GroundTruthGenerator:
     def _format_citation_text(
         self,
         title: str,
-        authors: List[str],
-        year: Optional[int],
-        journal: Optional[str]
+        authors: List[str],  # noqa: UP006
+        year: Optional[int],  # noqa: UP007
+        journal: Optional[str],  # noqa: UP007
     ) -> str:
         """Format citation components into citation text."""
         parts = []
@@ -365,24 +372,22 @@ class GroundTruthGenerator:
             if len(authors) == 1:
                 parts.append(authors[0])
             elif len(authors) == 2:
-                parts.append(f"{authors[0]} and {authors[1]}")
+                parts.append(f'{authors[0]} and {authors[1]}')
             else:
-                parts.append(f"{authors[0]} et al.")
+                parts.append(f'{authors[0]} et al.')
 
         if year:
-            parts.append(f"({year})")
+            parts.append(f'({year})')
 
         parts.append(f'"{title}"')
 
         if journal:
-            parts.append(f"in {journal}")
+            parts.append(f'in {journal}')
 
         return '. '.join(parts) + '.'
 
 
-async def load_ground_truth_from_file(
-    file_path: str
-) -> List[GroundTruthCitation]:
+async def load_ground_truth_from_file(file_path: str) -> List[GroundTruthCitation]:  # noqa: UP006
     """
     Load manually annotated ground truth from file.
 
@@ -400,10 +405,10 @@ async def load_ground_truth_from_file(
 
     path = Path(file_path)
     if not path.exists():
-        logger.warning(f"Ground truth file not found: {file_path}")
+        logger.warning(f'Ground truth file not found: {file_path}')
         return []
 
-    with open(path, 'r') as f:
+    with open(path, 'r') as f:  # noqa: UP015
         data = json.load(f)
 
     ground_truth_citations = []
@@ -413,7 +418,7 @@ async def load_ground_truth_from_file(
             title=item.get('title'),
             authors=item.get('authors', []),
             year=item.get('year'),
-            journal=item.get('journal')
+            journal=item.get('journal'),
         )
 
         gt_citation = GroundTruthCitation(
@@ -423,10 +428,12 @@ async def load_ground_truth_from_file(
             ground_truth_authors=item['ground_truth_authors'],
             ground_truth_year=item.get('ground_truth_year'),
             difficulty=item.get('difficulty', 'medium'),
-            metadata=item.get('metadata', {})
+            metadata=item.get('metadata', {}),
         )
 
         ground_truth_citations.append(gt_citation)
 
-    logger.info(f"Loaded {len(ground_truth_citations)} ground truth citations from {file_path}")
+    logger.info(
+        f'Loaded {len(ground_truth_citations)} ground truth citations from {file_path}'
+    )
     return ground_truth_citations

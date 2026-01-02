@@ -298,6 +298,7 @@ class SSETransport(MCPTransport):
         async def sse_endpoint_standard():
             """Standard SSE endpoint for MCP clients (Letta compatibility)."""
             import uuid
+
             client_id = str(uuid.uuid4())
 
             async def event_stream():

@@ -5,10 +5,10 @@ Tests bounded caching, LRU eviction, TTL expiration, and multi-layer
 caching behavior for OCR, analysis, and API response caching.
 """
 
-import time
+import time  # noqa: I001
 import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch  # noqa: F401
 from tempfile import TemporaryDirectory
 
 from thoth.services.cache_service import CacheService
@@ -62,6 +62,7 @@ class TestCacheService:
 
             # Create cache with small size
             from cachetools import LRUCache
+
             service._memory_cache = LRUCache(maxsize=3)
 
             # Add 4 items (will evict oldest)
@@ -98,7 +99,9 @@ class TestCacheService:
             assert success is True
 
             # Check memory cache
-            cache_keys = [k for k in service._memory_cache.keys() if k.startswith('ocr:')]
+            cache_keys = [
+                k for k in service._memory_cache.keys() if k.startswith('ocr:')
+            ]
             assert len(cache_keys) == 1
 
             cached_data = service._memory_cache[cache_keys[0]]
@@ -187,9 +190,7 @@ class TestCacheService:
             analysis = {'summary': 'Test summary', 'topics': ['ML', 'NLP']}
             model_info = {'model': 'claude-3', 'version': '1.0'}
 
-            success = service.cache_analysis_result(
-                content_hash, analysis, model_info
-            )
+            success = service.cache_analysis_result(content_hash, analysis, model_info)
 
             assert success is True
 
@@ -246,10 +247,7 @@ class TestCacheService:
 
             response = {'data': 'test', 'status': 200}
             success = service.cache_api_response(
-                'semantic_scholar',
-                'paper_abc123',
-                response,
-                ttl=3600
+                'semantic_scholar', 'paper_abc123', response, ttl=3600
             )
 
             assert success is True
@@ -382,6 +380,7 @@ class TestCacheService:
             # Modify file timestamp to make it old
             old_time = time.time() - 2  # 2 seconds ago
             import os
+
             os.utime(old_file, (old_time, old_time))
 
             # Cleanup should remove it
@@ -401,6 +400,7 @@ class TestCacheService:
 
             # LRUCache automatically handles size limit
             from cachetools import LRUCache
+
             service._memory_cache = LRUCache(maxsize=5)
 
             # Add more items than limit

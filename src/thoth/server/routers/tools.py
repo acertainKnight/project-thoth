@@ -182,10 +182,10 @@ async def execute_download_pdf_tool(parameters: dict[str, Any]) -> dict[str, Any
         raise ValueError('URL parameter is required')
 
     try:
-        from thoth.ingestion.pdf_downloader import download_pdf
+        from thoth.ingestion.pdf_downloader import download_pdf  # noqa: I001
         from thoth.config import config
 
-        config  # Already imported at module level
+        config  # Already imported at module level  # noqa: B018
         pdf_path, metadata = download_pdf(url, config.pdf_dir)
 
         return {

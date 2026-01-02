@@ -6,7 +6,7 @@ and querying research questions with source selections.
 """
 
 from datetime import datetime, time
-from typing import Any, List, Optional
+from typing import Any, List, Optional  # noqa: UP035
 from uuid import UUID
 
 from loguru import logger
@@ -19,17 +19,15 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
 
     def __init__(self, postgres_service, **kwargs):
         """Initialize research question repository."""
-        super().__init__(
-            postgres_service, table_name='research_questions', **kwargs
-        )
+        super().__init__(postgres_service, table_name='research_questions', **kwargs)
 
     async def get_by_user(
         self,
         user_id: str,
-        is_active: Optional[bool] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
-    ) -> List[dict[str, Any]]:
+        is_active: Optional[bool] = None,  # noqa: UP007
+        limit: Optional[int] = None,  # noqa: UP007
+        offset: Optional[int] = None,  # noqa: UP007
+    ) -> List[dict[str, Any]]:  # noqa: UP006
         """
         Get research questions for a specific user.
 
@@ -76,8 +74,9 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
             return []
 
     async def get_active_questions(
-        self, limit: Optional[int] = None
-    ) -> List[dict[str, Any]]:
+        self,
+        limit: Optional[int] = None,  # noqa: UP007
+    ) -> List[dict[str, Any]]:  # noqa: UP006
         """
         Get all active research questions across all users.
 
@@ -93,11 +92,11 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
             return cached
 
         try:
-            query = '''
+            query = """
                 SELECT * FROM research_questions
                 WHERE is_active = true
                 ORDER BY next_run_at ASC NULLS LAST, created_at DESC
-            '''
+            """
             params = []
 
             if limit is not None:
@@ -115,8 +114,9 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
             return []
 
     async def get_questions_due_for_run(
-        self, as_of: Optional[datetime] = None
-    ) -> List[dict[str, Any]]:
+        self,
+        as_of: Optional[datetime] = None,  # noqa: UP007
+    ) -> List[dict[str, Any]]:  # noqa: UP006
         """
         Get research questions that are due for discovery runs.
 
@@ -134,12 +134,12 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
             as_of = as_of.replace(tzinfo=None)
 
         try:
-            query = '''
+            query = """
                 SELECT * FROM research_questions
                 WHERE is_active = true
                 AND (next_run_at IS NULL OR next_run_at <= $1)
                 ORDER BY next_run_at ASC NULLS FIRST
-            '''
+            """
 
             results = await self.postgres.fetch(query, as_of)
             return [dict(row) for row in results]
@@ -149,7 +149,9 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
             return []
 
     async def update_last_run(
-        self, question_id: UUID, next_run_at: Optional[datetime] = None
+        self,
+        question_id: UUID,
+        next_run_at: Optional[datetime] = None,  # noqa: UP007
     ) -> bool:
         """
         Update last run timestamp and optionally set next run.
@@ -172,14 +174,10 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
             return await self.update(question_id, data)
 
         except Exception as e:
-            logger.error(
-                f'Failed to update last run for question {question_id}: {e}'
-            )
+            logger.error(f'Failed to update last run for question {question_id}: {e}')
             return False
 
-    async def get_by_name(
-        self, user_id: str, name: str
-    ) -> Optional[dict[str, Any]]:
+    async def get_by_name(self, user_id: str, name: str) -> Optional[dict[str, Any]]:  # noqa: UP007
         """
         Get research question by user and name.
 
@@ -196,10 +194,10 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
             return cached
 
         try:
-            query = '''
+            query = """
                 SELECT * FROM research_questions
                 WHERE user_id = $1 AND name = $2
-            '''
+            """
 
             result = await self.postgres.fetchrow(query, user_id, name)
 
@@ -220,17 +218,17 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
         self,
         user_id: str,
         name: str,
-        keywords: List[str],
-        topics: List[str],
-        authors: List[str],
-        selected_sources: List[str],
-        description: Optional[str] = None,
+        keywords: List[str],  # noqa: UP006
+        topics: List[str],  # noqa: UP006
+        authors: List[str],  # noqa: UP006
+        selected_sources: List[str],  # noqa: UP006
+        description: Optional[str] = None,  # noqa: UP007
         schedule_frequency: str = 'daily',
         schedule_time: time = time(2, 0, 0),
         min_relevance_score: float = 0.5,
         auto_download_enabled: bool = False,
         auto_download_min_score: float = 0.7,
-    ) -> Optional[UUID]:
+    ) -> Optional[UUID]:  # noqa: UP007
         """
         Create a new research question.
 
@@ -290,17 +288,17 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
     async def update_question(
         self,
         question_id: UUID,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        keywords: Optional[List[str]] = None,
-        topics: Optional[List[str]] = None,
-        authors: Optional[List[str]] = None,
-        selected_sources: Optional[List[str]] = None,
-        schedule_frequency: Optional[str] = None,
-        min_relevance_score: Optional[float] = None,
-        is_active: Optional[bool] = None,
-        last_run_at: Optional[datetime] = None,
-        next_run_at: Optional[datetime] = None,
+        name: Optional[str] = None,  # noqa: UP007
+        description: Optional[str] = None,  # noqa: UP007
+        keywords: Optional[List[str]] = None,  # noqa: UP006, UP007
+        topics: Optional[List[str]] = None,  # noqa: UP006, UP007
+        authors: Optional[List[str]] = None,  # noqa: UP006, UP007
+        selected_sources: Optional[List[str]] = None,  # noqa: UP006, UP007
+        schedule_frequency: Optional[str] = None,  # noqa: UP007
+        min_relevance_score: Optional[float] = None,  # noqa: UP007
+        is_active: Optional[bool] = None,  # noqa: UP007
+        last_run_at: Optional[datetime] = None,  # noqa: UP007
+        next_run_at: Optional[datetime] = None,  # noqa: UP007
     ) -> bool:
         """
         Update research question fields.
@@ -358,7 +356,8 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
             return False
 
     async def get_statistics(
-        self, question_id: Optional[UUID] = None
+        self,
+        question_id: Optional[UUID] = None,  # noqa: UP007
     ) -> dict[str, Any]:
         """
         Get statistics for research questions.
@@ -371,7 +370,7 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
         """
         try:
             if question_id:
-                query = '''
+                query = """
                     SELECT
                         rq.*,
                         COUNT(DISTINCT arm.article_id) as total_matches,
@@ -391,11 +390,11 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
                     LEFT JOIN discovery_execution_log del ON rq.id = del.question_id
                     WHERE rq.id = $1
                     GROUP BY rq.id
-                '''
+                """
                 result = await self.postgres.fetchrow(query, question_id)
                 return dict(result) if result else {}
             else:
-                query = '''
+                query = """
                     SELECT
                         COUNT(*) as total_questions,
                         COUNT(*) FILTER (WHERE is_active = true) as active_questions,
@@ -403,7 +402,7 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
                         AVG(arm.relevance_score) as avg_relevance_score
                     FROM research_questions rq
                     LEFT JOIN article_research_matches arm ON rq.id = arm.question_id
-                '''
+                """
                 result = await self.postgres.fetchrow(query)
                 return dict(result) if result else {}
 

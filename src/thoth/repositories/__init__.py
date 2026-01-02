@@ -5,7 +5,7 @@ This module provides a clean separation between business logic and data access,
 with support for caching, feature flags, and backward compatibility.
 """
 
-from thoth.repositories.base import BaseRepository
+from thoth.repositories.base import BaseRepository  # noqa: I001
 from thoth.repositories.paper_repository import PaperRepository
 from thoth.repositories.citation_repository import CitationRepository
 from thoth.repositories.tag_repository import TagRepository
@@ -20,7 +20,7 @@ from thoth.repositories.workflow_executions_repository import (
     WorkflowExecutionsRepository,
 )
 
-__all__ = [
+__all__ = [  # noqa: RUF022
     'BaseRepository',
     'PaperRepository',
     'CitationRepository',

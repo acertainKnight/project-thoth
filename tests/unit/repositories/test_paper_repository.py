@@ -5,15 +5,15 @@ Tests CRUD operations, caching behavior, search functionality,
 and error handling for the paper repository layer.
 """
 
-import pytest
-from unittest.mock import AsyncMock, Mock, patch
-from datetime import datetime
+import pytest  # noqa: I001
+from unittest.mock import AsyncMock, Mock, patch  # noqa: F401
+from datetime import datetime  # noqa: F401
 
 from thoth.repositories.paper_repository import PaperRepository
 from tests.fixtures.database_fixtures import (
     create_mock_record,
-    sample_paper_data,
-    sample_papers_batch
+    sample_paper_data,  # noqa: F401
+    sample_papers_batch,  # noqa: F401
 )
 
 
@@ -37,13 +37,13 @@ class TestPaperRepository:
         assert repo.use_cache is False
         assert repo._cache is None
 
-    async def test_create_paper(self, mock_postgres_service, sample_paper_data):
+    async def test_create_paper(self, mock_postgres_service, sample_paper_data):  # noqa: F811
         """Test creating a new paper record."""
         # Remove id from input data
         input_data = {k: v for k, v in sample_paper_data.items() if k != 'id'}
 
         # Mock fetchval to return new ID
-        mock_postgres_service.fetchval = AsyncMock(return_value=1)
+        mock_postgres_service.fetchval.return_value = 1
 
         repo = PaperRepository(mock_postgres_service)
         paper_id = await repo.create(input_data)
@@ -55,10 +55,10 @@ class TestPaperRepository:
         assert 'INSERT INTO papers' in query_info['query']
         assert 'RETURNING id' in query_info['query']
 
-    async def test_get_by_id(self, mock_postgres_service, sample_paper_data):
+    async def test_get_by_id(self, mock_postgres_service, sample_paper_data):  # noqa: F811
         """Test retrieving paper by ID."""
         mock_record = create_mock_record(**sample_paper_data)
-        mock_postgres_service.fetchrow = AsyncMock(return_value=mock_record)
+        mock_postgres_service.fetchrow.return_value = mock_record
 
         repo = PaperRepository(mock_postgres_service)
         paper = await repo.get_by_id(1)
@@ -70,17 +70,17 @@ class TestPaperRepository:
 
     async def test_get_by_id_not_found(self, mock_postgres_service):
         """Test retrieving non-existent paper."""
-        mock_postgres_service.fetchrow = AsyncMock(return_value=None)
+        mock_postgres_service.fetchrow.return_value = None
 
         repo = PaperRepository(mock_postgres_service)
         paper = await repo.get_by_id(999)
 
         assert paper is None
 
-    async def test_get_by_doi(self, mock_postgres_service, sample_paper_data):
+    async def test_get_by_doi(self, mock_postgres_service, sample_paper_data):  # noqa: F811
         """Test retrieving paper by DOI."""
         mock_record = create_mock_record(**sample_paper_data)
-        mock_postgres_service.fetchrow = AsyncMock(return_value=mock_record)
+        mock_postgres_service.fetchrow.return_value = mock_record
 
         repo = PaperRepository(mock_postgres_service)
         paper = await repo.get_by_doi('10.1000/test.123')
@@ -92,10 +92,10 @@ class TestPaperRepository:
         query_info = mock_postgres_service.executed_queries[0]
         assert 'WHERE doi = $1' in query_info['query']
 
-    async def test_get_by_arxiv_id(self, mock_postgres_service, sample_paper_data):
+    async def test_get_by_arxiv_id(self, mock_postgres_service, sample_paper_data):  # noqa: F811
         """Test retrieving paper by arXiv ID."""
         mock_record = create_mock_record(**sample_paper_data)
-        mock_postgres_service.fetchrow = AsyncMock(return_value=mock_record)
+        mock_postgres_service.fetchrow.return_value = mock_record
 
         repo = PaperRepository(mock_postgres_service)
         paper = await repo.get_by_arxiv_id('2024.12345')
@@ -109,7 +109,7 @@ class TestPaperRepository:
 
     async def test_update_paper(self, mock_postgres_service):
         """Test updating paper record."""
-        mock_postgres_service.execute = AsyncMock(return_value='UPDATE 1')
+        mock_postgres_service.execute.return_value = 'UPDATE 1'
 
         repo = PaperRepository(mock_postgres_service)
         success = await repo.update(1, {'title': 'Updated Title'})
@@ -122,7 +122,7 @@ class TestPaperRepository:
 
     async def test_delete_paper(self, mock_postgres_service):
         """Test deleting paper record."""
-        mock_postgres_service.execute = AsyncMock(return_value='DELETE 1')
+        mock_postgres_service.execute.return_value = 'DELETE 1'
 
         repo = PaperRepository(mock_postgres_service)
         success = await repo.delete(1)
@@ -133,10 +133,12 @@ class TestPaperRepository:
         assert 'DELETE FROM papers' in query_info['query']
         assert 'WHERE id = $1' in query_info['query']
 
-    async def test_search_by_title(self, mock_postgres_service, sample_papers_batch):
+    async def test_search_by_title(self, mock_postgres_service, sample_papers_batch):  # noqa: F811
         """Test searching papers by title."""
-        mock_records = [create_mock_record(**paper) for paper in sample_papers_batch[:3]]
-        mock_postgres_service.fetch = AsyncMock(return_value=mock_records)
+        mock_records = [
+            create_mock_record(**paper) for paper in sample_papers_batch[:3]
+        ]
+        mock_postgres_service.fetch.return_value = mock_records
 
         repo = PaperRepository(mock_postgres_service)
         papers = await repo.search_by_title('Test', limit=10)
@@ -148,10 +150,14 @@ class TestPaperRepository:
         assert 'ILIKE' in query_info['query']
         assert 'LIMIT' in query_info['query']
 
-    async def test_get_by_tags_match_all(self, mock_postgres_service, sample_papers_batch):
+    async def test_get_by_tags_match_all(
+        self, mock_postgres_service, sample_papers_batch
+    ):  # noqa: F811
         """Test getting papers matching all tags."""
-        mock_records = [create_mock_record(**paper) for paper in sample_papers_batch[:2]]
-        mock_postgres_service.fetch = AsyncMock(return_value=mock_records)
+        mock_records = [
+            create_mock_record(**paper) for paper in sample_papers_batch[:2]
+        ]
+        mock_postgres_service.fetch.return_value = mock_records
 
         repo = PaperRepository(mock_postgres_service)
         papers = await repo.get_by_tags(['machine-learning', 'nlp'], match_all=True)
@@ -161,10 +167,14 @@ class TestPaperRepository:
         query_info = mock_postgres_service.executed_queries[0]
         assert '@>' in query_info['query']  # Contains operator for match_all
 
-    async def test_get_by_tags_match_any(self, mock_postgres_service, sample_papers_batch):
+    async def test_get_by_tags_match_any(
+        self, mock_postgres_service, sample_papers_batch
+    ):  # noqa: F811
         """Test getting papers matching any tag."""
-        mock_records = [create_mock_record(**paper) for paper in sample_papers_batch[:5]]
-        mock_postgres_service.fetch = AsyncMock(return_value=mock_records)
+        mock_records = [
+            create_mock_record(**paper) for paper in sample_papers_batch[:5]
+        ]
+        mock_postgres_service.fetch.return_value = mock_records
 
         repo = PaperRepository(mock_postgres_service)
         papers = await repo.get_by_tags(['machine-learning', 'nlp'], match_all=False)
@@ -174,10 +184,12 @@ class TestPaperRepository:
         query_info = mock_postgres_service.executed_queries[0]
         assert '&&' in query_info['query']  # Overlaps operator for match_any
 
-    async def test_get_recent(self, mock_postgres_service, sample_papers_batch):
+    async def test_get_recent(self, mock_postgres_service, sample_papers_batch):  # noqa: F811
         """Test getting recent papers."""
-        mock_records = [create_mock_record(**paper) for paper in sample_papers_batch[:10]]
-        mock_postgres_service.fetch = AsyncMock(return_value=mock_records)
+        mock_records = [
+            create_mock_record(**paper) for paper in sample_papers_batch[:10]
+        ]
+        mock_postgres_service.fetch.return_value = mock_records
 
         repo = PaperRepository(mock_postgres_service)
         papers = await repo.get_recent(limit=10, offset=0)
@@ -191,7 +203,7 @@ class TestPaperRepository:
 
     async def test_update_tags(self, mock_postgres_service):
         """Test updating paper tags."""
-        mock_postgres_service.execute = AsyncMock(return_value='UPDATE 1')
+        mock_postgres_service.execute.return_value = 'UPDATE 1'
 
         repo = PaperRepository(mock_postgres_service)
         success = await repo.update_tags(1, ['new-tag', 'another-tag'])
@@ -206,9 +218,9 @@ class TestPaperRepository:
         mock_records = [
             create_mock_record(tag='machine-learning'),
             create_mock_record(tag='nlp'),
-            create_mock_record(tag='computer-vision')
+            create_mock_record(tag='computer-vision'),
         ]
-        mock_postgres_service.fetch = AsyncMock(return_value=mock_records)
+        mock_postgres_service.fetch.return_value = mock_records
 
         repo = PaperRepository(mock_postgres_service)
         tags = await repo.get_all_tags()
@@ -219,13 +231,13 @@ class TestPaperRepository:
         query_info = mock_postgres_service.executed_queries[0]
         assert 'DISTINCT unnest(tags)' in query_info['query']
 
-    async def test_full_text_search(self, mock_postgres_service, sample_papers_batch):
+    async def test_full_text_search(self, mock_postgres_service, sample_papers_batch):  # noqa: F811
         """Test full-text search functionality."""
         mock_records = [
             create_mock_record(**{**paper, 'rank': 0.5})
             for paper in sample_papers_batch[:3]
         ]
-        mock_postgres_service.fetch = AsyncMock(return_value=mock_records)
+        mock_postgres_service.fetch.return_value = mock_records
 
         repo = PaperRepository(mock_postgres_service)
         papers = await repo.full_text_search('machine learning', limit=20)
@@ -237,10 +249,10 @@ class TestPaperRepository:
         assert 'plainto_tsquery' in query_info['query']
         assert 'ts_rank' in query_info['query']
 
-    async def test_cache_behavior(self, mock_postgres_service, sample_paper_data):
+    async def test_cache_behavior(self, mock_postgres_service, sample_paper_data):  # noqa: F811
         """Test that caching reduces database queries."""
         mock_record = create_mock_record(**sample_paper_data)
-        mock_postgres_service.fetchrow = AsyncMock(return_value=mock_record)
+        mock_postgres_service.fetchrow.return_value = mock_record
 
         repo = PaperRepository(mock_postgres_service, cache_ttl=60)
 
@@ -255,12 +267,14 @@ class TestPaperRepository:
         assert paper1 == paper2
 
     async def test_cache_invalidation_on_update(
-        self, mock_postgres_service, sample_paper_data
+        self,
+        mock_postgres_service,
+        sample_paper_data,  # noqa: F811
     ):
         """Test that cache is invalidated after updates."""
         mock_record = create_mock_record(**sample_paper_data)
-        mock_postgres_service.fetchrow = AsyncMock(return_value=mock_record)
-        mock_postgres_service.execute = AsyncMock(return_value='UPDATE 1')
+        mock_postgres_service.fetchrow.return_value = mock_record
+        mock_postgres_service.execute.return_value = 'UPDATE 1'
 
         repo = PaperRepository(mock_postgres_service, cache_ttl=60)
 
@@ -300,7 +314,7 @@ class TestPaperRepository:
 
     async def test_count_papers(self, mock_postgres_service):
         """Test counting total papers."""
-        mock_postgres_service.fetchval = AsyncMock(return_value=100)
+        mock_postgres_service.fetchval.return_value = 100
 
         repo = PaperRepository(mock_postgres_service)
         count = await repo.count()
@@ -312,7 +326,7 @@ class TestPaperRepository:
 
     async def test_exists_check(self, mock_postgres_service):
         """Test checking if paper exists."""
-        mock_postgres_service.fetchval = AsyncMock(return_value=True)
+        mock_postgres_service.fetchval.return_value = True
 
         repo = PaperRepository(mock_postgres_service)
         exists = await repo.exists(1)

@@ -3,7 +3,7 @@ Vault-relative path resolution for Obsidian integration.
 
 This module provides utilities for resolving paths relative to the Obsidian vault root,
 ensuring consistent path handling across different environments (local development, Docker).
-"""
+"""  # noqa: W505
 
 import os
 from pathlib import Path
@@ -43,7 +43,9 @@ class VaultPathResolver:
         """
         self.vault_root = Path(vault_path).expanduser().resolve()
         self._validate_vault()
-        logger.debug(f"Initialized VaultPathResolver with vault root: {self.vault_root}")
+        logger.debug(
+            f'Initialized VaultPathResolver with vault root: {self.vault_root}'
+        )
 
     def _validate_vault(self) -> None:
         """Ensure vault has required structure.
@@ -57,23 +59,23 @@ class VaultPathResolver:
             ValueError: If validation fails
         """
         if not self.vault_root.exists():
-            raise ValueError(f"Vault path does not exist: {self.vault_root}")
+            raise ValueError(f'Vault path does not exist: {self.vault_root}')
 
         if not self.vault_root.is_dir():
-            raise ValueError(f"Vault path is not a directory: {self.vault_root}")
+            raise ValueError(f'Vault path is not a directory: {self.vault_root}')
 
         # Check for .obsidian directory to confirm this is an Obsidian vault
         obsidian_dir = self.vault_root / '.obsidian'
         if not obsidian_dir.exists():
             logger.warning(
-                f".obsidian directory not found at {obsidian_dir}. "
-                "This may not be a valid Obsidian vault."
+                f'.obsidian directory not found at {obsidian_dir}. '
+                'This may not be a valid Obsidian vault.'
             )
 
         # Ensure .thoth directory exists
         thoth_dir = self.vault_root / '.thoth'
         if not thoth_dir.exists():
-            logger.info(f"Creating .thoth directory at {thoth_dir}")
+            logger.info(f'Creating .thoth directory at {thoth_dir}')
             thoth_dir.mkdir(parents=True, exist_ok=True)
 
     def resolve(self, relative_path: str | Path) -> Path:
@@ -86,10 +88,10 @@ class VaultPathResolver:
             Absolute resolved path
 
         Examples:
-            >>> resolver = VaultPathResolver("/home/user/Documents/MyVault")
-            >>> resolver.resolve(".thoth/data/pdfs")
+            >>> resolver = VaultPathResolver('/home/user/Documents/MyVault')
+            >>> resolver.resolve('.thoth/data/pdfs')
             Path("/home/user/Documents/MyVault/.thoth/data/pdfs")
-            >>> resolver.resolve(".thoth/settings.json")
+            >>> resolver.resolve('.thoth/settings.json')
             Path("/home/user/Documents/MyVault/.thoth/settings.json")
         """
         if not relative_path:
@@ -120,8 +122,8 @@ class VaultPathResolver:
             ValueError: If path is not within vault root
 
         Examples:
-            >>> resolver = VaultPathResolver("/home/user/Documents/MyVault")
-            >>> resolver.make_relative("/home/user/Documents/MyVault/.thoth/data/pdfs")
+            >>> resolver = VaultPathResolver('/home/user/Documents/MyVault')
+            >>> resolver.make_relative('/home/user/Documents/MyVault/.thoth/data/pdfs')
             ".thoth/data/pdfs"
         """
         path = Path(absolute_path).resolve()
@@ -134,7 +136,7 @@ class VaultPathResolver:
             logger.debug(f"Made relative '{absolute_path}' → '{relative_str}'")
             return relative_str
         except ValueError:
-            raise ValueError(
+            raise ValueError(  # noqa: B904
                 f"Path '{absolute_path}' is not within vault root '{self.vault_root}'"
             )
 
@@ -149,7 +151,7 @@ class VaultPathResolver:
         """
         absolute = self.resolve(relative_path)
         absolute.mkdir(parents=True, exist_ok=True)
-        logger.debug(f"Ensured directory exists: {absolute}")
+        logger.debug(f'Ensured directory exists: {absolute}')
         return absolute
 
     @property
@@ -179,7 +181,7 @@ class VaultPathResolver:
             return False
 
 
-def detect_vault_path() -> Optional[Path]:
+def detect_vault_path() -> Optional[Path]:  # noqa: UP007
     """Auto-detect Obsidian vault path from environment or current directory.
 
     Detection priority:
@@ -196,7 +198,7 @@ def detect_vault_path() -> Optional[Path]:
     if vault_path:
         path = Path(vault_path).expanduser().resolve()
         if path.exists() and (path / '.obsidian').exists():
-            logger.info(f"Vault detected from OBSIDIAN_VAULT_PATH: {path}")
+            logger.info(f'Vault detected from OBSIDIAN_VAULT_PATH: {path}')
             return path
         else:
             logger.warning(
@@ -208,7 +210,7 @@ def detect_vault_path() -> Optional[Path]:
     if vault_path:
         path = Path(vault_path).expanduser().resolve()
         if path.exists() and (path / '.obsidian').exists():
-            logger.info(f"Vault detected from THOTH_VAULT_PATH: {path}")
+            logger.info(f'Vault detected from THOTH_VAULT_PATH: {path}')
             return path
         else:
             logger.warning(
@@ -220,7 +222,7 @@ def detect_vault_path() -> Optional[Path]:
     for _ in range(6):  # Check up to 5 parent levels
         obsidian_dir = current / '.obsidian'
         if obsidian_dir.exists() and obsidian_dir.is_dir():
-            logger.info(f"Vault auto-detected at: {current}")
+            logger.info(f'Vault auto-detected at: {current}')
             return current
 
         parent = current.parent
@@ -228,11 +230,11 @@ def detect_vault_path() -> Optional[Path]:
             break
         current = parent
 
-    logger.debug("No vault path detected")
+    logger.debug('No vault path detected')
     return None
 
 
-def create_vault_resolver(vault_path: Optional[str | Path] = None) -> VaultPathResolver:
+def create_vault_resolver(vault_path: Optional[str | Path] = None) -> VaultPathResolver:  # noqa: UP007
     """Create a VaultPathResolver with auto-detection if path not provided.
 
     Args:
@@ -252,6 +254,6 @@ def create_vault_resolver(vault_path: Optional[str | Path] = None) -> VaultPathR
         return VaultPathResolver(detected_path)
 
     raise ValueError(
-        "Could not detect Obsidian vault path. Please set OBSIDIAN_VAULT_PATH "
-        "environment variable or run from within an Obsidian vault directory."
+        'Could not detect Obsidian vault path. Please set OBSIDIAN_VAULT_PATH '
+        'environment variable or run from within an Obsidian vault directory.'
     )

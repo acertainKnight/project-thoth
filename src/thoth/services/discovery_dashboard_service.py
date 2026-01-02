@@ -12,12 +12,12 @@ the status field. The service automatically detects and processes these changes.
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta  # noqa: F401
 from pathlib import Path
 from typing import Optional
 
 from loguru import logger
-from watchdog.events import FileModifiedEvent, FileSystemEventHandler
+from watchdog.events import FileModifiedEvent, FileSystemEventHandler  # noqa: F401
 from watchdog.observers.polling import PollingObserver
 
 from thoth.config import config
@@ -33,13 +33,17 @@ class DiscoveryDashboardWatcher(FileSystemEventHandler):
     and automatically processes sentiment updates.
     """
 
-    def __init__(self, dashboard_service: 'DiscoveryDashboardService', loop: asyncio.AbstractEventLoop):
+    def __init__(
+        self,
+        dashboard_service: 'DiscoveryDashboardService',
+        loop: asyncio.AbstractEventLoop,
+    ):
         """Initialize the watcher with reference to dashboard service and event loop."""
         super().__init__()
         self.service = dashboard_service
         self.loop = loop  # Store reference to event loop for scheduling async tasks
         self.processing_files = set()  # Track files being processed to avoid loops
-        logger.info("Dashboard file watcher initialized")
+        logger.info('Dashboard file watcher initialized')
 
     def on_modified(self, event):
         """Handle file modification events."""
@@ -63,16 +67,15 @@ class DiscoveryDashboardWatcher(FileSystemEventHandler):
 
         # Avoid processing the same file multiple times
         if str(file_path) in self.processing_files:
-            logger.debug(f"Skipping {file_path.name} - already processing")
+            logger.debug(f'Skipping {file_path.name} - already processing')
             return
 
-        logger.info(f"📝 Detected change in dashboard file: {file_path.name}")
+        logger.info(f'📝 Detected change in dashboard file: {file_path.name}')
 
         # Schedule processing (debounced to avoid rapid-fire updates)
         # Use run_coroutine_threadsafe since we're in a watchdog thread
         asyncio.run_coroutine_threadsafe(
-            self._process_dashboard_change(file_path),
-            self.loop
+            self._process_dashboard_change(file_path), self.loop
         )
 
     def _is_dashboard_file(self, file_path: Path) -> bool:
@@ -100,7 +103,7 @@ class DiscoveryDashboardWatcher(FileSystemEventHandler):
             await self.service.import_dashboard_changes(file_path)
 
         except Exception as e:
-            logger.error(f"Error processing dashboard change for {file_path.name}: {e}")
+            logger.error(f'Error processing dashboard change for {file_path.name}: {e}')
         finally:
             self.processing_files.discard(str(file_path))
 
@@ -122,7 +125,7 @@ class DiscoveryDashboardService:
         self,
         postgres_service: PostgresService,
         obsidian_review_service: ObsidianReviewService,
-        dashboard_dir: Optional[Path] = None,
+        dashboard_dir: Optional[Path] = None,  # noqa: UP007
         check_interval: int = 60,
         auto_export: bool = True,
         auto_import: bool = True,
@@ -137,7 +140,7 @@ class DiscoveryDashboardService:
             check_interval: Seconds between automatic export checks (default: 60)
             auto_export: Enable automatic export of new results (default: True)
             auto_import: Enable automatic import of sentiment changes (default: True)
-        """
+        """  # noqa: W505
         self.pg = postgres_service
         self.review_service = obsidian_review_service
         self.check_interval = check_interval
@@ -146,25 +149,25 @@ class DiscoveryDashboardService:
 
         # Set up dashboard directory
         vault_root = Path(config.vault_root)
-        self.dashboard_dir = dashboard_dir or (vault_root / "Research" / "Dashboard")
+        self.dashboard_dir = dashboard_dir or (vault_root / 'Research' / 'Dashboard')
         self.dashboard_dir.mkdir(parents=True, exist_ok=True)
 
         # Track last export time per question
         self.last_export_times: dict[str, datetime] = {}
 
         # File watcher for automatic import
-        self.observer: Optional[PollingObserver] = None
-        self.watcher: Optional[DiscoveryDashboardWatcher] = None
+        self.observer: Optional[PollingObserver] = None  # noqa: UP007
+        self.watcher: Optional[DiscoveryDashboardWatcher] = None  # noqa: UP007
 
         # Track files we're writing to prevent file watcher loops
         self.writing_files: set[str] = set()
 
         logger.info(
-            f"Discovery dashboard service initialized:\n"
-            f"  Dashboard dir: {self.dashboard_dir}\n"
-            f"  Check interval: {check_interval}s\n"
-            f"  Auto-export: {auto_export}\n"
-            f"  Auto-import: {auto_import}"
+            f'Discovery dashboard service initialized:\n'
+            f'  Dashboard dir: {self.dashboard_dir}\n'
+            f'  Check interval: {check_interval}s\n'
+            f'  Auto-export: {auto_export}\n'
+            f'  Auto-import: {auto_import}'
         )
 
     async def start(self):
@@ -175,7 +178,7 @@ class DiscoveryDashboardService:
         1. New discovery results (auto-export)
         2. Dashboard file changes (auto-import)
         """
-        logger.info("🚀 Starting discovery dashboard service...")
+        logger.info('🚀 Starting discovery dashboard service...')
 
         # Start file watcher for auto-import
         if self.auto_import:
@@ -183,20 +186,20 @@ class DiscoveryDashboardService:
 
         # Start background task for auto-export
         if self.auto_export:
-            asyncio.create_task(self._auto_export_loop())
+            asyncio.create_task(self._auto_export_loop())  # noqa: RUF006
 
-        logger.success("✅ Discovery dashboard service started")
+        logger.success('✅ Discovery dashboard service started')
 
     async def stop(self):
         """Stop the automatic dashboard service."""
-        logger.info("Stopping discovery dashboard service...")
+        logger.info('Stopping discovery dashboard service...')
 
         if self.observer:
             self.observer.stop()
             self.observer.join(timeout=5)
-            logger.info("File watcher stopped")
+            logger.info('File watcher stopped')
 
-        logger.success("Discovery dashboard service stopped")
+        logger.success('Discovery dashboard service stopped')
 
     async def _start_file_watcher(self):
         """Start monitoring dashboard directory for changes."""
@@ -205,14 +208,10 @@ class DiscoveryDashboardService:
         self.watcher = DiscoveryDashboardWatcher(self, loop)
         self.observer = PollingObserver(timeout=1)
 
-        self.observer.schedule(
-            self.watcher,
-            str(self.dashboard_dir),
-            recursive=False
-        )
+        self.observer.schedule(self.watcher, str(self.dashboard_dir), recursive=False)
 
         self.observer.start()
-        logger.info(f"📁 Watching dashboard directory: {self.dashboard_dir}")
+        logger.info(f'📁 Watching dashboard directory: {self.dashboard_dir}')
 
     async def _auto_export_loop(self):
         """
@@ -221,17 +220,19 @@ class DiscoveryDashboardService:
         Runs every check_interval seconds, checking each research question
         for new matches that haven't been exported yet.
         """
-        logger.info(f"📊 Auto-export loop started (checking every {self.check_interval}s)")
+        logger.info(
+            f'📊 Auto-export loop started (checking every {self.check_interval}s)'
+        )
 
         while True:
             try:
                 await asyncio.sleep(self.check_interval)
                 await self._check_and_export_new_results()
             except asyncio.CancelledError:
-                logger.info("Auto-export loop cancelled")
+                logger.info('Auto-export loop cancelled')
                 break
             except Exception as e:
-                logger.error(f"Error in auto-export loop: {e}")
+                logger.error(f'Error in auto-export loop: {e}')
                 # Continue despite errors
 
     async def _check_and_export_new_results(self):
@@ -266,12 +267,11 @@ class DiscoveryDashboardService:
             if new_count > 0:
                 logger.info(
                     f"📋 Found {new_count} new matches for '{question_name}' - "
-                    f"exporting to dashboard..."
+                    f'exporting to dashboard...'
                 )
 
                 await self.export_to_dashboard(
-                    question_id=question_id,
-                    question_name=question_name
+                    question_id=question_id, question_name=question_name
                 )
 
                 self.last_export_times[str(question_id)] = datetime.now()
@@ -315,7 +315,7 @@ class DiscoveryDashboardService:
         question_id: str,
         question_name: str,
         min_relevance: float = 0.5,
-        limit: int = 100
+        limit: int = 100,
     ) -> Path:
         """
         Export discovery results to Obsidian dashboard file.
@@ -344,7 +344,10 @@ class DiscoveryDashboardService:
             return None
 
         # Generate dashboard file
-        dashboard_file = self.dashboard_dir / f"{self._sanitize_filename(question_name)}_Dashboard.md"
+        dashboard_file = (
+            self.dashboard_dir
+            / f'{self._sanitize_filename(question_name)}_Dashboard.md'
+        )
 
         # Get statistics
         stats = await self._get_statistics(question_id)
@@ -354,7 +357,7 @@ class DiscoveryDashboardService:
             question_name=question_name,
             question_id=question_id,
             matches=matches,
-            stats=stats
+            stats=stats,
         )
 
         # Write dashboard file (mark as writing to prevent file watcher loop)
@@ -368,11 +371,11 @@ class DiscoveryDashboardService:
             self.writing_files.discard(str(dashboard_file))
 
         logger.success(
-            f"✅ Dashboard exported: {dashboard_file.name}\n"
-            f"   Articles: {len(matches)} | "
-            f"   Liked: {stats['liked']} | "
-            f"   Disliked: {stats['disliked']} | "
-            f"   Pending: {stats['pending']}"
+            f'✅ Dashboard exported: {dashboard_file.name}\n'
+            f'   Articles: {len(matches)} | '
+            f'   Liked: {stats["liked"]} | '
+            f'   Disliked: {stats["disliked"]} | '
+            f'   Pending: {stats["pending"]}'
         )
 
         return dashboard_file
@@ -388,7 +391,7 @@ class DiscoveryDashboardService:
         Args:
             dashboard_file: Path to the dashboard markdown file
         """
-        logger.info(f"Importing changes from: {dashboard_file.name}")
+        logger.info(f'Importing changes from: {dashboard_file.name}')
 
         try:
             # Use ObsidianReviewService to parse and apply changes
@@ -396,10 +399,10 @@ class DiscoveryDashboardService:
 
             if results and results.get('updated', 0) > 0:
                 logger.success(
-                    f"✅ Imported sentiment changes:\n"
-                    f"   Liked: {results.get('liked', 0)}\n"
-                    f"   Disliked: {results.get('disliked', 0)}\n"
-                    f"   Skipped: {results.get('skipped', 0)}"
+                    f'✅ Imported sentiment changes:\n'
+                    f'   Liked: {results.get("liked", 0)}\n'
+                    f'   Disliked: {results.get("disliked", 0)}\n'
+                    f'   Skipped: {results.get("skipped", 0)}'
                 )
 
                 # Extract question info from dashboard frontmatter
@@ -407,24 +410,21 @@ class DiscoveryDashboardService:
 
                 if question_info:
                     # Regenerate dashboard with updated stats and filtered articles
-                    logger.info(f"🔄 Regenerating dashboard with updated data...")
+                    logger.info(f'🔄 Regenerating dashboard with updated data...')  # noqa: F541
                     await self.export_to_dashboard(
                         question_id=question_info['question_id'],
-                        question_name=question_info['question_name']
+                        question_name=question_info['question_name'],
                     )
-                    logger.success(f"✅ Dashboard regenerated successfully")
+                    logger.success(f'✅ Dashboard regenerated successfully')  # noqa: F541
 
             else:
-                logger.debug(f"No changes detected in {dashboard_file.name}")
+                logger.debug(f'No changes detected in {dashboard_file.name}')
 
         except Exception as e:
-            logger.error(f"Failed to import dashboard changes: {e}")
+            logger.error(f'Failed to import dashboard changes: {e}')
 
     async def _fetch_matches(
-        self,
-        question_id: str,
-        min_relevance: float,
-        limit: int
+        self, question_id: str, min_relevance: float, limit: int
     ) -> list[dict]:
         """Fetch article matches for a research question (pending only)."""
         query = """
@@ -456,7 +456,7 @@ class DiscoveryDashboardService:
         matches = await self.pg.fetch(query, question_id, min_relevance, limit)
         return [dict(match) for match in matches]
 
-    async def _extract_dashboard_metadata(self, dashboard_file: Path) -> Optional[dict]:
+    async def _extract_dashboard_metadata(self, dashboard_file: Path) -> Optional[dict]:  # noqa: UP007
         """
         Extract question_id and question_name from dashboard YAML frontmatter.
 
@@ -477,6 +477,7 @@ class DiscoveryDashboardService:
                 return None
 
             import yaml
+
             frontmatter = yaml.safe_load(parts[1].strip())
 
             if not isinstance(frontmatter, dict):
@@ -486,13 +487,12 @@ class DiscoveryDashboardService:
             question_name = frontmatter.get('question_name')
 
             if question_id and question_name:
-                return {
-                    'question_id': question_id,
-                    'question_name': question_name
-                }
+                return {'question_id': question_id, 'question_name': question_name}
 
         except Exception as e:
-            logger.warning(f"Could not extract metadata from {dashboard_file.name}: {e}")
+            logger.warning(
+                f'Could not extract metadata from {dashboard_file.name}: {e}'
+            )
 
         return None
 
@@ -510,19 +510,17 @@ class DiscoveryDashboardService:
         """
 
         result = await self.pg.fetchrow(query, question_id)
-        return dict(result) if result else {
-            'liked': 0, 'disliked': 0, 'skipped': 0, 'pending': 0, 'total': 0
-        }
+        return (
+            dict(result)
+            if result
+            else {'liked': 0, 'disliked': 0, 'skipped': 0, 'pending': 0, 'total': 0}
+        )
 
     def _generate_dashboard_content(
-        self,
-        question_name: str,
-        question_id: str,
-        matches: list[dict],
-        stats: dict
+        self, question_name: str, question_id: str, matches: list[dict], stats: dict
     ) -> str:
         """Generate dashboard markdown content with interactive elements."""
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         # Build YAML frontmatter
         frontmatter = f"""---
@@ -571,7 +569,11 @@ dashboard_version: 1.0
             relevance = match['relevance_score']
             title = match['title']
             authors = match['authors'] or 'Unknown'
-            abstract = (match['abstract'] or '')[:200] + '...' if match['abstract'] else 'No abstract available'
+            abstract = (
+                (match['abstract'] or '')[:200] + '...'
+                if match['abstract']
+                else 'No abstract available'
+            )
             url = match['url'] or 'No URL'
 
             article_entry = f"""

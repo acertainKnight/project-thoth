@@ -21,7 +21,9 @@ from thoth.utilities.schemas import Citation
 class MatchCandidate(BaseModel):
     """Represents a potential match for a citation from OpenAlex."""
 
-    openalex_id: str | None = Field(default=None, description='OpenAlex ID (e.g., W1234567890)')
+    openalex_id: str | None = Field(
+        default=None, description='OpenAlex ID (e.g., W1234567890)'
+    )
     doi: str | None = Field(default=None, description='DOI of the matched paper')
     title: str | None = Field(default=None, description='Title of the matched paper')
     authors: list[str] | None = Field(default=None, description='List of author names')
@@ -29,11 +31,15 @@ class MatchCandidate(BaseModel):
     venue: str | None = Field(default=None, description='Publication venue/journal')
     abstract: str | None = Field(default=None, description='Paper abstract')
     citation_count: int | None = Field(default=None, description='Number of citations')
-    confidence_score: float = Field(default=0.0, description='Match confidence score (0-1)')
+    confidence_score: float = Field(
+        default=0.0, description='Match confidence score (0-1)'
+    )
     url: str | None = Field(default=None, description='OpenAlex URL')
     pdf_url: str | None = Field(default=None, description='Open access PDF URL')
     is_open_access: bool | None = Field(default=None, description='Open access status')
-    fields_of_study: list[str] | None = Field(default=None, description='Academic fields')
+    fields_of_study: list[str] | None = Field(
+        default=None, description='Academic fields'
+    )
 
     def to_citation(self) -> Citation:
         """Convert match candidate to Citation object."""
@@ -152,19 +158,21 @@ class OpenAlexResolver:
         params = {
             'filter': filter_str,
             'per-page': 5,  # Get top 5 matches
-            'select': ','.join([
-                'id',
-                'doi',
-                'title',
-                'display_name',
-                'authorships',
-                'publication_year',
-                'primary_location',
-                'open_access',
-                'cited_by_count',
-                'abstract_inverted_index',
-                'topics',
-            ]),
+            'select': ','.join(
+                [
+                    'id',
+                    'doi',
+                    'title',
+                    'display_name',
+                    'authorships',
+                    'publication_year',
+                    'primary_location',
+                    'open_access',
+                    'cited_by_count',
+                    'abstract_inverted_index',
+                    'topics',
+                ]
+            ),
         }
 
         # Add polite pool email if available
@@ -173,7 +181,9 @@ class OpenAlexResolver:
 
         return params
 
-    def _parse_response(self, data: dict[str, Any], citation: Citation) -> list[MatchCandidate]:
+    def _parse_response(
+        self, data: dict[str, Any], citation: Citation
+    ) -> list[MatchCandidate]:
         """
         Parse OpenAlex API response into match candidates.
 
@@ -220,7 +230,9 @@ class OpenAlexResolver:
         authors = []
         if work.get('authorships'):
             for authorship in work['authorships']:
-                if authorship.get('author') and authorship['author'].get('display_name'):
+                if authorship.get('author') and authorship['author'].get(
+                    'display_name'
+                ):
                     authors.append(authorship['author']['display_name'])
 
         # Extract venue from primary location
@@ -285,7 +297,9 @@ class OpenAlexResolver:
         word_positions.sort(key=lambda x: x[0])
         return ' '.join(word for _, word in word_positions)
 
-    def _calculate_confidence(self, candidate: MatchCandidate, citation: Citation) -> float:
+    def _calculate_confidence(
+        self, candidate: MatchCandidate, citation: Citation
+    ) -> float:
         """
         Calculate confidence score for a match candidate.
 
@@ -417,7 +431,9 @@ class OpenAlexResolver:
 
                 # Make request
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    logger.debug(f'OpenAlex request: {endpoint} (attempt {attempt + 1})')
+                    logger.debug(
+                        f'OpenAlex request: {endpoint} (attempt {attempt + 1})'
+                    )
                     response = await client.get(url, params=params)
 
                     self._requests_made += 1
@@ -442,10 +458,7 @@ class OpenAlexResolver:
                 )
                 if e.response.status_code >= 500 and attempt < self.max_retries - 1:
                     # Server error - retry with backoff
-                    backoff = min(
-                        self.backoff_factor ** attempt,
-                        self.max_backoff
-                    )
+                    backoff = min(self.backoff_factor**attempt, self.max_backoff)
                     await asyncio.sleep(backoff)
                     continue
                 else:
@@ -455,10 +468,7 @@ class OpenAlexResolver:
             except httpx.RequestError as e:
                 logger.warning(f'Request error on attempt {attempt + 1}: {e}')
                 if attempt < self.max_retries - 1:
-                    backoff = min(
-                        self.backoff_factor ** attempt,
-                        self.max_backoff
-                    )
+                    backoff = min(self.backoff_factor**attempt, self.max_backoff)
                     await asyncio.sleep(backoff)
                     continue
                 else:
@@ -528,7 +538,7 @@ class OpenAlexResolver:
 
         # Build result mapping
         resolution_map = {}
-        for citation, result in zip(citations, results):
+        for citation, result in zip(citations, results):  # noqa: B905
             if isinstance(result, Exception):
                 logger.error(f'Error resolving citation: {result}')
                 resolution_map[citation] = []

@@ -9,9 +9,9 @@ Tests the end-to-end citation resolution process including:
 - Async operation correctness
 """
 
-import asyncio
+import asyncio  # noqa: I001
 import tempfile
-from typing import List
+from typing import List  # noqa: F401, UP035
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -25,7 +25,7 @@ from thoth.analyze.citations.resolution_types import (
 from thoth.analyze.citations.crossref_resolver import CrossrefResolver
 from thoth.analyze.citations.openalex_resolver import OpenAlexResolver
 from thoth.analyze.citations.semanticscholar import SemanticScholarAPI
-from thoth.utilities.schemas.citations import Citation
+from thoth.utilities.schemas.citations import Citation  # noqa: F401
 
 from tests.fixtures.citation_fixtures import (
     CITATION_WITH_DOI,
@@ -33,9 +33,9 @@ from tests.fixtures.citation_fixtures import (
     CITATION_WITHOUT_IDENTIFIERS,
     CITATION_MINIMAL,
     BATCH_CITATIONS,
-    CACHE_TEST_CITATIONS,
+    CACHE_TEST_CITATIONS,  # noqa: F401
     MOCK_CROSSREF_RESPONSE,
-    MOCK_OPENALEX_RESPONSE,
+    MOCK_OPENALEX_RESPONSE,  # noqa: F401
     MOCK_SEMANTIC_SCHOLAR_PAPER,
 )
 
@@ -59,11 +59,11 @@ class TestEndToEndResolution:
     @pytest.mark.asyncio
     async def test_full_resolution_chain_with_arxiv(self):
         """Test complete resolution for citation with ArXiv ID."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory() as tmpdir:  # noqa: F841
             # Mock Semantic Scholar to return a result
             mock_s2 = Mock(spec=SemanticScholarAPI)
 
-            def mock_paper_lookup(arxiv_id):
+            def mock_paper_lookup(arxiv_id):  # noqa: ARG001
                 return MOCK_SEMANTIC_SCHOLAR_PAPER
 
             mock_s2.paper_lookup_by_arxiv = mock_paper_lookup
@@ -75,13 +75,13 @@ class TestEndToEndResolution:
             # Should use Semantic Scholar for ArXiv
             assert result.status in [
                 CitationResolutionStatus.RESOLVED,
-                CitationResolutionStatus.PARTIAL
+                CitationResolutionStatus.PARTIAL,
             ]
 
     @pytest.mark.asyncio
     async def test_full_resolution_chain_fallback(self):
         """Test that resolution falls back through all sources."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory() as tmpdir:  # noqa: F841
             # Create resolvers with mocked API calls
             mock_crossref = Mock(spec=CrossrefResolver)
             mock_crossref.resolve_citation = AsyncMock(return_value=[])
@@ -95,7 +95,7 @@ class TestEndToEndResolution:
             chain = CitationResolutionChain(
                 crossref_resolver=mock_crossref,
                 openalex_resolver=mock_openalex,
-                semanticscholar_resolver=mock_s2
+                semanticscholar_resolver=mock_s2,
             )
 
             result = await chain.resolve(CITATION_MINIMAL)
@@ -142,9 +142,7 @@ class TestCacheIntegration:
         """Test that failed requests don't poison cache."""
         with tempfile.TemporaryDirectory() as tmpdir:
             crossref = CrossrefResolver(
-                cache_dir=tmpdir,
-                enable_caching=True,
-                max_retries=0
+                cache_dir=tmpdir, enable_caching=True, max_retries=0
             )
 
             mock_error = Mock()
@@ -152,9 +150,7 @@ class TestCacheIntegration:
 
             with patch.object(crossref, 'client') as mock_client:
                 # First call fails
-                mock_client.get = AsyncMock(
-                    side_effect=Exception("API error")
-                )
+                mock_client.get = AsyncMock(side_effect=Exception('API error'))
 
                 matches1 = await crossref.resolve_citation(CITATION_MINIMAL)
                 assert len(matches1) == 0
@@ -182,7 +178,7 @@ class TestAsyncCorrectness:
 
         with patch.object(chain, '_try_crossref', new_callable=AsyncMock) as mock:
             # Simulate varying response times
-            async def delayed_response(*args, **kwargs):
+            async def delayed_response(*args, **kwargs):  # noqa: ARG001
                 await asyncio.sleep(0.01)  # Small delay
                 return None
 
@@ -201,11 +197,7 @@ class TestAsyncCorrectness:
         """Test that batch resolution maintains citation order."""
         chain = CitationResolutionChain()
 
-        citations = [
-            CITATION_WITH_DOI,
-            CITATION_MINIMAL,
-            CITATION_WITHOUT_IDENTIFIERS
-        ]
+        citations = [CITATION_WITH_DOI, CITATION_MINIMAL, CITATION_WITHOUT_IDENTIFIERS]
 
         results = await chain.batch_resolve(citations, parallel=True)
 
@@ -224,19 +216,18 @@ class TestAsyncCorrectness:
 
         with patch.object(chain, 'resolve', new_callable=AsyncMock) as mock:
             mock.return_value = Mock(
-                status=CitationResolutionStatus.RESOLVED,
-                confidence_score=0.9
+                status=CitationResolutionStatus.RESOLVED, confidence_score=0.9
             )
 
             # Should complete without hanging
             try:
                 results = await asyncio.wait_for(
                     chain.batch_resolve(many_citations, parallel=True),
-                    timeout=30.0  # 30 second timeout
+                    timeout=30.0,  # 30 second timeout
                 )
                 assert len(results) == 200
-            except asyncio.TimeoutError:
-                pytest.fail("Batch resolution deadlocked")
+            except asyncio.TimeoutError:  # noqa: UP041
+                pytest.fail('Batch resolution deadlocked')
 
 
 class TestErrorRecovery:
@@ -251,9 +242,9 @@ class TestErrorRecovery:
             # Alternate between success and failure
             mock.side_effect = [
                 Mock(status=CitationResolutionStatus.RESOLVED, confidence_score=0.9),
-                Exception("API error"),
+                Exception('API error'),
                 Mock(status=CitationResolutionStatus.RESOLVED, confidence_score=0.9),
-                Exception("API error"),
+                Exception('API error'),
             ]
 
             results = await chain.batch_resolve(BATCH_CITATIONS[:4], parallel=True)
@@ -274,12 +265,12 @@ class TestErrorRecovery:
             crossref = CrossrefResolver(
                 cache_dir=tmpdir,
                 timeout=1,  # Short timeout
-                max_retries=0  # No retries
+                max_retries=0,  # No retries
             )
 
             with patch.object(crossref, 'client') as mock_client:
                 # Simulate timeout
-                mock_client.get = AsyncMock(side_effect=asyncio.TimeoutError())
+                mock_client.get = AsyncMock(side_effect=asyncio.TimeoutError())  # noqa: UP041
 
                 matches = await crossref.resolve_citation(CITATION_MINIMAL)
 
@@ -293,7 +284,7 @@ class TestErrorRecovery:
             crossref = CrossrefResolver(cache_dir=tmpdir)
 
             mock_response = Mock()
-            mock_response.json.return_value = {"malformed": "data"}  # Missing 'message'
+            mock_response.json.return_value = {'malformed': 'data'}  # Missing 'message'
             mock_response.raise_for_status = Mock()
 
             with patch.object(crossref, 'client') as mock_client:
@@ -320,7 +311,7 @@ class TestPerformanceCharacteristics:
 
         with patch.object(chain, 'resolve', new_callable=AsyncMock) as mock:
             # Simulate 0.1s per resolution
-            async def delayed_resolve(*args, **kwargs):
+            async def delayed_resolve(*args, **kwargs):  # noqa: ARG001
                 await asyncio.sleep(0.1)
                 return Mock(status=CitationResolutionStatus.RESOLVED)
 
@@ -338,7 +329,7 @@ class TestPerformanceCharacteristics:
             sequential_time = time.time() - start
 
             # Parallel should be significantly faster
-            # (With perfect parallelization, would be 10x faster, but allow for overhead)
+            # (With perfect parallelization, would be 10x faster, but allow for overhead)  # noqa: W505
             assert parallel_time < sequential_time * 0.5
 
     @pytest.mark.asyncio
@@ -346,21 +337,22 @@ class TestPerformanceCharacteristics:
         """Test that early stopping reduces unnecessary API calls."""
         chain = CitationResolutionChain()
 
-        with patch.object(
-            chain, '_try_crossref', new_callable=AsyncMock
-        ) as mock_crossref, \
-        patch.object(
-            chain, '_try_openalex', new_callable=AsyncMock
-        ) as mock_openalex, \
-        patch.object(
-            chain, '_try_semantic_scholar', new_callable=AsyncMock
-        ) as mock_s2:
-
+        with (
+            patch.object(
+                chain, '_try_crossref', new_callable=AsyncMock
+            ) as mock_crossref,
+            patch.object(
+                chain, '_try_openalex', new_callable=AsyncMock
+            ) as mock_openalex,
+            patch.object(
+                chain, '_try_semantic_scholar', new_callable=AsyncMock
+            ) as mock_s2,
+        ):
             # Crossref returns high confidence immediately
             mock_crossref.return_value = Mock(
                 status=CitationResolutionStatus.RESOLVED,
                 confidence_score=0.95,
-                source=APISource.CROSSREF
+                source=APISource.CROSSREF,
             )
 
             await chain.resolve(CITATION_MINIMAL)
@@ -406,13 +398,14 @@ class TestConfidenceScoreValidation:
             CITATION_WITH_DOI,
             CITATION_WITH_ARXIV,
             CITATION_MINIMAL,
-            CITATION_WITHOUT_IDENTIFIERS
+            CITATION_WITHOUT_IDENTIFIERS,
         ]
 
-        with patch.object(chain, '_try_crossref', new_callable=AsyncMock), \
-             patch.object(chain, '_try_openalex', new_callable=AsyncMock), \
-             patch.object(chain, '_try_semantic_scholar', new_callable=AsyncMock):
-
+        with (
+            patch.object(chain, '_try_crossref', new_callable=AsyncMock),
+            patch.object(chain, '_try_openalex', new_callable=AsyncMock),
+            patch.object(chain, '_try_semantic_scholar', new_callable=AsyncMock),
+        ):
             for citation in citations:
                 result = await chain.resolve(citation)
 
@@ -430,16 +423,16 @@ class TestConfidenceScoreValidation:
             ConfidenceLevel.HIGH,
             ConfidenceLevel.MEDIUM,
             ConfidenceLevel.LOW,
-            ConfidenceLevel.LOW
+            ConfidenceLevel.LOW,
         ]
 
-        for score, expected_level in zip(test_scores, expected_levels):
+        for score, expected_level in zip(test_scores, expected_levels):  # noqa: B905
             with patch.object(chain, '_try_crossref', new_callable=AsyncMock) as mock:
                 mock.return_value = Mock(
                     status=CitationResolutionStatus.RESOLVED,
                     confidence_score=score,
                     confidence_level=expected_level,
-                    source=APISource.CROSSREF
+                    source=APISource.CROSSREF,
                 )
 
                 result = await chain.resolve(CITATION_MINIMAL)

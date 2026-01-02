@@ -29,7 +29,7 @@ Classes:
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional  # noqa: UP035
 
 from loguru import logger
 
@@ -55,8 +55,8 @@ class ComponentScores:
     def __repr__(self) -> str:
         """Pretty print component scores for logging."""
         return (
-            f"ComponentScores(title={self.title:.3f}, authors={self.authors:.3f}, "
-            f"year={self.year:.3f}, journal={self.journal:.3f}, overall={self.overall:.3f})"
+            f'ComponentScores(title={self.title:.3f}, authors={self.authors:.3f}, '
+            f'year={self.year:.3f}, journal={self.journal:.3f}, overall={self.overall:.3f})'
         )
 
 
@@ -74,10 +74,10 @@ class MatchCandidate:
     """
 
     citation: Citation
-    source: str = "unknown"
+    source: str = 'unknown'
     component_scores: ComponentScores = field(default_factory=ComponentScores)
     passed_constraints: bool = True
-    rejection_reason: Optional[str] = None
+    rejection_reason: Optional[str] = None  # noqa: UP007
 
     @property
     def overall_score(self) -> float:
@@ -86,10 +86,10 @@ class MatchCandidate:
 
     def __repr__(self) -> str:
         """Pretty print match candidate for logging."""
-        title = self.citation.title or "Untitled"
-        status = "✓" if self.passed_constraints else "✗"
+        title = self.citation.title or 'Untitled'
+        status = '✓' if self.passed_constraints else '✗'
         return (
-            f"MatchCandidate({status} score={self.overall_score:.3f}, "
+            f'MatchCandidate({status} score={self.overall_score:.3f}, '
             f"source={self.source}, title='{title[:50]}...')"
         )
 
@@ -119,8 +119,8 @@ class MatchValidator:
     -------
     >>> validator = MatchValidator()
     >>> candidates = [
-    ...     MatchCandidate(citation=candidate1, source="semantic_scholar"),
-    ...     MatchCandidate(citation=candidate2, source="crossref")
+    ...     MatchCandidate(citation=candidate1, source='semantic_scholar'),
+    ...     MatchCandidate(citation=candidate2, source='crossref'),
     ... ]
     >>> for candidate in candidates:
     ...     score = validator.validate_match(input_citation, candidate)
@@ -129,12 +129,10 @@ class MatchValidator:
 
     def __init__(self):
         """Initialize the match validator."""
-        logger.debug("Initializing MatchValidator")
+        logger.debug('Initializing MatchValidator')
 
     def validate_match(
-        self,
-        input_citation: Citation,
-        candidate: MatchCandidate
+        self, input_citation: Citation, candidate: MatchCandidate
     ) -> float:
         """
         Validate and score a match candidate against an input citation.
@@ -160,27 +158,31 @@ class MatchValidator:
         Example:
         -------
         >>> validator = MatchValidator()
-        >>> input_cit = Citation(title="Machine Learning", authors=["Smith, J."], year=2020)
+        >>> input_cit = Citation(
+        ...     title='Machine Learning', authors=['Smith, J.'], year=2020
+        ... )
         >>> candidate = MatchCandidate(
-        ...     citation=Citation(title="Machine Learning Survey", authors=["Smith, John"], year=2020)
+        ...     citation=Citation(
+        ...         title='Machine Learning Survey', authors=['Smith, John'], year=2020
+        ...     )
         ... )
         >>> score = validator.validate_match(input_cit, candidate)
-        >>> print(f"Score: {score:.2f}")
+        >>> print(f'Score: {score:.2f}')
         Score: 0.87
         >>> print(candidate.component_scores)
         ComponentScores(title=0.920, authors=1.000, year=1.000, journal=0.000, overall=0.870)
-        """
+        """  # noqa: W505
         candidate_cit = candidate.citation
 
         logger.debug(
-            f"Validating match candidate from {candidate.source}: "
+            f'Validating match candidate from {candidate.source}: '
             f"'{candidate_cit.title[:50] if candidate_cit.title else 'Untitled'}'"
         )
 
         # Step 1: Check hard constraints first (fast rejection)
         if not self.check_hard_constraints(input_citation, candidate):
             logger.debug(
-                f"Candidate failed hard constraints: {candidate.rejection_reason}"
+                f'Candidate failed hard constraints: {candidate.rejection_reason}'
             )
             # Set all scores to 0 since we rejected this candidate
             candidate.component_scores = ComponentScores()
@@ -189,14 +191,14 @@ class MatchValidator:
         # Step 2: Calculate fuzzy match scores using fuzzy_matcher
         try:
             overall_score, component_dict = fuzzy_matcher.calculate_fuzzy_score(
-                title1=input_citation.title or "",
-                title2=candidate_cit.title or "",
+                title1=input_citation.title or '',
+                title2=candidate_cit.title or '',
                 authors1=input_citation.authors or [],
                 authors2=candidate_cit.authors or [],
                 year1=input_citation.year,
                 year2=candidate_cit.year,
-                journal1=input_citation.journal or "",
-                journal2=candidate_cit.journal or ""
+                journal1=input_citation.journal or '',
+                journal2=candidate_cit.journal or '',
             )
 
             # Step 3: Populate component scores from fuzzy_matcher results
@@ -205,30 +207,25 @@ class MatchValidator:
                 authors=component_dict['authors'],
                 year=component_dict['year'],
                 journal=component_dict['journal'],
-                overall=overall_score
+                overall=overall_score,
             )
 
-            logger.debug(
-                f"Match scores for candidate: {candidate.component_scores}"
-            )
+            logger.debug(f'Match scores for candidate: {candidate.component_scores}')
 
             return overall_score
 
         except Exception as e:
             logger.error(
-                f"Error calculating fuzzy scores for candidate: {e}",
-                exc_info=True
+                f'Error calculating fuzzy scores for candidate: {e}', exc_info=True
             )
             # On error, mark as failed with zero scores
             candidate.component_scores = ComponentScores()
             candidate.passed_constraints = False
-            candidate.rejection_reason = f"Scoring error: {str(e)}"
+            candidate.rejection_reason = f'Scoring error: {str(e)}'  # noqa: RUF010
             return 0.0
 
     def check_hard_constraints(
-        self,
-        input_citation: Citation,
-        candidate: MatchCandidate
+        self, input_citation: Citation, candidate: MatchCandidate
     ) -> bool:
         """
         Check hard constraints that must be satisfied for a valid match.
@@ -272,24 +269,24 @@ class MatchValidator:
         Example:
         -------
         >>> validator = MatchValidator()
-        >>> input_cit = Citation(title="Test", authors=["Smith, J."], year=2020)
+        >>> input_cit = Citation(title='Test', authors=['Smith, J.'], year=2020)
         >>>
         >>> # This should pass (1 year difference)
         >>> good_candidate = MatchCandidate(
-        ...     citation=Citation(authors=["Smith, John"], year=2021)
+        ...     citation=Citation(authors=['Smith, John'], year=2021)
         ... )
         >>> validator.check_hard_constraints(input_cit, good_candidate)
         True
         >>>
         >>> # This should fail (10 year difference)
         >>> bad_candidate = MatchCandidate(
-        ...     citation=Citation(authors=["Smith, John"], year=2010)
+        ...     citation=Citation(authors=['Smith, John'], year=2010)
         ... )
         >>> validator.check_hard_constraints(input_cit, bad_candidate)
         False
         >>> bad_candidate.rejection_reason
         'Year difference too large: 10 years (hard contradiction per spec)'
-        """
+        """  # noqa: W505
         candidate_cit = candidate.citation
 
         # Constraint 1: Year difference check (spec: hard contradiction if >5 years)
@@ -299,12 +296,12 @@ class MatchValidator:
             if year_diff > 5:
                 candidate.passed_constraints = False
                 candidate.rejection_reason = (
-                    f"Year difference too large: {year_diff} years "
-                    f"(hard contradiction per spec - year off by 5+)"
+                    f'Year difference too large: {year_diff} years '
+                    f'(hard contradiction per spec - year off by 5+)'
                 )
                 logger.debug(
-                    f"Rejecting candidate: year difference {year_diff} > 5 "
-                    f"({input_citation.year} vs {candidate_cit.year})"
+                    f'Rejecting candidate: year difference {year_diff} > 5 '
+                    f'({input_citation.year} vs {candidate_cit.year})'
                 )
                 return False
 
@@ -344,9 +341,10 @@ class MatchValidator:
                         break
 
                     # Check if they share a significant token (likely last name)
-                    # Look for tokens longer than 1 character to avoid matching just initials
-                    shared_tokens = set(t for t in input_tokens if len(t) > 1) & \
-                                   set(t for t in candidate_tokens if len(t) > 1)
+                    # Look for tokens longer than 1 character to avoid matching just initials  # noqa: W505
+                    shared_tokens = set(t for t in input_tokens if len(t) > 1) & set(
+                        t for t in candidate_tokens if len(t) > 1
+                    )
                     if shared_tokens:
                         has_overlap = True
                         break
@@ -354,22 +352,25 @@ class MatchValidator:
                 if has_overlap:
                     break
 
-            if not has_overlap and input_authors_normalized and candidate_authors_normalized:
+            if (
+                not has_overlap
+                and input_authors_normalized
+                and candidate_authors_normalized
+            ):
                 candidate.passed_constraints = False
                 candidate.rejection_reason = (
-                    "No author overlap found (spec: completely different authors)"
+                    'No author overlap found (spec: completely different authors)'
                 )
                 logger.debug(
-                    f"Rejecting candidate: no author overlap between "
-                    f"{input_authors_normalized} and {candidate_authors_normalized}"
+                    f'Rejecting candidate: no author overlap between '
+                    f'{input_authors_normalized} and {candidate_authors_normalized}'
                 )
                 return False
 
-        # Constraint 3: Journal contradiction check (spec: if provided, must not contradict)
+        # Constraint 3: Journal contradiction check (spec: if provided, must not contradict)  # noqa: W505
         if input_citation.journal and candidate_cit.journal:
             journal_score = fuzzy_matcher.match_journal(
-                input_citation.journal,
-                candidate_cit.journal
+                input_citation.journal, candidate_cit.journal
             )
 
             # If journals are completely different (score < 0.3), reject
@@ -381,7 +382,7 @@ class MatchValidator:
                     f"'{candidate_cit.journal}' (score: {journal_score:.2f}, spec: must not contradict)"
                 )
                 logger.debug(
-                    f"Rejecting candidate: journal score {journal_score:.2f} < 0.3"
+                    f'Rejecting candidate: journal score {journal_score:.2f} < 0.3'
                 )
                 return False
 
@@ -392,8 +393,8 @@ class MatchValidator:
 
     def get_best_match(
         self,
-        candidates: List[MatchCandidate]
-    ) -> Optional[MatchCandidate]:
+        candidates: List[MatchCandidate],  # noqa: UP006
+    ) -> Optional[MatchCandidate]:  # noqa: UP007
         """
         Select the best matching candidate from a list.
 
@@ -415,8 +416,8 @@ class MatchValidator:
         -------
         >>> validator = MatchValidator()
         >>> candidates = [
-        ...     MatchCandidate(citation=cit1, source="s2"),
-        ...     MatchCandidate(citation=cit2, source="crossref")
+        ...     MatchCandidate(citation=cit1, source='s2'),
+        ...     MatchCandidate(citation=cit2, source='crossref'),
         ... ]
         >>> # Validate all candidates first
         >>> for candidate in candidates:
@@ -424,21 +425,22 @@ class MatchValidator:
         >>>
         >>> best = validator.get_best_match(candidates)
         >>> if best:
-        ...     print(f"Best match from {best.source} with score {best.overall_score:.2f}")
-        """
+        ...     print(
+        ...         f'Best match from {best.source} with score {best.overall_score:.2f}'
+        ...     )
+        """  # noqa: W505
         if not candidates:
-            logger.debug("No candidates provided to get_best_match")
+            logger.debug('No candidates provided to get_best_match')
             return None
 
         # Filter to only candidates that passed constraints
         valid_candidates = [
-            candidate for candidate in candidates
-            if candidate.passed_constraints
+            candidate for candidate in candidates if candidate.passed_constraints
         ]
 
         if not valid_candidates:
             logger.debug(
-                f"No valid candidates found (0/{len(candidates)} passed constraints)"
+                f'No valid candidates found (0/{len(candidates)} passed constraints)'
             )
             return None
 
@@ -447,17 +449,17 @@ class MatchValidator:
         best_candidate = valid_candidates[0]
 
         logger.info(
-            f"Selected best match from {best_candidate.source} with score "
-            f"{best_candidate.overall_score:.3f} "
-            f"(from {len(valid_candidates)}/{len(candidates)} valid candidates)"
+            f'Selected best match from {best_candidate.source} with score '
+            f'{best_candidate.overall_score:.3f} '
+            f'(from {len(valid_candidates)}/{len(candidates)} valid candidates)'
         )
 
         # Log all valid candidates for debugging
         if len(valid_candidates) > 1:
             logger.debug(
-                f"Other valid candidates: "
-                + ", ".join(
-                    f"{c.source}={c.overall_score:.3f}"
+                f'Other valid candidates: '  # noqa: F541
+                + ', '.join(
+                    f'{c.source}={c.overall_score:.3f}'
                     for c in valid_candidates[1:4]  # Show top 3 alternatives
                 )
             )

@@ -6,11 +6,11 @@ and test data generation.
 """
 
 import asyncio
-import json
+import json  # noqa: F401
 import random
 import time
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, Mock
+from unittest.mock import AsyncMock, MagicMock, Mock  # noqa: F401
 
 import pytest
 
@@ -75,10 +75,7 @@ def protocol_handler():
 @pytest.fixture
 def server_info():
     """Create server info for testing."""
-    return MCPServerInfo(
-        name='Test MCP Server',
-        version='1.0.0-test'
-    )
+    return MCPServerInfo(name='Test MCP Server', version='1.0.0-test')
 
 
 @pytest.fixture
@@ -88,7 +85,7 @@ def capabilities():
         tools={'listChanged': True},
         resources={'subscribe': True, 'listChanged': True},
         prompts={'listChanged': True},
-        logging={}
+        logging={},
     )
 
 
@@ -98,7 +95,7 @@ async def mcp_server(mock_service_manager, server_info):
     server = MCPServer(
         service_manager=mock_service_manager,
         server_name=server_info.name,
-        server_version=server_info.version
+        server_version=server_info.version,
     )
 
     yield server
@@ -204,51 +201,37 @@ def mock_transports():
     return {
         'stdio': MockTransport('stdio'),
         'http': MockTransport('http'),
-        'sse': MockTransport('sse')
+        'sse': MockTransport('sse'),
     }
 
 
 def create_jsonrpc_request(
-    method: str,
-    params: dict[str, Any] | None = None,
-    request_id: int | str = 1
+    method: str, params: dict[str, Any] | None = None, request_id: int | str = 1
 ) -> JSONRPCRequest:
     """Helper to create JSONRPC request."""
     return JSONRPCRequest(
-        jsonrpc='2.0',
-        id=request_id,
-        method=method,
-        params=params or {}
+        jsonrpc='2.0', id=request_id, method=method, params=params or {}
     )
 
 
 def create_jsonrpc_notification(
-    method: str,
-    params: dict[str, Any] | None = None
+    method: str, params: dict[str, Any] | None = None
 ) -> JSONRPCNotification:
     """Helper to create JSONRPC notification."""
-    return JSONRPCNotification(
-        jsonrpc='2.0',
-        method=method,
-        params=params or {}
-    )
+    return JSONRPCNotification(jsonrpc='2.0', method=method, params=params or {})
 
 
 def create_initialize_request(
-    client_name: str = 'Test Client',
-    client_version: str = '1.0.0'
+    client_name: str = 'Test Client', client_version: str = '1.0.0'
 ) -> JSONRPCRequest:
     """Create initialize request."""
     return create_jsonrpc_request(
         method='initialize',
         params={
             'protocolVersion': '2024-11-05',
-            'clientInfo': {
-                'name': client_name,
-                'version': client_version
-            },
-            'capabilities': {}
-        }
+            'clientInfo': {'name': client_name, 'version': client_version},
+            'capabilities': {},
+        },
     )
 
 
@@ -258,16 +241,11 @@ def create_tools_list_request() -> JSONRPCRequest:
 
 
 def create_tools_call_request(
-    tool_name: str,
-    arguments: dict[str, Any] | None = None
+    tool_name: str, arguments: dict[str, Any] | None = None
 ) -> JSONRPCRequest:
     """Create tools/call request."""
     return create_jsonrpc_request(
-        method='tools/call',
-        params={
-            'name': tool_name,
-            'arguments': arguments or {}
-        }
+        method='tools/call', params={'name': tool_name, 'arguments': arguments or {}}
     )
 
 
@@ -279,7 +257,7 @@ def sample_requests():
         'initialized': create_jsonrpc_notification('initialized'),
         'tools_list': create_tools_list_request(),
         'tools_call': create_tools_call_request('search_papers', {'query': 'test'}),
-        'health': create_jsonrpc_request('health')
+        'health': create_jsonrpc_request('health'),
     }
 
 
@@ -295,7 +273,7 @@ class ServerLifecycleHelper:
         service_manager: ServiceManager,
         enable_stdio: bool = False,
         enable_http: bool = False,
-        enable_sse: bool = False
+        enable_sse: bool = False,
     ) -> MCPServer:
         """Create and configure a server."""
         server = MCPServer(service_manager)
@@ -399,7 +377,9 @@ class HealthCheckSimulator:
         self.check_count += 1
 
         # Create health check request
-        request = create_jsonrpc_request('health', request_id=f'health-{self.check_count}')
+        request = create_jsonrpc_request(
+            'health', request_id=f'health-{self.check_count}'
+        )
 
         # Send to server
         response = await self.server._handle_message(request)
@@ -408,7 +388,7 @@ class HealthCheckSimulator:
             'check_id': self.check_count,
             'timestamp': time.time(),
             'response': response,
-            'healthy': response and not hasattr(response, 'error')
+            'healthy': response and not hasattr(response, 'error'),
         }
 
         self.results.append(result)
@@ -440,17 +420,17 @@ class ErrorInjector:
     def __init__(self):
         self.error_handlers = {}
 
-    def inject_transport_error(
-        self,
-        transport: Any,
-        error_type: str = 'connection'
-    ):
+    def inject_transport_error(self, transport: Any, error_type: str = 'connection'):
         """Inject transport error."""
         if error_type == 'connection':
-            transport.start = AsyncMock(side_effect=ConnectionError('Connection failed'))
+            transport.start = AsyncMock(
+                side_effect=ConnectionError('Connection failed')
+            )
         elif error_type == 'timeout':
+
             async def timeout_error():
                 await asyncio.sleep(10)
+
             transport.start = timeout_error
         elif error_type == 'crash':
             transport.start = AsyncMock(side_effect=RuntimeError('Transport crashed'))
@@ -459,7 +439,7 @@ class ErrorInjector:
         self,
         tool_registry: Any,
         tool_name: str,
-        error_message: str = 'Tool execution failed'
+        error_message: str = 'Tool execution failed',
     ):
         """Inject tool execution error."""
         original_execute = tool_registry.execute_tool
@@ -471,17 +451,13 @@ class ErrorInjector:
 
         tool_registry.execute_tool = error_execute
 
-    def inject_protocol_error(
-        self,
-        protocol_handler: Any,
-        error_code: int = -32603
-    ):
+    def inject_protocol_error(self, protocol_handler: Any, error_code: int = -32603):
         """Inject protocol error."""
         protocol_handler.create_response = Mock(
             return_value=JSONRPCResponse(
                 jsonrpc='2.0',
                 id=1,
-                error={'code': error_code, 'message': 'Protocol error'}
+                error={'code': error_code, 'message': 'Protocol error'},
             )
         )
 

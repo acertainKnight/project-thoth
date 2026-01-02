@@ -50,25 +50,35 @@ class ProcessingService(BaseService):
         self._ocr_service = None
         self._citation_service = None
 
-    def _save_markdown_to_postgres(self, paper_title: str, markdown_content: str) -> None:
+    def _save_markdown_to_postgres(
+        self, paper_title: str, markdown_content: str
+    ) -> None:
         """Save markdown content directly to PostgreSQL."""
-        import asyncpg
+        import asyncpg  # noqa: I001
         import asyncio
 
-        db_url = getattr(self.config.secrets, 'database_url', None) if hasattr(self.config, 'secrets') else None
+        db_url = (
+            getattr(self.config.secrets, 'database_url', None)
+            if hasattr(self.config, 'secrets')
+            else None
+        )
         if not db_url:
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
         async def save():
             conn = await asyncpg.connect(db_url)
             try:
-                await conn.execute("""
+                await conn.execute(
+                    """
                     INSERT INTO papers (title, markdown_content, created_at, updated_at)
                     VALUES ($1, $2, NOW(), NOW())
                     ON CONFLICT (title) DO UPDATE SET
                         markdown_content = EXCLUDED.markdown_content,
                         updated_at = NOW()
-                """, paper_title, markdown_content)
+                """,
+                    paper_title,
+                    markdown_content,
+                )
             finally:
                 await conn.close()
 
@@ -147,7 +157,7 @@ class ProcessingService(BaseService):
             self.logger.debug('Processing with Mistral OCR')
             ocr_response = self._call_mistral_ocr(signed_url)
 
-            combined_markdown = self._get_combined_markdown(ocr_response)
+            combined_markdown = self._get_combined_markdown(ocr_response)  # noqa: F841
             output_path = output_dir / f'{pdf_path.stem}.md'
 
             no_images_markdown = self._join_markdown_pages(ocr_response)
@@ -156,7 +166,7 @@ class ProcessingService(BaseService):
             # Save to both disk and PostgreSQL
             no_images_output_path.write_text(no_images_markdown)
             self._save_markdown_to_postgres(pdf_path.stem, no_images_markdown)
-            self.logger.info(f"Saved markdown to PostgreSQL for {pdf_path.stem}")
+            self.logger.info(f'Saved markdown to PostgreSQL for {pdf_path.stem}')
 
             self.log_operation(
                 'ocr_completed',

@@ -5,7 +5,7 @@ This module provides real-time collection and analysis of system performance
 metrics across all Thoth services and pipelines.
 """
 
-import asyncio
+import asyncio  # noqa: I001
 import json
 import time
 from contextlib import contextmanager
@@ -17,7 +17,7 @@ import psutil
 from loguru import logger
 
 from thoth.services.service_manager import ServiceManager
-from thoth.config import config, Config
+from thoth.config import config, Config  # noqa: F401
 
 
 @dataclass
@@ -128,7 +128,7 @@ class MetricsCollector:
 
     def __init__(
         self,
-        config: Config,
+        config: Config,  # noqa: F811
         service_manager: ServiceManager | None = None,
         collection_interval: int = 10,
         retention_hours: int = 24,
@@ -442,7 +442,7 @@ class MetricsCollector:
         """Aggregate API performance metrics."""
         all_api_times = []
         for m in metrics:
-            for api_name, times in m.api_response_times.items():
+            for api_name, times in m.api_response_times.items():  # noqa: B007
                 all_api_times.extend(times)
 
         if not all_api_times:

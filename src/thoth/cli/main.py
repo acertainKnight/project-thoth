@@ -50,10 +50,10 @@ def main() -> None:
     )
 
     # Register sub-commands from modules
-    # agent.configure_subparser(subparsers)  # DEPRECATED: Use Letta REST API (port 8283)
+    # agent.configure_subparser(subparsers)  # DEPRECATED: Use Letta REST API (port 8283)  # noqa: W505
     discovery.configure_subparser(subparsers)
     mcp.configure_subparser(subparsers)
-    # memory.configure_subparser(subparsers)  # DEPRECATED: Use Letta REST API (port 8283)
+    # memory.configure_subparser(subparsers)  # DEPRECATED: Use Letta REST API (port 8283)  # noqa: W505
     notes.configure_subparser(subparsers)
     pdf.configure_subparser(subparsers)
     performance.configure_subparser(subparsers)

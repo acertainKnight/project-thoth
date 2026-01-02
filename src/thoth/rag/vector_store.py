@@ -29,8 +29,9 @@ class VectorStoreManager:
 
     def __init__(
         self,
-        collection_name: str | None = None,
-        persist_directory: str | None = None,  # Deprecated, kept for compatibility
+        collection_name: str | None = None,  # noqa: ARG002
+        persist_directory: str
+        | None = None,  # Deprecated, kept for compatibility  # noqa: ARG002
         embedding_function: Any | None = None,
     ):
         """
@@ -63,10 +64,7 @@ class VectorStoreManager:
         """Get or create connection pool."""
         if self._pool is None:
             self._pool = await asyncpg.create_pool(
-                self.db_url,
-                min_size=2,
-                max_size=10,
-                command_timeout=60
+                self.db_url, min_size=2, max_size=10, command_timeout=60
             )
         return self._pool
 
@@ -78,10 +76,7 @@ class VectorStoreManager:
             logger.debug('Ensured pgvector extension is enabled')
 
     async def add_documents_async(
-        self,
-        documents: list[Document],
-        paper_id: UUID | None = None,
-        **kwargs: Any
+        self, documents: list[Document], paper_id: UUID | None = None, **kwargs: Any
     ) -> list[str]:
         """
         Add documents to the vector store (async version).
@@ -98,10 +93,7 @@ class VectorStoreManager:
         return await self._add_documents_async(documents, paper_id, **kwargs)
 
     def add_documents(
-        self,
-        documents: list[Document],
-        paper_id: UUID | None = None,
-        **kwargs: Any
+        self, documents: list[Document], paper_id: UUID | None = None, **kwargs: Any
     ) -> list[str]:
         """
         Add documents to the vector store (sync wrapper).
@@ -116,24 +108,23 @@ class VectorStoreManager:
             List of document IDs (UUIDs as strings)
         """
         try:
-            loop = asyncio.get_running_loop()
+            loop = asyncio.get_running_loop()  # noqa: F841
             raise RuntimeError(
-                "add_documents() called from async context. "
+                'add_documents() called from async context. '
                 "Use 'await add_documents_async()' instead to avoid event loop conflicts."
             )
         except RuntimeError as e:
-            if "no running event loop" in str(e).lower():
+            if 'no running event loop' in str(e).lower():
                 # Safe to use asyncio.run() - no loop running
-                return asyncio.run(self._add_documents_async(documents, paper_id, **kwargs))
+                return asyncio.run(
+                    self._add_documents_async(documents, paper_id, **kwargs)
+                )
             else:
                 # Already in async context - raise helpful error
                 raise
 
     async def _add_documents_async(
-        self,
-        documents: list[Document],
-        paper_id: UUID | None = None,
-        **kwargs: Any
+        self, documents: list[Document], paper_id: UUID | None = None, **kwargs: Any
     ) -> list[str]:
         """Add documents asynchronously."""
         if not paper_id:
@@ -147,10 +138,11 @@ class VectorStoreManager:
         ids = []
 
         async with pool.acquire() as conn:
-            for idx, (doc, embedding) in enumerate(zip(documents, embeddings)):
+            for idx, (doc, embedding) in enumerate(zip(documents, embeddings)):  # noqa: B905
                 metadata = {**doc.metadata, **kwargs}
 
-                result = await conn.fetchrow("""
+                result = await conn.fetchrow(
+                    """
                     INSERT INTO document_chunks
                     (paper_id, content, chunk_index, chunk_type, metadata, embedding, token_count)
                     VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -168,7 +160,7 @@ class VectorStoreManager:
                     metadata.get('chunk_type', 'content'),
                     metadata,
                     embedding,
-                    len(doc.page_content.split())  # Rough token count
+                    len(doc.page_content.split()),  # Rough token count
                 )
 
                 ids.append(str(result['id']))
@@ -181,7 +173,7 @@ class VectorStoreManager:
         query: str,
         k: int = 4,
         filter: dict[str, Any] | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> list[Document]:
         """
         Perform similarity search.
@@ -201,8 +193,8 @@ class VectorStoreManager:
         self,
         query: str,
         k: int = 4,
-        filter: dict[str, Any] | None = None,
-        **kwargs: Any
+        filter: dict[str, Any] | None = None,  # noqa: ARG002
+        **kwargs: Any,  # noqa: ARG002
     ) -> list[Document]:
         """Perform similarity search asynchronously."""
         # Generate query embedding
@@ -212,7 +204,8 @@ class VectorStoreManager:
         async with pool.acquire() as conn:
             # Use pgvector cosine similarity search with HNSW index
             # The <=> operator uses the HNSW index automatically
-            rows = await conn.fetch("""
+            rows = await conn.fetch(
+                """
                 SELECT
                     dc.id,
                     dc.content,
@@ -227,24 +220,28 @@ class VectorStoreManager:
                 WHERE dc.embedding IS NOT NULL
                 ORDER BY dc.embedding <=> $1
                 LIMIT $2
-            """, query_embedding, k)
+            """,
+                query_embedding,
+                k,
+            )
 
             documents = []
             for row in rows:
                 metadata = dict(row['metadata']) if row['metadata'] else {}
-                metadata.update({
-                    'chunk_id': str(row['id']),
-                    'chunk_type': row['chunk_type'],
-                    'paper_title': row['title'],
-                    'doi': row['doi'],
-                    'authors': row['authors'],
-                    'similarity': float(row['similarity'])
-                })
+                metadata.update(
+                    {
+                        'chunk_id': str(row['id']),
+                        'chunk_type': row['chunk_type'],
+                        'paper_title': row['title'],
+                        'doi': row['doi'],
+                        'authors': row['authors'],
+                        'similarity': float(row['similarity']),
+                    }
+                )
 
-                documents.append(Document(
-                    page_content=row['content'],
-                    metadata=metadata
-                ))
+                documents.append(
+                    Document(page_content=row['content'], metadata=metadata)
+                )
 
             logger.debug(f'Found {len(documents)} similar documents for query')
             return documents
@@ -254,7 +251,7 @@ class VectorStoreManager:
         query: str,
         k: int = 4,
         filter: dict[str, Any] | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> list[tuple[Document, float]]:
         """
         Perform similarity search with scores.
@@ -285,8 +282,7 @@ class VectorStoreManager:
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             result = await conn.execute(
-                "DELETE FROM document_chunks WHERE paper_id = $1",
-                paper_id
+                'DELETE FROM document_chunks WHERE paper_id = $1', paper_id
             )
             logger.debug(f'Deleted chunks for paper {paper_id}: {result}')
 
@@ -316,7 +312,7 @@ class VectorStoreManager:
                 'total_papers': row['total_papers'],
                 'indexed_chunks': row['indexed_chunks'],
                 'collection_name': 'document_chunks (pgvector)',
-                'backend': 'PostgreSQL + pgvector'
+                'backend': 'PostgreSQL + pgvector',
             }
 
     async def close(self) -> None:

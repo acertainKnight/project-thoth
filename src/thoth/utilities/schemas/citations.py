@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Citation(BaseModel):
@@ -10,6 +10,21 @@ class Citation(BaseModel):
     title: str | None = Field(default=None)
     abstract: str | None = Field(default=None)
     year: int | None = Field(default=None)
+
+    @field_validator('year', mode='before')
+    @classmethod
+    def validate_year(cls, v: int | None) -> int | None:
+        """Validate year is in reasonable range (1900-2030).
+
+        Years outside this range are set to None as they're likely parsing errors.
+        Valid range covers historical publications (1900+) to near-future pre-prints (2030).
+        """  # noqa: W505
+        if v is None:
+            return None
+        if isinstance(v, int) and 1900 <= v <= 2030:
+            return v
+        return None
+
     journal: str | None = Field(default=None)
     venue: str | None = Field(default=None)
     citation_count: int | None = Field(default=None)
@@ -33,6 +48,27 @@ class Citation(BaseModel):
         description='Source that provided the PDF (crossref, unpaywall, arxiv, s2, doi-head)',
     )
     arxiv_id: str | None = Field(default=None, description='arXiv ID of the article')
+
+    def __hash__(self) -> int:
+        """Make Citation hashable so it can be used as dict keys.
+
+        Hash based on unique identifiers in order of reliability:
+        - doi (most reliable)
+        - title + year (fallback)
+        - text (last resort)
+        """
+        return hash((self.doi, self.title, self.year, self.text))
+
+    def __eq__(self, other: object) -> bool:
+        """Check equality based on same fields used for hashing."""
+        if not isinstance(other, Citation):
+            return False
+        return (self.doi, self.title, self.year, self.text) == (
+            other.doi,
+            other.title,
+            other.year,
+            other.text,
+        )
 
     def update_from_opencitation(self, open_citation: 'OpenCitation') -> None:
         """Update this Citation with values from an OpenCitation model."""

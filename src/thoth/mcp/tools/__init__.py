@@ -5,7 +5,7 @@ This package contains all MCP-compliant tools for the Thoth research assistant.
 """
 
 # Import the base classes from the parent base_tools module
-from ..base_tools import MCPTool, MCPToolCallResult, MCPToolRegistry
+from ..base_tools import MCPTool, MCPToolCallResult, MCPToolRegistry  # noqa: I001
 from .advanced_rag_tools import (
     CreateCustomIndexMCPTool,
     OptimizeSearchMCPTool,
@@ -169,7 +169,7 @@ def register_all_mcp_tools(registry: MCPToolRegistry) -> None:
         registry.register_class(tool_class)
 
 
-__all__ = [
+__all__ = [  # noqa: RUF022
     'MCP_TOOL_CLASSES',
     'AddWorkflowActionMCPTool',
     'AnalyzeTopicMCPTool',

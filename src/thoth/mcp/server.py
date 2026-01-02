@@ -390,7 +390,7 @@ async def start_mcp_server(
         enable_sse: Enable Server-Sent Events transport (default: True, primary transport)
         sse_host: SSE server host (default: localhost)
         sse_port: SSE server port (default: 8001, primary port)
-    """
+    """  # noqa: W505
     if service_manager is None:
         from thoth.services.service_manager import ServiceManager
 

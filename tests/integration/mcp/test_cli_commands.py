@@ -5,14 +5,14 @@ Tests the CLI interface including stdio, HTTP, and full server modes
 using subprocess execution.
 """
 
-import asyncio
+import asyncio  # noqa: F401
 import json
 import os
 import signal
 import subprocess
 import sys
 import time
-from pathlib import Path
+from pathlib import Path  # noqa: F401
 
 import pytest
 import requests
@@ -27,7 +27,7 @@ class TestStdioServerCommand:
             [sys.executable, '-m', 'thoth.cli', 'mcp', 'stdio', '--help'],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
         )
 
         assert result.returncode == 0
@@ -44,7 +44,7 @@ class TestStdioServerCommand:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            cwd=str(tmp_path)
+            cwd=str(tmp_path),
         )
 
         try:
@@ -61,12 +61,9 @@ class TestStdioServerCommand:
                 'method': 'initialize',
                 'params': {
                     'protocolVersion': '2024-11-05',
-                    'clientInfo': {
-                        'name': 'Test Client',
-                        'version': '1.0.0'
-                    },
-                    'capabilities': {}
-                }
+                    'clientInfo': {'name': 'Test Client', 'version': '1.0.0'},
+                    'capabilities': {},
+                },
             }
 
             # Write request to stdin
@@ -77,6 +74,7 @@ class TestStdioServerCommand:
             try:
                 # Set a timeout for reading
                 import select
+
                 if hasattr(select, 'poll'):
                     poller = select.poll()
                     poller.register(process.stdout, select.POLLIN)
@@ -102,11 +100,19 @@ class TestStdioServerCommand:
         """Test log level configuration for stdio server."""
         for level in ['DEBUG', 'INFO', 'WARNING', 'ERROR']:
             process = subprocess.Popen(
-                [sys.executable, '-m', 'thoth.cli', 'mcp', 'stdio', '--log-level', level],
+                [
+                    sys.executable,
+                    '-m',
+                    'thoth.cli',
+                    'mcp',
+                    'stdio',
+                    '--log-level',
+                    level,
+                ],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
             )
 
             try:
@@ -126,7 +132,7 @@ class TestHTTPServerCommand:
             [sys.executable, '-m', 'thoth.cli', 'mcp', 'http', '--help'],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
         )
 
         assert result.returncode == 0
@@ -141,14 +147,21 @@ class TestHTTPServerCommand:
 
         process = subprocess.Popen(
             [
-                sys.executable, '-m', 'thoth.cli', 'mcp', 'http',
-                '--host', '127.0.0.1',
-                '--port', str(port),
-                '--log-level', 'INFO'
+                sys.executable,
+                '-m',
+                'thoth.cli',
+                'mcp',
+                'http',
+                '--host',
+                '127.0.0.1',
+                '--port',
+                str(port),
+                '--log-level',
+                'INFO',
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
         )
 
         try:
@@ -159,8 +172,7 @@ class TestHTTPServerCommand:
             while time.time() - start_time < max_wait:
                 try:
                     response = requests.get(
-                        f'http://127.0.0.1:{port}/health',
-                        timeout=1
+                        f'http://127.0.0.1:{port}/health', timeout=1
                     )
                     if response.status_code == 200:
                         break
@@ -191,12 +203,18 @@ class TestHTTPServerCommand:
 
         process = subprocess.Popen(
             [
-                sys.executable, '-m', 'thoth.cli', 'mcp', 'http',
-                '--host', 'localhost',  # Should bind to localhost
-                '--port', str(port)
+                sys.executable,
+                '-m',
+                'thoth.cli',
+                'mcp',
+                'http',
+                '--host',
+                'localhost',  # Should bind to localhost
+                '--port',
+                str(port),
             ],
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
         )
 
         try:
@@ -204,10 +222,7 @@ class TestHTTPServerCommand:
 
             # Should be accessible via localhost
             try:
-                response = requests.get(
-                    f'http://localhost:{port}/health',
-                    timeout=2
-                )
+                response = requests.get(f'http://localhost:{port}/health', timeout=2)
                 assert response.status_code == 200
             except requests.ConnectionError:
                 # Server might not be ready yet
@@ -223,12 +238,9 @@ class TestHTTPServerCommand:
         port = 9102
 
         process = subprocess.Popen(
-            [
-                sys.executable, '-m', 'thoth.cli', 'mcp', 'http',
-                '--port', str(port)
-            ],
+            [sys.executable, '-m', 'thoth.cli', 'mcp', 'http', '--port', str(port)],
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
         )
 
         try:
@@ -258,7 +270,7 @@ class TestFullServerCommand:
             [sys.executable, '-m', 'thoth.cli', 'mcp', 'full', '--help'],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
         )
 
         assert result.returncode == 0
@@ -275,15 +287,23 @@ class TestFullServerCommand:
 
         process = subprocess.Popen(
             [
-                sys.executable, '-m', 'thoth.cli', 'mcp', 'full',
-                '--host', '127.0.0.1',
-                '--http-port', str(http_port),
-                '--sse-port', str(sse_port),
-                '--log-level', 'DEBUG'
+                sys.executable,
+                '-m',
+                'thoth.cli',
+                'mcp',
+                'full',
+                '--host',
+                '127.0.0.1',
+                '--http-port',
+                str(http_port),
+                '--sse-port',
+                str(sse_port),
+                '--log-level',
+                'DEBUG',
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
         )
 
         try:
@@ -308,14 +328,20 @@ class TestFullServerCommand:
 
         process = subprocess.Popen(
             [
-                sys.executable, '-m', 'thoth.cli', 'mcp', 'full',
-                '--http-port', str(http_port),
-                '--sse-port', str(http_port + 1),
-                '--disable-file-access'
+                sys.executable,
+                '-m',
+                'thoth.cli',
+                'mcp',
+                'full',
+                '--http-port',
+                str(http_port),
+                '--sse-port',
+                str(http_port + 1),
+                '--disable-file-access',
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
         )
 
         try:
@@ -337,12 +363,18 @@ class TestFullServerCommand:
 
         process = subprocess.Popen(
             [
-                sys.executable, '-m', 'thoth.cli', 'mcp', 'full',
-                '--http-port', str(http_port),
-                '--sse-port', str(sse_port)
+                sys.executable,
+                '-m',
+                'thoth.cli',
+                'mcp',
+                'full',
+                '--http-port',
+                str(http_port),
+                '--sse-port',
+                str(sse_port),
             ],
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
         )
 
         try:
@@ -361,28 +393,41 @@ class TestCLIErrorHandling:
         """Test invalid log level is rejected."""
         result = subprocess.run(
             [
-                sys.executable, '-m', 'thoth.cli', 'mcp', 'http',
-                '--log-level', 'INVALID'
+                sys.executable,
+                '-m',
+                'thoth.cli',
+                'mcp',
+                'http',
+                '--log-level',
+                'INVALID',
             ],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
         )
 
         # Should fail with non-zero exit code
         assert result.returncode != 0
-        assert 'invalid choice' in result.stderr.lower() or 'error' in result.stderr.lower()
+        assert (
+            'invalid choice' in result.stderr.lower()
+            or 'error' in result.stderr.lower()
+        )
 
     def test_invalid_port_number(self):
         """Test invalid port number."""
         result = subprocess.run(
             [
-                sys.executable, '-m', 'thoth.cli', 'mcp', 'http',
-                '--port', 'not-a-number'
+                sys.executable,
+                '-m',
+                'thoth.cli',
+                'mcp',
+                'http',
+                '--port',
+                'not-a-number',
             ],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
         )
 
         assert result.returncode != 0
@@ -391,12 +436,17 @@ class TestCLIErrorHandling:
         """Test port number out of valid range."""
         result = subprocess.run(
             [
-                sys.executable, '-m', 'thoth.cli', 'mcp', 'http',
-                '--port', '70000'  # Out of range
+                sys.executable,
+                '-m',
+                'thoth.cli',
+                'mcp',
+                'http',
+                '--port',
+                '70000',  # Out of range
             ],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
         )
 
         # May or may not fail at CLI level, but will fail at runtime
@@ -421,7 +471,7 @@ class TestCLIEnvironmentVariables:
             [sys.executable, '-m', 'thoth.cli', 'mcp', 'http', '--port', str(port)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            env=env
+            env=env,
         )
 
         try:
@@ -441,12 +491,17 @@ class TestCLISubprocessManagement:
         # Try to start on a privileged port (should fail)
         process = subprocess.Popen(
             [
-                sys.executable, '-m', 'thoth.cli', 'mcp', 'http',
-                '--port', '80'  # Privileged port
+                sys.executable,
+                '-m',
+                'thoth.cli',
+                'mcp',
+                'http',
+                '--port',
+                '80',  # Privileged port
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
         )
 
         try:
@@ -470,7 +525,7 @@ class TestCLISubprocessManagement:
         process1 = subprocess.Popen(
             [sys.executable, '-m', 'thoth.cli', 'mcp', 'http', '--port', str(port)],
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
         )
 
         try:
@@ -480,7 +535,7 @@ class TestCLISubprocessManagement:
             process2 = subprocess.Popen(
                 [sys.executable, '-m', 'thoth.cli', 'mcp', 'http', '--port', str(port)],
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                stderr=subprocess.PIPE,
             )
 
             try:
@@ -512,7 +567,7 @@ class TestCLISubprocessManagement:
             [sys.executable, '-m', 'thoth.cli', 'mcp', 'http', '--port', str(port)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            cwd=str(tmp_path)
+            cwd=str(tmp_path),
         )
 
         try:
@@ -537,7 +592,7 @@ class TestCLIOutputFormat:
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
         )
 
         try:
@@ -546,6 +601,7 @@ class TestCLIOutputFormat:
             # Read stderr (where logs go)
             # Use non-blocking read
             import select
+
             if hasattr(select, 'select'):
                 readable, _, _ = select.select([process.stderr], [], [], 1)
                 if readable:
@@ -566,14 +622,14 @@ class TestCLIOutputFormat:
             [sys.executable, '-m', 'thoth.cli', 'mcp', 'http', '--port', str(port)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
         )
 
         try:
             time.sleep(3)
 
             # Read stderr for startup messages
-            stderr_output = process.stderr.read()
+            stderr_output = process.stderr.read()  # noqa: F841
 
             # Should mention starting server
             # (exact format depends on logging configuration)

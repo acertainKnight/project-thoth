@@ -8,15 +8,15 @@ Tests:
 4. Metrics by confidence threshold
 """
 
-import pytest
-import numpy as np
+import pytest  # noqa: I001
+import numpy as np  # noqa: F401
 from hypothesis import given, strategies as st, settings
 
 from thoth.analyze.citations.resolution_chain import (
     ResolutionResult,
     CitationResolutionStatus,
     ConfidenceLevel,
-    ResolutionMetadata
+    ResolutionMetadata,  # noqa: F401
 )
 from thoth.analyze.citations.evaluation.metrics import (
     ConfusionMatrix,
@@ -27,7 +27,7 @@ from thoth.analyze.citations.evaluation.metrics import (
     _is_match_correct,
     _normalize_doi,
     _titles_match,
-    _normalize_author
+    _normalize_author,
 )
 from tests.fixtures.evaluation_fixtures import create_ground_truth_with_confidence
 
@@ -89,10 +89,7 @@ class TestConfusionMatrix:
     def test_accuracy_calculation(self):
         """Test accuracy = (TP + TN) / (TP + TN + FP + FN)."""
         cm = ConfusionMatrix(
-            true_positives=70,
-            true_negatives=20,
-            false_positives=5,
-            false_negatives=5
+            true_positives=70, true_negatives=20, false_positives=5, false_negatives=5
         )
         # Accuracy = (70 + 20) / 100 = 0.9
         assert cm.accuracy == pytest.approx(0.9)
@@ -106,16 +103,13 @@ class TestConfusionMatrix:
         tp=st.integers(min_value=0, max_value=100),
         fp=st.integers(min_value=0, max_value=100),
         tn=st.integers(min_value=0, max_value=100),
-        fn=st.integers(min_value=0, max_value=100)
+        fn=st.integers(min_value=0, max_value=100),
     )
     @settings(max_examples=100)
     def test_metrics_bounded_0_to_1(self, tp, fp, tn, fn):
         """Property test: all metrics are between 0 and 1."""
         cm = ConfusionMatrix(
-            true_positives=tp,
-            false_positives=fp,
-            true_negatives=tn,
-            false_negatives=fn
+            true_positives=tp, false_positives=fp, true_negatives=tn, false_negatives=fn
         )
 
         assert 0.0 <= cm.precision <= 1.0
@@ -140,7 +134,7 @@ class TestCitationMetrics:
             resolved_citations=90,
             unresolved_citations=10,
             by_difficulty={},
-            by_degradation={}
+            by_degradation={},
         )
 
         assert metrics.precision == cm.precision
@@ -161,7 +155,7 @@ class TestCitationMetrics:
             resolved_citations=90,
             unresolved_citations=10,
             by_difficulty={'easy': ConfusionMatrix()},
-            by_degradation={}
+            by_degradation={},
         )
 
         metrics_str = str(metrics)
@@ -174,12 +168,12 @@ class TestCitationMetrics:
 class TestPrecisionRecallF1Calculation:
     """Test main metrics calculation function."""
 
-    def test_calculate_metrics_basic(self, multiple_ground_truth, multiple_resolution_results):
+    def test_calculate_metrics_basic(
+        self, multiple_ground_truth, multiple_resolution_results
+    ):
         """Test basic metrics calculation with known ground truth."""
         metrics = calculate_precision_recall_f1(
-            multiple_ground_truth,
-            multiple_resolution_results,
-            match_criteria='doi'
+            multiple_ground_truth, multiple_resolution_results, match_criteria='doi'
         )
 
         # Expected: 1 TP (correct), 1 FP (wrong), 1 FN (failed)
@@ -196,11 +190,11 @@ class TestPrecisionRecallF1Calculation:
         self, multiple_ground_truth, multiple_resolution_results
     ):
         """Test error when ground truth and results have different lengths."""
-        with pytest.raises(ValueError, match="same length"):
+        with pytest.raises(ValueError, match='same length'):
             calculate_precision_recall_f1(
                 multiple_ground_truth[:2],  # Only 2
                 multiple_resolution_results,  # 3 results
-                match_criteria='doi'
+                match_criteria='doi',
             )
 
     def test_calculate_metrics_all_correct(self, edge_case_all_correct):
@@ -208,9 +202,7 @@ class TestPrecisionRecallF1Calculation:
         ground_truth, results = edge_case_all_correct
 
         metrics = calculate_precision_recall_f1(
-            ground_truth,
-            results,
-            match_criteria='doi'
+            ground_truth, results, match_criteria='doi'
         )
 
         # All correct: TP = 2, FP = 0, FN = 0
@@ -222,15 +214,15 @@ class TestPrecisionRecallF1Calculation:
         assert metrics.recall == 1.0
         assert metrics.f1_score == 1.0
 
-    def test_calculate_metrics_all_failed(self, multiple_ground_truth, edge_case_empty_results):
+    def test_calculate_metrics_all_failed(
+        self, multiple_ground_truth, edge_case_empty_results
+    ):
         """Test metrics when all resolutions fail."""
         # Pad to match length
         ground_truth = multiple_ground_truth[:2]
 
         metrics = calculate_precision_recall_f1(
-            ground_truth,
-            edge_case_empty_results,
-            match_criteria='doi'
+            ground_truth, edge_case_empty_results, match_criteria='doi'
         )
 
         # All failed: TP = 0, FP = 0, FN = 2
@@ -241,12 +233,12 @@ class TestPrecisionRecallF1Calculation:
         assert metrics.precision == 0.0
         assert metrics.recall == 0.0
 
-    def test_calculate_metrics_by_difficulty(self, multiple_ground_truth, multiple_resolution_results):
+    def test_calculate_metrics_by_difficulty(
+        self, multiple_ground_truth, multiple_resolution_results
+    ):
         """Test metrics are broken down by difficulty."""
         metrics = calculate_precision_recall_f1(
-            multiple_ground_truth,
-            multiple_resolution_results,
-            match_criteria='doi'
+            multiple_ground_truth, multiple_resolution_results, match_criteria='doi'
         )
 
         assert 'easy' in metrics.by_difficulty
@@ -262,36 +254,36 @@ class TestPrecisionRecallF1Calculation:
         # Hard case failed (FN)
         assert metrics.by_difficulty['hard'].false_negatives == 1
 
-    def test_calculate_metrics_by_degradation(self, multiple_ground_truth, multiple_resolution_results):
+    def test_calculate_metrics_by_degradation(
+        self, multiple_ground_truth, multiple_resolution_results
+    ):
         """Test metrics are broken down by degradation type."""
         metrics = calculate_precision_recall_f1(
-            multiple_ground_truth,
-            multiple_resolution_results,
-            match_criteria='doi'
+            multiple_ground_truth, multiple_resolution_results, match_criteria='doi'
         )
 
         # Should have entries for each degradation type
         assert 'clean' in metrics.by_degradation
         assert 'title_truncation' in metrics.by_degradation
 
-    def test_calculate_metrics_tracks_confidence(self, multiple_ground_truth, multiple_resolution_results):
+    def test_calculate_metrics_tracks_confidence(
+        self, multiple_ground_truth, multiple_resolution_results
+    ):
         """Test mean confidence is tracked."""
         metrics = calculate_precision_recall_f1(
-            multiple_ground_truth,
-            multiple_resolution_results,
-            match_criteria='doi'
+            multiple_ground_truth, multiple_resolution_results, match_criteria='doi'
         )
 
         # Mean of [0.95, 0.70, 0.0] = 0.55
         expected_confidence = (0.95 + 0.70 + 0.0) / 3
         assert abs(metrics.mean_confidence - expected_confidence) < 0.01
 
-    def test_calculate_metrics_tracks_api_calls(self, multiple_ground_truth, multiple_resolution_results):
+    def test_calculate_metrics_tracks_api_calls(
+        self, multiple_ground_truth, multiple_resolution_results
+    ):
         """Test API calls per citation is tracked."""
         metrics = calculate_precision_recall_f1(
-            multiple_ground_truth,
-            multiple_resolution_results,
-            match_criteria='doi'
+            multiple_ground_truth, multiple_resolution_results, match_criteria='doi'
         )
 
         # Should average API calls across results
@@ -301,35 +293,49 @@ class TestPrecisionRecallF1Calculation:
 class TestMatchCriteria:
     """Test different match criteria (doi, title_author, any)."""
 
-    def test_is_match_correct_doi_strict(self, sample_ground_truth, sample_resolution_result):
+    def test_is_match_correct_doi_strict(
+        self, sample_ground_truth, sample_resolution_result
+    ):
         """Test DOI matching is strict and normalized."""
         sample_ground_truth.ground_truth_doi = '10.5555/2380985'
         sample_resolution_result.matched_data['doi'] = 'https://doi.org/10.5555/2380985'
 
         assert _is_match_correct(sample_ground_truth, sample_resolution_result, 'doi')
 
-    def test_is_match_correct_doi_mismatch(self, sample_ground_truth, sample_resolution_result):
+    def test_is_match_correct_doi_mismatch(
+        self, sample_ground_truth, sample_resolution_result
+    ):
         """Test DOI mismatch returns False."""
         sample_ground_truth.ground_truth_doi = '10.1234/wrong'
         sample_resolution_result.matched_data['doi'] = '10.5555/2380985'
 
-        assert not _is_match_correct(sample_ground_truth, sample_resolution_result, 'doi')
+        assert not _is_match_correct(
+            sample_ground_truth, sample_resolution_result, 'doi'
+        )
 
-    def test_is_match_correct_title_author(self, sample_ground_truth, sample_resolution_result):
+    def test_is_match_correct_title_author(
+        self, sample_ground_truth, sample_resolution_result
+    ):
         """Test title+author matching with minor title variation."""
         # Use title with minor variation (missing punctuation) to test fuzzy matching
-        sample_ground_truth.ground_truth_title = 'Machine Learning A Probabilistic Perspective'
+        sample_ground_truth.ground_truth_title = (
+            'Machine Learning A Probabilistic Perspective'
+        )
         sample_ground_truth.ground_truth_authors = ['Murphy, Kevin P.']
 
         sample_resolution_result.matched_data = {
             'title': 'Machine Learning: A Probabilistic Perspective',
-            'authors': ['Murphy, Kevin P.']
+            'authors': ['Murphy, Kevin P.'],
         }
 
         # Should match even with minor punctuation variation (fuzzy matching)
-        assert _is_match_correct(sample_ground_truth, sample_resolution_result, 'title_author')
+        assert _is_match_correct(
+            sample_ground_truth, sample_resolution_result, 'title_author'
+        )
 
-    def test_is_match_correct_any_fallback(self, sample_ground_truth, sample_resolution_result):
+    def test_is_match_correct_any_fallback(
+        self, sample_ground_truth, sample_resolution_result
+    ):
         """Test 'any' criteria tries multiple matching methods."""
         # No DOI match
         sample_ground_truth.ground_truth_doi = None
@@ -351,7 +357,7 @@ class TestMatchCriteria:
             confidence_score=0.0,
             confidence_level=ConfidenceLevel.LOW,  # Use LOW instead of non-existent NONE
             source='crossref',  # Must be valid APISource enum value
-            matched_data=None
+            matched_data=None,
         )
 
         assert not _is_match_correct(sample_ground_truth, unresolved, 'any')
@@ -387,7 +393,7 @@ class TestNormalizationFunctions:
         # High similarity should match
         assert _titles_match(
             'Machine Learning: A Probabilistic Perspective',
-            'Machine Learning A Probabilistic Perspective'
+            'Machine Learning A Probabilistic Perspective',
         )
 
     def test_titles_match_low_similarity_fails(self):
@@ -478,16 +484,18 @@ class TestConfidenceCalibration:
 
     def test_calibration_length_mismatch_raises_error(self, multiple_ground_truth):
         """Test error when lengths don't match."""
-        results = [ResolutionResult(
-            citation='test citation',  # ResolutionResult expects string, not Citation object
-            status=CitationResolutionStatus.FAILED,
-            confidence_score=0.0,
-            confidence_level=ConfidenceLevel.LOW,  # Use LOW instead of non-existent NONE
-            source='crossref',  # Must be valid APISource enum value
-            matched_data=None
-        )]
+        results = [
+            ResolutionResult(
+                citation='test citation',  # ResolutionResult expects string, not Citation object
+                status=CitationResolutionStatus.FAILED,
+                confidence_score=0.0,
+                confidence_level=ConfidenceLevel.LOW,  # Use LOW instead of non-existent NONE
+                source='crossref',  # Must be valid APISource enum value
+                matched_data=None,
+            )
+        ]
 
-        with pytest.raises(ValueError, match="same length"):
+        with pytest.raises(ValueError, match='same length'):
             calculate_confidence_calibration(multiple_ground_truth, results)
 
     def test_calibration_empty_bins_handled(self):
@@ -496,7 +504,7 @@ class TestConfidenceCalibration:
         results = []
 
         # Only populate a few bins
-        for i in range(5):
+        for i in range(5):  # noqa: B007
             gt, result = create_ground_truth_with_confidence(0.9, is_correct=True)
             ground_truth.append(gt)
             results.append(result)
@@ -515,9 +523,7 @@ class TestMetricsByConfidenceThreshold:
     ):
         """Test higher thresholds filter out low confidence predictions."""
         metrics_by_threshold = calculate_metrics_by_confidence_threshold(
-            multiple_ground_truth,
-            multiple_resolution_results,
-            thresholds=[0.5, 0.8]
+            multiple_ground_truth, multiple_resolution_results, thresholds=[0.5, 0.8]
         )
 
         # At 0.5 threshold: all 3 results included (0.95, 0.70, 0.0)
@@ -527,17 +533,17 @@ class TestMetricsByConfidenceThreshold:
         assert 0.8 in metrics_by_threshold
 
         # Higher threshold should resolve fewer
-        assert (metrics_by_threshold[0.8].resolved_citations <=
-                metrics_by_threshold[0.5].resolved_citations)
+        assert (
+            metrics_by_threshold[0.8].resolved_citations
+            <= metrics_by_threshold[0.5].resolved_citations
+        )
 
     def test_metrics_by_threshold_precision_recall_tradeoff(
         self, multiple_ground_truth, multiple_resolution_results
     ):
         """Test precision increases and recall decreases with higher threshold."""
         metrics_by_threshold = calculate_metrics_by_confidence_threshold(
-            multiple_ground_truth,
-            multiple_resolution_results,
-            thresholds=[0.5, 0.9]
+            multiple_ground_truth, multiple_resolution_results, thresholds=[0.5, 0.9]
         )
 
         # Generally: higher threshold → higher precision, lower recall
@@ -550,8 +556,7 @@ class TestMetricsByConfidenceThreshold:
     ):
         """Test default thresholds are used when not specified."""
         metrics_by_threshold = calculate_metrics_by_confidence_threshold(
-            multiple_ground_truth,
-            multiple_resolution_results
+            multiple_ground_truth, multiple_resolution_results
         )
 
         # Default: [0.5, 0.6, 0.7, 0.8, 0.9]
@@ -564,9 +569,7 @@ class TestMetricsByConfidenceThreshold:
     ):
         """Test results below threshold are marked as FAILED."""
         metrics_by_threshold = calculate_metrics_by_confidence_threshold(
-            multiple_ground_truth,
-            multiple_resolution_results,
-            thresholds=[0.95]
+            multiple_ground_truth, multiple_resolution_results, thresholds=[0.95]
         )
 
         # At 0.95 threshold: only first result (0.95) passes

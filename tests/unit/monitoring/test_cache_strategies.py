@@ -11,7 +11,7 @@ This module tests the different cache eviction strategies:
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
-import pytest
+import pytest  # noqa: F401
 
 from thoth.monitoring.performance_monitor import (
     CacheStrategy,
@@ -30,29 +30,29 @@ class TestLRUStrategy:
             strategy=CacheStrategy.LRU,
         )
 
-        with patch('thoth.monitoring.performance_monitor.datetime') as mock_dt:
+        with patch.object(cache, '_get_now') as mock_get_now:
             base_time = datetime(2024, 1, 1, 12, 0, 0)
-            mock_dt.now.return_value = base_time
+            mock_get_now.return_value = base_time
 
             # Add 3 entries
             cache.put('key1', 'value1')
 
-            mock_dt.now.return_value = base_time + timedelta(seconds=1)
+            mock_get_now.return_value = base_time + timedelta(seconds=1)
             cache.put('key2', 'value2')
 
-            mock_dt.now.return_value = base_time + timedelta(seconds=2)
+            mock_get_now.return_value = base_time + timedelta(seconds=2)
             cache.put('key3', 'value3')
 
             # Access key1 and key2 to update their access time
-            mock_dt.now.return_value = base_time + timedelta(seconds=3)
+            mock_get_now.return_value = base_time + timedelta(seconds=3)
             cache.get('key1')
 
-            mock_dt.now.return_value = base_time + timedelta(seconds=4)
+            mock_get_now.return_value = base_time + timedelta(seconds=4)
             cache.get('key2')
 
             # key3 is now least recently used (accessed at t=2)
             # Add new entry to trigger eviction
-            mock_dt.now.return_value = base_time + timedelta(seconds=5)
+            mock_get_now.return_value = base_time + timedelta(seconds=5)
             cache.put('key4', 'value4')
 
             # key3 should be evicted
@@ -93,25 +93,25 @@ class TestLRUStrategy:
             strategy=CacheStrategy.LRU,
         )
 
-        with patch('thoth.monitoring.performance_monitor.datetime') as mock_dt:
+        with patch.object(cache, '_get_now') as mock_get_now:
             base_time = datetime(2024, 1, 1, 12, 0, 0)
 
             # Add entries
-            mock_dt.now.return_value = base_time
+            mock_get_now.return_value = base_time
             cache.put('key1', 'value1')
 
-            mock_dt.now.return_value = base_time + timedelta(seconds=1)
+            mock_get_now.return_value = base_time + timedelta(seconds=1)
             cache.put('key2', 'value2')
 
-            mock_dt.now.return_value = base_time + timedelta(seconds=2)
+            mock_get_now.return_value = base_time + timedelta(seconds=2)
             cache.put('key3', 'value3')
 
             # Overwrite key1 (updates its access time)
-            mock_dt.now.return_value = base_time + timedelta(seconds=10)
+            mock_get_now.return_value = base_time + timedelta(seconds=10)
             cache.put('key1', 'value1_updated')
 
             # Add new entry - key2 should be evicted (oldest access time)
-            mock_dt.now.return_value = base_time + timedelta(seconds=11)
+            mock_get_now.return_value = base_time + timedelta(seconds=11)
             cache.put('key4', 'value4')
 
             assert cache.get('key2') is None
@@ -242,9 +242,9 @@ class TestTTLStrategy:
             default_ttl=60.0,
         )
 
-        with patch('thoth.monitoring.performance_monitor.datetime') as mock_dt:
+        with patch.object(cache, '_get_now') as mock_get_now:
             base_time = datetime(2024, 1, 1, 12, 0, 0)
-            mock_dt.now.return_value = base_time
+            mock_get_now.return_value = base_time
 
             # Add entries with different TTLs
             cache.put('key1', 'value1', ttl=30.0)  # 30 seconds
@@ -253,11 +253,11 @@ class TestTTLStrategy:
             cache.put('key4', 'value4', ttl=10.0)  # 10 seconds (shortest)
 
             # Fill cache to trigger eviction
-            mock_dt.now.return_value = base_time + timedelta(seconds=15)
+            mock_get_now.return_value = base_time + timedelta(seconds=15)
             cache.put('key5', 'value5')
 
             # Advance time to trigger TTL eviction
-            mock_dt.now.return_value = base_time + timedelta(seconds=20)
+            mock_get_now.return_value = base_time + timedelta(seconds=20)
             cache.put('key6', 'value6')  # This will trigger eviction
 
             # key4 should be expired (10s TTL, 20s elapsed)
@@ -271,9 +271,9 @@ class TestTTLStrategy:
             strategy=CacheStrategy.TTL,
         )
 
-        with patch('thoth.monitoring.performance_monitor.datetime') as mock_dt:
+        with patch.object(cache, '_get_now') as mock_get_now:
             base_time = datetime(2024, 1, 1, 12, 0, 0)
-            mock_dt.now.return_value = base_time
+            mock_get_now.return_value = base_time
 
             # Add entries with short TTL
             cache.put('key1', 'value1', ttl=10.0)
@@ -282,7 +282,7 @@ class TestTTLStrategy:
             cache.put('key4', 'value4', ttl=12.0)
 
             # Advance time past multiple TTLs
-            mock_dt.now.return_value = base_time + timedelta(seconds=20)
+            mock_get_now.return_value = base_time + timedelta(seconds=20)
 
             # Fill cache to trigger eviction
             cache.put('key5', 'value5')
@@ -302,9 +302,9 @@ class TestTTLStrategy:
             strategy=CacheStrategy.TTL,
         )
 
-        with patch('thoth.monitoring.performance_monitor.datetime') as mock_dt:
+        with patch.object(cache, '_get_now') as mock_get_now:
             base_time = datetime(2024, 1, 1, 12, 0, 0)
-            mock_dt.now.return_value = base_time
+            mock_get_now.return_value = base_time
 
             # Add entries with long TTL
             cache.put('key1', 'value1', ttl=1000.0)
@@ -312,7 +312,7 @@ class TestTTLStrategy:
             cache.put('key3', 'value3', ttl=1000.0)
 
             # Small time advance
-            mock_dt.now.return_value = base_time + timedelta(seconds=10)
+            mock_get_now.return_value = base_time + timedelta(seconds=10)
 
             # Trigger eviction - nothing should be evicted
             cache.put('key4', 'value4', ttl=1000.0)
@@ -329,9 +329,9 @@ class TestTTLStrategy:
             strategy=CacheStrategy.TTL,
         )
 
-        with patch('thoth.monitoring.performance_monitor.datetime') as mock_dt:
+        with patch.object(cache, '_get_now') as mock_get_now:
             base_time = datetime(2024, 1, 1, 12, 0, 0)
-            mock_dt.now.return_value = base_time
+            mock_get_now.return_value = base_time
 
             # Add entries
             cache.put('key1', 'value1', ttl=10.0)
@@ -341,7 +341,7 @@ class TestTTLStrategy:
             initial_evictions = cache._eviction_count
 
             # Advance time to expire entries
-            mock_dt.now.return_value = base_time + timedelta(seconds=25)
+            mock_get_now.return_value = base_time + timedelta(seconds=25)
 
             # Trigger eviction
             cache.put('key4', 'value4')
@@ -361,33 +361,33 @@ class TestAdaptiveStrategy:
             strategy=CacheStrategy.ADAPTIVE,
         )
 
-        with patch('thoth.monitoring.performance_monitor.datetime') as mock_dt:
+        with patch.object(cache, '_get_now') as mock_get_now:
             base_time = datetime(2024, 1, 1, 12, 0, 0)
-            mock_dt.now.return_value = base_time
+            mock_get_now.return_value = base_time
 
             # Add 3 entries
             cache.put('key1', 'value1')
 
-            mock_dt.now.return_value = base_time + timedelta(seconds=1)
+            mock_get_now.return_value = base_time + timedelta(seconds=1)
             cache.put('key2', 'value2')
 
-            mock_dt.now.return_value = base_time + timedelta(seconds=2)
+            mock_get_now.return_value = base_time + timedelta(seconds=2)
             cache.put('key3', 'value3')
 
             # key1: old, frequently accessed (high frequency, low recency)
-            mock_dt.now.return_value = base_time + timedelta(seconds=3)
+            mock_get_now.return_value = base_time + timedelta(seconds=3)
             for _ in range(10):
                 cache.get('key1')
 
             # key2: recent, infrequently accessed (low frequency, high recency)
-            mock_dt.now.return_value = base_time + timedelta(seconds=50)
+            mock_get_now.return_value = base_time + timedelta(seconds=50)
             cache.get('key2')
 
             # key3: old, infrequently accessed (low frequency, low recency)
             # This should have worst score
 
             # Trigger eviction
-            mock_dt.now.return_value = base_time + timedelta(seconds=60)
+            mock_get_now.return_value = base_time + timedelta(seconds=60)
             cache.put('key4', 'value4')
 
             # key3 should be evicted (worst composite score)
@@ -403,9 +403,9 @@ class TestAdaptiveStrategy:
             strategy=CacheStrategy.ADAPTIVE,
         )
 
-        with patch('thoth.monitoring.performance_monitor.datetime') as mock_dt:
+        with patch.object(cache, '_get_now') as mock_get_now:
             base_time = datetime(2024, 1, 1, 12, 0, 0)
-            mock_dt.now.return_value = base_time
+            mock_get_now.return_value = base_time
 
             cache.put('key1', 'value1')
             cache.put('key2', 'value2')
@@ -415,7 +415,7 @@ class TestAdaptiveStrategy:
                 cache.get('key1')
 
             # key2: very recent but low frequency
-            mock_dt.now.return_value = base_time + timedelta(seconds=1000)
+            mock_get_now.return_value = base_time + timedelta(seconds=1000)
             cache.get('key2')
 
             # Add new entry
@@ -433,9 +433,9 @@ class TestAdaptiveStrategy:
             strategy=CacheStrategy.ADAPTIVE,
         )
 
-        with patch('thoth.monitoring.performance_monitor.datetime') as mock_dt:
+        with patch.object(cache, '_get_now') as mock_get_now:
             base_time = datetime(2024, 1, 1, 12, 0, 0)
-            mock_dt.now.return_value = base_time
+            mock_get_now.return_value = base_time
 
             # Add entries
             cache.put('key1', 'value1')
@@ -443,17 +443,17 @@ class TestAdaptiveStrategy:
             cache.put('key3', 'value3')
 
             # All accessed same number of times but at different times
-            mock_dt.now.return_value = base_time + timedelta(hours=1)
+            mock_get_now.return_value = base_time + timedelta(hours=1)
             cache.get('key1')
 
-            mock_dt.now.return_value = base_time + timedelta(hours=2)
+            mock_get_now.return_value = base_time + timedelta(hours=2)
             cache.get('key2')
 
-            mock_dt.now.return_value = base_time + timedelta(hours=3)
+            mock_get_now.return_value = base_time + timedelta(hours=3)
             cache.get('key3')
 
             # Trigger eviction
-            mock_dt.now.return_value = base_time + timedelta(hours=4)
+            mock_get_now.return_value = base_time + timedelta(hours=4)
             cache.put('key4', 'value4')
 
             # key1 should be evicted (least recent)
@@ -504,7 +504,9 @@ class TestEvictionBehaviorComparison:
         # Create caches with different strategies
         lru_cache = IntelligentCache('lru', max_size=3, strategy=CacheStrategy.LRU)
         lfu_cache = IntelligentCache('lfu', max_size=3, strategy=CacheStrategy.LFU)
-        adaptive_cache = IntelligentCache('adaptive', max_size=3, strategy=CacheStrategy.ADAPTIVE)
+        adaptive_cache = IntelligentCache(
+            'adaptive', max_size=3, strategy=CacheStrategy.ADAPTIVE
+        )
 
         # Same initial entries
         for cache in [lru_cache, lfu_cache, adaptive_cache]:

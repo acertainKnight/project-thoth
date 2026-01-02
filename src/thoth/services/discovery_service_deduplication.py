@@ -239,7 +239,7 @@ class DiscoveryDeduplicationMixin:
 
         Returns:
             bool: True if successful
-        """
+        """  # noqa: W505
         if not self.article_repository:
             return False
 
@@ -318,8 +318,8 @@ class DiscoveryDeduplicationMixin:
                     stats['existing_articles'] += 1
 
         logger.info(
-            f"Batch processing complete: {stats['new_articles']} new, "
-            f"{stats['existing_articles']} existing, {stats['errors']} errors"
+            f'Batch processing complete: {stats["new_articles"]} new, '
+            f'{stats["existing_articles"]} existing, {stats["errors"]} errors'
         )
 
         return stats
@@ -370,12 +370,12 @@ class DiscoveryDeduplicationMixin:
 
             # Count duplicates
             for group in [doi_groups, arxiv_groups, title_groups]:
-                for identifier, articles in group.items():
+                for identifier, articles in group.items():  # noqa: B007
                     if len(articles) > 1:
                         stats['duplicates_found'] += len(articles) - 1
 
             logger.info(
-                f"Deduplication scan complete: {stats['duplicates_found']} duplicates found"
+                f'Deduplication scan complete: {stats["duplicates_found"]} duplicates found'
             )
 
             return stats
@@ -388,9 +388,7 @@ class DiscoveryDeduplicationMixin:
 # Integration helper functions
 
 
-async def initialize_deduplication_for_service(
-    service, postgres_service
-) -> None:
+async def initialize_deduplication_for_service(service, postgres_service) -> None:
     """
     Initialize deduplication for a discovery service.
 

@@ -5,7 +5,7 @@ Tests end-to-end monitoring workflows including health checks,
 metrics collection, alerting, and cache refresh operations.
 """
 
-import asyncio
+import asyncio  # noqa: I001
 import time
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -16,7 +16,7 @@ from thoth.mcp.monitoring import (
     MCPHealthStatus,
     MCPMonitor,
     MCPServerStats,
-    mcp_monitor,
+    mcp_monitor,  # noqa: F401
 )
 
 
@@ -278,7 +278,7 @@ class TestAlertingMechanism:
             success_rate=0.0,
             avg_response_time=1.0,
             last_check=time.time(),
-            errors=['Server down']
+            errors=['Server down'],
         )
 
         assert monitor.should_alert(status) is True
@@ -296,7 +296,7 @@ class TestAlertingMechanism:
             success_rate=0.90,  # Below threshold
             avg_response_time=0.5,
             last_check=time.time(),
-            errors=[]
+            errors=[],
         )
 
         assert monitor.should_alert(status) is True
@@ -314,7 +314,7 @@ class TestAlertingMechanism:
             success_rate=0.99,
             avg_response_time=10.0,  # Above threshold
             last_check=time.time(),
-            errors=[]
+            errors=[],
         )
 
         assert monitor.should_alert(status) is True
@@ -331,7 +331,7 @@ class TestAlertingMechanism:
             success_rate=0.99,
             avg_response_time=0.5,
             last_check=time.time(),
-            errors=[]
+            errors=[],
         )
 
         assert monitor.should_alert(status) is False
@@ -348,7 +348,7 @@ class TestAlertingMechanism:
             success_rate=0.99,
             avg_response_time=0.5,
             last_check=time.time(),
-            errors=['Warning: High memory usage']
+            errors=['Warning: High memory usage'],
         )
 
         assert monitor.should_alert(status) is True
@@ -359,7 +359,7 @@ class TestAlertingMechanism:
         monitor.alert_thresholds = {
             'success_rate_min': 0.80,  # Lower threshold
             'response_time_max': 10.0,  # Higher threshold
-            'connection_failure_max': 5
+            'connection_failure_max': 5,
         }
 
         status = MCPHealthStatus(
@@ -370,7 +370,7 @@ class TestAlertingMechanism:
             success_rate=0.85,  # Would alert with default, but not with custom
             avg_response_time=7.0,  # Would alert with default, but not with custom
             last_check=time.time(),
-            errors=[]
+            errors=[],
         )
 
         assert monitor.should_alert(status) is False
@@ -437,7 +437,7 @@ class TestPrometheusMetrics:
     @pytest.mark.asyncio
     async def test_metrics_format(self):
         """Test metrics are in Prometheus format."""
-        monitor = MCPMonitor()
+        monitor = MCPMonitor()  # noqa: F841
 
         # Mock healthy server
         with patch('httpx.AsyncClient') as mock_client:
@@ -465,7 +465,7 @@ class TestPrometheusMetrics:
     @pytest.mark.asyncio
     async def test_metrics_include_all_categories(self):
         """Test metrics include all expected categories."""
-        monitor = MCPMonitor()
+        monitor = MCPMonitor()  # noqa: F841
 
         with patch('httpx.AsyncClient') as mock_client:
             mock_response = Mock()
@@ -484,7 +484,7 @@ class TestPrometheusMetrics:
                 'mcp_total_connections',
                 'mcp_active_connections',
                 'mcp_success_rate',
-                'mcp_avg_response_time'
+                'mcp_avg_response_time',
             ]
 
             for expected in expected_metrics:
@@ -493,7 +493,7 @@ class TestPrometheusMetrics:
     @pytest.mark.asyncio
     async def test_metrics_values_are_numeric(self):
         """Test metric values are numeric."""
-        monitor = MCPMonitor()
+        monitor = MCPMonitor()  # noqa: F841
 
         with patch('httpx.AsyncClient') as mock_client:
             mock_response = Mock()
@@ -578,10 +578,10 @@ class TestEndToEndMonitoringWorkflow:
                     )
 
                     health = await monitor.get_health_status()
-                    details = await monitor.get_server_details()
+                    details = await monitor.get_server_details()  # noqa: F841
 
                     # Log iteration
-                    print(f'Monitoring iteration {i+1}: healthy={health.healthy}')
+                    print(f'Monitoring iteration {i + 1}: healthy={health.healthy}')
 
                 await asyncio.sleep(0.2)
 

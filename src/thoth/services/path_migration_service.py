@@ -36,7 +36,7 @@ class PathMigrationService:
         self.notes_dir = Path(config.notes_dir)
         self.markdown_dir = Path(config.markdown_dir)
 
-        logger.debug(f'PathMigrationService initialized')
+        logger.debug(f'PathMigrationService initialized')  # noqa: F541
         logger.debug(f'  Vault path: {self.vault_path}')
         logger.debug(f'  Data path: {self.data_path}')
 
@@ -191,9 +191,7 @@ class PathMigrationService:
                     break
 
             if not needs_update:
-                logger.info(
-                    'Tracker file paths already normalized for this machine'
-                )
+                logger.info('Tracker file paths already normalized for this machine')
                 stats['paths_unchanged'] = len(data)
                 return stats
 
@@ -211,9 +209,7 @@ class PathMigrationService:
                 # Normalize paths in entry
                 new_entry = entry.copy()
                 if 'note_path' in new_entry:
-                    new_entry['note_path'] = self.normalize_path(
-                        new_entry['note_path']
-                    )
+                    new_entry['note_path'] = self.normalize_path(new_entry['note_path'])
                 if 'new_pdf_path' in new_entry:
                     new_entry['new_pdf_path'] = self.normalize_path(
                         new_entry['new_pdf_path']
@@ -277,7 +273,7 @@ class PathMigrationService:
             needs_update = False
             for node in data.get('nodes', []):
                 # Check if paths are full paths (need normalization)
-                if 'pdf_path' in node and node['pdf_path']:
+                if 'pdf_path' in node and node['pdf_path']:  # noqa: RUF019
                     if '/' in node['pdf_path'] or '\\' in node['pdf_path']:
                         needs_update = True
                         break
@@ -294,17 +290,17 @@ class PathMigrationService:
             # Normalize paths in nodes
             for node in data.get('nodes', []):
                 # Graph stores paths as filenames only, so just extract filename
-                if 'pdf_path' in node and node['pdf_path']:
+                if 'pdf_path' in node and node['pdf_path']:  # noqa: RUF019
                     if '/' in node['pdf_path'] or '\\' in node['pdf_path']:
                         node['pdf_path'] = Path(node['pdf_path']).name
                         stats['paths_updated'] += 1
 
-                if 'markdown_path' in node and node['markdown_path']:
+                if 'markdown_path' in node and node['markdown_path']:  # noqa: RUF019
                     if '/' in node['markdown_path'] or '\\' in node['markdown_path']:
                         node['markdown_path'] = Path(node['markdown_path']).name
                         stats['paths_updated'] += 1
 
-                if 'obsidian_path' in node and node['obsidian_path']:
+                if 'obsidian_path' in node and node['obsidian_path']:  # noqa: RUF019
                     if '/' in node['obsidian_path'] or '\\' in node['obsidian_path']:
                         node['obsidian_path'] = Path(node['obsidian_path']).name
                         stats['paths_updated'] += 1

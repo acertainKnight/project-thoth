@@ -11,7 +11,7 @@ Tests FastAPI health endpoints including:
 - Response model validation
 """
 
-import time
+import time  # noqa: I001
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -36,6 +36,7 @@ from thoth.mcp.monitoring import (
 # FastAPI Test Client Setup
 # ============================================================================
 
+
 @pytest.fixture
 def test_client():
     """Create FastAPI test client with MCP health router."""
@@ -50,6 +51,7 @@ def test_client():
 # ============================================================================
 # GET /mcp/health Endpoint Tests
 # ============================================================================
+
 
 class TestHealthEndpoint:
     """Test GET /mcp/health endpoint."""
@@ -153,6 +155,7 @@ class TestHealthEndpoint:
 # GET /mcp/servers Endpoint Tests
 # ============================================================================
 
+
 class TestServersEndpoint:
     """Test GET /mcp/servers endpoint."""
 
@@ -160,9 +163,7 @@ class TestServersEndpoint:
     @respx.mock
     async def test_servers_endpoint_healthy_server(self):
         """Test /mcp/servers returns server list when healthy."""
-        respx.get('http://localhost:8000/health').mock(
-            return_value=httpx.Response(200)
-        )
+        respx.get('http://localhost:8000/health').mock(return_value=httpx.Response(200))
 
         servers = await get_mcp_servers()
 
@@ -247,6 +248,7 @@ class TestServersEndpoint:
 # POST /mcp/refresh-cache Endpoint Tests
 # ============================================================================
 
+
 class TestRefreshCacheEndpoint:
     """Test POST /mcp/refresh-cache endpoint."""
 
@@ -272,8 +274,14 @@ class TestRefreshCacheEndpoint:
     @pytest.mark.asyncio
     async def test_refresh_cache_endpoint_error_handling(self):
         """Test /mcp/refresh-cache error handling."""
-        with patch('thoth.mcp.monitoring.mcp_monitor.refresh_tools_cache',
-                   return_value={'success': False, 'error': 'Cache refresh failed', 'timestamp': time.time()}):
+        with patch(
+            'thoth.mcp.monitoring.mcp_monitor.refresh_tools_cache',
+            return_value={
+                'success': False,
+                'error': 'Cache refresh failed',
+                'timestamp': time.time(),
+            },
+        ):
             with pytest.raises(HTTPException) as exc_info:
                 await refresh_mcp_cache()
 
@@ -282,8 +290,14 @@ class TestRefreshCacheEndpoint:
 
     def test_refresh_cache_endpoint_error_via_test_client(self, test_client):
         """Test /mcp/refresh-cache error handling via test client."""
-        with patch('thoth.mcp.monitoring.mcp_monitor.refresh_tools_cache',
-                   return_value={'success': False, 'error': 'Test error', 'timestamp': time.time()}):
+        with patch(
+            'thoth.mcp.monitoring.mcp_monitor.refresh_tools_cache',
+            return_value={
+                'success': False,
+                'error': 'Test error',
+                'timestamp': time.time(),
+            },
+        ):
             response = test_client.post('/mcp/refresh-cache')
 
             assert response.status_code == 500
@@ -302,6 +316,7 @@ class TestRefreshCacheEndpoint:
 # GET /mcp/metrics Endpoint Tests (Prometheus Format)
 # ============================================================================
 
+
 class TestMetricsEndpoint:
     """Test GET /mcp/metrics endpoint and Prometheus format."""
 
@@ -309,9 +324,7 @@ class TestMetricsEndpoint:
     @respx.mock
     async def test_metrics_endpoint_prometheus_format(self):
         """Test /mcp/metrics returns Prometheus-formatted metrics."""
-        respx.get('http://localhost:8000/health').mock(
-            return_value=httpx.Response(200)
-        )
+        respx.get('http://localhost:8000/health').mock(return_value=httpx.Response(200))
 
         metrics = await get_mcp_metrics()
 
@@ -340,9 +353,7 @@ class TestMetricsEndpoint:
     @respx.mock
     async def test_metrics_endpoint_includes_server_metrics(self):
         """Test /mcp/metrics includes per-server metrics."""
-        respx.get('http://localhost:8000/health').mock(
-            return_value=httpx.Response(200)
-        )
+        respx.get('http://localhost:8000/health').mock(return_value=httpx.Response(200))
 
         metrics = await get_mcp_metrics()
 
@@ -358,9 +369,7 @@ class TestMetricsEndpoint:
     @respx.mock
     async def test_metrics_endpoint_metric_values(self):
         """Test /mcp/metrics contains valid numeric values."""
-        respx.get('http://localhost:8000/health').mock(
-            return_value=httpx.Response(200)
-        )
+        respx.get('http://localhost:8000/health').mock(return_value=httpx.Response(200))
 
         metrics = await get_mcp_metrics()
         lines = metrics.split('\n')
@@ -382,9 +391,7 @@ class TestMetricsEndpoint:
     @respx.mock
     async def test_metrics_endpoint_label_format(self):
         """Test /mcp/metrics uses correct label formatting."""
-        respx.get('http://localhost:8000/health').mock(
-            return_value=httpx.Response(200)
-        )
+        respx.get('http://localhost:8000/health').mock(return_value=httpx.Response(200))
 
         metrics = await get_mcp_metrics()
 
@@ -411,6 +418,7 @@ class TestMetricsEndpoint:
 # ============================================================================
 # HTTP Client Mocking Tests
 # ============================================================================
+
 
 class TestHTTPClientMocking:
     """Test proper mocking of httpx client for external MCP server calls."""
@@ -489,14 +497,17 @@ class TestHTTPClientMocking:
 # Error Handling Tests
 # ============================================================================
 
+
 class TestEndpointErrorHandling:
     """Test error handling across all endpoints."""
 
     @pytest.mark.asyncio
     async def test_health_endpoint_handles_monitor_exception(self):
         """Test /mcp/health handles exceptions from monitor."""
-        with patch('thoth.mcp.monitoring.mcp_monitor.get_health_status',
-                   side_effect=Exception('Monitor error')):
+        with patch(
+            'thoth.mcp.monitoring.mcp_monitor.get_health_status',
+            side_effect=Exception('Monitor error'),
+        ):
             # Should not raise, should return error status
             try:
                 status = await get_mcp_health()
@@ -509,8 +520,10 @@ class TestEndpointErrorHandling:
     @pytest.mark.asyncio
     async def test_servers_endpoint_handles_monitor_exception(self):
         """Test /mcp/servers handles exceptions from monitor."""
-        with patch('thoth.mcp.monitoring.mcp_monitor.get_server_details',
-                   side_effect=Exception('Monitor error')):
+        with patch(
+            'thoth.mcp.monitoring.mcp_monitor.get_server_details',
+            side_effect=Exception('Monitor error'),
+        ):
             try:
                 servers = await get_mcp_servers()
                 # Should return empty list on error
@@ -520,8 +533,14 @@ class TestEndpointErrorHandling:
 
     def test_refresh_cache_endpoint_returns_500_on_failure(self, test_client):
         """Test /mcp/refresh-cache returns 500 on failure."""
-        with patch('thoth.mcp.monitoring.mcp_monitor.refresh_tools_cache',
-                   return_value={'success': False, 'error': 'Cache error', 'timestamp': time.time()}):
+        with patch(
+            'thoth.mcp.monitoring.mcp_monitor.refresh_tools_cache',
+            return_value={
+                'success': False,
+                'error': 'Cache error',
+                'timestamp': time.time(),
+            },
+        ):
             response = test_client.post('/mcp/refresh-cache')
             assert response.status_code == 500
 
@@ -529,6 +548,7 @@ class TestEndpointErrorHandling:
 # ============================================================================
 # Integration Tests with Multiple Endpoints
 # ============================================================================
+
 
 class TestEndpointIntegration:
     """Test integration between different endpoints."""

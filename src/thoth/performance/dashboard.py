@@ -5,7 +5,7 @@ This module provides real-time performance visualization, monitoring dashboards,
 and interactive analysis tools for the Thoth research assistant system.
 """
 
-import json
+import json  # noqa: I001
 import webbrowser
 from datetime import datetime
 from typing import Any
@@ -18,7 +18,7 @@ from thoth.performance.pipeline_analyzer import PipelineAnalyzer
 from thoth.performance.reliability_analyzer import ReliabilityAnalyzer
 from thoth.performance.workflow_monitor import WorkflowMonitor
 from thoth.services.service_manager import ServiceManager
-from thoth.config import config, Config
+from thoth.config import config, Config  # noqa: F401
 
 
 class PerformanceDashboard:
@@ -35,7 +35,7 @@ class PerformanceDashboard:
 
     def __init__(
         self,
-        config: Config,
+        config: Config,  # noqa: F811
         service_manager: ServiceManager,
         metrics_collector: MetricsCollector | None = None,
         pipeline_analyzer: PipelineAnalyzer | None = None,
@@ -880,7 +880,7 @@ class PerformanceDashboard:
         logger.info(f'JSON dashboard data saved: {json_file}')
         return str(json_file)
 
-    async def serve_dashboard(self, port: int = 8080) -> None:
+    async def serve_dashboard(self, port: int = 8080) -> None:  # noqa: ARG002
         """
         Serve dashboard via simple HTTP server.
 

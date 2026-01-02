@@ -5,18 +5,22 @@ This module calculates precision, recall, F1, and confidence calibration
 for citation resolution systems using ground truth data.
 """
 
-from dataclasses import dataclass
-from typing import List, Dict, Tuple, Optional
+from dataclasses import dataclass  # noqa: I001
+from typing import List, Dict, Tuple, Optional  # noqa: F401, UP035
 import numpy as np
 from loguru import logger
 
-from thoth.analyze.citations.resolution_chain import ResolutionResult, CitationResolutionStatus
+from thoth.analyze.citations.resolution_chain import (
+    ResolutionResult,
+    CitationResolutionStatus,
+)
 from thoth.analyze.citations.evaluation.ground_truth import GroundTruthCitation
 
 
 @dataclass
 class ConfusionMatrix:
     """Confusion matrix for binary classification."""
+
     true_positives: int = 0
     false_positives: int = 0
     true_negatives: int = 0
@@ -48,7 +52,12 @@ class ConfusionMatrix:
     @property
     def accuracy(self) -> float:
         """Accuracy = (TP + TN) / (TP + TN + FP + FN)"""
-        total = self.true_positives + self.true_negatives + self.false_positives + self.false_negatives
+        total = (
+            self.true_positives
+            + self.true_negatives
+            + self.false_positives
+            + self.false_negatives
+        )
         if total == 0:
             return 0.0
         return (self.true_positives + self.true_negatives) / total
@@ -67,6 +76,7 @@ class CitationMetrics:
     - Mean Confidence: Average confidence score
     - API Efficiency: Average API calls per resolved citation
     """
+
     confusion_matrix: ConfusionMatrix
     mean_confidence: float
     confidence_calibration_error: float
@@ -74,8 +84,8 @@ class CitationMetrics:
     total_citations: int
     resolved_citations: int
     unresolved_citations: int
-    by_difficulty: Dict[str, ConfusionMatrix]
-    by_degradation: Dict[str, ConfusionMatrix]
+    by_difficulty: Dict[str, ConfusionMatrix]  # noqa: UP006
+    by_degradation: Dict[str, ConfusionMatrix]  # noqa: UP006
 
     @property
     def precision(self) -> float:
@@ -104,8 +114,8 @@ F1 Score: {self.f1_score:.3f}
 Accuracy: {self.accuracy:.3f}
 
 Total Citations: {self.total_citations}
-Resolved: {self.resolved_citations} ({self.resolved_citations/self.total_citations*100:.1f}%)
-Unresolved: {self.unresolved_citations} ({self.unresolved_citations/self.total_citations*100:.1f}%)
+Resolved: {self.resolved_citations} ({self.resolved_citations / self.total_citations * 100:.1f}%)
+Unresolved: {self.unresolved_citations} ({self.unresolved_citations / self.total_citations * 100:.1f}%)
 
 Confidence: {self.mean_confidence:.3f}
 Calibration Error: {self.confidence_calibration_error:.3f}
@@ -119,9 +129,9 @@ By Difficulty:
 
 
 def calculate_precision_recall_f1(
-    ground_truth: List[GroundTruthCitation],
-    results: List[ResolutionResult],
-    match_criteria: str = "doi"  # "doi", "title_author", or "any"
+    ground_truth: List[GroundTruthCitation],  # noqa: UP006
+    results: List[ResolutionResult],  # noqa: UP006
+    match_criteria: str = 'doi',  # "doi", "title_author", or "any"
 ) -> CitationMetrics:
     """
     Calculate precision, recall, and F1 score for citation resolution.
@@ -145,13 +155,13 @@ def calculate_precision_recall_f1(
     """
     if len(ground_truth) != len(results):
         raise ValueError(
-            f"Ground truth and results must have same length: "
-            f"{len(ground_truth)} vs {len(results)}"
+            f'Ground truth and results must have same length: '
+            f'{len(ground_truth)} vs {len(results)}'
         )
 
     logger.info(
-        f"Calculating metrics for {len(ground_truth)} citations "
-        f"(match_criteria={match_criteria})"
+        f'Calculating metrics for {len(ground_truth)} citations '
+        f'(match_criteria={match_criteria})'
     )
 
     # Overall confusion matrix
@@ -159,9 +169,9 @@ def calculate_precision_recall_f1(
 
     # Confusion matrices by difficulty and degradation type
     by_difficulty = {
-        "easy": ConfusionMatrix(),
-        "medium": ConfusionMatrix(),
-        "hard": ConfusionMatrix()
+        'easy': ConfusionMatrix(),
+        'medium': ConfusionMatrix(),
+        'hard': ConfusionMatrix(),
     }
     by_degradation = {}
 
@@ -172,7 +182,7 @@ def calculate_precision_recall_f1(
     unresolved_count = 0
 
     # Evaluate each citation
-    for gt, result in zip(ground_truth, results):
+    for gt, result in zip(ground_truth, results):  # noqa: B905
         # Track confidence and API usage
         confidences.append(result.confidence_score)
         if result.metadata and result.metadata.api_sources_tried:
@@ -227,21 +237,19 @@ def calculate_precision_recall_f1(
         resolved_citations=resolved_count,
         unresolved_citations=unresolved_count,
         by_difficulty=by_difficulty,
-        by_degradation=by_degradation
+        by_degradation=by_degradation,
     )
 
     logger.info(
-        f"Evaluation complete: P={metrics.precision:.3f}, "
-        f"R={metrics.recall:.3f}, F1={metrics.f1_score:.3f}"
+        f'Evaluation complete: P={metrics.precision:.3f}, '
+        f'R={metrics.recall:.3f}, F1={metrics.f1_score:.3f}'
     )
 
     return metrics
 
 
 def _is_match_correct(
-    gt: GroundTruthCitation,
-    result: ResolutionResult,
-    match_criteria: str
+    gt: GroundTruthCitation, result: ResolutionResult, match_criteria: str
 ) -> bool:
     """
     Determine if resolution result matches ground truth.
@@ -262,49 +270,50 @@ def _is_match_correct(
 
     matched_data = result.matched_data
 
-    if match_criteria == "doi":
+    if match_criteria == 'doi':
         # Strictest: DOI must match exactly
-        if gt.ground_truth_doi and matched_data.get("doi"):
+        if gt.ground_truth_doi and matched_data.get('doi'):
             return _normalize_doi(gt.ground_truth_doi) == _normalize_doi(
-                matched_data["doi"]
+                matched_data['doi']
             )
         return False
 
-    elif match_criteria == "title_author":
+    elif match_criteria == 'title_author':
         # Medium: Title and primary author must match
         title_match = _titles_match(
-            gt.ground_truth_title,
-            matched_data.get("title", "")
+            gt.ground_truth_title, matched_data.get('title', '')
         )
 
         author_match = False
-        if gt.ground_truth_authors and matched_data.get("authors"):
+        if gt.ground_truth_authors and matched_data.get('authors'):
             # Check if primary author (first author) matches
             gt_primary = _normalize_author(gt.ground_truth_authors[0])
-            matched_primary = _normalize_author(matched_data["authors"][0])
+            matched_primary = _normalize_author(matched_data['authors'][0])
             author_match = gt_primary == matched_primary
 
         return title_match and author_match
 
-    elif match_criteria == "any":
+    elif match_criteria == 'any':
         # Most lenient: Any identifier match
         # Check DOI
-        if gt.ground_truth_doi and matched_data.get("doi"):
-            if _normalize_doi(gt.ground_truth_doi) == _normalize_doi(matched_data["doi"]):
+        if gt.ground_truth_doi and matched_data.get('doi'):
+            if _normalize_doi(gt.ground_truth_doi) == _normalize_doi(
+                matched_data['doi']
+            ):
                 return True
 
         # Check OpenAlex ID
-        if gt.ground_truth_openalex_id and matched_data.get("openalex_id"):
-            if gt.ground_truth_openalex_id == matched_data["openalex_id"]:
+        if gt.ground_truth_openalex_id and matched_data.get('openalex_id'):
+            if gt.ground_truth_openalex_id == matched_data['openalex_id']:
                 return True
 
         # Check Semantic Scholar ID
-        if gt.ground_truth_s2_id and matched_data.get("s2_id"):
-            if gt.ground_truth_s2_id == matched_data["s2_id"]:
+        if gt.ground_truth_s2_id and matched_data.get('s2_id'):
+            if gt.ground_truth_s2_id == matched_data['s2_id']:
                 return True
 
         # Fallback to title+author matching
-        return _is_match_correct(gt, result, "title_author")
+        return _is_match_correct(gt, result, 'title_author')
 
     return False
 
@@ -313,9 +322,9 @@ def _normalize_doi(doi: str) -> str:
     """Normalize DOI for comparison."""
     doi = doi.lower().strip()
     # Remove common prefixes
-    doi = doi.replace("https://doi.org/", "")
-    doi = doi.replace("http://doi.org/", "")
-    doi = doi.replace("doi:", "")
+    doi = doi.replace('https://doi.org/', '')
+    doi = doi.replace('http://doi.org/', '')
+    doi = doi.replace('doi:', '')
     return doi
 
 
@@ -336,15 +345,16 @@ def _normalize_author(author: str) -> str:
     """Normalize author name for comparison."""
     # Remove punctuation and extra spaces
     import re
+
     author = re.sub(r'[^\w\s]', ' ', author)
     author = ' '.join(author.split())
     return author.lower().strip()
 
 
 def calculate_confidence_calibration(
-    ground_truth: List[GroundTruthCitation],
-    results: List[ResolutionResult],
-    num_bins: int = 10
+    ground_truth: List[GroundTruthCitation],  # noqa: UP006
+    results: List[ResolutionResult],  # noqa: UP006
+    num_bins: int = 10,
 ) -> float:
     """
     Calculate Expected Calibration Error (ECE) for confidence scores.
@@ -363,14 +373,14 @@ def calculate_confidence_calibration(
         1.0 = completely miscalibrated
     """
     if len(ground_truth) != len(results):
-        raise ValueError("Ground truth and results must have same length")
+        raise ValueError('Ground truth and results must have same length')
 
     # Group predictions by confidence bin
     bins = [[] for _ in range(num_bins)]
 
-    for gt, result in zip(ground_truth, results):
+    for gt, result in zip(ground_truth, results):  # noqa: B905
         confidence = result.confidence_score
-        is_correct = _is_match_correct(gt, result, match_criteria="any")
+        is_correct = _is_match_correct(gt, result, match_criteria='any')
 
         # Determine bin
         bin_idx = min(int(confidence * num_bins), num_bins - 1)
@@ -394,15 +404,15 @@ def calculate_confidence_calibration(
         bin_weight = len(bin_predictions) / total_samples
         ece += bin_weight * abs(bin_confidence - bin_accuracy)
 
-    logger.debug(f"Calculated ECE: {ece:.4f}")
+    logger.debug(f'Calculated ECE: {ece:.4f}')
     return ece
 
 
 def calculate_metrics_by_confidence_threshold(
-    ground_truth: List[GroundTruthCitation],
-    results: List[ResolutionResult],
-    thresholds: List[float] = None
-) -> Dict[float, CitationMetrics]:
+    ground_truth: List[GroundTruthCitation],  # noqa: UP006
+    results: List[ResolutionResult],  # noqa: UP006
+    thresholds: List[float] = None,  # noqa: UP006, RUF013
+) -> Dict[float, CitationMetrics]:  # noqa: UP006
     """
     Calculate metrics at different confidence thresholds.
 
@@ -420,7 +430,7 @@ def calculate_metrics_by_confidence_threshold(
     if thresholds is None:
         thresholds = [0.5, 0.6, 0.7, 0.8, 0.9]
 
-    logger.info(f"Calculating metrics at thresholds: {thresholds}")
+    logger.info(f'Calculating metrics at thresholds: {thresholds}')
 
     metrics_by_threshold = {}
 
@@ -429,7 +439,7 @@ def calculate_metrics_by_confidence_threshold(
         filtered_gt = []
         filtered_results = []
 
-        for gt, result in zip(ground_truth, results):
+        for gt, result in zip(ground_truth, results):  # noqa: B905
             if result.confidence_score >= threshold:
                 # Keep result as-is
                 filtered_gt.append(gt)
@@ -443,23 +453,21 @@ def calculate_metrics_by_confidence_threshold(
                     confidence_level=result.confidence_level,
                     source=result.source,
                     matched_data=None,
-                    metadata=result.metadata
+                    metadata=result.metadata,
                 )
                 filtered_gt.append(gt)
                 filtered_results.append(low_conf_result)
 
         # Calculate metrics for this threshold
         metrics = calculate_precision_recall_f1(
-            filtered_gt,
-            filtered_results,
-            match_criteria="any"
+            filtered_gt, filtered_results, match_criteria='any'
         )
 
         metrics_by_threshold[threshold] = metrics
 
         logger.info(
-            f"Threshold {threshold}: P={metrics.precision:.3f}, "
-            f"R={metrics.recall:.3f}, F1={metrics.f1_score:.3f}"
+            f'Threshold {threshold}: P={metrics.precision:.3f}, '
+            f'R={metrics.recall:.3f}, F1={metrics.f1_score:.3f}'
         )
 
     return metrics_by_threshold

@@ -10,21 +10,21 @@ This module tests the core caching functionality including:
 - Cache invalidation
 """
 
-import time
+import time  # noqa: F401
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
-import pytest
+import pytest  # noqa: F401
 
 from tests.fixtures.performance_fixtures import (
-    MockTimeProvider,
-    assert_cache_entry_evicted,
-    assert_cache_size,
-    generate_cache_load,
-    simulate_access_pattern,
+    MockTimeProvider,  # noqa: F401
+    assert_cache_entry_evicted,  # noqa: F401
+    assert_cache_size,  # noqa: F401
+    generate_cache_load,  # noqa: F401
+    simulate_access_pattern,  # noqa: F401
 )
 from thoth.monitoring.performance_monitor import (
-    CacheEntry,
+    CacheEntry,  # noqa: F401
     CacheStrategy,
     IntelligentCache,
 )
@@ -112,10 +112,10 @@ class TestCacheTTL:
 
     def test_ttl_expiration(self, ttl_cache):
         """Test entries expire after TTL."""
-        with patch('thoth.monitoring.performance_monitor.datetime') as mock_dt:
+        with patch.object(ttl_cache, '_get_now') as mock_get_now:
             # Set initial time
             initial_time = datetime(2024, 1, 1, 12, 0, 0)
-            mock_dt.now.return_value = initial_time
+            mock_get_now.return_value = initial_time
 
             # Put entry with 60 second TTL
             ttl_cache.put('key1', 'value1', ttl=60.0)
@@ -124,7 +124,7 @@ class TestCacheTTL:
             assert ttl_cache.get('key1') == 'value1'
 
             # Advance time past TTL
-            mock_dt.now.return_value = initial_time + timedelta(seconds=61)
+            mock_get_now.return_value = initial_time + timedelta(seconds=61)
 
             # Should be expired
             result = ttl_cache.get('key1')
@@ -132,44 +132,44 @@ class TestCacheTTL:
 
     def test_ttl_not_expired(self, ttl_cache):
         """Test entries are available before TTL expires."""
-        with patch('thoth.monitoring.performance_monitor.datetime') as mock_dt:
+        with patch.object(ttl_cache, '_get_now') as mock_get_now:
             initial_time = datetime(2024, 1, 1, 12, 0, 0)
-            mock_dt.now.return_value = initial_time
+            mock_get_now.return_value = initial_time
 
             ttl_cache.put('key1', 'value1', ttl=60.0)
 
             # Advance time but stay within TTL
-            mock_dt.now.return_value = initial_time + timedelta(seconds=30)
+            mock_get_now.return_value = initial_time + timedelta(seconds=30)
 
             result = ttl_cache.get('key1')
             assert result == 'value1'
 
     def test_default_ttl(self, ttl_cache):
         """Test cache uses default TTL when not specified."""
-        with patch('thoth.monitoring.performance_monitor.datetime') as mock_dt:
+        with patch.object(ttl_cache, '_get_now') as mock_get_now:
             initial_time = datetime(2024, 1, 1, 12, 0, 0)
-            mock_dt.now.return_value = initial_time
+            mock_get_now.return_value = initial_time
 
             # ttl_cache has default_ttl=60.0
             ttl_cache.put('key1', 'value1')
 
             # Advance past default TTL
-            mock_dt.now.return_value = initial_time + timedelta(seconds=61)
+            mock_get_now.return_value = initial_time + timedelta(seconds=61)
 
             result = ttl_cache.get('key1')
             assert result is None
 
     def test_custom_ttl_overrides_default(self, ttl_cache):
         """Test custom TTL overrides default TTL."""
-        with patch('thoth.monitoring.performance_monitor.datetime') as mock_dt:
+        with patch.object(ttl_cache, '_get_now') as mock_get_now:
             initial_time = datetime(2024, 1, 1, 12, 0, 0)
-            mock_dt.now.return_value = initial_time
+            mock_get_now.return_value = initial_time
 
             # Custom TTL of 120 seconds
             ttl_cache.put('key1', 'value1', ttl=120.0)
 
             # Advance past default TTL (60s) but within custom TTL
-            mock_dt.now.return_value = initial_time + timedelta(seconds=90)
+            mock_get_now.return_value = initial_time + timedelta(seconds=90)
 
             result = ttl_cache.get('key1')
             assert result == 'value1'
@@ -183,14 +183,14 @@ class TestCacheTTL:
             default_ttl=None,
         )
 
-        with patch('thoth.monitoring.performance_monitor.datetime') as mock_dt:
+        with patch.object(cache, '_get_now') as mock_get_now:
             initial_time = datetime(2024, 1, 1, 12, 0, 0)
-            mock_dt.now.return_value = initial_time
+            mock_get_now.return_value = initial_time
 
             cache.put('key1', 'value1')
 
             # Advance time significantly
-            mock_dt.now.return_value = initial_time + timedelta(days=365)
+            mock_get_now.return_value = initial_time + timedelta(days=365)
 
             result = cache.get('key1')
             assert result == 'value1'
@@ -311,22 +311,26 @@ class TestAccessPatternTracking:
             adaptive_cache.get('key2')
 
         # Check frequency scores
-        assert adaptive_cache._frequency_scores['key1'] > adaptive_cache._frequency_scores['key2']
+        assert (
+            adaptive_cache._frequency_scores['key1']
+            > adaptive_cache._frequency_scores['key2']
+        )
 
     def test_old_access_patterns_pruned(self, adaptive_cache):
         """Test old access patterns are pruned after 1 hour."""
-        with patch('thoth.monitoring.performance_monitor.datetime') as mock_dt:
+        with patch.object(adaptive_cache, '_get_now') as mock_get_now:
             initial_time = datetime(2024, 1, 1, 12, 0, 0)
-            mock_dt.now.return_value = initial_time
+            mock_get_now.return_value = initial_time
 
-            adaptive_cache.put('key1', 'value1')
+            # Use long TTL so entry doesn't expire during test
+            adaptive_cache.put('key1', 'value1', ttl=10800.0)  # 3 hours
             adaptive_cache.get('key1')
 
             initial_patterns = len(adaptive_cache._access_patterns['key1'])
             assert initial_patterns > 0
 
             # Advance time past 1 hour
-            mock_dt.now.return_value = initial_time + timedelta(hours=2)
+            mock_get_now.return_value = initial_time + timedelta(hours=2)
 
             # Trigger pattern tracking
             adaptive_cache.get('key1')
@@ -337,22 +341,24 @@ class TestAccessPatternTracking:
 
     def test_access_metadata_updated_on_get(self, lru_cache):
         """Test access metadata is updated on get."""
-        with patch('thoth.monitoring.performance_monitor.datetime') as mock_dt:
+        with patch.object(lru_cache, '_get_now') as mock_get_now:
             initial_time = datetime(2024, 1, 1, 12, 0, 0)
-            mock_dt.now.return_value = initial_time
+            mock_get_now.return_value = initial_time
 
             lru_cache.put('key1', 'value1')
 
-            entry_before = lru_cache._cache['key1']
-            initial_count = entry_before.access_count
+            # Capture values before modification
+            entry = lru_cache._cache['key1']
+            initial_count = entry.access_count
+            initial_last_accessed = entry.last_accessed
 
             # Access the entry
-            mock_dt.now.return_value = initial_time + timedelta(seconds=10)
+            mock_get_now.return_value = initial_time + timedelta(seconds=10)
             lru_cache.get('key1')
 
-            entry_after = lru_cache._cache['key1']
-            assert entry_after.access_count == initial_count + 1
-            assert entry_after.last_accessed > entry_before.last_accessed
+            # Check updated values
+            assert entry.access_count == initial_count + 1
+            assert entry.last_accessed > initial_last_accessed
 
 
 class TestMemoryEstimation:

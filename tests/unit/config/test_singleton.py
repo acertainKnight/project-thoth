@@ -7,20 +7,25 @@ Tests:
 - Instance state preservation
 """
 
+import json  # noqa: I001
 import threading
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 from thoth.config import Config
+from tests.fixtures.config_fixtures import get_minimal_settings_json
 
 
 class TestSingletonPattern:
     """Test singleton pattern implementation."""
 
-    def test_multiple_instantiations_return_same_object(self, temp_vault: Path, monkeypatch):
+    def test_multiple_instantiations_return_same_object(
+        self, temp_vault: Path, monkeypatch
+    ):
         """Test multiple Config() calls return the same instance."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         # Reset singleton
         Config._instance = None
@@ -36,7 +41,7 @@ class TestSingletonPattern:
 
     def test_singleton_preserved_across_modules(self, temp_vault: Path, monkeypatch):
         """Test singleton is preserved when imported from different contexts."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
 
@@ -51,7 +56,7 @@ class TestSingletonPattern:
 
     def test_singleton_state_preserved(self, temp_vault: Path, monkeypatch):
         """Test singleton state is preserved across instantiations."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
 
@@ -66,7 +71,7 @@ class TestSingletonPattern:
 
     def test_singleton_not_affected_by_new_class(self, temp_vault: Path, monkeypatch):
         """Test creating new Config class doesn't affect singleton."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
 
@@ -84,7 +89,7 @@ class TestInitializationOnce:
 
     def test_init_only_called_once(self, temp_vault: Path, monkeypatch):
         """Test __init__ only executes initialization once."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
 
@@ -96,7 +101,7 @@ class TestInitializationOnce:
         assert config2._initialized is True
         assert config is config2
 
-    def test_vault_detection_not_repeated(self, temp_vault: Path, monkeypatch):
+    def test_vault_detection_not_repeated(self, temp_vault: Path, monkeypatch):  # noqa: ARG002
         """Test vault detection only happens once."""
         call_count = 0
         original_vault_root = temp_vault
@@ -106,19 +111,19 @@ class TestInitializationOnce:
             call_count += 1
             return original_vault_root
 
-        with pytest.mock.patch("thoth.config.get_vault_root", side_effect=mock_get_vault_root):
+        with patch('thoth.config.get_vault_root', side_effect=mock_get_vault_root):
             Config._instance = None
 
-            config1 = Config()
-            config2 = Config()
-            config3 = Config()
+            config1 = Config()  # noqa: F841
+            config2 = Config()  # noqa: F841
+            config3 = Config()  # noqa: F841
 
             # get_vault_root should only be called once
             assert call_count == 1
 
     def test_settings_loaded_once(self, temp_vault: Path, monkeypatch):
         """Test settings file is only loaded once."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
 
@@ -137,7 +142,7 @@ class TestThreadSafety:
 
     def test_singleton_thread_safe(self, temp_vault: Path, monkeypatch):
         """Test singleton is thread-safe with concurrent instantiation."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
 
@@ -163,24 +168,25 @@ class TestThreadSafety:
 
     def test_reload_lock_acquired(self, temp_vault: Path, monkeypatch):
         """Test reload operations acquire lock."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
         # Access _reload_lock should exist
-        assert hasattr(config, "_reload_lock")
-        assert isinstance(config._reload_lock, threading.Lock)
+        assert hasattr(config, '_reload_lock')
+        # Check it's a lock object by checking its type name
+        assert type(config._reload_lock).__name__ == 'lock'
 
     def test_callback_count_thread_safe(self, temp_vault: Path, monkeypatch):
         """Test reload_callback_count property is thread-safe."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
         def register_callback(i):
-            Config.register_reload_callback(f"callback_{i}", lambda c: None)
+            Config.register_reload_callback(f'callback_{i}', lambda c: None)  # noqa: ARG005
 
         threads = []
         for i in range(10):
@@ -200,7 +206,7 @@ class TestSingletonReset:
 
     def test_can_reset_singleton(self, temp_vault: Path, monkeypatch):
         """Test singleton can be reset by setting _instance to None."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config1 = Config()
@@ -215,13 +221,13 @@ class TestSingletonReset:
 
     def test_reset_clears_state(self, temp_vault: Path, monkeypatch):
         """Test resetting singleton clears state."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config1 = Config()
 
         # Register a callback
-        Config.register_reload_callback("test", lambda c: None)
+        Config.register_reload_callback('test', lambda c: None)  # noqa: ARG005
         assert config1.reload_callback_count == 1
 
         # Reset singleton
@@ -235,23 +241,29 @@ class TestSingletonReset:
 
     def test_reset_allows_different_vault(self, tmp_path: Path, monkeypatch):
         """Test resetting singleton allows using different vault."""
-        vault1 = tmp_path / "vault1"
+        vault1 = tmp_path / 'vault1'
         vault1.mkdir()
-        (vault1 / "_thoth").mkdir()
+        (vault1 / '_thoth').mkdir()
+        (vault1 / '_thoth' / 'settings.json').write_text(
+            json.dumps(get_minimal_settings_json(), indent=2)
+        )
 
-        vault2 = tmp_path / "vault2"
+        vault2 = tmp_path / 'vault2'
         vault2.mkdir()
-        (vault2 / "_thoth").mkdir()
+        (vault2 / '_thoth').mkdir()
+        (vault2 / '_thoth' / 'settings.json').write_text(
+            json.dumps(get_minimal_settings_json(), indent=2)
+        )
 
         # First vault
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(vault1))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(vault1))
         Config._instance = None
         config1 = Config()
         assert config1.vault_root == vault1.resolve()
 
         # Reset and use second vault
         Config._instance = None
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(vault2))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(vault2))
         config2 = Config()
         assert config2.vault_root == vault2.resolve()
 
@@ -261,7 +273,7 @@ class TestSingletonWithGlobalInstance:
 
     def test_global_config_is_singleton(self, temp_vault: Path, monkeypatch):
         """Test global 'config' object is the singleton."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
 
@@ -276,7 +288,7 @@ class TestSingletonWithGlobalInstance:
 
     def test_modifying_singleton_affects_global(self, temp_vault: Path, monkeypatch):
         """Test modifying singleton affects global config."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
 
@@ -312,7 +324,8 @@ class TestSingletonEdgeCases:
 
     def test_singleton_survives_exception_in_init(self, temp_vault: Path, monkeypatch):
         """Test singleton state after exception during init."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", "/nonexistent/path")
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', '/nonexistent/path')
+        monkeypatch.setenv('THOTH_DISABLE_AUTODETECT', '1')
 
         Config._instance = None
 
@@ -322,7 +335,8 @@ class TestSingletonEdgeCases:
 
         # Instance should be created but not initialized
         # Second attempt with valid path should work
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
+        monkeypatch.delenv('THOTH_DISABLE_AUTODETECT', raising=False)
 
         # Need to reset since init failed
         Config._instance = None
@@ -332,8 +346,9 @@ class TestSingletonEdgeCases:
 
     def test_singleton_with_no_vault_path(self, monkeypatch):
         """Test singleton behavior when no vault path is available."""
-        monkeypatch.delenv("OBSIDIAN_VAULT_PATH", raising=False)
-        monkeypatch.delenv("THOTH_VAULT_PATH", raising=False)
+        monkeypatch.delenv('OBSIDIAN_VAULT_PATH', raising=False)
+        monkeypatch.delenv('THOTH_VAULT_PATH', raising=False)
+        monkeypatch.setenv('THOTH_DISABLE_AUTODETECT', '1')
 
         Config._instance = None
 
@@ -345,7 +360,7 @@ class TestSingletonEdgeCases:
 
     def test_multiple_threads_initialization_race(self, temp_vault: Path, monkeypatch):
         """Test race condition during initialization from multiple threads."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
 
@@ -387,7 +402,7 @@ class TestSingletonInitializedFlag:
 
     def test_initialized_flag_false_before_init(self, temp_vault: Path, monkeypatch):
         """Test _initialized is False before initialization."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
 
@@ -398,7 +413,7 @@ class TestSingletonInitializedFlag:
 
     def test_initialized_prevents_reinit(self, temp_vault: Path, monkeypatch):
         """Test _initialized flag prevents re-initialization."""
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
 
@@ -421,7 +436,7 @@ class TestSingletonMemoryManagement:
         """Test singleton instance is not garbage collected."""
         import gc
 
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
 
@@ -442,7 +457,7 @@ class TestSingletonMemoryManagement:
         """Test singleton maintains correct reference count."""
         import sys
 
-        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(temp_vault))
+        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
 

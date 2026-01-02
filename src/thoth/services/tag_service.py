@@ -5,13 +5,13 @@ This module consolidates tag-related operations from TagConsolidator
 and related components.
 """
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed  # noqa: I001
 from typing import Any
 
 from thoth.analyze.tag_consolidator import TagConsolidator
 from thoth.services.base import BaseService, ServiceError
 from thoth.services.llm_service import LLMService
-from thoth.config import config, Config
+from thoth.config import config, Config  # noqa: F401
 
 
 class TagService(BaseService):
@@ -27,7 +27,7 @@ class TagService(BaseService):
 
     def __init__(
         self,
-        config: Config | None = None,
+        config: Config | None = None,  # noqa: F811
         llm_service: LLMService | None = None,
         citation_tracker: Any | None = None,
     ):

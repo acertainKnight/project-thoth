@@ -7,24 +7,24 @@ This module tests:
 - Performance tracking decorator
 - Optimization suggestions
 - Cache management and configuration
-"""
+"""  # noqa: W505
 
 import time
-from datetime import datetime
-from unittest.mock import Mock, patch
+from datetime import datetime  # noqa: F401
+from unittest.mock import Mock, patch  # noqa: F401
 
 import pytest
 
 from tests.fixtures.performance_fixtures import (
-    create_performance_scenario,
-    generate_cache_load,
+    create_performance_scenario,  # noqa: F401
+    generate_cache_load,  # noqa: F401
 )
 from thoth.monitoring.performance_monitor import (
     CacheStrategy,
-    OptimizationSuggestion,
-    PerformanceMetrics,
+    OptimizationSuggestion,  # noqa: F401
+    PerformanceMetrics,  # noqa: F401
     PerformanceMonitor,
-    SettingsPerformanceManager,
+    SettingsPerformanceManager,  # noqa: F401
     configure_performance_monitoring,
     get_global_performance_monitor,
     track_performance,
@@ -107,13 +107,18 @@ class TestPerformanceTracking:
             metadata=metadata,
         )
 
-        assert performance_monitor._operation_metadata['api_call']['user'] == 'test_user'
-        assert performance_monitor._operation_metadata['api_call']['endpoint'] == '/api/settings'
+        assert (
+            performance_monitor._operation_metadata['api_call']['user'] == 'test_user'
+        )
+        assert (
+            performance_monitor._operation_metadata['api_call']['endpoint']
+            == '/api/settings'
+        )
 
     def test_track_keeps_last_1000_timings(self, performance_monitor):
         """Test tracking keeps only last 1000 timings."""
         # Add 1500 timings
-        for i in range(1500):
+        for i in range(1500):  # noqa: B007
             performance_monitor.track_operation_performance('large_op', 0.001)
 
         # Should keep only last 1000
@@ -173,7 +178,10 @@ class TestOperationTiming:
             )
 
             assert duration == 1.0
-            assert performance_monitor._operation_metadata['db_query']['status'] == 'success'
+            assert (
+                performance_monitor._operation_metadata['db_query']['status']
+                == 'success'
+            )
             assert performance_monitor._operation_metadata['db_query']['rows'] == 100
 
     def test_end_timing_nonexistent_operation(self, performance_monitor):
@@ -391,7 +399,9 @@ class TestPerformanceDegradationDetection:
         performance_monitor.track_operation_performance('test_op', 2.0)
 
         # Check warning was logged
-        assert any('Performance degradation' in record.message for record in caplog.records)
+        assert any(
+            'Performance degradation' in record.message for record in caplog.records
+        )
 
 
 class TestCacheManagement:
@@ -632,8 +642,10 @@ class TestSettingsPerformanceReport:
         metrics = report['performance_metrics']
 
         # Should include settings-related operations
-        assert any('settings' in op.lower() or 'config' in op.lower() or 'schema' in op.lower()
-                   for op in metrics.keys())
+        assert any(
+            'settings' in op.lower() or 'config' in op.lower() or 'schema' in op.lower()
+            for op in metrics.keys()
+        )
 
     def test_report_includes_cache_metrics(self, settings_performance_manager):
         """Test report includes all cache metrics."""
@@ -649,7 +661,9 @@ class TestSettingsPerformanceReport:
         assert 'validation' in cache_metrics
         assert 'schema' in cache_metrics
 
-    def test_report_includes_optimization_suggestions(self, settings_performance_manager):
+    def test_report_includes_optimization_suggestions(
+        self, settings_performance_manager
+    ):
         """Test report includes optimization suggestions."""
         monitor = settings_performance_manager.monitor
 
@@ -668,6 +682,7 @@ class TestTrackPerformanceDecorator:
 
     def test_decorator_tracks_function_execution(self, performance_monitor):
         """Test decorator tracks function execution time."""
+
         @track_performance('test_function', monitor=performance_monitor)
         def test_func():
             time.sleep(0.01)
@@ -681,6 +696,7 @@ class TestTrackPerformanceDecorator:
 
     def test_decorator_with_arguments(self, performance_monitor):
         """Test decorator works with function arguments."""
+
         @track_performance('math_operation', monitor=performance_monitor)
         def add(a, b):
             return a + b
@@ -692,6 +708,7 @@ class TestTrackPerformanceDecorator:
 
     def test_decorator_with_exception(self, performance_monitor):
         """Test decorator handles exceptions and still tracks timing."""
+
         @track_performance('failing_function', monitor=performance_monitor)
         def failing_func():
             raise ValueError('Test error')
@@ -708,6 +725,7 @@ class TestTrackPerformanceDecorator:
 
     def test_decorator_with_disabled_monitoring(self, disabled_performance_monitor):
         """Test decorator with disabled monitoring."""
+
         @track_performance('test_function', monitor=disabled_performance_monitor)
         def test_func():
             return 'result'
@@ -720,6 +738,7 @@ class TestTrackPerformanceDecorator:
 
     def test_decorator_no_monitor(self):
         """Test decorator with no monitor provided."""
+
         @track_performance('test_function', monitor=None)
         def test_func():
             return 'result'

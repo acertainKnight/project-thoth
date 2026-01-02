@@ -5,11 +5,11 @@ This module provides infrastructure for running tasks asynchronously
 without blocking HTTP connections or agent interactions.
 """
 
-import asyncio
+import asyncio  # noqa: I001
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable
+from typing import Any, Callable  # noqa: UP035
 from dataclasses import dataclass, field
 
 from thoth.services.base import BaseService
@@ -79,7 +79,7 @@ class BackgroundTaskManager(BaseService):
             task_id=task_id,
             name=name,
             status=TaskStatus.PENDING,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(timezone.utc),  # noqa: UP017
         )
         self.tasks[task_id] = task
 
@@ -113,7 +113,7 @@ class BackgroundTaskManager(BaseService):
         try:
             # Update status to running
             task.status = TaskStatus.RUNNING
-            task.started_at = datetime.now(timezone.utc)
+            task.started_at = datetime.now(timezone.utc)  # noqa: UP017
             self.logger.info(f'Starting task {task_id}: {task.name}')
 
             # Execute the function (handle both sync and async)
@@ -126,7 +126,7 @@ class BackgroundTaskManager(BaseService):
 
             # Update with success
             task.status = TaskStatus.COMPLETED
-            task.completed_at = datetime.now(timezone.utc)
+            task.completed_at = datetime.now(timezone.utc)  # noqa: UP017
             task.result = result
             self.logger.info(
                 f'Task {task_id} completed successfully in '
@@ -136,11 +136,9 @@ class BackgroundTaskManager(BaseService):
         except Exception as e:
             # Update with failure
             task.status = TaskStatus.FAILED
-            task.completed_at = datetime.now(timezone.utc)
+            task.completed_at = datetime.now(timezone.utc)  # noqa: UP017
             task.error = str(e)
-            self.logger.error(
-                f'Task {task_id} failed: {e}', exc_info=True
-            )
+            self.logger.error(f'Task {task_id} failed: {e}', exc_info=True)
 
         finally:
             # Clean up the future
@@ -195,7 +193,7 @@ class BackgroundTaskManager(BaseService):
         Returns:
             int: Number of tasks removed
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)  # noqa: UP017
         cutoff = now.timestamp() - (max_age_hours * 3600)
 
         tasks_to_remove = [
@@ -210,8 +208,6 @@ class BackgroundTaskManager(BaseService):
             del self.tasks[task_id]
 
         if tasks_to_remove:
-            self.logger.info(
-                f'Cleaned up {len(tasks_to_remove)} old background tasks'
-            )
+            self.logger.info(f'Cleaned up {len(tasks_to_remove)} old background tasks')
 
         return len(tasks_to_remove)

@@ -6,7 +6,7 @@ including server lifecycle, transport coordination, tool execution,
 and error recovery scenarios.
 """
 
-import asyncio
+import asyncio  # noqa: I001
 import json
 import subprocess
 import sys
@@ -26,15 +26,12 @@ class TestCompleteServerLifecycle:
 
     @pytest.mark.asyncio
     async def test_full_server_lifecycle(
-        self,
-        mock_service_manager,
-        server_lifecycle_helper
+        self, mock_service_manager, server_lifecycle_helper
     ):
         """Test complete server lifecycle: init -> start -> use -> stop."""
         # Step 1: Initialize server
         server = await server_lifecycle_helper.create_server(
-            mock_service_manager,
-            enable_http=True
+            mock_service_manager, enable_http=True
         )
 
         # Step 2: Register tools
@@ -64,8 +61,8 @@ class TestCompleteServerLifecycle:
             params={
                 'protocolVersion': '2024-11-05',
                 'clientInfo': {'name': 'Test', 'version': '1.0.0'},
-                'capabilities': {}
-            }
+                'capabilities': {},
+            },
         )
 
         init_response = await server._handle_message(init_request)
@@ -73,11 +70,7 @@ class TestCompleteServerLifecycle:
         assert 'serverInfo' in init_response.result
 
         # Step 5: List tools
-        tools_request = JSONRPCRequest(
-            jsonrpc='2.0',
-            id=2,
-            method='tools/list'
-        )
+        tools_request = JSONRPCRequest(jsonrpc='2.0', id=2, method='tools/list')
 
         tools_response = await server._handle_message(tools_request)
         assert 'tools' in tools_response.result
@@ -88,18 +81,14 @@ class TestCompleteServerLifecycle:
             jsonrpc='2.0',
             id=3,
             method='tools/call',
-            params={'name': 'test_tool', 'arguments': {}}
+            params={'name': 'test_tool', 'arguments': {}},
         )
 
         call_response = await server._handle_message(call_request)
         assert not hasattr(call_response, 'error')
 
         # Step 7: Health check
-        health_request = JSONRPCRequest(
-            jsonrpc='2.0',
-            id=4,
-            method='health'
-        )
+        health_request = JSONRPCRequest(jsonrpc='2.0', id=4, method='health')
 
         health_response = await server._handle_message(health_request)
         assert health_response.result['status'] == 'healthy'
@@ -109,16 +98,11 @@ class TestCompleteServerLifecycle:
 
     @pytest.mark.asyncio
     async def test_server_lifecycle_with_all_transports(
-        self,
-        mock_service_manager,
-        server_lifecycle_helper
+        self, mock_service_manager, server_lifecycle_helper
     ):
         """Test lifecycle with all transport types."""
         server = await server_lifecycle_helper.create_server(
-            mock_service_manager,
-            enable_stdio=True,
-            enable_http=True,
-            enable_sse=True
+            mock_service_manager, enable_stdio=True, enable_http=True, enable_sse=True
         )
 
         await server.start()
@@ -142,14 +126,14 @@ class TestTransportCoordination:
         mock_service_manager,
         mock_stdio_transport,
         mock_http_transport,
-        mock_sse_transport
+        mock_sse_transport,
     ):
         """Test all transports start simultaneously."""
         server = MCPServer(mock_service_manager)
         server.transport_manager.transports = {
             'stdio': mock_stdio_transport,
             'http': mock_http_transport,
-            'sse': mock_sse_transport
+            'sse': mock_sse_transport,
         }
 
         start_time = time.time()
@@ -168,9 +152,7 @@ class TestTransportCoordination:
 
     @pytest.mark.asyncio
     async def test_transport_failure_isolation(
-        self,
-        mock_service_manager,
-        error_injector
+        self, mock_service_manager, error_injector
     ):
         """Test failure in one transport doesn't affect others."""
         server = MCPServer(mock_service_manager)
@@ -186,7 +168,7 @@ class TestTransportCoordination:
 
         server.transport_manager.transports = {
             'good': good_transport,
-            'bad': bad_transport
+            'bad': bad_transport,
         }
 
         # Start should fail due to bad transport
@@ -201,10 +183,7 @@ class TestIntegratedMonitoring:
     """Test monitoring integrated with server operations."""
 
     @pytest.mark.asyncio
-    async def test_monitoring_during_server_operation(
-        self,
-        mcp_server_with_transports
-    ):
+    async def test_monitoring_during_server_operation(self, mcp_server_with_transports):
         """Test monitoring while server is operating."""
         await mcp_server_with_transports.start()
         await asyncio.sleep(0.5)
@@ -230,10 +209,7 @@ class TestIntegratedMonitoring:
             await mcp_server_with_transports.stop()
 
     @pytest.mark.asyncio
-    async def test_monitoring_detects_busy_server(
-        self,
-        mcp_server_with_transports
-    ):
+    async def test_monitoring_detects_busy_server(self, mcp_server_with_transports):
         """Test monitoring detects server under load."""
         await mcp_server_with_transports.start()
         await asyncio.sleep(0.5)
@@ -241,12 +217,7 @@ class TestIntegratedMonitoring:
         try:
             # Simulate load - send many requests
             requests = [
-                JSONRPCRequest(
-                    jsonrpc='2.0',
-                    id=i,
-                    method='health'
-                )
-                for i in range(100)
+                JSONRPCRequest(jsonrpc='2.0', id=i, method='health') for i in range(100)
             ]
 
             # Process requests concurrently
@@ -279,10 +250,7 @@ class TestErrorRecoveryScenarios:
     """Test error recovery scenarios."""
 
     @pytest.mark.asyncio
-    async def test_recovery_from_tool_execution_error(
-        self,
-        mcp_server
-    ):
+    async def test_recovery_from_tool_execution_error(self, mcp_server):
         """Test server recovers from tool execution errors."""
         # Register tool that fails
         from thoth.mcp.tools import MCPTool
@@ -307,18 +275,14 @@ class TestErrorRecoveryScenarios:
                 jsonrpc='2.0',
                 id=1,
                 method='tools/call',
-                params={'name': 'failing_tool', 'arguments': {}}
+                params={'name': 'failing_tool', 'arguments': {}},
             )
 
             response = await mcp_server._handle_message(request)
             assert hasattr(response, 'error')
 
             # Server should still be functional
-            health_request = JSONRPCRequest(
-                jsonrpc='2.0',
-                id=2,
-                method='health'
-            )
+            health_request = JSONRPCRequest(jsonrpc='2.0', id=2, method='health')
 
             health_response = await mcp_server._handle_message(health_request)
             assert health_response.result['status'] == 'healthy'
@@ -327,31 +291,21 @@ class TestErrorRecoveryScenarios:
             await mcp_server.stop()
 
     @pytest.mark.asyncio
-    async def test_recovery_from_invalid_protocol_message(
-        self,
-        mcp_server
-    ):
+    async def test_recovery_from_invalid_protocol_message(self, mcp_server):
         """Test server recovers from invalid protocol messages."""
         await mcp_server.start()
 
         try:
             # Send invalid message
             invalid_request = JSONRPCRequest(
-                jsonrpc='2.0',
-                id=1,
-                method='invalid/method',
-                params={}
+                jsonrpc='2.0', id=1, method='invalid/method', params={}
             )
 
             response = await mcp_server._handle_message(invalid_request)
             assert hasattr(response, 'error')
 
             # Server should still work
-            valid_request = JSONRPCRequest(
-                jsonrpc='2.0',
-                id=2,
-                method='health'
-            )
+            valid_request = JSONRPCRequest(jsonrpc='2.0', id=2, method='health')
 
             valid_response = await mcp_server._handle_message(valid_request)
             assert not hasattr(valid_response, 'error')
@@ -360,10 +314,7 @@ class TestErrorRecoveryScenarios:
             await mcp_server.stop()
 
     @pytest.mark.asyncio
-    async def test_graceful_degradation_on_resource_error(
-        self,
-        mcp_server
-    ):
+    async def test_graceful_degradation_on_resource_error(self, mcp_server):
         """Test graceful degradation on resource errors."""
         await mcp_server.start()
 
@@ -373,18 +324,14 @@ class TestErrorRecoveryScenarios:
                 jsonrpc='2.0',
                 id=1,
                 method='resources/read',
-                params={'uri': 'nonexistent://resource'}
+                params={'uri': 'nonexistent://resource'},
             )
 
             response = await mcp_server._handle_message(request)
             assert hasattr(response, 'error')
 
             # Other operations should still work
-            tools_request = JSONRPCRequest(
-                jsonrpc='2.0',
-                id=2,
-                method='tools/list'
-            )
+            tools_request = JSONRPCRequest(jsonrpc='2.0', id=2, method='tools/list')
 
             tools_response = await mcp_server._handle_message(tools_request)
             assert not hasattr(tools_response, 'error')
@@ -397,10 +344,7 @@ class TestResourceCleanup:
     """Test proper resource cleanup."""
 
     @pytest.mark.asyncio
-    async def test_connection_cleanup_on_shutdown(
-        self,
-        mcp_server_with_transports
-    ):
+    async def test_connection_cleanup_on_shutdown(self, mcp_server_with_transports):
         """Test all connections are cleaned up on shutdown."""
         await mcp_server_with_transports.start()
         await asyncio.sleep(0.5)
@@ -415,18 +359,13 @@ class TestResourceCleanup:
         # but at least verify stop was called on all)
 
     @pytest.mark.asyncio
-    async def test_file_handle_cleanup(
-        self,
-        mcp_server,
-        tmp_path
-    ):
+    async def test_file_handle_cleanup(self, mcp_server, tmp_path):
         """Test file handles are cleaned up."""
         # Add file resource provider
         from thoth.mcp.resources import FileResourceProvider
 
         provider = FileResourceProvider(
-            base_paths=[str(tmp_path)],
-            allowed_extensions=['.txt']
+            base_paths=[str(tmp_path)], allowed_extensions=['.txt']
         )
         mcp_server.add_resource_provider(provider)
 
@@ -438,11 +377,7 @@ class TestResourceCleanup:
             test_file.write_text('test content')
 
             # Read resource
-            request = JSONRPCRequest(
-                jsonrpc='2.0',
-                id=1,
-                method='resources/list'
-            )
+            request = JSONRPCRequest(jsonrpc='2.0', id=1, method='resources/list')
 
             await mcp_server._handle_message(request)
 
@@ -453,21 +388,14 @@ class TestResourceCleanup:
         assert test_file.read_text() == 'test content'
 
     @pytest.mark.asyncio
-    async def test_memory_cleanup_after_many_requests(
-        self,
-        mcp_server
-    ):
+    async def test_memory_cleanup_after_many_requests(self, mcp_server):
         """Test memory is cleaned up after processing many requests."""
         await mcp_server.start()
 
         try:
             # Process many requests
             for i in range(1000):
-                request = JSONRPCRequest(
-                    jsonrpc='2.0',
-                    id=i,
-                    method='health'
-                )
+                request = JSONRPCRequest(jsonrpc='2.0', id=i, method='health')
 
                 await mcp_server._handle_message(request)
 
@@ -489,12 +417,18 @@ class TestCLIIntegrationWorkflow:
         # Start server via CLI
         process = subprocess.Popen(
             [
-                sys.executable, '-m', 'thoth.cli', 'mcp', 'http',
-                '--port', str(port),
-                '--log-level', 'INFO'
+                sys.executable,
+                '-m',
+                'thoth.cli',
+                'mcp',
+                'http',
+                '--port',
+                str(port),
+                '--log-level',
+                'INFO',
             ],
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
         )
 
         try:
@@ -506,10 +440,7 @@ class TestCLIIntegrationWorkflow:
 
             # Try health check (may not work if server not fully started)
             try:
-                response = requests.get(
-                    f'http://127.0.0.1:{port}/health',
-                    timeout=2
-                )
+                response = requests.get(f'http://127.0.0.1:{port}/health', timeout=2)
                 if response.status_code == 200:
                     assert 'status' in response.json() or 'healthy' in response.json()
             except requests.ConnectionError:
@@ -532,7 +463,7 @@ class TestCLIIntegrationWorkflow:
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
         )
 
         try:
@@ -546,8 +477,8 @@ class TestCLIIntegrationWorkflow:
                 'params': {
                     'protocolVersion': '2024-11-05',
                     'clientInfo': {'name': 'Test', 'version': '1.0.0'},
-                    'capabilities': {}
-                }
+                    'capabilities': {},
+                },
             }
 
             process.stdin.write(json.dumps(init_msg) + '\n')
@@ -565,10 +496,7 @@ class TestConcurrentWorkflows:
     """Test concurrent workflow execution."""
 
     @pytest.mark.asyncio
-    async def test_concurrent_client_sessions(
-        self,
-        mcp_server
-    ):
+    async def test_concurrent_client_sessions(self, mcp_server):
         """Test multiple concurrent client sessions."""
         await mcp_server.start()
 
@@ -584,37 +512,31 @@ class TestConcurrentWorkflows:
                         'protocolVersion': '2024-11-05',
                         'clientInfo': {
                             'name': f'Client {client_id}',
-                            'version': '1.0.0'
+                            'version': '1.0.0',
                         },
-                        'capabilities': {}
-                    }
+                        'capabilities': {},
+                    },
                 )
 
                 await mcp_server._handle_message(init_request)
 
                 # List tools
                 tools_request = JSONRPCRequest(
-                    jsonrpc='2.0',
-                    id=f'{client_id}-2',
-                    method='tools/list'
+                    jsonrpc='2.0', id=f'{client_id}-2', method='tools/list'
                 )
 
                 await mcp_server._handle_message(tools_request)
 
                 # Health check
                 health_request = JSONRPCRequest(
-                    jsonrpc='2.0',
-                    id=f'{client_id}-3',
-                    method='health'
+                    jsonrpc='2.0', id=f'{client_id}-3', method='health'
                 )
 
                 return await mcp_server._handle_message(health_request)
 
             # Run 3 clients concurrently
             results = await asyncio.gather(
-                client_session(1),
-                client_session(2),
-                client_session(3)
+                client_session(1), client_session(2), client_session(3)
             )
 
             # All should succeed
@@ -626,41 +548,34 @@ class TestConcurrentWorkflows:
 
     @pytest.mark.asyncio
     async def test_concurrent_monitoring_and_operations(
-        self,
-        mcp_server_with_transports
+        self, mcp_server_with_transports
     ):
         """Test monitoring while operations are running."""
         await mcp_server_with_transports.start()
         await asyncio.sleep(0.5)
 
         try:
+
             async def monitoring_loop():
                 monitor = MCPMonitor()
                 for _ in range(5):
                     with patch('httpx.AsyncClient') as mock_client:
                         mock_response = Mock()
                         mock_response.status_code = 200
-                        mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                            return_value=mock_response
+                        mock_client.return_value.__aenter__.return_value.get = (
+                            AsyncMock(return_value=mock_response)
                         )
                         await monitor.get_health_status()
                     await asyncio.sleep(0.1)
 
             async def operations_loop():
                 for i in range(10):
-                    request = JSONRPCRequest(
-                        jsonrpc='2.0',
-                        id=i,
-                        method='health'
-                    )
+                    request = JSONRPCRequest(jsonrpc='2.0', id=i, method='health')
                     await mcp_server_with_transports._handle_message(request)
                     await asyncio.sleep(0.05)
 
             # Run both concurrently
-            await asyncio.gather(
-                monitoring_loop(),
-                operations_loop()
-            )
+            await asyncio.gather(monitoring_loop(), operations_loop())
 
         finally:
             await mcp_server_with_transports.stop()
@@ -670,10 +585,7 @@ class TestProductionScenarios:
     """Test production-like scenarios."""
 
     @pytest.mark.asyncio
-    async def test_24hour_simulation(
-        self,
-        mcp_server
-    ):
+    async def test_24hour_simulation(self, mcp_server):
         """Simulate 24-hour operation (compressed to seconds)."""
         await mcp_server.start()
 
@@ -682,9 +594,7 @@ class TestProductionScenarios:
             for hour in range(24):
                 # Health check
                 request = JSONRPCRequest(
-                    jsonrpc='2.0',
-                    id=f'hour-{hour}',
-                    method='health'
+                    jsonrpc='2.0', id=f'hour-{hour}', method='health'
                 )
 
                 response = await mcp_server._handle_message(request)
@@ -696,18 +606,14 @@ class TestProductionScenarios:
             await mcp_server.stop()
 
     @pytest.mark.asyncio
-    async def test_high_load_scenario(
-        self,
-        mcp_server
-    ):
+    async def test_high_load_scenario(self, mcp_server):
         """Test server under high load."""
         await mcp_server.start()
 
         try:
             # Send 500 requests rapidly
             requests_list = [
-                JSONRPCRequest(jsonrpc='2.0', id=i, method='health')
-                for i in range(500)
+                JSONRPCRequest(jsonrpc='2.0', id=i, method='health') for i in range(500)
             ]
 
             start_time = time.time()

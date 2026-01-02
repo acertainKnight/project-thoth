@@ -10,10 +10,10 @@ This module provides:
 """
 
 import asyncio
-import json
+import json  # noqa: F401
 import tempfile
 from pathlib import Path
-from typing import AsyncGenerator, Generator
+from typing import AsyncGenerator, Generator  # noqa: UP035
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -42,6 +42,7 @@ pytest_plugins = [
 # Test Configuration
 # ============================================================================
 
+
 @pytest.fixture(scope='session')
 def event_loop_policy():
     """Set event loop policy for async tests."""
@@ -62,14 +63,17 @@ def test_config() -> Config:
     (test_vault / '_thoth').mkdir()
 
     # Mock environment variables
-    with patch.dict('os.environ', {
-        'OBSIDIAN_VAULT_PATH': str(test_vault),
-        'POSTGRES_DB': 'thoth_test',
-        'POSTGRES_HOST': 'localhost',
-        'POSTGRES_PORT': '5432',
-        'POSTGRES_USER': 'test_user',
-        'POSTGRES_PASSWORD': 'test_password',
-    }):
+    with patch.dict(
+        'os.environ',
+        {
+            'OBSIDIAN_VAULT_PATH': str(test_vault),
+            'POSTGRES_DB': 'thoth_test',
+            'POSTGRES_HOST': 'localhost',
+            'POSTGRES_PORT': '5432',
+            'POSTGRES_USER': 'test_user',
+            'POSTGRES_PASSWORD': 'test_password',
+        },
+    ):
         config = Config()
         config.vault_root = test_vault
         return config
@@ -79,8 +83,11 @@ def test_config() -> Config:
 # Database Fixtures
 # ============================================================================
 
+
 @pytest_asyncio.fixture
-async def postgres_service(test_config: Config) -> AsyncGenerator[PostgresService, None]:
+async def postgres_service(
+    test_config: Config,
+) -> AsyncGenerator[PostgresService, None]:
     """
     Create PostgreSQL service with test database.
 
@@ -118,6 +125,7 @@ async def empty_database(postgres_service: PostgresService):
 # Mock Service Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def mock_llm_service():
     """
@@ -127,12 +135,14 @@ def mock_llm_service():
     """
     mock = MagicMock()
     mock.generate_completion = AsyncMock(return_value='Mocked LLM response')
-    mock.analyze_content = AsyncMock(return_value={
-        'summary': 'Test paper summary',
-        'key_points': ['Point 1', 'Point 2', 'Point 3'],
-        'methodology': 'Test methodology',
-        'tags': ['machine-learning', 'nlp'],
-    })
+    mock.analyze_content = AsyncMock(
+        return_value={
+            'summary': 'Test paper summary',
+            'key_points': ['Point 1', 'Point 2', 'Point 3'],
+            'methodology': 'Test methodology',
+            'tags': ['machine-learning', 'nlp'],
+        }
+    )
     return mock
 
 
@@ -144,13 +154,15 @@ def mock_web_search():
     Returns realistic search results for testing.
     """
     mock = MagicMock()
-    mock.search = AsyncMock(return_value=[
-        {
-            'title': 'Test Paper Title',
-            'url': 'https://example.com/paper.pdf',
-            'snippet': 'Test paper abstract snippet',
-        }
-    ])
+    mock.search = AsyncMock(
+        return_value=[
+            {
+                'title': 'Test Paper Title',
+                'url': 'https://example.com/paper.pdf',
+                'snippet': 'Test paper abstract snippet',
+            }
+        ]
+    )
     return mock
 
 
@@ -158,23 +170,25 @@ def mock_web_search():
 def mock_crossref_client():
     """Mock CrossRef API client."""
     mock = MagicMock()
-    mock.search = AsyncMock(return_value={
-        'status': 'ok',
-        'message': {
-            'items': [
-                {
-                    'DOI': '10.1234/test.doi',
-                    'title': ['Test Paper Title'],
-                    'author': [
-                        {'given': 'John', 'family': 'Doe'},
-                        {'given': 'Jane', 'family': 'Smith'},
-                    ],
-                    'published': {'date-parts': [[2023, 5, 15]]},
-                    'container-title': ['Test Journal'],
-                }
-            ]
+    mock.search = AsyncMock(
+        return_value={
+            'status': 'ok',
+            'message': {
+                'items': [
+                    {
+                        'DOI': '10.1234/test.doi',
+                        'title': ['Test Paper Title'],
+                        'author': [
+                            {'given': 'John', 'family': 'Doe'},
+                            {'given': 'Jane', 'family': 'Smith'},
+                        ],
+                        'published': {'date-parts': [[2023, 5, 15]]},
+                        'container-title': ['Test Journal'],
+                    }
+                ]
+            },
         }
-    })
+    )
     return mock
 
 
@@ -182,23 +196,23 @@ def mock_crossref_client():
 def mock_openalex_client():
     """Mock OpenAlex API client."""
     mock = MagicMock()
-    mock.search = AsyncMock(return_value={
-        'results': [
-            {
-                'id': 'https://openalex.org/W1234567890',
-                'doi': 'https://doi.org/10.1234/test.doi',
-                'title': 'Test Paper Title',
-                'authorships': [
-                    {'author': {'display_name': 'John Doe'}},
-                    {'author': {'display_name': 'Jane Smith'}},
-                ],
-                'publication_year': 2023,
-                'primary_location': {
-                    'source': {'display_name': 'Test Journal'}
-                },
-            }
-        ]
-    })
+    mock.search = AsyncMock(
+        return_value={
+            'results': [
+                {
+                    'id': 'https://openalex.org/W1234567890',
+                    'doi': 'https://doi.org/10.1234/test.doi',
+                    'title': 'Test Paper Title',
+                    'authorships': [
+                        {'author': {'display_name': 'John Doe'}},
+                        {'author': {'display_name': 'Jane Smith'}},
+                    ],
+                    'publication_year': 2023,
+                    'primary_location': {'source': {'display_name': 'Test Journal'}},
+                }
+            ]
+        }
+    )
     return mock
 
 
@@ -206,28 +220,31 @@ def mock_openalex_client():
 def mock_semanticscholar_client():
     """Mock Semantic Scholar API client."""
     mock = MagicMock()
-    mock.search = AsyncMock(return_value={
-        'data': [
-            {
-                'paperId': 'abcd1234',
-                'externalIds': {'DOI': '10.1234/test.doi'},
-                'title': 'Test Paper Title',
-                'authors': [
-                    {'name': 'John Doe'},
-                    {'name': 'Jane Smith'},
-                ],
-                'year': 2023,
-                'venue': 'Test Journal',
-                'citationCount': 42,
-            }
-        ]
-    })
+    mock.search = AsyncMock(
+        return_value={
+            'data': [
+                {
+                    'paperId': 'abcd1234',
+                    'externalIds': {'DOI': '10.1234/test.doi'},
+                    'title': 'Test Paper Title',
+                    'authors': [
+                        {'name': 'John Doe'},
+                        {'name': 'Jane Smith'},
+                    ],
+                    'year': 2023,
+                    'venue': 'Test Journal',
+                    'citationCount': 42,
+                }
+            ]
+        }
+    )
     return mock
 
 
 # ============================================================================
 # Sample Data Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def sample_citation() -> Citation:
@@ -290,7 +307,7 @@ def sample_paper_content() -> str:
 
     Includes typical paper sections: abstract, intro, methods, results, conclusion.
     """
-    return '''
+    return """
 # Test Paper Title
 
 ## Abstract
@@ -316,7 +333,7 @@ Future work will extend to LLM-based content analysis pipelines.
 ## References
 1. Test Citation One (2023)
 2. Test Citation Two (2022)
-'''
+"""
 
 
 @pytest.fixture
@@ -343,13 +360,14 @@ def sample_evaluation_data():
                 'expected_tags': ['test', 'evaluation'],
                 'expected_strategy': 'direct',
             }
-        ]
+        ],
     }
 
 
 # ============================================================================
 # Performance Testing Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def benchmark_data_small() -> list[Citation]:
@@ -398,6 +416,7 @@ def benchmark_data_large() -> list[Citation]:
 # Utility Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def temp_directory() -> Generator[Path, None, None]:
     """
@@ -420,9 +439,86 @@ def capture_logs(caplog):
     return caplog
 
 
+@pytest.fixture(autouse=True)
+def _configure_loguru_for_caplog(request):
+    """
+    Auto-configure loguru to propagate logs to caplog when available.
+
+    This fixture runs automatically for all tests, allowing caplog to capture
+    loguru logs without requiring explicit fixture usage.
+    """
+    import logging
+    from unittest.mock import patch
+
+    # Check if caplog is available in this test
+    if 'caplog' not in request.fixturenames:
+        yield
+        return
+
+    # Create a custom propagation handler
+    class PropagateHandler(logging.Handler):
+        """Handler that forwards logs to Python's logging system."""
+
+        def emit(self, record):
+            # Let the record propagate through Python's logging system
+            # where caplog will intercept it
+            pass
+
+    # Set up handler
+    handler = PropagateHandler()
+    logging.root.addHandler(handler)
+    logging.root.setLevel(logging.DEBUG)
+
+    # Simple sink that logs to Python's stdlib logging
+    def loguru_to_stdlib(message):
+        """Forward loguru messages to Python logging."""
+        record = message.record
+
+        # Map levels
+        levels = {
+            'TRACE': 10,
+            'DEBUG': 10,
+            'INFO': 20,
+            'SUCCESS': 20,
+            'WARNING': 30,
+            'ERROR': 40,
+            'CRITICAL': 50,
+        }
+        level = levels.get(record['level'].name, 20)
+
+        # Create Python log record and let it propagate
+        py_logger = logging.getLogger(record['name'])
+        py_logger.log(level, record['message'])
+
+    # Store original logger.remove
+    original_remove = logger.remove
+
+    def patched_remove(handler_id=None):
+        """Patched logger.remove that preserves our caplog sink."""
+        # Call original remove
+        original_remove(handler_id)
+        # Re-add our sink immediately
+        return logger.add(loguru_to_stdlib, format='{message}', level=0)
+
+    # Patch logger.remove to preserve our sink
+    with patch.object(logger, 'remove', side_effect=patched_remove):
+        # Add the initial sink
+        sink_id = logger.add(loguru_to_stdlib, format='{message}', level=0)
+
+        yield
+
+    # Cleanup
+    try:
+        original_remove(sink_id)
+    except (ValueError, KeyError):
+        pass
+    logging.root.removeHandler(handler)
+
+
 # ============================================================================
 # Markers and Test Configuration
 # ============================================================================
+
 
 def pytest_configure(config):
     """Register custom pytest markers."""
@@ -432,12 +528,8 @@ def pytest_configure(config):
     config.addinivalue_line(
         'markers', 'property: Property-based tests using hypothesis'
     )
-    config.addinivalue_line(
-        'markers', 'benchmark: Performance benchmark tests'
-    )
-    config.addinivalue_line(
-        'markers', 'slow: Tests that take significant time to run'
-    )
+    config.addinivalue_line('markers', 'benchmark: Performance benchmark tests')
+    config.addinivalue_line('markers', 'slow: Tests that take significant time to run')
     config.addinivalue_line(
         'markers', 'requires_db: Tests that require PostgreSQL database'
     )
@@ -449,6 +541,7 @@ def pytest_configure(config):
 # ============================================================================
 # Async Test Helpers
 # ============================================================================
+
 
 @pytest.fixture
 def anyio_backend():

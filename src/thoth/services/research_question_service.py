@@ -37,7 +37,7 @@ class ResearchQuestionService(BaseService):
         super().__init__(config)
         self.postgres_service = postgres_service
         self.repository = ResearchQuestionRepository(postgres_service or config)
-        logger.info("ResearchQuestionService initialized")
+        logger.info('ResearchQuestionService initialized')
 
     async def create_research_question(
         self,
@@ -48,13 +48,13 @@ class ResearchQuestionService(BaseService):
         authors: list[str],
         selected_sources: list[str],
         schedule_frequency: str = 'daily',
-        schedule_time: Optional[str] = None,
-        schedule_days_of_week: Optional[list[str]] = None,
+        schedule_time: Optional[str] = None,  # noqa: UP007
+        schedule_days_of_week: Optional[list[str]] = None,  # noqa: UP007
         min_relevance_score: float = 0.5,
         auto_download_pdfs: bool = True,
-        auto_process_pdfs: bool = False,
-        max_articles_per_run: int = 50,
-    ) -> Optional[UUID]:
+        auto_process_pdfs: bool = False,  # noqa: ARG002
+        max_articles_per_run: int = 50,  # noqa: ARG002
+    ) -> Optional[UUID]:  # noqa: UP007
         """
         Create a new research question with validation.
 
@@ -97,7 +97,7 @@ class ResearchQuestionService(BaseService):
             )
 
         # Calculate next run time
-        next_run_at = self._calculate_next_run(
+        next_run_at = self._calculate_next_run(  # noqa: F841
             frequency=schedule_frequency,
             schedule_time=schedule_time,
             schedule_days_of_week=schedule_days_of_week,
@@ -107,7 +107,7 @@ class ResearchQuestionService(BaseService):
         # Note: Repository parameters differ from service parameters
         # - auto_download_pdfs maps to auto_download_enabled
         # - auto_download_min_score is hardcoded for now
-        # - next_run_at, auto_process_pdfs, max_articles_per_run are calculated/stored separately
+        # - next_run_at, auto_process_pdfs, max_articles_per_run are calculated/stored separately  # noqa: W505
 
         # Convert schedule_time string (HH:MM) to time object
         time_obj = None
@@ -139,7 +139,9 @@ class ResearchQuestionService(BaseService):
                 f"Created research question '{name}' for user {user_id}: {question_id}"
             )
         else:
-            logger.error(f"Failed to create research question '{name}' for user {user_id}")
+            logger.error(
+                f"Failed to create research question '{name}' for user {user_id}"
+            )
 
         return question_id
 
@@ -167,11 +169,11 @@ class ResearchQuestionService(BaseService):
         # Verify ownership
         question = await self.repository.get_by_id(question_id)
         if not question:
-            raise ValueError(f"Research question {question_id} not found")
+            raise ValueError(f'Research question {question_id} not found')
 
         if question['user_id'] != user_id:
             raise PermissionError(
-                f"User {user_id} does not have permission to update question {question_id}"
+                f'User {user_id} does not have permission to update question {question_id}'
             )
 
         # Validate if critical fields are being updated
@@ -185,20 +187,31 @@ class ResearchQuestionService(BaseService):
             self._validate_schedule_frequency(updates['schedule_frequency'])
 
         # Recalculate next_run_at if schedule changed
-        if any(k in updates for k in ['schedule_frequency', 'schedule_time', 'schedule_days_of_week']):
+        if any(
+            k in updates
+            for k in ['schedule_frequency', 'schedule_time', 'schedule_days_of_week']
+        ):
             updates['next_run_at'] = self._calculate_next_run(
-                frequency=updates.get('schedule_frequency', question['schedule_frequency']),
-                schedule_time=updates.get('schedule_time', question.get('schedule_time')),
-                schedule_days_of_week=updates.get('schedule_days_of_week', question.get('schedule_days_of_week')),
+                frequency=updates.get(
+                    'schedule_frequency', question['schedule_frequency']
+                ),
+                schedule_time=updates.get(
+                    'schedule_time', question.get('schedule_time')
+                ),
+                schedule_days_of_week=updates.get(
+                    'schedule_days_of_week', question.get('schedule_days_of_week')
+                ),
             )
 
         # Perform update
         success = await self.repository.update_question(question_id, **updates)
 
         if success:
-            logger.info(f"Updated research question {question_id}: {list(updates.keys())}")
+            logger.info(
+                f'Updated research question {question_id}: {list(updates.keys())}'
+            )
         else:
-            logger.error(f"Failed to update research question {question_id}")
+            logger.error(f'Failed to update research question {question_id}')
 
         return success
 
@@ -225,26 +238,26 @@ class ResearchQuestionService(BaseService):
         # Verify ownership
         question = await self.repository.get_by_id(question_id)
         if not question:
-            logger.warning(f"Research question {question_id} not found for deletion")
+            logger.warning(f'Research question {question_id} not found for deletion')
             return False
 
         if question['user_id'] != user_id:
             raise PermissionError(
-                f"User {user_id} does not have permission to delete question {question_id}"
+                f'User {user_id} does not have permission to delete question {question_id}'
             )
 
         # Perform deletion
         if hard_delete:
             success = await self.repository.delete_question(question_id)
-            action = "deleted"
+            action = 'deleted'
         else:
             success = await self.repository.deactivate_question(question_id)
-            action = "deactivated"
+            action = 'deactivated'
 
         if success:
-            logger.info(f"{action.capitalize()} research question {question_id}")
+            logger.info(f'{action.capitalize()} research question {question_id}')
         else:
-            logger.error(f"Failed to {action} research question {question_id}")
+            logger.error(f'Failed to {action} research question {question_id}')
 
         return success
 
@@ -269,15 +282,15 @@ class ResearchQuestionService(BaseService):
         )
 
         logger.debug(
-            f"Retrieved {len(questions)} research questions for user {user_id} "
-            f"(active_only={active_only})"
+            f'Retrieved {len(questions)} research questions for user {user_id} '
+            f'(active_only={active_only})'
         )
 
         return questions
 
     async def get_questions_due_for_discovery(
         self,
-        as_of: Optional[datetime] = None,
+        as_of: Optional[datetime] = None,  # noqa: UP007
     ) -> list[dict[str, Any]]:
         """
         Get all research questions that are due for discovery runs.
@@ -293,8 +306,8 @@ class ResearchQuestionService(BaseService):
         questions = await self.repository.get_questions_due_for_run(as_of=as_of)
 
         logger.info(
-            f"Found {len(questions)} research questions due for discovery "
-            f"(as_of={as_of or 'now'})"
+            f'Found {len(questions)} research questions due for discovery '
+            f'(as_of={as_of or "now"})'
         )
 
         return questions
@@ -305,7 +318,7 @@ class ResearchQuestionService(BaseService):
         articles_found: int,
         articles_matched: int,
         execution_time: float,
-        errors: Optional[list[str]] = None,
+        errors: Optional[list[str]] = None,  # noqa: ARG002, UP007
     ) -> bool:
         """
         Mark a discovery run as completed and update statistics.
@@ -322,7 +335,9 @@ class ResearchQuestionService(BaseService):
         """
         question = await self.repository.get_by_id(question_id)
         if not question:
-            logger.error(f"Cannot mark completion for non-existent question {question_id}")
+            logger.error(
+                f'Cannot mark completion for non-existent question {question_id}'
+            )
             return False
 
         # Calculate next run time
@@ -337,18 +352,22 @@ class ResearchQuestionService(BaseService):
             question_id=question_id,
             last_run_at=datetime.now(),
             next_run_at=next_run_at,
-            articles_found_count=question.get('articles_found_count', 0) + articles_found,
-            articles_matched_count=question.get('articles_matched_count', 0) + articles_matched,
+            articles_found_count=question.get('articles_found_count', 0)
+            + articles_found,
+            articles_matched_count=question.get('articles_matched_count', 0)
+            + articles_matched,
         )
 
         if success:
             logger.info(
-                f"Marked discovery completed for question {question_id}: "
-                f"{articles_found} found, {articles_matched} matched, "
-                f"{execution_time:.2f}s, next run: {next_run_at}"
+                f'Marked discovery completed for question {question_id}: '
+                f'{articles_found} found, {articles_matched} matched, '
+                f'{execution_time:.2f}s, next run: {next_run_at}'
             )
         else:
-            logger.error(f"Failed to mark discovery completed for question {question_id}")
+            logger.error(
+                f'Failed to mark discovery completed for question {question_id}'
+            )
 
         return success
 
@@ -356,7 +375,7 @@ class ResearchQuestionService(BaseService):
         self,
         question_id: UUID,
         user_id: str,
-    ) -> Optional[dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:  # noqa: UP007
         """
         Get statistics for a research question.
 
@@ -377,12 +396,12 @@ class ResearchQuestionService(BaseService):
 
         if question['user_id'] != user_id:
             raise PermissionError(
-                f"User {user_id} does not have permission to view statistics for question {question_id}"
+                f'User {user_id} does not have permission to view statistics for question {question_id}'
             )
 
         stats = await self.repository.get_statistics(question_id)
 
-        logger.debug(f"Retrieved statistics for question {question_id}")
+        logger.debug(f'Retrieved statistics for question {question_id}')
 
         return stats
 
@@ -399,13 +418,13 @@ class ResearchQuestionService(BaseService):
     ) -> None:
         """Validate research question inputs."""
         if not name or len(name.strip()) == 0:
-            raise ValueError("Research question name cannot be empty")
+            raise ValueError('Research question name cannot be empty')
 
         if len(name) > 255:
-            raise ValueError("Research question name must be 255 characters or less")
+            raise ValueError('Research question name must be 255 characters or less')
 
         if not keywords and not topics:
-            raise ValueError("At least one keyword or topic must be provided")
+            raise ValueError('At least one keyword or topic must be provided')
 
         self._validate_source_selection(selected_sources)
         self._validate_schedule_frequency(schedule_frequency)
@@ -414,17 +433,17 @@ class ResearchQuestionService(BaseService):
     def _validate_source_selection(self, selected_sources: list[str]) -> None:
         """Validate source selection array."""
         if not selected_sources or len(selected_sources) == 0:
-            raise ValueError("At least one source must be selected")
+            raise ValueError('At least one source must be selected')
 
         # Check for valid format: either ['*'] or specific source names
         if len(selected_sources) == 1 and selected_sources[0] == '*':
             return  # Valid: ALL sources
 
-        # Validate specific source names (basic validation, actual availability checked at runtime)
-        valid_source_pattern = r'^[a-z0-9_-]+$'
+        # Validate specific source names (basic validation, actual availability checked at runtime)  # noqa: W505
+        valid_source_pattern = r'^[a-z0-9_-]+$'  # noqa: F841
         for source in selected_sources:
             if not source or len(source.strip()) == 0:
-                raise ValueError("Source name cannot be empty")
+                raise ValueError('Source name cannot be empty')
             # Additional validation could check against available_sources table
 
     def _validate_schedule_frequency(self, frequency: str) -> None:
@@ -433,14 +452,14 @@ class ResearchQuestionService(BaseService):
         if frequency not in valid_frequencies:
             raise ValueError(
                 f"Invalid schedule frequency '{frequency}'. "
-                f"Must be one of: {', '.join(valid_frequencies)}"
+                f'Must be one of: {", ".join(valid_frequencies)}'
             )
 
     def _validate_relevance_score(self, score: float) -> None:
         """Validate relevance score threshold."""
         if not 0.0 <= score <= 1.0:
             raise ValueError(
-                f"Relevance score must be between 0.0 and 1.0, got {score}"
+                f'Relevance score must be between 0.0 and 1.0, got {score}'
             )
 
     # ==================== Scheduling Methods ====================
@@ -448,8 +467,8 @@ class ResearchQuestionService(BaseService):
     def _calculate_next_run(
         self,
         frequency: str,
-        schedule_time: Optional[str] = None,
-        schedule_days_of_week: Optional[list[str]] = None,
+        schedule_time: Optional[str] = None,  # noqa: UP007
+        schedule_days_of_week: Optional[list[str]] = None,  # noqa: UP007
     ) -> datetime:
         """
         Calculate the next scheduled run time.
@@ -468,9 +487,13 @@ class ResearchQuestionService(BaseService):
         if schedule_time:
             try:
                 hour, minute = map(int, schedule_time.split(':'))
-                scheduled_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                scheduled_time = now.replace(
+                    hour=hour, minute=minute, second=0, microsecond=0
+                )
             except (ValueError, AttributeError):
-                logger.warning(f"Invalid schedule_time '{schedule_time}', using current time")
+                logger.warning(
+                    f"Invalid schedule_time '{schedule_time}', using current time"
+                )
                 scheduled_time = now
         else:
             scheduled_time = now
@@ -487,10 +510,19 @@ class ResearchQuestionService(BaseService):
             else:
                 # Find next matching weekday
                 weekday_map = {
-                    'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
-                    'friday': 4, 'saturday': 5, 'sunday': 6,
+                    'monday': 0,
+                    'tuesday': 1,
+                    'wednesday': 2,
+                    'thursday': 3,
+                    'friday': 4,
+                    'saturday': 5,
+                    'sunday': 6,
                 }
-                target_days = [weekday_map.get(day.lower()) for day in schedule_days_of_week if day.lower() in weekday_map]
+                target_days = [
+                    weekday_map.get(day.lower())
+                    for day in schedule_days_of_week
+                    if day.lower() in weekday_map
+                ]
 
                 if not target_days:
                     next_run = scheduled_time + timedelta(days=7)
@@ -520,7 +552,7 @@ class ResearchQuestionService(BaseService):
 
         logger.debug(
             f"Calculated next run for frequency '{frequency}': {next_run} "
-            f"(schedule_time={schedule_time}, days={schedule_days_of_week})"
+            f'(schedule_time={schedule_time}, days={schedule_days_of_week})'
         )
 
         return next_run

@@ -44,7 +44,9 @@ class RAGService(BaseService):
     def rag_manager(self) -> RAGManager:
         """Get or create the RAG manager."""
         if self._rag_manager is None:
-            self.logger.info('Lazy-loading RAGManager (downloading embeddings model, this may take 30-120s)...')
+            self.logger.info(
+                'Lazy-loading RAGManager (downloading embeddings model, this may take 30-120s)...'
+            )
             self._rag_manager = RAGManager(
                 embedding_model=self.config.rag_config.embedding_model,
                 llm_model=self.config.rag_config.qa.model,

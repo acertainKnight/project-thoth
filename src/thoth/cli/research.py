@@ -41,7 +41,7 @@ async def run_export_review(args, pipeline: ThothPipeline) -> int:
         # Get question identifier
         question_identifier = args.question
         if not question_identifier:
-            logger.error("Question name or ID is required")
+            logger.error('Question name or ID is required')
             return 1
 
         # Initialize repositories
@@ -58,19 +58,19 @@ async def run_export_review(args, pipeline: ThothPipeline) -> int:
         except ValueError:
             # Not a valid UUID, try by name
             # Assume default user for CLI (TODO: Add user context)
-            user_id = args.user_id if hasattr(args, 'user_id') else "default"
+            user_id = args.user_id if hasattr(args, 'user_id') else 'default'
             question = await question_repo.get_by_name(user_id, question_identifier)
 
         if not question:
             logger.error(
-                f"Research question not found: {question_identifier}\n"
-                "Try using the UUID instead of the name, or check that the question exists."
+                f'Research question not found: {question_identifier}\n'
+                'Try using the UUID instead of the name, or check that the question exists.'
             )
             return 1
 
         question_id = question['id']
         question_name = question['name']
-        logger.info(f"Found research question: {question_name} ({question_id})")
+        logger.info(f'Found research question: {question_name} ({question_id})')
 
         # Initialize review service
         vault_resolver = VaultPathResolver(pipeline.config)
@@ -88,10 +88,10 @@ async def run_export_review(args, pipeline: ThothPipeline) -> int:
             # If directory, use default filename
             if output_path.is_dir():
                 safe_name = review_service._sanitize_filename(question_name)
-                output_path = output_path / f"{safe_name}_Review.md"
+                output_path = output_path / f'{safe_name}_Review.md'
 
         # Generate review file
-        logger.info("Generating Obsidian review file...")
+        logger.info('Generating Obsidian review file...')
         result_path = await review_service.generate_obsidian_review_file(
             question_id=question_id,
             output_path=output_path,
@@ -99,24 +99,24 @@ async def run_export_review(args, pipeline: ThothPipeline) -> int:
             limit=args.limit,
         )
 
-        logger.info(f"✅ Review file generated successfully: {result_path}")
+        logger.info(f'✅ Review file generated successfully: {result_path}')
         logger.info(
-            "\nNext steps:\n"
-            "1. Open the file in Obsidian\n"
-            "2. Review articles and update status in YAML frontmatter\n"
-            "3. Run: thoth research apply-review --file <path>"
+            '\nNext steps:\n'
+            '1. Open the file in Obsidian\n'
+            '2. Review articles and update status in YAML frontmatter\n'
+            '3. Run: thoth research apply-review --file <path>'
         )
 
         return 0
 
     except ValueError as e:
-        logger.error(f"Validation error: {e}")
+        logger.error(f'Validation error: {e}')
         return 1
     except RuntimeError as e:
-        logger.error(f"Generation failed: {e}")
+        logger.error(f'Generation failed: {e}')
         return 1
     except Exception as e:
-        logger.exception(f"Unexpected error exporting review: {e}")
+        logger.exception(f'Unexpected error exporting review: {e}')
         return 1
 
 
@@ -139,12 +139,12 @@ async def run_start_dashboard(args, pipeline: ThothPipeline) -> int:
         int: Exit code (0 for success, 1 for error)
     """
     try:
-        logger.info("🚀 Starting automatic discovery dashboard service...")
+        logger.info('🚀 Starting automatic discovery dashboard service...')
 
         # Initialize repositories
         postgres_service = pipeline.services.postgres
         match_repo = ArticleResearchMatchRepository(postgres_service)
-        question_repo = ResearchQuestionRepository(postgres_service)
+        question_repo = ResearchQuestionRepository(postgres_service)  # noqa: F841
 
         # Initialize review service
         review_service = ObsidianReviewService(
@@ -166,15 +166,15 @@ async def run_start_dashboard(args, pipeline: ThothPipeline) -> int:
         await dashboard_service.start()
 
         logger.success(
-            "✅ Dashboard service started!\n\n"
-            "The service is now:\n"
-            f"  📊 Checking for new results every {args.check_interval} seconds\n"
-            f"  📁 Watching {dashboard_service.dashboard_dir}\n"
-            f"  🔄 Auto-export: {'enabled' if not args.no_auto_export else 'disabled'}\n"
-            f"  📥 Auto-import: {'enabled' if not args.no_auto_import else 'disabled'}\n\n"
-            "Open dashboard files in Obsidian and start reviewing!\n"
-            "Changes you make will sync automatically.\n\n"
-            "Press Ctrl+C to stop the service."
+            '✅ Dashboard service started!\n\n'
+            'The service is now:\n'
+            f'  📊 Checking for new results every {args.check_interval} seconds\n'
+            f'  📁 Watching {dashboard_service.dashboard_dir}\n'
+            f'  🔄 Auto-export: {"enabled" if not args.no_auto_export else "disabled"}\n'
+            f'  📥 Auto-import: {"enabled" if not args.no_auto_import else "disabled"}\n\n'
+            'Open dashboard files in Obsidian and start reviewing!\n'
+            'Changes you make will sync automatically.\n\n'
+            'Press Ctrl+C to stop the service.'
         )
 
         # Keep running until interrupted
@@ -182,14 +182,14 @@ async def run_start_dashboard(args, pipeline: ThothPipeline) -> int:
             while True:
                 await asyncio.sleep(1)
         except KeyboardInterrupt:
-            logger.info("\n\n📴 Stopping dashboard service...")
+            logger.info('\n\n📴 Stopping dashboard service...')
             await dashboard_service.stop()
-            logger.success("✅ Dashboard service stopped")
+            logger.success('✅ Dashboard service stopped')
 
         return 0
 
     except Exception as e:
-        logger.exception(f"Failed to start dashboard service: {e}")
+        logger.exception(f'Failed to start dashboard service: {e}')
         return 1
 
 
@@ -211,14 +211,14 @@ async def run_apply_review(args, pipeline: ThothPipeline) -> int:
         # Validate file path
         review_file = Path(args.file)
         if not review_file.exists():
-            logger.error(f"Review file not found: {review_file}")
+            logger.error(f'Review file not found: {review_file}')
             return 1
 
         if not review_file.is_file():
-            logger.error(f"Path is not a file: {review_file}")
+            logger.error(f'Path is not a file: {review_file}')
             return 1
 
-        logger.info(f"Reading review file: {review_file}")
+        logger.info(f'Reading review file: {review_file}')
 
         # Initialize repositories
         postgres_service = pipeline.services.postgres
@@ -237,71 +237,71 @@ async def run_apply_review(args, pipeline: ThothPipeline) -> int:
         # Extract question_id from file if not provided
         import yaml
 
-        content = review_file.read_text(encoding="utf-8")
-        if content.startswith("---"):
-            parts = content.split("---", 2)
+        content = review_file.read_text(encoding='utf-8')
+        if content.startswith('---'):
+            parts = content.split('---', 2)
             if len(parts) >= 3:
                 frontmatter = yaml.safe_load(parts[1])
-                question_id = UUID(frontmatter.get("question_id"))
+                question_id = UUID(frontmatter.get('question_id'))
             else:
-                logger.error("Invalid review file: malformed YAML frontmatter")
+                logger.error('Invalid review file: malformed YAML frontmatter')
                 return 1
         else:
-            logger.error("Invalid review file: missing YAML frontmatter")
+            logger.error('Invalid review file: missing YAML frontmatter')
             return 1
 
-        logger.info(f"Processing reviews for question ID: {question_id}")
+        logger.info(f'Processing reviews for question ID: {question_id}')
 
         # Dry run check
         if args.dry_run:
-            logger.info("🔍 DRY RUN MODE - No changes will be made to the database")
-            logger.info(f"Would process review file: {review_file}")
+            logger.info('🔍 DRY RUN MODE - No changes will be made to the database')
+            logger.info(f'Would process review file: {review_file}')
 
             # Parse and show what would be done
-            articles = frontmatter.get("articles", [])
-            preview_stats = {"liked": 0, "disliked": 0, "skip": 0, "pending": 0}
+            articles = frontmatter.get('articles', [])
+            preview_stats = {'liked': 0, 'disliked': 0, 'skip': 0, 'pending': 0}
 
             for article in articles:
-                status = article.get("status", "pending")
+                status = article.get('status', 'pending')
                 if status in preview_stats:
                     preview_stats[status] += 1
 
-            logger.info("\nReview summary (would be applied):")
-            logger.info(f"  ⭐ Liked: {preview_stats['liked']}")
-            logger.info(f"  ❌ Disliked: {preview_stats['disliked']}")
-            logger.info(f"  ⏭️  Skipped: {preview_stats['skip']}")
-            logger.info(f"  ⬜ Pending: {preview_stats['pending']} (no action)")
-            logger.info("\nRun without --dry-run to apply changes")
+            logger.info('\nReview summary (would be applied):')
+            logger.info(f'  ⭐ Liked: {preview_stats["liked"]}')
+            logger.info(f'  ❌ Disliked: {preview_stats["disliked"]}')
+            logger.info(f'  ⏭️  Skipped: {preview_stats["skip"]}')
+            logger.info(f'  ⬜ Pending: {preview_stats["pending"]} (no action)')
+            logger.info('\nRun without --dry-run to apply changes')
 
             return 0
 
         # Apply decisions
-        logger.info("Applying review decisions to database...")
+        logger.info('Applying review decisions to database...')
         stats = await review_service.apply_review_decisions(
             review_file=review_file,
             question_id=question_id,
         )
 
         # Display results
-        logger.info("\n✅ Review decisions applied successfully!")
-        logger.info("\nSummary:")
-        logger.info(f"  ⭐ Liked: {stats['liked']} (bookmarked, rating=5)")
-        logger.info(f"  ❌ Disliked: {stats['disliked']} (rating=1)")
-        logger.info(f"  ⏭️  Skipped: {stats['skip']} (marked as viewed)")
+        logger.info('\n✅ Review decisions applied successfully!')
+        logger.info('\nSummary:')
+        logger.info(f'  ⭐ Liked: {stats["liked"]} (bookmarked, rating=5)')
+        logger.info(f'  ❌ Disliked: {stats["disliked"]} (rating=1)')
+        logger.info(f'  ⏭️  Skipped: {stats["skip"]} (marked as viewed)')
 
         if stats['errors'] > 0:
-            logger.warning(f"  ⚠️  Errors: {stats['errors']} (check logs)")
+            logger.warning(f'  ⚠️  Errors: {stats["errors"]} (check logs)')
 
         return 0
 
     except ValueError as e:
-        logger.error(f"Validation error: {e}")
+        logger.error(f'Validation error: {e}')
         return 1
     except RuntimeError as e:
-        logger.error(f"Failed to apply decisions: {e}")
+        logger.error(f'Failed to apply decisions: {e}')
         return 1
     except Exception as e:
-        logger.exception(f"Unexpected error applying review: {e}")
+        logger.exception(f'Unexpected error applying review: {e}')
         return 1
 
 

@@ -52,7 +52,7 @@ class MCPMonitor:
         self.last_health_check = 0
         self.health_check_interval = 30
         self.alert_thresholds = {
-            'success_rate_min': 0.95,
+            'success_rate_min': 95.0,  # Percentage (0-100), not decimal
             'response_time_max': 5.0,
             'connection_failure_max': 10,
         }
@@ -72,7 +72,9 @@ class MCPMonitor:
                     if response.status_code == 200:
                         manager_healthy = True
                     else:
-                        errors.append(f'MCP server returned status {response.status_code}')
+                        errors.append(
+                            f'MCP server returned status {response.status_code}'
+                        )
             except httpx.ConnectError:
                 errors.append('Cannot connect to MCP server at localhost:8000')
             except httpx.TimeoutException:

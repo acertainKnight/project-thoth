@@ -5,18 +5,18 @@ This module executes parameterized browser workflows with search parameter injec
 authentication handling, and robust error recovery.
 """
 
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
-import asyncio
+import asyncio  # noqa: F401
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional  # noqa: F401
 from uuid import UUID
 
 from loguru import logger
 from playwright.async_api import BrowserContext, Error as PlaywrightError, Page
 
 from thoth.discovery.browser.action_executor import ActionExecutor
-from thoth.discovery.browser.browser_manager import BrowserManager, BrowserManagerError
+from thoth.discovery.browser.browser_manager import BrowserManager, BrowserManagerError  # noqa: F401
 from thoth.discovery.browser.extraction_service import ExtractionService
 from thoth.repositories.browser_workflow_repository import BrowserWorkflowRepository
 from thoth.repositories.workflow_actions_repository import WorkflowActionsRepository
@@ -37,7 +37,7 @@ from thoth.utilities.schemas.browser_workflow import (
     ExecutionTrigger,
     KeywordsFormat,
     SelectorStrategy,
-    WaitCondition,
+    WaitCondition,  # noqa: F401
 )
 
 
@@ -102,8 +102,7 @@ class WorkflowEngine:
     Example:
         >>> engine = WorkflowEngine(browser_manager, workflow_repo, ...)
         >>> params = ExecutionParameters(
-        ...     keywords=['neural', 'pathways'],
-        ...     date_range='last_24h'
+        ...     keywords=['neural', 'pathways'], date_range='last_24h'
         ... )
         >>> result = await engine.execute_workflow(workflow_id, params)
     """
@@ -138,9 +137,7 @@ class WorkflowEngine:
         self.actions_repo = actions_repo
         self.max_retries = max_retries
 
-        logger.info(
-            f'WorkflowEngine initialized (max_retries={max_retries})'
-        )
+        logger.info(f'WorkflowEngine initialized (max_retries={max_retries})')
 
     async def execute_workflow(
         self,
@@ -179,14 +176,16 @@ class WorkflowEngine:
         execution_log: list[dict[str, Any]] = []
 
         # Create execution record
-        execution_id = await self.executions_repo.create({
-            'workflow_id': workflow_id,
-            'status': ExecutionStatus.RUNNING.value,
-            'started_at': start_time,
-            'execution_parameters': parameters.model_dump(),
-            'triggered_by': trigger.value,
-            'triggered_by_query_id': query_id,
-        })
+        execution_id = await self.executions_repo.create(
+            {
+                'workflow_id': workflow_id,
+                'status': ExecutionStatus.RUNNING.value,
+                'started_at': start_time,
+                'execution_parameters': parameters.model_dump(),
+                'triggered_by': trigger.value,
+                'triggered_by_query_id': query_id,
+            }
+        )
 
         if not execution_id:
             raise WorkflowEngineError('Failed to create execution record')
@@ -200,19 +199,25 @@ class WorkflowEngine:
             if not workflow.get('is_active'):
                 raise WorkflowEngineError(f'Workflow is inactive: {workflow_id}')
 
-            execution_log.append({
-                'timestamp': datetime.utcnow().isoformat(),
-                'action': 'workflow_loaded',
-                'workflow_name': workflow.get('name'),
-            })
+            execution_log.append(
+                {
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'action': 'workflow_loaded',
+                    'workflow_name': workflow.get('name'),
+                }
+            )
 
             # 2. Load search configuration
-            search_config = await self.search_config_repo.get_by_workflow_id(workflow_id)
-            execution_log.append({
-                'timestamp': datetime.utcnow().isoformat(),
-                'action': 'search_config_loaded',
-                'has_config': search_config is not None,
-            })
+            search_config = await self.search_config_repo.get_by_workflow_id(
+                workflow_id
+            )
+            execution_log.append(
+                {
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'action': 'search_config_loaded',
+                    'has_config': search_config is not None,
+                }
+            )
 
             # 3. Initialize browser context
             context = await self.browser_manager.get_browser(
@@ -221,19 +226,23 @@ class WorkflowEngine:
             )
             page = await context.new_page()
 
-            execution_log.append({
-                'timestamp': datetime.utcnow().isoformat(),
-                'action': 'browser_initialized',
-            })
+            execution_log.append(
+                {
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'action': 'browser_initialized',
+                }
+            )
 
             # 4. Navigate to start URL
             start_url = workflow.get('start_url')
             await page.goto(start_url, wait_until='domcontentloaded')
-            execution_log.append({
-                'timestamp': datetime.utcnow().isoformat(),
-                'action': 'navigated',
-                'url': start_url,
-            })
+            execution_log.append(
+                {
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'action': 'navigated',
+                    'url': start_url,
+                }
+            )
 
             # 5. Handle authentication if required
             if workflow.get('requires_authentication'):
@@ -264,7 +273,10 @@ class WorkflowEngine:
 
             # Update workflow statistics
             await self.workflow_repo.update_statistics(
-                workflow_id, success=True, articles_found=len(articles), duration_ms=duration_ms
+                workflow_id,
+                success=True,
+                articles_found=len(articles),
+                duration_ms=duration_ms,
             )
 
             logger.info(
@@ -299,11 +311,13 @@ class WorkflowEngine:
                 workflow_id, success=False, articles_found=0, duration_ms=duration_ms
             )
 
-            execution_log.append({
-                'timestamp': datetime.utcnow().isoformat(),
-                'action': 'error',
-                'error': error_message,
-            })
+            execution_log.append(
+                {
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'action': 'error',
+                    'error': error_message,
+                }
+            )
 
             return WorkflowExecutionResult(
                 success=False,
@@ -338,7 +352,7 @@ class WorkflowEngine:
             WorkflowEngineError: If authentication fails
         """
         workflow_id = workflow['id']
-        auth_type = workflow.get('authentication_type', 'form')
+        auth_type = workflow.get('authentication_type', 'form')  # noqa: F841
 
         # Get credentials from repository
         creds_data = await self.credentials_repo.get_by_workflow_id(workflow_id)
@@ -363,23 +377,29 @@ class WorkflowEngine:
                 # API key in headers or URL
                 await self._authenticate_api_key(page, credentials, execution_log)
             else:
-                raise WorkflowEngineError(f'Unsupported authentication type: {stored_auth_type}')
+                raise WorkflowEngineError(
+                    f'Unsupported authentication type: {stored_auth_type}'
+                )
 
-            execution_log.append({
-                'timestamp': datetime.utcnow().isoformat(),
-                'action': 'authentication_success',
-                'auth_type': stored_auth_type,
-            })
+            execution_log.append(
+                {
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'action': 'authentication_success',
+                    'auth_type': stored_auth_type,
+                }
+            )
 
             logger.info(f'Authentication successful for workflow {workflow_id}')
 
         except Exception as e:
-            execution_log.append({
-                'timestamp': datetime.utcnow().isoformat(),
-                'action': 'authentication_failed',
-                'auth_type': stored_auth_type,
-                'error': str(e),
-            })
+            execution_log.append(
+                {
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'action': 'authentication_failed',
+                    'auth_type': stored_auth_type,
+                    'error': str(e),
+                }
+            )
             raise WorkflowEngineError(f'Authentication failed: {e}') from e
 
     async def _authenticate_form(
@@ -391,12 +411,20 @@ class WorkflowEngine:
         """Perform form-based authentication."""
         username = credentials.get('username')
         password = credentials.get('password')
-        username_selector = credentials.get('username_selector', 'input[name="username"], input[type="email"]')
-        password_selector = credentials.get('password_selector', 'input[name="password"], input[type="password"]')
-        submit_selector = credentials.get('submit_selector', 'button[type="submit"], input[type="submit"]')
+        username_selector = credentials.get(
+            'username_selector', 'input[name="username"], input[type="email"]'
+        )
+        password_selector = credentials.get(
+            'password_selector', 'input[name="password"], input[type="password"]'
+        )
+        submit_selector = credentials.get(
+            'submit_selector', 'button[type="submit"], input[type="submit"]'
+        )
 
         if not username or not password:
-            raise WorkflowEngineError('Username and password required for form authentication')
+            raise WorkflowEngineError(
+                'Username and password required for form authentication'
+            )
 
         # Fill username
         username_input = await page.wait_for_selector(username_selector, timeout=10000)
@@ -413,10 +441,12 @@ class WorkflowEngine:
         # Wait for navigation to complete
         await page.wait_for_load_state('networkidle', timeout=30000)
 
-        execution_log.append({
-            'timestamp': datetime.utcnow().isoformat(),
-            'action': 'form_authentication_completed',
-        })
+        execution_log.append(
+            {
+                'timestamp': datetime.utcnow().isoformat(),
+                'action': 'form_authentication_completed',
+            }
+        )
 
     async def _authenticate_basic(
         self,
@@ -429,17 +459,21 @@ class WorkflowEngine:
         password = credentials.get('password')
 
         if not username or not password:
-            raise WorkflowEngineError('Username and password required for basic authentication')
+            raise WorkflowEngineError(
+                'Username and password required for basic authentication'
+            )
 
         # Set authentication header
-        await page.context.set_extra_http_headers({
-            'Authorization': f'Basic {username}:{password}'
-        })
+        await page.context.set_extra_http_headers(
+            {'Authorization': f'Basic {username}:{password}'}
+        )
 
-        execution_log.append({
-            'timestamp': datetime.utcnow().isoformat(),
-            'action': 'basic_auth_header_set',
-        })
+        execution_log.append(
+            {
+                'timestamp': datetime.utcnow().isoformat(),
+                'action': 'basic_auth_header_set',
+            }
+        )
 
     async def _authenticate_api_key(
         self,
@@ -455,15 +489,15 @@ class WorkflowEngine:
             raise WorkflowEngineError('API key required for API key authentication')
 
         # Set API key header
-        await page.context.set_extra_http_headers({
-            header_name: api_key
-        })
+        await page.context.set_extra_http_headers({header_name: api_key})
 
-        execution_log.append({
-            'timestamp': datetime.utcnow().isoformat(),
-            'action': 'api_key_header_set',
-            'header_name': header_name,
-        })
+        execution_log.append(
+            {
+                'timestamp': datetime.utcnow().isoformat(),
+                'action': 'api_key_header_set',
+                'header_name': header_name,
+            }
+        )
 
     async def _inject_search_parameters(
         self,
@@ -487,7 +521,9 @@ class WorkflowEngine:
         try:
             # Format keywords according to configuration
             if parameters.keywords:
-                keywords_format = search_config.get('keywords_format', 'space_separated')
+                keywords_format = search_config.get(
+                    'keywords_format', 'space_separated'
+                )
                 formatted_keywords = self._format_keywords(
                     parameters.keywords, keywords_format
                 )
@@ -498,16 +534,18 @@ class WorkflowEngine:
                     element = await self._find_element(page, search_input_selector)
                     if element:
                         await element.fill(formatted_keywords)
-                        execution_log.append({
-                            'timestamp': datetime.utcnow().isoformat(),
-                            'action': 'keywords_injected',
-                            'keywords': formatted_keywords,
-                        })
+                        execution_log.append(
+                            {
+                                'timestamp': datetime.utcnow().isoformat(),
+                                'action': 'keywords_injected',
+                                'keywords': formatted_keywords,
+                            }
+                        )
 
             # Apply filters
             filters = search_config.get('filters', [])
             for filter_config in filters:
-                filter_name = filter_config.get('name')
+                filter_name = filter_config.get('name')  # noqa: F841
                 parameter_name = filter_config.get('parameter_name')
 
                 # Get value from parameters
@@ -535,10 +573,12 @@ class WorkflowEngine:
                     await element.click()
                     # Wait for results to load
                     await page.wait_for_load_state('networkidle', timeout=30000)
-                    execution_log.append({
-                        'timestamp': datetime.utcnow().isoformat(),
-                        'action': 'search_submitted',
-                    })
+                    execution_log.append(
+                        {
+                            'timestamp': datetime.utcnow().isoformat(),
+                            'action': 'search_submitted',
+                        }
+                    )
 
         except Exception as e:
             raise WorkflowEngineError(f'Failed to inject search parameters: {e}') from e
@@ -571,14 +611,18 @@ class WorkflowEngine:
 
             if not actions_data or len(actions_data) == 0:
                 logger.debug(f'No workflow actions defined for workflow {workflow_id}')
-                execution_log.append({
-                    'timestamp': datetime.utcnow().isoformat(),
-                    'action': 'workflow_actions_skipped',
-                    'reason': 'no_actions_defined',
-                })
+                execution_log.append(
+                    {
+                        'timestamp': datetime.utcnow().isoformat(),
+                        'action': 'workflow_actions_skipped',
+                        'reason': 'no_actions_defined',
+                    }
+                )
                 return
 
-            logger.info(f'Executing {len(actions_data)} workflow actions for workflow {workflow_id}')
+            logger.info(
+                f'Executing {len(actions_data)} workflow actions for workflow {workflow_id}'
+            )
 
             # Initialize ActionExecutor with page and retry settings
             action_executor = ActionExecutor(
@@ -591,7 +635,9 @@ class WorkflowEngine:
             param_dict = {}
             if parameters.keywords:
                 param_dict['keywords'] = ' '.join(parameters.keywords)
-                param_dict['keyword'] = parameters.keywords[0] if parameters.keywords else ''
+                param_dict['keyword'] = (
+                    parameters.keywords[0] if parameters.keywords else ''
+                )
             if parameters.date_range:
                 param_dict['date_range'] = parameters.date_range
             if parameters.subject:
@@ -615,7 +661,9 @@ class WorkflowEngine:
                         selector=action_data.get('selector'),
                         value=action_data.get('action_config', {}).get('value'),
                         timeout=action_data.get('action_config', {}).get('timeout'),
-                        wait_condition=action_data.get('action_config', {}).get('wait_condition'),
+                        wait_condition=action_data.get('action_config', {}).get(
+                            'wait_condition'
+                        ),
                     )
 
                     # Execute action with parameter substitution
@@ -625,22 +673,26 @@ class WorkflowEngine:
                     )
 
                     if result.success:
-                        execution_log.append({
-                            'timestamp': datetime.utcnow().isoformat(),
-                            'action': 'workflow_action_executed',
-                            'step_number': step_num,
-                            'action_type': action_type,
-                            'success': True,
-                        })
+                        execution_log.append(
+                            {
+                                'timestamp': datetime.utcnow().isoformat(),
+                                'action': 'workflow_action_executed',
+                                'step_number': step_num,
+                                'action_type': action_type,
+                                'success': True,
+                            }
+                        )
                         logger.info(f'Action step {step_num} completed successfully')
                     else:
-                        execution_log.append({
-                            'timestamp': datetime.utcnow().isoformat(),
-                            'action': 'workflow_action_failed',
-                            'step_number': step_num,
-                            'action_type': action_type,
-                            'error': result.error,
-                        })
+                        execution_log.append(
+                            {
+                                'timestamp': datetime.utcnow().isoformat(),
+                                'action': 'workflow_action_failed',
+                                'step_number': step_num,
+                                'action_type': action_type,
+                                'error': result.error,
+                            }
+                        )
                         logger.warning(f'Action step {step_num} failed: {result.error}')
                         # Continue execution unless it's a critical failure
                         if action_data.get('is_required', True):
@@ -650,31 +702,37 @@ class WorkflowEngine:
 
                 except Exception as e:
                     logger.error(f'Error executing action step {step_num}: {e}')
-                    execution_log.append({
-                        'timestamp': datetime.utcnow().isoformat(),
-                        'action': 'workflow_action_error',
-                        'step_number': step_num,
-                        'error': str(e),
-                    })
+                    execution_log.append(
+                        {
+                            'timestamp': datetime.utcnow().isoformat(),
+                            'action': 'workflow_action_error',
+                            'step_number': step_num,
+                            'error': str(e),
+                        }
+                    )
                     # Re-raise if it's a required action
                     if action_data.get('is_required', True):
                         raise
 
-            execution_log.append({
-                'timestamp': datetime.utcnow().isoformat(),
-                'action': 'workflow_actions_completed',
-                'total_actions': len(actions_data),
-            })
+            execution_log.append(
+                {
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'action': 'workflow_actions_completed',
+                    'total_actions': len(actions_data),
+                }
+            )
 
             logger.info(f'Completed execution of {len(actions_data)} workflow actions')
 
         except Exception as e:
             logger.error(f'Workflow actions execution failed: {e}')
-            execution_log.append({
-                'timestamp': datetime.utcnow().isoformat(),
-                'action': 'workflow_actions_failed',
-                'error': str(e),
-            })
+            execution_log.append(
+                {
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'action': 'workflow_actions_failed',
+                    'error': str(e),
+                }
+            )
             raise WorkflowEngineError(f'Workflow actions execution failed: {e}') from e
 
     async def _extract_articles(
@@ -699,17 +757,20 @@ class WorkflowEngine:
         try:
             extraction_rules = workflow.get('extraction_rules', {})
             if not extraction_rules:
-                logger.warning(f'No extraction rules defined for workflow {workflow["id"]}')
-                execution_log.append({
-                    'timestamp': datetime.utcnow().isoformat(),
-                    'action': 'extraction_skipped',
-                    'reason': 'no_extraction_rules',
-                })
+                logger.warning(
+                    f'No extraction rules defined for workflow {workflow["id"]}'
+                )
+                execution_log.append(
+                    {
+                        'timestamp': datetime.utcnow().isoformat(),
+                        'action': 'extraction_skipped',
+                        'reason': 'no_extraction_rules',
+                    }
+                )
                 return []
 
             max_articles = parameters.custom_filters.get(
-                'max_articles',
-                workflow.get('max_articles_per_run', 100)
+                'max_articles', workflow.get('max_articles_per_run', 100)
             )
 
             # Initialize extraction service
@@ -720,11 +781,13 @@ class WorkflowEngine:
                 existing_titles=set(),
             )
 
-            execution_log.append({
-                'timestamp': datetime.utcnow().isoformat(),
-                'action': 'extraction_started',
-                'max_articles': max_articles,
-            })
+            execution_log.append(
+                {
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'action': 'extraction_started',
+                    'max_articles': max_articles,
+                }
+            )
 
             # Extract articles
             articles = await extraction_service.extract_articles(
@@ -735,13 +798,15 @@ class WorkflowEngine:
             # Get extraction statistics
             stats = extraction_service.extraction_stats
 
-            execution_log.append({
-                'timestamp': datetime.utcnow().isoformat(),
-                'action': 'extraction_completed',
-                'articles_extracted': stats['extracted'],
-                'articles_skipped': stats['skipped'],
-                'articles_errors': stats['errors'],
-            })
+            execution_log.append(
+                {
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'action': 'extraction_completed',
+                    'articles_extracted': stats['extracted'],
+                    'articles_skipped': stats['skipped'],
+                    'articles_errors': stats['errors'],
+                }
+            )
 
             logger.info(
                 f'Extracted {len(articles)} articles for workflow {workflow["id"]} '
@@ -751,11 +816,13 @@ class WorkflowEngine:
             return articles
 
         except Exception as e:
-            execution_log.append({
-                'timestamp': datetime.utcnow().isoformat(),
-                'action': 'extraction_failed',
-                'error': str(e),
-            })
+            execution_log.append(
+                {
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'action': 'extraction_failed',
+                    'error': str(e),
+                }
+            )
             logger.error(f'Article extraction failed: {e}')
             raise WorkflowEngineError(f'Article extraction failed: {e}') from e
 
@@ -854,22 +921,22 @@ class WorkflowEngine:
                 # Click radio button
                 await element.click()
 
-            execution_log.append({
-                'timestamp': datetime.utcnow().isoformat(),
-                'action': 'filter_applied',
-                'filter_name': filter_name,
-                'filter_type': filter_type,
-                'value': value,
-            })
+            execution_log.append(
+                {
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'action': 'filter_applied',
+                    'filter_name': filter_name,
+                    'filter_type': filter_type,
+                    'value': value,
+                }
+            )
 
         except Exception as e:
             raise WorkflowEngineError(
                 f'Failed to apply filter {filter_name}: {e}'
             ) from e
 
-    def _format_keywords(
-        self, keywords: list[str], format_type: str
-    ) -> str:
+    def _format_keywords(self, keywords: list[str], format_type: str) -> str:
         """
         Format keywords according to the specified format.
 

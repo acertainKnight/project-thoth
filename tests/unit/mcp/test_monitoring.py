@@ -11,8 +11,8 @@ Tests the MCPMonitor class including:
 - Edge cases and error conditions
 """
 
-import time
-from unittest.mock import AsyncMock, Mock, patch
+import time  # noqa: I001
+from unittest.mock import AsyncMock, Mock, patch  # noqa: F401
 
 import httpx
 import pytest
@@ -29,6 +29,7 @@ from thoth.mcp.monitoring import (
 # MCPMonitor Initialization Tests
 # ============================================================================
 
+
 class TestMCPMonitorInit:
     """Test MCPMonitor initialization and configuration."""
 
@@ -39,7 +40,7 @@ class TestMCPMonitorInit:
         assert monitor.last_health_check == 0
         assert monitor.health_check_interval == 30
         assert monitor.alert_thresholds == {
-            'success_rate_min': 0.95,
+            'success_rate_min': 95.0,  # Percentage (0-100)
             'response_time_max': 5.0,
             'connection_failure_max': 10,
         }
@@ -52,8 +53,8 @@ class TestMCPMonitorInit:
         assert 'response_time_max' in monitor.alert_thresholds
         assert 'connection_failure_max' in monitor.alert_thresholds
 
-        # Verify threshold values are reasonable
-        assert 0 < monitor.alert_thresholds['success_rate_min'] <= 1.0
+        # Verify threshold values are reasonable (success_rate is percentage 0-100)
+        assert 0 < monitor.alert_thresholds['success_rate_min'] <= 100.0
         assert monitor.alert_thresholds['response_time_max'] > 0
         assert monitor.alert_thresholds['connection_failure_max'] > 0
 
@@ -61,6 +62,7 @@ class TestMCPMonitorInit:
 # ============================================================================
 # get_health_status() Tests - Healthy Server
 # ============================================================================
+
 
 class TestGetHealthStatusHealthy:
     """Test get_health_status() with healthy MCP server."""
@@ -119,6 +121,7 @@ class TestGetHealthStatusHealthy:
 # get_health_status() Tests - Unhealthy Server
 # ============================================================================
 
+
 class TestGetHealthStatusUnhealthy:
     """Test get_health_status() with unhealthy MCP server."""
 
@@ -145,9 +148,7 @@ class TestGetHealthStatusUnhealthy:
     @respx.mock
     async def test_server_returns_500(self):
         """Test health status when server returns 500 Internal Server Error."""
-        respx.get('http://localhost:8000/health').mock(
-            return_value=httpx.Response(500)
-        )
+        respx.get('http://localhost:8000/health').mock(return_value=httpx.Response(500))
 
         monitor = MCPMonitor()
         status = await monitor.get_health_status()
@@ -159,9 +160,7 @@ class TestGetHealthStatusUnhealthy:
     @respx.mock
     async def test_server_returns_404(self):
         """Test health status when server returns 404 Not Found."""
-        respx.get('http://localhost:8000/health').mock(
-            return_value=httpx.Response(404)
-        )
+        respx.get('http://localhost:8000/health').mock(return_value=httpx.Response(404))
 
         monitor = MCPMonitor()
         status = await monitor.get_health_status()
@@ -173,6 +172,7 @@ class TestGetHealthStatusUnhealthy:
 # ============================================================================
 # get_health_status() Tests - Connection Errors
 # ============================================================================
+
 
 class TestGetHealthStatusConnectionErrors:
     """Test get_health_status() with various connection errors."""
@@ -242,6 +242,7 @@ class TestGetHealthStatusConnectionErrors:
 # get_health_status() Tests - Edge Cases
 # ============================================================================
 
+
 class TestGetHealthStatusEdgeCases:
     """Test get_health_status() edge cases and error conditions."""
 
@@ -282,12 +283,13 @@ class TestGetHealthStatusEdgeCases:
 
             assert status.healthy is False
             assert len(status.errors) > 0
-            assert 'Health check error:' in status.errors[0]
+            assert 'MCP health check error:' in status.errors[0]
 
 
 # ============================================================================
 # get_server_details() Tests
 # ============================================================================
+
 
 class TestGetServerDetails:
     """Test get_server_details() with various scenarios."""
@@ -296,9 +298,7 @@ class TestGetServerDetails:
     @respx.mock
     async def test_server_details_healthy_server(self):
         """Test server details returns correct stats for healthy server."""
-        respx.get('http://localhost:8000/health').mock(
-            return_value=httpx.Response(200)
-        )
+        respx.get('http://localhost:8000/health').mock(return_value=httpx.Response(200))
 
         monitor = MCPMonitor()
         servers = await monitor.get_server_details()
@@ -329,9 +329,7 @@ class TestGetServerDetails:
     @respx.mock
     async def test_server_details_includes_timestamps(self):
         """Test server details includes valid timestamp."""
-        respx.get('http://localhost:8000/health').mock(
-            return_value=httpx.Response(200)
-        )
+        respx.get('http://localhost:8000/health').mock(return_value=httpx.Response(200))
 
         monitor = MCPMonitor()
         servers = await monitor.get_server_details()
@@ -343,9 +341,7 @@ class TestGetServerDetails:
     @respx.mock
     async def test_server_details_uses_cached_health_status(self):
         """Test server details uses health status from get_health_status()."""
-        respx.get('http://localhost:8000/health').mock(
-            return_value=httpx.Response(200)
-        )
+        respx.get('http://localhost:8000/health').mock(return_value=httpx.Response(200))
 
         monitor = MCPMonitor()
 
@@ -363,6 +359,7 @@ class TestGetServerDetails:
 # ============================================================================
 # should_alert() Tests
 # ============================================================================
+
 
 class TestShouldAlert:
     """Test should_alert() threshold logic."""
@@ -463,6 +460,7 @@ class TestShouldAlert:
 # refresh_tools_cache() Tests
 # ============================================================================
 
+
 class TestRefreshToolsCache:
     """Test refresh_tools_cache() functionality."""
 
@@ -494,7 +492,9 @@ class TestRefreshToolsCache:
         monitor = MCPMonitor()
 
         # Patch to simulate error during refresh
-        with patch.object(monitor, 'refresh_tools_cache', side_effect=Exception('Cache error')):
+        with patch.object(
+            monitor, 'refresh_tools_cache', side_effect=Exception('Cache error')
+        ):
             try:
                 await monitor.refresh_tools_cache()
                 pytest.fail('Expected exception to be raised')
@@ -505,6 +505,7 @@ class TestRefreshToolsCache:
 # ============================================================================
 # Model Validation Tests - MCPHealthStatus
 # ============================================================================
+
 
 class TestMCPHealthStatusModel:
     """Test MCPHealthStatus Pydantic model validation."""
@@ -582,6 +583,7 @@ class TestMCPHealthStatusModel:
 # ============================================================================
 # Model Validation Tests - MCPServerStats
 # ============================================================================
+
 
 class TestMCPServerStatsModel:
     """Test MCPServerStats Pydantic model validation."""

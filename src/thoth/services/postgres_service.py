@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 import asyncpg
-from loguru import logger
+from loguru import logger  # noqa: F401
 
 from thoth.services.base import BaseService, ServiceError
 
@@ -28,7 +28,7 @@ class PostgresService(BaseService):
     - Health checks and monitoring
     """
 
-    def __init__(self, config=None, database_url: Optional[str] = None):
+    def __init__(self, config=None, database_url: Optional[str] = None):  # noqa: UP007
         """
         Initialize the PostgresService.
 
@@ -38,7 +38,7 @@ class PostgresService(BaseService):
         """
         super().__init__(config)
         self.database_url = database_url or config.secrets.database_url
-        self._pool: Optional[asyncpg.Pool] = None
+        self._pool: Optional[asyncpg.Pool] = None  # noqa: UP007
         self._connection_lock = asyncio.Lock()
 
     async def initialize(self) -> None:
@@ -59,7 +59,9 @@ class PostgresService(BaseService):
                     max_inactive_connection_lifetime=300.0,
                     command_timeout=60.0,
                 )
-                self.logger.info(f'PostgreSQL connection pool initialized: {self._pool}')
+                self.logger.info(
+                    f'PostgreSQL connection pool initialized: {self._pool}'
+                )
 
                 # Verify connection
                 async with self._pool.acquire() as conn:
@@ -88,7 +90,7 @@ class PostgresService(BaseService):
         Usage:
             async with postgres.acquire() as conn:
                 result = await conn.fetchrow('SELECT * FROM papers WHERE id = $1', paper_id)
-        """
+        """  # noqa: W505
         if not self._pool:
             await self.initialize()
 
@@ -116,7 +118,7 @@ class PostgresService(BaseService):
         self,
         query: str,
         *args,
-        timeout: Optional[float] = None,
+        timeout: Optional[float] = None,  # noqa: UP007
         retry_count: int = 3,
     ) -> str:
         """
@@ -143,12 +145,10 @@ class PostgresService(BaseService):
 
             except asyncpg.exceptions.PostgresError as e:
                 if attempt == retry_count - 1:
-                    raise ServiceError(
-                        self.handle_error(e, 'executing query')
-                    ) from e
+                    raise ServiceError(self.handle_error(e, 'executing query')) from e
 
                 # Exponential backoff
-                wait_time = 2 ** attempt
+                wait_time = 2**attempt
                 self.logger.warning(
                     f'Query failed (attempt {attempt + 1}/{retry_count}), '
                     f'retrying in {wait_time}s: {e}'
@@ -159,7 +159,7 @@ class PostgresService(BaseService):
         self,
         query: str,
         *args,
-        timeout: Optional[float] = None,
+        timeout: Optional[float] = None,  # noqa: UP007
         retry_count: int = 3,
     ) -> list[asyncpg.Record]:
         """
@@ -190,7 +190,7 @@ class PostgresService(BaseService):
                         self.handle_error(e, 'fetching query results')
                     ) from e
 
-                wait_time = 2 ** attempt
+                wait_time = 2**attempt
                 self.logger.warning(
                     f'Fetch failed (attempt {attempt + 1}/{retry_count}), '
                     f'retrying in {wait_time}s: {e}'
@@ -201,9 +201,9 @@ class PostgresService(BaseService):
         self,
         query: str,
         *args,
-        timeout: Optional[float] = None,
+        timeout: Optional[float] = None,  # noqa: UP007
         retry_count: int = 3,
-    ) -> Optional[asyncpg.Record]:
+    ) -> Optional[asyncpg.Record]:  # noqa: UP007
         """
         Fetch a single row with retry logic.
 
@@ -232,7 +232,7 @@ class PostgresService(BaseService):
                         self.handle_error(e, 'fetching query row')
                     ) from e
 
-                wait_time = 2 ** attempt
+                wait_time = 2**attempt
                 self.logger.warning(
                     f'Fetchrow failed (attempt {attempt + 1}/{retry_count}), '
                     f'retrying in {wait_time}s: {e}'
@@ -244,7 +244,7 @@ class PostgresService(BaseService):
         query: str,
         *args,
         column: int = 0,
-        timeout: Optional[float] = None,
+        timeout: Optional[float] = None,  # noqa: UP007
         retry_count: int = 3,
     ) -> Any:
         """
@@ -278,7 +278,7 @@ class PostgresService(BaseService):
                         self.handle_error(e, 'fetching query value')
                     ) from e
 
-                wait_time = 2 ** attempt
+                wait_time = 2**attempt
                 self.logger.warning(
                     f'Fetchval failed (attempt {attempt + 1}/{retry_count}), '
                     f'retrying in {wait_time}s: {e}'
@@ -289,7 +289,7 @@ class PostgresService(BaseService):
         self,
         query: str,
         args: list[tuple],
-        timeout: Optional[float] = None,
+        timeout: Optional[float] = None,  # noqa: UP007
         retry_count: int = 3,
     ) -> None:
         """
@@ -317,7 +317,7 @@ class PostgresService(BaseService):
                         self.handle_error(e, 'executing batch query')
                     ) from e
 
-                wait_time = 2 ** attempt
+                wait_time = 2**attempt
                 self.logger.warning(
                     f'Executemany failed (attempt {attempt + 1}/{retry_count}), '
                     f'retrying in {wait_time}s: {e}'

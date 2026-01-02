@@ -52,7 +52,10 @@ class NoteService(BaseService):
         self.notes_dir = Path(notes_dir or self.config.notes_dir)
         self.pdf_dir = Path(pdf_dir or self.config.pdf_dir)
         self.markdown_dir = Path(markdown_dir or self.config.markdown_dir)
-        self.api_base_url = api_base_url or f"http://{self.config.servers_config.api.host}:{self.config.servers_config.api.port}"
+        self.api_base_url = (
+            api_base_url
+            or f'http://{self.config.servers_config.api.host}:{self.config.servers_config.api.port}'
+        )
 
         # Ensure directories exist
         self.notes_dir.mkdir(parents=True, exist_ok=True)
@@ -69,14 +72,19 @@ class NoteService(BaseService):
         # Use LRUCache with bounded size to prevent unbounded memory growth
         # Limits cache to 500 most recently used notes
         from cachetools import LRUCache
+
         self._notes_cache: LRUCache = LRUCache(maxsize=500)
 
-    def _get_markdown_content(self, title: str, markdown_path: Path) -> str:
+    def _get_markdown_content(self, title: str, markdown_path: Path) -> str:  # noqa: ARG002
         """Get markdown content from PostgreSQL."""
-        import asyncpg
+        import asyncpg  # noqa: I001
         import asyncio
 
-        db_url = getattr(self.config.secrets, 'database_url', None) if hasattr(self.config, 'secrets') else None
+        db_url = (
+            getattr(self.config.secrets, 'database_url', None)
+            if hasattr(self.config, 'secrets')
+            else None
+        )
         if not db_url:
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
@@ -84,10 +92,9 @@ class NoteService(BaseService):
             conn = await asyncpg.connect(db_url)
             try:
                 result = await conn.fetchval(
-                    "SELECT markdown_content FROM papers WHERE title = $1",
-                    title
+                    'SELECT markdown_content FROM papers WHERE title = $1', title
                 )
-                return result or ""
+                return result or ''
             finally:
                 await conn.close()
 
@@ -97,36 +104,49 @@ class NoteService(BaseService):
         except RuntimeError as e:
             # Fallback only if there's already a running loop in this thread
             # (this happens when called from async context)
-            if "asyncio.run() cannot be called from a running event loop" in str(e):
+            if 'asyncio.run() cannot be called from a running event loop' in str(e):
                 # We're in an async context - run in a separate thread to avoid blocking
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                     future = executor.submit(asyncio.run, fetch())
                     content = future.result()
             else:
                 raise
 
-        self.logger.debug(f"Loaded markdown from PostgreSQL for: {title}")
+        self.logger.debug(f'Loaded markdown from PostgreSQL for: {title}')
         return content
 
-    def _save_markdown_to_postgres(self, title: str, markdown_content: str, pdf_path: str, note_path: str) -> None:
+    def _save_markdown_to_postgres(
+        self, title: str, markdown_content: str, pdf_path: str, note_path: str
+    ) -> None:
         """Update markdown content in PostgreSQL papers table."""
-        import asyncpg
+        import asyncpg  # noqa: I001
         import asyncio
 
-        db_url = getattr(self.config.secrets, 'database_url', None) if hasattr(self.config, 'secrets') else None
+        db_url = (
+            getattr(self.config.secrets, 'database_url', None)
+            if hasattr(self.config, 'secrets')
+            else None
+        )
         if not db_url:
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
         async def save():
             conn = await asyncpg.connect(db_url)
             try:
-                await conn.execute("""
+                await conn.execute(
+                    """
                     UPDATE papers
                     SET markdown_content = $1, pdf_path = $2, note_path = $3, updated_at = NOW()
                     WHERE title = $4
-                """, markdown_content, pdf_path, note_path, title)
-                self.logger.info(f"Updated markdown in PostgreSQL for: {title}")
+                """,
+                    markdown_content,
+                    pdf_path,
+                    note_path,
+                    title,
+                )
+                self.logger.info(f'Updated markdown in PostgreSQL for: {title}')
             finally:
                 await conn.close()
 
@@ -136,9 +156,10 @@ class NoteService(BaseService):
         except RuntimeError as e:
             # Fallback only if there's already a running loop in this thread
             # (this happens when called from async context)
-            if "asyncio.run() cannot be called from a running event loop" in str(e):
+            if 'asyncio.run() cannot be called from a running event loop' in str(e):
                 # We're in an async context - run in a separate thread to avoid blocking
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                     future = executor.submit(asyncio.run, save())
                     future.result()
@@ -193,7 +214,9 @@ class NoteService(BaseService):
                 shutil.move(str(pdf_path), str(final_pdf_path))
 
             # Try to read markdown content from PostgreSQL first, then file
-            markdown_content = self._get_markdown_content(content.get('title'), markdown_path)
+            markdown_content = self._get_markdown_content(
+                content.get('title'), markdown_path
+            )
 
             # Keep markdown in its original directory, just rename it
             final_markdown_path = (
@@ -221,7 +244,12 @@ class NoteService(BaseService):
             note_path.write_text(note_content, encoding='utf-8')
 
             # Save markdown content to PostgreSQL
-            self._save_markdown_to_postgres(content.get('title'), markdown_content, str(final_pdf_path), str(note_path))
+            self._save_markdown_to_postgres(
+                content.get('title'),
+                markdown_content,
+                str(final_pdf_path),
+                str(note_path),
+            )
 
             self.log_operation(
                 'note_created',

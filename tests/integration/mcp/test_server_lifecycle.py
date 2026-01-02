@@ -13,7 +13,7 @@ import pytest
 
 from thoth.mcp.protocol import JSONRPCRequest, MCPErrorCodes
 from thoth.mcp.server import MCPServer
-from thoth.services.service_manager import ServiceManager
+from thoth.services.service_manager import ServiceManager  # noqa: F401
 
 
 class TestServerInitialization:
@@ -25,7 +25,7 @@ class TestServerInitialization:
         server = MCPServer(
             service_manager=mock_service_manager,
             server_name='Test Server',
-            server_version='1.0.0'
+            server_version='1.0.0',
         )
 
         assert server.server_info.name == 'Test Server'
@@ -56,7 +56,7 @@ class TestServerInitialization:
             server = MCPServer(
                 service_manager=mock_service_manager,
                 server_name=f'Server {i}',
-                server_version=f'1.0.{i}'
+                server_version=f'1.0.{i}',
             )
             servers.append(server)
 
@@ -140,17 +140,13 @@ class TestServerStartStop:
 
     @pytest.mark.asyncio
     async def test_start_server_with_all_transports(
-        self,
-        mcp_server,
-        mock_stdio_transport,
-        mock_http_transport,
-        mock_sse_transport
+        self, mcp_server, mock_stdio_transport, mock_http_transport, mock_sse_transport
     ):
         """Test starting server with all transports."""
         mcp_server.transport_manager.transports = {
             'stdio': mock_stdio_transport,
             'http': mock_http_transport,
-            'sse': mock_sse_transport
+            'sse': mock_sse_transport,
         }
 
         await mcp_server.start()
@@ -262,10 +258,7 @@ class TestProtocolMessageHandling:
     async def test_handle_unknown_method(self, mcp_server):
         """Test handling unknown method."""
         request = JSONRPCRequest(
-            jsonrpc='2.0',
-            id=1,
-            method='unknown/method',
-            params={}
+            jsonrpc='2.0', id=1, method='unknown/method', params={}
         )
 
         response = await mcp_server._handle_message(request)
@@ -281,7 +274,7 @@ class TestProtocolMessageHandling:
             jsonrpc='2.0',
             id=1,
             method='tools/call',
-            params={'invalid': 'params'}  # Missing required 'name' field
+            params={'invalid': 'params'},  # Missing required 'name' field
         )
 
         response = await mcp_server._handle_message(request)
@@ -305,12 +298,7 @@ class TestToolRegistryIntegration:
             description = 'A test tool'
 
             def get_json_schema(self):
-                return {
-                    'type': 'object',
-                    'properties': {
-                        'message': {'type': 'string'}
-                    }
-                }
+                return {'type': 'object', 'properties': {'message': {'type': 'string'}}}
 
             async def execute(self, message: str = 'default'):
                 return {'result': f'Executed with: {message}'}
@@ -322,10 +310,7 @@ class TestToolRegistryIntegration:
             jsonrpc='2.0',
             id=1,
             method='tools/call',
-            params={
-                'name': 'test_tool',
-                'arguments': {'message': 'test'}
-            }
+            params={'name': 'test_tool', 'arguments': {'message': 'test'}},
         )
 
         response = await mcp_server._handle_message(request)
@@ -338,11 +323,7 @@ class TestToolRegistryIntegration:
     async def test_tool_list_reflects_registered_tools(self, mcp_server):
         """Test that tools/list shows all registered tools."""
         # Get initial count
-        request = JSONRPCRequest(
-            jsonrpc='2.0',
-            id=1,
-            method='tools/list'
-        )
+        request = JSONRPCRequest(jsonrpc='2.0', id=1, method='tools/list')
 
         response = await mcp_server._handle_message(request)
         initial_count = len(response.result['tools'])
@@ -375,11 +356,7 @@ class TestResourceManagerIntegration:
     @pytest.mark.asyncio
     async def test_list_resources(self, mcp_server):
         """Test listing resources through server."""
-        request = JSONRPCRequest(
-            jsonrpc='2.0',
-            id=1,
-            method='resources/list'
-        )
+        request = JSONRPCRequest(jsonrpc='2.0', id=1, method='resources/list')
 
         response = await mcp_server._handle_message(request)
 
@@ -394,7 +371,7 @@ class TestResourceManagerIntegration:
             jsonrpc='2.0',
             id=1,
             method='resources/read',
-            params={'uri': 'nonexistent://resource'}
+            params={'uri': 'nonexistent://resource'},
         )
 
         response = await mcp_server._handle_message(request)
@@ -408,12 +385,9 @@ class TestConcurrentOperations:
     """Test concurrent server operations."""
 
     @pytest.mark.asyncio
-    async def test_concurrent_health_checks(self, mcp_server, health_check_simulator):
+    async def test_concurrent_health_checks(self, mcp_server, health_check_simulator):  # noqa: ARG002
         """Test multiple concurrent health checks."""
-        tasks = [
-            health_check_simulator.run_check()
-            for _ in range(10)
-        ]
+        tasks = [health_check_simulator.run_check() for _ in range(10)]
 
         results = await asyncio.gather(*tasks)
 
@@ -426,17 +400,10 @@ class TestConcurrentOperations:
         """Test concurrent tool calls."""
         requests = []
         for i in range(5):
-            request = JSONRPCRequest(
-                jsonrpc='2.0',
-                id=i,
-                method='tools/list'
-            )
+            request = JSONRPCRequest(jsonrpc='2.0', id=i, method='tools/list')
             requests.append(request)
 
-        tasks = [
-            mcp_server._handle_message(req)
-            for req in requests
-        ]
+        tasks = [mcp_server._handle_message(req) for req in requests]
 
         responses = await asyncio.gather(*tasks)
 
@@ -449,8 +416,7 @@ class TestConcurrentOperations:
         """Test message handling under concurrent load."""
         # Mix of different request types
         request_types = [
-            JSONRPCRequest(jsonrpc='2.0', id=i, method='health')
-            for i in range(50)
+            JSONRPCRequest(jsonrpc='2.0', id=i, method='health') for i in range(50)
         ]
 
         start_time = time.time()
@@ -472,10 +438,7 @@ class TestErrorHandlingDuringLifecycle:
 
     @pytest.mark.asyncio
     async def test_transport_failure_during_start(
-        self,
-        mcp_server,
-        mock_stdio_transport,
-        error_injector
+        self, mcp_server, mock_stdio_transport, error_injector
     ):
         """Test handling transport failure during start."""
         error_injector.inject_transport_error(mock_stdio_transport, 'connection')

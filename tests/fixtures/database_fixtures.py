@@ -5,10 +5,10 @@ Provides test database setup, mock data, and utilities for testing
 repository and service layers with proper isolation and cleanup.
 """
 
-import asyncio
+import asyncio  # noqa: I001
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Dict, Any, Optional
-from unittest.mock import Mock, AsyncMock, MagicMock
+from typing import AsyncGenerator, Dict, Any, Optional  # noqa: F401, UP035
+from unittest.mock import Mock, AsyncMock, MagicMock  # noqa: F401
 
 import asyncpg
 import pytest
@@ -52,33 +52,43 @@ async def mock_postgres_service():
     # Create tracking side effects that respect return_value
     def make_tracking_side_effect(mock_obj, query_type, default_return=None):
         """Create a side effect that tracks queries and returns configurable values."""
+
         async def side_effect(query: str, *args, **kwargs):
-            service.executed_queries.append({
-                'type': query_type,
-                'query': query,
-                'args': args,
-                **{k: v for k, v in kwargs.items() if k in ['timeout', 'column']}
-            })
+            service.executed_queries.append(
+                {
+                    'type': query_type,
+                    'query': query,
+                    'args': args,
+                    **{k: v for k, v in kwargs.items() if k in ['timeout', 'column']},
+                }
+            )
             # Return configured return_value if set, otherwise default
             # AsyncMock stores configured return_value in _mock_return_value
             if hasattr(mock_obj, '_mock_return_value'):
                 return mock_obj._mock_return_value
             return default_return
+
         return side_effect
 
     # Create AsyncMocks with tracking side effects
     # Tests can override .return_value and side_effect will use it
     mock_execute = AsyncMock()
-    mock_execute.side_effect = make_tracking_side_effect(mock_execute, 'execute', 'EXECUTED')
+    mock_execute.side_effect = make_tracking_side_effect(
+        mock_execute, 'execute', 'EXECUTED'
+    )
 
     mock_fetch = AsyncMock()
     mock_fetch.side_effect = make_tracking_side_effect(mock_fetch, 'fetch', [])
 
     mock_fetchrow = AsyncMock()
-    mock_fetchrow.side_effect = make_tracking_side_effect(mock_fetchrow, 'fetchrow', None)
+    mock_fetchrow.side_effect = make_tracking_side_effect(
+        mock_fetchrow, 'fetchrow', None
+    )
 
     mock_fetchval = AsyncMock()
-    mock_fetchval.side_effect = make_tracking_side_effect(mock_fetchval, 'fetchval', None)
+    mock_fetchval.side_effect = make_tracking_side_effect(
+        mock_fetchval, 'fetchval', None
+    )
 
     @asynccontextmanager
     async def mock_acquire():
@@ -163,6 +173,7 @@ def create_mock_record(**kwargs) -> asyncpg.Record:
     Returns:
         Mock Record that behaves like asyncpg.Record
     """
+
     class MockRecord:
         """Mock implementation of asyncpg.Record."""
 
@@ -191,7 +202,7 @@ def create_mock_record(**kwargs) -> asyncpg.Record:
 
 
 @pytest.fixture
-def sample_paper_data() -> Dict[str, Any]:
+def sample_paper_data() -> Dict[str, Any]:  # noqa: UP006
     """Sample paper data for testing."""
     return {
         'id': 1,
@@ -204,24 +215,24 @@ def sample_paper_data() -> Dict[str, Any]:
         'tags': ['machine-learning', 'nlp'],
         'content': 'Full paper content...',
         'created_at': '2024-01-20T10:00:00',
-        'updated_at': '2024-01-20T10:00:00'
+        'updated_at': '2024-01-20T10:00:00',
     }
 
 
 @pytest.fixture
-def sample_citation_data() -> Dict[str, Any]:
+def sample_citation_data() -> Dict[str, Any]:  # noqa: UP006
     """Sample citation data for testing."""
     return {
         'id': 1,
         'citing_paper_id': 1,
         'cited_paper_id': 2,
         'metadata': {'context': 'Related work section'},
-        'created_at': '2024-01-20T10:00:00'
+        'created_at': '2024-01-20T10:00:00',
     }
 
 
 @pytest.fixture
-def sample_papers_batch() -> list[Dict[str, Any]]:
+def sample_papers_batch() -> list[Dict[str, Any]]:  # noqa: UP006
     """Sample batch of papers for testing."""
     return [
         {
@@ -231,7 +242,7 @@ def sample_papers_batch() -> list[Dict[str, Any]]:
             'abstract': f'Abstract {i}',
             'doi': f'10.1000/test.{i}',
             'tags': ['test'],
-            'created_at': f'2024-01-{i:02d}T10:00:00'
+            'created_at': f'2024-01-{i:02d}T10:00:00',
         }
         for i in range(1, 11)
     ]
@@ -298,12 +309,14 @@ class AsyncIterator:
         try:
             return next(self.items)
         except StopIteration:
-            raise StopAsyncIteration
+            raise StopAsyncIteration  # noqa: B904
 
 
 def async_generator(items):
     """Convert list to async generator for testing."""
+
     async def gen():
         for item in items:
             yield item
+
     return gen()

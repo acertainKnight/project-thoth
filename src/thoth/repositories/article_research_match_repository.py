@@ -6,7 +6,7 @@ discovered articles and research questions with relevance scoring.
 """
 
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, List, Optional  # noqa: UP035
 from uuid import UUID
 
 from loguru import logger
@@ -28,12 +28,12 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         article_id: UUID,
         question_id: UUID,
         relevance_score: float,
-        matched_keywords: Optional[List[str]] = None,
-        matched_topics: Optional[List[str]] = None,
-        matched_authors: Optional[List[str]] = None,
-        discovered_via_source: Optional[str] = None,
-        discovery_run_id: Optional[UUID] = None,
-    ) -> Optional[UUID]:
+        matched_keywords: Optional[List[str]] = None,  # noqa: UP006, UP007
+        matched_topics: Optional[List[str]] = None,  # noqa: UP006, UP007
+        matched_authors: Optional[List[str]] = None,  # noqa: UP006, UP007
+        discovered_via_source: Optional[str] = None,  # noqa: UP007
+        discovery_run_id: Optional[UUID] = None,  # noqa: UP007
+    ) -> Optional[UUID]:  # noqa: UP007
         """
         Create a new article-question match.
 
@@ -51,7 +51,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             Optional[UUID]: Match ID or None
         """
         try:
-            data = {
+            data = {  # noqa: F841
                 'article_id': article_id,
                 'question_id': question_id,
                 'relevance_score': relevance_score,
@@ -63,7 +63,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             }
 
             # Use ON CONFLICT to handle duplicates
-            query = '''
+            query = """
                 INSERT INTO article_research_matches (
                     article_id, question_id, relevance_score,
                     matched_keywords, matched_topics, matched_authors,
@@ -80,7 +80,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                     matched_authors = EXCLUDED.matched_authors,
                     discovered_via_source = EXCLUDED.discovered_via_source
                 RETURNING id
-            '''
+            """
 
             match_id = await self.postgres.fetchval(
                 query,
@@ -107,7 +107,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         self,
         article_id: str,
         question_id: str,
-    ) -> Optional[dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:  # noqa: UP007
         """
         Check if an article is already matched to a research question.
 
@@ -119,10 +119,10 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             Match record if exists, None otherwise
         """
         try:
-            query = '''
+            query = """
                 SELECT * FROM article_research_matches
                 WHERE article_id = $1 AND question_id = $2
-            '''
+            """
 
             result = await self.postgres.fetchrow(query, article_id, question_id)
 
@@ -140,12 +140,12 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
     async def get_matches_by_question(
         self,
         question_id: UUID,
-        min_relevance: Optional[float] = None,
-        is_viewed: Optional[bool] = None,
-        is_bookmarked: Optional[bool] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
-    ) -> List[dict[str, Any]]:
+        min_relevance: Optional[float] = None,  # noqa: UP007
+        is_viewed: Optional[bool] = None,  # noqa: UP007
+        is_bookmarked: Optional[bool] = None,  # noqa: UP007
+        limit: Optional[int] = None,  # noqa: UP007
+        offset: Optional[int] = None,  # noqa: UP007
+    ) -> List[dict[str, Any]]:  # noqa: UP006
         """
         Get all article matches for a research question.
 
@@ -161,14 +161,20 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             List[dict[str, Any]]: List of matches with article data
         """
         cache_key = self._cache_key(
-            'question', question_id, min_relevance, is_viewed, is_bookmarked, limit, offset
+            'question',
+            question_id,
+            min_relevance,
+            is_viewed,
+            is_bookmarked,
+            limit,
+            offset,
         )
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
 
         try:
-            query = '''
+            query = """
                 SELECT
                     arm.*,
                     da.doi, da.title, da.authors, da.abstract,
@@ -176,7 +182,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                 FROM article_research_matches arm
                 JOIN discovered_articles da ON arm.article_id = da.id
                 WHERE arm.question_id = $1
-            '''
+            """
             params = [question_id]
 
             if min_relevance is not None:
@@ -208,14 +214,10 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             return data
 
         except Exception as e:
-            logger.error(
-                f'Failed to get matches for question {question_id}: {e}'
-            )
+            logger.error(f'Failed to get matches for question {question_id}: {e}')
             return []
 
-    async def get_matches_by_article(
-        self, article_id: UUID
-    ) -> List[dict[str, Any]]:
+    async def get_matches_by_article(self, article_id: UUID) -> List[dict[str, Any]]:  # noqa: UP006
         """
         Get all question matches for an article.
 
@@ -231,7 +233,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             return cached
 
         try:
-            query = '''
+            query = """
                 SELECT
                     arm.*,
                     rq.name as question_name,
@@ -242,7 +244,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                 JOIN research_questions rq ON arm.question_id = rq.id
                 WHERE arm.article_id = $1
                 ORDER BY arm.relevance_score DESC
-            '''
+            """
 
             results = await self.postgres.fetch(query, article_id)
             data = [dict(row) for row in results]
@@ -259,7 +261,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         min_score: float = 0.7,
         is_viewed: bool = False,
         limit: int = 50,
-    ) -> List[dict[str, Any]]:
+    ) -> List[dict[str, Any]]:  # noqa: UP006
         """
         Get high-relevance unviewed matches across all questions.
 
@@ -272,7 +274,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             List[dict[str, Any]]: List of high-relevance matches
         """
         try:
-            query = '''
+            query = """
                 SELECT
                     arm.*,
                     da.doi, da.title, da.authors, da.abstract,
@@ -285,7 +287,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                 AND arm.is_viewed = $2
                 ORDER BY arm.relevance_score DESC, arm.matched_at DESC
                 LIMIT $3
-            '''
+            """
 
             results = await self.postgres.fetch(query, min_score, is_viewed, limit)
             return [dict(row) for row in results]
@@ -295,7 +297,9 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             return []
 
     async def mark_as_viewed(
-        self, match_id: UUID, viewed_at: Optional[datetime] = None
+        self,
+        match_id: UUID,
+        viewed_at: Optional[datetime] = None,  # noqa: UP007
     ) -> bool:
         """
         Mark a match as viewed by the user.
@@ -334,13 +338,14 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             return await self.update(match_id, {'is_bookmarked': is_bookmarked})
 
         except Exception as e:
-            logger.error(
-                f'Failed to set bookmark for match {match_id}: {e}'
-            )
+            logger.error(f'Failed to set bookmark for match {match_id}: {e}')
             return False
 
     async def set_user_rating(
-        self, match_id: UUID, rating: int, notes: Optional[str] = None
+        self,
+        match_id: UUID,
+        rating: int,
+        notes: Optional[str] = None,  # noqa: UP007
     ) -> bool:
         """
         Set user rating and notes for a match.
@@ -416,7 +421,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             dict[str, int]: Counts for liked, disliked, skipped, and pending
         """
         try:
-            query = '''
+            query = """
                 SELECT
                     COUNT(*) FILTER (WHERE user_sentiment = 'like') as liked,
                     COUNT(*) FILTER (WHERE user_sentiment = 'dislike') as disliked,
@@ -424,15 +429,19 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                     COUNT(*) FILTER (WHERE user_sentiment IS NULL) as pending
                 FROM article_research_matches
                 WHERE question_id = $1
-            '''
+            """
 
             result = await self.postgres.fetchrow(query, question_id)
-            return dict(result) if result else {
-                'liked': 0,
-                'disliked': 0,
-                'skipped': 0,
-                'pending': 0,
-            }
+            return (
+                dict(result)
+                if result
+                else {
+                    'liked': 0,
+                    'disliked': 0,
+                    'skipped': 0,
+                    'pending': 0,
+                }
+            )
 
         except Exception as e:
             logger.error(
@@ -440,9 +449,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             )
             return {'liked': 0, 'disliked': 0, 'skipped': 0, 'pending': 0}
 
-    async def get_statistics_by_question(
-        self, question_id: UUID
-    ) -> dict[str, Any]:
+    async def get_statistics_by_question(self, question_id: UUID) -> dict[str, Any]:
         """
         Get match statistics for a research question.
 
@@ -453,7 +460,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             dict[str, Any]: Statistics including counts, averages, etc.
         """
         try:
-            query = '''
+            query = """
                 SELECT
                     COUNT(*) as total_matches,
                     COUNT(*) FILTER (WHERE relevance_score >= 0.7) as high_relevance,
@@ -466,20 +473,18 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                     COUNT(DISTINCT discovered_via_source) as source_count
                 FROM article_research_matches
                 WHERE question_id = $1
-            '''
+            """
 
             result = await self.postgres.fetchrow(query, question_id)
             return dict(result) if result else {}
 
         except Exception as e:
-            logger.error(
-                f'Failed to get statistics for question {question_id}: {e}'
-            )
+            logger.error(f'Failed to get statistics for question {question_id}: {e}')
             return {}
 
     async def get_matches_by_source(
         self, question_id: UUID, source_name: str, limit: int = 50
-    ) -> List[dict[str, Any]]:
+    ) -> List[dict[str, Any]]:  # noqa: UP006
         """
         Get matches discovered by a specific source.
 
@@ -492,7 +497,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             List[dict[str, Any]]: List of matches from that source
         """
         try:
-            query = '''
+            query = """
                 SELECT
                     arm.*,
                     da.doi, da.title, da.authors
@@ -502,17 +507,13 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                 AND arm.discovered_via_source = $2
                 ORDER BY arm.relevance_score DESC, arm.matched_at DESC
                 LIMIT $3
-            '''
+            """
 
-            results = await self.postgres.fetch(
-                query, question_id, source_name, limit
-            )
+            results = await self.postgres.fetch(query, question_id, source_name, limit)
             return [dict(row) for row in results]
 
         except Exception as e:
-            logger.error(
-                f'Failed to get matches by source {source_name}: {e}'
-            )
+            logger.error(f'Failed to get matches by source {source_name}: {e}')
             return []
 
     async def delete_matches_for_question(self, question_id: UUID) -> int:
@@ -526,10 +527,10 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             int: Number of matches deleted
         """
         try:
-            query = '''
+            query = """
                 DELETE FROM article_research_matches
                 WHERE question_id = $1
-            '''
+            """
 
             result = await self.postgres.execute(query, question_id)
 
@@ -538,14 +539,10 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
 
             # Extract count from result (e.g., "DELETE 10")
             count = int(result.split()[-1]) if result else 0
-            logger.info(
-                f'Deleted {count} matches for question {question_id}'
-            )
+            logger.info(f'Deleted {count} matches for question {question_id}')
 
             return count
 
         except Exception as e:
-            logger.error(
-                f'Failed to delete matches for question {question_id}: {e}'
-            )
+            logger.error(f'Failed to delete matches for question {question_id}: {e}')
             return 0

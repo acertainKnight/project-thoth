@@ -33,7 +33,7 @@ class ElementSelector(BaseModel):
         ...     css='input#search-box',
         ...     xpath='//input[@id="search-box"]',
         ...     text='Search articles',
-        ...     priority=['css', 'xpath', 'text']
+        ...     priority=['css', 'xpath', 'text'],
         ... )
     """
 
@@ -70,8 +70,9 @@ class ElementSelector(BaseModel):
 
     @field_validator('priority')
     def validate_priority(
-        cls, priority: list[SelectorStrategy]
-    ) -> list[SelectorStrategy]:  # noqa: N805
+        cls,
+        priority: list[SelectorStrategy],  # noqa: N805
+    ) -> list[SelectorStrategy]:  # noqa: N805, RUF100
         """Ensure priority list contains at least one strategy."""
         if not priority:
             return [SelectorStrategy.CSS, SelectorStrategy.XPATH, SelectorStrategy.TEXT]
@@ -114,7 +115,7 @@ class WorkflowAction(BaseModel):
         ...     target_selector=ElementSelector(css='input#search-box'),
         ...     action_value='neural pathways',
         ...     is_parameterized=True,
-        ...     parameter_name='keywords'
+        ...     parameter_name='keywords',
         ... )
     """
 
@@ -122,7 +123,9 @@ class WorkflowAction(BaseModel):
     workflow_id: UUID | None = Field(
         default=None, description='Parent workflow identifier'
     )
-    step_number: int = Field(description='Execution order in workflow (0-indexed)', ge=0)
+    step_number: int = Field(
+        description='Execution order in workflow (0-indexed)', ge=0
+    )
     action_type: ActionType = Field(description='Type of browser action to perform')
 
     # Target element
@@ -157,9 +160,7 @@ class WorkflowAction(BaseModel):
     )
 
     # Error handling
-    retry_on_failure: bool = Field(
-        default=True, description='Retry action if it fails'
-    )
+    retry_on_failure: bool = Field(default=True, description='Retry action if it fails')
     max_retries: int = Field(default=3, description='Maximum retry attempts', ge=0)
     continue_on_error: bool = Field(
         default=False, description='Continue workflow even if this action fails'
@@ -210,8 +211,8 @@ class SearchFilter(BaseModel):
         ...     options={
         ...         'last_24h': 'Last 24 hours',
         ...         'last_7d': 'Last 7 days',
-        ...         'last_30d': 'Last 30 days'
-        ...     }
+        ...         'last_30d': 'Last 30 days',
+        ...     },
         ... )
     """
 
@@ -257,13 +258,15 @@ class WorkflowSearchConfig(BaseModel):
         ...             name='date_range',
         ...             filter_type=FilterType.DROPDOWN,
         ...             selector=ElementSelector(css='select#date'),
-        ...             parameter_name='date_range'
+        ...             parameter_name='date_range',
         ...         )
-        ...     ]
+        ...     ],
         ... )
     """
 
-    id: UUID = Field(default_factory=uuid4, description='Unique configuration identifier')
+    id: UUID = Field(
+        default_factory=uuid4, description='Unique configuration identifier'
+    )
     workflow_id: UUID = Field(description='Parent workflow identifier')
 
     # Search type
@@ -336,7 +339,7 @@ class WorkflowCredentials(BaseModel):
         ...     workflow_id=uuid4(),
         ...     credential_type=CredentialType.USERNAME_PASSWORD,
         ...     encryption_algorithm='fernet',
-        ...     session_valid_until=datetime(2025, 12, 27)
+        ...     session_valid_until=datetime(2025, 12, 27),
         ... )
     """
 
@@ -409,11 +412,11 @@ class WorkflowExecution(BaseModel):
         ...     status=ExecutionStatus.SUCCESS,
         ...     execution_parameters={
         ...         'keywords': ['neural', 'pathways'],
-        ...         'date_range': 'last_24h'
+        ...         'date_range': 'last_24h',
         ...     },
         ...     articles_extracted=42,
         ...     triggered_by=ExecutionTrigger.QUERY,
-        ...     triggered_by_query_id=uuid4()
+        ...     triggered_by_query_id=uuid4(),
         ... )
     """
 
@@ -469,16 +472,15 @@ class WorkflowExecution(BaseModel):
     )
 
     # Trigger information
-    triggered_by: ExecutionTrigger = Field(
-        description='What triggered this execution'
-    )
+    triggered_by: ExecutionTrigger = Field(description='What triggered this execution')
     triggered_by_query_id: UUID | None = Field(
         default=None,
         description='Research question ID if triggered by query',
     )
 
     created_at: datetime = Field(
-        default_factory=datetime.utcnow, description='Execution record creation timestamp'
+        default_factory=datetime.utcnow,
+        description='Execution record creation timestamp',
     )
 
 
@@ -492,7 +494,7 @@ class ExecutionParameters(BaseModel):
         ...     keywords=['neural', 'pathways', 'decision making'],
         ...     date_range='last_24h',
         ...     subject='neuroscience',
-        ...     max_articles=50
+        ...     max_articles=50,
         ... )
     """
 
@@ -538,8 +540,8 @@ class BrowserWorkflow(BaseModel):
         ...     extraction_rules={
         ...         'title': {'css': 'h3.article-title'},
         ...         'authors': {'css': 'span.author-name'},
-        ...         'abstract': {'css': 'div.abstract-content'}
-        ...     }
+        ...         'abstract': {'css': 'div.abstract-content'},
+        ...     },
         ... )
     """
 

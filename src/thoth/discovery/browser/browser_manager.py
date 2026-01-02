@@ -5,21 +5,21 @@ This module manages browser lifecycle, pooling, and session persistence
 for browser-based discovery workflows.
 """
 
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 import asyncio
-import json
+import json  # noqa: F401
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, Optional
+from typing import Any, AsyncIterator, Dict, Optional  # noqa: F401, UP035
 from uuid import UUID
 
 from loguru import logger
 from playwright.async_api import (
-    Browser,
+    Browser,  # noqa: F401
     BrowserContext,
     Error as PlaywrightError,
-    Page,
+    Page,  # noqa: F401
     async_playwright,
 )
 
@@ -73,7 +73,7 @@ class BrowserManager:
         # Browser pool management
         self._playwright = None
         self._browser_type = None
-        self._active_contexts: Dict[str, BrowserContext] = {}
+        self._active_contexts: Dict[str, BrowserContext] = {}  # noqa: UP006
         self._semaphore = asyncio.Semaphore(max_concurrent_browsers)
 
         # Session storage directory
@@ -105,8 +105,8 @@ class BrowserManager:
     async def get_browser(
         self,
         headless: bool = True,
-        viewport: Optional[Dict[str, int]] = None,
-        user_agent: Optional[str] = None,
+        viewport: Optional[Dict[str, int]] = None,  # noqa: UP006, UP007
+        user_agent: Optional[str] = None,  # noqa: UP007
     ) -> BrowserContext:
         """
         Get a browser context from the pool.
@@ -126,7 +126,9 @@ class BrowserManager:
             BrowserManagerError: If browser cannot be created
         """
         if not self._browser_type:
-            raise BrowserManagerError('BrowserManager not initialized. Call initialize() first.')
+            raise BrowserManagerError(
+                'BrowserManager not initialized. Call initialize() first.'
+            )
 
         # Acquire semaphore to limit concurrent browsers
         await self._semaphore.acquire()
@@ -178,9 +180,9 @@ class BrowserManager:
     async def browser_context(
         self,
         headless: bool = True,
-        viewport: Optional[Dict[str, int]] = None,
-        user_agent: Optional[str] = None,
-        session_id: Optional[UUID] = None,
+        viewport: Optional[Dict[str, int]] = None,  # noqa: UP006, UP007
+        user_agent: Optional[str] = None,  # noqa: UP007
+        session_id: Optional[UUID] = None,  # noqa: UP007
     ) -> AsyncIterator[BrowserContext]:
         """
         Context manager for safely acquiring and releasing browser contexts.
@@ -206,7 +208,9 @@ class BrowserManager:
             BrowserManagerError: If browser context cannot be created
         """
         if session_id:
-            context = await self.load_session(session_id, headless, viewport, user_agent)
+            context = await self.load_session(
+                session_id, headless, viewport, user_agent
+            )
         else:
             context = await self.get_browser(headless, viewport, user_agent)
 
@@ -249,7 +253,7 @@ class BrowserManager:
         self,
         session_id: UUID,
         headless: bool = True,
-        viewport: Optional[Dict[str, int]] = None,
+        viewport: Optional[Dict[str, int]] = None,  # noqa: UP006, UP007
     ) -> BrowserContext:
         """
         Load a previously saved browser session.
@@ -269,7 +273,9 @@ class BrowserManager:
             BrowserManagerError: If session cannot be loaded
         """
         if not self._browser_type:
-            raise BrowserManagerError('BrowserManager not initialized. Call initialize() first.')
+            raise BrowserManagerError(
+                'BrowserManager not initialized. Call initialize() first.'
+            )
 
         session_file = self.session_dir / f'{session_id}.json'
 

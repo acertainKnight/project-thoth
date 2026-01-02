@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
-import os
+import json  # noqa: F401
+import os  # noqa: F401
 from collections import defaultdict
 from pathlib import Path
 
@@ -45,17 +45,21 @@ class TokenUsageTracker:
 
     def _load_from_postgres(self) -> None:
         """Load token usage from PostgreSQL."""
-        import asyncpg
+        import asyncpg  # noqa: I001
         import asyncio
 
-        db_url = getattr(self.config.secrets, 'database_url', None) if hasattr(self.config, 'secrets') else None
+        db_url = (
+            getattr(self.config.secrets, 'database_url', None)
+            if hasattr(self.config, 'secrets')
+            else None
+        )
         if not db_url:
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
         async def load():
             conn = await asyncpg.connect(db_url)
             try:
-                rows = await conn.fetch("SELECT * FROM token_usage")
+                rows = await conn.fetch('SELECT * FROM token_usage')
                 for row in rows:
                     record = self._usage[row['user_id']]
                     record['prompt_tokens'] = row['prompt_tokens']
@@ -77,10 +81,14 @@ class TokenUsageTracker:
 
     def _save_to_postgres(self) -> None:
         """Save token usage to PostgreSQL."""
-        import asyncpg
+        import asyncpg  # noqa: I001
         import asyncio
 
-        db_url = getattr(self.config.secrets, 'database_url', None) if hasattr(self.config, 'secrets') else None
+        db_url = (
+            getattr(self.config.secrets, 'database_url', None)
+            if hasattr(self.config, 'secrets')
+            else None
+        )
         if not db_url:
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
@@ -88,7 +96,8 @@ class TokenUsageTracker:
             conn = await asyncpg.connect(db_url)
             try:
                 for user_id, stats in self._usage.items():
-                    await conn.execute("""
+                    await conn.execute(
+                        """
                         INSERT INTO token_usage (user_id, prompt_tokens, completion_tokens, total_tokens, total_cost)
                         VALUES ($1, $2, $3, $4, $5)
                         ON CONFLICT (user_id) DO UPDATE SET
@@ -97,9 +106,16 @@ class TokenUsageTracker:
                             total_tokens = EXCLUDED.total_tokens,
                             total_cost = EXCLUDED.total_cost,
                             updated_at = NOW()
-                    """, user_id, stats['prompt_tokens'], stats['completion_tokens'],
-                         stats['total_tokens'], stats['total_cost'])
-                logger.debug(f'Saved token usage for {len(self._usage)} users to PostgreSQL')
+                    """,
+                        user_id,
+                        stats['prompt_tokens'],
+                        stats['completion_tokens'],
+                        stats['total_tokens'],
+                        stats['total_cost'],
+                    )
+                logger.debug(
+                    f'Saved token usage for {len(self._usage)} users to PostgreSQL'
+                )
             finally:
                 await conn.close()
 

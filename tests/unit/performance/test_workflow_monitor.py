@@ -5,10 +5,10 @@ Tests workflow step tracking, research workflow management, metrics aggregation,
 and performance analysis.
 """
 
-import json
-from datetime import datetime, timedelta
-from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
+import json  # noqa: I001
+from datetime import datetime, timedelta  # noqa: F401
+from pathlib import Path  # noqa: F401
+from unittest.mock import AsyncMock, Mock, patch  # noqa: F401
 
 import pytest
 
@@ -16,7 +16,7 @@ from thoth.config import Config
 from thoth.performance.metrics_collector import MetricsCollector
 from thoth.performance.workflow_monitor import (
     ResearchWorkflow,
-    WorkflowMetrics,
+    WorkflowMetrics,  # noqa: F401
     WorkflowMonitor,
     WorkflowStage,
     WorkflowStatus,
@@ -28,7 +28,7 @@ from tests.fixtures.workflow_fixtures import (
     create_completed_workflow,
     create_failed_workflow,
     create_research_workflow,
-    create_workflow_metrics,
+    create_workflow_metrics,  # noqa: F401
     create_workflow_step,
 )
 
@@ -265,9 +265,7 @@ class TestResearchWorkflowDataclass:
 
     def test_research_workflow_user_experience_metrics(self):
         """Test workflow user experience metrics."""
-        workflow = create_research_workflow(
-            user_satisfaction=4.5, query_iterations=3
-        )
+        workflow = create_research_workflow(user_satisfaction=4.5, query_iterations=3)
 
         assert workflow.user_satisfaction == 4.5
         assert workflow.query_iterations == 3
@@ -358,9 +356,7 @@ class TestWorkflowMonitorInitialization:
         """Create mock metrics collector."""
         return Mock(spec=MetricsCollector)
 
-    def test_workflow_monitor_initialization(
-        self, mock_config, mock_service_manager
-    ):
+    def test_workflow_monitor_initialization(self, mock_config, mock_service_manager):
         """Test WorkflowMonitor initialization."""
         monitor = WorkflowMonitor(
             config=mock_config, service_manager=mock_service_manager
@@ -603,7 +599,9 @@ class TestDurationCalculation:
         start_time = datetime(2025, 1, 1, 10, 0, 0)
         end_time = datetime(2025, 1, 1, 10, 0, 30)
 
-        mock_datetime.now.side_effect = [start_time, end_time, end_time]
+        # start_workflow calls datetime.now() twice (workflow_id + start_time)
+        # add_workflow_step calls once, complete_workflow_step calls once
+        mock_datetime.now.side_effect = [start_time, start_time, start_time, end_time]
 
         workflow_id = monitor.start_workflow(initial_query='test query')
         step_id = monitor.add_workflow_step(
@@ -622,7 +620,9 @@ class TestDurationCalculation:
         start_time = datetime(2025, 1, 1, 10, 0, 0)
         end_time = datetime(2025, 1, 1, 10, 2, 0)
 
-        mock_datetime.now.side_effect = [start_time, end_time, end_time]
+        # start_workflow calls datetime.now() twice (workflow_id + start_time)
+        # complete_workflow calls once
+        mock_datetime.now.side_effect = [start_time, start_time, end_time]
 
         workflow_id = monitor.start_workflow(initial_query='test query')
         completed_workflow = monitor.complete_workflow(
@@ -719,9 +719,7 @@ class TestWorkflowAggregation:
 
     def test_total_tokens_across_steps(self):
         """Test aggregating tokens across all steps."""
-        workflow = create_completed_workflow(
-            num_steps=5, tokens_per_step=100
-        )
+        workflow = create_completed_workflow(num_steps=5, tokens_per_step=100)
 
         assert workflow.total_tokens_used == 500
 

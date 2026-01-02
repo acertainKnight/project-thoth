@@ -141,14 +141,16 @@ class ReferenceExtractor:
             r'\n(References)\n',
             r'\n(REFERENCES)\n',
             r'\n(Bibliography)\n',
-            r'\n(BIBLIOGRAPHY)\n'
+            r'\n(BIBLIOGRAPHY)\n',
         ]
 
         for pattern in patterns:
             match = re.search(pattern, content)
             if match:
                 start_pos = match.end()
-                logger.info(f'Found plain text references section at position {start_pos}')
+                logger.info(
+                    f'Found plain text references section at position {start_pos}'
+                )
 
                 # Extract from this position to end of document
                 # (or to next major section if we can identify it)

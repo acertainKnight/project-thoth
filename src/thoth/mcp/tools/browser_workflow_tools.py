@@ -6,9 +6,9 @@ browser-based discovery workflows, including action configuration, search setup,
 execution, and monitoring.
 """
 
-from typing import Any
+from typing import Any  # noqa: I001
 from uuid import UUID
-import json
+import json  # noqa: F401
 
 from loguru import logger
 
@@ -222,9 +222,9 @@ class AddWorkflowActionMCPTool(MCPTool):
 **Type:** {action_data['action_type']}
 """
                 if 'selector' in action_data:
-                    result_text += f"**Selector:** {action_data['selector']}\n"
+                    result_text += f'**Selector:** {action_data["selector"]}\n'
                 if 'value' in action_data:
-                    result_text += f"**Value:** {action_data['value']}\n"
+                    result_text += f'**Value:** {action_data["value"]}\n'
 
                 return MCPToolCallResult(
                     content=[{'type': 'text', 'text': result_text}]
@@ -355,7 +355,7 @@ class ConfigureSearchMCPTool(MCPTool):
 """
                 if 'snippet_selector' in config_data:
                     result_text += (
-                        f"**Snippet Selector:** {config_data['snippet_selector']}\n"
+                        f'**Snippet Selector:** {config_data["snippet_selector"]}\n'
                     )
 
                 return MCPToolCallResult(
@@ -409,8 +409,14 @@ class ExecuteWorkflowMCPTool(MCPTool):
                 'date_range': {
                     'type': 'object',
                     'properties': {
-                        'start': {'type': 'string', 'description': 'Start date (YYYY-MM-DD)'},
-                        'end': {'type': 'string', 'description': 'End date (YYYY-MM-DD)'},
+                        'start': {
+                            'type': 'string',
+                            'description': 'Start date (YYYY-MM-DD)',
+                        },
+                        'end': {
+                            'type': 'string',
+                            'description': 'End date (YYYY-MM-DD)',
+                        },
                     },
                     'description': 'Date range filter (optional)',
                 },
@@ -486,7 +492,7 @@ class ExecuteWorkflowMCPTool(MCPTool):
                 parameters = ExecutionParameters(
                     keywords=keywords,
                     date_range=date_range,
-                    custom_filters={'max_articles': max_articles}
+                    custom_filters={'max_articles': max_articles},
                 )
 
                 # Execute workflow
@@ -500,11 +506,13 @@ class ExecuteWorkflowMCPTool(MCPTool):
                 # Format results
                 if result.stats.success:
                     articles_text = []
-                    for i, article in enumerate(result.articles[:10], 1):  # Show first 10
+                    for i, article in enumerate(
+                        result.articles[:10], 1
+                    ):  # Show first 10
                         articles_text.append(
-                            f"{i}. **{article.title}**\n"
-                            f"   Authors: {', '.join(article.authors[:3]) if article.authors else 'N/A'}\n"
-                            f"   URL: {article.url or 'N/A'}\n"
+                            f'{i}. **{article.title}**\n'
+                            f'   Authors: {", ".join(article.authors[:3]) if article.authors else "N/A"}\n'
+                            f'   URL: {article.url or "N/A"}\n'
                         )
 
                     result_text = f"""✓ Workflow execution completed successfully!
@@ -523,7 +531,9 @@ class ExecuteWorkflowMCPTool(MCPTool):
 {''.join(articles_text) if articles_text else 'No articles extracted'}
 """
                     if len(result.articles) > 10:
-                        result_text += f"\n... and {len(result.articles) - 10} more articles"
+                        result_text += (
+                            f'\n... and {len(result.articles) - 10} more articles'
+                        )
 
                 else:
                     result_text = f"""✗ Workflow execution failed
@@ -534,7 +544,9 @@ class ExecuteWorkflowMCPTool(MCPTool):
 **Duration:** {result.stats.duration_ms}ms
 """
 
-                return MCPToolCallResult(content=[{'type': 'text', 'text': result_text}])
+                return MCPToolCallResult(
+                    content=[{'type': 'text', 'text': result_text}]
+                )
 
             finally:
                 # Always shutdown execution service
@@ -712,9 +724,9 @@ class GetWorkflowDetailsMCPTool(MCPTool):
                 result_text += f"""  Step {action['step_number']}: {action['action_type']}
 """
                 if action.get('selector'):
-                    result_text += f"    - Selector: {action['selector']}\n"
+                    result_text += f'    - Selector: {action["selector"]}\n'
                 if action.get('value'):
-                    result_text += f"    - Value: {action['value']}\n"
+                    result_text += f'    - Value: {action["value"]}\n'
 
             if search_config:
                 result_text += f"""
@@ -725,11 +737,13 @@ class GetWorkflowDetailsMCPTool(MCPTool):
 """
                 if search_config.get('snippet_selector'):
                     result_text += (
-                        f"- Snippet Selector: {search_config['snippet_selector']}\n"
+                        f'- Snippet Selector: {search_config["snippet_selector"]}\n'
                     )
-                result_text += f"- Max Results: {search_config.get('max_results', 100)}\n"
+                result_text += (
+                    f'- Max Results: {search_config.get("max_results", 100)}\n'
+                )
             else:
-                result_text += "\n**Search Configuration:** Not configured\n"
+                result_text += '\n**Search Configuration:** Not configured\n'
 
             return MCPToolCallResult(content=[{'type': 'text', 'text': result_text}])
 
