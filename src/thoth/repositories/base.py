@@ -312,7 +312,7 @@ class BaseRepository(Generic[T]):
             logger.error(f'Failed to check {self.table_name} existence: {e}')
             return False
 
-    async def transaction(self):
+    def transaction(self):
         """
         Create a database transaction context for multi-step operations.
 
