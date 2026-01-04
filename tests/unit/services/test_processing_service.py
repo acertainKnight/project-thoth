@@ -37,10 +37,12 @@ class TestProcessingServiceMethods:
             mock_llm = Mock()
             service = ProcessingService(llm_service=mock_llm)
             
-            # Check key methods exist
-            assert hasattr(service, 'process_pdf')
-            assert hasattr(service, 'extract_text')
+            # Check key methods exist (actual methods from implementation)
+            assert hasattr(service, 'ocr_convert')
+            assert hasattr(service, 'process_pdf_to_markdown')
+            assert hasattr(service, 'analyze_content')
             assert hasattr(service, 'extract_metadata')
+            assert hasattr(service, 'get_processing_stats')
         except ImportError:
             pytest.skip("Processing service not available (pdf extras not installed)")
 

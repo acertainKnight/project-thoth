@@ -31,11 +31,12 @@ class TestCitationServiceMethods:
         """Test CitationService has all required methods."""
         service = CitationService()
         
-        # Check key methods exist
+        # Check key methods exist (actual methods from implementation)
         assert hasattr(service, 'extract_citations')
-        assert hasattr(service, 'enrich_citations')
-        assert hasattr(service, 'resolve_citation')
-        assert hasattr(service, 'batch_process_citations')
+        assert hasattr(service, 'format_citation')
+        assert hasattr(service, 'track_citations')
+        assert hasattr(service, 'get_citation_network')
+        assert hasattr(service, 'search_articles')
 
     def test_initialize_method(self):
         """Test initialize() method."""

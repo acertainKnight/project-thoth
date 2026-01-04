@@ -31,9 +31,9 @@ class TestPdfLocatorServiceMethods:
         """Test PdfLocatorService has all required methods."""
         service = PdfLocatorService()
         
-        # Check key methods exist
-        assert hasattr(service, 'locate_pdf')
-        assert hasattr(service, 'download_pdf')
+        # Check key methods exist (actual methods from implementation)
+        assert hasattr(service, 'locate')
+        assert hasattr(service, 'health_check')
 
     def test_initialize_method(self):
         """Test initialize() method."""

@@ -34,10 +34,12 @@ class TestRAGServiceMethods:
             
             service = RAGService()
             
-            # Check key methods exist
-            assert hasattr(service, 'index_document')
+            # Check key methods exist (actual methods from implementation)
+            assert hasattr(service, 'index_file')
+            assert hasattr(service, 'index_directory')
             assert hasattr(service, 'search')
-            assert hasattr(service, 'build_index')
+            assert hasattr(service, 'ask_question')
+            assert hasattr(service, 'get_statistics')
         except ImportError:
             pytest.skip("RAG service not available (embeddings extras not installed)")
 
