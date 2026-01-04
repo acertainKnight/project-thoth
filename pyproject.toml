@@ -210,6 +210,8 @@ all = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+# Note: scripts/ directory is intentionally excluded (not in src/)
+# Migration scripts and one-off utilities should not be part of installed package
 
 ### STANDARDIZED CODE REQUIREMENTS ###################################################
 ### pytest ###########################################################################
