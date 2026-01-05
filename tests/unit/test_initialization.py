@@ -1,5 +1,7 @@
 """Tests for the initialization module."""
 
+import warnings
+
 import pytest
 
 from thoth.initialization import initialize_thoth
@@ -96,3 +98,74 @@ class TestInitializationFactory:
         assert type(services1) == type(services2)
         assert type(pipeline1) == type(pipeline2)
         assert type(graph1) == type(graph2)
+
+
+class TestThothPipelineDeprecation:
+    """Test ThothPipeline deprecation warnings."""
+
+    def test_thothpipeline_init_shows_deprecation_warning(self):
+        """Test that ThothPipeline.__init__() shows deprecation warning."""
+        from thoth.pipeline import ThothPipeline
+        
+        with pytest.warns(DeprecationWarning, match="ThothPipeline is deprecated"):
+            pipeline = ThothPipeline()
+        
+        # Should still work (backward compatible)
+        assert hasattr(pipeline, 'services')
+        assert hasattr(pipeline, 'document_pipeline')
+        assert hasattr(pipeline, 'citation_tracker')
+
+    def test_thothpipeline_process_pdf_shows_deprecation_warning(self):
+        """Test that ThothPipeline.process_pdf() shows deprecation warning."""
+        from thoth.pipeline import ThothPipeline
+        
+        # Suppress the __init__ warning to test process_pdf warning specifically
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            pipeline = ThothPipeline()
+        
+        # Now test process_pdf warning
+        # Note: We can't actually call it without a real PDF, but we can mock it
+        import unittest.mock as mock
+        
+        with mock.patch.object(pipeline.document_pipeline, 'process_pdf', return_value=('a', 'b', 'c')):
+            with pytest.warns(DeprecationWarning, match="process_pdf.*deprecated"):
+                pipeline.process_pdf('fake.pdf')
+
+    def test_thothpipeline_still_works_correctly(self):
+        """Test that ThothPipeline still initializes correctly despite deprecation."""
+        from thoth.pipeline import ThothPipeline
+        
+        # Suppress warnings for functional test
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            pipeline = ThothPipeline()
+        
+        # Verify all components are initialized correctly
+        assert isinstance(pipeline.services, ServiceManager)
+        assert isinstance(pipeline.document_pipeline, OptimizedDocumentPipeline)
+        assert isinstance(pipeline.citation_tracker, CitationGraph)
+        
+        # Verify services are accessible
+        assert hasattr(pipeline.services, 'llm')
+        assert hasattr(pipeline.services, 'article')
+        
+        # Verify pipeline has services
+        assert pipeline.document_pipeline.services is pipeline.services
+
+    def test_thothpipeline_vs_initialize_thoth_equivalent(self):
+        """Test that ThothPipeline and initialize_thoth() produce equivalent results."""
+        from thoth.pipeline import ThothPipeline
+        
+        # Suppress warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            pipeline = ThothPipeline()
+        
+        # Get results from initialize_thoth
+        services, doc_pipeline, graph = initialize_thoth()
+        
+        # Should have same types
+        assert type(pipeline.services) == type(services)
+        assert type(pipeline.document_pipeline) == type(doc_pipeline)
+        assert type(pipeline.citation_tracker) == type(graph)
