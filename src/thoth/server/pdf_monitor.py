@@ -10,6 +10,10 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
+if TYPE_CHECKING:
+    from thoth.pipelines.optimized_document_pipeline import OptimizedDocumentPipeline
+    from thoth.pipeline import ThothPipeline
+
 from loguru import logger
 
 from thoth.config import config
@@ -523,7 +527,9 @@ class PDFHandler(FileSystemEventHandler):
 
         Args:
             pipeline: The Thoth pipeline instance to process PDFs.
+                     Can be either ThothPipeline (deprecated) or OptimizedDocumentPipeline.
         """
+        # Store the pipeline - could be ThothPipeline or OptimizedDocumentPipeline
         self.pipeline = pipeline
 
     def on_created(self, event):
@@ -545,7 +551,8 @@ class PDFHandler(FileSystemEventHandler):
         logger.info(f'New PDF detected: {file_path}')
 
         try:
-            # The pipeline now handles tracking and reprocessing checks
+            # The pipeline handles tracking and reprocessing checks
+            # Works with both ThothPipeline and OptimizedDocumentPipeline
             self.pipeline.process_pdf(file_path)
         except Exception as e:
             logger.error(f'Error processing {file_path}: {e!s}')
@@ -563,6 +570,7 @@ class PDFMonitor:
         self,
         watch_dir: Path | None = None,
         pipeline: Optional['ThothPipeline'] = None,
+        document_pipeline: Optional['OptimizedDocumentPipeline'] = None,
         polling_interval: float = 1.0,
         recursive: bool = False,
     ):
@@ -571,23 +579,52 @@ class PDFMonitor:
 
         Args:
             watch_dir: Directory to watch for PDF files. If None, loaded from config.
-            pipeline: ThothPipeline instance. If None, a new instance is created.
+            pipeline: DEPRECATED. ThothPipeline instance. Use document_pipeline instead.
+            document_pipeline: OptimizedDocumentPipeline instance. If None, one is created.
             polling_interval: Interval in seconds for polling the directory.
             recursive: Whether to watch subdirectories recursively.
         """
+        import warnings
+        
         self.config = config
         self.watch_dir = watch_dir or self.config.pdf_dir
 
         # Ensure the watch directory exists
         self.watch_dir.mkdir(parents=True, exist_ok=True)
 
-        # Initialize pipeline if not provided
-        if pipeline is None:
-            from thoth.pipeline import ThothPipeline
-
-            self.pipeline = ThothPipeline()
+        # Handle both old and new parameters for backward compatibility
+        if pipeline is not None and document_pipeline is not None:
+            raise ValueError(
+                "Cannot specify both 'pipeline' and 'document_pipeline' parameters. "
+                "Use 'document_pipeline' only (pipeline is deprecated)."
+            )
+        
+        if pipeline is not None:
+            # OLD parameter - issue deprecation warning
+            warnings.warn(
+                "PDFMonitor parameter 'pipeline' is deprecated and will be removed in a future version. "
+                "Use 'document_pipeline' instead:\n\n"
+                "    from thoth.initialization import initialize_thoth\n"
+                "    _, document_pipeline, _ = initialize_thoth()\n"
+                "    monitor = PDFMonitor(document_pipeline=document_pipeline)\n",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            # Extract the document pipeline from ThothPipeline wrapper
+            # Check if it's actually a ThothPipeline by checking for the class name
+            if pipeline.__class__.__name__ == 'ThothPipeline' and hasattr(pipeline, 'document_pipeline'):
+                self.pipeline = pipeline.document_pipeline
+            else:
+                # If passed an OptimizedDocumentPipeline directly, or a mock, use it as-is
+                self.pipeline = pipeline
+        elif document_pipeline is not None:
+            # NEW parameter - use directly
+            self.pipeline = document_pipeline
         else:
-            self.pipeline = pipeline
+            # Neither provided - create new pipeline using initialize_thoth()
+            from thoth.initialization import initialize_thoth
+            
+            _, self.pipeline, _ = initialize_thoth()
 
         # Set up the observer
         self.observer = PollingObserver(timeout=polling_interval)
