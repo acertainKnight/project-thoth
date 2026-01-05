@@ -14,15 +14,6 @@ from thoth.services.discovery_orchestrator import DiscoveryOrchestrator
 from thoth.services.discovery_service import DiscoveryService
 from thoth.services.llm_service import LLMService
 
-# Optional: Letta service (requires memory extras)
-try:
-    from thoth.services.letta_service import LettaService
-
-    LETTA_AVAILABLE = True
-except ImportError:
-    LettaService = None  # type: ignore
-    LETTA_AVAILABLE = False
-
 # Optional: Processing service (requires pdf extras with mistralai)
 try:
     from thoth.services.processing_service import ProcessingService
@@ -128,13 +119,8 @@ class ServiceManager:
 
         self._services['api_gateway'] = ExternalAPIGateway(config=self.config)
 
-        # Initialize Letta service for agent management (optional)
-        if LETTA_AVAILABLE:
-            self._services['letta'] = LettaService(config=self.config)
-            logger.debug('Letta service initialized')
-        else:
-            self._services['letta'] = None
-            logger.debug('Letta service not available (requires memory extras)')
+        # Note: Letta agents run natively on port 8283 via REST API
+        # No LettaService wrapper needed - use direct REST API calls
 
         # Initialize services that need dependencies
         self._services['citation'] = CitationService(config=self.config)

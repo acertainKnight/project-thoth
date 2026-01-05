@@ -98,7 +98,8 @@ class TestServiceManagerOptionalServices:
         manager.initialize()
         
         # Optional services (may be None if extras not installed)
-        optional_services = ['processing', 'rag', 'letta']
+        # Note: letta removed - agents use native Letta REST API (port 8283)
+        optional_services = ['processing', 'rag']
         
         for service_name in optional_services:
             assert service_name in manager._services, f"Optional service '{service_name}' not in _services"
@@ -122,13 +123,8 @@ class TestServiceManagerOptionalServices:
         
         assert manager._services['rag'] is None
 
-    @patch('thoth.services.service_manager.LETTA_AVAILABLE', False)
-    def test_letta_service_none_when_unavailable(self):
-        """Test Letta service is None when memory extras not installed."""
-        manager = ServiceManager()
-        manager.initialize()
-        
-        assert manager._services['letta'] is None
+    # Note: test_letta_service_none_when_unavailable removed
+    # LettaService deleted - agents use native Letta REST API (port 8283)
 
 
 class TestServiceManagerDynamicAccess:
