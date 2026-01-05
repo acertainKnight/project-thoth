@@ -221,17 +221,6 @@ class TestModuleLevelManagers:
         assert isinstance(websocket.operation_progress, dict)
 
 
-class TestDependencySetup:
-    """Tests for dependency injection."""
-
-    def test_set_dependencies(self):
-        """Test setting dependencies."""
-        mock_service_manager = Mock()
-        mock_agent = Mock()
-        mock_chat_manager = Mock()
-        
-        websocket.set_dependencies(mock_service_manager, mock_agent, mock_chat_manager)
-        
-        assert websocket.service_manager == mock_service_manager
-        assert websocket.research_agent == mock_agent
-        assert websocket.chat_manager == mock_chat_manager
+# REMOVED: TestDependencySetup - Phase 5
+# set_dependencies() function removed in favor of FastAPI Depends() pattern
+# Dependencies are now injected via get_service_manager(), get_research_agent(), get_chat_manager()

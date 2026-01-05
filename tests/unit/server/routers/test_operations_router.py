@@ -6,15 +6,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from thoth.server.dependencies import get_service_manager
 from thoth.server.routers import operations
-
-
-@pytest.fixture
-def test_client():
-    """Create FastAPI test client with operations router."""
-    app = FastAPI()
-    app.include_router(operations.router)
-    return TestClient(app)
 
 
 @pytest.fixture
@@ -23,26 +16,43 @@ def mock_service_manager():
     manager = Mock()
     manager.citation_service = None
     manager.discovery_service = None
-    operations.set_service_manager(manager)
-    yield manager
+    manager.citation = None
+    manager.discovery = None
+    return manager
+
+
+@pytest.fixture
+def test_client(mock_service_manager):
+    """Create FastAPI test client with operations router and dependency override."""
+    app = FastAPI()
+    app.include_router(operations.router)
+    
+    # Override dependency to return mock
+    app.dependency_overrides[get_service_manager] = lambda: mock_service_manager
+    
+    client = TestClient(app)
+    yield client
+    
     # Clean up
-    operations.set_service_manager(None)
+    app.dependency_overrides.clear()
 
 
 class TestCollectionStatsEndpoint:
     """Tests for /collection/stats endpoint."""
 
-    def test_collection_stats_without_service_manager(self, test_client):
+    def test_collection_stats_without_service_manager(self):
         """Test collection stats fails when service manager not initialized."""
-        # Ensure no service manager
-        operations.set_service_manager(None)
+        # Create app with endpoint that returns None for service_manager
+        app = FastAPI()
+        app.include_router(operations.router)
+        app.dependency_overrides[get_service_manager] = lambda: None
         
-        response = test_client.get('/collection/stats')
-        
-        assert response.status_code == 503
-        assert 'Service manager not initialized' in response.json()['detail']
+        with TestClient(app) as client:
+            response = client.get('/collection/stats')
+            assert response.status_code == 503
+            assert 'Service manager not initialized' in response.json()['detail']
 
-    def test_collection_stats_with_service_manager(self, test_client, mock_service_manager):
+    def test_collection_stats_with_service_manager(self, test_client):
         """Test collection stats returns basic stats."""
         response = test_client.get('/collection/stats')
         
@@ -72,14 +82,17 @@ class TestCollectionStatsEndpoint:
 class TestListArticlesEndpoint:
     """Tests for /articles endpoint."""
 
-    def test_list_articles_without_service_manager(self, test_client):
+    def test_list_articles_without_service_manager(self):
         """Test list articles fails when service manager not initialized."""
-        operations.set_service_manager(None)
+        # Create app with None service_manager override
+        app = FastAPI()
+        app.include_router(operations.router)
+        app.dependency_overrides[get_service_manager] = lambda: None
         
-        response = test_client.get('/articles')
-        
-        assert response.status_code == 503
-        assert 'Service manager not initialized' in response.json()['detail']
+        with TestClient(app) as client:
+            response = client.get('/articles')
+            assert response.status_code == 503
+            assert 'Service manager not initialized' in response.json()['detail']
 
     def test_list_articles_returns_paginated_results(self, test_client, mock_service_manager):
         """Test list articles returns paginated mock data."""

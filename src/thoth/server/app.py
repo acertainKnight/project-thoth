@@ -57,24 +57,20 @@ base_url: str = None
 current_config: dict[str, Any] = {}
 
 # Service manager initialized when the server starts
-service_manager = None
-
-# Global agent instance - will be initialized when server starts
-research_agent = None
-agent_adapter = None
-llm_router = None
-
-# Chat persistence manager - will be initialized when server starts
-chat_manager: ChatPersistenceManager = None
-
-# Global watcher instance for settings hot-reload
+# Global watcher instance for settings hot-reload (kept global for lifecycle management)
 _settings_watcher: Optional[SettingsFileWatcher] = None  # noqa: UP007
 
-# Global discovery scheduler instance - will be initialized when server starts
+# Global discovery scheduler instance (kept global for lifecycle management)
 discovery_scheduler: Optional[DiscoveryScheduler] = None  # noqa: UP007
 
-# Global workflow execution service - will be initialized when server starts
+# Global workflow execution service (kept global for lifecycle management)
 workflow_execution_service = None
+
+# NOTE: The following have been moved to app.state for better thread safety:
+# - service_manager (accessed via dependencies.get_service_manager)
+# - research_agent (accessed via dependencies.get_research_agent)
+# - chat_manager (accessed via dependencies.get_chat_manager)
+# - agent_adapter, llm_router (not needed in routers)
 
 
 def _should_enable_hot_reload() -> bool:
@@ -138,7 +134,7 @@ async def shutdown_mcp_server(timeout: float = 10.0) -> None:
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
+async def lifespan(app: FastAPI):
     """Handle FastAPI application lifespan events."""
     global _settings_watcher, discovery_scheduler, workflow_execution_service
 
@@ -168,6 +164,9 @@ async def lifespan(_app: FastAPI):
     else:
         logger.info('Hot-reload disabled (not in Docker environment)')
 
+    # Get service_manager from app.state (set by start_obsidian_server)
+    service_manager = getattr(app.state, 'service_manager', None)
+    
     # Initialize PostgreSQL connection pool if postgres service exists
     if service_manager and hasattr(service_manager, 'postgres'):
         try:
@@ -201,6 +200,10 @@ async def lifespan(_app: FastAPI):
                 'Continuing without workflow execution service (browser workflows will not work)'
             )
             workflow_execution_service = None
+    
+    # Store workflow_execution_service in app.state for router access
+    if workflow_execution_service is not None:
+        app.state.workflow_execution_service = workflow_execution_service
 
     # Initialize discovery scheduler after PostgreSQL is ready
     if service_manager:
@@ -533,27 +536,13 @@ async def start_server(
             logger.warning(f'Failed to initialize Thoth orchestrator: {e}')
             thoth_orchestrator = None
 
-        # Set up router dependencies
+        # Phase 5 COMPLETE: All routers now use FastAPI Depends() for dependency injection
+        # set_dependencies() calls removed - dependencies injected from app.state
+        
+        # Still need to set directories for health router (not migrated - not necessary)
         health.set_directories(pdf_dir, notes_dir, base_url)
-        websocket.set_dependencies(service_manager, research_agent, chat_manager)
-        chat.set_chat_manager(chat_manager)
-        # agent.set_dependencies(research_agent, current_config, thoth_orchestrator)  # Disabled: agent router doesn't have set_dependencies  # noqa: W505
-        research.set_dependencies(research_agent, chat_manager)
-        operations.set_service_manager(service_manager)
-        tools.set_dependencies(research_agent, service_manager)
-
-        # Initialize browser workflow dependencies
-        if workflow_execution_service is not None:
-            postgres_svc = service_manager._services.get('postgres')
-            if postgres_svc:
-                browser_workflows.set_dependencies(
-                    postgres_svc, workflow_execution_service
-                )
-                logger.info('Browser workflow dependencies initialized')
-            else:
-                logger.warning('PostgreSQL service not available for browser workflows')
-        else:
-            logger.warning('Workflow execution service not available')
+        
+        logger.info('✅ Phase 5: All router dependencies injected via FastAPI Depends()')
 
         logger.info('Thoth server initialization completed successfully')
 
@@ -587,6 +576,14 @@ def start_obsidian_server(
 
         # Create the FastAPI app
         app = create_app()
+
+        # Store dependencies in app.state for router access
+        app.state.service_manager = service_manager
+        app.state.research_agent = research_agent
+        app.state.chat_manager = chat_manager
+        app.state.workflow_execution_service = workflow_execution_service
+        
+        logger.info('Dependencies stored in app.state for router access')
 
         # Configure uvicorn
         config = uvicorn.Config(
@@ -626,7 +623,15 @@ def start_obsidian_server(
 
 
 # Create the app instance for direct use
+# Note: When used this way (imported directly), dependencies must be set separately
+# Typically used by: python -m uvicorn thoth.server.app:app
 app = create_app()
+
+# Initialize empty app.state for direct imports (will be populated by lifespan or explicit initialization)
+app.state.service_manager = None
+app.state.research_agent = None  
+app.state.chat_manager = None
+app.state.workflow_execution_service = None
 
 # Export the main functions
 __all__ = ['app', 'create_app', 'start_obsidian_server', 'start_server']

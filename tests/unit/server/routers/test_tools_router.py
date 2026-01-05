@@ -6,15 +6,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from thoth.server.dependencies import get_research_agent, get_service_manager
 from thoth.server.routers import tools
-
-
-@pytest.fixture
-def test_client():
-    """Create FastAPI test client with tools router."""
-    app = FastAPI()
-    app.include_router(tools.router)
-    return TestClient(app)
 
 
 @pytest.fixture
@@ -38,24 +31,47 @@ def mock_service_manager():
     manager.rag_service = Mock()
     manager.pdf_locator_service = Mock()
     manager.note_service = Mock()
+    manager.discovery = Mock()
     return manager
+
+
+@pytest.fixture
+def test_client(mock_research_agent, mock_service_manager):
+    """Create FastAPI test client with tools router and dependency overrides."""
+    app = FastAPI()
+    app.include_router(tools.router)
+    
+    # Override dependencies to return mocks
+    app.dependency_overrides[get_research_agent] = lambda: mock_research_agent
+    app.dependency_overrides[get_service_manager] = lambda: mock_service_manager
+    
+    client = TestClient(app)
+    yield client
+    
+    # Clean up
+    app.dependency_overrides.clear()
 
 
 class TestExecuteToolEndpoint:
     """Tests for POST /execute endpoint."""
 
-    def test_execute_tool_without_agent(self, test_client):
+    def test_execute_tool_without_agent(self, mock_service_manager):
         """Test tool execution fails when research agent not initialized."""
-        tools.set_dependencies(None, None)
+        # Create app with None agent override
+        app = FastAPI()
+        app.include_router(tools.router)
+        app.dependency_overrides[get_research_agent] = lambda: None
+        app.dependency_overrides[get_service_manager] = lambda: mock_service_manager
         
-        request_data = {
-            'tool_name': 'thoth_search_papers',
-            'parameters': {'query': 'test'}
-        }
-        response = test_client.post('/execute', json=request_data)
-        
-        assert response.status_code == 503
-        assert 'Research agent not initialized' in response.json()['detail']
+        with TestClient(app) as client:
+            request_data = {
+                'tool_name': 'thoth_search_papers',
+                'parameters': {'query': 'test'}
+            }
+            response = client.post('/execute', json=request_data)
+            
+            assert response.status_code == 503
+            assert 'Research agent not initialized' in response.json()['detail']
 
     def test_execute_tool_through_agent(self, test_client, mock_research_agent):
         """Test tool execution through agent."""
@@ -63,7 +79,6 @@ class TestExecuteToolEndpoint:
             'response': 'Tool executed',
             'tool_calls': [{'tool': 'thoth_search_papers'}]
         }
-        tools.set_dependencies(mock_research_agent, None)
         
         request_data = {
             'tool_name': 'thoth_search_papers',
@@ -80,7 +95,6 @@ class TestExecuteToolEndpoint:
 
     def test_execute_tool_bypassing_agent_tool_not_found(self, test_client, mock_research_agent):
         """Test bypassing agent with non-existent tool returns error."""
-        tools.set_dependencies(mock_research_agent, None)
         
         request_data = {
             'tool_name': 'nonexistent_tool',
@@ -95,7 +109,6 @@ class TestExecuteToolEndpoint:
 
     def test_execute_tool_bypassing_agent_success(self, test_client, mock_research_agent, mock_service_manager):
         """Test bypassing agent with valid tool."""
-        tools.set_dependencies(mock_research_agent, mock_service_manager)
         
         # Mock the tool to exist
         mock_research_agent.get_available_tools.return_value = [
@@ -118,25 +131,29 @@ class TestExecuteToolEndpoint:
 class TestExecuteCommandEndpoint:
     """Tests for POST /execute/command endpoint."""
 
-    def test_execute_command_without_service_manager(self, test_client):
+    def test_execute_command_without_service_manager(self, mock_research_agent):
         """Test command execution fails when service manager not initialized."""
-        tools.set_dependencies(None, None)
+        # Create app with None service_manager override
+        app = FastAPI()
+        app.include_router(tools.router)
+        app.dependency_overrides[get_research_agent] = lambda: mock_research_agent
+        app.dependency_overrides[get_service_manager] = lambda: None
         
-        request_data = {
-            'command': 'discovery',
-            'args': ['list']
-        }
-        response = test_client.post('/execute/command', json=request_data)
-        
-        assert response.status_code == 503
-        assert 'Service manager not initialized' in response.json()['detail']
+        with TestClient(app) as client:
+            request_data = {
+                'command': 'discovery',
+                'args': ['list']
+            }
+            response = client.post('/execute/command', json=request_data)
+            
+            assert response.status_code == 503
+            assert 'Service manager not initialized' in response.json()['detail']
 
     def test_execute_discovery_list_command(self, test_client, mock_service_manager):
         """Test executing discovery list command."""
         mock_service_manager.discovery.list_sources = AsyncMock(
             return_value=['arxiv', 'semantic_scholar']
         )
-        tools.set_dependencies(None, mock_service_manager)
         
         request_data = {
             'command': 'discovery',
@@ -151,7 +168,6 @@ class TestExecuteCommandEndpoint:
 
     def test_execute_command_with_streaming(self, test_client, mock_service_manager):
         """Test executing command with streaming enabled."""
-        tools.set_dependencies(None, mock_service_manager)
         
         request_data = {
             'command': 'discovery',
@@ -166,7 +182,6 @@ class TestExecuteCommandEndpoint:
 
     def test_execute_unknown_command(self, test_client, mock_service_manager):
         """Test executing unknown command returns error."""
-        tools.set_dependencies(None, mock_service_manager)
         
         request_data = {
             'command': 'unknown_command',

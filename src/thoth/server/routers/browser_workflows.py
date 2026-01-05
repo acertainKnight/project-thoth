@@ -33,24 +33,21 @@ from thoth.utilities.schemas.browser_workflow import (
     WorkflowAction,  # noqa: F401
 )
 
+from thoth.server.dependencies import (
+    get_postgres_service,
+    get_workflow_execution_service,
+)
+
 router = APIRouter(prefix='/api/workflows', tags=['browser_workflows'])
 
-# Module-level dependencies (set by app initialization)
-postgres_service: Optional[PostgresService] = None  # noqa: UP007
-workflow_execution_service: Optional[WorkflowExecutionService] = None  # noqa: UP007
+# REMOVED: Module-level globals - Phase 5
+# Dependencies now injected via FastAPI Depends() from dependencies module
 
 
-def set_dependencies(
-    postgres: PostgresService, execution_service: WorkflowExecutionService
-):
-    """Set module-level dependencies for dependency injection."""
-    global postgres_service, workflow_execution_service
-    postgres_service = postgres
-    workflow_execution_service = execution_service
-
-
-# Dependency injection helpers
-async def get_workflow_repo() -> BrowserWorkflowRepository:
+# Dependency injection helpers - updated to use central dependencies
+async def get_workflow_repo(
+    postgres_service: Optional[PostgresService] = Depends(get_postgres_service)
+) -> BrowserWorkflowRepository:
     """Get browser workflow repository dependency."""
     if postgres_service is None:
         raise HTTPException(
@@ -60,7 +57,9 @@ async def get_workflow_repo() -> BrowserWorkflowRepository:
     return BrowserWorkflowRepository(postgres_service)
 
 
-async def get_executions_repo() -> WorkflowExecutionsRepository:
+async def get_executions_repo(
+    postgres_service: Optional[PostgresService] = Depends(get_postgres_service)
+) -> WorkflowExecutionsRepository:
     """Get workflow executions repository dependency."""
     if postgres_service is None:
         raise HTTPException(
@@ -70,7 +69,9 @@ async def get_executions_repo() -> WorkflowExecutionsRepository:
     return WorkflowExecutionsRepository(postgres_service)
 
 
-async def get_actions_repo() -> WorkflowActionsRepository:
+async def get_actions_repo(
+    postgres_service: Optional[PostgresService] = Depends(get_postgres_service)
+) -> WorkflowActionsRepository:
     """Get workflow actions repository dependency."""
     if postgres_service is None:
         raise HTTPException(
@@ -80,7 +81,9 @@ async def get_actions_repo() -> WorkflowActionsRepository:
     return WorkflowActionsRepository(postgres_service)
 
 
-async def get_search_config_repo() -> WorkflowSearchConfigRepository:
+async def get_search_config_repo(
+    postgres_service: Optional[PostgresService] = Depends(get_postgres_service)
+) -> WorkflowSearchConfigRepository:
     """Get workflow search config repository dependency."""
     if postgres_service is None:
         raise HTTPException(
@@ -90,7 +93,11 @@ async def get_search_config_repo() -> WorkflowSearchConfigRepository:
     return WorkflowSearchConfigRepository(postgres_service)
 
 
-async def get_execution_service() -> WorkflowExecutionService:
+async def get_execution_service(
+    workflow_execution_service: Optional[WorkflowExecutionService] = Depends(
+        get_workflow_execution_service
+    )
+) -> WorkflowExecutionService:
     """Get workflow execution service dependency."""
     if workflow_execution_service is None:
         raise HTTPException(

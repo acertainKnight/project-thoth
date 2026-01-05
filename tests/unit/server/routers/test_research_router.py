@@ -6,15 +6,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from thoth.server.dependencies import get_chat_manager, get_research_agent
 from thoth.server.routers import research
-
-
-@pytest.fixture
-def test_client():
-    """Create FastAPI test client with research router."""
-    app = FastAPI()
-    app.include_router(research.router)
-    return TestClient(app)
 
 
 @pytest.fixture
@@ -35,18 +28,40 @@ def mock_chat_manager():
     return manager
 
 
+@pytest.fixture
+def test_client(mock_research_agent, mock_chat_manager):
+    """Create FastAPI test client with research router and dependency overrides."""
+    app = FastAPI()
+    app.include_router(research.router)
+    
+    # Override dependencies to return mocks
+    app.dependency_overrides[get_research_agent] = lambda: mock_research_agent
+    app.dependency_overrides[get_chat_manager] = lambda: mock_chat_manager
+    
+    client = TestClient(app)
+    yield client
+    
+    # Clean up
+    app.dependency_overrides.clear()
+
+
 class TestResearchChatEndpoint:
     """Tests for POST /chat endpoint."""
 
-    def test_research_chat_without_agent(self, test_client):
+    def test_research_chat_without_agent(self, mock_chat_manager):
         """Test chat fails when research agent not initialized."""
-        research.set_dependencies(None, None)
+        # Create app with None agent override
+        app = FastAPI()
+        app.include_router(research.router)
+        app.dependency_overrides[get_research_agent] = lambda: None
+        app.dependency_overrides[get_chat_manager] = lambda: mock_chat_manager
         
-        request_data = {'message': 'Hello'}
-        response = test_client.post('/chat', json=request_data)
-        
-        assert response.status_code == 503
-        assert 'Research agent not initialized' in response.json()['detail']
+        with TestClient(app) as client:
+            request_data = {'message': 'Hello'}
+            response = client.post('/chat', json=request_data)
+            
+            assert response.status_code == 503
+            assert 'Research agent not initialized' in response.json()['detail']
 
     def test_research_chat_success(self, test_client, mock_research_agent):
         """Test chat returns response from research agent."""
@@ -55,7 +70,6 @@ class TestResearchChatEndpoint:
             'response': 'Here is the answer',
             'tool_calls': []
         }
-        research.set_dependencies(mock_research_agent, None)
         
         request_data = {'message': 'What is machine learning?'}
         response = test_client.post('/chat', json=request_data)
@@ -73,7 +87,6 @@ class TestResearchChatEndpoint:
             'response': 'Here is the answer',
             'tool_calls': []
         }
-        research.set_dependencies(mock_research_agent, mock_chat_manager)
         
         request_data = {
             'message': 'What is machine learning?',
@@ -90,7 +103,6 @@ class TestResearchChatEndpoint:
         """Test chat handles errors and returns error response."""
         # Setup mock to raise exception
         mock_research_agent.chat.side_effect = Exception("Agent error")
-        research.set_dependencies(mock_research_agent, None)
         
         request_data = {'message': 'Test'}
         response = test_client.post('/chat', json=request_data)
@@ -104,15 +116,19 @@ class TestResearchChatEndpoint:
 class TestResearchQueryEndpoint:
     """Tests for POST /query endpoint."""
 
-    def test_research_query_without_agent(self, test_client):
+    def test_research_query_without_agent(self):
         """Test query fails when research agent not initialized."""
-        research.set_dependencies(None, None)
+        # Create app with None agent override
+        app = FastAPI()
+        app.include_router(research.router)
+        app.dependency_overrides[get_research_agent] = lambda: None
         
-        request_data = {'query': 'machine learning papers'}
-        response = test_client.post('/query', json=request_data)
-        
-        assert response.status_code == 503
-        assert 'Research agent not initialized' in response.json()['detail']
+        with TestClient(app) as client:
+            request_data = {'query': 'machine learning papers'}
+            response = client.post('/query', json=request_data)
+            
+            assert response.status_code == 503
+            assert 'Research agent not initialized' in response.json()['detail']
 
     def test_research_query_success(self, test_client, mock_research_agent):
         """Test query returns research results."""
@@ -127,7 +143,6 @@ class TestResearchQueryEndpoint:
                 }
             ]
         }
-        research.set_dependencies(mock_research_agent, None)
         
         request_data = {
             'query': 'machine learning papers',
@@ -152,7 +167,6 @@ class TestResearchQueryEndpoint:
             'response': 'Research summary',
             'tool_calls': []
         }
-        research.set_dependencies(mock_research_agent, None)
         
         request_data = {'query': 'test query'}
         response = test_client.post('/query', json=request_data)
@@ -167,7 +181,6 @@ class TestResearchQueryEndpoint:
         """Test query handles errors properly."""
         # Setup mock to raise exception
         mock_research_agent.chat.side_effect = Exception("Query error")
-        research.set_dependencies(mock_research_agent, None)
         
         request_data = {'query': 'test'}
         response = test_client.post('/query', json=request_data)

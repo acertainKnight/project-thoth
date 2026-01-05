@@ -3,23 +3,18 @@
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from loguru import logger
 from pydantic import BaseModel
 
+from thoth.server.dependencies import get_research_agent, get_service_manager
+from thoth.services.service_manager import ServiceManager
+
 router = APIRouter()
 
-# Module-level variables that will be set by the main app
-research_agent = None
-service_manager = None
-
-
-def set_dependencies(agent, sm):
-    """Set the dependencies for this router."""
-    global research_agent, service_manager
-    research_agent = agent
-    service_manager = sm
+# REMOVED: Module-level globals - Phase 5
+# Dependencies now injected via FastAPI Depends() instead of set_dependencies()
 
 
 # Request Models
@@ -37,7 +32,11 @@ class CommandExecutionRequest(BaseModel):
 
 
 @router.post('/execute')
-async def execute_tool_direct(request: ToolExecutionRequest):
+async def execute_tool_direct(
+    request: ToolExecutionRequest,
+    research_agent=Depends(get_research_agent),
+    service_manager: ServiceManager = Depends(get_service_manager)
+):
     """Execute a specific tool directly, optionally bypassing the agent."""
     if research_agent is None:
         raise HTTPException(status_code=503, detail='Research agent not initialized')
@@ -225,11 +224,11 @@ async def execute_rag_search_tool(parameters: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.post('/execute/command')
-async def execute_command(request: CommandExecutionRequest):
+async def execute_command(
+    request: CommandExecutionRequest,
+    service_manager: ServiceManager = Depends(get_service_manager)
+):
     """Execute a Thoth CLI command through the API."""
-    if service_manager is None:
-        raise HTTPException(status_code=503, detail='Service manager not initialized')
-
     try:
         if request.streaming:
             # Execute with streaming support

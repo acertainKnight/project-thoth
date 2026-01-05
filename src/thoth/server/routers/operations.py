@@ -5,30 +5,28 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from loguru import logger
 from pydantic import BaseModel
 
+from thoth.server.dependencies import get_service_manager
 from thoth.server.routers.websocket import (
     create_background_task,
     get_operation_status,
     update_operation_progress,
 )
+from thoth.services.service_manager import ServiceManager
 
 router = APIRouter()
-
-# Module-level variables that will be set by the main app
-service_manager = None
 
 
 # Collection and Articles endpoints
 @router.get('/collection/stats')
-async def get_collection_stats():
+async def get_collection_stats(
+    service_manager: ServiceManager = Depends(get_service_manager)
+):
     """Get collection statistics."""
-    if service_manager is None:
-        raise HTTPException(status_code=503, detail='Service manager not initialized')
-
     try:
         # Get basic stats from the service manager
         stats = {
@@ -70,11 +68,12 @@ async def get_collection_stats():
 
 
 @router.get('/articles')
-async def list_articles(limit: int = 10, offset: int = 0):
+async def list_articles(
+    limit: int = 10,
+    offset: int = 0,
+    service_manager: ServiceManager = Depends(get_service_manager)
+):
     """List articles in the collection."""
-    if service_manager is None:
-        raise HTTPException(status_code=503, detail='Service manager not initialized')
-
     try:
         # Return mock data for now - this would integrate with actual document storage
         articles = [
@@ -100,10 +99,8 @@ async def list_articles(limit: int = 10, offset: int = 0):
         raise HTTPException(status_code=500, detail=f'Error listing articles: {e}')  # noqa: B904
 
 
-def set_service_manager(sm):
-    """Set the service manager for this router."""
-    global service_manager
-    service_manager = sm
+# REMOVED: set_service_manager() - Phase 5
+# Dependencies now injected via FastAPI Depends() instead of module-level globals
 
 
 # Request Models
@@ -136,12 +133,17 @@ def get_operation_status_endpoint(operation_id: str):
 
 
 @router.post('/stream/operation')
-async def start_streaming_operation(request: StreamingOperationRequest):
+async def start_streaming_operation(
+    request: StreamingOperationRequest,
+    service_manager: ServiceManager = Depends(get_service_manager)
+):
     """Start a streaming operation and return operation ID for tracking."""
     operation_id = request.operation_id or str(uuid.uuid4())
 
-    # Start the operation in background
-    create_background_task(execute_streaming_operation(operation_id, request))
+    # Start the operation in background, passing service_manager
+    create_background_task(
+        execute_streaming_operation(operation_id, request, service_manager)
+    )
 
     return JSONResponse(
         {
@@ -153,7 +155,7 @@ async def start_streaming_operation(request: StreamingOperationRequest):
 
 
 async def execute_streaming_operation(
-    operation_id: str, request: StreamingOperationRequest
+    operation_id: str, request: StreamingOperationRequest, service_manager: ServiceManager
 ):
     """Execute a streaming operation with progress updates."""
     try:
@@ -162,11 +164,11 @@ async def execute_streaming_operation(
         )
 
         if request.operation_type == 'pdf_process':
-            await stream_pdf_processing(operation_id, request.parameters)
+            await stream_pdf_processing(operation_id, request.parameters, service_manager)
         elif request.operation_type == 'discovery_run':
-            await stream_discovery_run(operation_id, request.parameters)
+            await stream_discovery_run(operation_id, request.parameters, service_manager)
         elif request.operation_type == 'batch_process':
-            await stream_batch_process(operation_id, request.parameters)
+            await stream_batch_process(operation_id, request.parameters, service_manager)
         else:
             raise ValueError(f'Unknown operation type: {request.operation_type}')
 
@@ -181,11 +183,10 @@ async def execute_streaming_operation(
         )
 
 
-async def stream_pdf_processing(operation_id: str, parameters: dict[str, Any]):
+async def stream_pdf_processing(
+    operation_id: str, parameters: dict[str, Any], service_manager: ServiceManager
+):
     """Stream PDF processing with progress updates."""
-    if service_manager is None:
-        raise HTTPException(status_code=503, detail='Service manager not initialized')
-
     pdf_paths = parameters.get('pdf_paths', [])
     if not pdf_paths:
         raise ValueError('No PDF paths provided')
@@ -227,11 +228,10 @@ async def stream_pdf_processing(operation_id: str, parameters: dict[str, Any]):
             )
 
 
-async def stream_discovery_run(operation_id: str, parameters: dict[str, Any]):
+async def stream_discovery_run(
+    operation_id: str, parameters: dict[str, Any], service_manager: ServiceManager
+):
     """Stream discovery run with progress updates."""
-    if service_manager is None:
-        raise HTTPException(status_code=503, detail='Service manager not initialized')
-
     source_name = parameters.get('source_name')
     max_articles = parameters.get('max_articles', 50)
 
@@ -275,11 +275,10 @@ async def stream_discovery_run(operation_id: str, parameters: dict[str, Any]):
         raise
 
 
-async def stream_batch_process(operation_id: str, parameters: dict[str, Any]):
+async def stream_batch_process(
+    operation_id: str, parameters: dict[str, Any], service_manager: ServiceManager
+):
     """Stream batch processing with progress updates."""
-    if service_manager is None:
-        raise HTTPException(status_code=503, detail='Service manager not initialized')
-
     items = parameters.get('items', [])
     batch_size = parameters.get('batch_size', 5)
     process_type = parameters.get('process_type', 'pdf')
@@ -370,7 +369,10 @@ async def process_discovery_query(item: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.post('/batch/process')
-async def batch_process(request: BatchProcessRequest):
+async def batch_process(
+    request: BatchProcessRequest,
+    service_manager: ServiceManager = Depends(get_service_manager)
+):
     """Start a batch processing operation."""
     operation_id = str(uuid.uuid4())
 
@@ -385,8 +387,8 @@ async def batch_process(request: BatchProcessRequest):
         operation_id=operation_id,
     )
 
-    # Start the operation in background
-    create_background_task(execute_batch_process(operation_id, request))
+    # Start the operation in background, passing service_manager
+    create_background_task(execute_batch_process(operation_id, request, service_manager))
 
     return JSONResponse(
         {
@@ -398,11 +400,13 @@ async def batch_process(request: BatchProcessRequest):
     )
 
 
-async def execute_batch_process(operation_id: str, request: BatchProcessRequest):
+async def execute_batch_process(
+    operation_id: str, request: BatchProcessRequest, service_manager: ServiceManager
+):
     """Execute batch processing operation."""
     parameters = {
         'items': request.items,
         'batch_size': request.batch_size,
         'process_type': request.operation_type,
     }
-    await stream_batch_process(operation_id, parameters)
+    await stream_batch_process(operation_id, parameters, service_manager)

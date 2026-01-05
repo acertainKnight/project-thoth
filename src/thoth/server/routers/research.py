@@ -3,26 +3,19 @@
 from datetime import datetime  # noqa: I001
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 from pydantic import BaseModel
 
 from thoth.server.chat_models import ChatMessage
+from thoth.server.dependencies import get_chat_manager, get_research_agent
 from thoth.services.llm_router import LLMRouter
 from thoth.config import config
 
 router = APIRouter()
 
-# Module-level variables that will be set by the main app
-research_agent = None
-chat_manager = None
-
-
-def set_dependencies(agent, cm):
-    """Set the dependencies for this router."""
-    global research_agent, chat_manager
-    research_agent = agent
-    chat_manager = cm
+# REMOVED: Module-level globals - Phase 5
+# Dependencies now injected via FastAPI Depends() instead of set_dependencies()
 
 
 # Request/Response Models
@@ -55,7 +48,11 @@ class ResearchResponse(BaseModel):
 
 
 @router.post('/chat')
-async def research_chat(request: ChatRequest) -> ChatResponse:
+async def research_chat(
+    request: ChatRequest,
+    research_agent=Depends(get_research_agent),
+    chat_manager=Depends(get_chat_manager)
+) -> ChatResponse:
     """
     Enhanced chat endpoint with persistence support.
 
@@ -148,7 +145,10 @@ async def research_chat(request: ChatRequest) -> ChatResponse:
 
 
 @router.post('/query')
-async def research_query(request: ResearchRequest) -> ResearchResponse:
+async def research_query(
+    request: ResearchRequest,
+    research_agent=Depends(get_research_agent)
+) -> ResearchResponse:
     """
     Direct research query endpoint for quick research tasks.
 
