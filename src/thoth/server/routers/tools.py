@@ -135,7 +135,7 @@ async def execute_search_papers_tool(parameters: dict[str, Any]) -> dict[str, An
     max_results = parameters.get('max_results', 10)
 
     try:
-        discovery_service = service_manager.discovery_service
+        discovery_service = service_manager.discovery
         results = await discovery_service.search_papers(query, max_results)
 
         return {
@@ -160,7 +160,7 @@ async def execute_analyze_document_tool(parameters: dict[str, Any]) -> dict[str,
 
     try:
         # Use the processing service to analyze document
-        processing_service = service_manager.processing_service
+        processing_service = service_manager.processing
         result = await processing_service.analyze_document(document_id, analysis_type)
 
         return {
@@ -209,7 +209,7 @@ async def execute_rag_search_tool(parameters: dict[str, Any]) -> dict[str, Any]:
     top_k = parameters.get('top_k', 5)
 
     try:
-        rag_service = service_manager.rag_service
+        rag_service = service_manager.rag
         results = await rag_service.search(query, top_k=top_k)
 
         return {
@@ -295,7 +295,7 @@ async def execute_discovery_command(
     kwargs: dict[str, Any],  # noqa: ARG001
 ) -> dict[str, Any]:
     """Execute a discovery command."""
-    discovery_service = service_manager.discovery_service
+    discovery_service = service_manager.discovery
 
     action = args[0] if args else 'list'
 
@@ -317,7 +317,7 @@ async def execute_pdf_locate_command(
     kwargs: dict[str, Any],  # noqa: ARG001
 ) -> dict[str, Any]:
     """Execute a PDF locate command."""
-    pdf_locator_service = service_manager.pdf_locator_service
+    pdf_locator_service = service_manager.pdf_locator
 
     if not args:
         raise ValueError('DOI or identifier required')
@@ -337,7 +337,7 @@ async def execute_rag_command(
     kwargs: dict[str, Any],
 ) -> dict[str, Any]:
     """Execute a RAG command."""
-    rag_service = service_manager.rag_service
+    rag_service = service_manager.rag
 
     action = args[0] if args else 'search'
 
@@ -357,7 +357,7 @@ async def execute_notes_command(
     kwargs: dict[str, Any],
 ) -> dict[str, Any]:
     """Execute a notes command."""
-    note_service = service_manager.note_service
+    note_service = service_manager.note
 
     action = args[0] if args else 'list'
 

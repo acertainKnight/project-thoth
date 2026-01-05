@@ -161,7 +161,8 @@ class TestServiceManagerDynamicAccess:
         with pytest.raises(AttributeError) as exc_info:
             _ = manager.nonexistent_service
         
-        assert "has no attribute 'nonexistent_service'" in str(exc_info.value)
+        assert "has no service 'nonexistent_service'" in str(exc_info.value)
+        assert "Available services:" in str(exc_info.value)
 
     def test_service_lookup_by_name(self):
         """Test get_service() method for explicit service lookup."""

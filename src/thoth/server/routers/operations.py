@@ -41,19 +41,19 @@ async def get_collection_stats():
         # If we have access to document services, get real stats
         if (
             hasattr(service_manager, 'citation_service')
-            and service_manager.citation_service
+            and service_manager.citation
         ):
             try:
                 # Try to get real collection stats
                 pdf_tracker = getattr(
-                    service_manager.citation_service, 'pdf_tracker', None
+                    service_manager.citation, 'pdf_tracker', None
                 )
                 if pdf_tracker:
                     processed_files = getattr(pdf_tracker, '_processed_files', {})
                     stats['processed_documents'] = len(processed_files)
 
                 citation_graph = getattr(
-                    service_manager.citation_service, 'citation_graph', None
+                    service_manager.citation, 'citation_graph', None
                 )
                 if citation_graph and hasattr(citation_graph, '_graph'):
                     stats['total_citations'] = citation_graph._graph.number_of_nodes()
@@ -240,7 +240,7 @@ async def stream_discovery_run(operation_id: str, parameters: dict[str, Any]):
     )
 
     try:
-        discovery_service = service_manager.discovery_service
+        discovery_service = service_manager.discovery
         if not discovery_service:
             raise ValueError('Discovery service not available')
 
@@ -359,7 +359,7 @@ async def process_discovery_query(item: dict[str, Any]) -> dict[str, Any]:
         max_results = item.get('max_results', 10)
 
         # Use discovery service
-        discovery_service = service_manager.discovery_service
+        discovery_service = service_manager.discovery
         results = await asyncio.to_thread(
             discovery_service.search_papers, query, max_results
         )

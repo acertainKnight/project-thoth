@@ -133,7 +133,7 @@ class TestExecuteCommandEndpoint:
 
     def test_execute_discovery_list_command(self, test_client, mock_service_manager):
         """Test executing discovery list command."""
-        mock_service_manager.discovery_service.list_sources = AsyncMock(
+        mock_service_manager.discovery.list_sources = AsyncMock(
             return_value=['arxiv', 'semantic_scholar']
         )
         tools.set_dependencies(None, mock_service_manager)
@@ -184,7 +184,7 @@ class TestToolExecutionHelpers:
     @pytest.mark.asyncio
     async def test_execute_search_papers_tool(self, mock_service_manager):
         """Test search papers tool execution."""
-        mock_service_manager.discovery_service.search_papers = AsyncMock(
+        mock_service_manager.discovery.search_papers = AsyncMock(
             return_value=[{'title': 'Paper 1'}]
         )
         
@@ -209,7 +209,7 @@ class TestToolExecutionHelpers:
     @pytest.mark.asyncio
     async def test_execute_rag_search_tool(self, mock_service_manager):
         """Test RAG search tool execution."""
-        mock_service_manager.rag_service.search = AsyncMock(
+        mock_service_manager.rag.search = AsyncMock(
             return_value=[{'content': 'Result 1'}]
         )
         
@@ -239,7 +239,7 @@ class TestCommandHandlers:
     @pytest.mark.asyncio
     async def test_execute_discovery_command_list(self, mock_service_manager):
         """Test discovery list command."""
-        mock_service_manager.discovery_service.list_sources = AsyncMock(
+        mock_service_manager.discovery.list_sources = AsyncMock(
             return_value=['source1', 'source2']
         )
         tools.service_manager = mock_service_manager
@@ -252,7 +252,7 @@ class TestCommandHandlers:
     @pytest.mark.asyncio
     async def test_execute_pdf_locate_command(self, mock_service_manager):
         """Test PDF locate command."""
-        mock_service_manager.pdf_locator_service.locate = AsyncMock(
+        mock_service_manager.pdf_locator.locate = AsyncMock(
             return_value=['url1', 'url2']
         )
         tools.service_manager = mock_service_manager
@@ -265,7 +265,7 @@ class TestCommandHandlers:
     @pytest.mark.asyncio
     async def test_execute_rag_command_search(self, mock_service_manager):
         """Test RAG search command."""
-        mock_service_manager.rag_service.search = AsyncMock(
+        mock_service_manager.rag.search = AsyncMock(
             return_value=[{'result': 'data'}]
         )
         tools.service_manager = mock_service_manager
@@ -278,7 +278,7 @@ class TestCommandHandlers:
     @pytest.mark.asyncio
     async def test_execute_notes_command_list(self, mock_service_manager):
         """Test notes list command."""
-        mock_service_manager.note_service.list_notes = AsyncMock(
+        mock_service_manager.note.list_notes = AsyncMock(
             return_value=['note1', 'note2']
         )
         tools.service_manager = mock_service_manager

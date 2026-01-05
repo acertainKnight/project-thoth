@@ -169,9 +169,9 @@ async def lifespan(_app: FastAPI):
         logger.info('Hot-reload disabled (not in Docker environment)')
 
     # Initialize PostgreSQL connection pool if postgres service exists
-    if service_manager and 'postgres' in service_manager._services:
+    if service_manager and hasattr(service_manager, 'postgres'):
         try:
-            postgres_svc = service_manager._services['postgres']
+            postgres_svc = service_manager.postgres
             await postgres_svc.initialize()
             logger.success('PostgreSQL connection pool initialized')
         except Exception as e:
@@ -179,14 +179,14 @@ async def lifespan(_app: FastAPI):
             logger.warning('Continuing without PostgreSQL (some features may not work)')
 
     # Initialize WorkflowExecutionService after PostgreSQL is ready
-    if service_manager and 'postgres' in service_manager._services:
+    if service_manager and hasattr(service_manager, 'postgres'):
         try:
             from thoth.discovery.browser.workflow_execution_service import (
                 WorkflowExecutionService,
             )
 
             logger.info('Initializing workflow execution service...')
-            postgres_svc = service_manager._services['postgres']
+            postgres_svc = service_manager.postgres
             workflow_execution_service = WorkflowExecutionService(
                 postgres_service=postgres_svc,
                 max_concurrent_browsers=5,

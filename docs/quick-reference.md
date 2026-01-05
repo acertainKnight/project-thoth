@@ -1,314 +1,662 @@
-# 🚀 Thoth Quick Reference Guide
+# Thoth Quick Reference
 
-## Service Management Commands
+Command cheat sheet and quick reference for Thoth Research Assistant.
 
-### 🏃 Quick Start
+## Table of Contents
+
+- [Docker Commands](#docker-commands)
+- [CLI Commands](#cli-commands)
+- [API Endpoints](#api-endpoints)
+- [Configuration](#configuration)
+- [Common Workflows](#common-workflows)
+- [Troubleshooting](#troubleshooting)
+
+## Docker Commands
+
+### Service Management
+
 ```bash
-# One-command deployment (recommended)
-export OBSIDIAN_VAULT="/path/to/your/vault"
-make deploy-and-start OBSIDIAN_VAULT="$OBSIDIAN_VAULT"
+# Start services
+make dev                    # Development mode (hot-reload, debug)
+make prod                   # Production mode (optimized)
 
-# Start all services
-make start
+# Stop services
+make dev-stop              # Stop development
+make prod-stop             # Stop production
 
-# Check status
-make status
+# Restart services
+make dev-restart           # Restart development
+make prod-restart          # Restart production (zero downtime)
 
 # View logs
-make logs
+make dev-logs              # Follow all development logs
+make prod-logs             # Follow production logs
+make logs                  # View all logs
 
-# Stop everything
-make stop
-```
-
-### 🎯 Service Management
-
-| Command | Purpose |
-|---------|---------|
-| `make deploy-and-start` | Complete deployment + start all services |
-| `make deploy-plugin` | Deploy Obsidian plugin only |
-| `make start` | Start all Docker services |
-| `make stop` | Stop all services |
-| `make restart` | Restart all services |
-| `make status` | Check service health |
-| `make logs` | View service logs |
-| `make clean` | Clean build artifacts |
-
-### 🔧 Service Operations
-
-```bash
-# Health checks
-curl http://localhost:8000/health           # API server
-curl http://localhost:8001/health           # MCP server (52 tools)
-curl http://localhost:8003/api/v1/heartbeat # ChromaDB
-curl http://localhost:8283/health           # Letta memory
-
-# Docker container management
-docker ps                                   # View running containers
-docker logs thoth-dev-api                   # API server logs
-docker logs thoth-dev-mcp                   # MCP server logs
-docker logs thoth-dev-letta                 # Letta memory logs
-docker logs thoth-dev-chromadb              # ChromaDB logs
-
-# Service monitoring
-make status                                 # Check all services
-docker compose ps                           # Docker service status
-```
-
-## Memory System Commands
-
-### 🧠 Letta Memory Service
-
-```bash
-# Memory service management
-cd deployment/letta-memory-service
-make start                   # Start memory service
-make start-prod             # Start with monitoring
-make health                 # Check health
-make logs                   # View logs
-make backup                 # Backup data
-make scale                  # Scale replicas
-```
-
-### 🧰 Memory Tools (via Agent)
-
-```bash
-# Start agent with memory tools
-python -m thoth agent
-
-# In chat, use memory tools:
-"Use core_memory_append to store my research focus on transformers"
-"Use archival_memory_insert to save this key finding: [finding]"
-"Use archival_memory_search to find information about attention mechanisms"
-"Use memory_stats to show memory usage"
-"Use memory_health_check to verify the memory system"
-```
-
-## Agent and Chat Commands
-
-### 💬 Interactive Agent
-```bash
-# Start research assistant
-python -m thoth agent
-
-# Test memory integration
-python scripts/test_memory_mcp_integration.py
-
-# Agent with specific memory settings
-python -m thoth agent --use-letta-memory --enable-memory
-```
-
-### 🔧 System Commands
-```bash
-# Server management
-python -m thoth api --host 0.0.0.0 --port 8000   # API server
-python -m thoth mcp http --host 0.0.0.0 --port 8001  # MCP server (52 tools)
-
-# MCP tools available to agents
-python -m thoth agent                     # Agent with all 52 MCP tools
-# In chat: "Use thoth_search_papers to find papers on transformers"
-# In chat: "Use memory_stats to show memory usage"
-```
-
-## Discovery and Research Commands
-
-### 🔍 Discovery Management
-```bash
-# Discovery sources
-python -m thoth discovery list            # List sources
-python -m thoth discovery create          # Create source
-python -m thoth discovery run             # Run discovery
-python -m thoth discovery server          # Start discovery server
-```
-
-### 📚 Knowledge Base
-```bash
-# RAG operations
-python -m thoth rag index                 # Index documents
-python -m thoth rag search --query "..."  # Search knowledge base
-python -m thoth rag ask --question "..."  # Ask questions
-python -m thoth rag stats                 # RAG statistics
-```
-
-### 📄 Document Processing
-```bash
-# PDF processing
-python -m thoth monitor --watch-dir ./pdfs --optimized
-python -m thoth process --pdf-path ./paper.pdf
-```
-
-## Configuration Files
-
-### 📁 Environment Files
-```bash
-.env                                      # Main application
-deployment/letta-memory-service/.env      # Memory service
-docker/monitoring/.env                    # Monitoring stack
-```
-
-### 🔑 Key Variables
-```bash
-# Cross-service communication
-LETTA_SERVER_URL=http://localhost:8283
-THOTH_CHROMADB_URL=http://localhost:8003
-
-# API Keys
-API_OPENROUTER_KEY=your_key
-API_MISTRAL_KEY=your_key
-OPENAI_API_KEY=your_key
-
-# Memory configuration
-LETTA_ARCHIVAL_MEMORY_ENABLED=true
-LETTA_FALLBACK_ENABLED=true
-```
-
-## Service URLs
-
-### 🌐 Development URLs
-| Service | URL | Description |
-|---------|-----|-------------|
-| API Server | http://localhost:8000 | Main REST API + WebSocket |
-| MCP Server | http://localhost:8001 | 52 MCP tools |
-| ChromaDB | http://localhost:8003 | Vector database |
-| Letta Memory | http://localhost:8283 | Persistent agent memory |
-| Discovery | http://localhost:8004 | Multi-source paper discovery |
-
-### 🔒 Production URLs
-| Service | URL | Access |
-|---------|-----|--------|
-| Main API | https://thoth.yourdomain.com | Public |
-| Memory Service | Internal only | Service-to-service |
-| Vector Database | Internal only | Service-to-service |
-| Monitoring | https://monitoring.yourdomain.com | VPN/Internal |
-
-## Troubleshooting Quick Fixes
-
-### 🚨 Common Issues
-
-#### Service Won't Start
-```bash
-# Check logs
-./scripts/start-all-services.sh status
-make -f Makefile.services logs-memory
-
-# Restart service
-docker-compose restart thoth-chat
-make -f Makefile.services restart-all
-```
-
-#### Memory Service Connection
-```bash
-# Check Letta health
-curl http://localhost:8283/health
-
-# Restart memory service
-cd deployment/letta-memory-service
-make restart
-```
-
-#### Port Conflicts
-```bash
-# Find what's using ports
-netstat -tulpn | grep :8283
-sudo fuser -k 8283/tcp
-
-# Use different ports
-# Edit docker-compose.yml port mappings
-```
-
-#### Resource Issues
-```bash
-# Check Docker resources
-docker system df
-docker stats
+# Health check
+make health                # Check all services status
 
 # Clean up
-docker system prune -f
-make -f Makefile.services clean-all  # WARNING: deletes data
+make clean                 # Remove build artifacts
+make dev-clean             # Stop and remove dev containers
+make prod-clean            # Stop and remove prod containers
 ```
 
-### 🔧 Quick Fixes
+### Individual Service Logs
 
 ```bash
-# Full system restart
-./scripts/stop-all-services.sh
-./scripts/start-all-services.sh dev
+# View specific service logs
+docker logs thoth-dev-api                 # API server
+docker logs thoth-dev-mcp                 # MCP server
+docker logs thoth-dev-pdf-monitor         # PDF monitor
+docker logs thoth-dev-letta               # Letta memory
+docker logs thoth-dev-postgres            # PostgreSQL
+docker logs thoth-dev-chroma              # ChromaDB
 
-# Reset development environment
-make -f Makefile.services dev-reset
-
-# Health check all services
-make -f Makefile.services health-check
-
-# View all logs
-make -f Makefile.services logs-all
+# Follow logs
+docker logs -f thoth-dev-api              # Real-time API logs
 ```
 
-## Development Workflows
-
-### 🛠️ Service Development
+### Service Status
 
 ```bash
-# Develop memory integration
-make -f Makefile.services start-memory
-python scripts/test_memory_mcp_integration.py
+# List running containers
+docker compose -f docker-compose.dev.yml ps
 
-# Develop chat agent
-make -f Makefile.services start-core  # Memory + Vector DB
-docker-compose -f docker-compose.dev.yml up -d thoth-app
-
-# Full stack development
-./scripts/start-all-services.sh dev
-# All services with hot-reload
-```
-
-### 🧪 Testing
-
-```bash
-# Test service integration
-make -f Makefile.services test-integration
-
-# Test memory system
-python scripts/test_memory_mcp_integration.py
-
-# Test individual components
-python -m thoth agent
-# In chat: "Use memory_health_check"
-```
-
-## Performance Tuning
-
-### ⚡ Scaling
-```bash
-# Scale based on load
-make -f Makefile.services scale-memory    # Memory service
-make -f Makefile.services scale-chat      # Chat service
-
-# Monitor performance
-make -f Makefile.services view-metrics
+# Check container resource usage
 docker stats
+
+# Inspect specific service
+docker inspect thoth-dev-api
 ```
 
-### 🎛️ Configuration
+## CLI Commands
+
+### PDF Processing
+
 ```bash
-# Memory service tuning
-LETTA_POOL_SIZE=100                      # Increase connection pool
-LETTA_PG_POOL_SIZE=50                    # Database connections
+# Process single PDF
+python -m thoth pdf process paper.pdf
+python -m thoth pdf process paper.pdf --generate-tags --enrich-citations
 
-# Main application tuning
-THOTH_AGENT_MAX_TOOL_CALLS=30            # More tool calls
-THOTH_AGENT_TIMEOUT_SECONDS=600          # Longer timeouts
+# Batch process directory
+python -m thoth pdf process ./papers/ --parallel
+python -m thoth pdf process ./papers/ --parallel --max-workers 4
+
+# Monitor directory
+python -m thoth pdf monitor --watch-dir ./papers/
+python -m thoth pdf monitor --watch-dir ./papers/ --recursive
 ```
 
-## 📚 Documentation Links
+### Discovery
 
-- **[Setup Guide](setup.md)** - Installation and configuration
-- **[Service Management](service-management.md)** - Comprehensive service guide
-- **[Usage Guide](usage.md)** - Day-to-day usage
-- **[API Documentation](api.md)** - REST API and WebSocket reference
-- **[Architecture](architecture.md)** - System design overview
-- **[Deployment](deployment.md)** - Production deployment guide
+```bash
+# Start discovery service
+python -m thoth discovery start
+
+# Search sources
+python -m thoth discovery search "query" --source arxiv
+python -m thoth discovery search "query" --source semantic_scholar
+python -m thoth discovery search "query" --sources arxiv semantic_scholar
+
+# Schedule discovery
+python -m thoth discovery schedule \
+    --query "machine learning" \
+    --source arxiv \
+    --cron "0 9 * * *"
+
+# List sources
+python -m thoth discovery sources
+
+# Stop discovery
+python -m thoth discovery stop
+```
+
+### MCP Server
+
+```bash
+# Start MCP server
+python -m thoth mcp start --port 8001
+
+# List available tools
+python -m thoth mcp tools
+
+# Test specific tool
+python -m thoth mcp test discover_papers
+
+# Server information
+python -m thoth mcp info
+```
+
+### RAG Operations
+
+```bash
+# Build vector index
+python -m thoth rag build
+
+# Semantic search
+python -m thoth rag search "query text"
+python -m thoth rag search "query" --top-k 10 --threshold 0.7
+
+# Query with filters
+python -m thoth rag query "transformers" --year 2023 --author "Smith"
+
+# Rebuild index
+python -m thoth rag rebuild --force
+```
+
+### Citation Management
+
+```bash
+# Extract citations
+python -m thoth citations extract paper.pdf
+python -m thoth citations extract paper.pdf --enrich
+
+# Format citations
+python -m thoth citations format paper.pdf --style apa
+python -m thoth citations format paper.pdf --style bibtex
+
+# Build citation graph
+python -m thoth citations graph --build
+python -m thoth citations graph --analyze --metrics pagerank
+python -m thoth citations graph --top-papers 20
+```
+
+### Research Questions
+
+```bash
+# Create research question
+python -m thoth research create "Research question text"
+
+# List questions
+python -m thoth research list
+
+# Run discovery for question
+python -m thoth research discover <question_id>
+
+# Export results
+python -m thoth research export <question_id> --format json
+```
+
+### System Commands
+
+```bash
+# Check configuration
+python -m thoth system check
+
+# Show vault information
+python -m thoth system vault
+
+# Clear cache
+python -m thoth system clear-cache
+
+# Run migrations
+python -m thoth system migrate
+
+# Export data
+python -m thoth system export --output backup.json
+```
+
+## API Endpoints
+
+### Health & Status
+
+```bash
+# Overall health
+curl http://localhost:8000/health | jq
+
+# Service-specific health
+curl http://localhost:8000/health/services | jq
+
+# Ready status (Kubernetes)
+curl http://localhost:8000/readiness
+
+# Liveness probe
+curl http://localhost:8000/liveness
+```
+
+### Configuration
+
+```bash
+# Get configuration
+curl http://localhost:8000/config | jq
+
+# Update configuration
+curl -X POST http://localhost:8000/config \
+  -H "Content-Type: application/json" \
+  -d @settings.json
+
+# Reload configuration
+curl -X POST http://localhost:8000/config/reload
+
+# Get schema
+curl http://localhost:8000/config/schema | jq
+```
+
+### Document Processing
+
+```bash
+# Process PDF
+curl -X POST http://localhost:8000/process \
+  -F "file=@paper.pdf"
+
+# Batch process
+curl -X POST http://localhost:8000/batch-process \
+  -H "Content-Type: application/json" \
+  -d '{"files": ["file1.pdf", "file2.pdf"]}'
+
+# Get operation status
+curl http://localhost:8000/operations/<id> | jq
+
+# List operations
+curl http://localhost:8000/operations | jq
+```
+
+### Chat & Research
+
+```bash
+# Send chat message
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello Thoth"}'
+
+# Get chat history
+curl http://localhost:8000/chat/history | jq
+
+# Run research query
+curl -X POST http://localhost:8000/research/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "transformers"}'
+
+# Get results
+curl http://localhost:8000/research/results/<id> | jq
+```
+
+### MCP Tools
+
+```bash
+# List tools
+curl http://localhost:8001/tools | jq
+
+# Get tool schema
+curl http://localhost:8001/tools/<tool_name>/schema | jq
+
+# Execute tool
+curl -X POST http://localhost:8001/tools/<tool_name> \
+  -H "Content-Type: application/json" \
+  -d '{"param1": "value1"}'
+```
+
+### Letta (Agent Memory)
+
+```bash
+# List agents
+curl http://localhost:8283/v1/agents | jq
+
+# Get agent details
+curl http://localhost:8283/v1/agents/<agent_id> | jq
+
+# Send message to agent
+curl -X POST http://localhost:8283/v1/agents/<agent_id>/messages \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello agent"}'
+
+# Get agent memory
+curl http://localhost:8283/v1/agents/<agent_id>/memory | jq
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Required
+export OBSIDIAN_VAULT_PATH="/path/to/vault"
+export MISTRAL_API_KEY="your_key"
+export OPENROUTER_API_KEY="your_key"
+
+# Optional
+export OPENAI_API_KEY="your_key"
+export SEMANTIC_SCHOLAR_KEY="your_key"
+export GOOGLE_API_KEY="your_key"
+```
+
+### Settings File Location
+
+```bash
+# Main settings file
+$OBSIDIAN_VAULT_PATH/_thoth/settings.json
+
+# Plugin settings
+$OBSIDIAN_VAULT_PATH/.obsidian/plugins/thoth-obsidian/data.json
+
+# Environment file
+.env  # In project root
+```
+
+### Key Settings
+
+```json
+{
+  "llm_config": {
+    "default": {
+      "model": "mistral/mistral-large-latest",
+      "temperature": 0.7
+    }
+  },
+  "discovery": {
+    "auto_start_scheduler": false,
+    "default_max_articles": 50
+  },
+  "processing": {
+    "generate_tags": true,
+    "enrich_citations": true,
+    "build_index": true
+  }
+}
+```
+
+## Common Workflows
+
+### Daily Research Session
+
+```bash
+# 1. Start services
+make dev
+
+# 2. Check health
+make health
+
+# 3. Open Obsidian and chat with agent
+# (Click Thoth ribbon icon)
+
+# 4. View logs if needed
+make dev-logs
+```
+
+### Process New Papers
+
+```bash
+# 1. Drop PDFs into vault
+cp paper1.pdf paper2.pdf $OBSIDIAN_VAULT_PATH/_thoth/data/pdfs/
+
+# 2. Monitor automatically processes them
+# (If dev mode is running)
+
+# 3. Check generated notes
+ls $OBSIDIAN_VAULT_PATH/_thoth/data/notes/
+
+# 4. View in Obsidian
+```
+
+### Discovery Workflow
+
+```bash
+# 1. Search for papers
+python -m thoth discovery search "machine learning" \
+    --source arxiv \
+    --max-results 50
+
+# 2. Review results in terminal
+
+# 3. Download selected papers
+# (PDFs auto-downloaded to _thoth/data/pdfs/)
+
+# 4. Processing happens automatically
+```
+
+### Update Configuration
+
+```bash
+# 1. Edit settings
+nano $OBSIDIAN_VAULT_PATH/_thoth/settings.json
+
+# 2. In dev mode, changes apply automatically (~2s)
+
+# 3. Or manually reload
+make reload-settings
+
+# 4. Verify changes
+curl http://localhost:8000/config | jq
+```
+
+## Troubleshooting
+
+### Quick Diagnostics
+
+```bash
+# Check all services
+make health
+
+# Check specific service
+docker ps | grep thoth
+
+# View recent errors
+docker logs thoth-dev-api --tail 100 | grep ERROR
+
+# Check disk space
+df -h
+
+# Check memory usage
+docker stats --no-stream
+```
+
+### Common Fixes
+
+```bash
+# Restart specific service
+docker restart thoth-dev-api
+
+# Rebuild specific service
+docker compose -f docker-compose.dev.yml up -d --build api
+
+# Clear cache
+rm -rf $OBSIDIAN_VAULT_PATH/_thoth/cache/*
+
+# Reset database (WARNING: Loses data)
+docker compose -f docker-compose.dev.yml down -v
+make dev
+```
+
+### Port Conflicts
+
+```bash
+# Find process using port
+lsof -i :8000
+
+# Kill process
+kill -9 <PID>
+
+# Or change port in settings.json
+```
+
+### Permission Issues
+
+```bash
+# Fix vault permissions
+chmod -R u+rw $OBSIDIAN_VAULT_PATH/_thoth
+
+# Fix Docker permissions
+sudo chown -R 1000:1000 $OBSIDIAN_VAULT_PATH/_thoth
+```
+
+### Service Won't Start
+
+```bash
+# Check logs
+docker logs thoth-dev-api
+
+# Verify environment
+echo $OBSIDIAN_VAULT_PATH
+cat .env
+
+# Rebuild from scratch
+make clean
+make dev
+```
+
+## Testing
+
+### Run Tests
+
+```bash
+# All tests (998 total)
+pytest tests/
+
+# Specific categories
+pytest tests/unit/
+pytest tests/integration/
+pytest tests/e2e/
+
+# With coverage
+pytest --cov=src/thoth tests/
+
+# Specific test file
+pytest tests/unit/services/test_llm_service.py
+
+# Verbose output
+pytest -vv tests/
+```
+
+### Code Quality
+
+```bash
+# Lint code
+uv run ruff check .
+
+# Format code
+uv run ruff format .
+
+# Auto-fix issues
+uv run ruff check --fix .
+
+# Type checking
+uv run mypy src/thoth
+```
+
+## Service Ports Reference
+
+### Development Mode
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| API | 8000 | REST API |
+| MCP HTTP | 8001 | MCP tools |
+| ChromaDB | 8003 | Vector DB |
+| Discovery | 8004 | Discovery service |
+| Letta | 8283 | Agent memory |
+| PostgreSQL | 5433 | Database |
+
+### Production Mode
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| API | 8080 | REST API |
+| MCP SSE | 8081 | MCP streaming |
+| MCP HTTP | 8082 | MCP tools |
+| Letta | 8283 | Agent memory |
+| Letta Nginx | 8284 | SSE proxy |
+
+## Keyboard Shortcuts
+
+Configure in **Obsidian Settings → Hotkeys**:
+
+- **Open Thoth Chat**: (Set your own)
+- **New Chat Session**: (Set your own)
+- **Insert Research Query**: (Set your own)
+- **Start Agent**: (Set your own)
+- **Stop Agent**: (Set your own)
+
+## Directory Quick Reference
+
+```
+Vault Structure:
+_thoth/
+├── settings.json          # Configuration
+├── data/
+│   ├── pdfs/             # Input PDFs
+│   ├── notes/            # Generated notes
+│   ├── knowledge/        # Citation graphs
+│   └── prompts/          # Custom prompts
+├── logs/                 # Application logs
+└── cache/                # Temporary cache
+
+Docker Volumes:
+thoth-letta-data          # Letta memory
+thoth-letta-postgres      # PostgreSQL data
+thoth-chroma-data         # Vector embeddings
+```
+
+## Help Resources
+
+- **Documentation**: `/docs` directory
+- **Setup**: [docs/setup.md](setup.md)
+- **Architecture**: [docs/architecture.md](architecture.md)
+- **Usage**: [docs/usage.md](usage.md)
+- **GitHub**: [github.com/acertainKnight/project-thoth](https://github.com/acertainKnight/project-thoth)
+- **Issues**: [GitHub Issues](https://github.com/acertainKnight/project-thoth/issues)
+
+## Service Access Patterns
+
+### ServiceManager Usage
+
+**ALWAYS use short names** when accessing services:
+
+```python
+from thoth.services.service_manager import ServiceManager
+
+# Initialize
+manager = ServiceManager()
+manager.initialize()
+
+# ✅ CORRECT - Use short names
+llm = manager.llm                  # LLMService
+discovery = manager.discovery      # DiscoveryService
+rag = manager.rag                  # RAGService (may be None)
+processing = manager.processing    # ProcessingService (may be None)
+postgres = manager.postgres        # PostgresService
+citation = manager.citation        # CitationService
+article = manager.article          # ArticleService
+note = manager.note                # NoteService
+tag = manager.tag                  # TagService
+
+# ❌ WRONG - Don't use _service suffix
+llm = manager.llm_service          # AttributeError!
+discovery = manager.discovery_service  # AttributeError!
+
+# ❌ WRONG - Don't access private dict
+llm = manager._services['llm']     # Bad practice!
+```
+
+**Optional Services** (may be `None` if extras not installed):
+- `processing` - Requires `pdf` extras (`uv sync --extra pdf`)
+- `rag` - Requires `embeddings` extras (`uv sync --extra embeddings`)
+- `cache` - Requires optimization extras
+- `async_processing` - Requires optimization extras
+
+**Check before using optional services:**
+
+```python
+# Option 1: Check if None
+if manager.processing is not None:
+    result = manager.processing.process_pdf(path)
+
+# Option 2: Use hasattr
+if hasattr(manager, 'processing'):
+    result = manager.processing.process_pdf(path)
+
+# Option 3: Try-except
+try:
+    result = manager.processing.process_pdf(path)
+except AttributeError:
+    print("Processing service not available (install pdf extras)")
+```
+
+**IDE Autocomplete**: Type hints are provided for all services. Your IDE will show:
+- Available service names
+- Service types
+- Whether services are optional (may be None)
 
 ---
 
-**Need Help?** Check the full documentation or create an issue on GitHub!
+**Pro Tip**: Bookmark this page for quick reference! Most commands support `--help` flag for detailed information.

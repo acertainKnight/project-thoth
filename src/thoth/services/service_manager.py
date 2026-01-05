@@ -1,6 +1,6 @@
 """Central service manager for Thoth components."""
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from loguru import logger
 
@@ -57,7 +57,34 @@ class ServiceManager:
 
     This class provides a single point of access for all services,
     handling initialization and dependency injection.
+    
+    Services are accessed by short names (e.g., service_manager.llm)
+    NOT by long names (e.g., service_manager.llm_service).
     """
+
+    # Type hints for IDE autocomplete support (no runtime overhead)
+    if TYPE_CHECKING:
+        # Core services (always available)
+        llm: LLMService
+        article: ArticleService
+        note: NoteService
+        query: QueryService
+        discovery: DiscoveryService
+        discovery_manager: DiscoveryManager
+        discovery_orchestrator: DiscoveryOrchestrator
+        web_search: WebSearchService
+        pdf_locator: PdfLocatorService
+        api_gateway: ExternalAPIGateway
+        citation: CitationService
+        postgres: PostgresService
+        research_question: ResearchQuestionService
+        tag: TagService
+        
+        # Optional services (may be None if extras not installed)
+        processing: ProcessingService | None  # Requires 'pdf' extras
+        rag: RAGService | None  # Requires 'embeddings' extras
+        cache: CacheService | None  # Requires optimization extras
+        async_processing: AsyncProcessingService | None  # Requires optimization extras
 
     def __init__(self, config: Config | None = None):
         """
@@ -196,9 +223,21 @@ class ServiceManager:
         if name in self._services:
             return self._services[name]
 
-        # If not found, raise AttributeError
+        # If not found, provide helpful error message
+        # Check if user tried the old _service suffix pattern
+        if name.endswith('_service'):
+            short_name = name[:-8]  # Remove '_service' suffix
+            if short_name in self._services:
+                raise AttributeError(
+                    f"ServiceManager has no attribute '{name}'. "
+                    f"Use short name 'service_manager.{short_name}' instead of 'service_manager.{name}'"
+                )
+        
+        # General error with available services
+        available = ', '.join(sorted(self._services.keys()))
         raise AttributeError(
-            f"'{self.__class__.__name__}' object has no attribute '{name}'"
+            f"ServiceManager has no service '{name}'. "
+            f"Available services: {available}"
         )
 
     def get_service(self, name: str) -> BaseService:
