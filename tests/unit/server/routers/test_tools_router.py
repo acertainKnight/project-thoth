@@ -1,0 +1,289 @@
+"""Tests for tools router endpoints."""
+
+from unittest.mock import AsyncMock, Mock
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from thoth.server.routers import tools
+
+
+@pytest.fixture
+def test_client():
+    """Create FastAPI test client with tools router."""
+    app = FastAPI()
+    app.include_router(tools.router)
+    return TestClient(app)
+
+
+@pytest.fixture
+def mock_research_agent():
+    """Create mock research agent."""
+    agent = Mock()
+    agent.chat = AsyncMock()
+    agent.get_available_tools = Mock(return_value=[
+        {'name': 'thoth_search_papers', 'description': 'Search papers'},
+        {'name': 'thoth_analyze_document', 'description': 'Analyze documents'}
+    ])
+    return agent
+
+
+@pytest.fixture
+def mock_service_manager():
+    """Create mock service manager."""
+    manager = Mock()
+    manager.discovery_service = Mock()
+    manager.processing_service = Mock()
+    manager.rag_service = Mock()
+    manager.pdf_locator_service = Mock()
+    manager.note_service = Mock()
+    return manager
+
+
+class TestExecuteToolEndpoint:
+    """Tests for POST /execute endpoint."""
+
+    def test_execute_tool_without_agent(self, test_client):
+        """Test tool execution fails when research agent not initialized."""
+        tools.set_dependencies(None, None)
+        
+        request_data = {
+            'tool_name': 'thoth_search_papers',
+            'parameters': {'query': 'test'}
+        }
+        response = test_client.post('/execute', json=request_data)
+        
+        assert response.status_code == 503
+        assert 'Research agent not initialized' in response.json()['detail']
+
+    def test_execute_tool_through_agent(self, test_client, mock_research_agent):
+        """Test tool execution through agent."""
+        mock_research_agent.chat.return_value = {
+            'response': 'Tool executed',
+            'tool_calls': [{'tool': 'thoth_search_papers'}]
+        }
+        tools.set_dependencies(mock_research_agent, None)
+        
+        request_data = {
+            'tool_name': 'thoth_search_papers',
+            'parameters': {'query': 'machine learning'},
+            'bypass_agent': False
+        }
+        response = test_client.post('/execute', json=request_data)
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data['tool'] == 'thoth_search_papers'
+        assert data['bypassed_agent'] is False
+        assert 'response' in data
+
+    def test_execute_tool_bypassing_agent_tool_not_found(self, test_client, mock_research_agent):
+        """Test bypassing agent with non-existent tool returns error."""
+        tools.set_dependencies(mock_research_agent, None)
+        
+        request_data = {
+            'tool_name': 'nonexistent_tool',
+            'parameters': {},
+            'bypass_agent': True
+        }
+        response = test_client.post('/execute', json=request_data)
+        
+        # Returns 500 because HTTPException is caught by outer handler
+        assert response.status_code == 500
+        assert 'failed' in response.json()['detail'].lower()
+
+    def test_execute_tool_bypassing_agent_success(self, test_client, mock_research_agent, mock_service_manager):
+        """Test bypassing agent with valid tool."""
+        tools.set_dependencies(mock_research_agent, mock_service_manager)
+        
+        # Mock the tool to exist
+        mock_research_agent.get_available_tools.return_value = [
+            {'name': 'thoth_search_papers'}
+        ]
+        
+        request_data = {
+            'tool_name': 'thoth_search_papers',
+            'parameters': {'query': 'test'},
+            'bypass_agent': True
+        }
+        response = test_client.post('/execute', json=request_data)
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data['tool'] == 'thoth_search_papers'
+        assert data['bypassed_agent'] is True
+
+
+class TestExecuteCommandEndpoint:
+    """Tests for POST /execute/command endpoint."""
+
+    def test_execute_command_without_service_manager(self, test_client):
+        """Test command execution fails when service manager not initialized."""
+        tools.set_dependencies(None, None)
+        
+        request_data = {
+            'command': 'discovery',
+            'args': ['list']
+        }
+        response = test_client.post('/execute/command', json=request_data)
+        
+        assert response.status_code == 503
+        assert 'Service manager not initialized' in response.json()['detail']
+
+    def test_execute_discovery_list_command(self, test_client, mock_service_manager):
+        """Test executing discovery list command."""
+        mock_service_manager.discovery_service.list_sources = AsyncMock(
+            return_value=['arxiv', 'semantic_scholar']
+        )
+        tools.set_dependencies(None, mock_service_manager)
+        
+        request_data = {
+            'command': 'discovery',
+            'args': ['list']
+        }
+        response = test_client.post('/execute/command', json=request_data)
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data['command'] == 'discovery'
+        assert 'result' in data
+
+    def test_execute_command_with_streaming(self, test_client, mock_service_manager):
+        """Test executing command with streaming enabled."""
+        tools.set_dependencies(None, mock_service_manager)
+        
+        request_data = {
+            'command': 'discovery',
+            'args': ['list'],
+            'streaming': True
+        }
+        response = test_client.post('/execute/command', json=request_data)
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data['streaming'] is True
+
+    def test_execute_unknown_command(self, test_client, mock_service_manager):
+        """Test executing unknown command returns error."""
+        tools.set_dependencies(None, mock_service_manager)
+        
+        request_data = {
+            'command': 'unknown_command',
+            'args': []
+        }
+        response = test_client.post('/execute/command', json=request_data)
+        
+        assert response.status_code == 500
+        assert 'failed' in response.json()['detail'].lower()
+
+
+class TestToolExecutionHelpers:
+    """Tests for tool execution helper functions."""
+
+    @pytest.mark.asyncio
+    async def test_execute_search_papers_tool(self, mock_service_manager):
+        """Test search papers tool execution."""
+        mock_service_manager.discovery_service.search_papers = AsyncMock(
+            return_value=[{'title': 'Paper 1'}]
+        )
+        
+        # Set service_manager for the module
+        tools.service_manager = mock_service_manager
+        
+        result = await tools.execute_search_papers_tool({
+            'query': 'machine learning',
+            'max_results': 10
+        })
+        
+        assert result['tool'] == 'thoth_search_papers'
+        assert result['query'] == 'machine learning'
+        assert result['status'] == 'success'
+
+    @pytest.mark.asyncio
+    async def test_execute_download_pdf_tool(self):
+        """Test download PDF tool execution."""
+        with pytest.raises(ValueError, match='URL parameter is required'):
+            await tools.execute_download_pdf_tool({})
+
+    @pytest.mark.asyncio
+    async def test_execute_rag_search_tool(self, mock_service_manager):
+        """Test RAG search tool execution."""
+        mock_service_manager.rag_service.search = AsyncMock(
+            return_value=[{'content': 'Result 1'}]
+        )
+        
+        tools.service_manager = mock_service_manager
+        
+        result = await tools.execute_rag_search_tool({
+            'query': 'test query',
+            'top_k': 5
+        })
+        
+        assert result['tool'] == 'thoth_rag_search'
+        assert result['query'] == 'test query'
+        assert result['status'] == 'success'
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_directly_unknown_tool(self):
+        """Test executing unknown tool directly returns placeholder."""
+        result = await tools.execute_tool_directly('unknown_tool', {})
+        
+        assert result['status'] == 'not_implemented'
+        assert 'not implemented' in result['result'].lower()
+
+
+class TestCommandHandlers:
+    """Tests for command handler functions."""
+
+    @pytest.mark.asyncio
+    async def test_execute_discovery_command_list(self, mock_service_manager):
+        """Test discovery list command."""
+        mock_service_manager.discovery_service.list_sources = AsyncMock(
+            return_value=['source1', 'source2']
+        )
+        tools.service_manager = mock_service_manager
+        
+        result = await tools.execute_discovery_command(['list'], {})
+        
+        assert result['action'] == 'list'
+        assert 'sources' in result
+
+    @pytest.mark.asyncio
+    async def test_execute_pdf_locate_command(self, mock_service_manager):
+        """Test PDF locate command."""
+        mock_service_manager.pdf_locator_service.locate = AsyncMock(
+            return_value=['url1', 'url2']
+        )
+        tools.service_manager = mock_service_manager
+        
+        result = await tools.execute_pdf_locate_command(['10.1234/test'], {})
+        
+        assert result['identifier'] == '10.1234/test'
+        assert result['found'] is True
+
+    @pytest.mark.asyncio
+    async def test_execute_rag_command_search(self, mock_service_manager):
+        """Test RAG search command."""
+        mock_service_manager.rag_service.search = AsyncMock(
+            return_value=[{'result': 'data'}]
+        )
+        tools.service_manager = mock_service_manager
+        
+        result = await tools.execute_rag_command(['search', 'test', 'query'], {})
+        
+        assert result['action'] == 'search'
+        assert result['query'] == 'test query'
+
+    @pytest.mark.asyncio
+    async def test_execute_notes_command_list(self, mock_service_manager):
+        """Test notes list command."""
+        mock_service_manager.note_service.list_notes = AsyncMock(
+            return_value=['note1', 'note2']
+        )
+        tools.service_manager = mock_service_manager
+        
+        result = await tools.execute_notes_command(['list'], {})
+        
+        assert result['action'] == 'list'
+        assert 'notes' in result
