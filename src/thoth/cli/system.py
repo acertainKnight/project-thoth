@@ -4,59 +4,37 @@ from pathlib import Path
 
 from loguru import logger
 
+from thoth.initialization import initialize_thoth
 from thoth.pipeline import ThothPipeline
 from thoth.server.app import start_obsidian_server
 from thoth.server.pdf_monitor import PDFMonitor
 from thoth.config import config
 
-# Optional optimized pipeline import
-try:
-    from thoth.pipelines.optimized_document_pipeline import OptimizedDocumentPipeline
-    from thoth.services.service_manager import ServiceManager
-
-    OPTIMIZED_PIPELINE_AVAILABLE = True
-except ImportError:
-    OPTIMIZED_PIPELINE_AVAILABLE = False
-
 
 def run_monitor(args, pipeline: ThothPipeline) -> int:
     """
-    Run the PDF monitor with optional performance optimizations.
+    Run the PDF monitor.
+    
+    Now always uses OptimizedDocumentPipeline via initialize_thoth().
+    The --optimized flag is maintained for backward compatibility but has no effect.
     """
     # config imported globally from thoth.config
     watch_dir = Path(args.watch_dir) if args.watch_dir else config.pdf_dir
     watch_dir.mkdir(parents=True, exist_ok=True)
 
-    # Use optimized pipeline if available and requested
-    monitor_pipeline = pipeline
-    if args.optimized and OPTIMIZED_PIPELINE_AVAILABLE:
-        logger.info('Initializing optimized pipeline for monitor')
-        service_manager = ServiceManager(config)
-        service_manager.initialize()
+    # Always use optimized pipeline via initialize_thoth()
+    logger.info('Initializing optimized pipeline for monitor')
+    services, document_pipeline, citation_tracker = initialize_thoth()
+    logger.info('Monitor using optimized processing pipeline')
 
-        monitor_pipeline = OptimizedDocumentPipeline(
-            services=service_manager,
-            citation_tracker=pipeline.citation_tracker,
-            pdf_tracker=pipeline.pdf_tracker,
-            output_dir=config.output_dir,
-            notes_dir=config.notes_dir,
-            markdown_dir=config.markdown_dir,
-        )
-        logger.info(' Monitor using optimized processing pipeline')
-    elif args.optimized and not OPTIMIZED_PIPELINE_AVAILABLE:
-        logger.warning(
-            'Optimized pipeline requested but not available, using standard pipeline'
-        )
-    else:
-        # Issue deprecation warning for non-optimized usage
+    # Show deprecation warning if --optimized flag was used (it's now always optimized)
+    if hasattr(args, 'optimized') and args.optimized:
         warnings.warn(
-            'Using standard pipeline without --optimized flag. '
-            "For better performance, consider using 'thoth monitor --optimized' "
-            'which provides 50-65% faster processing with async I/O and intelligent caching.',
+            "The --optimized flag is deprecated and has no effect. "
+            "The monitor now always uses the optimized pipeline.",
             DeprecationWarning,
             stacklevel=2,
         )
-        logger.info('Monitor using standard processing pipeline')
 
     if args.api_server or config.servers_config.api.auto_start:
         api_host = args.api_host or config.servers_config.api.host
@@ -80,9 +58,10 @@ def run_monitor(args, pipeline: ThothPipeline) -> int:
         logger.info(f'Starting Obsidian API server on {api_host}:{api_port}')
         api_thread.start()
 
+    # Use NEW document_pipeline parameter
     monitor = PDFMonitor(
         watch_dir=watch_dir,
-        pipeline=monitor_pipeline,  # Use the selected pipeline (optimized or standard)
+        document_pipeline=document_pipeline,  # NEW parameter - no deprecation warning
         polling_interval=args.polling_interval,
         recursive=args.recursive,
     )
