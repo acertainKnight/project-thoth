@@ -236,10 +236,16 @@ class WorkflowActionResponse(BaseModel):
     message: str
 
 
+class CreateWorkflowResponse(BaseModel):
+    """Response model for workflow creation."""
+
+    workflow_id: UUID
+
+
 # Endpoints
 
 
-@router.post('', response_model=dict[str, UUID], status_code=status.HTTP_201_CREATED)
+@router.post('', response_model=CreateWorkflowResponse, status_code=status.HTTP_201_CREATED)
 async def create_workflow(
     request: WorkflowCreateRequest,
     repo: BrowserWorkflowRepository = Depends(get_workflow_repo),  # noqa: B008
@@ -285,7 +291,7 @@ async def create_workflow(
             )
 
         logger.info(f'Created workflow: {workflow_id} ({request.name})')
-        return {'workflow_id': workflow_id}
+        return CreateWorkflowResponse(workflow_id=workflow_id)
 
     except Exception as e:
         logger.error(f'Error creating workflow: {e}')

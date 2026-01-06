@@ -209,9 +209,9 @@ class TestToolExecutionHelpers:
             mock_service_manager
         )
         
-        assert result['tool'] == 'thoth_search_papers'
-        assert result['query'] == 'machine learning'
-        assert result['status'] == 'success'
+        assert result.tool == 'thoth_search_papers'
+        assert result.query == 'machine learning'
+        assert result.status == 'success'
 
     @pytest.mark.asyncio
     async def test_execute_download_pdf_tool(self, mock_service_manager):
@@ -231,17 +231,17 @@ class TestToolExecutionHelpers:
             mock_service_manager
         )
         
-        assert result['tool'] == 'thoth_rag_search'
-        assert result['query'] == 'test query'
-        assert result['status'] == 'success'
+        assert result.tool == 'thoth_rag_search'
+        assert result.query == 'test query'
+        assert result.status == 'success'
 
     @pytest.mark.asyncio
     async def test_execute_tool_directly_unknown_tool(self, mock_service_manager):
         """Test executing unknown tool directly returns placeholder."""
         result = await tools.execute_tool_directly('unknown_tool', {}, mock_service_manager)
         
-        assert result['status'] == 'not_implemented'
-        assert 'not implemented' in result['result'].lower()
+        assert result.status == 'not_implemented'
+        assert 'not implemented' in result.result['message'].lower()
 
 
 class TestCommandHandlers:
@@ -256,8 +256,8 @@ class TestCommandHandlers:
         
         result = await tools.execute_discovery_command(['list'], {}, mock_service_manager)
         
-        assert result['action'] == 'list'
-        assert 'sources' in result
+        assert result.action == 'list'
+        assert result.sources is not None
 
     @pytest.mark.asyncio
     async def test_execute_pdf_locate_command(self, mock_service_manager):
@@ -268,8 +268,8 @@ class TestCommandHandlers:
         
         result = await tools.execute_pdf_locate_command(['10.1234/test'], {}, mock_service_manager)
         
-        assert result['identifier'] == '10.1234/test'
-        assert result['found'] is True
+        assert result.identifier == '10.1234/test'
+        assert result.found is True
 
     @pytest.mark.asyncio
     async def test_execute_rag_command_search(self, mock_service_manager):
@@ -280,8 +280,8 @@ class TestCommandHandlers:
         
         result = await tools.execute_rag_command(['search', 'test', 'query'], {}, mock_service_manager)
         
-        assert result['action'] == 'search'
-        assert result['query'] == 'test query'
+        assert result.action == 'search'
+        assert result.query == 'test query'
 
     @pytest.mark.asyncio
     async def test_execute_notes_command_list(self, mock_service_manager):
@@ -292,5 +292,5 @@ class TestCommandHandlers:
         
         result = await tools.execute_notes_command(['list'], {}, mock_service_manager)
         
-        assert result['action'] == 'list'
-        assert 'notes' in result
+        assert result.action == 'list'
+        assert result.notes is not None

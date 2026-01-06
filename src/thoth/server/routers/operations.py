@@ -21,6 +21,24 @@ from thoth.services.service_manager import ServiceManager
 router = APIRouter()
 
 
+# Response Models
+class ArticleListResponse(BaseModel):
+    """Response for listing articles."""
+    articles: list[dict[str, Any]]
+    total: int
+    limit: int
+    offset: int
+
+
+class BatchProcessResult(BaseModel):
+    """Result for a single batch item."""
+    status: str
+    path: str | None = None
+    query: str | None = None
+    result: dict[str, Any] | None = None
+    error: str | None = None
+
+
 # Collection and Articles endpoints
 @router.get('/collection/stats')
 async def get_collection_stats(
@@ -72,7 +90,7 @@ async def list_articles(
     limit: int = 10,
     offset: int = 0,
     service_manager: ServiceManager = Depends(get_service_manager)
-):
+) -> ArticleListResponse:
     """List articles in the collection."""
     try:
         # Return mock data for now - this would integrate with actual document storage
@@ -87,12 +105,12 @@ async def list_articles(
             for i in range(offset + 1, min(offset + limit + 1, 6))
         ]
 
-        return {
-            'articles': articles,
-            'total': 5,  # Mock total
-            'limit': limit,
-            'offset': offset,
-        }
+        return ArticleListResponse(
+            articles=articles,
+            total=5,  # Mock total
+            limit=limit,
+            offset=offset,
+        )
 
     except Exception as e:
         logger.error(f'Error listing articles: {e}')
@@ -333,7 +351,7 @@ async def stream_batch_process(
     )
 
 
-async def process_single_pdf(item: dict[str, Any]) -> dict[str, Any]:
+async def process_single_pdf(item: dict[str, Any]) -> BatchProcessResult:
     """Process a single PDF item."""
     try:
         pdf_path = Path(item.get('path', ''))
@@ -346,12 +364,12 @@ async def process_single_pdf(item: dict[str, Any]) -> dict[str, Any]:
         pipeline = DocumentPipeline(service_manager)
         result = await asyncio.to_thread(pipeline.process_pdf, pdf_path)
 
-        return {'status': 'success', 'path': str(pdf_path), 'result': result}
+        return BatchProcessResult(status='success', path=str(pdf_path), result=result)
     except Exception as e:
-        return {'status': 'error', 'path': item.get('path', ''), 'error': str(e)}
+        return BatchProcessResult(status='error', path=item.get('path', ''), error=str(e))
 
 
-async def process_discovery_query(item: dict[str, Any]) -> dict[str, Any]:
+async def process_discovery_query(item: dict[str, Any]) -> BatchProcessResult:
     """Process a single discovery query."""
     try:
         query = item.get('query', '')
@@ -363,9 +381,9 @@ async def process_discovery_query(item: dict[str, Any]) -> dict[str, Any]:
             discovery_service.search_papers, query, max_results
         )
 
-        return {'status': 'success', 'query': query, 'results': results}
+        return BatchProcessResult(status='success', query=query, result={'results': results})
     except Exception as e:
-        return {'status': 'error', 'query': item.get('query', ''), 'error': str(e)}
+        return BatchProcessResult(status='error', query=item.get('query', ''), error=str(e))
 
 
 @router.post('/batch/process')
