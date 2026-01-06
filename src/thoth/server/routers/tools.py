@@ -55,7 +55,7 @@ async def execute_tool_direct(
                 )
 
             # Execute the tool (implementation based on tool structure)
-            result = await execute_tool_directly(request.tool_name, request.parameters)
+            result = await execute_tool_directly(request.tool_name, request.parameters, service_manager)
 
             return JSONResponse(
                 {
@@ -90,19 +90,19 @@ async def execute_tool_direct(
 
 
 async def execute_tool_directly(
-    tool_name: str, parameters: dict[str, Any]
+    tool_name: str, parameters: dict[str, Any], service_manager: ServiceManager
 ) -> dict[str, Any]:
     """Execute a tool directly without going through the agent."""
     try:
         # Map tool names to their direct execution methods
         if tool_name.startswith('thoth_search_papers'):
-            return await execute_search_papers_tool(parameters)
+            return await execute_search_papers_tool(parameters, service_manager)
         elif tool_name.startswith('thoth_analyze_document'):
-            return await execute_analyze_document_tool(parameters)
+            return await execute_analyze_document_tool(parameters, service_manager)
         elif tool_name.startswith('thoth_download_pdf'):
-            return await execute_download_pdf_tool(parameters)
+            return await execute_download_pdf_tool(parameters, service_manager)
         elif tool_name.startswith('thoth_rag_search'):
-            return await execute_rag_search_tool(parameters)
+            return await execute_rag_search_tool(parameters, service_manager)
         else:
             # Fallback for unknown tools
             logger.warning(f'Direct execution not implemented for tool: {tool_name}')
@@ -125,11 +125,10 @@ async def execute_tool_directly(
         }
 
 
-async def execute_search_papers_tool(parameters: dict[str, Any]) -> dict[str, Any]:
+async def execute_search_papers_tool(
+    parameters: dict[str, Any], service_manager: ServiceManager
+) -> dict[str, Any]:
     """Execute the search papers tool directly."""
-    if service_manager is None:
-        raise ValueError('Service manager not available')
-
     query = parameters.get('query', '')
     max_results = parameters.get('max_results', 10)
 
@@ -149,11 +148,10 @@ async def execute_search_papers_tool(parameters: dict[str, Any]) -> dict[str, An
         raise ValueError(f'Search papers failed: {e}') from e
 
 
-async def execute_analyze_document_tool(parameters: dict[str, Any]) -> dict[str, Any]:
+async def execute_analyze_document_tool(
+    parameters: dict[str, Any], service_manager: ServiceManager
+) -> dict[str, Any]:
     """Execute the analyze document tool directly."""
-    if service_manager is None:
-        raise ValueError('Service manager not available')
-
     document_id = parameters.get('document_id')
     analysis_type = parameters.get('analysis_type', 'full')
 
@@ -174,7 +172,9 @@ async def execute_analyze_document_tool(parameters: dict[str, Any]) -> dict[str,
         raise ValueError(f'Document analysis failed: {e}') from e
 
 
-async def execute_download_pdf_tool(parameters: dict[str, Any]) -> dict[str, Any]:
+async def execute_download_pdf_tool(
+    parameters: dict[str, Any], service_manager: ServiceManager
+) -> dict[str, Any]:
     """Execute the download PDF tool directly."""
     url = parameters.get('url', '')
     if not url:
@@ -199,11 +199,10 @@ async def execute_download_pdf_tool(parameters: dict[str, Any]) -> dict[str, Any
         raise ValueError(f'PDF download failed: {e}') from e
 
 
-async def execute_rag_search_tool(parameters: dict[str, Any]) -> dict[str, Any]:
+async def execute_rag_search_tool(
+    parameters: dict[str, Any], service_manager: ServiceManager
+) -> dict[str, Any]:
     """Execute the RAG search tool directly."""
-    if service_manager is None:
-        raise ValueError('Service manager not available')
-
     query = parameters.get('query', '')
     top_k = parameters.get('top_k', 5)
 
@@ -232,10 +231,10 @@ async def execute_command(
     try:
         if request.streaming:
             # Execute with streaming support
-            result = await execute_command_streaming(request)
+            result = await execute_command_streaming(request, service_manager)
         else:
             # Execute synchronously
-            result = await execute_command_sync(request)
+            result = await execute_command_sync(request, service_manager)
 
         return JSONResponse(result)
 
@@ -248,6 +247,7 @@ async def execute_command(
 
 async def execute_command_streaming(
     request: CommandExecutionRequest,
+    service_manager: ServiceManager
 ) -> dict[str, Any]:
     """Execute a command with streaming support."""
     # Implementation would depend on the specific command structure
@@ -262,7 +262,10 @@ async def execute_command_streaming(
     }
 
 
-async def execute_command_sync(request: CommandExecutionRequest) -> dict[str, Any]:
+async def execute_command_sync(
+    request: CommandExecutionRequest,
+    service_manager: ServiceManager
+) -> dict[str, Any]:
     """Execute a command synchronously."""
     command_handlers = {
         'discovery': execute_discovery_command,
@@ -276,7 +279,7 @@ async def execute_command_sync(request: CommandExecutionRequest) -> dict[str, An
         raise ValueError(f'Unknown command: {request.command}')
 
     try:
-        result = await handler(request.args, request.kwargs)
+        result = await handler(request.args, request.kwargs, service_manager)
         return {
             'command': request.command,
             'args': request.args,
@@ -292,6 +295,7 @@ async def execute_command_sync(request: CommandExecutionRequest) -> dict[str, An
 async def execute_discovery_command(
     args: list[str],
     kwargs: dict[str, Any],  # noqa: ARG001
+    service_manager: ServiceManager
 ) -> dict[str, Any]:
     """Execute a discovery command."""
     discovery_service = service_manager.discovery
@@ -314,6 +318,7 @@ async def execute_discovery_command(
 async def execute_pdf_locate_command(
     args: list[str],
     kwargs: dict[str, Any],  # noqa: ARG001
+    service_manager: ServiceManager
 ) -> dict[str, Any]:
     """Execute a PDF locate command."""
     pdf_locator_service = service_manager.pdf_locator
@@ -334,6 +339,7 @@ async def execute_pdf_locate_command(
 async def execute_rag_command(
     args: list[str],
     kwargs: dict[str, Any],
+    service_manager: ServiceManager
 ) -> dict[str, Any]:
     """Execute a RAG command."""
     rag_service = service_manager.rag
@@ -354,6 +360,7 @@ async def execute_rag_command(
 async def execute_notes_command(
     args: list[str],
     kwargs: dict[str, Any],
+    service_manager: ServiceManager
 ) -> dict[str, Any]:
     """Execute a notes command."""
     note_service = service_manager.note

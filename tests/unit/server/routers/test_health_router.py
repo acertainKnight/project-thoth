@@ -5,18 +5,28 @@ from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from thoth.server.dependencies import get_service_manager
 from thoth.server.routers import health
 
 
 @pytest.fixture
-def test_client():
+def mock_service_manager():
+    """Create mock service manager."""
+    manager = Mock()
+    return manager
+
+
+@pytest.fixture
+def test_client(mock_service_manager):
     """Create FastAPI test client with health router."""
-    from fastapi import FastAPI
-    
     app = FastAPI()
     app.include_router(health.router)
+    
+    # Override dependency to return mock
+    app.dependency_overrides[get_service_manager] = lambda: mock_service_manager
     
     # Set up directories for the router
     with TemporaryDirectory() as tmpdir:
@@ -27,15 +37,18 @@ def test_client():
         
         health.set_directories(pdf_dir, notes_dir, "http://localhost:8000")
         
-        yield TestClient(app)
+        client = TestClient(app)
+        yield client
+        
+        # Clean up
+        app.dependency_overrides.clear()
 
 
 class TestHealthEndpoint:
     """Tests for /health endpoint."""
 
-    @patch('thoth.server.app.service_manager')
     @patch('thoth.server.routers.health.HealthMonitor')
-    def test_health_check_healthy(self, mock_monitor_class, mock_service_manager, test_client):
+    def test_health_check_healthy(self, mock_monitor_class, test_client, mock_service_manager):
         """Test health check returns 200 when services are healthy."""
         # Setup mock
         mock_monitor = Mock()
@@ -56,9 +69,8 @@ class TestHealthEndpoint:
         assert 'services' in data
         assert 'timestamp' in data
 
-    @patch('thoth.server.app.service_manager')
     @patch('thoth.server.routers.health.HealthMonitor')
-    def test_health_check_unhealthy(self, mock_monitor_class, mock_service_manager, test_client):
+    def test_health_check_unhealthy(self, mock_monitor_class, test_client, mock_service_manager):
         """Test health check returns 503 when services are unhealthy."""
         # Setup mock
         mock_monitor = Mock()
@@ -77,22 +89,32 @@ class TestHealthEndpoint:
         assert data['status'] == 'unhealthy'
         assert data['healthy'] is False
 
-    @patch('thoth.server.app.service_manager', None)
-    def test_health_check_service_manager_not_initialized(self, test_client):
+    def test_health_check_service_manager_not_initialized(self, mock_service_manager):
         """Test health check handles service manager not initialized."""
-        # Make request
-        response = test_client.get('/health')
+        # Create app with None service_manager override
+        app = FastAPI()
+        app.include_router(health.router)
+        app.dependency_overrides[get_service_manager] = lambda: None
         
-        # Assertions
-        assert response.status_code == 503
-        data = response.json()
-        assert data['status'] == 'unhealthy'
-        assert data['healthy'] is False
-        assert 'Service manager not initialized' in data['error']
+        with TemporaryDirectory() as tmpdir:
+            pdf_dir = Path(tmpdir) / "pdfs"
+            notes_dir = Path(tmpdir) / "notes"
+            pdf_dir.mkdir()
+            notes_dir.mkdir()
+            health.set_directories(pdf_dir, notes_dir, "http://localhost:8000")
+            
+            with TestClient(app) as client:
+                response = client.get('/health')
+                
+                # Assertions
+                assert response.status_code == 503
+                data = response.json()
+                assert data['status'] == 'unhealthy'
+                assert data['healthy'] is False
+                assert 'Service manager not initialized' in data['error']
 
-    @patch('thoth.server.app.service_manager')
     @patch('thoth.server.routers.health.HealthMonitor')
-    def test_health_check_exception_handling(self, mock_monitor_class, mock_service_manager, test_client):
+    def test_health_check_exception_handling(self, mock_monitor_class, test_client, mock_service_manager):
         """Test health check handles exceptions gracefully."""
         # Setup mock to raise exception
         mock_monitor_class.side_effect = Exception("Test exception")

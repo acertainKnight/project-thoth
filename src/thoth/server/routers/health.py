@@ -3,12 +3,14 @@
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from loguru import logger
 
 from thoth.ingestion.pdf_downloader import download_pdf
 from thoth.monitoring import HealthMonitor
+from thoth.server.dependencies import get_service_manager
+from thoth.services.service_manager import ServiceManager
 
 router = APIRouter()
 
@@ -27,7 +29,7 @@ def set_directories(pdf_directory: Path, notes_directory: Path, base_url_val: st
 
 
 @router.get('/health')
-def health_check():
+def health_check(service_manager: ServiceManager = Depends(get_service_manager)):
     """
     Health check endpoint.
 
@@ -35,8 +37,6 @@ def health_check():
         JSONResponse: Health status information with appropriate HTTP status code
     """
     try:
-        from thoth.server.app import service_manager
-
         if service_manager is None:
             logger.warning('Service manager not initialized')
             return JSONResponse(
