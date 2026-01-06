@@ -51,6 +51,16 @@ except ImportError:
     OPTIMIZED_SERVICES_AVAILABLE = False
 
 
+class ServiceUnavailableError(Exception):
+    """
+    Raised when an optional service is not available.
+    
+    This error indicates that the service requires additional dependencies
+    that are not currently installed.
+    """
+    pass
+
+
 class ServiceManager:
     """
     Central manager for all Thoth services.
@@ -212,16 +222,26 @@ class ServiceManager:
         """Dynamically access services by name."""
         self._ensure_initialized()
 
-        # Handle special cases for optional services
-        if name in ('cache', 'async_processing'):
-            if name not in self._services:
-                raise RuntimeError(
-                    f'{name.replace("_", " ").title()} service not available - optimized services not installed'
-                )
-
         # Try to get the service
         if name in self._services:
-            return self._services[name]
+            service = self._services[name]
+            
+            # If service is None (optional service not installed), provide helpful error
+            if service is None:
+                # Map service names to their extras groups
+                extras_map = {
+                    'processing': 'pdf',
+                    'rag': 'embeddings',
+                    'cache': 'optimization',
+                    'async_processing': 'optimization',
+                }
+                extras_name = extras_map.get(name, 'unknown')
+                raise ServiceUnavailableError(
+                    f"Service '{name}' is not available. "
+                    f"Install required dependencies: uv sync --extra {extras_name}"
+                )
+            
+            return service
 
         # If not found, provide helpful error message
         # Check if user tried the old _service suffix pattern
@@ -287,6 +307,39 @@ class ServiceManager:
         """
         self._ensure_initialized()
         self._services['discovery'].filter_func = filter_func
+
+    def require_service(self, service_name: str, extras_name: str) -> BaseService:
+        """
+        Get a required service or raise a helpful error if not available.
+        
+        This method is especially useful for optional services that require
+        additional dependencies to be installed.
+        
+        Args:
+            service_name: Name of the service (e.g., 'rag', 'processing')
+            extras_name: Name of the extras group to install (e.g., 'embeddings', 'pdf')
+            
+        Returns:
+            BaseService: The requested service
+            
+        Raises:
+            ServiceUnavailableError: If the service is not available
+            
+        Example:
+            >>> rag = service_manager.require_service('rag', 'embeddings')
+            >>> results = rag.search(query)
+        """
+        self._ensure_initialized()
+        
+        service = self._services.get(service_name)
+        
+        if service is None:
+            raise ServiceUnavailableError(
+                f"Service '{service_name}' is not available. "
+                f"Install required dependencies: uv sync --extra {extras_name}"
+            )
+        
+        return service
 
     def get_all_services(self) -> dict[str, BaseService]:
         """Get all initialized services."""

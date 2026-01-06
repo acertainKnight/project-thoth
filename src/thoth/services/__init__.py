@@ -15,6 +15,7 @@ _MODULES = {
     'QueryService': 'query_service',
     'RAGService': 'rag_service',
     'ServiceManager': 'service_manager',
+    'ServiceUnavailableError': 'service_manager',
     'TagService': 'tag_service',
     'WebSearchService': 'web_search_service',
 }
