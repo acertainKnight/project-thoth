@@ -8,7 +8,6 @@ from datetime import datetime, time, timedelta
 from typing import Any, Optional
 from uuid import UUID
 
-from loguru import logger
 
 from thoth.config import Config
 from thoth.repositories.research_question_repository import ResearchQuestionRepository
@@ -37,7 +36,7 @@ class ResearchQuestionService(BaseService):
         super().__init__(config)
         self.postgres_service = postgres_service
         self.repository = ResearchQuestionRepository(postgres_service or config)
-        logger.info('ResearchQuestionService initialized')
+        self.logger.info('ResearchQuestionService initialized')
 
     async def create_research_question(
         self,
@@ -135,11 +134,11 @@ class ResearchQuestionService(BaseService):
         )
 
         if question_id:
-            logger.info(
+            self.logger.info(
                 f"Created research question '{name}' for user {user_id}: {question_id}"
             )
         else:
-            logger.error(
+            self.logger.error(
                 f"Failed to create research question '{name}' for user {user_id}"
             )
 
@@ -207,11 +206,11 @@ class ResearchQuestionService(BaseService):
         success = await self.repository.update_question(question_id, **updates)
 
         if success:
-            logger.info(
+            self.logger.info(
                 f'Updated research question {question_id}: {list(updates.keys())}'
             )
         else:
-            logger.error(f'Failed to update research question {question_id}')
+            self.logger.error(f'Failed to update research question {question_id}')
 
         return success
 
@@ -238,7 +237,7 @@ class ResearchQuestionService(BaseService):
         # Verify ownership
         question = await self.repository.get_by_id(question_id)
         if not question:
-            logger.warning(f'Research question {question_id} not found for deletion')
+            self.logger.warning(f'Research question {question_id} not found for deletion')
             return False
 
         if question['user_id'] != user_id:
@@ -255,9 +254,9 @@ class ResearchQuestionService(BaseService):
             action = 'deactivated'
 
         if success:
-            logger.info(f'{action.capitalize()} research question {question_id}')
+            self.logger.info(f'{action.capitalize()} research question {question_id}')
         else:
-            logger.error(f'Failed to {action} research question {question_id}')
+            self.logger.error(f'Failed to {action} research question {question_id}')
 
         return success
 
@@ -281,7 +280,7 @@ class ResearchQuestionService(BaseService):
             active_only=active_only,
         )
 
-        logger.debug(
+        self.logger.debug(
             f'Retrieved {len(questions)} research questions for user {user_id} '
             f'(active_only={active_only})'
         )
@@ -305,7 +304,7 @@ class ResearchQuestionService(BaseService):
         """
         questions = await self.repository.get_questions_due_for_run(as_of=as_of)
 
-        logger.info(
+        self.logger.info(
             f'Found {len(questions)} research questions due for discovery '
             f'(as_of={as_of or "now"})'
         )
@@ -335,7 +334,7 @@ class ResearchQuestionService(BaseService):
         """
         question = await self.repository.get_by_id(question_id)
         if not question:
-            logger.error(
+            self.logger.error(
                 f'Cannot mark completion for non-existent question {question_id}'
             )
             return False
@@ -359,13 +358,13 @@ class ResearchQuestionService(BaseService):
         )
 
         if success:
-            logger.info(
+            self.logger.info(
                 f'Marked discovery completed for question {question_id}: '
                 f'{articles_found} found, {articles_matched} matched, '
                 f'{execution_time:.2f}s, next run: {next_run_at}'
             )
         else:
-            logger.error(
+            self.logger.error(
                 f'Failed to mark discovery completed for question {question_id}'
             )
 
@@ -401,7 +400,7 @@ class ResearchQuestionService(BaseService):
 
         stats = await self.repository.get_statistics(question_id)
 
-        logger.debug(f'Retrieved statistics for question {question_id}')
+        self.logger.debug(f'Retrieved statistics for question {question_id}')
 
         return stats
 
@@ -491,7 +490,7 @@ class ResearchQuestionService(BaseService):
                     hour=hour, minute=minute, second=0, microsecond=0
                 )
             except (ValueError, AttributeError):
-                logger.warning(
+                self.logger.warning(
                     f"Invalid schedule_time '{schedule_time}', using current time"
                 )
                 scheduled_time = now
@@ -547,10 +546,10 @@ class ResearchQuestionService(BaseService):
             next_run = datetime(2099, 12, 31)
 
         else:
-            logger.warning(f"Unknown frequency '{frequency}', defaulting to daily")
+            self.logger.warning(f"Unknown frequency '{frequency}', defaulting to daily")
             next_run = scheduled_time + timedelta(days=1)
 
-        logger.debug(
+        self.logger.debug(
             f"Calculated next run for frequency '{frequency}': {next_run} "
             f'(schedule_time={schedule_time}, days={schedule_days_of_week})'
         )

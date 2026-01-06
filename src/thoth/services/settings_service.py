@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any
 
 import jsonschema
-from loguru import logger
 from pydantic import BaseModel, Field
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
@@ -34,7 +33,7 @@ try:
     DOCKER_INTEGRATION_AVAILABLE = True
 except ImportError:
     DOCKER_INTEGRATION_AVAILABLE = False
-    logger.warning(
+    self.logger.warning(
         'Docker integration not available - running without container features'
     )
 
@@ -136,7 +135,7 @@ class ConfigurationMigrator:
         # Find migration path
         migration_path = self._find_migration_path(current_version, target_version)
         if not migration_path:
-            logger.warning(
+            self.logger.warning(
                 f'No migration path found from {current_version} to {target_version}'
             )
             return None
@@ -179,7 +178,7 @@ class ConfigurationMigrator:
             if not success:
                 raise ValueError('Failed to save migrated configuration')
 
-            logger.info(
+            self.logger.info(
                 f'Successfully migrated configuration from {migration_info.from_version} to {migration_info.to_version}'
             )
 
@@ -196,7 +195,7 @@ class ConfigurationMigrator:
             )
 
         except Exception as e:
-            logger.error(f'Migration failed: {e}')
+            self.logger.error(f'Migration failed: {e}')
             return MigrationResult(
                 success=False,
                 migration_id=migration_info.migration_id,
@@ -215,7 +214,7 @@ class ConfigurationMigrator:
 
         if self.settings_service.settings_path.exists():
             shutil.copy2(self.settings_service.settings_path, backup_path)
-            logger.info(f'Created migration backup: {backup_path}')
+            self.logger.info(f'Created migration backup: {backup_path}')
 
         return str(backup_path)
 
@@ -233,7 +232,7 @@ class ConfigurationMigrator:
             self.settings_service._settings_cache = None
             self.settings_service._last_modified = None
 
-            logger.info(
+            self.logger.info(
                 f'Successfully rolled back migration from backup: {backup_path}'
             )
 
@@ -247,7 +246,7 @@ class ConfigurationMigrator:
             )
 
         except Exception as e:
-            logger.error(f'Migration rollback failed: {e}')
+            self.logger.error(f'Migration rollback failed: {e}')
             return MigrationResult(
                 success=False,
                 migration_id='rollback',
@@ -279,7 +278,7 @@ class ConfigurationMigrator:
                             )
                         )
             except Exception as e:
-                logger.warning(f'Failed to load migration history: {e}')
+                self.logger.warning(f'Failed to load migration history: {e}')
 
         return history
 
@@ -365,7 +364,7 @@ class ConfigurationMigrator:
                 'error_tracking': True,
             }
 
-        logger.info(
+        self.logger.info(
             'Applied migration 1.0.0 -> 1.1.0: Added performance and monitoring settings'
         )
         return migrated
@@ -394,7 +393,7 @@ class ConfigurationMigrator:
             'features': ['auto_fix', 'conditional_visibility', 'advanced_organization'],
         }
 
-        logger.info(
+        self.logger.info(
             'Applied migration 1.1.0 -> 2.0.0: Added advanced organization features'
         )
         return migrated
@@ -475,11 +474,11 @@ class SettingsService(BaseService):
         if DOCKER_INTEGRATION_AVAILABLE:
             self._init_docker_integration()
 
-        logger.info(f'Settings service initialized with file: {self.settings_path}')
+        self.logger.info(f'Settings service initialized with file: {self.settings_path}')
         if self._is_in_obsidian_vault():
-            logger.info('Obsidian vault detected, using vault-relative settings path')
+            self.logger.info('Obsidian vault detected, using vault-relative settings path')
         if self._use_container_optimizations:
-            logger.info(
+            self.logger.info(
                 'Container environment detected, using container-optimized file operations'
             )
 
@@ -503,7 +502,7 @@ class SettingsService(BaseService):
         env_path = os.getenv('THOTH_SETTINGS_FILE')
         if env_path:
             path = Path(env_path).expanduser().resolve()
-            logger.info(f'Using settings file from THOTH_SETTINGS_FILE: {path}')
+            self.logger.info(f'Using settings file from THOTH_SETTINGS_FILE: {path}')
             return path
 
         # 2. Use provided path if given
@@ -514,14 +513,14 @@ class SettingsService(BaseService):
         vault_root = self._detect_obsidian_vault()
         if vault_root:
             vault_settings = vault_root / '.thoth.settings.json'
-            logger.info(
+            self.logger.info(
                 f'Obsidian vault detected at {vault_root}, using {vault_settings}'
             )
             return vault_settings
 
         # 4. Default to current directory
         default_path = Path('.thoth.settings.json').resolve()
-        logger.info(f'Using default settings path: {default_path}')
+        self.logger.info(f'Using default settings path: {default_path}')
         return default_path
 
     def _detect_obsidian_vault(self) -> Path | None:
@@ -540,7 +539,7 @@ class SettingsService(BaseService):
         for _ in range(6):
             obsidian_dir = current / '.obsidian'
             if obsidian_dir.exists() and obsidian_dir.is_dir():
-                logger.debug(f'Found .obsidian directory at: {current}')
+                self.logger.debug(f'Found .obsidian directory at: {current}')
                 return current
 
             parent = current.parent
@@ -600,7 +599,7 @@ class SettingsService(BaseService):
 
             if self._container_info.is_container:
                 self._volume_manager = VolumeManager()
-                logger.info(
+                self.logger.info(
                     f'Detected container environment: {self._container_info.container_runtime}'
                 )
 
@@ -608,7 +607,7 @@ class SettingsService(BaseService):
                 self._setup_default_rollback_triggers()
 
         except Exception as e:
-            logger.warning(f'Failed to initialize Docker integration: {e}')
+            self.logger.warning(f'Failed to initialize Docker integration: {e}')
             self._use_container_optimizations = False
 
     def _setup_default_rollback_triggers(self) -> None:
@@ -652,7 +651,7 @@ class SettingsService(BaseService):
         if self._use_container_optimizations:
             self._create_initial_snapshot()
 
-        logger.info(f'Settings service initialized with file: {self.settings_path}')
+        self.logger.info(f'Settings service initialized with file: {self.settings_path}')
 
     def load_settings(self, force: bool = False) -> dict[str, Any]:
         """
@@ -688,10 +687,10 @@ class SettingsService(BaseService):
                 return settings_with_overrides
 
         except json.JSONDecodeError as e:
-            logger.error(f'Invalid JSON in settings file: {e}')
+            self.logger.error(f'Invalid JSON in settings file: {e}')
             raise
         except FileNotFoundError:
-            logger.warning('Settings file not found, creating default')
+            self.logger.warning('Settings file not found, creating default')
             return self._create_default_settings()
 
     def _apply_env_overrides(self, settings: dict[str, Any]) -> dict[str, Any]:
@@ -708,7 +707,7 @@ class SettingsService(BaseService):
             env_value = os.getenv(env_var)
             if env_value is not None:
                 self._set_nested_value(settings, json_path, env_value)
-                logger.debug(
+                self.logger.debug(
                     f'Applied environment override: {json_path} from {env_var}'
                 )
 
@@ -786,7 +785,7 @@ class SettingsService(BaseService):
             # Validate settings first
             is_valid, errors = self.validate_settings(settings)
             if not is_valid:
-                logger.error(f'Settings validation failed: {errors}')
+                self.logger.error(f'Settings validation failed: {errors}')
                 return False
 
             # Create backup if requested and file exists
@@ -832,26 +831,26 @@ class SettingsService(BaseService):
             # Notify callbacks
             self._notify_callbacks('save', settings)
 
-            logger.info('Settings saved successfully with atomic operations')
+            self.logger.info('Settings saved successfully with atomic operations')
             return True
 
         except Exception as e:
-            logger.error(f'Failed to save settings: {e}')
+            self.logger.error(f'Failed to save settings: {e}')
 
             # Cleanup temporary file
             if temp_path and temp_path.exists():
                 try:
                     temp_path.unlink()
                 except Exception as cleanup_error:
-                    logger.warning(f'Failed to cleanup temp file: {cleanup_error}')
+                    self.logger.warning(f'Failed to cleanup temp file: {cleanup_error}')
 
             # Attempt rollback if we have a backup
             if backup_path and create_backup:
                 success = self._rollback_from_backup(backup_path)
                 if success:
-                    logger.info('Successfully rolled back to previous settings')
+                    self.logger.info('Successfully rolled back to previous settings')
                 else:
-                    logger.error('Rollback failed - settings may be corrupted')
+                    self.logger.error('Rollback failed - settings may be corrupted')
 
             return False
 
@@ -915,13 +914,13 @@ class SettingsService(BaseService):
             required_fields = ['version', 'lastModified']
             for field in required_fields:
                 if field not in test_settings:
-                    logger.warning(f'Written file missing required field: {field}')
+                    self.logger.warning(f'Written file missing required field: {field}')
                     return False
 
             return True
 
         except (OSError, json.JSONDecodeError) as e:
-            logger.error(f'Validation failed for written file: {e}')
+            self.logger.error(f'Validation failed for written file: {e}')
             return False
 
     def _rollback_from_backup(self, backup_path: Path) -> bool:
@@ -936,12 +935,12 @@ class SettingsService(BaseService):
         """
         try:
             if not backup_path.exists():
-                logger.error(f'Backup file not found: {backup_path}')
+                self.logger.error(f'Backup file not found: {backup_path}')
                 return False
 
             # Validate backup before restoring
             if not self._validate_written_file(backup_path):
-                logger.error(f'Backup file is invalid: {backup_path}')
+                self.logger.error(f'Backup file is invalid: {backup_path}')
                 return False
 
             # Copy backup to settings file
@@ -951,11 +950,11 @@ class SettingsService(BaseService):
             self._settings_cache = None
             self._last_modified = None
 
-            logger.info(f'Successfully rolled back from backup: {backup_path}')
+            self.logger.info(f'Successfully rolled back from backup: {backup_path}')
             return True
 
         except Exception as e:
-            logger.error(f'Rollback failed: {e}')
+            self.logger.error(f'Rollback failed: {e}')
             return False
 
     def update_setting(self, path: str, value: Any, action: str = 'set') -> bool:
@@ -982,7 +981,7 @@ class SettingsService(BaseService):
                 if action == 'set':
                     target[key] = {}
                 else:
-                    logger.error(f'Path not found: {path}')
+                    self.logger.error(f'Path not found: {path}')
                     return False
             target = target[key]
 
@@ -991,27 +990,27 @@ class SettingsService(BaseService):
 
         if action == 'set':
             target[final_key] = value
-            logger.info(f'Set {path} = {value}')
+            self.logger.info(f'Set {path} = {value}')
 
         elif action == 'append':
             if final_key not in target:
                 target[final_key] = []
             if not isinstance(target[final_key], list):
-                logger.error(f'Cannot append to non-list at {path}')
+                self.logger.error(f'Cannot append to non-list at {path}')
                 return False
             target[final_key].append(value)
-            logger.info(f'Appended {value} to {path}')
+            self.logger.info(f'Appended {value} to {path}')
 
         elif action == 'remove':
             if final_key in target:
                 if isinstance(target[final_key], list) and value in target[final_key]:
                     target[final_key].remove(value)
-                    logger.info(f'Removed {value} from {path}')
+                    self.logger.info(f'Removed {value} from {path}')
                 else:
                     del target[final_key]
-                    logger.info(f'Removed {path}')
+                    self.logger.info(f'Removed {path}')
             else:
-                logger.warning(f'Path not found for removal: {path}')
+                self.logger.warning(f'Path not found for removal: {path}')
                 return False
 
         # Save the updated settings
@@ -1078,7 +1077,7 @@ class SettingsService(BaseService):
     def _load_schema(self) -> dict[str, Any] | None:
         """Load JSON schema for validation."""
         if not self.schema_path.exists():
-            logger.warning('Schema file not found, validation will be limited')
+            self.logger.warning('Schema file not found, validation will be limited')
             return None
 
         try:
@@ -1086,7 +1085,7 @@ class SettingsService(BaseService):
                 self._schema_cache = json.load(f)
                 return self._schema_cache
         except Exception as e:
-            logger.error(f'Failed to load schema: {e}')
+            self.logger.error(f'Failed to load schema: {e}')
             return None
 
     def migrate_from_env(self) -> dict[str, Any]:
@@ -1211,7 +1210,7 @@ class SettingsService(BaseService):
                         return
 
                     self._last_event_time = current_time
-                    logger.info('Settings file changed, reloading...')
+                    self.logger.info('Settings file changed, reloading...')
 
                     # Create snapshot before loading new settings
                     if self.settings_service._use_container_optimizations:
@@ -1227,20 +1226,20 @@ class SettingsService(BaseService):
             poll_interval = optimizations['file_watching'].get('poll_interval', 2.0)
 
             self._file_observer = PollingObserver(timeout=poll_interval)
-            logger.info(
+            self.logger.info(
                 f'Using polling file observer with {poll_interval}s interval for container environment'
             )
         else:
             # Use standard observer for native environments
             self._file_observer = Observer()
-            logger.info('Using standard file observer for native environment')
+            self.logger.info('Using standard file observer for native environment')
 
         handler = DockerAwareSettingsFileHandler(self)
         self._file_observer.schedule(
             handler, path=str(self.settings_path.parent), recursive=False
         )
         self._file_observer.start()
-        logger.info('Started Docker-aware settings file watcher')
+        self.logger.info('Started Docker-aware settings file watcher')
 
     def _notify_callbacks(self, event_type: str, settings: dict[str, Any]) -> None:
         """Notify all registered callbacks of settings change."""
@@ -1248,7 +1247,7 @@ class SettingsService(BaseService):
             try:
                 callback(event_type, settings)
             except Exception as e:
-                logger.error(f'Error in settings callback: {e}')
+                self.logger.error(f'Error in settings callback: {e}')
 
     def _create_backup(self) -> Path:
         """Create a backup of current settings with enhanced error handling."""
@@ -1277,7 +1276,7 @@ class SettingsService(BaseService):
                 backup_path.unlink()  # Remove invalid backup
                 raise ValueError('Created backup file is not valid JSON')
 
-            logger.info(f'Created settings backup: {backup_path}')
+            self.logger.info(f'Created settings backup: {backup_path}')
 
             # Clean up old backups (keep last 10)
             self._cleanup_old_backups()
@@ -1285,7 +1284,7 @@ class SettingsService(BaseService):
             return backup_path
 
         except Exception as e:
-            logger.error(f'Failed to create backup: {e}')
+            self.logger.error(f'Failed to create backup: {e}')
             # Clean up partial backup
             if backup_path.exists():
                 try:
@@ -1300,7 +1299,7 @@ class SettingsService(BaseService):
         if len(backups) > keep_count:
             for backup in backups[:-keep_count]:
                 backup.unlink()
-                logger.debug(f'Removed old backup: {backup}')
+                self.logger.debug(f'Removed old backup: {backup}')
 
     def _create_default_settings(self) -> dict[str, Any]:
         """Create default settings file."""
@@ -1314,7 +1313,7 @@ class SettingsService(BaseService):
                 self.save_settings(settings, create_backup=False)
                 return settings
             except Exception as e:
-                logger.error(f'Failed to load example settings: {e}')
+                self.logger.error(f'Failed to load example settings: {e}')
 
         # Create minimal default settings
         settings = {
@@ -1407,9 +1406,9 @@ class SettingsService(BaseService):
                 snapshot_id = self.create_configuration_snapshot(
                     'initial_container_setup'
                 )
-                logger.info(f'Created initial container snapshot: {snapshot_id}')
+                self.logger.info(f'Created initial container snapshot: {snapshot_id}')
         except Exception as e:
-            logger.warning(f'Failed to create initial snapshot: {e}')
+            self.logger.warning(f'Failed to create initial snapshot: {e}')
 
     def _create_auto_snapshot(self, description: str) -> str | None:
         """Create automatic snapshot before configuration changes."""
@@ -1418,7 +1417,7 @@ class SettingsService(BaseService):
                 f'auto_{description}_{int(time.time())}'
             )
         except Exception as e:
-            logger.warning(f'Failed to create auto snapshot: {e}')
+            self.logger.warning(f'Failed to create auto snapshot: {e}')
             return None
 
     def create_configuration_snapshot(self, description: str = '') -> str:
@@ -1473,11 +1472,11 @@ class SettingsService(BaseService):
             # Clean up old snapshots (keep last 20)
             self._cleanup_old_snapshots()
 
-            logger.info(f'Created configuration snapshot: {snapshot_id}')
+            self.logger.info(f'Created configuration snapshot: {snapshot_id}')
             return snapshot_id
 
         except Exception as e:
-            logger.error(f'Failed to create configuration snapshot: {e}')
+            self.logger.error(f'Failed to create configuration snapshot: {e}')
             raise
 
     def rollback_to_snapshot(self, snapshot_id: str) -> RollbackResult:
@@ -1531,7 +1530,7 @@ class SettingsService(BaseService):
             self._settings_cache = None
             self._last_modified = None
 
-            logger.info(f'Successfully rolled back to snapshot: {snapshot_id}')
+            self.logger.info(f'Successfully rolled back to snapshot: {snapshot_id}')
 
             return RollbackResult(
                 success=True,
@@ -1541,7 +1540,7 @@ class SettingsService(BaseService):
             )
 
         except Exception as e:
-            logger.error(f'Failed to rollback to snapshot {snapshot_id}: {e}')
+            self.logger.error(f'Failed to rollback to snapshot {snapshot_id}: {e}')
             return RollbackResult(
                 success=False, snapshot_id=snapshot_id, error_message=str(e)
             )
@@ -1590,13 +1589,13 @@ class SettingsService(BaseService):
             # Use most recent snapshot
             latest_snapshot = max(valid_snapshots, key=lambda s: s.timestamp)
 
-            logger.warning(
+            self.logger.warning(
                 f'Executing automatic rollback due to {trigger.trigger_type}: {trigger.description}'
             )
             return self.rollback_to_snapshot(latest_snapshot.snapshot_id)
 
         except Exception as e:
-            logger.error(f'Failed to execute automatic rollback: {e}')
+            self.logger.error(f'Failed to execute automatic rollback: {e}')
             return RollbackResult(success=False, snapshot_id='', error_message=str(e))
 
     def get_rollback_history(self) -> list[SnapshotInfo]:
@@ -1656,7 +1655,7 @@ class SettingsService(BaseService):
                     self._snapshots_cache.append(snapshot_info)
 
             except Exception as e:
-                logger.warning(f'Failed to process snapshot file {snapshot_file}: {e}')
+                self.logger.warning(f'Failed to process snapshot file {snapshot_file}: {e}')
 
         # Sort by timestamp
         self._snapshots_cache.sort(key=lambda s: s.timestamp)
@@ -1674,9 +1673,9 @@ class SettingsService(BaseService):
             for snapshot in snapshots_to_remove:
                 try:
                     snapshot.file_path.unlink()
-                    logger.debug(f'Removed old snapshot: {snapshot.snapshot_id}')
+                    self.logger.debug(f'Removed old snapshot: {snapshot.snapshot_id}')
                 except Exception as e:
-                    logger.warning(
+                    self.logger.warning(
                         f'Failed to remove old snapshot {snapshot.snapshot_id}: {e}'
                     )
 
@@ -1684,7 +1683,7 @@ class SettingsService(BaseService):
             self._snapshots_cache = self._snapshots_cache[-keep_count:]
 
         except Exception as e:
-            logger.warning(f'Failed to cleanup old snapshots: {e}')
+            self.logger.warning(f'Failed to cleanup old snapshots: {e}')
 
     def get_docker_volume_info(self) -> dict[str, Any] | None:
         """
@@ -1714,7 +1713,7 @@ class SettingsService(BaseService):
             return None
 
         except Exception as e:
-            logger.warning(f'Failed to get Docker volume info: {e}')
+            self.logger.warning(f'Failed to get Docker volume info: {e}')
             return None
 
     def ensure_container_persistence(self) -> bool:
@@ -1735,7 +1734,7 @@ class SettingsService(BaseService):
             if result.success and result.volume_path != str(self.settings_path):
                 # Settings were moved to a persistent volume
                 self.settings_path = Path(result.volume_path)
-                logger.info(
+                self.logger.info(
                     f'Settings moved to persistent volume: {self.settings_path}'
                 )
 
@@ -1758,7 +1757,7 @@ class SettingsService(BaseService):
             return result.success
 
         except Exception as e:
-            logger.error(f'Failed to ensure container persistence: {e}')
+            self.logger.error(f'Failed to ensure container persistence: {e}')
             return False
 
     # Migration and versioning methods
@@ -1769,7 +1768,7 @@ class SettingsService(BaseService):
             current_config = self.load_settings()
             return self.migrator.detect_migration_needs(current_config)
         except Exception as e:
-            logger.error(f'Failed to check migration needs: {e}')
+            self.logger.error(f'Failed to check migration needs: {e}')
             return None
 
     def execute_migration(self, migration_info: MigrationInfo) -> MigrationResult:
@@ -1877,12 +1876,12 @@ class SettingsService(BaseService):
         )
 
         if to_schema and to_schema.breaking_changes:
-            logger.info(
+            self.logger.info(
                 f'Migration {migration_info.from_version} -> {migration_info.to_version} requires manual intervention (breaking changes)'
             )
             return None
 
-        logger.info(
+        self.logger.info(
             f'Auto-migrating configuration from {migration_info.from_version} to {migration_info.to_version}'
         )
         return self.execute_migration(migration_info)
@@ -1931,11 +1930,11 @@ class SettingsService(BaseService):
                 if not success:
                     raise ValueError('Failed to save imported configuration')
 
-            logger.info('Successfully imported configuration from migration')
+            self.logger.info('Successfully imported configuration from migration')
             return True
 
         except Exception as e:
-            logger.error(f'Failed to import configuration: {e}')
+            self.logger.error(f'Failed to import configuration: {e}')
             return False
 
     def cleanup(self) -> None:
@@ -1943,4 +1942,4 @@ class SettingsService(BaseService):
         if self._file_observer and self._file_observer.is_alive():
             self._file_observer.stop()
             self._file_observer.join()
-            logger.info('Stopped settings file watcher')
+            self.logger.info('Stopped settings file watcher')

@@ -17,7 +17,6 @@ from datetime import datetime
 from typing import Any, Optional
 from uuid import UUID
 
-from loguru import logger
 
 from thoth.config import Config
 from thoth.repositories.base import BaseRepository
@@ -68,7 +67,7 @@ class DiscoveryExecutionLogRepository(BaseRepository[dict[str, Any]]):
 
             if result:
                 execution_id = result['id']
-                logger.debug(
+                self.logger.debug(
                     f'Created execution log entry {execution_id} for question {question_id}'
                 )
                 return execution_id
@@ -76,7 +75,7 @@ class DiscoveryExecutionLogRepository(BaseRepository[dict[str, Any]]):
             return None
 
         except Exception as e:
-            logger.error(f'Failed to create execution log entry: {e}', exc_info=True)
+            self.logger.error(f'Failed to create execution log entry: {e}', exc_info=True)
             return None
 
     async def complete_execution(
@@ -118,7 +117,7 @@ class DiscoveryExecutionLogRepository(BaseRepository[dict[str, Any]]):
             result = await self.postgres.fetchrow(query_duration, execution_id)
 
             if not result:
-                logger.error(f'Execution log {execution_id} not found for completion')
+                self.logger.error(f'Execution log {execution_id} not found for completion')
                 return False
 
             started_at = result['started_at']
@@ -157,14 +156,14 @@ class DiscoveryExecutionLogRepository(BaseRepository[dict[str, Any]]):
                 error_details,
             )
 
-            logger.debug(
+            self.logger.debug(
                 f"Completed execution log {execution_id} with status '{status}' "
                 f'in {duration_seconds:.2f}s'
             )
             return True
 
         except Exception as e:
-            logger.error(
+            self.logger.error(
                 f'Failed to complete execution log {execution_id}: {e}', exc_info=True
             )
             return False
@@ -214,7 +213,7 @@ class ResearchQuestionScheduler(BaseService):
         self._task: Optional[asyncio.Task] = None  # noqa: UP007
         self._check_interval = 300  # 5 minutes in seconds
 
-        logger.info('ResearchQuestionScheduler initialized')
+        self.logger.info('ResearchQuestionScheduler initialized')
 
     async def start(self) -> None:
         """
@@ -224,13 +223,13 @@ class ResearchQuestionScheduler(BaseService):
         This method returns immediately while the loop continues in the background.
         """
         if self._running:
-            logger.warning('Scheduler is already running')
+            self.logger.warning('Scheduler is already running')
             return
 
         self._running = True
         self._task = asyncio.create_task(self._scheduler_loop())
 
-        logger.info(
+        self.logger.info(
             f'Research question scheduler started (check interval: {self._check_interval}s)'
         )
 
@@ -241,10 +240,10 @@ class ResearchQuestionScheduler(BaseService):
         Cancels the background task and waits for it to complete.
         """
         if not self._running:
-            logger.warning('Scheduler is not running')
+            self.logger.warning('Scheduler is not running')
             return
 
-        logger.info('Stopping research question scheduler...')
+        self.logger.info('Stopping research question scheduler...')
 
         self._running = False
 
@@ -253,9 +252,9 @@ class ResearchQuestionScheduler(BaseService):
             try:
                 await self._task
             except asyncio.CancelledError:
-                logger.debug('Scheduler task cancelled successfully')
+                self.logger.debug('Scheduler task cancelled successfully')
 
-        logger.info('Research question scheduler stopped')
+        self.logger.info('Research question scheduler stopped')
 
     async def _scheduler_loop(self) -> None:
         """
@@ -264,7 +263,7 @@ class ResearchQuestionScheduler(BaseService):
         Checks for due questions every 5 minutes and executes their discoveries.
         Handles errors gracefully to prevent loop crashes.
         """
-        logger.info('Scheduler loop started')
+        self.logger.info('Scheduler loop started')
 
         while self._running:
             try:
@@ -274,18 +273,18 @@ class ResearchQuestionScheduler(BaseService):
                 due_questions = await self.research_question_service.get_questions_due_for_discovery()
 
                 if due_questions:
-                    logger.info(
+                    self.logger.info(
                         f'Found {len(due_questions)} research questions due for discovery'
                     )
                     await self._run_due_discoveries(due_questions)
                 else:
-                    logger.debug('No research questions due for discovery')
+                    self.logger.debug('No research questions due for discovery')
 
                 loop_duration = time.time() - loop_start
-                logger.debug(f'Scheduler loop completed in {loop_duration:.2f}s')
+                self.logger.debug(f'Scheduler loop completed in {loop_duration:.2f}s')
 
             except Exception as e:
-                logger.error(
+                self.logger.error(
                     f'Error in scheduler loop (continuing): {e}', exc_info=True
                 )
 
@@ -293,10 +292,10 @@ class ResearchQuestionScheduler(BaseService):
             try:
                 await asyncio.sleep(self._check_interval)
             except asyncio.CancelledError:
-                logger.info('Scheduler loop cancelled during sleep')
+                self.logger.info('Scheduler loop cancelled during sleep')
                 break
 
-        logger.info('Scheduler loop stopped')
+        self.logger.info('Scheduler loop stopped')
 
     async def _run_due_discoveries(self, due_questions: list[dict[str, Any]]) -> None:
         """
@@ -307,7 +306,7 @@ class ResearchQuestionScheduler(BaseService):
         Args:
             due_questions: List of research question records due for discovery
         """
-        logger.info(f'Starting discovery for {len(due_questions)} questions')
+        self.logger.info(f'Starting discovery for {len(due_questions)} questions')
 
         # Execute discoveries in parallel
         tasks = []
@@ -322,7 +321,7 @@ class ResearchQuestionScheduler(BaseService):
         successful = sum(1 for r in results if r is True)
         failed = sum(1 for r in results if r is not True)
 
-        logger.info(
+        self.logger.info(
             f'Batch discovery completed: {successful} successful, {failed} failed'
         )
 
@@ -342,7 +341,7 @@ class ResearchQuestionScheduler(BaseService):
         question_id = question['id']
         question_name = question['name']
 
-        logger.info(
+        self.logger.info(
             f"Starting discovery for question '{question_name}' ({question_id})"
         )
 
@@ -353,7 +352,7 @@ class ResearchQuestionScheduler(BaseService):
         )
 
         if not execution_id:
-            logger.error(
+            self.logger.error(
                 f'Failed to create execution log for question {question_id}, skipping'
             )
             return False
@@ -396,7 +395,7 @@ class ResearchQuestionScheduler(BaseService):
                     high_relevance_articles=high_relevance_articles,
                 )
 
-                logger.info(
+                self.logger.info(
                     f"Discovery completed for '{question_name}': "
                     f'{total_found} found, {matched} matched'
                 )
@@ -420,14 +419,14 @@ class ResearchQuestionScheduler(BaseService):
                     error_message=error_msg,
                 )
 
-                logger.error(
+                self.logger.error(
                     f'Discovery failed for question {question_id}: {error_msg}'
                 )
 
                 return False
 
         except Exception as e:
-            logger.error(
+            self.logger.error(
                 f'Exception during discovery for question {question_id}: {e}',
                 exc_info=True,
             )
@@ -470,12 +469,12 @@ class ResearchQuestionScheduler(BaseService):
             )
 
             if success:
-                logger.debug(f'Updated schedule for question {question_id}')
+                self.logger.debug(f'Updated schedule for question {question_id}')
             else:
-                logger.warning(f'Failed to update schedule for question {question_id}')
+                self.logger.warning(f'Failed to update schedule for question {question_id}')
 
         except Exception as e:
-            logger.error(
+            self.logger.error(
                 f'Error updating schedule for question {question_id}: {e}',
                 exc_info=True,
             )
@@ -502,7 +501,7 @@ class ResearchQuestionScheduler(BaseService):
         Returns:
             Discovery result dictionary
         """
-        logger.info(f'Triggering immediate discovery for question {question_id}')
+        self.logger.info(f'Triggering immediate discovery for question {question_id}')
 
         # Load question
         question = await self.research_question_service.repository.get_by_id(
@@ -510,7 +509,7 @@ class ResearchQuestionScheduler(BaseService):
         )
 
         if not question:
-            logger.error(f'Question {question_id} not found')
+            self.logger.error(f'Question {question_id} not found')
             return {
                 'success': False,
                 'error': 'Research question not found',
@@ -523,7 +522,7 @@ class ResearchQuestionScheduler(BaseService):
         )
 
         if not execution_id:
-            logger.error(f'Failed to create execution log for question {question_id}')
+            self.logger.error(f'Failed to create execution log for question {question_id}')
             return {
                 'success': False,
                 'error': 'Failed to create execution log',
@@ -570,7 +569,7 @@ class ResearchQuestionScheduler(BaseService):
             return result
 
         except Exception as e:
-            logger.error(f'Exception during immediate discovery: {e}', exc_info=True)
+            self.logger.error(f'Exception during immediate discovery: {e}', exc_info=True)
 
             await self.execution_log.complete_execution(
                 execution_id=execution_id,
