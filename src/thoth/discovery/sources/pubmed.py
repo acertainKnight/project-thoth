@@ -9,7 +9,7 @@ import time
 import xml.etree.ElementTree as ET
 from typing import Any
 
-import requests
+import httpx
 from loguru import logger
 
 from thoth.utilities.schemas import ScrapedArticleMetadata
@@ -152,7 +152,7 @@ class PubMedAPISource(BaseAPISource):
             'email': 'research@example.com',  # Should be configurable
         }
 
-        response = requests.get(
+        response = httpx.get(
             f'{self.base_url}/esearch.fcgi', params=params, timeout=30
         )
         response.raise_for_status()
@@ -205,7 +205,7 @@ class PubMedAPISource(BaseAPISource):
             'email': 'research@example.com',  # Should be configurable
         }
 
-        response = requests.get(
+        response = httpx.get(
             f'{self.base_url}/efetch.fcgi', params=params, timeout=60
         )
         response.raise_for_status()

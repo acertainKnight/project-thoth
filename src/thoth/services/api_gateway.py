@@ -6,7 +6,7 @@ import hashlib
 import time
 from typing import Any
 
-import requests
+import httpx
 from langchain_core.rate_limiters import InMemoryRateLimiter
 
 from thoth.services.base import BaseService, ServiceError
@@ -17,7 +17,7 @@ class ExternalAPIGateway(BaseService):
 
     def __init__(self, config=None):
         super().__init__(config)
-        self.session = requests.Session()
+        self.session = httpx.Client()
         gateway_conf = self.config.api_gateway_config
         if gateway_conf:
             self.rate_limiter = InMemoryRateLimiter(
@@ -106,7 +106,7 @@ class ExternalAPIGateway(BaseService):
                     result = response.json()
                     self._cache[cache_key] = (now, result)
                     return result
-                except requests.RequestException as e:
+                except httpx.HTTPError as e:
                     last_err = e
                     continue
 

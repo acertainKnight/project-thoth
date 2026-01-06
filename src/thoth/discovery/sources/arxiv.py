@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Any
 
 import httpx
-import requests
+import httpx
 from bs4 import BeautifulSoup
 from loguru import logger
 
@@ -491,7 +491,7 @@ class ArxivAPISource(BaseAPISource):
             headers = {
                 'User-Agent': 'Thoth/1.0 (https://github.com/nick-ghafari/project-thoth)'
             }
-            response = requests.get(
+            response = httpx.get(
                 self.base_url, params=params, timeout=30, headers=headers
             )
             response.raise_for_status()

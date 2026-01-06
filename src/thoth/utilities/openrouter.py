@@ -6,7 +6,7 @@ import os
 import time
 from typing import Any
 
-import requests
+import httpx
 from langchain_core.rate_limiters import InMemoryRateLimiter
 from langchain_openai import ChatOpenAI
 from loguru import logger
@@ -26,13 +26,13 @@ def get_openrouter_models() -> list[dict[str, Any]]:
         return _model_cache
 
     try:
-        response = requests.get('https://openrouter.ai/api/v1/models')
+        response = httpx.get('https://openrouter.ai/api/v1/models')
         response.raise_for_status()
         _model_cache = response.json().get('data', [])
         _last_cache_time = current_time
         logger.info(f'Fetched and cached {len(_model_cache)} models from OpenRouter.')
         return _model_cache
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f'Failed to fetch models from OpenRouter: {e}')
         return _model_cache or []  # Return stale cache if available
 
@@ -101,7 +101,7 @@ class OpenRouterRateLimiter:
             Optional[float]: The number of available credits or None if the request failed.
         """  # noqa: W505
         try:
-            response = requests.get(
+            response = httpx.get(
                 'https://openrouter.ai/api/v1/auth/key',
                 headers={'Authorization': f'Bearer {self.api_key}'},
             )

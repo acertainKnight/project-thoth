@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
-import requests
+import httpx
 from bs4 import BeautifulSoup
 from loguru import logger
 
@@ -41,7 +41,7 @@ class WebScraper:
             default_delay: Default delay between requests in seconds.
         """
         self.default_delay = default_delay
-        self.session = requests.Session()
+        self.session = httpx.Client()
 
         # Set default headers to appear more like a regular browser
         self.session.headers.update(

@@ -12,7 +12,7 @@ import re
 import time
 from typing import Any
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from thoth.services.base import BaseService, ServiceError
@@ -69,7 +69,7 @@ class PdfLocatorService(BaseService):
         )
 
         # Initialize request session with default headers
-        self.session = requests.Session()
+        self.session = httpx.Client()
         self.session.headers.update({'User-Agent': self.user_agent})
 
         # Initialize cache for PDF locations
@@ -161,7 +161,7 @@ class PdfLocatorService(BaseService):
         url: str,
         headers: dict[str, str] | None = None,
         accept: str = 'application/json',
-    ) -> requests.Response | None:
+    ) -> httpx.Response | None:
         """
         Make a polite HTTP GET request with retry and backoff.
 
@@ -184,7 +184,7 @@ class PdfLocatorService(BaseService):
                 if response.status_code in (200, 404):
                     return response
                 self.logger.debug(f'HTTP {response.status_code} for {url}, retrying...')
-            except requests.RequestException as e:
+            except httpx.HTTPError as e:
                 self.logger.debug(f'Request failed for {url}: {e}, retrying...')
                 continue
 
@@ -350,7 +350,7 @@ class PdfLocatorService(BaseService):
         """
         try:
             headers = {'Accept': 'application/pdf'}
-            response = requests.head(
+            response = httpx.head(
                 f'https://doi.org/{doi}',
                 allow_redirects=True,
                 headers=headers,

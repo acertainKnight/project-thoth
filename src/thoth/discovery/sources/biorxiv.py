@@ -9,7 +9,7 @@ import time
 from datetime import datetime
 from typing import Any
 
-import requests
+import httpx
 from loguru import logger
 
 from thoth.utilities.schemas import ScrapedArticleMetadata
@@ -69,7 +69,7 @@ class BioRxivAPISource(BaseAPISource):
             logger.info(f'Searching BioRxiv with URL: {url}')
 
             self._rate_limit()
-            response = requests.get(url, params=params, timeout=30)
+            response = httpx.get(url, params=params, timeout=30)
             response.raise_for_status()
 
             data = response.json()

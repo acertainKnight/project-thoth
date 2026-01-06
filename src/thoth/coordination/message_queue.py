@@ -3,7 +3,7 @@ Message queue implementation using Letta shared memory blocks.
 Enables asynchronous agent-to-agent communication.
 """
 
-import requests
+import httpx
 import json
 from datetime import datetime
 from typing import List, Dict, Optional
@@ -27,7 +27,7 @@ def _get_message_queue_block_id() -> Optional[str]:
 
 def _get_block_content(block_id: str) -> str:
     """Get current content of message_queue block."""
-    response = requests.get(f"{API_BASE}/blocks/{block_id}")
+    response = httpx.get(f"{API_BASE}/blocks/{block_id}")
 
     if response.status_code == 200:
         return response.json().get('value', '')
@@ -37,7 +37,7 @@ def _get_block_content(block_id: str) -> str:
 
 def _update_block_content(block_id: str, new_content: str) -> bool:
     """Update message_queue block content."""
-    response = requests.patch(
+    response = httpx.patch(
         f"{API_BASE}/blocks/{block_id}",
         json={"value": new_content}
     )

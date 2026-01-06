@@ -17,7 +17,7 @@ class TestOpenRouterMemoryLeak:
     @pytest.fixture
     def mock_openrouter_setup(self):
         """Mock OpenRouter API calls."""
-        with patch('thoth.utilities.openrouter.requests.get') as mock_get:
+        with patch('thoth.utilities.openrouter.httpx.get') as mock_get:
             # Mock the credits check
             mock_response = Mock()
             mock_response.status_code = 200
@@ -242,7 +242,7 @@ class TestMemoryLeakRegression:
         """Test that memory usage doesn't grow unbounded with client creation/deletion."""
         from thoth.utilities.openrouter import OpenRouterClient
         
-        with patch('thoth.utilities.openrouter.requests.get') as mock_get:
+        with patch('thoth.utilities.openrouter.httpx.get') as mock_get:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.json.return_value = {'data': {'usage': 0, 'limit': 100}}
