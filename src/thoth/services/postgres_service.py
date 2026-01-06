@@ -11,7 +11,6 @@ from datetime import datetime
 from typing import Any, Optional
 
 import asyncpg
-from loguru import logger  # noqa: F401
 
 from thoth.services.base import BaseService, ServiceError
 

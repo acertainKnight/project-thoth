@@ -8,8 +8,6 @@ scattered across CitationProcessor, tracker, and other components.
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from loguru import logger
-
 from thoth.analyze.citations.citations import CitationProcessor
 from thoth.analyze.citations.formatter import CitationFormatter, CitationStyle
 from thoth.services.base import BaseService, ServiceError
@@ -55,7 +53,7 @@ class CitationService(BaseService):
             from thoth.config import Config
 
             Config.register_reload_callback('citation_service', self._on_config_reload)
-            logger.debug('CitationService registered for config reload notifications')
+            self.logger.debug('CitationService registered for config reload notifications')
 
     @property
     def citation_processor(self) -> CitationProcessor:
@@ -124,30 +122,30 @@ class CitationService(BaseService):
             if hasattr(self.config, 'llm_config') and hasattr(
                 self.config.llm_config, 'citation'
             ):
-                logger.info(f'Citation model: {self.config.llm_config.citation.model}')
+                self.logger.info(f'Citation model: {self.config.llm_config.citation.model}')
 
             # Log citation config if available
             if hasattr(self.config, 'citation_config'):
                 citation_config = self.config.citation_config
                 if hasattr(citation_config, 'style'):
-                    logger.info(f'Citation style: {citation_config.style}')
+                    self.logger.info(f'Citation style: {citation_config.style}')
                 if hasattr(citation_config, 'link_format'):
-                    logger.info(f'Link format: {citation_config.link_format}')
+                    self.logger.info(f'Link format: {citation_config.link_format}')
 
                 # Log API usage settings
                 if hasattr(citation_config, 'apis'):
                     apis = citation_config.apis
-                    logger.info(
+                    self.logger.info(
                         f'Citation APIs enabled: '
                         f'OpenCitations={getattr(apis, "use_opencitations", False)}, '
                         f'Scholarly={getattr(apis, "use_scholarly", False)}, '
                         f'SemanticScholar={getattr(apis, "use_semantic_scholar", False)}'
                     )
 
-            logger.success('✅ Citation config reloaded')
+            self.logger.success('✅ Citation config reloaded')
 
         except Exception as e:
-            logger.error(f'Citation config reload failed: {e}')
+            self.logger.error(f'Citation config reload failed: {e}')
 
     def extract_citations(
         self, markdown_path: Path | str, style: str = 'ieee'
@@ -603,7 +601,7 @@ class CitationService(BaseService):
                 article_title = (
                     graph.nodes[article_id].get('metadata', {}).get('title', article_id)
                 )
-                logger.info(f'Attempting to regenerate note for: {article_title}')
+                self.logger.info(f'Attempting to regenerate note for: {article_title}')
 
                 # Get regeneration data from citation tracker
                 regeneration_data = (
@@ -624,7 +622,7 @@ class CitationService(BaseService):
                             citations=regeneration_data['citations'],
                         )
 
-                        logger.info(
+                        self.logger.info(
                             f'Successfully regenerated note for: {article_title} at {note_path}'
                         )
                         regenerated_count += 1
@@ -633,12 +631,12 @@ class CitationService(BaseService):
                         )
 
                     except Exception as e:
-                        logger.error(
+                        self.logger.error(
                             f'Failed to regenerate note for {article_title} (ID: {article_id}): {e}'
                         )
                         failed_count += 1
                 else:
-                    logger.warning(
+                    self.logger.warning(
                         f'No regeneration data found for article: {article_title}'
                     )
                     failed_count += 1

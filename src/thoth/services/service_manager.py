@@ -106,6 +106,7 @@ class ServiceManager:
         self.config = config or global_config
         self._services = {}
         self._initialized = False
+        self.logger = logger.bind(service='ServiceManager')
 
     def initialize(self) -> None:
         """Initialize all services with proper dependencies."""
@@ -120,10 +121,10 @@ class ServiceManager:
             self._services['processing'] = ProcessingService(
                 config=self.config, llm_service=self._services['llm']
             )
-            logger.debug('Processing service initialized')
+            self.logger.debug('Processing service initialized')
         else:
             self._services['processing'] = None
-            logger.debug('Processing service not available (requires pdf extras)')
+            self.logger.debug('Processing service not available (requires pdf extras)')
 
         self._services['article'] = ArticleService(
             config=self.config, llm_service=self._services['llm']
@@ -145,10 +146,10 @@ class ServiceManager:
         # Initialize RAG service (optional - requires embeddings extras)
         if RAG_AVAILABLE:
             self._services['rag'] = RAGService(config=self.config)
-            logger.debug('RAG service initialized')
+            self.logger.debug('RAG service initialized')
         else:
             self._services['rag'] = None
-            logger.debug('RAG service not available (requires embeddings extras)')
+            self.logger.debug('RAG service not available (requires embeddings extras)')
 
         self._services['web_search'] = WebSearchService(config=self.config)
 
@@ -200,11 +201,11 @@ class ServiceManager:
             # Check if this is an expected API key error during early initialization
             error_msg = str(e)
             if 'API key not found' in error_msg or 'OPENROUTER' in error_msg:
-                logger.debug(
+                self.logger.debug(
                     f'TagService initialization deferred (API keys loading): {e}'
                 )
             else:
-                logger.warning(f'TagService initialization skipped: {e}')
+                self.logger.warning(f'TagService initialization skipped: {e}')
             self._services['tag'] = None
 
         # Initialize optimized services if available
@@ -286,16 +287,16 @@ class ServiceManager:
             citation_tracker: CitationGraph instance
         """
         self._ensure_initialized()
-        logger.info(
+        self.logger.info(
             f'Setting citation tracker with {len(citation_tracker.graph.nodes) if citation_tracker else 0} nodes'
         )
         if self._services['tag'] is not None:
             self._services['tag']._citation_tracker = citation_tracker
-            logger.info(
+            self.logger.info(
                 f'Citation tracker set in TagService: {len(citation_tracker.graph.nodes) if citation_tracker else 0} nodes'
             )
         else:
-            logger.warning('TagService is None, cannot set citation tracker')
+            self.logger.warning('TagService is None, cannot set citation tracker')
         self._services['citation']._citation_tracker = citation_tracker
 
     def set_filter_function(self, filter_func: Any) -> None:

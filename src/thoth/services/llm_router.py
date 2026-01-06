@@ -7,7 +7,6 @@ from __future__ import annotations  # noqa: I001
 from typing import TYPE_CHECKING
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from loguru import logger
 
 from thoth.services.base import BaseService
 from thoth.services.llm_service import LLMService
@@ -82,7 +81,7 @@ class LLMRouter(BaseService):
         filtered_models = []
         for model_id in self.candidate_models:
             if model_id not in model_details_map:
-                logger.warning(
+                self.logger.warning(
                     f"Candidate model '{model_id}' not found in OpenRouter models."
                 )
                 continue
@@ -100,7 +99,7 @@ class LLMRouter(BaseService):
             filtered_models.append(details)
 
         if not filtered_models:
-            logger.error('No candidate models meet the required capabilities.')
+            self.logger.error('No candidate models meet the required capabilities.')
             if self.candidate_models:
                 first_candidate = self.candidate_models[0]
                 return (
@@ -165,10 +164,10 @@ class LLMRouter(BaseService):
 
         valid_ids = {m['id'] for m in candidate_details}
         if selected_model_id in valid_ids:
-            logger.info(f"Router selected model '{selected_model_id}' for query.")
+            self.logger.info(f"Router selected model '{selected_model_id}' for query.")
             return selected_model_id
         else:
-            logger.warning(
+            self.logger.warning(
                 f"Router selected an invalid model '{selected_model_id}'. Falling back to the first candidate."
             )
             return candidate_details[0]['id']
