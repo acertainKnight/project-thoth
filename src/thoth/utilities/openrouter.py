@@ -4,7 +4,7 @@ Client for the OpenRouter API leveraging the OpenAI API.
 
 import os
 import time
-from typing import Any, ClassVar
+from typing import Any
 
 import requests
 from langchain_core.rate_limiters import InMemoryRateLimiter
@@ -256,9 +256,6 @@ class OpenRouterClient(BaseLLMClient, ChatOpenAI):
         >>> response = model.invoke('Hello world')
     """  # noqa: W505
 
-    # Store custom non-Pydantic attributes as class variables
-    custom_attributes: ClassVar[dict[str, Any]] = {}
-
     def __init__(
         self,
         api_key: str | None = None,
@@ -312,20 +309,14 @@ class OpenRouterClient(BaseLLMClient, ChatOpenAI):
             **kwargs,
         )
 
-        # Store our custom attributes in the class dictionary
-        # instead of trying to set them as instance attributes
-        instance_id = id(self)
-        if instance_id not in self.custom_attributes:
-            self.custom_attributes[instance_id] = {}
-
-        self.custom_attributes[instance_id]['use_rate_limiter'] = use_rate_limiter
-        self.custom_attributes[instance_id]['rate_limiter'] = None
+        # Store custom attributes as instance variables (fixes memory leak)
+        # Using leading underscore to avoid conflicts with parent class
+        self._use_rate_limiter = use_rate_limiter
+        self._rate_limiter = None
 
         # Set up rate limiter if requested
         if use_rate_limiter and api_key:
-            self.custom_attributes[instance_id]['rate_limiter'] = OpenRouterRateLimiter(
-                api_key=api_key
-            )
+            self._rate_limiter = OpenRouterRateLimiter(api_key=api_key)
 
     def _generate(self, *args, **kwargs):
         """
@@ -333,16 +324,10 @@ class OpenRouterClient(BaseLLMClient, ChatOpenAI):
 
         This method follows LangChain's pattern where _generate is synchronous.
         """
-        instance_id = id(self)
-        use_rate_limiter = self.custom_attributes.get(instance_id, {}).get(
-            'use_rate_limiter', False
-        )
-        rate_limiter = self.custom_attributes.get(instance_id, {}).get('rate_limiter')
-
-        # Apply rate limiting if enabled
-        if use_rate_limiter and rate_limiter:
+        # Apply rate limiting if enabled (use instance variables)
+        if self._use_rate_limiter and self._rate_limiter:
             # Call the synchronous acquire method
-            rate_limiter.acquire()
+            self._rate_limiter.acquire()
 
         # Call the parent's synchronous _generate method
         return super()._generate(*args, **kwargs)
