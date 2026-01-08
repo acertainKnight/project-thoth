@@ -2,7 +2,7 @@
 Citation processor for extracting and analyzing citations from academic documents.
 """
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -381,9 +381,14 @@ class CitationProcessor:
 
             for future in as_completed(future_to_citation):
                 try:
-                    result = future.result()
+                    result = future.result(timeout=300)  # 5 minute timeout per citation
                     if result is not None:
                         results.append(result)
+                except TimeoutError:
+                    raw_citation = future_to_citation[future]
+                    logger.error(
+                        f'Timeout (5 min) processing citation "{raw_citation[:100]}..."'
+                    )
                 except Exception as e:
                     raw_citation = future_to_citation[future]
                     logger.error(
