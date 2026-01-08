@@ -634,13 +634,15 @@ class CitationProcessor:
                     citation.pdf_url = location.url
                     citation.pdf_source = location.source
                     citation.is_open_access = location.is_oa
+                    title_preview = citation.title[:50] if citation.title else 'Unknown'
                     logger.debug(
-                        f"Found PDF for '{citation.title[:50]}' from {location.source}"
+                        f"Found PDF for '{title_preview}' from {location.source}"
                     )
                     return True
             except Exception as e:
+                title_preview = citation.title[:50] if citation.title else 'Unknown'
                 logger.warning(
-                    f"Failed to locate PDF for citation '{citation.title[:50]}': {e}"
+                    f"Failed to locate PDF for citation '{title_preview}': {e}"
                 )
             return False
 

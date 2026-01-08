@@ -284,7 +284,8 @@ class BatchCitationProcessor:
         # Check cache if enabled
         if self.config.enable_caching and cache_key in self._cache:
             self.statistics.cache_hits += 1
-            logger.debug(f'Cache hit for citation: {citation.title[:50]}')
+            title_preview = citation.title[:50] if citation.title else 'Unknown'
+            logger.debug(f'Cache hit for citation: {title_preview}')
             return self._cache[cache_key]
 
         async with semaphore:
@@ -331,9 +332,10 @@ class BatchCitationProcessor:
 
             except Exception as e:
                 last_error = e
+                title_preview = citation.title[:50] if citation.title else 'Unknown'
                 logger.warning(
                     f'Resolution attempt {attempt + 1}/{self.config.retry_attempts} '
-                    f"failed for '{citation.title[:50]}': {e}"
+                    f"failed for '{title_preview}': {e}"
                 )
 
                 if attempt < self.config.retry_attempts - 1:

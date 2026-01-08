@@ -82,7 +82,17 @@ class ProcessingService(BaseService):
             finally:
                 await conn.close()
 
-        asyncio.get_event_loop().run_until_complete(save())
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No event loop running, create one
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(save())
+            loop.close()
+        else:
+            # Already have a running loop
+            asyncio.create_task(save())
 
     @property
     def mistral_client(self) -> Mistral:

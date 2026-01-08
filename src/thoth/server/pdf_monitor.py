@@ -222,38 +222,41 @@ class PDFTracker:
             conn = await asyncpg.connect(db_url)
             try:
                 rows = await conn.fetch(
-                    'SELECT pdf_path, new_pdf_path, note_path FROM processed_pdfs'
+                    'SELECT pdf_path, new_pdf_path, note_path, file_size, file_mtime FROM processed_pdfs'
                 )
                 for row in rows:
                     # Stored paths are already relative (e.g., "thoth/papers/pdfs/file.pdf")  # noqa: W505
                     pdf_path_key = row['pdf_path']
 
-                    # Get file stats if the file exists (resolve relative to absolute)
-                    file_stats = {}
-                    if self.vault_resolver:
-                        try:
-                            absolute_path = self.vault_resolver.resolve(pdf_path_key)
-                            if absolute_path.exists():
-                                stats = absolute_path.stat()
-                                file_stats = {
-                                    'size': stats.st_size,
-                                    'mtime': stats.st_mtime,
-                                }
-                        except Exception as e:
-                            logger.debug(
-                                f'Could not get file stats for {pdf_path_key}: {e}'
-                            )
-
-                    self.processed_files[str(pdf_path_key)] = {
+                    # Build tracked file info with database values
+                    tracked_info = {
                         'new_pdf_path': row['new_pdf_path'],
                         'note_path': row['note_path'],
-                        **file_stats,  # Add size and mtime if available
                     }
+
+                    # Add size and mtime from database if available
+                    if row['file_size'] is not None:
+                        tracked_info['size'] = row['file_size']
+                    if row['file_mtime'] is not None:
+                        tracked_info['mtime'] = row['file_mtime']
+
+                    self.processed_files[str(pdf_path_key)] = tracked_info
+
                 logger.info(f'Loaded {len(rows)} processed PDFs from PostgreSQL')
             finally:
                 await conn.close()
 
-        asyncio.get_event_loop().run_until_complete(load())
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No event loop running, create one
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(load())
+            loop.close()
+        else:
+            # Already have a running loop
+            asyncio.create_task(load())
 
     def _save_tracked_files(self):
         """
@@ -293,16 +296,20 @@ class PDFTracker:
                             pass
                     await conn.execute(
                         """
-                        INSERT INTO processed_pdfs (pdf_path, new_pdf_path, note_path, processed_at)
-                        VALUES ($1, $2, $3, NOW())
+                        INSERT INTO processed_pdfs (pdf_path, new_pdf_path, note_path, file_size, file_mtime, processed_at)
+                        VALUES ($1, $2, $3, $4, $5, NOW())
                         ON CONFLICT (pdf_path) DO UPDATE SET
                             new_pdf_path = EXCLUDED.new_pdf_path,
                             note_path = EXCLUDED.note_path,
+                            file_size = EXCLUDED.file_size,
+                            file_mtime = EXCLUDED.file_mtime,
                             processed_at = NOW()
                     """,
                         str(pdf_path),
                         metadata.get('new_pdf_path'),
                         metadata.get('note_path'),
+                        metadata.get('size'),
+                        metadata.get('mtime'),
                     )
                 logger.info(
                     f'Saved {len(self.processed_files)} processed PDFs to PostgreSQL'
@@ -310,7 +317,17 @@ class PDFTracker:
             finally:
                 await conn.close()
 
-        asyncio.get_event_loop().run_until_complete(save())
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No event loop running, create one
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(save())
+            loop.close()
+        else:
+            # Already have a running loop
+            asyncio.create_task(save())
 
     def is_processed(self, file_path: Path) -> bool:
         """
@@ -499,6 +516,17 @@ class PDFTracker:
         try:
             stats = file_path.stat()
             tracked_info = self.processed_files[lookup_key]
+
+            # Handle migration case: if size/mtime not in tracker, backfill from filesystem
+            if 'size' not in tracked_info or 'mtime' not in tracked_info:
+                logger.debug(
+                    f'Backfilling size/mtime for {lookup_key} from filesystem'
+                )
+                tracked_info['size'] = stats.st_size
+                tracked_info['mtime'] = stats.st_mtime
+                # Save the updated tracker immediately
+                self._save_tracked_files()
+                return True  # File is now tracked properly, consider it unchanged
 
             # Check if size or modification time changed
             if (
@@ -715,8 +743,8 @@ class PDFMonitor:
                     if current_mtime > last_settings_mtime:
                         logger.info('Settings file changed, reloading configuration...')
                         try:
-                            # Reload config
-                            self.config = config
+                            # Reload config from file and notify all services
+                            config.reload_settings()
 
                             # Check if watch directories changed in settings
                             if hasattr(self.config, 'monitor_config') and hasattr(

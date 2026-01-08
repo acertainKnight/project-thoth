@@ -233,8 +233,9 @@ class ArxivResolver:
                 if match:
                     matches.append(match)
 
+            title_preview = citation.title[:50] if citation.title else 'Unknown'
             logger.info(
-                f'Found {len(matches)} arXiv matches for: {citation.title[:50]}...'
+                f'Found {len(matches)} arXiv matches for: {title_preview}...'
             )
             return matches
 

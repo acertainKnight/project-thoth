@@ -506,8 +506,9 @@ class OpenAlexResolver:
 
         if candidates:
             self._matches_found += 1
+            title_preview = citation.title[:50] if citation.title else 'Unknown'
             logger.debug(
-                f'Found {len(candidates)} matches for "{citation.title[:50]}..." '
+                f'Found {len(candidates)} matches for "{title_preview}..." '
                 f'(best score: {candidates[0].confidence_score:.2f})'
             )
 

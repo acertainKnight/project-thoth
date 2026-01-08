@@ -196,8 +196,6 @@ class CitationEnhancer:
                 try:
                     future.result()  # This will raise any exceptions that occurred
                 except Exception as e:
-                    from loguru import logger
-
                     logger.error(f'Error in parallel citation processing: {e}')
 
         return citations
@@ -230,8 +228,6 @@ class CitationEnhancer:
                         if citation_key in citation_map:
                             citation_map[citation_key].update_from_opencitation(result)
             except Exception as e:
-                from loguru import logger
-
                 logger.warning(f'Batch OpenCitations lookup failed: {e}')
                 # Fallback to individual processing
                 for citation in citations:
@@ -259,8 +255,6 @@ class CitationEnhancer:
             # Process all citations at once using existing method
             self._arxiv_lookup(citations)
         except Exception as e:
-            from loguru import logger
-
             logger.warning(f'Batch arXiv lookup failed: {e}')
             # Fallback to individual processing
             for citation in citations:
@@ -286,8 +280,6 @@ class CitationEnhancer:
                 try:
                     future.result()
                 except Exception as e:
-                    from loguru import logger
-
                     logger.debug(f'Individual scholarly lookup failed: {e}')
 
     def _check_citation(self, citation: Citation) -> tuple[bool, bool]:
