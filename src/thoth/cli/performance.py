@@ -8,7 +8,7 @@ This module provides commands for:
 - System resource optimization
 """
 
-import asyncio
+import asyncio  # noqa: I001
 import json
 import time
 from pathlib import Path

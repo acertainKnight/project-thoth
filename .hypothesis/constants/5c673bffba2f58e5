@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/services/note_service.py
+# hypothesis_version: 6.148.9
+
+[100, 500, '*.md', ', ', '-', '/', 'No summary available', 'Unknown', 'Untitled', '[<>:"/\\\\|?*]', '[^a-zA-Z0-9\\s\\-]', '\\s+', '^# .*\\n\\n?', 'abstract', 'analysis', 'api_base_url', 'authors', 'basic_note_created', 'citation_count', 'citations', 'creating basic note', 'creating note', 'data', 'database_url', 'discussion', 'doi', 'evaluation_metrics', 'experimental_setup', 'future_work', 'journal', 'key_points', 'limitations', 'markdown_link', 'methodology', 'model_dump', 'modified', 'name', 'note_created', 'notes_directory', 'number', 'objectives', 'obsidian_link', 'obsidian_note.md', 'pdf_link', 'recent_notes', 'related_work', 'results', 'secrets', 'size', 'source_files', 'strengths', 'summary', 'tags', 'templates_directory', 'title', 'total_notes', 'untitled', 'utf-8', 'year', '•·-*▪▸►◆◇○●']

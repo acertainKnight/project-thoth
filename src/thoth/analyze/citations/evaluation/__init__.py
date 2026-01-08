@@ -8,4 +8,4 @@ Ground Truth Strategy:
 1. Round-trip testing: Use papers with known metadata, generate citations, test resolution
 2. Cross-database validation: Papers that exist in multiple databases (Crossref+OpenAlex+S2)
 3. Manual validation: Small gold standard dataset for edge cases
-"""
+"""  # noqa: W505

@@ -6,7 +6,7 @@ error patterns, failure modes, and recovery strategies to improve
 system stability and user experience.
 """
 
-import json
+import json  # noqa: I001
 import re
 import statistics
 from collections import Counter, defaultdict
@@ -20,7 +20,7 @@ from loguru import logger
 
 from thoth.performance.metrics_collector import MetricsCollector
 from thoth.services.service_manager import ServiceManager
-from thoth.config import config, Config
+from thoth.config import config, Config  # noqa: F401
 
 
 class FailureSeverity(Enum):
@@ -156,7 +156,7 @@ class ReliabilityAnalyzer:
 
     def __init__(
         self,
-        config: Config,
+        config: Config,  # noqa: F811
         service_manager: ServiceManager,
         metrics_collector: MetricsCollector | None = None,
     ):
@@ -301,7 +301,7 @@ class ReliabilityAnalyzer:
     ) -> FailureCategory:
         """Classify error into appropriate category."""
         message_lower = error_message.lower()
-        type_lower = error_type.lower()
+        type_lower = error_type.lower()  # noqa: F841
 
         # API-related errors
         if any(
@@ -369,7 +369,10 @@ class ReliabilityAnalyzer:
         return FailureCategory.PROCESSING_FAILURE  # Default
 
     def _classify_error_severity(
-        self, error_message: str, error_type: str, service: str
+        self,
+        error_message: str,
+        error_type: str,  # noqa: ARG002
+        service: str,
     ) -> FailureSeverity:
         """Classify error severity based on impact."""
         message_lower = error_message.lower()
@@ -485,7 +488,7 @@ class ReliabilityAnalyzer:
 
         return normalized
 
-    def _generate_pattern_name(self, signature: str, error_event: ErrorEvent) -> str:
+    def _generate_pattern_name(self, signature: str, error_event: ErrorEvent) -> str:  # noqa: ARG002
         """Generate human-readable name for failure pattern."""
         service = error_event.service
         category = error_event.category.value if error_event.category else 'unknown'

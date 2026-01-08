@@ -6,7 +6,7 @@ health monitoring, and usage statistics.
 """
 
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, List, Optional  # noqa: UP035
 
 from loguru import logger
 
@@ -18,11 +18,9 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
 
     def __init__(self, postgres_service, **kwargs):
         """Initialize available source repository."""
-        super().__init__(
-            postgres_service, table_name='available_sources', **kwargs
-        )
+        super().__init__(postgres_service, table_name='available_sources', **kwargs)
 
-    async def get_by_name(self, name: str) -> Optional[dict[str, Any]]:
+    async def get_by_name(self, name: str) -> Optional[dict[str, Any]]:  # noqa: UP007
         """
         Get source by name.
 
@@ -52,7 +50,7 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to get source by name {name}: {e}')
             return None
 
-    async def get_active_sources(self) -> List[dict[str, Any]]:
+    async def get_active_sources(self) -> List[dict[str, Any]]:  # noqa: UP006
         """
         Get all active sources.
 
@@ -65,11 +63,11 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
             return cached
 
         try:
-            query = '''
+            query = """
                 SELECT * FROM available_sources
                 WHERE is_active = true
                 ORDER BY display_name ASC
-            '''
+            """
 
             results = await self.postgres.fetch(query)
             data = [dict(row) for row in results]
@@ -81,7 +79,7 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to get active sources: {e}')
             return []
 
-    async def list_all_source_names(self) -> List[str]:
+    async def list_all_source_names(self) -> List[str]:  # noqa: UP006
         """
         Get list of all active source names.
 
@@ -94,11 +92,11 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
             return cached
 
         try:
-            query = '''
+            query = """
                 SELECT name FROM available_sources
                 WHERE is_active = true
                 ORDER BY name ASC
-            '''
+            """
 
             results = await self.postgres.fetch(query)
             names = [row['name'] for row in results]
@@ -114,7 +112,7 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
         self,
         name: str,
         health_status: str,
-        error_count: Optional[int] = None,
+        error_count: Optional[int] = None,  # noqa: UP007
     ) -> bool:
         """
         Update health status for a source.
@@ -141,13 +139,13 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
             if error_count is not None:
                 data['error_count'] = error_count
 
-            query = '''
+            query = """
                 UPDATE available_sources
                 SET health_status = $1,
                     last_health_check = $2,
                     error_count = COALESCE($3, error_count)
                 WHERE name = $4
-            '''
+            """
 
             await self.postgres.execute(
                 query,
@@ -164,16 +162,14 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
             return True
 
         except Exception as e:
-            logger.error(
-                f'Failed to update health status for {name}: {e}'
-            )
+            logger.error(f'Failed to update health status for {name}: {e}')
             return False
 
     async def increment_query_count(
         self,
         name: str,
         articles_found: int = 0,
-        response_time_ms: Optional[float] = None,
+        response_time_ms: Optional[float] = None,  # noqa: UP007
     ) -> bool:
         """
         Increment query statistics for a source.
@@ -187,7 +183,7 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
             bool: True if successful
         """
         try:
-            query = '''
+            query = """
                 UPDATE available_sources
                 SET total_queries = total_queries + 1,
                     total_articles_found = total_articles_found + $1,
@@ -201,11 +197,9 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
                         ELSE avg_response_time_ms
                     END
                 WHERE name = $3
-            '''
+            """
 
-            await self.postgres.execute(
-                query, articles_found, response_time_ms, name
-            )
+            await self.postgres.execute(query, articles_found, response_time_ms, name)
 
             # Invalidate cache
             self._invalidate_cache(name)
@@ -213,9 +207,7 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
             return True
 
         except Exception as e:
-            logger.error(
-                f'Failed to increment query count for {name}: {e}'
-            )
+            logger.error(f'Failed to increment query count for {name}: {e}')
             return False
 
     async def increment_error_count(self, name: str) -> bool:
@@ -229,7 +221,7 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
             bool: True if successful
         """
         try:
-            query = '''
+            query = """
                 UPDATE available_sources
                 SET error_count = error_count + 1,
                     health_status = CASE
@@ -238,7 +230,7 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
                         ELSE health_status
                     END
                 WHERE name = $1
-            '''
+            """
 
             await self.postgres.execute(query, name)
 
@@ -248,9 +240,7 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
             return True
 
         except Exception as e:
-            logger.error(
-                f'Failed to increment error count for {name}: {e}'
-            )
+            logger.error(f'Failed to increment error count for {name}: {e}')
             return False
 
     async def reset_error_count(self, name: str) -> bool:
@@ -264,12 +254,12 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
             bool: True if successful
         """
         try:
-            query = '''
+            query = """
                 UPDATE available_sources
                 SET error_count = 0,
                     health_status = 'active'
                 WHERE name = $1
-            '''
+            """
 
             await self.postgres.execute(query, name)
 
@@ -290,7 +280,7 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
             dict[str, Any]: Aggregated statistics across all sources
         """
         try:
-            query = '''
+            query = """
                 SELECT
                     COUNT(*) as total_sources,
                     COUNT(*) FILTER (WHERE is_active = true) as active_sources,
@@ -301,7 +291,7 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
                     SUM(total_articles_found) as total_articles_found,
                     AVG(avg_response_time_ms) as avg_response_time_ms
                 FROM available_sources
-            '''
+            """
 
             result = await self.postgres.fetchrow(query)
             return dict(result) if result else {}
@@ -370,14 +360,14 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
                 logger.warning(f'Source {name} already registered')
                 return False
 
-            query = '''
+            query = """
                 INSERT INTO available_sources (
                     name, display_name, description, source_type,
                     capabilities, rate_limit_per_minute,
                     is_active, health_status
                 )
                 VALUES ($1, $2, $3, $4, $5, $6, true, 'active')
-            '''
+            """
 
             await self.postgres.execute(
                 query,

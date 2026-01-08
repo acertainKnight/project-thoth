@@ -45,7 +45,7 @@ def start_api_server(host='127.0.0.1', port=8000, base_url='/', reload=False):
         logger.info(f'Starting API server process on {host}:{port}...')
 
         # Import here to avoid circular dependencies
-        from pathlib import Path
+        from pathlib import Path  # noqa: I001
 
         from thoth.server.app import start_obsidian_server
         from thoth.config import config

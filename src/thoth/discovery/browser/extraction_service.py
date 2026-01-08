@@ -5,13 +5,17 @@ This module handles article extraction using configured rules, pagination,
 deduplication, and error handling for browser-based discovery workflows.
 """
 
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional  # noqa: UP035
 
 from loguru import logger
-from playwright.async_api import ElementHandle, Page, TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import (
+    ElementHandle,
+    Page,
+    TimeoutError as PlaywrightTimeoutError,
+)
 
 from thoth.utilities.schemas import ScrapedArticleMetadata
 
@@ -38,23 +42,23 @@ class ExtractionService:
         >>> service = ExtractionService(page)
         >>> articles = await service.extract_articles(
         ...     extraction_rules={
-        ...         "article_container": ".article-item",
-        ...         "selectors": {
-        ...             "title": "h3.title",
-        ...             "authors": ".author-list .author",
-        ...             "abstract": ".abstract-text"
-        ...         }
+        ...         'article_container': '.article-item',
+        ...         'selectors': {
+        ...             'title': 'h3.title',
+        ...             'authors': '.author-list .author',
+        ...             'abstract': '.abstract-text',
+        ...         },
         ...     },
-        ...     max_articles=100
+        ...     max_articles=100,
         ... )
     """
 
     def __init__(
         self,
         page: Page,
-        source_name: str = "browser_extraction",
-        existing_dois: Optional[set] = None,
-        existing_titles: Optional[set] = None,
+        source_name: str = 'browser_extraction',
+        existing_dois: Optional[set] = None,  # noqa: UP007
+        existing_titles: Optional[set] = None,  # noqa: UP007
     ):
         """
         Initialize the ExtractionService.
@@ -75,9 +79,9 @@ class ExtractionService:
 
     async def extract_articles(
         self,
-        extraction_rules: Dict[str, Any],
+        extraction_rules: Dict[str, Any],  # noqa: UP006
         max_articles: int = 100,
-    ) -> List[ScrapedArticleMetadata]:
+    ) -> List[ScrapedArticleMetadata]:  # noqa: UP006
         """
         Extract articles using configured extraction rules.
 
@@ -108,18 +112,18 @@ class ExtractionService:
 
         try:
             # Wait for page to be ready
-            wait_for = extraction_rules.get("wait_for", "body")
+            wait_for = extraction_rules.get('wait_for', 'body')
             try:
                 await self.page.wait_for_selector(wait_for, timeout=10000)
             except PlaywrightTimeoutError:
-                logger.warning(f"Timeout waiting for selector: {wait_for}")
+                logger.warning(f'Timeout waiting for selector: {wait_for}')
 
             # Extract articles from current page
             page_num = 1
             while len(articles) < max_articles:
                 logger.info(
-                    f"Extracting from page {page_num} "
-                    f"(collected {len(articles)}/{max_articles})"
+                    f'Extracting from page {page_num} '
+                    f'(collected {len(articles)}/{max_articles})'
                 )
 
                 # Extract articles from current page
@@ -128,7 +132,9 @@ class ExtractionService:
                 )
 
                 if not page_articles:
-                    logger.info("No articles found on current page, stopping extraction")
+                    logger.info(
+                        'No articles found on current page, stopping extraction'
+                    )
                     break
 
                 articles.extend(page_articles)
@@ -138,34 +144,34 @@ class ExtractionService:
                     break
 
                 # Try to navigate to next page
-                pagination_config = extraction_rules.get("pagination")
+                pagination_config = extraction_rules.get('pagination')
                 if not pagination_config:
-                    logger.debug("No pagination config, stopping after first page")
+                    logger.debug('No pagination config, stopping after first page')
                     break
 
                 has_next = await self._navigate_to_next_page(pagination_config)
                 if not has_next:
-                    logger.info("No more pages available")
+                    logger.info('No more pages available')
                     break
 
                 page_num += 1
 
             logger.info(
-                f"Extraction complete: extracted={self._extracted_count}, "
-                f"skipped={self._skipped_count}, errors={self._error_count}"
+                f'Extraction complete: extracted={self._extracted_count}, '
+                f'skipped={self._skipped_count}, errors={self._error_count}'
             )
 
             return articles[:max_articles]
 
         except Exception as e:
-            logger.error(f"Critical error during article extraction: {e}")
-            raise ExtractionServiceError(f"Extraction failed: {e}") from e
+            logger.error(f'Critical error during article extraction: {e}')
+            raise ExtractionServiceError(f'Extraction failed: {e}') from e
 
     async def _extract_articles_from_page(
         self,
-        extraction_rules: Dict[str, Any],
+        extraction_rules: Dict[str, Any],  # noqa: UP006
         max_articles: int,
-    ) -> List[ScrapedArticleMetadata]:
+    ) -> List[ScrapedArticleMetadata]:  # noqa: UP006
         """
         Extract articles from the current page.
 
@@ -177,7 +183,7 @@ class ExtractionService:
             List of extracted articles
         """
         articles = []
-        container_selector = extraction_rules.get("article_container", "article")
+        container_selector = extraction_rules.get('article_container', 'article')
 
         try:
             # Wait for article container
@@ -185,7 +191,7 @@ class ExtractionService:
 
             # Get all article elements
             article_elements = await self.page.query_selector_all(container_selector)
-            logger.debug(f"Found {len(article_elements)} article elements")
+            logger.debug(f'Found {len(article_elements)} article elements')
 
             # Extract each article
             for element in article_elements[:max_articles]:
@@ -195,7 +201,7 @@ class ExtractionService:
                     # Check for duplicates
                     if self._is_duplicate(article):
                         self._skipped_count += 1
-                        logger.debug(f"Skipped duplicate: {article.title[:60]}...")
+                        logger.debug(f'Skipped duplicate: {article.title[:60]}...')
                         continue
 
                     articles.append(article)
@@ -208,9 +214,9 @@ class ExtractionService:
                         self.existing_titles.add(self._normalize_title(article.title))
 
         except PlaywrightTimeoutError:
-            logger.warning(f"No articles found with selector: {container_selector}")
+            logger.warning(f'No articles found with selector: {container_selector}')
         except Exception as e:
-            logger.error(f"Error extracting articles from page: {e}")
+            logger.error(f'Error extracting articles from page: {e}')
             self._error_count += 1
 
         return articles
@@ -218,8 +224,8 @@ class ExtractionService:
     async def _extract_single_article(
         self,
         article_element: ElementHandle,
-        rules: Dict[str, Any],
-    ) -> Optional[ScrapedArticleMetadata]:
+        rules: Dict[str, Any],  # noqa: UP006
+    ) -> Optional[ScrapedArticleMetadata]:  # noqa: UP007
         """
         Extract metadata from a single article element.
 
@@ -231,39 +237,47 @@ class ExtractionService:
             ScrapedArticleMetadata if extraction successful, None otherwise
         """
         try:
-            selectors = rules.get("selectors", {})
+            selectors = rules.get('selectors', {})
 
             # Extract title (required)
-            title = await self._extract_text(article_element, selectors.get("title"))
+            title = await self._extract_text(article_element, selectors.get('title'))
             if not title:
-                logger.debug("Skipped article: no title found")
+                logger.debug('Skipped article: no title found')
                 return None
 
             # Extract optional fields
             authors_raw = await self._extract_multiple_text(
-                article_element, selectors.get("authors")
+                article_element, selectors.get('authors')
             )
-            authors = [a.strip() for a in authors_raw if a.strip()] if authors_raw else []
+            authors = (
+                [a.strip() for a in authors_raw if a.strip()] if authors_raw else []
+            )
 
-            abstract = await self._extract_text(article_element, selectors.get("abstract"))
-            doi = await self._extract_text(article_element, selectors.get("doi"))
-            arxiv_id = await self._extract_text(article_element, selectors.get("arxiv_id"))
-            journal = await self._extract_text(article_element, selectors.get("journal"))
+            abstract = await self._extract_text(
+                article_element, selectors.get('abstract')
+            )
+            doi = await self._extract_text(article_element, selectors.get('doi'))
+            arxiv_id = await self._extract_text(
+                article_element, selectors.get('arxiv_id')
+            )
+            journal = await self._extract_text(
+                article_element, selectors.get('journal')
+            )
             publication_date = await self._extract_text(
-                article_element, selectors.get("publication_date")
+                article_element, selectors.get('publication_date')
             )
 
             # Extract URLs
             url = await self._extract_attribute(
-                article_element, selectors.get("url"), "href"
+                article_element, selectors.get('url'), 'href'
             )
             pdf_url = await self._extract_attribute(
-                article_element, selectors.get("pdf_url"), "href"
+                article_element, selectors.get('pdf_url'), 'href'
             )
 
             # Extract keywords if configured
             keywords_raw = await self._extract_multiple_text(
-                article_element, selectors.get("keywords")
+                article_element, selectors.get('keywords')
             )
             keywords = (
                 [k.strip() for k in keywords_raw if k.strip()] if keywords_raw else []
@@ -274,10 +288,10 @@ class ExtractionService:
                 doi = self._clean_doi(doi)
 
             # Make URLs absolute if they're relative
-            if url and not url.startswith("http"):
-                url = self.page.url.rstrip("/") + "/" + url.lstrip("/")
-            if pdf_url and not pdf_url.startswith("http"):
-                pdf_url = self.page.url.rstrip("/") + "/" + pdf_url.lstrip("/")
+            if url and not url.startswith('http'):
+                url = self.page.url.rstrip('/') + '/' + url.lstrip('/')
+            if pdf_url and not pdf_url.startswith('http'):
+                pdf_url = self.page.url.rstrip('/') + '/' + pdf_url.lstrip('/')
 
             # Create metadata object
             metadata = ScrapedArticleMetadata(
@@ -298,15 +312,15 @@ class ExtractionService:
             return metadata
 
         except Exception as e:
-            logger.debug(f"Error extracting article: {e}")
+            logger.debug(f'Error extracting article: {e}')
             self._error_count += 1
             return None
 
     async def _extract_text(
         self,
         element: ElementHandle,
-        selector: Optional[str],
-    ) -> Optional[str]:
+        selector: Optional[str],  # noqa: UP007
+    ) -> Optional[str]:  # noqa: UP007
         """
         Extract text content from an element using a selector.
 
@@ -333,8 +347,8 @@ class ExtractionService:
     async def _extract_multiple_text(
         self,
         element: ElementHandle,
-        selector: Optional[str],
-    ) -> List[str]:
+        selector: Optional[str],  # noqa: UP007
+    ) -> List[str]:  # noqa: UP006
         """
         Extract text from multiple elements matching a selector.
 
@@ -357,16 +371,18 @@ class ExtractionService:
                     texts.append(text.strip())
             return texts
         except Exception as e:
-            logger.debug(f"Error extracting multiple text with selector '{selector}': {e}")
+            logger.debug(
+                f"Error extracting multiple text with selector '{selector}': {e}"
+            )
 
         return []
 
     async def _extract_attribute(
         self,
         element: ElementHandle,
-        selector: Optional[str],
+        selector: Optional[str],  # noqa: UP007
         attribute: str,
-    ) -> Optional[str]:
+    ) -> Optional[str]:  # noqa: UP007
         """
         Extract an attribute value from an element.
 
@@ -395,7 +411,7 @@ class ExtractionService:
 
     async def _navigate_to_next_page(
         self,
-        pagination_config: Dict[str, Any],
+        pagination_config: Dict[str, Any],  # noqa: UP006
     ) -> bool:
         """
         Navigate to the next page using pagination configuration.
@@ -415,10 +431,10 @@ class ExtractionService:
             True if navigation successful, False if no next page
         """
         try:
-            pagination_type = pagination_config.get("type", "button")
+            pagination_type = pagination_config.get('type', 'button')
 
-            if pagination_type == "button":
-                selector = pagination_config.get("selector", "button.next, a.next")
+            if pagination_type == 'button':
+                selector = pagination_config.get('selector', 'button.next, a.next')
                 next_button = await self.page.query_selector(selector)
 
                 if not next_button:
@@ -435,8 +451,8 @@ class ExtractionService:
 
                 return True
 
-            elif pagination_type == "link":
-                selector = pagination_config.get("selector", "a[rel='next']")
+            elif pagination_type == 'link':
+                selector = pagination_config.get('selector', "a[rel='next']")
                 next_link = await self.page.query_selector(selector)
 
                 if not next_link:
@@ -449,14 +465,14 @@ class ExtractionService:
                 return True
 
             else:
-                logger.warning(f"Unsupported pagination type: {pagination_type}")
+                logger.warning(f'Unsupported pagination type: {pagination_type}')
                 return False
 
         except PlaywrightTimeoutError:
-            logger.debug("Timeout during pagination navigation")
+            logger.debug('Timeout during pagination navigation')
             return False
         except Exception as e:
-            logger.debug(f"Error navigating to next page: {e}")
+            logger.debug(f'Error navigating to next page: {e}')
             return False
 
     def _is_duplicate(self, article: ScrapedArticleMetadata) -> bool:
@@ -495,8 +511,8 @@ class ExtractionService:
         import re
 
         # Remove punctuation and extra whitespace, lowercase
-        normalized = re.sub(r"[^\w\s]", "", title.lower())
-        normalized = re.sub(r"\s+", " ", normalized).strip()
+        normalized = re.sub(r'[^\w\s]', '', title.lower())
+        normalized = re.sub(r'\s+', ' ', normalized).strip()
         return normalized
 
     @staticmethod
@@ -513,16 +529,16 @@ class ExtractionService:
         import re
 
         # Remove common prefixes
-        doi = re.sub(r"^(doi:|DOI:)\s*", "", doi, flags=re.IGNORECASE)
-        doi = re.sub(r"^https?://.*?/(10\.\d+/.*)", r"\1", doi)
+        doi = re.sub(r'^(doi:|DOI:)\s*', '', doi, flags=re.IGNORECASE)
+        doi = re.sub(r'^https?://.*?/(10\.\d+/.*)', r'\1', doi)
 
         return doi.strip()
 
     @property
-    def extraction_stats(self) -> Dict[str, int]:
+    def extraction_stats(self) -> Dict[str, int]:  # noqa: UP006
         """Get extraction statistics."""
         return {
-            "extracted": self._extracted_count,
-            "skipped": self._skipped_count,
-            "errors": self._error_count,
+            'extracted': self._extracted_count,
+            'skipped': self._skipped_count,
+            'errors': self._error_count,
         }

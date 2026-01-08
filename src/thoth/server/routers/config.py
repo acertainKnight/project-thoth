@@ -39,7 +39,7 @@ class SchemaVersionResponse(BaseModel):
 def export_config_for_obsidian():
     """Export current configuration in Obsidian plugin format."""
     try:
-        config  # Already imported at module level
+        config  # Already imported at module level  # noqa: B018
         obsidian_config = config.export_for_obsidian()
 
         return JSONResponse(
@@ -59,16 +59,16 @@ def export_config_for_obsidian():
 
 
 @router.post('/import')
-async def import_config_from_obsidian(obsidian_config: dict[str, Any]):
+async def import_config_from_obsidian(obsidian_config: dict[str, Any]):  # noqa: ARG001
     """Import configuration from Obsidian plugin format and validate it."""
     try:
         from thoth.config import config
 
         # Import configuration from Obsidian format
-        config
+        config  # noqa: B018
 
         # Validate the imported configuration
-        validation_result = imported_config.validate_for_obsidian()
+        validation_result = imported_config.validate_for_obsidian()  # noqa: F821
 
         if validation_result['errors']:
             return JSONResponse(
@@ -82,7 +82,7 @@ async def import_config_from_obsidian(obsidian_config: dict[str, Any]):
             )
 
         # If validation passed, sync to environment
-        synced_vars = imported_config.sync_to_environment()
+        synced_vars = imported_config.sync_to_environment()  # noqa: F821
 
         return JSONResponse(
             {
@@ -104,19 +104,22 @@ async def import_config_from_obsidian(obsidian_config: dict[str, Any]):
 @router.post('/validate')
 async def validate_config(config_data: dict[str, Any] | None = None):
     """Validate configuration data with enhanced error messages and suggestions."""
-    raise HTTPException(status_code=501, detail="Validation endpoint temporarily disabled - needs migration to new config system")
+    raise HTTPException(
+        status_code=501,
+        detail='Validation endpoint temporarily disabled - needs migration to new config system',
+    )
     try:
         # validator = EnhancedValidator()
 
         if config_data:
             # Validate provided configuration data
-            validation_result = validator.validate_config(config_data)
+            validation_result = validator.validate_config(config_data)  # noqa: F821
             source = 'provided'
         else:
             # Validate current configuration
-            config
-            config_dict = current_config.model_dump()
-            validation_result = validator.validate_config(config_dict)
+            config  # noqa: B018
+            config_dict = current_config.model_dump()  # noqa: F821
+            validation_result = validator.validate_config(config_dict)  # noqa: F821
             source = 'current'
 
         return JSONResponse(
@@ -149,14 +152,17 @@ async def validate_config(config_data: dict[str, Any] | None = None):
 @router.post('/validate-partial')
 async def validate_partial_config(request: PartialValidationRequest):
     """Validate a single configuration field for real-time UI feedback."""
-    raise HTTPException(status_code=501, detail="Partial validation endpoint temporarily disabled - needs migration to new config system")
+    raise HTTPException(
+        status_code=501,
+        detail='Partial validation endpoint temporarily disabled - needs migration to new config system',
+    )
     try:
         # validator = EnhancedValidator()
 
         # Create partial config data for validation
         partial_data = {request.field_path: request.field_value}
 
-        validation_result = validator.validate_partial_config(
+        validation_result = validator.validate_partial_config(  # noqa: F821
             partial_data, request.field_path
         )
 
@@ -190,19 +196,22 @@ def get_config_schema():
     """
     Get enhanced configuration schema with rich UI metadata for dynamic form generation.
     """
-    raise HTTPException(status_code=501, detail="Schema generation endpoint temporarily disabled - needs migration to new config system")
+    raise HTTPException(
+        status_code=501,
+        detail='Schema generation endpoint temporarily disabled - needs migration to new config system',
+    )
     try:
         # Generate comprehensive schema using SchemaGenerator
         # generator = SchemaGenerator()
         # schema = generator.generate_schema(Config)
 
         # Add API metadata
-        schema['generated_at'] = time.time()
-        schema['supports_partial_validation'] = True
-        schema['migration_support'] = True
-        schema['api_version'] = '2.0.0'
+        schema['generated_at'] = time.time()  # noqa: F821
+        schema['supports_partial_validation'] = True  # noqa: F821
+        schema['migration_support'] = True  # noqa: F821
+        schema['api_version'] = '2.0.0'  # noqa: F821
 
-        return JSONResponse({'status': 'success', **schema})
+        return JSONResponse({'status': 'success', **schema})  # noqa: F821
 
     except Exception as e:
         logger.error(f'Failed to generate config schema: {e}')

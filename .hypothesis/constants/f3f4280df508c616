@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/repositories/browser_workflow_repository.py
+# hypothesis_version: 6.148.9
+
+[300, 'active', 'browser_workflows', 'degraded', 'domain', 'down', 'due_for_run', 'extraction_rules', 'id', 'is_active', 'name', 'start_url', 'unknown', 'website_domain']

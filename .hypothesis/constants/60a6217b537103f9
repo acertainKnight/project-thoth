@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/services/research_question_service.py
+# hypothesis_version: 6.148.9
+
+[0.0, 0.5, 0.7, 0.8, 1.0, 255, 2099, '*', ':', '^[a-z0-9_-]+$', 'articles_found_count', 'daily', 'deactivated', 'deleted', 'friday', 'min_relevance_score', 'monday', 'monthly', 'next_run_at', 'on-demand', 'saturday', 'schedule_frequency', 'schedule_time', 'selected_sources', 'sunday', 'thursday', 'tuesday', 'user_id', 'wednesday', 'weekly']

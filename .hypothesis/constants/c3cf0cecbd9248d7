@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/rag/rag_manager.py
+# hypothesis_version: 6.148.9
+
+[200, '*.md', '-', '...', 'Config', 'Vector index cleared', '_', 'answer', 'article', 'chunk_encoding', 'chunk_index', 'chunk_overlap', 'chunk_size', 'content', 'document_type', 'embedding_model', 'file_type', 'filename', 'filter', 'k', 'markdown', 'metadata', 'note', 'notes', 'other', 'qa_model', 'query', 'question', 'rag_manager', 'result', 'source', 'source_documents', 'sources', 'stuff', 'title', 'total_chunks', 'utf-8']

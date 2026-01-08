@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/ingestion/pdf_downloader.py
+# hypothesis_version: 6.148.9
+
+[1024, '.pdf', 'content-length', 'iB', 'wb']

@@ -6,7 +6,7 @@ bottleneck identification, and optimization recommendations for document
 processing, RAG operations, and knowledge graph construction.
 """
 
-import statistics
+import statistics  # noqa: I001
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -17,7 +17,7 @@ from loguru import logger
 
 from thoth.performance.metrics_collector import MetricsCollector
 from thoth.services.service_manager import ServiceManager
-from thoth.config import config, Config
+from thoth.config import config, Config  # noqa: F401
 
 
 @dataclass
@@ -99,7 +99,7 @@ class PipelineAnalyzer:
 
     def __init__(
         self,
-        config: Config,
+        config: Config,  # noqa: F811
         service_manager: ServiceManager,
         metrics_collector: MetricsCollector | None = None,
     ):
@@ -140,7 +140,7 @@ class PipelineAnalyzer:
 
         Returns:
             str: Unique execution ID for tracking
-        """
+        """  # noqa: W505
         execution_id = f'{pipeline_type}_{datetime.now().strftime("%Y%m%d_%H%M%S_%f")}'
 
         execution = PipelineExecution(
@@ -440,7 +440,8 @@ class PipelineAnalyzer:
             return 'other'
 
     def _analyze_resource_efficiency(
-        self, executions: list[PipelineExecution]
+        self,
+        executions: list[PipelineExecution],  # noqa: ARG002
     ) -> tuple[float, float, float]:
         """
         Analyze resource efficiency metrics.

@@ -29,8 +29,51 @@ class UpdateSessionRequest(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
+class SessionData(BaseModel):
+    """Session data model."""
+    id: str
+    title: str
+    created_at: str
+    updated_at: str
+    is_active: bool
+    metadata: dict[str, Any]
+    message_count: int
+    last_message_preview: str | None
+
+
+class CreateSessionResponse(BaseModel):
+    """Response for session creation."""
+    status: str
+    session: SessionData
+
+
+class UpdateSessionResponse(BaseModel):
+    """Response for session update."""
+    status: str
+    message: str
+    session: SessionData
+
+
+class GetSessionResponse(BaseModel):
+    """Response for getting a session."""
+    status: str
+    session: SessionData
+
+
+class DeleteSessionResponse(BaseModel):
+    """Response for session deletion."""
+    status: str
+    message: str
+
+
+class ArchiveSessionResponse(BaseModel):
+    """Response for session archiving."""
+    status: str
+    message: str
+
+
 class SessionListResponse(BaseModel):
-    sessions: list[dict[str, Any]]
+    sessions: list[SessionData]
     total_count: int
 
 
@@ -48,7 +91,7 @@ class SearchMessagesResponse(BaseModel):
 
 
 @router.post('/sessions')
-async def create_chat_session(request: CreateSessionRequest) -> dict[str, Any]:
+async def create_chat_session(request: CreateSessionRequest) -> CreateSessionResponse:
     """Create a new chat session."""
     if chat_manager is None:
         raise HTTPException(status_code=503, detail='Chat manager not initialized')
@@ -58,19 +101,19 @@ async def create_chat_session(request: CreateSessionRequest) -> dict[str, Any]:
             title=request.title, metadata=request.metadata
         )
 
-        return {
-            'status': 'success',
-            'session': {
-                'id': session.id,
-                'title': session.title,
-                'created_at': session.created_at.isoformat(),
-                'updated_at': session.updated_at.isoformat(),
-                'is_active': session.is_active,
-                'metadata': session.metadata,
-                'message_count': session.message_count,
-                'last_message_preview': session.last_message_preview,
-            },
-        }
+        return CreateSessionResponse(
+            status='success',
+            session=SessionData(
+                id=session.id,
+                title=session.title,
+                created_at=session.created_at.isoformat(),
+                updated_at=session.updated_at.isoformat(),
+                is_active=session.is_active,
+                metadata=session.metadata,
+                message_count=session.message_count,
+                last_message_preview=session.last_message_preview,
+            ),
+        )
     except Exception as e:
         logger.error(f'Error creating chat session: {e}')
         raise HTTPException(
@@ -92,16 +135,16 @@ async def list_chat_sessions(
         session_data = []
         for session in sessions:
             session_data.append(
-                {
-                    'id': session.id,
-                    'title': session.title,
-                    'created_at': session.created_at.isoformat(),
-                    'updated_at': session.updated_at.isoformat(),
-                    'is_active': session.is_active,
-                    'metadata': session.metadata,
-                    'message_count': session.message_count,
-                    'last_message_preview': session.last_message_preview,
-                }
+                SessionData(
+                    id=session.id,
+                    title=session.title,
+                    created_at=session.created_at.isoformat(),
+                    updated_at=session.updated_at.isoformat(),
+                    is_active=session.is_active,
+                    metadata=session.metadata,
+                    message_count=session.message_count,
+                    last_message_preview=session.last_message_preview,
+                )
             )
 
         return SessionListResponse(sessions=session_data, total_count=len(session_data))
@@ -113,7 +156,7 @@ async def list_chat_sessions(
 
 
 @router.get('/sessions/{session_id}')
-async def get_chat_session(session_id: str) -> dict[str, Any]:
+async def get_chat_session(session_id: str) -> GetSessionResponse:
     """Get a specific chat session."""
     if chat_manager is None:
         raise HTTPException(status_code=503, detail='Chat manager not initialized')
@@ -123,19 +166,19 @@ async def get_chat_session(session_id: str) -> dict[str, Any]:
         if not session:
             raise HTTPException(status_code=404, detail='Session not found')
 
-        return {
-            'status': 'success',
-            'session': {
-                'id': session.id,
-                'title': session.title,
-                'created_at': session.created_at.isoformat(),
-                'updated_at': session.updated_at.isoformat(),
-                'is_active': session.is_active,
-                'metadata': session.metadata,
-                'message_count': session.message_count,
-                'last_message_preview': session.last_message_preview,
-            },
-        }
+        return GetSessionResponse(
+            status='success',
+            session=SessionData(
+                id=session.id,
+                title=session.title,
+                created_at=session.created_at.isoformat(),
+                updated_at=session.updated_at.isoformat(),
+                is_active=session.is_active,
+                metadata=session.metadata,
+                message_count=session.message_count,
+                last_message_preview=session.last_message_preview,
+            ),
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -148,7 +191,7 @@ async def get_chat_session(session_id: str) -> dict[str, Any]:
 @router.put('/sessions/{session_id}')
 async def update_chat_session(
     session_id: str, request: UpdateSessionRequest
-) -> dict[str, Any]:
+) -> UpdateSessionResponse:
     """Update a chat session."""
     if chat_manager is None:
         raise HTTPException(status_code=503, detail='Chat manager not initialized')
@@ -164,20 +207,20 @@ async def update_chat_session(
         # Get updated session
         session = chat_manager.get_session(session_id)
 
-        return {
-            'status': 'success',
-            'message': 'Session updated successfully',
-            'session': {
-                'id': session.id,
-                'title': session.title,
-                'created_at': session.created_at.isoformat(),
-                'updated_at': session.updated_at.isoformat(),
-                'is_active': session.is_active,
-                'metadata': session.metadata,
-                'message_count': session.message_count,
-                'last_message_preview': session.last_message_preview,
-            },
-        }
+        return UpdateSessionResponse(
+            status='success',
+            message='Session updated successfully',
+            session=SessionData(
+                id=session.id,
+                title=session.title,
+                created_at=session.created_at.isoformat(),
+                updated_at=session.updated_at.isoformat(),
+                is_active=session.is_active,
+                metadata=session.metadata,
+                message_count=session.message_count,
+                last_message_preview=session.last_message_preview,
+            ),
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -188,7 +231,7 @@ async def update_chat_session(
 
 
 @router.delete('/sessions/{session_id}')
-async def delete_chat_session(session_id: str) -> dict[str, Any]:
+async def delete_chat_session(session_id: str) -> DeleteSessionResponse:
     """Delete a chat session and all its messages."""
     if chat_manager is None:
         raise HTTPException(status_code=503, detail='Chat manager not initialized')
@@ -199,7 +242,9 @@ async def delete_chat_session(session_id: str) -> dict[str, Any]:
         if not success:
             raise HTTPException(status_code=404, detail='Session not found')
 
-        return {'status': 'success', 'message': 'Session deleted successfully'}
+        return DeleteSessionResponse(
+            status='success', message='Session deleted successfully'
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -210,7 +255,7 @@ async def delete_chat_session(session_id: str) -> dict[str, Any]:
 
 
 @router.post('/sessions/{session_id}/archive')
-async def archive_chat_session(session_id: str) -> dict[str, Any]:
+async def archive_chat_session(session_id: str) -> ArchiveSessionResponse:
     """Archive a chat session (mark as inactive)."""
     if chat_manager is None:
         raise HTTPException(status_code=503, detail='Chat manager not initialized')
@@ -221,7 +266,9 @@ async def archive_chat_session(session_id: str) -> dict[str, Any]:
         if not success:
             raise HTTPException(status_code=404, detail='Session not found')
 
-        return {'status': 'success', 'message': 'Session archived successfully'}
+        return ArchiveSessionResponse(
+            status='success', message='Session archived successfully'
+        )
     except HTTPException:
         raise
     except Exception as e:

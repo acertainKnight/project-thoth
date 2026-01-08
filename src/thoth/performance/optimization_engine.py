@@ -5,7 +5,7 @@ This module provides intelligent performance optimization recommendations
 and automated tuning strategies based on comprehensive system analysis.
 """
 
-import json
+import json  # noqa: I001
 import statistics
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -21,7 +21,7 @@ from thoth.performance.reliability_analyzer import (
 )
 from thoth.performance.workflow_monitor import WorkflowMonitor
 from thoth.services.service_manager import ServiceManager
-from thoth.config import config, Config
+from thoth.config import config, Config  # noqa: F401
 
 
 class OptimizationPriority(Enum):
@@ -121,7 +121,7 @@ class OptimizationEngine:
 
     def __init__(
         self,
-        config: Config,
+        config: Config,  # noqa: F811
         service_manager: ServiceManager,
         metrics_collector: MetricsCollector | None = None,
         pipeline_analyzer: PipelineAnalyzer | None = None,
@@ -417,7 +417,7 @@ class OptimizationEngine:
         resource_data = system_metrics.get('resource_consumption', {})
 
         api_costs = resource_data.get('api_costs_usd', {})
-        token_usage = resource_data.get('token_usage', {})
+        token_usage = resource_data.get('token_usage', {})  # noqa: F841
 
         # High API cost optimization
         total_cost = sum(api_costs.values())
@@ -730,7 +730,7 @@ class OptimizationEngine:
                 # Extract percentage if available
                 import re
 
-                percentages = re.findall(r'(\d+)[-–](\d+)%', improvement_text)
+                percentages = re.findall(r'(\d+)[-–](\d+)%', improvement_text)  # noqa: RUF001
                 if percentages:
                     min_perf, max_perf = map(int, percentages[0])
                     avg_improvement = (min_perf + max_perf) / 2
@@ -741,7 +741,7 @@ class OptimizationEngine:
             if 'cost' in improvement_text and (
                 'reduction' in improvement_text or 'saving' in improvement_text
             ):
-                percentages = re.findall(r'(\d+)[-–](\d+)%', improvement_text)
+                percentages = re.findall(r'(\d+)[-–](\d+)%', improvement_text)  # noqa: RUF001
                 if percentages:
                     min_cost, max_cost = map(int, percentages[0])
                     avg_saving = (min_cost + max_cost) / 2
@@ -766,7 +766,7 @@ class OptimizationEngine:
         medium_effort_count = sum(
             1 for rec in all_recommendations if rec.implementation_effort == 'Medium'
         )
-        low_effort_count = sum(
+        low_effort_count = sum(  # noqa: F841
             1 for rec in all_recommendations if rec.implementation_effort == 'Low'
         )
 

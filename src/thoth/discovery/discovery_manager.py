@@ -6,7 +6,7 @@ article discovery from APIs and web scraping sources, applies filtering,
 and integrates with the existing Thoth pipeline.
 """
 
-import json
+import json  # noqa: I001
 import time
 from datetime import datetime
 from pathlib import Path
@@ -194,7 +194,9 @@ class DiscoveryManager:
             if self.source_repo:
                 source_record = await self.source_repo.get_by_name(source_name)
                 if not source_record or not source_record.get('is_active'):
-                    logger.debug(f"Source '{source_name}' not found or inactive in database")
+                    logger.debug(
+                        f"Source '{source_name}' not found or inactive in database"
+                    )
                     return None
 
                 # Map database record to DiscoverySource model
@@ -206,11 +208,13 @@ class DiscoveryManager:
                     schedule_config={
                         'interval_minutes': 1440,
                         'max_articles_per_run': 50,
-                        'enabled': True
+                        'enabled': True,
                     },
                     api_config={
-                        'source': source_record['name'],  # CRITICAL: Add source identifier
-                        **source_record.get('config', {})
+                        'source': source_record[
+                            'name'
+                        ],  # CRITICAL: Add source identifier
+                        **source_record.get('config', {}),
                     },
                     scraper_config=None,
                     browser_recording=None,
@@ -360,7 +364,10 @@ class DiscoveryManager:
             raise DiscoveryManagerError(f'Discovery failed: {e}') from e
 
     def _discover_from_source(
-        self, source: DiscoverySource, max_articles: int | None = None, question: dict[str, Any] | None = None
+        self,
+        source: DiscoverySource,
+        max_articles: int | None = None,
+        question: dict[str, Any] | None = None,
     ) -> list[ScrapedArticleMetadata]:
         """
         Discover articles from a specific source.
@@ -377,7 +384,9 @@ class DiscoveryManager:
 
         try:
             if source.source_type == 'api' and source.api_config:
-                articles = self._discover_from_api(source.api_config, max_articles, question)
+                articles = self._discover_from_api(
+                    source.api_config, max_articles, question
+                )
             elif source.source_type == 'scraper' and source.scraper_config:
                 articles = self._discover_from_scraper(
                     source.scraper_config, max_articles
@@ -401,7 +410,10 @@ class DiscoveryManager:
         return articles
 
     def _discover_from_api(
-        self, api_config: dict[str, Any], max_articles: int | None = None, question: dict[str, Any] | None = None
+        self,
+        api_config: dict[str, Any],
+        max_articles: int | None = None,
+        question: dict[str, Any] | None = None,
     ) -> list[ScrapedArticleMetadata]:
         """
         Discover articles from API sources.
@@ -441,12 +453,16 @@ class DiscoveryManager:
             # Add keywords from research question
             if question.get('keywords'):
                 existing_keywords = enhanced_config.get('keywords', [])
-                enhanced_config['keywords'] = list(set(existing_keywords + question['keywords']))
+                enhanced_config['keywords'] = list(
+                    set(existing_keywords + question['keywords'])
+                )
 
             # Add topics/categories from research question
             if question.get('topics'):
                 existing_categories = enhanced_config.get('categories', [])
-                enhanced_config['categories'] = list(set(existing_categories + question['topics']))
+                enhanced_config['categories'] = list(
+                    set(existing_categories + question['topics'])
+                )
 
             # Add preferred authors from research question
             if question.get('authors'):
@@ -454,7 +470,9 @@ class DiscoveryManager:
 
             # Build optimized search query for ArXiv API
             # ArXiv needs explicit search_query parameter with proper syntax
-            if source_type == 'arxiv' and (question.get('keywords') or question.get('topics')):
+            if source_type == 'arxiv' and (
+                question.get('keywords') or question.get('topics')
+            ):
                 query_parts = []
 
                 # Add category filters (topics -> ArXiv categories)
@@ -463,7 +481,7 @@ class DiscoveryManager:
                     top_topics = question['topics'][:3]
                     cat_queries = [f'cat:{topic}' for topic in top_topics]
                     if cat_queries:
-                        query_parts.append(f"({' OR '.join(cat_queries)})")
+                        query_parts.append(f'({" OR ".join(cat_queries)})')
 
                 # Add keyword searches (search in title and abstract)
                 if question.get('keywords'):
@@ -474,13 +492,13 @@ class DiscoveryManager:
                         # Search in title OR abstract for each keyword
                         keyword_queries.append(f'(ti:"{keyword}" OR abs:"{keyword}")')
                     if keyword_queries:
-                        query_parts.append(f"({' OR '.join(keyword_queries)})")
+                        query_parts.append(f'({" OR ".join(keyword_queries)})')
 
                 # Combine with AND for more focused results
                 if query_parts:
                     search_query = ' AND '.join(query_parts)
                     enhanced_config['search_query'] = search_query
-                    logger.info(f"Built ArXiv search query: {search_query}")
+                    logger.info(f'Built ArXiv search query: {search_query}')
 
             # Add date filters from research question
             if question:
@@ -490,12 +508,12 @@ class DiscoveryManager:
                     enhanced_config['end_date'] = str(question['date_filter_end'])
 
             logger.info(
-                f"Enhanced API config with research question data: "
-                f"keywords={enhanced_config.get('keywords', [])}, "
-                f"categories={enhanced_config.get('categories', [])}, "
-                f"authors={enhanced_config.get('preferred_authors', [])}, "
-                f"search_query={enhanced_config.get('search_query', 'N/A')}, "
-                f"date_range={enhanced_config.get('start_date', 'N/A')} to {enhanced_config.get('end_date', 'present')}"
+                f'Enhanced API config with research question data: '
+                f'keywords={enhanced_config.get("keywords", [])}, '
+                f'categories={enhanced_config.get("categories", [])}, '
+                f'authors={enhanced_config.get("preferred_authors", [])}, '
+                f'search_query={enhanced_config.get("search_query", "N/A")}, '
+                f'date_range={enhanced_config.get("start_date", "N/A")} to {enhanced_config.get("end_date", "present")}'
             )
 
         try:
@@ -540,7 +558,9 @@ class DiscoveryManager:
             # Create ResearchQuery for plugin
             research_query = ResearchQuery(
                 name=api_config.get('name', source_type),
-                description=api_config.get('description', f'Discovery from {source_type}'),
+                description=api_config.get(
+                    'description', f'Discovery from {source_type}'
+                ),
                 research_question=question.get('question', '') if question else '',
                 keywords=keywords,
                 required_topics=question.get('topics', []) if question else [],

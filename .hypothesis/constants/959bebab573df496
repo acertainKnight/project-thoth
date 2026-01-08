@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/repositories/workflow_executions_repository.py
+# hypothesis_version: 6.148.9
+
+[0.0, 'cancelled', 'completed', 'completed_at', 'error_message', 'failed', 'id', 'results', 'running', 'started_at', 'status', 'success_rate', 'successful', 'total', 'total_executions', 'workflow', 'workflow_executions', 'workflow_id']

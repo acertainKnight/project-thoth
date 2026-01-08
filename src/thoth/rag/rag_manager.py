@@ -5,11 +5,11 @@ This module provides the main interface for the Retrieval-Augmented Generation
 system, coordinating embeddings, vector storage, and question answering.
 """
 
-from pathlib import Path
+from pathlib import Path  # noqa: I001
 from typing import Any
 
 from langchain.chains import RetrievalQA
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from loguru import logger
 
@@ -72,8 +72,8 @@ class RAGManager:
         self._init_components()
 
         # Register for config reload notifications
-        self.config.register_reload_callback("rag_manager", self._on_config_reload)
-        logger.debug("RAGManager registered for config reload notifications")
+        self.config.register_reload_callback('rag_manager', self._on_config_reload)
+        logger.debug('RAGManager registered for config reload notifications')
 
         logger.info('RAGManager initialized successfully')
 
@@ -110,7 +110,7 @@ class RAGManager:
 
         logger.debug('All RAG components initialized')
 
-    def _on_config_reload(self, config: 'Config') -> None:
+    def _on_config_reload(self, config: 'Config') -> None:  # noqa: ARG002, F821
         """
         Handle configuration reload for RAG system.
 
@@ -124,20 +124,28 @@ class RAGManager:
         - QA model settings
         """
         try:
-            logger.info("Reloading RAG configuration...")
+            logger.info('Reloading RAG configuration...')
 
             # Track changes for logging
-            embedding_changed = self.embedding_model != self.config.rag_config.embedding_model
+            embedding_changed = (
+                self.embedding_model != self.config.rag_config.embedding_model
+            )
             qa_model_changed = self.llm_model != self.config.rag_config.qa.model
             chunk_size_changed = self.chunk_size != self.config.rag_config.chunk_size
 
             # Log what's changing
             if embedding_changed:
-                logger.info(f"Embedding model changed: {self.embedding_model} → {self.config.rag_config.embedding_model}")
+                logger.info(
+                    f'Embedding model changed: {self.embedding_model} → {self.config.rag_config.embedding_model}'
+                )
             if qa_model_changed:
-                logger.info(f"QA model changed: {self.llm_model} → {self.config.rag_config.qa.model}")
+                logger.info(
+                    f'QA model changed: {self.llm_model} → {self.config.rag_config.qa.model}'
+                )
             if chunk_size_changed:
-                logger.info(f"Chunk size changed: {self.chunk_size} → {self.config.rag_config.chunk_size}")
+                logger.info(
+                    f'Chunk size changed: {self.chunk_size} → {self.config.rag_config.chunk_size}'
+                )
 
             # Update configuration parameters
             self.embedding_model = self.config.rag_config.embedding_model
@@ -153,10 +161,10 @@ class RAGManager:
             # Note: This recreates embedding manager and LLM clients
             self._init_components()
 
-            logger.success("✅ RAG config reloaded successfully")
+            logger.success('✅ RAG config reloaded successfully')
 
         except Exception as e:
-            logger.error(f"RAG config reload failed: {e}")
+            logger.error(f'RAG config reload failed: {e}')
 
     def _has_images(self, content: str) -> bool:
         """

@@ -1390,6 +1390,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d5/10/3654b44093aa3e587948c770279baca3a8dfe4d14a616142e8c6bf04b09b/free_proxy-1.1.3.tar.gz", hash = "sha256:6d82aa112e3df7725bdbf177e2110bccdf5f3bbd6e1c70b8616ec12ae3bbf98c", size = 5607, upload-time = "2024-11-07T08:42:48.684Z" }
 
 [[package]]
+name = "freezegun"
+version = "1.5.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/95/dd/23e2f4e357f8fd3bdff613c1fe4466d21bfb00a6177f238079b17f7b1c84/freezegun-1.5.5.tar.gz", hash = "sha256:ac7742a6cc6c25a2c35e9292dfd554b897b517d2dec26891a2e8debf205cb94a", size = 35914, upload-time = "2025-08-09T10:39:08.338Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5e/2e/b41d8a1a917d6581fc27a35d05561037b048e47df50f27f8ac9c7e27a710/freezegun-1.5.5-py3-none-any.whl", hash = "sha256:cd557f4a75cf074e84bc374249b9dd491eaeacd61376b9eb3c423282211619d2", size = 19266, upload-time = "2025-08-09T10:39:06.636Z" },
+]
+
+[[package]]
 name = "frozenlist"
 version = "1.5.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1764,6 +1776,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/cc/3f/2c29224acb2e2df4d2046e4c73ee2662023c58ff5b113c4c1adac0886c43/humanfriendly-10.0.tar.gz", hash = "sha256:6b0b831ce8f15f7300721aa49829fc4e83921a9a301cc7f606be6686a2288ddc", size = 360702, upload-time = "2021-09-17T21:40:43.31Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f0/0f/310fb31e39e2d734ccaa2c0fb981ee41f7bd5056ce9bc29b2248bd569169/humanfriendly-10.0-py2.py3-none-any.whl", hash = "sha256:1697e1a8a8f550fd43c2865cd84542fc175a61dcb779b6fee18cf6b6ccba1477", size = 86794, upload-time = "2021-09-17T21:40:39.897Z" },
+]
+
+[[package]]
+name = "hypothesis"
+version = "6.148.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
+    { name = "sortedcontainers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b4/1b/de4a349fe5942e500c3f6b0e61e09347d9fefab9e1ac7048c909080a31a0/hypothesis-6.148.9.tar.gz", hash = "sha256:6ec0696ed2fff8c514d61b6f1ca2cd1cb00c948ffd18cab1877c941c0ddb2839", size = 471562, upload-time = "2026-01-01T04:52:54.005Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ac/65/c7fbad05a0ace913b60342d36d1b871edc861f81ab98f60a298a781144a5/hypothesis-6.148.9-py3-none-any.whl", hash = "sha256:c514fcca90eded0e6b56d4df4bc41db935cb4635a9fe3ec9be21d09243ca983b", size = 538490, upload-time = "2026-01-01T04:52:51.353Z" },
 ]
 
 [[package]]
@@ -4821,6 +4846,15 @@ wheels = [
 ]
 
 [[package]]
+name = "py-cpuinfo"
+version = "9.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/37/a8/d832f7293ebb21690860d2e01d8115e5ff6f2ae8bbdc953f0eb0fa4bd2c7/py-cpuinfo-9.0.0.tar.gz", hash = "sha256:3cdbbf3fac90dc6f118bfd64384f309edeadd902d7c8fb17f02ffa1fc3f49690", size = 104716, upload-time = "2022-10-25T20:38:06.303Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e0/a9/023730ba63db1e494a271cb018dcd361bd2c917ba7004c3e49d5daf795a2/py_cpuinfo-9.0.0-py3-none-any.whl", hash = "sha256:859625bc251f64e21f077d099d4162689c762b5d6a4c3c97553d56241c9674d5", size = 22335, upload-time = "2022-10-25T20:38:27.636Z" },
+]
+
+[[package]]
 name = "pyasn1"
 version = "0.6.1"
 source = { registry = "https://pypi.org/simple" }
@@ -5106,6 +5140,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8e/c4/453c52c659521066969523e87d85d54139bbd17b78f09532fb8eb8cdb58e/pytest_asyncio-0.26.0.tar.gz", hash = "sha256:c4df2a697648241ff39e7f0e4a73050b03f123f760673956cf0d72a4990e312f", size = 54156, upload-time = "2025-03-25T06:22:28.883Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/20/7f/338843f449ace853647ace35870874f69a764d251872ed1b4de9f234822c/pytest_asyncio-0.26.0-py3-none-any.whl", hash = "sha256:7b51ed894f4fbea1340262bdae5135797ebbe21d8638978e35d31c6d19f72fb0", size = 19694, upload-time = "2025-03-25T06:22:27.807Z" },
+]
+
+[[package]]
+name = "pytest-benchmark"
+version = "5.2.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "py-cpuinfo" },
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/24/34/9f732b76456d64faffbef6232f1f9dbec7a7c4999ff46282fa418bd1af66/pytest_benchmark-5.2.3.tar.gz", hash = "sha256:deb7317998a23c650fd4ff76e1230066a76cb45dcece0aca5607143c619e7779", size = 341340, upload-time = "2025-11-09T18:48:43.215Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/33/29/e756e715a48959f1c0045342088d7ca9762a2f509b945f362a316e9412b7/pytest_benchmark-5.2.3-py3-none-any.whl", hash = "sha256:bc839726ad20e99aaa0d11a127445457b4219bdb9e80a1afc4b51da7f96b0803", size = 45255, upload-time = "2025-11-09T18:48:39.765Z" },
 ]
 
 [[package]]
@@ -5546,6 +5593,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f3/61/d7545dafb7ac2230c70d38d31cbfe4cc64f7144dc41f6e4e4b78ecd9f5bb/requests-toolbelt-1.0.0.tar.gz", hash = "sha256:7681a0a3d047012b5bdc0ee37d7f8f07ebe76ab08caeccfc3921ce23c88d5bc6", size = 206888, upload-time = "2023-05-01T04:11:33.229Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3f/51/d4db610ef29373b879047326cbf6fa98b6c1969d6f6dc423279de2b1be2c/requests_toolbelt-1.0.0-py2.py3-none-any.whl", hash = "sha256:cccfdd665f0a24fcf4726e690f65639d272bb0637b9b92dfd91a5568ccf6bd06", size = 54481, upload-time = "2023-05-01T04:11:28.427Z" },
+]
+
+[[package]]
+name = "respx"
+version = "0.22.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f4/7c/96bd0bc759cf009675ad1ee1f96535edcb11e9666b985717eb8c87192a95/respx-0.22.0.tar.gz", hash = "sha256:3c8924caa2a50bd71aefc07aa812f2466ff489f1848c96e954a5362d17095d91", size = 28439, upload-time = "2024-12-19T22:33:59.374Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8e/67/afbb0978d5399bc9ea200f1d4489a23c9a1dad4eee6376242b8182389c79/respx-0.22.0-py2.py3-none-any.whl", hash = "sha256:631128d4c9aba15e56903fb5f66fb1eff412ce28dd387ca3a81339e52dbd3ad0", size = 25127, upload-time = "2024-12-19T22:33:57.837Z" },
 ]
 
 [[package]]
@@ -6364,6 +6423,7 @@ all = [
     { name = "bibtexparser" },
     { name = "black" },
     { name = "build" },
+    { name = "cachetools" },
     { name = "chromadb" },
     { name = "codespell" },
     { name = "cryptography" },
@@ -6371,8 +6431,10 @@ all = [
     { name = "fake-useragent" },
     { name = "fastapi" },
     { name = "feedparser" },
+    { name = "freezegun" },
     { name = "grandalf" },
     { name = "httpx" },
+    { name = "hypothesis" },
     { name = "instructor" },
     { name = "jinja2" },
     { name = "json-repair" },
@@ -6406,10 +6468,12 @@ all = [
     { name = "pypdf" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "pytest-benchmark" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
     { name = "pytest-timeout" },
     { name = "requests" },
+    { name = "respx" },
     { name = "roman-numerals-py" },
     { name = "ruff" },
     { name = "scholarly" },
@@ -6515,6 +6579,7 @@ service-api = [
     { name = "asyncpg" },
     { name = "beautifulsoup4" },
     { name = "bibtexparser" },
+    { name = "cachetools" },
     { name = "chromadb" },
     { name = "cryptography" },
     { name = "duckduckgo-search" },
@@ -6566,6 +6631,7 @@ service-dashboard = [
     { name = "asyncpg" },
     { name = "beautifulsoup4" },
     { name = "bibtexparser" },
+    { name = "cachetools" },
     { name = "chromadb" },
     { name = "cryptography" },
     { name = "duckduckgo-search" },
@@ -6613,23 +6679,45 @@ service-discovery = [
     { name = "asyncpg" },
     { name = "beautifulsoup4" },
     { name = "bibtexparser" },
+    { name = "cachetools" },
+    { name = "chromadb" },
     { name = "cryptography" },
     { name = "duckduckgo-search" },
     { name = "fake-useragent" },
     { name = "fastapi" },
     { name = "feedparser" },
+    { name = "grandalf" },
     { name = "httpx" },
+    { name = "instructor" },
     { name = "jinja2" },
     { name = "json-repair" },
+    { name = "langchain" },
+    { name = "langchain-anthropic" },
+    { name = "langchain-chroma" },
+    { name = "langchain-core" },
+    { name = "langchain-openai" },
+    { name = "langchain-text-splitters" },
+    { name = "langgraph" },
+    { name = "langgraph-checkpoint" },
+    { name = "langgraph-prebuilt" },
+    { name = "langgraph-sdk" },
+    { name = "langsmith" },
     { name = "lxml" },
+    { name = "mistralai" },
     { name = "networkx" },
+    { name = "openai" },
+    { name = "openrouter" },
     { name = "playwright" },
+    { name = "pypdf" },
     { name = "requests" },
     { name = "roman-numerals-py" },
     { name = "scholarly" },
     { name = "selenium" },
     { name = "sqlalchemy" },
+    { name = "tiktoken" },
     { name = "uvicorn" },
+    { name = "watchdog" },
+    { name = "websockets" },
 ]
 service-mcp = [
     { name = "aiofiles" },
@@ -6639,6 +6727,7 @@ service-mcp = [
     { name = "asyncpg" },
     { name = "beautifulsoup4" },
     { name = "bibtexparser" },
+    { name = "cachetools" },
     { name = "chromadb" },
     { name = "cryptography" },
     { name = "duckduckgo-search" },
@@ -6688,6 +6777,7 @@ service-monitor = [
     { name = "asyncpg" },
     { name = "beautifulsoup4" },
     { name = "bibtexparser" },
+    { name = "cachetools" },
     { name = "chromadb" },
     { name = "cryptography" },
     { name = "duckduckgo-search" },
@@ -6730,17 +6820,23 @@ service-monitor = [
     { name = "websockets" },
 ]
 test = [
+    { name = "freezegun" },
+    { name = "hypothesis" },
+    { name = "psutil" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "pytest-benchmark" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
     { name = "pytest-timeout" },
+    { name = "respx" },
 ]
 utils = [
     { name = "jsonpatch" },
     { name = "psutil" },
 ]
 vectordb = [
+    { name = "cachetools" },
     { name = "chromadb" },
     { name = "langchain-chroma" },
 ]
@@ -6766,6 +6862,7 @@ requires-dist = [
     { name = "bibtexparser", marker = "extra == 'discovery'", specifier = ">=1.4.2" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=25.1.0" },
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.2.2.post1" },
+    { name = "cachetools", marker = "extra == 'vectordb'", specifier = ">=5.3.0" },
     { name = "chromadb", marker = "extra == 'vectordb'", specifier = ">=0.5.0" },
     { name = "click", specifier = ">=8.1.8" },
     { name = "codespell", marker = "extra == 'dev'", specifier = ">=2.4.1" },
@@ -6777,10 +6874,12 @@ requires-dist = [
     { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.115.12" },
     { name = "fastapi", marker = "extra == 'mcp'", specifier = ">=0.115.12" },
     { name = "feedparser", marker = "extra == 'discovery'", specifier = ">=6.0.11" },
+    { name = "freezegun", marker = "extra == 'test'", specifier = ">=1.5.5" },
     { name = "fuzzywuzzy", specifier = ">=0.18.0" },
     { name = "grandalf", marker = "extra == 'langchain'", specifier = ">=0.8" },
     { name = "grandalf", marker = "extra == 'viz'", specifier = ">=0.8" },
     { name = "httpx", marker = "extra == 'api'", specifier = ">=0.27.0" },
+    { name = "hypothesis", marker = "extra == 'test'", specifier = ">=6.122.0" },
     { name = "instructor", marker = "extra == 'langchain'", specifier = ">=1.8.3" },
     { name = "ipykernel", marker = "extra == 'jupyter'", specifier = ">=6.29.5" },
     { name = "jinja2", marker = "extra == 'api'", specifier = ">=3.1.6" },
@@ -6814,6 +6913,7 @@ requires-dist = [
     { name = "playwright", marker = "extra == 'discovery'", specifier = ">=1.48.0" },
     { name = "plotly", marker = "extra == 'viz'", specifier = ">=5.20.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.2.0" },
+    { name = "psutil", marker = "extra == 'test'", specifier = ">=7.0.0" },
     { name = "psutil", marker = "extra == 'utils'", specifier = ">=7.0.0" },
     { name = "pydantic", specifier = ">=2.9.2" },
     { name = "pydantic-settings", specifier = ">=2.5.0" },
@@ -6822,6 +6922,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.3.5" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.26.0" },
     { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.26.0" },
+    { name = "pytest-benchmark", marker = "extra == 'test'", specifier = ">=5.1.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.1.1" },
     { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=6.1.1" },
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.14.0" },
@@ -6831,6 +6932,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "python-levenshtein", specifier = ">=0.27.3" },
     { name = "requests", marker = "extra == 'api'", specifier = ">=2.32.3" },
+    { name = "respx", marker = "extra == 'test'", specifier = ">=0.22.0" },
     { name = "roman-numerals-py", marker = "extra == 'discovery'", specifier = ">=3.1.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11.11" },
     { name = "scholarly", marker = "extra == 'discovery'", specifier = ">=1.7.11" },
@@ -6839,8 +6941,8 @@ requires-dist = [
     { name = "sentence-transformers", marker = "extra == 'embeddings'", specifier = ">=3.0.0" },
     { name = "sqlalchemy", marker = "extra == 'api'", specifier = ">=2.0.39" },
     { name = "sqlite-vec", marker = "extra == 'memory'", specifier = ">=0.1.6" },
-    { name = "thoth", extras = ["api", "discovery"], marker = "extra == 'service-discovery'" },
     { name = "thoth", extras = ["api", "discovery", "pdf", "langchain", "vectordb"], marker = "extra == 'service-dashboard'" },
+    { name = "thoth", extras = ["api", "discovery", "pdf", "langchain", "vectordb"], marker = "extra == 'service-discovery'" },
     { name = "thoth", extras = ["api", "discovery", "pdf", "langchain", "vectordb", "memory"], marker = "extra == 'service-api'" },
     { name = "thoth", extras = ["api", "pdf", "discovery", "mcp", "langchain", "vectordb", "embeddings"], marker = "extra == 'service-monitor'" },
     { name = "thoth", extras = ["api", "pdf", "mcp", "discovery", "langchain", "vectordb", "embeddings"], marker = "extra == 'service-mcp'" },

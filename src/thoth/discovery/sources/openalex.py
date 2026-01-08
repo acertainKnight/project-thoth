@@ -8,7 +8,7 @@ scholarly works from the OpenAlex database.
 import time
 from typing import Any
 
-import requests
+import httpx
 from loguru import logger
 
 from thoth.utilities.schemas import ScrapedArticleMetadata
@@ -83,7 +83,7 @@ class OpenAlexAPISource(BaseAPISource):
             logger.info(f'Searching OpenAlex with params: {params}')
 
             self._rate_limit()
-            response = requests.get(self.base_url, params=params, timeout=30)
+            response = httpx.get(self.base_url, params=params, timeout=30)
             response.raise_for_status()
 
             data = response.json()

@@ -1,76 +1,58 @@
 repos:
-  # Format first ────────────────────────────────────────────────────────────────
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.10
-    hooks:
-      - id: ruff-format          # auto-wraps lines to 88 chars
-
-  # Project-local hooks ─────────────────────────────────────────────────────────
-  - repo: local
-    hooks:
-      # Pytest
-      - id: pytest
-        name: pytest
-        entry: uv run pytest
-        language: system
-        pass_filenames: false
-        types: [python]
-
-      # Strip notebook output
-      - id: nbstripout
-        name: nbstripout
-        entry: uv run nbstripout
-        language: system
-        types: [jupyter]
-
-      # Spell-checking
-      - id: codespell
-        name: codespell
-        entry: uv run codespell
-        language: system
-        types: [python]
-        exclude: |
-          (?x)(
-            .*\.csv|
-            .*\.ipynb        # Jupyter notebooks
-          )
-        args: [--ignore-words=.codespellignore]
-
-      # SQL lint/auto-fix
-      - id: sqlfluff-fix
-        name: sqlfluff-fix
-        entry: uv run sqlfluff fix --show-lint-violations --processes 0 --disable-progress-bar
-        language: system
-        types: [sql]
-
-      # Ruff lint (auto-fix) – runs every commit
-      - id: ruff-lint
-        name: ruff
-        entry: uv run ruff check --force-exclude
-        language: system
-        types: [python]
-        args: [--fix]
-
-      # ✔ NEW: Ruff add-noqa – manual only
-      # To invoke this hook, run:
-      #   pre-commit run --hook-stage manual ruff-add-noqa --all-files
-      - id: ruff-add-noqa
-        name: ruff (add-noqa)
-        entry: uv run ruff check --force-exclude --add-noqa
-        language: system
-        pass_filenames: false
-        stages: [manual]      # won't run unless you call it explicitly
-
-  # Standard pre-commit hooks
+  # General file checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0  # Use the latest version
+    rev: v4.5.0
     hooks:
-      - id: check-added-large-files
-        args: [--maxkb=2048]
-      # Add other standard hooks here if needed, e.g.:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
-        args: [--multi]
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-json
       - id: check-toml
       - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: detect-private-key
+      - id: mixed-line-ending
+
+  # Python code formatting with ruff
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.9
+    hooks:
+      # Run the linter
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      # Run the formatter
+      - id: ruff-format
+
+  # Type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-all]
+        args: [--ignore-missing-imports, --show-error-codes]
+        exclude: ^tests/
+
+  # Security checks
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.6
+    hooks:
+      - id: bandit
+        args: ['-c', 'pyproject.toml']
+        additional_dependencies: ['bandit[toml]']
+
+  # Docstring checks
+  - repo: https://github.com/pycqa/pydocstyle
+    rev: 6.3.0
+    hooks:
+      - id: pydocstyle
+        args: [--convention=google]
+        exclude: ^tests/
+
+  # Import sorting
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: [--profile, black]

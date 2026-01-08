@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/pipeline.py
+# hypothesis_version: 6.148.9
+
+['__main__', 'all_available_tags', 'articles_processed', 'articles_updated', 'final_tag_count', 'graph', 'migrated', 'original_tag_count', 'tags_added', 'tags_consolidated', 'tracker', 'vocabulary_size']

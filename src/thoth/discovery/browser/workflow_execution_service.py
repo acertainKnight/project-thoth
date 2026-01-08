@@ -15,14 +15,18 @@ from uuid import UUID
 from loguru import logger
 
 from thoth.discovery.browser.browser_manager import BrowserManager
-from thoth.discovery.browser.extraction_service import ExtractionService
-from thoth.discovery.browser.workflow_engine import WorkflowEngine, WorkflowExecutionResult
+from thoth.discovery.browser.extraction_service import ExtractionService  # noqa: F401
+from thoth.discovery.browser.workflow_engine import (
+    WorkflowEngine,
+)
 from thoth.repositories.browser_workflow_repository import BrowserWorkflowRepository
 from thoth.repositories.workflow_actions_repository import WorkflowActionsRepository
 from thoth.repositories.workflow_credentials_repository import (
     WorkflowCredentialsRepository,
 )
-from thoth.repositories.workflow_executions_repository import WorkflowExecutionsRepository
+from thoth.repositories.workflow_executions_repository import (
+    WorkflowExecutionsRepository,
+)
 from thoth.repositories.workflow_search_config_repository import (
     WorkflowSearchConfigRepository,
 )
@@ -83,13 +87,13 @@ class WorkflowExecutionService:
         ...     workflow_id=uuid.UUID('...'),
         ...     parameters=ExecutionParameters(
         ...         keywords=['machine learning', 'neural networks'],
-        ...         date_range='last_7d'
-        ...     )
+        ...         date_range='last_7d',
+        ...     ),
         ... )
         >>>
-        >>> print(f"Extracted {len(result.articles)} articles")
-        >>> print(f"Success: {result.stats.success}")
-        >>> print(f"Duration: {result.stats.duration_ms}ms")
+        >>> print(f'Extracted {len(result.articles)} articles')
+        >>> print(f'Success: {result.stats.success}')
+        >>> print(f'Duration: {result.stats.duration_ms}ms')
     """
 
     def __init__(
@@ -319,7 +323,9 @@ class WorkflowExecutionService:
         # Validate keywords if provided
         if parameters.keywords:
             if not isinstance(parameters.keywords, list):
-                raise WorkflowExecutionServiceError('Keywords must be a list of strings')
+                raise WorkflowExecutionServiceError(
+                    'Keywords must be a list of strings'
+                )
 
             if not all(isinstance(k, str) for k in parameters.keywords):
                 raise WorkflowExecutionServiceError('All keywords must be strings')

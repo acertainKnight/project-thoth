@@ -13,7 +13,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from loguru import logger
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
@@ -33,13 +32,13 @@ class DiscoveryConfigHandler(FileSystemEventHandler):
     def on_created(self, event):
         """Handle file creation events."""
         if not event.is_directory and event.src_path.endswith('.json'):
-            logger.info(f'New discovery config detected: {event.src_path}')
+            self.logger.info(f'New discovery config detected: {event.src_path}')
             self.server.load_source_from_file(Path(event.src_path))
 
     def on_modified(self, event):
         """Handle file modification events."""
         if not event.is_directory and event.src_path.endswith('.json'):
-            logger.info(f'Discovery config modified: {event.src_path}')
+            self.logger.info(f'Discovery config modified: {event.src_path}')
             self.server.load_source_from_file(Path(event.src_path))
 
 
@@ -94,7 +93,7 @@ class DiscoveryServer(BaseService):
     def initialize(self) -> None:
         """Initialize the discovery server."""
         self.discovery_service.initialize()
-        self.logger.info('Discovery server initialized')
+        self.self.logger.info('Discovery server initialized')
 
     def start(self) -> None:
         """
@@ -107,7 +106,7 @@ class DiscoveryServer(BaseService):
             raise DiscoveryServerError('Discovery server is already running')
 
         try:
-            self.logger.info('Starting discovery server...')
+            self.self.logger.info('Starting discovery server...')
 
             # Set up signal handlers for graceful shutdown
             signal.signal(signal.SIGTERM, self._signal_handler)
@@ -130,7 +129,7 @@ class DiscoveryServer(BaseService):
             )
             self.server_thread.start()
 
-            self.logger.info('Discovery server started successfully')
+            self.self.logger.info('Discovery server started successfully')
             self.log_operation('server_started')
 
         except Exception as e:
@@ -142,7 +141,7 @@ class DiscoveryServer(BaseService):
         if not self.running:
             return
 
-        self.logger.info('Stopping discovery server...')
+        self.self.logger.info('Stopping discovery server...')
 
         # Signal shutdown
         self.running = False
@@ -152,7 +151,7 @@ class DiscoveryServer(BaseService):
         try:
             self.discovery_service.stop_scheduler()
         except Exception as e:
-            self.logger.error(f'Error stopping scheduler: {e}')
+            self.self.logger.error(f'Error stopping scheduler: {e}')
 
         # Stop file monitoring
         self._stop_file_monitoring()
@@ -161,7 +160,7 @@ class DiscoveryServer(BaseService):
         if self.server_thread and self.server_thread.is_alive():
             self.server_thread.join(timeout=10.0)
 
-        self.logger.info('Discovery server stopped')
+        self.self.logger.info('Discovery server stopped')
         self.log_operation('server_stopped')
 
     def load_source_from_file(self, config_file: Path) -> bool:
@@ -176,7 +175,7 @@ class DiscoveryServer(BaseService):
         """
         try:
             if not config_file.exists():
-                self.logger.warning(f'Config file does not exist: {config_file}')
+                self.self.logger.warning(f'Config file does not exist: {config_file}')
                 return False
 
             # Load configuration
@@ -192,12 +191,12 @@ class DiscoveryServer(BaseService):
             if existing_source:
                 # Update existing source
                 self.discovery_service.update_source(source)
-                self.logger.info(f'Updated discovery source: {source.name}')
+                self.self.logger.info(f'Updated discovery source: {source.name}')
                 action = 'updated'
             else:
                 # Create new source
                 self.discovery_service.create_source(source)
-                self.logger.info(f'Created discovery source: {source.name}')
+                self.self.logger.info(f'Created discovery source: {source.name}')
                 action = 'created'
                 self.sources_loaded += 1
 
@@ -212,7 +211,7 @@ class DiscoveryServer(BaseService):
 
         except Exception as e:
             error_msg = f'Failed to load source from {config_file}: {e}'
-            self.logger.error(error_msg)
+            self.self.logger.error(error_msg)
             self.errors_count += 1
             return False
 
@@ -267,30 +266,30 @@ class DiscoveryServer(BaseService):
             self.start()
 
             # Block until shutdown signal
-            self.logger.info('Discovery server running. Press Ctrl+C to stop.')
+            self.self.logger.info('Discovery server running. Press Ctrl+C to stop.')
 
             while self.running:
                 try:
                     time.sleep(1)
                 except KeyboardInterrupt:
-                    self.logger.info('Shutdown signal received')
+                    self.self.logger.info('Shutdown signal received')
                     break
 
         except Exception as e:
-            self.logger.error(f'Server error: {e}')
+            self.self.logger.error(f'Server error: {e}')
             raise
         finally:
             self.stop()
 
     def _signal_handler(self, signum, frame):  # noqa: ARG002
         """Handle shutdown signals."""
-        self.logger.info(f'Received signal {signum}, shutting down...')
+        self.self.logger.info(f'Received signal {signum}, shutting down...')
         self.running = False
         self.shutdown_event.set()
 
     def _server_loop(self) -> None:
         """Main server loop running in separate thread."""
-        self.logger.info('Server loop started')
+        self.self.logger.info('Server loop started')
 
         while self.running:
             try:
@@ -302,11 +301,11 @@ class DiscoveryServer(BaseService):
                 self._perform_maintenance()
 
             except Exception as e:
-                self.logger.error(f'Error in server loop: {e}')
+                self.self.logger.error(f'Error in server loop: {e}')
                 self.errors_count += 1
                 time.sleep(60)  # Continue after error
 
-        self.logger.info('Server loop stopped')
+        self.self.logger.info('Server loop stopped')
 
     def _start_file_monitoring(self) -> None:
         """Start monitoring the discovery sources directory."""
@@ -319,10 +318,10 @@ class DiscoveryServer(BaseService):
             )
             self.file_observer.start()
 
-            self.logger.info(f'Started file monitoring on: {sources_dir}')
+            self.self.logger.info(f'Started file monitoring on: {sources_dir}')
 
         except Exception as e:
-            self.logger.error(f'Failed to start file monitoring: {e}')
+            self.self.logger.error(f'Failed to start file monitoring: {e}')
             self.errors_count += 1
 
     def _stop_file_monitoring(self) -> None:
@@ -331,9 +330,9 @@ class DiscoveryServer(BaseService):
             try:
                 self.file_observer.stop()
                 self.file_observer.join(timeout=5.0)
-                self.logger.info('Stopped file monitoring')
+                self.self.logger.info('Stopped file monitoring')
             except Exception as e:
-                self.logger.error(f'Error stopping file monitoring: {e}')
+                self.self.logger.error(f'Error stopping file monitoring: {e}')
 
     def _load_existing_sources(self) -> None:
         """Load all existing discovery source configurations."""
@@ -341,7 +340,7 @@ class DiscoveryServer(BaseService):
             sources_dir = self.discovery_service.sources_dir
             config_files = list(sources_dir.glob('*.json'))
 
-            self.logger.info(
+            self.self.logger.info(
                 f'Loading {len(config_files)} existing source configurations'
             )
 
@@ -349,22 +348,22 @@ class DiscoveryServer(BaseService):
                 self.load_source_from_file(config_file)
 
         except Exception as e:
-            self.logger.error(f'Error loading existing sources: {e}')
+            self.self.logger.error(f'Error loading existing sources: {e}')
             self.errors_count += 1
 
     def _activate_source_in_scheduler(self, source: DiscoverySource) -> None:
         """Activate a source in the scheduler if it's not already active."""
         try:
             if not source.schedule_config or not source.schedule_config.enabled:
-                self.logger.debug(f'Source {source.name} not enabled for scheduling')
+                self.self.logger.debug(f'Source {source.name} not enabled for scheduling')
                 return
 
             # The discovery service scheduler will automatically pick up
             # sources that have schedule configs when it runs its check loop
-            self.logger.info(f'Source {source.name} will be activated in scheduler')
+            self.self.logger.info(f'Source {source.name} will be activated in scheduler')
 
         except Exception as e:
-            self.logger.error(f'Error activating source {source.name}: {e}')
+            self.self.logger.error(f'Error activating source {source.name}: {e}')
             self.errors_count += 1
 
     def _perform_maintenance(self) -> None:
@@ -386,14 +385,14 @@ class DiscoveryServer(BaseService):
                 self._last_status_log = time.time()
 
         except Exception as e:
-            self.logger.error(f'Error in maintenance: {e}')
+            self.self.logger.error(f'Error in maintenance: {e}')
             self.errors_count += 1
 
     def _log_status_summary(self) -> None:
         """Log a summary of server status."""
         status = self.get_server_status()
 
-        self.logger.info(
+        self.self.logger.info(
             f'Discovery Server Status: '
             f'Sources: {status["discovery_service"]["total_sources"]}, '
             f'Enabled: {status["discovery_service"]["enabled_sources"]}, '

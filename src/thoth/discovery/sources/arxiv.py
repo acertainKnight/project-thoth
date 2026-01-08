@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Any
 
 import httpx
-import requests
+import httpx
 from bs4 import BeautifulSoup
 from loguru import logger
 
@@ -365,10 +365,13 @@ class ArxivClient:
             # Strip version number if present (e.g., v1, v2) as Semantic Scholar
             # doesn't recognize version-specific IDs
             import re
+
             clean_paper_id = re.sub(r'v\d+$', '', paper_id)
 
             # Use Semantic Scholar to get citation counts for arXiv papers
-            semantic_url = f'https://api.semanticscholar.org/v1/paper/arXiv:{clean_paper_id}'
+            semantic_url = (
+                f'https://api.semanticscholar.org/v1/paper/arXiv:{clean_paper_id}'
+            )
             response = self.client.get(semantic_url)
             response.raise_for_status()
             data = response.json()
@@ -465,7 +468,7 @@ class ArxivAPISource(BaseAPISource):
 
                 # Combine query parts
                 if not query_parts:
-                    # Default to recent papers in computer science if no specific criteria
+                    # Default to recent papers in computer science if no specific criteria  # noqa: W505
                     query = 'cat:cs.*'
                 else:
                     query = ' AND '.join(query_parts)
@@ -488,7 +491,7 @@ class ArxivAPISource(BaseAPISource):
             headers = {
                 'User-Agent': 'Thoth/1.0 (https://github.com/nick-ghafari/project-thoth)'
             }
-            response = requests.get(
+            response = httpx.get(
                 self.base_url, params=params, timeout=30, headers=headers
             )
             response.raise_for_status()

@@ -4,20 +4,20 @@ Tag repository for managing paper tags in PostgreSQL.
 This module handles tag associations and tag-based queries.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List  # noqa: I001, UP035
 from loguru import logger
 
 from thoth.repositories.base import BaseRepository
 
 
-class TagRepository(BaseRepository[Dict[str, Any]]):
+class TagRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
     """Repository for managing tag records."""
 
     def __init__(self, postgres_service, **kwargs):
         """Initialize tag repository."""
         super().__init__(postgres_service, table_name='tags', **kwargs)
 
-    async def get_all_unique_tags(self) -> List[str]:
+    async def get_all_unique_tags(self) -> List[str]:  # noqa: UP006
         """
         Get all unique tags across the system.
 
@@ -25,12 +25,12 @@ class TagRepository(BaseRepository[Dict[str, Any]]):
             List[str]: List of unique tag names
         """
         try:
-            query = "SELECT DISTINCT name FROM tags ORDER BY name"
+            query = 'SELECT DISTINCT name FROM tags ORDER BY name'
             results = await self.postgres.fetch(query)
             return [row['name'] for row in results]
 
         except Exception as e:
-            logger.error(f"Failed to get all unique tags: {e}")
+            logger.error(f'Failed to get all unique tags: {e}')
             return []
 
     async def get_tag_usage_count(self, tag_name: str) -> int:
@@ -54,7 +54,7 @@ class TagRepository(BaseRepository[Dict[str, Any]]):
             logger.error(f"Failed to get usage count for tag '{tag_name}': {e}")
             return 0
 
-    async def get_tag_statistics(self) -> List[Dict[str, Any]]:
+    async def get_tag_statistics(self) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get statistics for all tags including usage counts.
 
@@ -75,7 +75,7 @@ class TagRepository(BaseRepository[Dict[str, Any]]):
             return [dict(row) for row in results]
 
         except Exception as e:
-            logger.error(f"Failed to get tag statistics: {e}")
+            logger.error(f'Failed to get tag statistics: {e}')
             return []
 
     async def consolidate_tag(self, old_tag: str, new_tag: str) -> int:
@@ -103,7 +103,9 @@ class TagRepository(BaseRepository[Dict[str, Any]]):
             # Invalidate cache
             self._invalidate_cache()
 
-            logger.info(f"Consolidated tag '{old_tag}' to '{new_tag}' in {count} papers")
+            logger.info(
+                f"Consolidated tag '{old_tag}' to '{new_tag}' in {count} papers"
+            )
             return count
 
         except Exception as e:
@@ -166,7 +168,7 @@ class TagRepository(BaseRepository[Dict[str, Any]]):
             logger.error(f"Failed to remove tag '{tag}' from paper {paper_id}: {e}")
             return False
 
-    async def get_related_tags(self, tag: str, limit: int = 10) -> List[Dict[str, Any]]:
+    async def get_related_tags(self, tag: str, limit: int = 10) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get tags that frequently co-occur with the given tag.
 

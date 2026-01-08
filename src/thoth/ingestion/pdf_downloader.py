@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 
-import requests
+import httpx
 from loguru import logger
 from tqdm import tqdm
 
@@ -27,7 +27,7 @@ def download_pdf(url: str, pdf_dir: Path, filename: str | None = None) -> Path:
 
     Raises:
         ValueError: If the URL is invalid or doesn't point to a PDF.
-        requests.RequestException: If the download fails.
+        httpx.HTTPError: If the download fails.
         IOError: If there are issues saving the file.
 
     Example:
@@ -54,7 +54,7 @@ def download_pdf(url: str, pdf_dir: Path, filename: str | None = None) -> Path:
 
     # Download with progress bar
     try:
-        response = requests.get(url, stream=True)
+        response = httpx.get(url, stream=True)
         response.raise_for_status()
 
         # Get total file size
@@ -78,7 +78,7 @@ def download_pdf(url: str, pdf_dir: Path, filename: str | None = None) -> Path:
         logger.info(f'Successfully downloaded PDF to {pdf_path}')
         return pdf_path
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f'Failed to download PDF from {url}: {e!s}')
         raise
     except OSError as e:

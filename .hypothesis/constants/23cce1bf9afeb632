@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/services/citation_service.py
+# hypothesis_version: 6.148.9
+
+['0%', 'CitationGraph', '_citation_tracker', '_service_manager', 'analysis', 'apa', 'apis', 'articles_searched', 'chicago', 'citation', 'citation_config', 'citation_formatted', 'citation_service', 'citations', 'citations_extracted', 'citations_tracked', 'content', 'data', 'depth', 'edges', 'extracting citations', 'harvard', 'id', 'ieee', 'link_format', 'llm_config', 'markdown_path', 'metadata', 'mla', 'network_retrieved', 'nodes', 'notes_regenerated', 'paths_updated', 'pdf_located', 'pdf_path', 'prompts_dir', 'provider', 'source', 'style', 'target', 'title', 'tracking citations']

@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/tag_consolidator.py
+# hypothesis_version: 6.148.9
+
+['/', 'abstract', 'added_tags', 'analysis', 'articles_processed', 'articles_updated', 'available_tags', 'canonical_tags', 'consolidate_tags.j2', 'current_tags', 'existing_tags', 'final_tag_count', 'final_tags', 'google', 'jinja2', 'json_schema', 'map_single_tag.j2', 'max_tokens', 'metadata', 'original_tag', 'original_tag_count', 'original_tags', 'tags', 'tags_added', 'tags_consolidated', 'title', 'updated_articles']

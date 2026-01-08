@@ -6,10 +6,13 @@ This module contains the main pipeline that orchestrates the processing of PDF d
 2. LLM analysis of content
 3. Citation extraction and processing
 4. Note generation for Obsidian
+
+DEPRECATED: Use initialize_thoth() from thoth.initialization instead.
 """  # noqa: W505
 
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +37,12 @@ class ThothPipeline:
     """
     Main processing pipeline for Thoth.
 
+    DEPRECATED: Use initialize_thoth() from thoth.initialization instead.
+    
+    This class is maintained for backward compatibility but will be removed
+    in a future version. New code should use the initialize_thoth() factory
+    function directly.
+
     This class orchestrates the complete document processing workflow:
     1. OCR conversion of PDF to Markdown using ProcessingService
     2. Content analysis using ProcessingService
@@ -54,6 +63,8 @@ class ThothPipeline:
         """
         Initialize the Thoth pipeline.
 
+        DEPRECATED: Use initialize_thoth() from thoth.initialization instead.
+
         Args:
             ocr_api_key: The Mistral API key for OCR. If None, loaded from config.
             llm_api_key: The OpenRouter API key for LLM processing. If None, loaded from config.
@@ -63,7 +74,17 @@ class ThothPipeline:
             notes_dir: Directory to save generated notes. If None, default from config is used.
             api_base_url: Base URL for the FastAPI endpoint. If None, loaded from config.
         """  # noqa: W505
-        # ThothPipeline now uses OptimizedDocumentPipeline by default
+        # Issue deprecation warning
+        warnings.warn(
+            "ThothPipeline is deprecated and will be removed in a future version. "
+            "Use initialize_thoth() from thoth.initialization instead:\n\n"
+            "    from thoth.initialization import initialize_thoth\n"
+            "    services, pipeline, graph = initialize_thoth()\n",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        
+        # ThothPipeline now uses initialize_thoth() internally
         logger.info(
             'ThothPipeline initialized with optimized processing (50-65% faster) '
             'including async I/O, intelligent caching, and CPU-aware scaling.'
@@ -72,67 +93,31 @@ class ThothPipeline:
         # Load configuration
         self.config = config
 
-        # Override API keys if provided
+        # Override API keys if provided (for backward compatibility)
         if ocr_api_key:
             self.config.api_keys.mistral_key = ocr_api_key
         if llm_api_key:
             self.config.api_keys.openrouter_key = llm_api_key
 
-        # Set up directories
+        # Handle directory overrides for backward compatibility
+        # Store them as attributes for compatibility with old code
         self.templates_dir = templates_dir or Path(self.config.templates_dir)
         self.prompts_dir = prompts_dir or Path(self.config.prompts_dir)
         self.output_dir = output_dir or Path(self.config.output_dir)
         self.notes_dir = notes_dir or Path(self.config.notes_dir)
         self.markdown_dir = Path(self.config.markdown_dir)
 
-        # Ensure directories exist
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.notes_dir.mkdir(parents=True, exist_ok=True)
-        self.markdown_dir.mkdir(parents=True, exist_ok=True)
-
-        # Initialize service manager
-        self.services = ServiceManager(config=self.config)
-        self.services.initialize()
-
-        # Run automatic path migration on startup
-        # This ensures synced data from other machines works correctly
-        from thoth.services.path_migration_service import PathMigrationService
-
-        migration_service = PathMigrationService(self.config)
-        migration_results = migration_service.migrate_all()
-        if migration_results.get('tracker', {}).get('migrated') or migration_results.get(
-            'graph', {}
-        ).get('migrated'):
-            logger.info('Paths migrated to current machine configuration')
-
-        # Initialize PDF tracker
-        self.pdf_tracker = PDFTracker()
-
-        # Initialize components that aren't yet services
-        # TODO: CitationGraph should eventually be converted to a service
-        self.citation_tracker = CitationGraph(
-            knowledge_base_dir=self.config.knowledge_base_dir,
-            graph_storage_path=self.config.graph_storage_path,
-            pdf_dir=self.config.pdf_dir,
-            markdown_dir=self.config.markdown_dir,
-            notes_dir=self.config.notes_dir,
-            service_manager=self.services,  # Pass ServiceManager for note generation
+        # Use initialize_thoth() for the actual initialization
+        from thoth.initialization import initialize_thoth
+        
+        self.services, self.document_pipeline, self.citation_tracker = initialize_thoth(
+            config=self.config
         )
-
-        # Set citation tracker in services that need it
-        self.services.set_citation_tracker(self.citation_tracker)
-
-        # Initialize optimized document pipeline for handling PDF processing
-        self.document_pipeline = OptimizedDocumentPipeline(
-            services=self.services,
-            citation_tracker=self.citation_tracker,
-            pdf_tracker=self.pdf_tracker,
-            output_dir=self.output_dir,
-            notes_dir=self.notes_dir,
-            markdown_dir=self.markdown_dir,
-        )
-
-        # Initialize knowledge pipeline for RAG operations
+        
+        # Extract additional components for backward compatibility
+        self.pdf_tracker = self.document_pipeline.pdf_tracker
+        
+        # Initialize knowledge pipeline for RAG operations (still needed)
         self.knowledge_pipeline = KnowledgePipeline(
             services=self.services,
             citation_tracker=self.citation_tracker,
@@ -145,7 +130,17 @@ class ThothPipeline:
         logger.info('Thoth pipeline initialized with service layer')
 
     def process_pdf(self, pdf_path: str | Path) -> tuple[Path, Path, Path]:
-        """Process a PDF using the internal :class:`DocumentPipeline`."""
+        """
+        Process a PDF using the internal :class:`DocumentPipeline`.
+        
+        DEPRECATED: Use pipeline.document_pipeline.process_pdf() directly instead.
+        """
+        warnings.warn(
+            "ThothPipeline.process_pdf() is deprecated. "
+            "Use pipeline.document_pipeline.process_pdf() directly instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
         try:
             return self.document_pipeline.process_pdf(pdf_path)
@@ -156,6 +151,8 @@ class ThothPipeline:
         """
         Regenerate all markdown notes for all articles in the citation graph.
 
+        DEPRECATED: Use services.citation.regenerate_all_notes() directly instead.
+
         This method delegates to the CitationService's regenerate_all_notes method
         and returns a list of (final_pdf_path, final_note_path) for successfully
         regenerated notes.
@@ -163,6 +160,13 @@ class ThothPipeline:
         Returns:
             list[tuple[Path, Path]]: A list of (PDF path, note path) tuples for successes.
         """  # noqa: W505
+        warnings.warn(
+            "ThothPipeline.regenerate_all_notes() is deprecated. "
+            "Use services.citation.regenerate_all_notes() directly instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        
         if not self.services:
             logger.error(
                 'ServiceManager is not initialized. Cannot regenerate all notes.'
@@ -181,6 +185,8 @@ class ThothPipeline:
         """
         Consolidate existing tags without suggesting additional tags.
 
+        DEPRECATED: Use services.tag.consolidate_only() directly instead.
+
         This method performs only the tag consolidation process:
         1. Extracts all existing tags from the citation graph
         2. Consolidates similar tags into canonical forms using LLM analysis
@@ -196,6 +202,13 @@ class ThothPipeline:
             >>> print(f'Processed {stats["articles_processed"]} articles')
             >>> print(f'Consolidated {stats["tags_consolidated"]} tags')
         """
+        warnings.warn(
+            "ThothPipeline.consolidate_tags_only() is deprecated. "
+            "Use services.tag.consolidate_only() directly instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        
         if not self.citation_tracker:
             logger.error('CitationGraph is not initialized. Cannot consolidate tags.')
             return {
@@ -214,6 +227,8 @@ class ThothPipeline:
         """
         Suggest additional relevant tags for all articles using existing tag vocabulary.
 
+        DEPRECATED: Use services.tag.suggest_additional() directly instead.
+
         This method suggests additional tags for articles based on their abstracts
         and the existing tag vocabulary in the citation graph.
 
@@ -227,6 +242,13 @@ class ThothPipeline:
             >>> print(f'Processed {stats["articles_processed"]} articles')
             >>> print(f'Added {stats["tags_added"]} new tags')
         """
+        warnings.warn(
+            "ThothPipeline.suggest_additional_tags() is deprecated. "
+            "Use services.tag.suggest_additional() directly instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        
         if not self.citation_tracker:
             logger.error(
                 'CitationGraph is not initialized. Cannot suggest additional tags.'
@@ -243,6 +265,8 @@ class ThothPipeline:
     def consolidate_and_retag_all_articles(self) -> dict[str, Any]:
         """
         Consolidate existing tags and suggest additional relevant tags for all articles.
+
+        DEPRECATED: Use services.tag.consolidate_and_retag() directly instead.
 
         This method performs a complete tag consolidation and re-tagging process:
         1. Extracts all existing tags from the citation graph
@@ -263,6 +287,13 @@ class ThothPipeline:
             >>> print(f'Consolidated {stats["tags_consolidated"]} tags')
             >>> print(f'Added {stats["tags_added"]} new tags')
         """
+        warnings.warn(
+            "ThothPipeline.consolidate_and_retag_all_articles() is deprecated. "
+            "Use services.tag.consolidate_and_retag() directly instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        
         if not self.citation_tracker:
             logger.error(
                 'CitationGraph is not initialized. Cannot consolidate and retag articles.'
@@ -280,7 +311,18 @@ class ThothPipeline:
     def web_search(
         self, query: str, num_results: int = 5, provider: str | None = None
     ) -> list[SearchResult]:
-        """Perform a general web search."""
+        """
+        Perform a general web search.
+        
+        DEPRECATED: Use services.web_search.search() directly instead.
+        """
+        warnings.warn(
+            "ThothPipeline.web_search() is deprecated. "
+            "Use services.web_search.search() directly instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        
         try:
             logger.info(f'Performing web search for: {query}')
             return self.services.web_search.search(

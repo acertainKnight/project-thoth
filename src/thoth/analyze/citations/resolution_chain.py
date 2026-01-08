@@ -23,9 +23,9 @@ Features:
 - Progress tracking for large batches
 """
 
-import asyncio
+import asyncio  # noqa: I001
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List  # noqa: UP035
 
 from loguru import logger
 
@@ -130,16 +130,24 @@ class CitationResolutionChain:
         """
         start_time = time.time()
         metadata = ResolutionMetadata()
-        candidates: List[MatchCandidate] = []
+        candidates: List[MatchCandidate] = []  # noqa: UP006
 
         citation_text = citation.text or citation.title or 'Unknown citation'
         logger.debug(f'Starting resolution chain for: {citation_text[:80]}...')
 
         # Step 1: Check if citation already has DOI
         if citation.doi:
-            logger.info(f'Citation already has DOI: {citation.doi} - skipping resolution')
+            logger.info(
+                f'Citation already has DOI: {citation.doi} - skipping resolution'
+            )
             self._stats['already_has_doi'] += 1
             self._stats['total_processed'] += 1
+
+            # Calculate processing time even when skipping resolution
+            processing_time = (
+                time.time() - start_time
+            ) * 1000  # Convert to milliseconds
+            metadata.processing_time_ms = processing_time
 
             return ResolutionResult(
                 citation=citation_text,
@@ -173,21 +181,29 @@ class CitationResolutionChain:
 
         # Step 3: Try Crossref (best for DOI-based resolution)
         logger.debug('Trying Crossref resolver...')
-        result = await self._try_crossref(citation, metadata, candidates)
-        if result and result.confidence_score >= HIGH_CONFIDENCE_THRESHOLD:
-            logger.info(
-                f'Found high-confidence match via Crossref: '
-                f'score={result.confidence_score:.2f}, doi={result.matched_data.get("doi") if result.matched_data else None}'
-            )
-            result.metadata.processing_time_ms = (time.time() - start_time) * 1000
-            self._stats['resolved_crossref'] += 1
-            self._stats['high_confidence'] += 1
-            self._stats['total_processed'] += 1
-            return result
+        try:
+            result = await self._try_crossref(citation, metadata, candidates)
+            if result and result.confidence_score >= HIGH_CONFIDENCE_THRESHOLD:
+                logger.info(
+                    f'Found high-confidence match via Crossref: '
+                    f'score={result.confidence_score:.2f}, doi={result.matched_data.get("doi") if result.matched_data else None}'
+                )
+                result.metadata.processing_time_ms = (time.time() - start_time) * 1000
+                self._stats['resolved_crossref'] += 1
+                self._stats['high_confidence'] += 1
+                self._stats['total_processed'] += 1
+                return result
+        except Exception as e:
+            logger.warning(f'Crossref resolver failed: {e}')
+            # Continue to next source
 
         # Step 4: Try ArXiv (excellent for preprints and ML/AI papers)
         logger.debug('Trying ArXiv resolver...')
-        result = await self._try_arxiv(citation, metadata, candidates)
+        try:
+            result = await self._try_arxiv(citation, metadata, candidates)
+        except Exception as e:
+            logger.warning(f'ArXiv resolver failed: {e}')
+            result = None
         if result and result.confidence_score >= HIGH_CONFIDENCE_THRESHOLD:
             logger.info(
                 f'Found high-confidence match via ArXiv: '
@@ -201,7 +217,11 @@ class CitationResolutionChain:
 
         # Step 5: Try OpenAlex (better fuzzy matching than Crossref)
         logger.debug('Trying OpenAlex resolver...')
-        result = await self._try_openalex(citation, metadata, candidates)
+        try:
+            result = await self._try_openalex(citation, metadata, candidates)
+        except Exception as e:
+            logger.warning(f'OpenAlex resolver failed: {e}')
+            result = None
         if result and result.confidence_score >= HIGH_CONFIDENCE_THRESHOLD:
             logger.info(
                 f'Found high-confidence match via OpenAlex: '
@@ -259,7 +279,7 @@ class CitationResolutionChain:
         self,
         citation: Citation,
         metadata: ResolutionMetadata,
-        candidates: List[MatchCandidate],
+        candidates: List[MatchCandidate],  # noqa: UP006
     ) -> ResolutionResult | None:
         """
         Try resolving citation via Crossref API.
@@ -324,14 +344,14 @@ class CitationResolutionChain:
 
         except Exception as e:
             logger.error(f'Error in Crossref resolution: {e}')
-            metadata.error_message = f'Crossref error: {str(e)}'
+            metadata.error_message = f'Crossref error: {str(e)}'  # noqa: RUF010
             return None
 
     async def _try_arxiv(
         self,
         citation: Citation,
         metadata: ResolutionMetadata,
-        candidates: List[MatchCandidate],
+        candidates: List[MatchCandidate],  # noqa: UP006
     ) -> ResolutionResult | None:
         """
         Try resolving citation via ArXiv API.
@@ -394,14 +414,14 @@ class CitationResolutionChain:
 
         except Exception as e:
             logger.error(f'Error in ArXiv resolution: {e}')
-            metadata.error_message = f'ArXiv error: {str(e)}'
+            metadata.error_message = f'ArXiv error: {str(e)}'  # noqa: RUF010
             return None
 
     async def _try_openalex(
         self,
         citation: Citation,
         metadata: ResolutionMetadata,
-        candidates: List[MatchCandidate],
+        candidates: List[MatchCandidate],  # noqa: UP006
     ) -> ResolutionResult | None:
         """
         Try resolving citation via OpenAlex API.
@@ -463,14 +483,14 @@ class CitationResolutionChain:
 
         except Exception as e:
             logger.error(f'Error in OpenAlex resolution: {e}')
-            metadata.error_message = f'OpenAlex error: {str(e)}'
+            metadata.error_message = f'OpenAlex error: {str(e)}'  # noqa: RUF010
             return None
 
     async def _try_semantic_scholar(
         self,
         citation: Citation,
         metadata: ResolutionMetadata,
-        candidates: List[MatchCandidate],
+        candidates: List[MatchCandidate],  # noqa: UP006
     ) -> ResolutionResult | None:
         """
         Try resolving citation via Semantic Scholar API.
@@ -499,7 +519,9 @@ class CitationResolutionChain:
                     arxiv_id = citation.backup_id.split(':', 1)[1]
                     return self.semanticscholar_resolver.paper_lookup_by_arxiv(arxiv_id)
                 elif citation.doi:
-                    return self.semanticscholar_resolver.paper_lookup_by_doi(citation.doi)
+                    return self.semanticscholar_resolver.paper_lookup_by_doi(
+                        citation.doi
+                    )
                 elif citation.title:
                     # Title search
                     results = self.semanticscholar_resolver.paper_search(
@@ -515,15 +537,21 @@ class CitationResolutionChain:
                 return None
 
             # Calculate confidence score
-            confidence = self._calculate_semanticscholar_confidence(paper_data, citation)
+            confidence = self._calculate_semanticscholar_confidence(
+                paper_data, citation
+            )
 
             # Convert to standard MatchCandidate
             candidate = MatchCandidate(
                 candidate_data=paper_data,
                 raw_score=confidence,
                 component_scores={
-                    'title_match': 0.9 if paper_data.get('title') == citation.title else 0.7,
-                    'has_doi': 1.0 if paper_data.get('externalIds', {}).get('DOI') else 0.0,
+                    'title_match': 0.9
+                    if paper_data.get('title') == citation.title
+                    else 0.7,
+                    'has_doi': 1.0
+                    if paper_data.get('externalIds', {}).get('DOI')
+                    else 0.0,
                 },
                 source=APISource.SEMANTIC_SCHOLAR,
             )
@@ -575,7 +603,7 @@ class CitationResolutionChain:
 
         except Exception as e:
             logger.error(f'Error in Semantic Scholar resolution: {e}')
-            metadata.error_message = f'Semantic Scholar error: {str(e)}'
+            metadata.error_message = f'Semantic Scholar error: {str(e)}'  # noqa: RUF010
             return None
 
     def _calculate_crossref_confidence(
@@ -622,7 +650,9 @@ class CitationResolutionChain:
             # else: 0.0
 
         # Calculate author overlap (25% weight - basic check)
-        author_score = 0.5  # Default middle value (Crossref doesn't provide full author matching)
+        author_score = (
+            0.5  # Default middle value (Crossref doesn't provide full author matching)
+        )
         if citation.authors and match.authors:
             # Simple first author check
             if len(citation.authors) > 0 and len(match.authors) > 0:
@@ -633,16 +663,18 @@ class CitationResolutionChain:
 
         # Weighted combination (spec-compliant)
         final_score = (
-            0.45 * title_sim +
-            0.25 * author_score +
-            0.15 * year_score +
-            0.15 * crossref_relevance  # Use Crossref score as journal proxy
+            0.45 * title_sim
+            + 0.25 * author_score
+            + 0.15 * year_score
+            + 0.15 * crossref_relevance  # Use Crossref score as journal proxy
         )
 
         return min(final_score, 1.0)
 
     def _calculate_semanticscholar_confidence(
-        self, paper_data: Dict[str, Any], citation: Citation
+        self,
+        paper_data: dict[str, Any],
+        citation: Citation,
     ) -> float:
         """
         Calculate confidence score for Semantic Scholar match with spec-compliant validation.
@@ -659,7 +691,7 @@ class CitationResolutionChain:
 
         Returns:
             Confidence score between 0.0 and 1.0
-        """
+        """  # noqa: W505
         # Calculate title similarity (45% weight, spec: must be ≥ 0.80)
         title_sim = 0.0
         if citation.title and paper_data.get('title'):
@@ -694,13 +726,18 @@ class CitationResolutionChain:
                     # Check if last names match (simple token overlap)
                     input_tokens = input_auth.split()
                     s2_tokens = s2_auth.split()
-                    if any(t1 == t2 for t1 in input_tokens for t2 in s2_tokens if len(t1) > 2):
+                    if any(
+                        t1 == t2
+                        for t1 in input_tokens
+                        for t2 in s2_tokens
+                        if len(t1) > 2
+                    ):
                         author_score = 0.8  # Found author match
                         break
                 if author_score > 0:
                     break
 
-            # If no match found, set low score (but not zero - S2 data might be incomplete)
+            # If no match found, set low score (but not zero - S2 data might be incomplete)  # noqa: W505
             if author_score == 0.0:
                 author_score = 0.3  # Benefit of doubt for S2
 
@@ -716,10 +753,10 @@ class CitationResolutionChain:
 
         # Weighted combination (spec-compliant)
         final_score = (
-            0.45 * title_sim +
-            0.25 * author_score +
-            0.15 * year_score +
-            0.15 * quality_score
+            0.45 * title_sim
+            + 0.25 * author_score
+            + 0.15 * year_score
+            + 0.15 * quality_score
         )
 
         return min(final_score, 1.0)
@@ -758,7 +795,7 @@ class CitationResolutionChain:
 
         return intersection / union if union > 0 else 0.0
 
-    def _crossref_match_to_dict(self, match: CrossrefMatch) -> Dict[str, Any]:
+    def _crossref_match_to_dict(self, match: CrossrefMatch) -> Dict[str, Any]:  # noqa: UP006
         """Convert Crossref MatchCandidate to dict."""
         return {
             'doi': match.doi,
@@ -827,15 +864,15 @@ class CitationResolutionChain:
 
         # Weighted combination
         final_score = (
-            0.45 * title_sim +
-            0.25 * author_score +
-            0.15 * year_score +
-            0.15 * quality_score
+            0.45 * title_sim
+            + 0.25 * author_score
+            + 0.15 * year_score
+            + 0.15 * quality_score
         )
 
         return min(final_score, 1.0)
 
-    def _arxiv_match_to_dict(self, match: ArxivMatch) -> Dict[str, Any]:
+    def _arxiv_match_to_dict(self, match: ArxivMatch) -> Dict[str, Any]:  # noqa: UP006
         """Convert ArXiv match to dict."""
         return {
             'arxiv_id': match.arxiv_id,
@@ -850,7 +887,7 @@ class CitationResolutionChain:
             'updated': match.updated,
         }
 
-    def _openalex_match_to_dict(self, match: OpenAlexMatch) -> Dict[str, Any]:
+    def _openalex_match_to_dict(self, match: OpenAlexMatch) -> Dict[str, Any]:  # noqa: UP006
         """Convert OpenAlex MatchCandidate to dict."""
         return {
             'doi': match.doi,
@@ -867,8 +904,10 @@ class CitationResolutionChain:
         }
 
     async def batch_resolve(
-        self, citations: List[Citation], parallel: bool = True
-    ) -> List[ResolutionResult]:
+        self,
+        citations: list[Citation],
+        parallel: bool = True,
+    ) -> List[ResolutionResult]:  # noqa: UP006
         """
         Resolve multiple citations in batch.
 
@@ -941,7 +980,9 @@ class CitationResolutionChain:
         return final_results
 
     def _log_batch_summary(
-        self, results: List[ResolutionResult], elapsed: float
+        self,
+        results: list[ResolutionResult],
+        elapsed: float,
     ) -> None:
         """
         Log summary statistics for batch resolution.
@@ -962,7 +1003,9 @@ class CitationResolutionChain:
         )
         failed = sum(1 for r in results if r.status == CitationResolutionStatus.FAILED)
 
-        high_conf = sum(1 for r in results if r.confidence_level == ConfidenceLevel.HIGH)
+        high_conf = sum(
+            1 for r in results if r.confidence_level == ConfidenceLevel.HIGH
+        )
         med_conf = sum(
             1 for r in results if r.confidence_level == ConfidenceLevel.MEDIUM
         )
@@ -976,16 +1019,16 @@ class CitationResolutionChain:
         logger.info(
             f'Batch resolution complete in {elapsed:.2f}s:\n'
             f'  Total: {total}\n'
-            f'  Resolved: {resolved} ({resolved/total*100:.1f}%)\n'
-            f'  Unresolved: {unresolved} ({unresolved/total*100:.1f}%)\n'
-            f'  Failed: {failed} ({failed/total*100:.1f}%)\n'
+            f'  Resolved: {resolved} ({resolved / total * 100:.1f}%)\n'
+            f'  Unresolved: {unresolved} ({unresolved / total * 100:.1f}%)\n'
+            f'  Failed: {failed} ({failed / total * 100:.1f}%)\n'
             f'  Confidence: HIGH={high_conf}, MEDIUM={med_conf}, LOW={low_conf}\n'
             f'  Sources: Crossref={crossref}, OpenAlex={openalex}, '
             f'SemanticScholar={semantic}\n'
-            f'  Avg time: {elapsed/total*1000:.1f}ms per citation'
+            f'  Avg time: {elapsed / total * 1000:.1f}ms per citation'
         )
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> Dict[str, Any]:  # noqa: UP006
         """
         Get resolution statistics.
 

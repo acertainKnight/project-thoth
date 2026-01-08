@@ -18,14 +18,16 @@ from thoth.repositories.base import BaseRepository
 class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
     """Repository for managing encrypted workflow credentials."""
 
-    def __init__(self, postgres_service, encryption_key: Optional[str] = None, **kwargs):
+    def __init__(
+        self, postgres_service, encryption_key: str | None = None, **kwargs
+    ):
         """
         Initialize workflow credentials repository.
 
         Args:
             postgres_service: PostgreSQL service instance
             encryption_key: Base64-encoded Fernet key. If None, reads from WORKFLOW_ENCRYPTION_KEY env var
-        """
+        """  # noqa: W505
         super().__init__(postgres_service, table_name='workflow_credentials', **kwargs)
 
         # Get or validate encryption key
@@ -53,7 +55,7 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
 
     async def create(
         self, workflow_id: UUID, credential_type: str, credentials: dict[str, str]
-    ) -> Optional[UUID]:
+    ) -> Optional[UUID]:  # noqa: UP007
         """
         Create encrypted credentials for a workflow.
 
@@ -64,7 +66,7 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
 
         Returns:
             Optional[UUID]: ID of created credential record or None
-        """
+        """  # noqa: W505
         try:
             # Encrypt all credential values
             encrypted_credentials = {
@@ -90,7 +92,7 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to create credentials: {e}')
             return None
 
-    async def get_by_workflow_id(self, workflow_id: UUID) -> Optional[dict[str, Any]]:
+    async def get_by_workflow_id(self, workflow_id: UUID) -> Optional[dict[str, Any]]:  # noqa: UP007
         """
         Get decrypted credentials for a workflow.
 
@@ -139,9 +141,7 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to get credentials for workflow {workflow_id}: {e}')
             return None
 
-    async def update(
-        self, workflow_id: UUID, credentials: dict[str, str]
-    ) -> bool:
+    async def update(self, workflow_id: UUID, credentials: dict[str, str]) -> bool:
         """
         Update encrypted credentials for a workflow.
 
@@ -172,7 +172,9 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
             return True
 
         except Exception as e:
-            logger.error(f'Failed to update credentials for workflow {workflow_id}: {e}')
+            logger.error(
+                f'Failed to update credentials for workflow {workflow_id}: {e}'
+            )
             return False
 
     async def delete(self, workflow_id: UUID) -> bool:
@@ -195,7 +197,9 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
             return True
 
         except Exception as e:
-            logger.error(f'Failed to delete credentials for workflow {workflow_id}: {e}')
+            logger.error(
+                f'Failed to delete credentials for workflow {workflow_id}: {e}'
+            )
             return False
 
     async def exists(self, workflow_id: UUID) -> bool:
@@ -213,5 +217,7 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
             return await self.postgres.fetchval(query, workflow_id) or False
 
         except Exception as e:
-            logger.error(f'Failed to check credentials existence for workflow {workflow_id}: {e}')
+            logger.error(
+                f'Failed to check credentials existence for workflow {workflow_id}: {e}'
+            )
             return False

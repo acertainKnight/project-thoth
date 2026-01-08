@@ -5,20 +5,20 @@ This module provides specialized methods for paper data access,
 including search, filtering, and relationship queries.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional  # noqa: I001, UP035
 from loguru import logger
 
 from thoth.repositories.base import BaseRepository
 
 
-class PaperRepository(BaseRepository[Dict[str, Any]]):
+class PaperRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
     """Repository for managing research paper records."""
 
     def __init__(self, postgres_service, **kwargs):
         """Initialize paper repository."""
         super().__init__(postgres_service, table_name='papers', **kwargs)
 
-    async def get_by_doi(self, doi: str) -> Optional[Dict[str, Any]]:
+    async def get_by_doi(self, doi: str) -> Optional[Dict[str, Any]]:  # noqa: UP006, UP007
         """
         Get a paper by DOI.
 
@@ -28,13 +28,13 @@ class PaperRepository(BaseRepository[Dict[str, Any]]):
         Returns:
             Optional[Dict[str, Any]]: Paper data or None
         """
-        cache_key = self._cache_key("doi", doi)
+        cache_key = self._cache_key('doi', doi)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
 
         try:
-            query = "SELECT * FROM papers WHERE doi = $1"
+            query = 'SELECT * FROM papers WHERE doi = $1'
             result = await self.postgres.fetchrow(query, doi)
 
             if result:
@@ -45,10 +45,10 @@ class PaperRepository(BaseRepository[Dict[str, Any]]):
             return None
 
         except Exception as e:
-            logger.error(f"Failed to get paper by DOI {doi}: {e}")
+            logger.error(f'Failed to get paper by DOI {doi}: {e}')
             return None
 
-    async def get_by_arxiv_id(self, arxiv_id: str) -> Optional[Dict[str, Any]]:
+    async def get_by_arxiv_id(self, arxiv_id: str) -> Optional[Dict[str, Any]]:  # noqa: UP006, UP007
         """
         Get a paper by arXiv ID.
 
@@ -58,13 +58,13 @@ class PaperRepository(BaseRepository[Dict[str, Any]]):
         Returns:
             Optional[Dict[str, Any]]: Paper data or None
         """
-        cache_key = self._cache_key("arxiv", arxiv_id)
+        cache_key = self._cache_key('arxiv', arxiv_id)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
 
         try:
-            query = "SELECT * FROM papers WHERE arxiv_id = $1"
+            query = 'SELECT * FROM papers WHERE arxiv_id = $1'
             result = await self.postgres.fetchrow(query, arxiv_id)
 
             if result:
@@ -75,12 +75,12 @@ class PaperRepository(BaseRepository[Dict[str, Any]]):
             return None
 
         except Exception as e:
-            logger.error(f"Failed to get paper by arXiv ID {arxiv_id}: {e}")
+            logger.error(f'Failed to get paper by arXiv ID {arxiv_id}: {e}')
             return None
 
     async def search_by_title(
         self, title: str, limit: int = 10
-    ) -> List[Dict[str, Any]]:
+    ) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Search papers by title (case-insensitive, partial match).
 
@@ -98,7 +98,7 @@ class PaperRepository(BaseRepository[Dict[str, Any]]):
                 ORDER BY created_at DESC
                 LIMIT $2
             """
-            results = await self.postgres.fetch(query, f"%{title}%", limit)
+            results = await self.postgres.fetch(query, f'%{title}%', limit)
             return [dict(row) for row in results]
 
         except Exception as e:
@@ -106,8 +106,11 @@ class PaperRepository(BaseRepository[Dict[str, Any]]):
             return []
 
     async def get_by_tags(
-        self, tags: List[str], match_all: bool = False, limit: int = 50
-    ) -> List[Dict[str, Any]]:
+        self,
+        tags: list[str],
+        match_all: bool = False,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get papers with specific tags.
 
@@ -141,12 +144,12 @@ class PaperRepository(BaseRepository[Dict[str, Any]]):
             return [dict(row) for row in results]
 
         except Exception as e:
-            logger.error(f"Failed to get papers by tags {tags}: {e}")
+            logger.error(f'Failed to get papers by tags {tags}: {e}')
             return []
 
     async def get_recent(
         self, limit: int = 10, offset: int = 0
-    ) -> List[Dict[str, Any]]:
+    ) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get recent papers ordered by creation date.
 
@@ -167,10 +170,10 @@ class PaperRepository(BaseRepository[Dict[str, Any]]):
             return [dict(row) for row in results]
 
         except Exception as e:
-            logger.error(f"Failed to get recent papers: {e}")
+            logger.error(f'Failed to get recent papers: {e}')
             return []
 
-    async def update_tags(self, paper_id: int, tags: List[str]) -> bool:
+    async def update_tags(self, paper_id: int, tags: List[str]) -> bool:  # noqa: UP006
         """
         Update paper tags.
 
@@ -182,7 +185,7 @@ class PaperRepository(BaseRepository[Dict[str, Any]]):
             bool: True if successful
         """
         try:
-            query = "UPDATE papers SET tags = $1 WHERE id = $2"
+            query = 'UPDATE papers SET tags = $1 WHERE id = $2'
             await self.postgres.execute(query, tags, paper_id)
 
             # Invalidate cache
@@ -191,10 +194,10 @@ class PaperRepository(BaseRepository[Dict[str, Any]]):
             return True
 
         except Exception as e:
-            logger.error(f"Failed to update tags for paper {paper_id}: {e}")
+            logger.error(f'Failed to update tags for paper {paper_id}: {e}')
             return False
 
-    async def get_all_tags(self) -> List[str]:
+    async def get_all_tags(self) -> List[str]:  # noqa: UP006
         """
         Get all unique tags across all papers.
 
@@ -212,12 +215,12 @@ class PaperRepository(BaseRepository[Dict[str, Any]]):
             return [row['tag'] for row in results]
 
         except Exception as e:
-            logger.error(f"Failed to get all tags: {e}")
+            logger.error(f'Failed to get all tags: {e}')
             return []
 
     async def full_text_search(
         self, search_text: str, limit: int = 20
-    ) -> List[Dict[str, Any]]:
+    ) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Full-text search across title, abstract, and content.
 

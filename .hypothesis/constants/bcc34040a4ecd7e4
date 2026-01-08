@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/discovery/plugins/__init__.py
+# hypothesis_version: 6.148.9
+
+['ArxivPlugin', 'BaseDiscoveryPlugin', 'arxiv', 'browser_workflow', 'plugin_registry']

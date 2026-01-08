@@ -23,10 +23,10 @@ class ArticleRepository(BaseRepository[dict[str, Any]]):
 
     async def find_duplicate(
         self,
-        doi: Optional[str] = None,
-        arxiv_id: Optional[str] = None,
-        title: Optional[str] = None,
-    ) -> Optional[UUID]:
+        doi: Optional[str] = None,  # noqa: UP007
+        arxiv_id: Optional[str] = None,  # noqa: UP007
+        title: Optional[str] = None,  # noqa: UP007
+    ) -> Optional[UUID]:  # noqa: UP007
         """
         Find duplicate article by identifiers.
 
@@ -51,8 +51,8 @@ class ArticleRepository(BaseRepository[dict[str, Any]]):
 
     async def get_or_create_article(
         self,
-        doi: Optional[str] = None,
-        arxiv_id: Optional[str] = None,
+        doi: Optional[str] = None,  # noqa: UP007
+        arxiv_id: Optional[str] = None,  # noqa: UP007
         title: str = '',
         **article_data,
     ) -> tuple[UUID, bool]:
@@ -101,11 +101,11 @@ class ArticleRepository(BaseRepository[dict[str, Any]]):
         self,
         article_id: UUID,
         source_id: UUID,
-        discovery_query: Optional[str] = None,
-        relevance_score: Optional[float] = None,
-        rank_in_results: Optional[int] = None,
-        source_metadata: Optional[dict[str, Any]] = None,
-        external_id: Optional[str] = None,
+        discovery_query: Optional[str] = None,  # noqa: UP007
+        relevance_score: Optional[float] = None,  # noqa: UP007
+        rank_in_results: Optional[int] = None,  # noqa: UP007
+        source_metadata: Optional[dict[str, Any]] = None,  # noqa: UP007
+        external_id: Optional[str] = None,  # noqa: UP007
     ) -> bool:
         """
         Link article to a discovery source.
@@ -159,9 +159,7 @@ class ArticleRepository(BaseRepository[dict[str, Any]]):
             )
             return False
 
-    async def has_been_processed(
-        self, article_id: UUID, source_id: UUID
-    ) -> bool:
+    async def has_been_processed(self, article_id: UUID, source_id: UUID) -> bool:
         """
         Check if article has been processed by a specific source.
 
@@ -183,9 +181,7 @@ class ArticleRepository(BaseRepository[dict[str, Any]]):
             )
             return False
 
-    async def mark_as_processed(
-        self, article_id: UUID, source_id: UUID
-    ) -> bool:
+    async def mark_as_processed(self, article_id: UUID, source_id: UUID) -> bool:
         """
         Mark article as processed for a specific source.
 
@@ -202,9 +198,7 @@ class ArticleRepository(BaseRepository[dict[str, Any]]):
             return result or False
 
         except Exception as e:
-            logger.error(
-                f'Failed to mark article {article_id} as processed: {e}'
-            )
+            logger.error(f'Failed to mark article {article_id} as processed: {e}')
             return False
 
     async def get_new_articles_since(
@@ -282,7 +276,7 @@ class ArticleRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to get multi-source articles: {e}')
             return []
 
-    async def get_by_doi(self, doi: str) -> Optional[dict[str, Any]]:
+    async def get_by_doi(self, doi: str) -> Optional[dict[str, Any]]:  # noqa: UP007
         """
         Get article by DOI.
 
@@ -312,7 +306,7 @@ class ArticleRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to get article by DOI {doi}: {e}')
             return None
 
-    async def get_by_arxiv_id(self, arxiv_id: str) -> Optional[dict[str, Any]]:
+    async def get_by_arxiv_id(self, arxiv_id: str) -> Optional[dict[str, Any]]:  # noqa: UP007
         """
         Get article by arXiv ID.
 
@@ -346,7 +340,7 @@ class ArticleRepository(BaseRepository[dict[str, Any]]):
         self,
         article_id: UUID,
         status: str,
-        paper_id: Optional[UUID] = None,
+        paper_id: Optional[UUID] = None,  # noqa: UP007
     ) -> bool:
         """
         Update article processing status.
@@ -377,7 +371,8 @@ class ArticleRepository(BaseRepository[dict[str, Any]]):
             return False
 
     async def get_discovery_statistics(
-        self, source_id: Optional[UUID] = None
+        self,
+        source_id: Optional[UUID] = None,  # noqa: UP007
     ) -> dict[str, Any]:
         """
         Get discovery statistics for all sources or a specific source.

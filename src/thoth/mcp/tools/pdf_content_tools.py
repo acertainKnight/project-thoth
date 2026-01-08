@@ -8,7 +8,7 @@ and extracting metadata from PDF files.
 from pathlib import Path
 from typing import Any
 
-import requests
+import httpx
 
 from ..base_tools import MCPTool, MCPToolCallResult
 
@@ -120,7 +120,7 @@ class LocatePdfMCPTool(MCPTool):
 
                             # Implement actual download
                             try:
-                                import requests
+                                import httpx
 
                                 # Make sure output directory exists
                                 output_path.mkdir(parents=True, exist_ok=True)
@@ -130,7 +130,7 @@ class LocatePdfMCPTool(MCPTool):
                                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
                                 }
 
-                                response = requests.get(
+                                response = httpx.get(
                                     pdf_url, headers=headers, stream=True, timeout=30
                                 )
                                 response.raise_for_status()
@@ -182,7 +182,7 @@ class LocatePdfMCPTool(MCPTool):
                                     response_text += '- PDF validation: Could not verify PDF structure\n'
 
                             except (
-                                requests.exceptions.RequestException
+                                httpx.HTTPError
                             ) as download_error:
                                 response_text += '**Download Failed:**\n'
                                 response_text += f'- Error: {download_error}\n'
@@ -345,7 +345,7 @@ class ValidatePdfSourcesMCPTool(MCPTool):
                         if source['name'] == 'arXiv':
                             # Test arXiv API
                             test_url = 'https://export.arxiv.org/api/query?search_query=all:test&max_results=1'
-                            test_response = requests.get(test_url, timeout=10)
+                            test_response = httpx.get(test_url, timeout=10)
                             if test_response.status_code == 200:
                                 response_text += '  - Status: ✓ API accessible\n'
                                 response_text += '  - API Access: Working\n'
@@ -359,7 +359,7 @@ class ValidatePdfSourcesMCPTool(MCPTool):
                         elif source['name'] == 'bioRxiv':
                             # Test bioRxiv access
                             test_url = 'https://www.biorxiv.org/content/early/recent'
-                            test_response = requests.head(test_url, timeout=10)
+                            test_response = httpx.head(test_url, timeout=10)
                             if test_response.status_code == 200:
                                 response_text += '  - Status: ✓ Site accessible\n'
                                 response_text += '  - API Access: HTTP accessible\n'
@@ -372,7 +372,7 @@ class ValidatePdfSourcesMCPTool(MCPTool):
                         elif 'doi.org' in source.get('url', ''):
                             # Test DOI resolution
                             test_url = 'https://doi.org/10.1000/182'  # Test DOI
-                            test_response = requests.head(
+                            test_response = httpx.head(
                                 test_url, timeout=10, allow_redirects=False
                             )
                             if test_response.status_code in [302, 303, 301]:
@@ -388,7 +388,7 @@ class ValidatePdfSourcesMCPTool(MCPTool):
                             # Generic HTTP test
                             test_url = source.get('url', source.get('base_url'))
                             if test_url:
-                                test_response = requests.head(test_url, timeout=10)
+                                test_response = httpx.head(test_url, timeout=10)
                                 if test_response.status_code == 200:
                                     response_text += '  - Status: ✓ Site accessible\n'
                                     response_text += '  - API Access: Working\n'
@@ -397,10 +397,10 @@ class ValidatePdfSourcesMCPTool(MCPTool):
                             else:
                                 response_text += '  - Status:  No URL to test\n'
 
-                    except requests.exceptions.Timeout:
+                    except httpx.TimeoutException:
                         response_text += '  - Status: ✗ Timeout (>10s)\n'
                         response_text += '  - API Access: Slow/unavailable\n'
-                    except requests.exceptions.RequestException as e:
+                    except httpx.HTTPError as e:
                         response_text += '  - Status: ✗ Connection error\n'
                         response_text += f'  - Error: {str(e)[:50]}...\n'
                     except Exception as e:

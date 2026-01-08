@@ -3,14 +3,15 @@ Note Regeneration Service
 
 Regenerates Obsidian notes from stored database analysis data without re-running LLM inference.
 This allows recovering notes or changing note templates without expensive re-processing.
-"""
-import asyncio
+"""  # noqa: W505
+
+import asyncio  # noqa: I001
 from pathlib import Path
 from typing import Any
 
 import asyncpg
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel  # noqa: F401
 
 from thoth.analyze.llm_processor import AnalysisResponse
 from thoth.analyze.citations.citations import Citation
@@ -25,7 +26,9 @@ class NoteRegenerationService:
         self.db_url = config.secrets.database_url
         self.note_service = None  # Will be initialized when needed
 
-    async def get_paper_analysis(self, paper_id: str | None = None, title: str | None = None) -> dict[str, Any] | None:
+    async def get_paper_analysis(
+        self, paper_id: str | None = None, title: str | None = None
+    ) -> dict[str, Any] | None:
         """
         Retrieve paper analysis data from database.
 
@@ -37,7 +40,7 @@ class NoteRegenerationService:
             Dictionary containing paper metadata and analysis data
         """
         if not paper_id and not title:
-            raise ValueError("Either paper_id or title must be provided")
+            raise ValueError('Either paper_id or title must be provided')
 
         conn = await asyncpg.connect(self.db_url)
         try:
@@ -60,11 +63,11 @@ class NoteRegenerationService:
                 row = await conn.fetchrow(query, title)
 
             if not row:
-                logger.warning(f"Paper not found: paper_id={paper_id}, title={title}")
+                logger.warning(f'Paper not found: paper_id={paper_id}, title={title}')
                 return None
 
             if not row['analysis_data']:
-                logger.warning(f"Paper has no analysis data: {row['title']}")
+                logger.warning(f'Paper has no analysis data: {row["title"]}')
                 return None
 
             return dict(row)
@@ -98,7 +101,9 @@ class NoteRegenerationService:
         finally:
             await conn.close()
 
-    def _convert_analysis_to_model(self, analysis_data: dict[str, Any]) -> AnalysisResponse:
+    def _convert_analysis_to_model(
+        self, analysis_data: dict[str, Any]
+    ) -> AnalysisResponse:
         """
         Convert stored analysis data dict to AnalysisResponse model.
 
@@ -108,10 +113,12 @@ class NoteRegenerationService:
         Returns:
             AnalysisResponse model instance
         """
-        # The analysis_data is already in the correct format (AnalysisResponse.model_dump())
+        # The analysis_data is already in the correct format (AnalysisResponse.model_dump())  # noqa: W505
         return AnalysisResponse(**analysis_data)
 
-    def _convert_citations_to_models(self, citations_data: list[dict[str, Any]]) -> list[Citation]:
+    def _convert_citations_to_models(
+        self, citations_data: list[dict[str, Any]]
+    ) -> list[Citation]:
         """
         Convert stored citation data to Citation models.
 
@@ -137,10 +144,7 @@ class NoteRegenerationService:
         return citations
 
     async def regenerate_note(
-        self,
-        paper_id: str | None = None,
-        title: str | None = None,
-        force: bool = False
+        self, paper_id: str | None = None, title: str | None = None, force: bool = False
     ) -> tuple[str, str, str] | None:
         """
         Regenerate note for a paper from stored database data.
@@ -163,8 +167,14 @@ class NoteRegenerationService:
         # Check if note already exists
         note_path = paper_data.get('note_path')
         if note_path and Path(note_path).exists() and not force:
-            logger.info(f"Note already exists: {note_path}. Use force=True to regenerate.")
-            return (note_path, paper_data.get('pdf_path', ''), paper_data.get('markdown_content', ''))
+            logger.info(
+                f'Note already exists: {note_path}. Use force=True to regenerate.'
+            )
+            return (
+                note_path,
+                paper_data.get('pdf_path', ''),
+                paper_data.get('markdown_content', ''),
+            )
 
         # Get citations
         citations_data = await self.get_paper_citations(paper_id)
@@ -178,10 +188,16 @@ class NoteRegenerationService:
         pdf_path = Path(paper_data.get('pdf_path', ''))
         if not pdf_path.is_absolute():
             # Assume it's relative to vault root
-            pdf_path = vault_root / 'thoth' / 'papers' / 'pdfs' / pdf_path.name if pdf_path.name else None
+            pdf_path = (
+                vault_root / 'thoth' / 'papers' / 'pdfs' / pdf_path.name
+                if pdf_path.name
+                else None
+            )
 
-        # For markdown, we have the content stored, so create a temp file or use stored path
-        markdown_path = vault_root / '_thoth' / 'data' / 'markdown' / f"{paper_data['title']}.md"
+        # For markdown, we have the content stored, so create a temp file or use stored path  # noqa: W505
+        markdown_path = (
+            vault_root / '_thoth' / 'data' / 'markdown' / f'{paper_data["title"]}.md'
+        )
         if paper_data.get('markdown_content'):
             markdown_path.parent.mkdir(parents=True, exist_ok=True)
             markdown_path.write_text(paper_data['markdown_content'], encoding='utf-8')
@@ -189,10 +205,11 @@ class NoteRegenerationService:
         # Initialize note service if needed
         if not self.note_service:
             from thoth.services.note_service import NoteService
+
             self.note_service = NoteService()
 
         # Generate note using note service
-        logger.info(f"Regenerating note for: {paper_data['title']}")
+        logger.info(f'Regenerating note for: {paper_data["title"]}')
         try:
             note_path, new_pdf_path, new_markdown_path = self.note_service.create_note(
                 pdf_path=pdf_path,
@@ -204,22 +221,29 @@ class NoteRegenerationService:
             # Update database with new paths
             conn = await asyncpg.connect(self.db_url)
             try:
-                await conn.execute("""
+                await conn.execute(
+                    """
                     UPDATE papers
                     SET note_path = $1, pdf_path = $2, updated_at = CURRENT_TIMESTAMP
                     WHERE id = $3
-                """, str(note_path), str(new_pdf_path), paper_id)
+                """,
+                    str(note_path),
+                    str(new_pdf_path),
+                    paper_id,
+                )
             finally:
                 await conn.close()
 
-            logger.success(f"Successfully regenerated note: {note_path}")
+            logger.success(f'Successfully regenerated note: {note_path}')
             return (str(note_path), str(new_pdf_path), str(new_markdown_path))
 
         except Exception as e:
-            logger.error(f"Failed to regenerate note: {e}")
+            logger.error(f'Failed to regenerate note: {e}')
             raise
 
-    async def regenerate_all_notes(self, limit: int | None = None, force: bool = False) -> dict[str, int]:
+    async def regenerate_all_notes(
+        self, limit: int | None = None, force: bool = False
+    ) -> dict[str, int]:
         """
         Regenerate notes for all papers with analysis data.
 
@@ -239,11 +263,11 @@ class NoteRegenerationService:
                 ORDER BY created_at DESC
             """
             if limit:
-                query += f" LIMIT {limit}"
+                query += f' LIMIT {limit}'
 
             rows = await conn.fetch(query)
 
-            logger.info(f"Found {len(rows)} papers with analysis data")
+            logger.info(f'Found {len(rows)} papers with analysis data')
 
             success = 0
             skipped = 0
@@ -251,26 +275,31 @@ class NoteRegenerationService:
 
             for row in rows:
                 try:
-                    result = await self.regenerate_note(
-                        paper_id=row['id'],
-                        force=force
-                    )
+                    result = await self.regenerate_note(paper_id=row['id'], force=force)
                     if result:
                         success += 1
-                        logger.info(f"[{success}/{len(rows)}] Regenerated: {row['title']}")
+                        logger.info(
+                            f'[{success}/{len(rows)}] Regenerated: {row["title"]}'
+                        )
                     else:
                         skipped += 1
-                        logger.info(f"[{success + skipped}/{len(rows)}] Skipped: {row['title']}")
+                        logger.info(
+                            f'[{success + skipped}/{len(rows)}] Skipped: {row["title"]}'
+                        )
                 except Exception as e:
                     failed += 1
-                    logger.error(f"[{success + skipped + failed}/{len(rows)}] Failed: {row['title']} - {e}")
+                    logger.error(
+                        f'[{success + skipped + failed}/{len(rows)}] Failed: {row["title"]} - {e}'
+                    )
 
-            logger.info(f"Regeneration complete: {success} success, {skipped} skipped, {failed} failed")
+            logger.info(
+                f'Regeneration complete: {success} success, {skipped} skipped, {failed} failed'
+            )
             return {
                 'success': success,
                 'skipped': skipped,
                 'failed': failed,
-                'total': len(rows)
+                'total': len(rows),
             }
 
         finally:
@@ -278,13 +307,17 @@ class NoteRegenerationService:
 
 
 # Convenience functions for CLI usage
-async def regenerate_note_by_title(title: str, force: bool = False) -> tuple[str, str, str] | None:
+async def regenerate_note_by_title(
+    title: str, force: bool = False
+) -> tuple[str, str, str] | None:
     """Regenerate note for a paper by title."""
     service = NoteRegenerationService()
     return await service.regenerate_note(title=title, force=force)
 
 
-async def regenerate_all_notes(limit: int | None = None, force: bool = False) -> dict[str, int]:
+async def regenerate_all_notes(
+    limit: int | None = None, force: bool = False
+) -> dict[str, int]:
     """Regenerate notes for all papers with analysis data."""
     service = NoteRegenerationService()
     return await service.regenerate_all_notes(limit=limit, force=force)
@@ -294,31 +327,35 @@ if __name__ == '__main__':
     import sys
 
     if len(sys.argv) < 2:
-        print("Usage: python -m thoth.services.note_regeneration_service <command> [args]")
-        print("Commands:")
-        print("  regenerate <title>  - Regenerate note for paper by title")
-        print("  regenerate-all [limit]  - Regenerate all notes (optionally limit count)")
+        print(
+            'Usage: python -m thoth.services.note_regeneration_service <command> [args]'
+        )
+        print('Commands:')
+        print('  regenerate <title>  - Regenerate note for paper by title')
+        print(
+            '  regenerate-all [limit]  - Regenerate all notes (optionally limit count)'
+        )
         sys.exit(1)
 
     command = sys.argv[1]
 
     if command == 'regenerate':
         if len(sys.argv) < 3:
-            print("Error: Title required")
+            print('Error: Title required')
             sys.exit(1)
         title = ' '.join(sys.argv[2:])
         result = asyncio.run(regenerate_note_by_title(title, force=True))
         if result:
-            print(f"Success! Note: {result[0]}")
+            print(f'Success! Note: {result[0]}')
         else:
-            print("Failed to regenerate note")
+            print('Failed to regenerate note')
             sys.exit(1)
 
     elif command == 'regenerate-all':
         limit = int(sys.argv[2]) if len(sys.argv) > 2 else None
         results = asyncio.run(regenerate_all_notes(limit=limit, force=False))
-        print(f"Results: {results}")
+        print(f'Results: {results}')
 
     else:
-        print(f"Unknown command: {command}")
+        print(f'Unknown command: {command}')
         sys.exit(1)

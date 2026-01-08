@@ -8,7 +8,7 @@ All agent management is now handled by the Letta platform running on port 8283.
 """
 
 import os
-from typing import Any
+from typing import Any  # noqa: F401
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -142,7 +142,7 @@ async def list_available_agents():
             )
 
     except ImportError:
-        raise HTTPException(
+        raise HTTPException(  # noqa: B904
             status_code=500,
             detail='httpx not installed. Install with: pip install httpx',
         )
@@ -209,7 +209,7 @@ async def agent_chat(message_request: ChatMessage):
             )
 
     except ImportError:
-        raise HTTPException(
+        raise HTTPException(  # noqa: B904
             status_code=500,
             detail='httpx not installed. Install with: pip install httpx',
         )
@@ -273,7 +273,7 @@ async def create_agent(request: AgentCreateRequest):
             )
 
     except ImportError:
-        raise HTTPException(
+        raise HTTPException(  # noqa: B904
             status_code=500,
             detail='httpx not installed. Install with: pip install httpx',
         )

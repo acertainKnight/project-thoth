@@ -5,7 +5,7 @@ This module provides methods for managing browser-based discovery workflows,
 including CRUD operations, execution statistics, and health monitoring.
 """
 
-from typing import Any, Optional
+from typing import Any, Optional  # noqa: I001
 from uuid import UUID
 from datetime import datetime
 from loguru import logger
@@ -18,11 +18,9 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
 
     def __init__(self, postgres_service, **kwargs):
         """Initialize browser workflow repository."""
-        super().__init__(
-            postgres_service, table_name='browser_workflows', **kwargs
-        )
+        super().__init__(postgres_service, table_name='browser_workflows', **kwargs)
 
-    async def create(self, workflow_data: dict[str, Any]) -> Optional[UUID]:
+    async def create(self, workflow_data: dict[str, Any]) -> Optional[UUID]:  # noqa: UP007
         """
         Create a new browser workflow.
 
@@ -42,12 +40,12 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             ]
             for field in required_fields:
                 if field not in workflow_data:
-                    logger.error(f"Missing required field: {field}")
+                    logger.error(f'Missing required field: {field}')
                     return None
 
             # Build column and value lists
             columns = list(workflow_data.keys())
-            placeholders = [f"${i+1}" for i in range(len(columns))]
+            placeholders = [f'${i + 1}' for i in range(len(columns))]
             values = [workflow_data[col] for col in columns]
 
             query = f"""
@@ -61,14 +59,14 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             # Invalidate cache
             self._invalidate_cache()
 
-            logger.debug(f"Created browser workflow: {result}")
+            logger.debug(f'Created browser workflow: {result}')
             return result
 
         except Exception as e:
-            logger.error(f"Failed to create browser workflow: {e}")
+            logger.error(f'Failed to create browser workflow: {e}')
             return None
 
-    async def get_by_id(self, workflow_id: UUID) -> Optional[dict[str, Any]]:
+    async def get_by_id(self, workflow_id: UUID) -> Optional[dict[str, Any]]:  # noqa: UP007
         """
         Get a workflow by ID.
 
@@ -98,7 +96,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to get workflow by ID {workflow_id}: {e}')
             return None
 
-    async def get_by_name(self, name: str) -> Optional[dict[str, Any]]:
+    async def get_by_name(self, name: str) -> Optional[dict[str, Any]]:  # noqa: UP007
         """
         Get a workflow by name.
 
@@ -141,11 +139,11 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             return cached
 
         try:
-            query = '''
+            query = """
                 SELECT * FROM browser_workflows
                 WHERE is_active = true
                 ORDER BY name ASC
-            '''
+            """
 
             results = await self.postgres.fetch(query)
             data = [dict(row) for row in results]
@@ -157,9 +155,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to get active workflows: {e}')
             return []
 
-    async def update(
-        self, workflow_id: UUID, updates: dict[str, Any]
-    ) -> bool:
+    async def update(self, workflow_id: UUID, updates: dict[str, Any]) -> bool:
         """
         Update a workflow.
 
@@ -175,13 +171,11 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
                 return True
 
             # Build SET clause
-            set_clauses = [
-                f"{col} = ${i+2}" for i, col in enumerate(updates.keys())
-            ]
-            values = [workflow_id] + list(updates.values())
+            set_clauses = [f'{col} = ${i + 2}' for i, col in enumerate(updates.keys())]
+            values = [workflow_id] + list(updates.values())  # noqa: RUF005
 
             # Always update updated_at timestamp
-            set_clauses.append(f"updated_at = ${len(values) + 1}")
+            set_clauses.append(f'updated_at = ${len(values) + 1}')
             values.append(datetime.now())
 
             query = f"""
@@ -289,14 +283,10 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             return True
 
         except Exception as e:
-            logger.error(
-                f'Failed to update statistics for workflow {workflow_id}: {e}'
-            )
+            logger.error(f'Failed to update statistics for workflow {workflow_id}: {e}')
             return False
 
-    async def update_health_status(
-        self, workflow_id: UUID, status: str
-    ) -> bool:
+    async def update_health_status(self, workflow_id: UUID, status: str) -> bool:
         """
         Update health status for a workflow.
 
@@ -311,8 +301,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             valid_statuses = ['active', 'degraded', 'down', 'unknown']
             if status not in valid_statuses:
                 logger.warning(
-                    f'Invalid health status: {status}. '
-                    f'Must be one of {valid_statuses}'
+                    f'Invalid health status: {status}. Must be one of {valid_statuses}'
                 )
                 return False
 
@@ -353,11 +342,11 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             return cached
 
         try:
-            query = '''
+            query = """
                 SELECT * FROM browser_workflows
                 WHERE website_domain = $1
                 ORDER BY name ASC
-            '''
+            """
 
             results = await self.postgres.fetch(query, domain)
             data = [dict(row) for row in results]
@@ -377,7 +366,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             dict[str, Any]: Aggregated statistics across all workflows
         """
         try:
-            query = '''
+            query = """
                 SELECT
                     COUNT(*) as total_workflows,
                     COUNT(*) FILTER (WHERE is_active = true) as active_workflows,
@@ -390,7 +379,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
                     SUM(total_articles_extracted) as total_articles_extracted,
                     AVG(average_execution_time_ms) as avg_execution_time_ms
                 FROM browser_workflows
-            '''
+            """
 
             result = await self.postgres.fetchrow(query)
             return dict(result) if result else {}
@@ -438,14 +427,14 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
 
         Returns:
             list[dict[str, Any]]: List of workflows due for execution
-        """
+        """  # noqa: W505
         cache_key = self._cache_key('due_for_run', str(hours_since_last_run))
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
 
         try:
-            query = '''
+            query = """
                 SELECT * FROM browser_workflows
                 WHERE is_active = true
                   AND (
@@ -455,7 +444,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
                 ORDER BY
                     last_executed_at ASC NULLS FIRST,
                     name ASC
-            '''
+            """
 
             results = await self.postgres.fetch(query, hours_since_last_run)
             data = [dict(row) for row in results]

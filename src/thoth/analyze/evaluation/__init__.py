@@ -26,18 +26,21 @@ Ground Truth Generation:
 - Manual annotation of gold-standard paper analyses
 - Cross-validation: Multiple annotators for quality assessment
 - Synthetic papers: Control content complexity and length
-"""
+"""  # noqa: W505
 
-from thoth.analyze.evaluation.ground_truth import AnalysisGroundTruthGenerator, AnalysisGroundTruthPair
+from thoth.analyze.evaluation.ground_truth import (
+    AnalysisGroundTruthGenerator,
+    AnalysisGroundTruthPair,
+)
 from thoth.analyze.evaluation.metrics import (
     AnalysisMetrics,
-    ExtractionMetrics,
     ContentQualityMetrics,
+    ExtractionMetrics,
     calculate_analysis_metrics,
 )
 from thoth.analyze.evaluation.runner import run_analysis_evaluation
 
-__all__ = [
+__all__ = [  # noqa: RUF022
     'AnalysisGroundTruthGenerator',
     'AnalysisGroundTruthPair',
     'AnalysisMetrics',

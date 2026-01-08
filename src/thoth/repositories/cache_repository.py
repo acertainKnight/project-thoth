@@ -5,24 +5,22 @@ This module handles caching of external API responses to reduce
 redundant API calls and improve performance.
 """
 
-from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from datetime import datetime, timedelta  # noqa: I001
+from typing import Any, Dict, Optional  # noqa: UP035
 from loguru import logger
 import json
 
 from thoth.repositories.base import BaseRepository
 
 
-class CacheRepository(BaseRepository[Dict[str, Any]]):
+class CacheRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
     """Repository for managing API cache records."""
 
     def __init__(self, postgres_service, **kwargs):
         """Initialize cache repository."""
         super().__init__(postgres_service, table_name='api_cache', **kwargs)
 
-    async def get_cached_response(
-        self, cache_key: str
-    ) -> Optional[Dict[str, Any]]:
+    async def get_cached_response(self, cache_key: str) -> Optional[Dict[str, Any]]:  # noqa: UP006, UP007
         """
         Get a cached API response if not expired.
 
@@ -47,10 +45,10 @@ class CacheRepository(BaseRepository[Dict[str, Any]]):
                 if isinstance(response_data, str):
                     response_data = json.loads(response_data)
 
-                logger.debug(f"Cache hit for key: {cache_key}")
+                logger.debug(f'Cache hit for key: {cache_key}')
                 return response_data
 
-            logger.debug(f"Cache miss for key: {cache_key}")
+            logger.debug(f'Cache miss for key: {cache_key}')
             return None
 
         except Exception as e:
@@ -60,8 +58,8 @@ class CacheRepository(BaseRepository[Dict[str, Any]]):
     async def set_cached_response(
         self,
         cache_key: str,
-        response_data: Dict[str, Any],
-        ttl_seconds: Optional[int] = 3600,
+        response_data: Dict[str, Any],  # noqa: UP006
+        ttl_seconds: Optional[int] = 3600,  # noqa: UP007
     ) -> bool:
         """
         Store an API response in the cache.
@@ -96,7 +94,7 @@ class CacheRepository(BaseRepository[Dict[str, Any]]):
             # Invalidate cache
             self._invalidate_cache(cache_key)
 
-            logger.debug(f"Cached response for key: {cache_key}")
+            logger.debug(f'Cached response for key: {cache_key}')
             return True
 
         except Exception as e:
@@ -114,13 +112,13 @@ class CacheRepository(BaseRepository[Dict[str, Any]]):
             bool: True if successful
         """
         try:
-            query = "DELETE FROM api_cache WHERE cache_key = $1"
+            query = 'DELETE FROM api_cache WHERE cache_key = $1'
             await self.postgres.execute(query, cache_key)
 
             # Invalidate memory cache
             self._invalidate_cache(cache_key)
 
-            logger.debug(f"Invalidated cache key: {cache_key}")
+            logger.debug(f'Invalidated cache key: {cache_key}')
             return True
 
         except Exception as e:
@@ -138,7 +136,7 @@ class CacheRepository(BaseRepository[Dict[str, Any]]):
             int: Number of entries invalidated
         """
         try:
-            query = "DELETE FROM api_cache WHERE cache_key LIKE $1"
+            query = 'DELETE FROM api_cache WHERE cache_key LIKE $1'
             result = await self.postgres.execute(query, pattern)
 
             # Extract count from result
@@ -147,7 +145,9 @@ class CacheRepository(BaseRepository[Dict[str, Any]]):
             # Invalidate memory cache
             self._invalidate_cache(pattern)
 
-            logger.info(f"Invalidated {count} cache entries matching pattern: {pattern}")
+            logger.info(
+                f'Invalidated {count} cache entries matching pattern: {pattern}'
+            )
             return count
 
         except Exception as e:
@@ -172,14 +172,14 @@ class CacheRepository(BaseRepository[Dict[str, Any]]):
             # Extract count
             count = int(result.split()[-1]) if result else 0
 
-            logger.info(f"Cleaned up {count} expired cache entries")
+            logger.info(f'Cleaned up {count} expired cache entries')
             return count
 
         except Exception as e:
-            logger.error(f"Failed to cleanup expired cache entries: {e}")
+            logger.error(f'Failed to cleanup expired cache entries: {e}')
             return 0
 
-    async def get_cache_statistics(self) -> Dict[str, Any]:
+    async def get_cache_statistics(self) -> Dict[str, Any]:  # noqa: UP006
         """
         Get cache usage statistics.
 
@@ -200,5 +200,5 @@ class CacheRepository(BaseRepository[Dict[str, Any]]):
             return dict(result) if result else {}
 
         except Exception as e:
-            logger.error(f"Failed to get cache statistics: {e}")
+            logger.error(f'Failed to get cache statistics: {e}')
             return {}

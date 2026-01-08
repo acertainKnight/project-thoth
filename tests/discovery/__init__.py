@@ -1,1 +1,0 @@
-"""Discovery system tests."""

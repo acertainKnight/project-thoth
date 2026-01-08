@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/mcp/tools/processing_tools.py
+# hypothesis_version: 6.148.9
+
+[100, '\n**Search System:**\n', '\n**System Status:**\n', '**Knowledge Base:**\n', '**Results:**\n', '**Summary:**\n', '*.pdf', ', ', 'Unknown', 'Unknown error', 'Untitled', 'article_identifier', 'article_title', 'arxiv_id', 'authors', 'batch_process_pdfs', 'boolean', 'citation_count', 'citations_found', 'collection_stats', 'content', 'default', 'description', 'directory_path', 'document_type', 'doi', 'embeddings', 'error', 'filter_by_type', 'get_article_details', 'integer', 'journal', 'key_findings', 'last_indexed', 'limit', 'list_articles', 'max_files', 'maximum', 'metadata', 'minimum', 'note_path', 'object', 'offset', 'pdf_path', 'process_pdf', 'processing_time', 'properties', 'publication_date', 'required', 'score', 'search_term', 'skip_existing', 'source_type', 'string', 'success', 'tags', 'text', 'title', 'type']

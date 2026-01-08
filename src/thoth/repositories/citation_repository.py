@@ -4,22 +4,20 @@ Citation repository for managing paper citations in PostgreSQL.
 This module handles citation relationships between papers.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional  # noqa: I001, UP035
 from loguru import logger
 
 from thoth.repositories.base import BaseRepository
 
 
-class CitationRepository(BaseRepository[Dict[str, Any]]):
+class CitationRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
     """Repository for managing citation records."""
 
     def __init__(self, postgres_service, **kwargs):
         """Initialize citation repository."""
         super().__init__(postgres_service, table_name='citations', **kwargs)
 
-    async def get_citations_for_paper(
-        self, paper_id: int
-    ) -> List[Dict[str, Any]]:
+    async def get_citations_for_paper(self, paper_id: int) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get all citations made by a paper.
 
@@ -40,12 +38,10 @@ class CitationRepository(BaseRepository[Dict[str, Any]]):
             return [dict(row) for row in results]
 
         except Exception as e:
-            logger.error(f"Failed to get citations for paper {paper_id}: {e}")
+            logger.error(f'Failed to get citations for paper {paper_id}: {e}')
             return []
 
-    async def get_citing_papers(
-        self, paper_id: int
-    ) -> List[Dict[str, Any]]:
+    async def get_citing_papers(self, paper_id: int) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get all papers that cite this paper.
 
@@ -66,12 +62,12 @@ class CitationRepository(BaseRepository[Dict[str, Any]]):
             return [dict(row) for row in results]
 
         except Exception as e:
-            logger.error(f"Failed to get citing papers for {paper_id}: {e}")
+            logger.error(f'Failed to get citing papers for {paper_id}: {e}')
             return []
 
     async def get_citation_network(
         self, paper_id: int, depth: int = 1
-    ) -> Dict[str, Any]:
+    ) -> Dict[str, Any]:  # noqa: UP006
         """
         Get citation network up to specified depth.
 
@@ -110,25 +106,24 @@ class CitationRepository(BaseRepository[Dict[str, Any]]):
             results = await self.postgres.fetch(query, paper_id, depth)
 
             # Build network structure
-            network = {
-                'nodes': set(),
-                'edges': []
-            }
+            network = {'nodes': set(), 'edges': []}
 
             for row in results:
                 network['nodes'].add(row['citing_paper_id'])
                 network['nodes'].add(row['cited_paper_id'])
-                network['edges'].append({
-                    'source': row['citing_paper_id'],
-                    'target': row['cited_paper_id'],
-                    'depth': row['depth']
-                })
+                network['edges'].append(
+                    {
+                        'source': row['citing_paper_id'],
+                        'target': row['cited_paper_id'],
+                        'depth': row['depth'],
+                    }
+                )
 
             network['nodes'] = list(network['nodes'])
             return network
 
         except Exception as e:
-            logger.error(f"Failed to get citation network for paper {paper_id}: {e}")
+            logger.error(f'Failed to get citation network for paper {paper_id}: {e}')
             return {'nodes': [], 'edges': []}
 
     async def get_citation_count(self, paper_id: int) -> int:
@@ -149,12 +144,15 @@ class CitationRepository(BaseRepository[Dict[str, Any]]):
             return await self.postgres.fetchval(query, paper_id) or 0
 
         except Exception as e:
-            logger.error(f"Failed to get citation count for paper {paper_id}: {e}")
+            logger.error(f'Failed to get citation count for paper {paper_id}: {e}')
             return 0
 
     async def create_citation(
-        self, citing_paper_id: int, cited_paper_id: int, metadata: Optional[Dict] = None
-    ) -> Optional[int]:
+        self,
+        citing_paper_id: int,
+        cited_paper_id: int,
+        metadata: Optional[Dict] = None,  # noqa: UP006, UP007
+    ) -> Optional[int]:  # noqa: UP007
         """
         Create a citation relationship.
 
@@ -183,12 +181,10 @@ class CitationRepository(BaseRepository[Dict[str, Any]]):
             return result
 
         except Exception as e:
-            logger.error(f"Failed to create citation: {e}")
+            logger.error(f'Failed to create citation: {e}')
             return None
 
-    async def get_most_cited(
-        self, limit: int = 10
-    ) -> List[Dict[str, Any]]:
+    async def get_most_cited(self, limit: int = 10) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get most cited papers.
 
@@ -213,5 +209,5 @@ class CitationRepository(BaseRepository[Dict[str, Any]]):
             return [dict(row) for row in results]
 
         except Exception as e:
-            logger.error(f"Failed to get most cited papers: {e}")
+            logger.error(f'Failed to get most cited papers: {e}')
             return []

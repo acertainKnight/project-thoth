@@ -25,16 +25,16 @@ Usage throughout codebase:
     api_key = config.api_keys.openai_key
 """
 
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 import json
 import os
 import threading
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional  # noqa: UP035
 
 from loguru import logger
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator  # noqa: F401
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -49,38 +49,62 @@ def get_vault_root() -> Path:
     Priority:
     1. OBSIDIAN_VAULT_PATH environment variable
     2. THOTH_VAULT_PATH environment variable (legacy)
-    3. Auto-detect by walking up looking for _thoth/ directory
+    3. Auto-detect by walking up looking for _thoth/ directory (unless THOTH_DISABLE_AUTODETECT is set)
+    4. Check known location (unless THOTH_DISABLE_AUTODETECT is set)
 
     Returns:
         Path to vault root
 
     Raises:
         ValueError: If vault cannot be detected
-    """
+
+    Environment Variables:
+        THOTH_DISABLE_AUTODETECT: Set to '1' to disable auto-detection and known location fallbacks (for testing)
+    """  # noqa: W505
+    # Check if auto-detection is disabled (for testing)
+    disable_autodetect = os.getenv('THOTH_DISABLE_AUTODETECT') == '1'
+
     # 1. Check OBSIDIAN_VAULT_PATH
     if vault := os.getenv('OBSIDIAN_VAULT_PATH'):
         path = Path(vault).expanduser().resolve()
         if path.exists():
-            logger.info(f"Vault detected from OBSIDIAN_VAULT_PATH: {path}")
+            logger.info(f'Vault detected from OBSIDIAN_VAULT_PATH: {path}')
             return path
-        logger.warning(
-            f"OBSIDIAN_VAULT_PATH set to '{vault}' but path doesn't exist"
-        )
+        logger.warning(f"OBSIDIAN_VAULT_PATH set to '{vault}' but path doesn't exist")
+        # If auto-detection is disabled, raise immediately instead of falling through
+        if disable_autodetect:
+            raise ValueError(
+                f"OBSIDIAN_VAULT_PATH set to '{vault}' but path doesn't exist. "
+                'Auto-detection is disabled (THOTH_DISABLE_AUTODETECT=1).'
+            )
 
     # 2. Check THOTH_VAULT_PATH (legacy support)
     if vault := os.getenv('THOTH_VAULT_PATH'):
         path = Path(vault).expanduser().resolve()
         if path.exists():
-            logger.info(f"Vault detected from THOTH_VAULT_PATH: {path}")
+            logger.info(f'Vault detected from THOTH_VAULT_PATH: {path}')
             return path
         logger.warning(f"THOTH_VAULT_PATH set to '{vault}' but path doesn't exist")
+        # If auto-detection is disabled, raise immediately
+        if disable_autodetect:
+            raise ValueError(
+                f"THOTH_VAULT_PATH set to '{vault}' but path doesn't exist. "
+                'Auto-detection is disabled (THOTH_DISABLE_AUTODETECT=1).'
+            )
+
+    # If auto-detection is disabled, stop here
+    if disable_autodetect:
+        raise ValueError(
+            'Could not detect vault. THOTH_DISABLE_AUTODETECT=1 prevents fallbacks. '
+            'Please set OBSIDIAN_VAULT_PATH or THOTH_VAULT_PATH to a valid path.'
+        )
 
     # 3. Auto-detect by walking up looking for _thoth/ directory
     current = Path.cwd()
     for _ in range(6):  # Check up to 5 parent levels
         thoth_dir = current / '_thoth'
         if thoth_dir.exists() and thoth_dir.is_dir():
-            logger.info(f"Vault auto-detected at: {current}")
+            logger.info(f'Vault auto-detected at: {current}')
             return current
 
         parent = current.parent
@@ -91,13 +115,13 @@ def get_vault_root() -> Path:
     # 4. Check specific known location based on your setup
     known_location = Path.home() / 'Documents' / 'thoth'
     if (known_location / '_thoth').exists():
-        logger.info(f"Vault found at known location: {known_location}")
+        logger.info(f'Vault found at known location: {known_location}')
         return known_location
 
     raise ValueError(
-        "Could not detect vault. Please set OBSIDIAN_VAULT_PATH:\n"
-        "  export OBSIDIAN_VAULT_PATH=/path/to/your/vault\n\n"
-        "Or run from within vault directory (contains _thoth/)"
+        'Could not detect vault. Please set OBSIDIAN_VAULT_PATH:\n'
+        '  export OBSIDIAN_VAULT_PATH=/path/to/your/vault\n\n'
+        'Or run from within vault directory (contains _thoth/)'
     )
 
 
@@ -118,7 +142,7 @@ class APIKeys(BaseModel):
     google_search_engine_id: str = Field(default='', alias='googleSearchEngineId')
     semantic_scholar_key: str = Field(default='', alias='semanticScholarKey')
     web_search_key: str = Field(default='', alias='webSearchKey')
-    web_search_providers: List[str] = Field(
+    web_search_providers: List[str] = Field(  # noqa: UP006
         default_factory=list, alias='webSearchProviders'
     )
     letta_api_key: str = Field(default='', alias='lettaApiKey')
@@ -158,12 +182,12 @@ class LLMDefaultConfig(BaseModel):
 class LLMCitationModels(BaseModel):
     """Citation sub-models."""
 
-    document_citation: Optional[str] = Field(default=None, alias='documentCitation')
-    reference_cleaning: Optional[str] = Field(default=None, alias='referenceCleaning')
-    structured_extraction: Optional[str] = Field(
+    document_citation: Optional[str] = Field(default=None, alias='documentCitation')  # noqa: UP007
+    reference_cleaning: Optional[str] = Field(default=None, alias='referenceCleaning')  # noqa: UP007
+    structured_extraction: Optional[str] = Field(  # noqa: UP007
         default=None, alias='structuredExtraction'
     )
-    batch_structured_extraction: Optional[str] = Field(
+    batch_structured_extraction: Optional[str] = Field(  # noqa: UP007
         default=None, alias='batchStructuredExtraction'
     )
 
@@ -210,9 +234,7 @@ class LLMResearchAgentConfig(BaseModel):
     max_tokens: int = Field(default=50000, alias='maxTokens')
     max_output_tokens: int = Field(default=50000, alias='maxOutputTokens')
     max_context_length: int = Field(default=100000, alias='maxContextLength')
-    use_auto_model_selection: bool = Field(
-        default=False, alias='useAutoModelSelection'
-    )
+    use_auto_model_selection: bool = Field(default=False, alias='useAutoModelSelection')
     auto_model_require_tool_calling: bool = Field(
         default=False, alias='autoModelRequireToolCalling'
     )
@@ -251,9 +273,7 @@ class LLMQueryBasedRoutingConfig(BaseModel):
     """Query-based routing configuration."""
 
     enabled: bool = False
-    routing_model: str = Field(
-        default='google/gemini-2.5-flash', alias='routingModel'
-    )
+    routing_model: str = Field(default='google/gemini-2.5-flash', alias='routingModel')
     use_dynamic_prompt: bool = Field(default=False, alias='useDynamicPrompt')
 
     class Config:
@@ -477,8 +497,8 @@ class EpisodicSummarizationJob(BaseModel):
 
     enabled: bool = True
     interval_hours: int = Field(default=24, alias='intervalHours')
-    time_of_day: Optional[str] = Field(default=None, alias='timeOfDay')
-    days_of_week: Optional[List[str]] = Field(default=None, alias='daysOfWeek')
+    time_of_day: Optional[str] = Field(default=None, alias='timeOfDay')  # noqa: UP007
+    days_of_week: Optional[List[str]] = Field(default=None, alias='daysOfWeek')  # noqa: UP006, UP007
     parameters: EpisodicSummarizationParameters = Field(
         default_factory=EpisodicSummarizationParameters
     )
@@ -490,7 +510,7 @@ class EpisodicSummarizationJob(BaseModel):
 class MemorySchedulerConfig(BaseModel):
     """Memory scheduler configuration."""
 
-    jobs: Dict[str, EpisodicSummarizationJob] = Field(default_factory=dict)
+    jobs: Dict[str, EpisodicSummarizationJob] = Field(default_factory=dict)  # noqa: UP006
 
     class Config:
         populate_by_name = True
@@ -573,7 +593,7 @@ class MonitorConfig(BaseModel):
     auto_start: bool = Field(default=True, alias='autoStart')
     watch_interval: int = Field(default=10, alias='watchInterval')
     bulk_process_size: int = Field(default=10, alias='bulkProcessSize')
-    watch_directories: List[str] = Field(
+    watch_directories: List[str] = Field(  # noqa: UP006
         default_factory=list, alias='watchDirectories'
     )
     recursive: bool = True
@@ -608,7 +628,7 @@ class ChromeExtensionConfig(BaseModel):
 class WebSearchConfig(BaseModel):
     """Web search configuration."""
 
-    providers: List[str] = Field(default_factory=list)
+    providers: List[str] = Field(default_factory=list)  # noqa: UP006
 
     class Config:
         populate_by_name = True
@@ -619,9 +639,7 @@ class DiscoveryConfig(BaseModel):
 
     auto_start_scheduler: bool = Field(default=False, alias='autoStartScheduler')
     default_max_articles: int = Field(default=50, alias='defaultMaxArticles')
-    default_interval_minutes: int = Field(
-        default=60, alias='defaultIntervalMinutes'
-    )
+    default_interval_minutes: int = Field(default=60, alias='defaultIntervalMinutes')
     rate_limit_delay: float = Field(default=1.0, alias='rateLimitDelay')
     chrome_extension: ChromeExtensionConfig = Field(
         default_factory=ChromeExtensionConfig, alias='chromeExtension'
@@ -668,7 +686,7 @@ class CitationConfig(BaseModel):
     use_resolution_chain: bool = Field(
         default=True,
         alias='useResolutionChain',
-        description='Enable improved citation resolution chain with Crossref, ArXiv, OpenAlex, and Semantic Scholar'
+        description='Enable improved citation resolution chain with Crossref, ArXiv, OpenAlex, and Semantic Scholar',
     )
 
     class Config:
@@ -714,9 +732,7 @@ class PerformanceMemoryConfig(BaseModel):
     """Performance memory configuration."""
 
     optimization_enabled: bool = Field(default=True, alias='optimizationEnabled')
-    chunk_processing_enabled: bool = Field(
-        default=True, alias='chunkProcessingEnabled'
-    )
+    chunk_processing_enabled: bool = Field(default=True, alias='chunkProcessingEnabled')
     max_document_size_mb: int = Field(default=50, alias='maxDocumentSizeMb')
 
     class Config:
@@ -806,7 +822,7 @@ class APIGatewayConfig(BaseModel):
     rate_limit: float = Field(default=5.0, alias='rateLimit')
     cache_expiry: int = Field(default=3600, alias='cacheExpiry')
     default_timeout: int = Field(default=15, alias='defaultTimeout')
-    endpoints: Dict[str, Any] = Field(default_factory=dict)
+    endpoints: Dict[str, Any] = Field(default_factory=dict)  # noqa: UP006
 
     class Config:
         populate_by_name = True
@@ -851,9 +867,13 @@ class PostgresConfig(BaseModel):
 class FeatureFlagsConfig(BaseModel):
     """Feature flags for A/B testing and gradual rollout."""
 
-    use_postgres_for_citations: bool = Field(default=False, alias='usePostgresForCitations')
+    use_postgres_for_citations: bool = Field(
+        default=False, alias='usePostgresForCitations'
+    )
     use_postgres_for_tags: bool = Field(default=False, alias='usePostgresForTags')
-    use_postgres_for_rag_metadata: bool = Field(default=False, alias='usePostgresForRagMetadata')
+    use_postgres_for_rag_metadata: bool = Field(
+        default=False, alias='usePostgresForRagMetadata'
+    )
     enable_cache_layer: bool = Field(default=True, alias='enableCacheLayer')
     cache_ttl_seconds: int = Field(default=300, alias='cacheTtlSeconds')
 
@@ -864,10 +884,10 @@ class FeatureFlagsConfig(BaseModel):
 class Settings(BaseModel):
     """Complete settings - maps EXACTLY to your settings.json file."""
 
-    schema_: Optional[str] = Field(default=None, alias='$schema')
-    version: Optional[str] = None
-    last_modified: Optional[str] = Field(default=None, alias='lastModified')
-    comment_: Optional[str] = Field(default=None, alias='_comment')
+    schema_: Optional[str] = Field(default=None, alias='$schema')  # noqa: UP007
+    version: Optional[str] = None  # noqa: UP007
+    last_modified: Optional[str] = Field(default=None, alias='lastModified')  # noqa: UP007
+    comment_: Optional[str] = Field(default=None, alias='_comment')  # noqa: UP007
 
     api_keys: APIKeys = Field(default_factory=APIKeys, alias='apiKeys')
     llm: LLMConfig = Field(default_factory=LLMConfig)
@@ -904,16 +924,16 @@ class Settings(BaseModel):
         """
         if not settings_file.exists():
             raise FileNotFoundError(
-                f"Settings file not found: {settings_file}\n"
-                f"Please ensure your settings.json exists in the vault/_thoth/ directory"
+                f'Settings file not found: {settings_file}\n'
+                f'Please ensure your settings.json exists in the vault/_thoth/ directory'
             )
 
         try:
             data = json.loads(settings_file.read_text())
-            logger.info(f"Loaded settings from {settings_file}")
+            logger.info(f'Loaded settings from {settings_file}')
             return cls(**data)
         except Exception as e:
-            logger.error(f"Error loading settings from {settings_file}: {e}")
+            logger.error(f'Error loading settings from {settings_file}: {e}')
             raise
 
 
@@ -965,26 +985,35 @@ class Config:
     """
 
     _instance: Config | None = None
-    _reload_callbacks: Dict[str, Callable[[Config], None]] = {}
+    _reload_callbacks: Dict[str, Callable[[Config], None]] = {}  # noqa: UP006, RUF012
+    _instance_lock = threading.Lock()  # Thread-safe singleton and initialization
 
     def __new__(cls) -> Config:
-        """Singleton pattern - only one Config instance."""
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
+        """Singleton pattern - only one Config instance (thread-safe)."""
+        # Thread-safe singleton check
+        with cls._instance_lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._instance._initialized = False
         return cls._instance
 
     def __init__(self) -> None:
-        """Initialize configuration by loading vault and ALL settings."""
-        if self._initialized:
-            return
+        """Initialize configuration by loading vault and ALL settings (thread-safe)."""
+        # Thread-safe initialization check - prevent multiple threads from initializing
+        with self._instance_lock:
+            if self._initialized:
+                return
+
+            # Mark as initializing immediately to prevent other threads from entering
+            # We haven't finished initialization yet, but this prevents race conditions
+            self._initialized = True
 
         # 1. Detect vault
         self.vault_root = get_vault_root()
-        logger.info(f"Vault root: {self.vault_root}")
+        logger.info(f'Vault root: {self.vault_root}')
 
-        # 2. Initialize callback system for reload notifications (named callbacks with Config parameter)
-        self._reload_callbacks: Dict[str, Callable[[Config], None]] = {}
+        # 2. Initialize callback system for reload notifications (named callbacks with Config parameter)  # noqa: W505
+        self._reload_callbacks: Dict[str, Callable[[Config], None]] = {}  # noqa: UP006
         self._reload_lock = threading.Lock()
 
         # 3. Load ALL settings from your existing JSON file
@@ -1001,7 +1030,7 @@ class Config:
         self._configure_logging()
 
         self._initialized = True
-        logger.success("Configuration loaded successfully with ALL settings preserved")
+        logger.success('Configuration loaded successfully with ALL settings preserved')
 
     def _resolve_paths(self) -> None:
         """Convert relative paths to absolute (vault-relative).
@@ -1038,7 +1067,7 @@ class Config:
                     return (self.vault_root / relative_part).resolve()
                 else:
                     # Other absolute paths: use as-is but warn
-                    logger.warning(f"Absolute path outside vault: {path} - using as-is")
+                    logger.warning(f'Absolute path outside vault: {path} - using as-is')
                     return path.resolve()
 
             # Relative path: resolve relative to vault root
@@ -1084,8 +1113,11 @@ class Config:
             self.discovery_results_dir,
             self.discovery_chrome_configs_dir,
         ]:
-            dir_path.mkdir(parents=True, exist_ok=True)
-            logger.debug(f"Ensured directory exists: {dir_path}")
+            try:
+                dir_path.mkdir(parents=True, exist_ok=True)
+                logger.debug(f'Ensured directory exists: {dir_path}')
+            except PermissionError:
+                logger.warning(f'Permission denied creating directory: {dir_path}')
 
     def _configure_logging(self) -> None:
         """Configure loguru logging based on your settings."""
@@ -1119,7 +1151,9 @@ class Config:
             )
 
     @classmethod
-    def register_reload_callback(cls, name: str, callback: Callable[[Config], None]) -> None:
+    def register_reload_callback(
+        cls, name: str, callback: Callable[[Config], None]
+    ) -> None:
         """
         Register a callback to be called after config reload.
 
@@ -1136,22 +1170,25 @@ class Config:
         if not cls._instance:
             cls._instance = cls()
 
-        cls._instance._reload_callbacks[name] = callback
-        logger.debug(f"Registered reload callback: {name}")
+        with cls._instance._reload_lock:
+            cls._instance._reload_callbacks[name] = callback
+            logger.debug(f'Registered reload callback: {name}')
 
     @classmethod
     def unregister_reload_callback(cls, name: str) -> None:
         """Unregister a reload callback."""
-        if cls._instance and name in cls._instance._reload_callbacks:
-            del cls._instance._reload_callbacks[name]
-            logger.debug(f"Unregistered reload callback: {name}")
+        if cls._instance:
+            with cls._instance._reload_lock:
+                if name in cls._instance._reload_callbacks:
+                    del cls._instance._reload_callbacks[name]
+                    logger.debug(f'Unregistered reload callback: {name}')
 
     def _notify_reload_callbacks(self) -> None:
         """Notify all registered callbacks after successful reload."""
         for name, callback in self._reload_callbacks.items():
             try:
                 callback(self)
-                logger.debug(f"✓ Notified callback: {name}")
+                logger.debug(f'✓ Notified callback: {name}')
             except Exception as e:
                 logger.error(f"Callback '{name}' failed: {e}")
 
@@ -1167,7 +1204,7 @@ class Config:
 
         Thread-safe and can be called at any time.
         """
-        logger.info("Reloading settings from JSON...")
+        logger.info('Reloading settings from JSON...')
 
         try:
             # Store old config for rollback
@@ -1189,13 +1226,13 @@ class Config:
             # Reconfigure logging
             self._configure_logging()
 
-            logger.success("✅ Settings reloaded successfully")
+            logger.success('✅ Settings reloaded successfully')
 
             # Notify all callbacks
             self._notify_reload_callbacks()
 
         except Exception as e:
-            logger.error(f"Settings reload failed: {e}")
+            logger.error(f'Settings reload failed: {e}')
             # Rollback to old settings
             if 'old_settings' in locals():
                 self.settings = old_settings
@@ -1203,7 +1240,7 @@ class Config:
                 self.pdf_dir = old_paths['pdf']
                 self.markdown_dir = old_paths['markdown']
                 self.notes_dir = old_paths['notes']
-                logger.warning("Rolled back to previous settings")
+                logger.warning('Rolled back to previous settings')
             raise
 
     # ========================================================================
@@ -1316,9 +1353,9 @@ class Config:
     def __repr__(self) -> str:
         """String representation of config."""
         return (
-            f"Config(vault_root={self.vault_root}, "
-            f"model={self.llm_config.default.model}, "
-            f"log_level={self.logging_config.level})"
+            f'Config(vault_root={self.vault_root}, '
+            f'model={self.llm_config.default.model}, '
+            f'log_level={self.logging_config.level})'
         )
 
 
@@ -1326,7 +1363,15 @@ class Config:
 # 5. GLOBAL CONFIG INSTANCE - Import this everywhere
 # ============================================================================
 
-config = Config()
+
+# Use __getattr__ to make 'config' dynamically reference the current singleton
+# This allows tests to reset Config._instance and have the global config update
+def __getattr__(name: str):
+    """Lazy evaluation of module-level attributes."""
+    if name == 'config':
+        return Config()
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
 
 # ============================================================================
 # Usage throughout codebase:

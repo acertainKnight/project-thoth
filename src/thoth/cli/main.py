@@ -25,7 +25,8 @@ def _configure_safe_environment() -> None:
 # Configure environment variables before importing any ML libraries
 _configure_safe_environment()
 
-from thoth.pipeline import ThothPipeline  # noqa: E402
+from thoth.initialization import initialize_thoth  # noqa: E402
+from thoth.pipeline import ThothPipeline  # noqa: E402 - Still imported for backward compat
 
 from . import (  # noqa: E402
     discovery,
@@ -50,10 +51,10 @@ def main() -> None:
     )
 
     # Register sub-commands from modules
-    # agent.configure_subparser(subparsers)  # DEPRECATED: Use Letta REST API (port 8283)
+    # agent.configure_subparser(subparsers)  # DEPRECATED: Use Letta REST API (port 8283)  # noqa: W505
     discovery.configure_subparser(subparsers)
     mcp.configure_subparser(subparsers)
-    # memory.configure_subparser(subparsers)  # DEPRECATED: Use Letta REST API (port 8283)
+    # memory.configure_subparser(subparsers)  # DEPRECATED: Use Letta REST API (port 8283)  # noqa: W505
     notes.configure_subparser(subparsers)
     pdf.configure_subparser(subparsers)
     performance.configure_subparser(subparsers)
@@ -64,8 +65,16 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Create a single pipeline instance to be used by all commands
-    pipeline = ThothPipeline()
+    # Initialize Thoth using the new factory function
+    # This replaces ThothPipeline() and provides cleaner access to components
+    services, document_pipeline, citation_tracker = initialize_thoth()
+    
+    # Create ThothPipeline wrapper for backward compatibility with CLI commands
+    # that still expect it (will be removed once all commands are updated)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        pipeline = ThothPipeline()
 
     if hasattr(args, 'func'):
         # Check if the function is async and handle accordingly

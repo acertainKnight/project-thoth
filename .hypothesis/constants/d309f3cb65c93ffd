@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/utilities/schemas/queries.py
+# hypothesis_version: 6.148.9
+
+[0.0, 0.7, 0.8, 1.0, '[^\\w\\-._]', '_', 'chat', 'create_query', 'delete_query', 'download', 'edit_query', 'end', 'evaluate_article', 'keep', 'list_queries', 'name', 'refine_query', 'reject', 'review', 'skip']

@@ -6,10 +6,10 @@ parameterized searches on websites that require authentication or lack APIs.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime  # noqa: F401
 from uuid import UUID
 
-from loguru import logger
+from loguru import logger  # noqa: F401
 
 from thoth.discovery.browser.workflow_execution_service import (
     WorkflowExecutionService,
@@ -58,15 +58,15 @@ class BrowserWorkflowPlugin(BaseDiscoveryPlugin):
     Example:
         >>> plugin = BrowserWorkflowPlugin(
         ...     postgres_service=postgres,
-        ...     config={'workflow_id': 'uuid-string', 'max_articles': 50}
+        ...     config={'workflow_id': 'uuid-string', 'max_articles': 50},
         ... )
         >>> articles = await plugin.discover(
         ...     query=ResearchQuery(
         ...         name='ML Research',
         ...         keywords=['machine learning', 'neural networks'],
-        ...         research_question='What are recent advances in ML?'
+        ...         research_question='What are recent advances in ML?',
         ...     ),
-        ...     max_results=50
+        ...     max_results=50,
         ... )
     """
 
@@ -127,7 +127,9 @@ class BrowserWorkflowPlugin(BaseDiscoveryPlugin):
             self.logger.warning(f'Error during shutdown: {e}')
 
     def discover(
-        self, query: ResearchQuery, max_results: int
+        self,
+        query: ResearchQuery,  # noqa: ARG002
+        max_results: int,  # noqa: ARG002
     ) -> list[ScrapedArticleMetadata]:
         """
         Synchronous discover method (required by BaseDiscoveryPlugin).
@@ -244,9 +246,7 @@ class BrowserWorkflowPlugin(BaseDiscoveryPlugin):
             )
             return []
 
-    def _build_execution_parameters(
-        self, query: ResearchQuery
-    ) -> ExecutionParameters:
+    def _build_execution_parameters(self, query: ResearchQuery) -> ExecutionParameters:
         """
         Build ExecutionParameters from ResearchQuery.
 

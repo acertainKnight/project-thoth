@@ -1,627 +1,544 @@
 # Thoth Setup Guide
 
-This guide provides detailed instructions for setting up and configuring the Thoth Research Assistant system, including options for single-service deployment and multi-service architectures.
+Comprehensive installation and configuration guide for Thoth Research Assistant.
 
-## Deployment Architecture Options
+## Table of Contents
 
-Thoth can be deployed in several configurations:
+- [Prerequisites](#prerequisites)
+- [Installation Methods](#installation-methods)
+  - [Docker Installation (Recommended)](#docker-installation-recommended)
+  - [Local Installation](#local-installation)
+- [Configuration](#configuration)
+- [Obsidian Plugin Setup](#obsidian-plugin-setup)
+- [API Keys](#api-keys)
+- [Verification](#verification)
+- [Troubleshooting](#troubleshooting)
 
-1. **🏠 Single Container** - All services in one container (simple development)
-2. **🏗️ Multi-Service** - Separate containers for each service (recommended)
-3. **☁️ Cloud/Kubernetes** - Scalable microservice deployment
-4. **🧠 Memory-First** - Letta memory service with other services connecting to it
+## Prerequisites
 
-## System Requirements
+### Required Software
 
-### Minimum Requirements
-- **Python**: 3.10 or higher (3.12 recommended)
-- **Node.js**: 16.0 or higher
-- **RAM**: 4GB minimum, 8GB recommended
-- **Storage**: 2GB free space for installation and data
-- **OS**: Linux, macOS, or Windows with WSL2
+- **Python**: 3.10, 3.11, or 3.12 (NOT 3.13)
+  - Check version: `python --version`
+  - [Download Python](https://www.python.org/downloads/)
 
-### Recommended Requirements
-- **Python**: 3.12
-- **Node.js**: 20.0 or higher
-- **RAM**: 16GB for large document processing
-- **Storage**: 10GB+ for document storage and vector databases
-- **GPU**: Optional, for local embedding models
+- **Docker & Docker Compose**: For containerized deployment
+  - Check Docker: `docker --version`
+  - Check Compose: `docker compose version`
+  - [Install Docker](https://docs.docker.com/get-docker/)
+
+- **Obsidian**: For plugin integration
+  - [Download Obsidian](https://obsidian.md/)
+
+- **UV Package Manager**: Recommended for Python dependencies
+  - Install: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+  - Or use pip as fallback
+
+### System Requirements
+
+- **OS**: Linux, macOS, or Windows (WSL2 recommended for Windows)
+- **RAM**: 8GB minimum, 16GB recommended
+- **Disk**: 10GB free space (for Docker images and data)
+- **CPU**: Multi-core recommended for parallel processing
 
 ## Installation Methods
 
-### Method 1: One-Command Deployment (Recommended)
+### Docker Installation (Recommended)
 
-Complete deployment with Obsidian integration in a single command.
+Docker provides the easiest setup with all dependencies pre-configured.
 
-1. **Clone and Configure**
-   ```bash
-   git clone https://github.com/acertainKnight/project-thoth.git
-   cd project-thoth
+#### Step 1: Clone Repository
 
-   # Set your Obsidian vault path
-   export OBSIDIAN_VAULT="/path/to/your/obsidian/vault"
-   ```
-
-2. **Deploy Everything**
-   ```bash
-   # One command does it all
-   make deploy-and-start OBSIDIAN_VAULT="$OBSIDIAN_VAULT"
-   ```
-
-   This command automatically:
-   - ✅ Builds the Obsidian plugin
-   - ✅ Deploys plugin to your vault
-   - ✅ Creates complete `.thoth/` directory structure
-   - ✅ Copies all 22+ prompt templates
-   - ✅ Creates settings and MCP plugin configuration
-   - ✅ Starts all Docker services (API, MCP, ChromaDB, Letta, Discovery)
-
-3. **Service URLs**
-   - **API Server**: http://localhost:8000
-   - **MCP Server**: http://localhost:8001 (52 tools)
-   - **ChromaDB**: http://localhost:8003
-   - **Letta Memory**: http://localhost:8283
-   - **Discovery**: http://localhost:8004
-
-4. **Verify Deployment**
-   ```bash
-   # Check all services are running
-   make status
-
-   # View logs
-   make logs
-
-   # Check vault integration
-   make check-vault
-   ```
-
-### Method 2: Individual Service Setup
-
-Start only the services you need for development or testing.
-
-#### Core Services (Minimum Required)
 ```bash
-# 1. Start memory service (Letta)
-cd deployment/letta-memory-service
-make start
+# Clone the repository
+git clone https://github.com/acertainKnight/project-thoth.git
+cd project-thoth
 
-# 2. Start vector database
-docker-compose up -d chromadb
-
-# 3. Start main chat agent
-make docker-up-dev
+# Check repository structure
+ls -la
 ```
 
-#### Optional Services
-```bash
-# Start monitoring stack
-docker-compose -f docker/monitoring/docker-compose.monitoring.yml --profile monitoring up -d
+#### Step 2: Set Environment Variables
 
-# Start discovery service (if running separately)
-python -m thoth discovery server
+```bash
+# Set your Obsidian vault path
+export OBSIDIAN_VAULT_PATH="/path/to/your/obsidian/vault"
+
+# Verify it's set
+echo $OBSIDIAN_VAULT_PATH
 ```
 
-#### Using Service-Specific Commands
+**Important**: The vault path must:
+- Be an absolute path (not relative)
+- Point to your Obsidian vault root directory
+- Contain a `_thoth/` subdirectory (will be created if missing)
+
+#### Step 3: Configure API Keys
+
 ```bash
-# Use the service management Makefile
-make -f Makefile.services help              # Show all options
+# Copy example environment file
+cp .env.example .env
 
-# Start specific services
-make -f Makefile.services start-memory      # Memory service only
-make -f Makefile.services start-chat        # Chat agent only
-make -f Makefile.services start-monitoring  # Monitoring only
-
-# Start service combinations
-make -f Makefile.services start-core        # Memory + Vector DB
-make -f Makefile.services start-app         # Chat + Discovery
-make -f Makefile.services start-full        # Everything + Monitoring
+# Edit with your preferred editor
+nano .env  # or vim, code, etc.
 ```
 
-### Method 3: Quick Start (Single Container)
+Add your API keys to `.env`:
+```bash
+# Required keys
+MISTRAL_API_KEY=your_mistral_key_here
+OPENROUTER_API_KEY=your_openrouter_key_here
 
-For simple development and testing.
+# Optional keys
+OPENAI_API_KEY=your_openai_key_here
+SEMANTIC_SCHOLAR_KEY=your_semantic_scholar_key_here
+```
 
-1. **Clone and Setup**
-   ```bash
-   git clone https://github.com/acertainKnight/project-thoth.git
-   cd project-thoth
+#### Step 4: Start Development Environment
 
-   # Check system dependencies
-   make check-deps
+```bash
+# Start all services with hot-reload
+make dev
 
-   # Deploy everything in single container
-   make full-deploy
-   ```
+# This will:
+# 1. Build Docker images
+# 2. Start 8 services (API, MCP, Monitor, Agent, Discovery, Letta, PostgreSQL, ChromaDB)
+# 3. Deploy Obsidian plugin
+# 4. Initialize databases
+```
 
-2. **Configure Environment**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your API keys
-   ```
+#### Step 5: Verify Services
 
-### Method 4: Manual Installation
+```bash
+# Check all services are running
+make health
 
-#### Python Backend Setup
+# Expected output:
+# API Server: ✓ Running on port 8000
+# MCP Server: ✓ Running on port 8001
+# Letta: ✓ Running on port 8283
+# PostgreSQL: ✓ Running
+# ChromaDB: ✓ Running on port 8003
+```
 
-1. **Create Virtual Environment**
-   ```bash
-   # Using uv (fastest, recommended)
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   uv venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   uv sync
+### Local Installation
 
-   # Or using traditional pip
-   python -m venv .venv
-   source .venv/bin/activate
-   pip install -e .
-   ```
+For development without Docker:
 
-2. **Verify Installation**
-   ```bash
-   python -m thoth --help
-   ```
+#### Step 1: Install Python Dependencies
 
-#### Obsidian Plugin Setup
+```bash
+# Clone repository
+git clone https://github.com/acertainKnight/project-thoth.git
+cd project-thoth
 
-1. **Install Dependencies**
-   ```bash
-   cd obsidian-plugin/thoth-obsidian
-   npm install
-   ```
+# Create virtual environment with UV (recommended)
+uv venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
-2. **Build Plugin**
-   ```bash
-   npm run build
-   ```
+# Install dependencies
+uv sync
 
-3. **Deploy to Obsidian**
-   ```bash
-   # Auto-detect Obsidian vault
-   make deploy-plugin
+# Or with pip (slower)
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev,test]"
+```
 
-   # Or specify vault location
-   make deploy-plugin OBSIDIAN_VAULT="/path/to/your/vault"
-   ```
+#### Step 2: Install Playwright
 
-4. **Enable in Obsidian**
-   - Open Obsidian
-   - Go to Settings → Community Plugins
-   - Enable "Thoth Research Assistant"
+Required for browser-based discovery features:
+
+```bash
+# Install Playwright browsers
+python -m playwright install chromium
+
+# Verify installation
+python -m playwright --version
+```
+
+#### Step 3: Set Up PostgreSQL
+
+Letta requires PostgreSQL with pgvector extension:
+
+```bash
+# Install PostgreSQL and pgvector
+# Ubuntu/Debian:
+sudo apt-get install postgresql-15 postgresql-15-pgvector
+
+# macOS with Homebrew:
+brew install postgresql@15
+brew install pgvector
+
+# Start PostgreSQL
+sudo systemctl start postgresql  # Linux
+brew services start postgresql@15  # macOS
+
+# Create database for Letta
+createdb letta
+psql letta -c "CREATE EXTENSION vector;"
+```
+
+#### Step 4: Configure Environment
+
+```bash
+# Set vault path
+export OBSIDIAN_VAULT_PATH="$HOME/Documents/ObsidianVault"
+
+# Configure API keys
+cp .env.example .env
+# Edit .env with your keys
+```
+
+#### Step 5: Start Services Manually
+
+```bash
+# Terminal 1: Start API server
+python -m thoth server start --port 8000
+
+# Terminal 2: Start MCP server
+python -m thoth mcp start --port 8001
+
+# Terminal 3: Start Letta
+letta server --port 8283
+```
 
 ## Configuration
 
-### Environment Variables
+### Vault Structure
 
-Create a `.env` file in the project root:
+Thoth uses a vault-centric configuration approach. All settings and data are stored in your Obsidian vault under `_thoth/`:
+
+```
+your-vault/
+├── _thoth/
+│   ├── settings.json          # Main configuration (hot-reloadable)
+│   ├── data/
+│   │   ├── pdfs/             # Place PDF files here
+│   │   ├── notes/            # Generated notes appear here
+│   │   ├── knowledge/        # Citation graphs
+│   │   └── prompts/          # Custom AI prompts
+│   ├── logs/
+│   │   ├── thoth.log         # Application logs
+│   │   └── letta.log         # Agent system logs
+│   └── cache/                # Temporary cache files
+```
+
+### Settings File
+
+The `_thoth/settings.json` file controls all Thoth configuration:
+
+```json
+{
+  "llm_config": {
+    "default": {
+      "model": "mistral/mistral-large-latest",
+      "temperature": 0.7,
+      "max_tokens": 4096
+    },
+    "analysis": {
+      "model": "openrouter/anthropic/claude-3.5-sonnet",
+      "temperature": 0.3,
+      "max_tokens": 8192
+    }
+  },
+  "discovery": {
+    "auto_start_scheduler": false,
+    "default_max_articles": 50,
+    "default_interval_minutes": 1440
+  },
+  "rag": {
+    "embedding_model": "all-MiniLM-L6-v2",
+    "chunk_size": 500,
+    "chunk_overlap": 50
+  }
+}
+```
+
+**Hot-Reload**: In development mode (`make dev`), changes to `settings.json` are automatically applied within ~2 seconds!
+
+### Directory Configuration
+
+By default, Thoth uses these paths (relative to vault root):
+
+```json
+{
+  "directories": {
+    "pdf": "_thoth/data/pdfs",
+    "notes": "_thoth/data/notes",
+    "knowledge": "_thoth/data/knowledge",
+    "prompts": "_thoth/data/prompts",
+    "logs": "_thoth/logs",
+    "cache": "_thoth/cache"
+  }
+}
+```
+
+Paths can be:
+- **Relative**: `_thoth/data/pdfs` (relative to vault root)
+- **Absolute**: `/absolute/path/to/directory`
+
+## Obsidian Plugin Setup
+
+### Automatic Installation (via Make)
 
 ```bash
-# === REQUIRED API KEYS ===
-MISTRAL_API_KEY=your_mistral_api_key_here
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-
-# === OPTIONAL API KEYS ===
-# Citation and academic search
-OPENCITATIONS_KEY=your_opencitations_key
-SEMANTIC_SCHOLAR_KEY=your_semantic_scholar_key
-
-# Web search capabilities
-GOOGLE_API_KEY=your_google_api_key
-GOOGLE_SEARCH_ENGINE_ID=your_custom_search_engine_id
-SERPER_API_KEY=your_serper_key
-
-# === DIRECTORY CONFIGURATION ===
-THOTH_WORKSPACE_DIR=/path/to/your/research/workspace
-THOTH_PDF_DIR=/path/to/your/pdf/collection
-THOTH_DATA_DIR=/path/to/thoth/data
-THOTH_LOGS_DIR=/path/to/thoth/logs
-
-# === SYSTEM CONFIGURATION ===
-THOTH_LOG_LEVEL=INFO
-THOTH_API_HOST=127.0.0.1
-THOTH_API_PORT=8000
-
-# === PERFORMANCE TUNING ===
-TOKENIZERS_PARALLELISM=false
-OMP_NUM_THREADS=1
+# Deploy plugin to Obsidian
+make deploy-plugin
 ```
 
-### API Key Setup
+This copies the plugin to `.obsidian/plugins/thoth-obsidian/` in your vault.
 
-#### Required Keys
+### Manual Installation
 
-1. **Mistral AI** (Primary LLM provider)
-   - Sign up at [console.mistral.ai](https://console.mistral.ai)
-   - Create API key
-   - Add to `MISTRAL_API_KEY`
+1. **Build the plugin**:
+   ```bash
+   cd obsidian-plugin/thoth-obsidian
+   npm install
+   npm run build
+   ```
 
-2. **OpenRouter** (Alternative LLM provider)
-   - Sign up at [openrouter.ai](https://openrouter.ai)
-   - Create API key
-   - Add to `OPENROUTER_API_KEY`
+2. **Copy to Obsidian**:
+   ```bash
+   mkdir -p "$OBSIDIAN_VAULT_PATH/.obsidian/plugins/thoth-obsidian"
+   cp main.js manifest.json styles.css \
+      "$OBSIDIAN_VAULT_PATH/.obsidian/plugins/thoth-obsidian/"
+   ```
 
-#### Optional Keys
+3. **Enable in Obsidian**:
+   - Open Obsidian
+   - Settings → Community Plugins
+   - Turn off "Restricted Mode"
+   - Enable "Thoth Research Assistant"
 
-1. **OpenCitations** (Citation data)
-   - Email [contact@opencitations.net](mailto:contact@opencitations.net) for API access
-   - Add to `OPENCITATIONS_KEY`
+### Plugin Configuration
 
-2. **Semantic Scholar** (Academic paper metadata)
-   - Apply at [semanticscholar.org/product/api](https://www.semanticscholar.org/product/api)
-   - Add to `SEMANTIC_SCHOLAR_KEY`
+After enabling the plugin:
 
-3. **Google Custom Search** (Web search)
-   - Create custom search engine at [cse.google.com](https://cse.google.com)
-   - Get API key from [console.developers.google.com](https://console.developers.google.com)
-   - Add `GOOGLE_API_KEY` and `GOOGLE_SEARCH_ENGINE_ID`
+1. **Click the Thoth ribbon icon** (left sidebar) or use Command Palette (`Ctrl/Cmd+P` → "Thoth")
+2. **Open Settings**: Settings → Thoth Research Assistant
+3. **Configure connection**:
+   - **Local Mode**: Use `http://localhost:8000` (default)
+   - **Remote Mode**: Set custom URL for Docker deployments
 
-### Directory Structure Setup
+4. **Test connection**: Click "Test Connection" button
 
-Thoth will create the following directories automatically:
+## API Keys
 
-```
-~/thoth-workspace/          # Main workspace (configurable)
-├── data/                   # Vector stores and databases
-├── knowledge/              # Knowledge graphs and processed data
-├── logs/                   # Application logs
-├── pdfs/                   # PDF document storage
-├── queries/                # Saved research queries
-└── prompts/               # Custom prompt templates
-```
+### Required Keys
 
-You can customize these locations in your `.env` file or through the Obsidian plugin settings.
+#### Mistral AI
+- **Purpose**: Primary LLM provider for analysis and generation
+- **Get Key**: [Mistral Console](https://console.mistral.ai/)
+- **Free Tier**: Limited tokens per month
+- **Recommended Models**:
+  - `mistral-large-latest`: Best quality
+  - `mistral-medium-latest`: Good balance
+  - `mistral-small-latest`: Fast and cheap
 
-## First Run Options
+#### OpenRouter
+- **Purpose**: Access to multiple LLM providers (Anthropic, OpenAI, etc.)
+- **Get Key**: [OpenRouter](https://openrouter.ai/keys)
+- **Free Tier**: Limited requests
+- **Benefits**: Automatic fallback, model routing, unified API
 
-### Option A: Multi-Service Architecture (Recommended)
+### Optional Keys
 
-This starts all services separately for better scaling and fault isolation.
+#### OpenAI
+- **Purpose**: Access to GPT models
+- **Get Key**: [OpenAI Platform](https://platform.openai.com/api-keys)
+- **Cost**: Pay-per-use pricing
 
-#### 1. Start All Services
+#### Semantic Scholar
+- **Purpose**: Enhanced paper discovery and metadata
+- **Get Key**: [Semantic Scholar API](https://www.semanticscholar.org/product/api)
+- **Free Tier**: 5000 requests/5 minutes
+
+#### Google Search
+- **Purpose**: Web search for paper discovery
+- **Get Key**: [Google Cloud Console](https://console.cloud.google.com/)
+- **Requirements**: Enable Custom Search API
+
+### Configuring Keys
+
+**Option 1: Environment Variables** (recommended for local development):
 ```bash
-# Development environment (with hot-reload)
-./scripts/start-all-services.sh dev
-
-# Production environment (optimized)
-./scripts/start-all-services.sh prod
-
-# Check all services are healthy
-./scripts/start-all-services.sh status
+export MISTRAL_API_KEY="your_key"
+export OPENROUTER_API_KEY="your_key"
 ```
 
-#### 2. Service URLs Available
-- **Main API**: http://localhost:8000
-- **MCP Server**: http://localhost:8001
-- **Memory Service (Letta)**: http://localhost:8283
-- **Vector Database**: http://localhost:8003
-- **Monitoring**: http://localhost:9090 (Prometheus), http://localhost:3000 (Grafana)
-
-#### 3. Individual Service Management
+**Option 2: .env File** (recommended for Docker):
 ```bash
-# Start only specific services
-make -f Makefile.services start-memory      # Memory service
-make -f Makefile.services start-chat        # Chat agent
-make -f Makefile.services start-monitoring  # Monitoring
-
-# Check service health
-make -f Makefile.services health-check
-
-# View service logs
-make -f Makefile.services logs-memory
-make -f Makefile.services logs-chat
+# .env file in project root
+MISTRAL_API_KEY=your_key
+OPENROUTER_API_KEY=your_key
 ```
 
-### Option B: Single Service (Simple Development)
+**Option 3: Settings JSON** (not recommended - security risk):
+```json
+{
+  "api_keys": {
+    "mistral_key": "your_key",
+    "openrouter_key": "your_key"
+  }
+}
+```
 
-#### 1. Start the Backend Services
+## Verification
+
+### Check Services
 
 ```bash
-# Start API server (traditional method)
-make start-api
-
-# Or start in development mode with auto-reload
-make start-api-dev
-```
-
-The API server will be available at `http://localhost:8000`
-
-## Configure Obsidian Plugin
-
-1. Open Obsidian
-2. Open plugin settings: Settings → Community Plugins → Thoth Research Assistant
-3. Configure essential settings:
-   - **API Keys**: Enter your Mistral/OpenRouter keys
-   - **Directories**: Set workspace and PDF directories
-   - **Connection**: Verify endpoint (default: `http://127.0.0.1:8000`)
-
-## Test Your Setup
-
-### 1. Health Check All Services
-```bash
-# Check all services (multi-service setup)
-make -f Makefile.services health-check
-
-# Or check individual services
-curl http://localhost:8000/health    # Main API
-curl http://localhost:8283/health    # Memory service
-curl http://localhost:8003/api/v1/heartbeat  # Vector DB
-```
-
-### 2. Test the Chat Agent
-```bash
-# Interactive agent (works with any setup)
-python -m thoth agent
-
-# Or via Obsidian
-# 1. Use command palette (Ctrl/Cmd+P)
-# 2. Run "Open Research Chat"
-# 3. Send test message: "Hello, are you working?"
-```
-
-### 3. Test Memory Integration
-```bash
-# Test Letta memory integration
-python scripts/test_memory_mcp_integration.py
-
-# Test memory tools via agent
-python -m thoth agent
-# In chat: "Use memory_health_check to verify the memory system"
-```
-
-### 4. Process Your First Documents
-
-```bash
-# Set up document monitoring (works with any setup)
-python -m thoth monitor --watch-dir /path/to/pdfs --optimized
-
-# Index documents for RAG search
-python -m thoth rag index
-
-# Test RAG search
-python -m thoth rag search --query "test query" --k 5
-```
-
-## Advanced Configuration
-
-### Service-Specific Configuration
-
-#### Memory Service (Letta) Configuration
-```bash
-# Edit memory service settings
-nano deployment/letta-memory-service/.env
-
-# Key settings:
-LETTA_SERVER_URL=http://localhost:8283
-LETTA_DB_PASSWORD=secure_password
-LETTA_POOL_SIZE=50
-LETTA_ARCHIVAL_MEMORY_ENABLED=true
-LETTA_FALLBACK_ENABLED=true
-```
-
-#### Main Application Configuration
-```bash
-# Edit main application settings
-nano .env
-
-# Key settings for service integration:
-LETTA_SERVER_URL=http://localhost:8283  # Connect to memory service
-THOTH_CHROMADB_URL=http://localhost:8003  # Connect to vector DB
-API_OPENROUTER_KEY=your_key
-API_MISTRAL_KEY=your_key
-```
-
-### MCP Integration Setup
-
-The MCP server is automatically started with the main application:
-
-```bash
-# MCP server starts automatically with chat service
-# Available at: http://localhost:8001
-
-# For standalone MCP server:
-python -m thoth mcp stdio    # CLI integration
-python -m thoth mcp http     # HTTP integration
-```
-
-### Letta Memory System Setup
-
-The memory system runs as a separate service:
-
-```bash
-# Start Letta memory service
-cd deployment/letta-memory-service
-make start
-
-# Check memory service health
+# Health check all services
 make health
 
-# View memory service logs
-make logs
-
-# Test memory integration
-python scripts/test_memory_mcp_integration.py
+# Or check manually:
+curl http://localhost:8000/health | jq
+curl http://localhost:8001/health | jq
+curl http://localhost:8283/v1/health | jq
 ```
 
-### Custom LLM Providers
-
-Edit `src/thoth/utilities/config.py` to add custom LLM providers or modify model configurations.
-
-### Performance Tuning
-
-#### For Large Document Collections
+### Test API
 
 ```bash
-# Increase memory limits
-export THOTH_MAX_MEMORY=16GB
-export CHROMA_MAX_BATCH_SIZE=500
+# Test API endpoint
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello, Thoth!"}'
 
-# Use faster embedding models
-export THOTH_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+# Test MCP tools
+curl http://localhost:8001/tools | jq
 ```
 
-#### For Slower Systems
+### Test Document Processing
 
 ```bash
-# Reduce concurrent processing
-export THOTH_MAX_CONCURRENT=2
-export THOTH_CHUNK_SIZE=512
+# Process a test PDF
+python -m thoth pdf process test.pdf
 
-# Use smaller models
-export THOTH_PRIMARY_MODEL=mistral/mistral-7b-instruct
+# Check output
+ls -la "$OBSIDIAN_VAULT_PATH/_thoth/data/notes/"
 ```
 
-### Development Mode
-
-For development and debugging:
+### View Logs
 
 ```bash
-# Start both plugin watcher and API server
-make dev
+# Development logs (all services)
+make dev-logs
 
-# Enable debug logging
-export THOTH_LOG_LEVEL=DEBUG
+# Specific service logs
+docker logs thoth-dev-api
+docker logs thoth-dev-mcp
+docker logs thoth-dev-letta
 
-# Run tests
-pytest tests/
+# Application logs in vault
+tail -f "$OBSIDIAN_VAULT_PATH/_thoth/logs/thoth.log"
 ```
 
 ## Troubleshooting
 
-### Multi-Service Setup Issues
+### Common Issues
 
-#### 1. Service Won't Start
+#### Port Already in Use
+
+**Symptom**: Error binding to port 8000/8001/8283
+
+**Solution**:
 ```bash
-# Check Docker and service status
-./scripts/start-all-services.sh status
+# Find process using port
+lsof -i :8000
+# Kill the process
+kill -9 <PID>
 
-# Check specific service logs
-make -f Makefile.services logs-memory    # Memory service
-make -f Makefile.services logs-chat      # Chat service
-
-# Restart specific service
-docker-compose restart thoth-chat
+# Or use different ports in settings.json
 ```
 
-#### 2. Memory Service Connection Issues
+#### Docker Permission Errors
+
+**Symptom**: Permission denied errors in Docker containers
+
+**Solution**:
 ```bash
-# Check if Letta is running
-curl http://localhost:8283/health
+# Add user to docker group
+sudo usermod -aG docker $USER
+newgrp docker
 
-# Check memory service logs
-cd deployment/letta-memory-service
-make logs
-
-# Restart memory service
-make restart
+# Or run with sudo (not recommended)
+sudo make dev
 ```
 
-#### 3. Port Conflicts
-```bash
-# Check what's using the ports
-netstat -tulpn | grep :8283  # Memory service
-netstat -tulpn | grep :8000  # Main API
-netstat -tulpn | grep :8001  # MCP server
+#### Vault Not Detected
 
-# Kill conflicting processes
-sudo fuser -k 8283/tcp
+**Symptom**: `ValueError: Could not detect vault`
+
+**Solution**:
+```bash
+# Ensure OBSIDIAN_VAULT_PATH is set
+echo $OBSIDIAN_VAULT_PATH
+
+# Should point to valid directory
+ls -la "$OBSIDIAN_VAULT_PATH"
+
+# Create _thoth directory if missing
+mkdir -p "$OBSIDIAN_VAULT_PATH/_thoth"
 ```
 
-#### 4. Service Health Check Failures
+#### Plugin Not Loading in Obsidian
+
+**Symptom**: Plugin doesn't appear in Obsidian
+
+**Solution**:
+1. Check plugin directory exists:
+   ```bash
+   ls "$OBSIDIAN_VAULT_PATH/.obsidian/plugins/thoth-obsidian/"
+   ```
+2. Verify files are present: `main.js`, `manifest.json`, `styles.css`
+3. Disable "Restricted Mode" in Obsidian settings
+4. Enable plugin in Community Plugins section
+5. Restart Obsidian
+
+#### Hot-Reload Not Working
+
+**Symptom**: Settings changes not applied
+
+**Solution**:
+1. Verify dev mode: `docker ps` should show `thoth-dev-*` containers
+2. Check settings.json location: `$OBSIDIAN_VAULT_PATH/_thoth/settings.json`
+3. Watch logs: `make dev-logs`
+4. Manual reload: `make reload-settings`
+
+#### Test Failures
+
+**Symptom**: `pytest` tests failing
+
+**Solution**:
 ```bash
-# Run comprehensive health check
-make -f Makefile.services health-check
+# Update dependencies
+uv sync
 
-# Check individual service health
-curl http://localhost:8000/health    # Main API
-curl http://localhost:8283/health    # Memory service
-curl http://localhost:8003/api/v1/heartbeat  # Vector DB
+# Clear pytest cache
+pytest --cache-clear
 
-# Restart unhealthy services
-make -f Makefile.services restart-all
+# Run with verbose output
+pytest -vv tests/
 ```
-
-### Traditional Setup Issues
-
-#### 1. "Module not found" errors
-```bash
-# Ensure you're in the virtual environment
-source .venv/bin/activate
-pip install -e .
-```
-
-#### 2. Obsidian plugin not loading
-```bash
-# Rebuild and redeploy
-make clean-plugin
-make deploy-plugin
-# Restart Obsidian
-```
-
-#### 3. API connection failures
-```bash
-# Check if services are running (multi-service)
-./scripts/start-all-services.sh status
-
-# Or check traditional setup
-make status
-
-# Restart services
-./scripts/stop-all-services.sh
-./scripts/start-all-services.sh dev
-```
-
-#### 4. PDF processing failures
-```bash
-# Install additional dependencies
-pip install "thoth[pdf]"
-
-# Check PDF directory permissions
-ls -la /path/to/pdf/directory
-
-# Test with optimized processing
-python -m thoth monitor --watch-dir /path/to/pdfs --optimized
-```
-
-### Performance Issues
-
-#### Slow processing
-- Reduce batch sizes in `.env`
-- Use faster embedding models
-- Increase system RAM allocation
-
-#### High memory usage
-- Enable memory monitoring: `THOTH_ENABLE_MONITORING=true`
-- Use smaller chunk sizes
-- Process documents in smaller batches
 
 ### Getting Help
 
-1. **Check logs**
-   ```bash
-   tail -f logs/thoth.log
-   make logs
-   ```
-
-2. **Enable debug mode**
-   ```bash
-   export THOTH_LOG_LEVEL=DEBUG
-   python -m thoth --help
-   ```
-
-3. **Report issues**
-   - [GitHub Issues](https://github.com/acertainKnight/project-thoth/issues)
-   - Include logs and system information
-   - Describe steps to reproduce
+- **Check Logs**: `make dev-logs` or `tail -f _thoth/logs/thoth.log`
+- **GitHub Issues**: [Report an issue](https://github.com/acertainKnight/project-thoth/issues)
+- **Documentation**: See other docs in this directory
+- **Health Check**: `make health` to verify all services
 
 ## Next Steps
 
-After successful setup:
+After successful installation:
 
-1. **Read the [Usage Guide](usage.md)** for detailed feature documentation
-2. **Explore [Examples](examples/)** for common research workflows
-3. **Check [API Documentation](api.md)** for programmatic access
-4. **Join the community** for support and feature discussions
+1. **Read the [Usage Guide](usage.md)** for day-to-day operations
+2. **Check the [Architecture](architecture.md)** to understand the system
+3. **See [Quick Reference](quick-reference.md)** for command cheat sheet
+4. **Try processing your first paper** with the Obsidian plugin!
 
 ---
 
-*For additional help, see the [FAQ](faq.md) or create an issue on GitHub.*
+**Need help?** Open an issue on [GitHub](https://github.com/acertainKnight/project-thoth/issues) or check the [Troubleshooting](#troubleshooting) section above.

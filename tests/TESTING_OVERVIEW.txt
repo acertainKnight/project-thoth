@@ -1,0 +1,291 @@
+========================================================================
+PROJECT THOTH - TEST STRATEGY OVERVIEW
+========================================================================
+
+TARGET: 50%+ Coverage for Applied Scientist/Research Engineer Portfolio
+
+PHILOSOPHY: Demonstrate ML systems understanding, not just code coverage
+
+========================================================================
+TEST ARCHITECTURE BREAKDOWN
+========================================================================
+
+1. UNIT TESTS (30% of coverage)
+   - 195 tests covering critical algorithms
+   - Focus: Citation parsing, metric calculation, confidence scoring
+   - Key: Property-based testing for edge case discovery
+
+2. INTEGRATION TESTS (40% of coverage)  
+   - 205 tests covering component interactions
+   - Focus: Pipeline workflows, database operations, async safety
+   - Key: Concurrent testing, transaction isolation
+
+3. END-TO-END TESTS (15% of coverage)
+   - 25 comprehensive workflow tests
+   - Focus: Complete user journeys
+   - Key: Realistic data, production scenarios
+
+4. PROPERTY-BASED TESTS (5% of coverage)
+   - 40 generative tests
+   - Focus: Edge case discovery through fuzzing
+   - Key: Mathematical properties, invariants
+
+5. BENCHMARK TESTS (10% of coverage)
+   - 50 performance tests
+   - Focus: Latency, throughput, scaling
+   - Key: Regression detection, SLA validation
+
+========================================================================
+TOP 10 CRITICAL COMPONENTS (Prioritized for Testing)
+========================================================================
+
+RANK | COMPONENT                    | TESTS | WHY CRITICAL
+-----|------------------------------|-------|---------------------------
+  1  | RAG Evaluation Metrics       |  30+  | ML evaluation correctness
+  2  | Ground Truth Generation      |  25+  | Research reproducibility
+  3  | Citation Formatter           |  20+  | Domain expertise demo
+  4  | Article Evaluation Service   |  25+  | ML inference pipeline
+  5  | Context Analyzer             |  30+  | Complex NLP logic
+  6  | Vector Store Operations      |  25+  | Core retrieval component
+  7  | Database Repositories        |  20+  | Async concurrency safety
+  8  | Embedding Consistency        |  15+  | Reproducibility critical
+  9  | API Endpoints                |  25+  | Production reliability
+ 10  | LLM Service                  |  15+  | External API integration
+
+========================================================================
+COVERAGE GOALS BY MODULE
+========================================================================
+
+Module                      | Target | Priority | Test Types
+----------------------------|--------|----------|-------------------
+rag/evaluation/             |  90%   | Critical | Unit+Integ+Property
+analyze/citations/          |  85%   | Critical | Unit+Property
+services/article_service.py |  80%   | Critical | Unit+Integration
+discovery/context_analyzer  |  75%   | High     | Unit+Integration
+rag/vector_store.py         |  80%   | High     | Unit+Integ+Bench
+repositories/               |  70%   | High     | Integration
+server/routers/             |  60%   | Medium   | Integration+E2E
+utilities/schemas/          |  85%   | Medium   | Unit
+mcp/tools/                  |  50%   | Medium   | Integration
+pipeline.py                 |  70%   | Medium   | Integration+E2E
+
+========================================================================
+ML EVALUATION BEST PRACTICES (Demonstrates Research Rigor)
+========================================================================
+
+✓ Statistical Significance Testing
+  - Bootstrap confidence intervals (1000+ iterations)
+  - Non-overlapping CIs for improvement claims
+  - Minimum sample sizes (50+ test cases)
+
+✓ Ground Truth Validation
+  - Versioned datasets with checksums
+  - Quality thresholds (100+ test cases)
+  - Balanced difficulty distribution
+  - Inter-annotator agreement > 0.8
+
+✓ Deterministic Testing
+  - Fixed random seeds (random, numpy, torch)
+  - Reproducible embeddings
+  - Version-controlled test data
+  - Experiment tracking (config + git hash)
+
+✓ Metric Correctness
+  - Edge case testing (empty inputs, no relevant docs)
+  - Mathematical property validation (NDCG ∈ [0,1])
+  - Reference implementation comparison
+  - Precision/Recall duality checks
+
+========================================================================
+RESEARCH REPRODUCIBILITY FEATURES
+========================================================================
+
+1. Seed Control
+   - All random operations use fixed seeds
+   - Deterministic algorithm modes enabled
+   - Same input → same output (guaranteed)
+
+2. Dataset Versioning
+   - Ground truth datasets tagged with versions
+   - Checksum verification on load
+   - Change tracking via git
+
+3. Experiment Tracking
+   - Log all evaluation parameters
+   - Record git commit hash
+   - Track model versions
+   - Store configuration + metrics
+
+4. Environment Consistency
+   - Pinned dependency versions
+   - Container-based testing
+   - Isolated test databases
+
+========================================================================
+PRODUCTION RELIABILITY TESTING
+========================================================================
+
+✓ Async Safety
+  - Concurrent request handling (100+ parallel)
+  - Race condition detection
+  - Connection pool management
+
+✓ Resource Limits
+  - Memory limit enforcement (< 600MB for batches)
+  - Timeout protection (30s max)
+  - Graceful degradation
+
+✓ Error Recovery
+  - Retry logic with exponential backoff
+  - API failure resilience (50% failure rate)
+  - Circuit breaker patterns
+  - Success rate > 90% after retries
+
+✓ Performance Validation
+  - Latency SLAs (p50 < 500ms, p99 < 2s)
+  - Throughput targets (>10 QPS)
+  - Linear scaling verification
+  - Regression detection
+
+========================================================================
+PORTFOLIO HIGHLIGHTS (Why This Impresses for Research Roles)
+========================================================================
+
+1. ML EVALUATION EXPERTISE ★★★★★
+   - Comprehensive metric validation (NDCG, MRR, MAP, P@K, R@K)
+   - Ground truth generation strategies
+   - Statistical significance testing
+   - Performance benchmarking
+
+2. RESEARCH RIGOR ★★★★★
+   - Deterministic testing for reproducibility
+   - Versioned datasets with quality control
+   - Experiment tracking and provenance
+   - Mathematical property validation
+
+3. PRODUCTION ENGINEERING ★★★★★
+   - Async safety and concurrency testing
+   - Resource management and limits
+   - Error recovery and resilience
+   - Performance regression detection
+
+4. SYSTEM UNDERSTANDING ★★★★★
+   - Property-based testing for edge cases
+   - Integration testing across components
+   - E2E workflow validation
+   - Benchmark-driven optimization
+
+5. PRAGMATIC APPROACH ★★★★★
+   - Strategic 50% coverage (not 100%)
+   - Focus on critical paths
+   - Fast feedback loops (< 5min for unit tests)
+   - Maintainable test suite
+
+========================================================================
+TESTING WORKFLOW
+========================================================================
+
+DEVELOPMENT (Fast Feedback)
+  $ pytest tests/unit/ -v --tb=short
+  ⏱️  < 2 minutes | ✓ 195 tests
+
+PRE-COMMIT (Safety Check)
+  $ pytest tests/integration/ -v
+  ⏱️  < 10 minutes | ✓ 205 tests
+
+CI/CD PIPELINE (Automated)
+  Stage 1: Unit tests + coverage        (< 5 min)
+  Stage 2: Integration tests            (< 15 min)
+  Stage 3: E2E + Benchmarks             (< 30 min)
+  Stage 4: Property-based (nightly)     (< 60 min)
+
+PRE-RELEASE (Full Validation)
+  $ pytest tests/ --cov=src/thoth --cov-report=html
+  ⏱️  < 30 minutes | ✓ 515 total tests
+
+========================================================================
+SUCCESS METRICS
+========================================================================
+
+Coverage Metrics:
+  ✓ Overall coverage: 50-55%
+  ✓ Critical modules: 75-90%
+  ✓ Test execution: < 30 min
+  ✓ Test flakiness: < 1%
+
+Quality Metrics:
+  ✓ Property-based: Find 5+ edge cases/month
+  ✓ Benchmark stability: < 10% variance
+  ✓ E2E success rate: > 95%
+  ✓ Test isolation: 100%
+
+Research Credibility:
+  ✓ Metric correctness: 100%
+  ✓ Reproducibility: 100%
+  ✓ Ground truth quality: IAA > 0.8
+  ✓ Statistical rigor: All claims tested
+
+========================================================================
+IMPLEMENTATION ROADMAP
+========================================================================
+
+PHASE 1: Foundation (Week 1-2)
+  - Set up test infrastructure
+  - Implement TOP 5 critical tests
+  - Create fixtures and mocks
+  ➤ Deliverable: 15% coverage
+
+PHASE 2: Core Coverage (Week 3-4)
+  - Unit tests for TOP 10 components
+  - Integration tests for pipelines
+  ➤ Deliverable: 30% coverage
+
+PHASE 3: Advanced Testing (Week 5-6)
+  - Property-based tests
+  - Benchmark tests
+  - E2E scenarios
+  ➤ Deliverable: 50% coverage
+
+PHASE 4: Polish (Week 7-8)
+  - Optimize slow tests
+  - Fix flaky tests
+  - Generate reports
+  ➤ Deliverable: Production-ready
+
+========================================================================
+KEY DIFFERENTIATORS FOR APPLIED SCIENTIST ROLES
+========================================================================
+
+This test strategy demonstrates understanding of:
+
+1. ML EVALUATION FUNDAMENTALS
+   ✓ Information retrieval metrics (NDCG, MAP, MRR)
+   ✓ Ground truth dataset curation
+   ✓ Statistical hypothesis testing
+   ✓ Performance benchmarking methodologies
+
+2. RESEARCH REPRODUCIBILITY
+   ✓ Deterministic algorithm execution
+   ✓ Dataset versioning and provenance
+   ✓ Experiment tracking and logging
+   ✓ Environment consistency management
+
+3. PRODUCTION ML SYSTEMS
+   ✓ Async/concurrent system testing
+   ✓ Resource management and limits
+   ✓ Error handling and resilience
+   ✓ Performance optimization and regression detection
+
+4. SOFTWARE ENGINEERING RIGOR
+   ✓ Property-based testing for robustness
+   ✓ Integration testing across components
+   ✓ End-to-end workflow validation
+   ✓ Continuous integration best practices
+
+========================================================================
+
+Created: 2025-12-31
+Version: 1.0
+Strategy Document: tests/TEST_STRATEGY.md
+
+========================================================================

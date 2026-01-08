@@ -36,6 +36,7 @@ ENV/
 .env
 .env.*
 !.env.example
+!.env.letta.example
 *.key
 *.pem
 *.crt
@@ -52,6 +53,7 @@ logs/
 *.log
 .cache/
 tmp/
+evaluation_results/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -90,6 +92,10 @@ knowledge/
 .mcp.json
 .claude/settings.local.json
 claude-flow
+.hypothesis/
+.letta/
+.claude/
+.benchmarks/
 
 # Test results and coverage
 evaluation_results/

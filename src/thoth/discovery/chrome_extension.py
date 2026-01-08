@@ -6,7 +6,7 @@ that allows users to configure web scrapers through a point-and-click
 interface directly in their browser.
 """
 
-import asyncio
+import asyncio  # noqa: I001
 import json
 from pathlib import Path
 from typing import Any

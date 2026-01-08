@@ -20,7 +20,7 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
         """Initialize workflow actions repository."""
         super().__init__(postgres_service, table_name='workflow_actions', **kwargs)
 
-    async def create(self, action_data: dict[str, Any]) -> Optional[UUID]:
+    async def create(self, action_data: dict[str, Any]) -> Optional[UUID]:  # noqa: UP007
         """
         Create a new workflow action step.
 
@@ -37,7 +37,7 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
         """
         try:
             columns = list(action_data.keys())
-            placeholders = [f"${i+1}" for i in range(len(columns))]
+            placeholders = [f'${i + 1}' for i in range(len(columns))]
 
             query = f"""
                 INSERT INTO {self.table_name} ({', '.join(columns)})
@@ -51,16 +51,14 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             if 'workflow_id' in action_data:
                 self._invalidate_cache(str(action_data['workflow_id']))
 
-            logger.debug(f"Created workflow action: {result}")
+            logger.debug(f'Created workflow action: {result}')
             return result
 
         except Exception as e:
-            logger.error(f"Failed to create workflow action: {e}")
+            logger.error(f'Failed to create workflow action: {e}')
             return None
 
-    async def get_by_workflow_id(
-        self, workflow_id: UUID
-    ) -> list[dict[str, Any]]:
+    async def get_by_workflow_id(self, workflow_id: UUID) -> list[dict[str, Any]]:
         """
         Get all actions for a workflow, ordered by step number.
 
@@ -70,7 +68,7 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
         Returns:
             list[dict[str, Any]]: List of action steps ordered by step_number
         """
-        cache_key = self._cache_key("workflow", str(workflow_id))
+        cache_key = self._cache_key('workflow', str(workflow_id))
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
@@ -88,12 +86,12 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             return actions
 
         except Exception as e:
-            logger.error(f"Failed to get actions for workflow {workflow_id}: {e}")
+            logger.error(f'Failed to get actions for workflow {workflow_id}: {e}')
             return []
 
     async def get_by_step_number(
         self, workflow_id: UUID, step_number: int
-    ) -> Optional[dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:  # noqa: UP007
         """
         Get a specific action step by its step number.
 
@@ -104,7 +102,7 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
         Returns:
             Optional[dict[str, Any]]: Action step data or None
         """
-        cache_key = self._cache_key("workflow", str(workflow_id), "step", step_number)
+        cache_key = self._cache_key('workflow', str(workflow_id), 'step', step_number)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
@@ -125,13 +123,11 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
 
         except Exception as e:
             logger.error(
-                f"Failed to get action step {step_number} for workflow {workflow_id}: {e}"
+                f'Failed to get action step {step_number} for workflow {workflow_id}: {e}'
             )
             return None
 
-    async def update(
-        self, action_id: UUID, updates: dict[str, Any]
-    ) -> bool:
+    async def update(self, action_id: UUID, updates: dict[str, Any]) -> bool:
         """
         Update a workflow action step.
 
@@ -147,8 +143,8 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
                 return True
 
             # Build SET clause
-            set_clauses = [f"{col} = ${i+2}" for i, col in enumerate(updates.keys())]
-            values = [action_id] + list(updates.values())
+            set_clauses = [f'{col} = ${i + 2}' for i, col in enumerate(updates.keys())]
+            values = [action_id] + list(updates.values())  # noqa: RUF005
 
             query = f"""
                 UPDATE {self.table_name}
@@ -164,11 +160,11 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             if workflow_id:
                 self._invalidate_cache(str(workflow_id))
 
-            logger.debug(f"Updated workflow action: {action_id}")
+            logger.debug(f'Updated workflow action: {action_id}')
             return True
 
         except Exception as e:
-            logger.error(f"Failed to update workflow action {action_id}: {e}")
+            logger.error(f'Failed to update workflow action {action_id}: {e}')
             return False
 
     async def delete(self, action_id: UUID) -> bool:
@@ -183,10 +179,10 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
         """
         try:
             # Get workflow_id before deletion for cache invalidation
-            workflow_id_query = "SELECT workflow_id FROM workflow_actions WHERE id = $1"
+            workflow_id_query = 'SELECT workflow_id FROM workflow_actions WHERE id = $1'
             workflow_id = await self.postgres.fetchval(workflow_id_query, action_id)
 
-            query = f"DELETE FROM {self.table_name} WHERE id = $1"
+            query = f'DELETE FROM {self.table_name} WHERE id = $1'
             await self.postgres.execute(query, action_id)
 
             # Invalidate cache
@@ -194,16 +190,14 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             if workflow_id:
                 self._invalidate_cache(str(workflow_id))
 
-            logger.debug(f"Deleted workflow action: {action_id}")
+            logger.debug(f'Deleted workflow action: {action_id}')
             return True
 
         except Exception as e:
-            logger.error(f"Failed to delete workflow action {action_id}: {e}")
+            logger.error(f'Failed to delete workflow action {action_id}: {e}')
             return False
 
-    async def reorder_steps(
-        self, workflow_id: UUID, new_order: list[UUID]
-    ) -> bool:
+    async def reorder_steps(self, workflow_id: UUID, new_order: list[UUID]) -> bool:
         """
         Reorder workflow action steps by updating their step numbers.
 
@@ -230,11 +224,11 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             # Invalidate cache for the workflow
             self._invalidate_cache(str(workflow_id))
 
-            logger.debug(f"Reordered {len(new_order)} steps for workflow {workflow_id}")
+            logger.debug(f'Reordered {len(new_order)} steps for workflow {workflow_id}')
             return True
 
         except Exception as e:
-            logger.error(f"Failed to reorder steps for workflow {workflow_id}: {e}")
+            logger.error(f'Failed to reorder steps for workflow {workflow_id}: {e}')
             return False
 
     async def get_step_count(self, workflow_id: UUID) -> int:
@@ -255,7 +249,7 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             return await self.postgres.fetchval(query, workflow_id) or 0
 
         except Exception as e:
-            logger.error(f"Failed to count steps for workflow {workflow_id}: {e}")
+            logger.error(f'Failed to count steps for workflow {workflow_id}: {e}')
             return 0
 
     async def get_actions_by_type(
@@ -282,6 +276,6 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
 
         except Exception as e:
             logger.error(
-                f"Failed to get actions of type {action_type} for workflow {workflow_id}: {e}"
+                f'Failed to get actions of type {action_type} for workflow {workflow_id}: {e}'
             )
             return []

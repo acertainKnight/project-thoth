@@ -62,6 +62,7 @@ class CacheService(BaseService):
         # In-memory cache for frequently accessed items with bounded size
         # Using LRUCache to enforce the size limit automatically
         from cachetools import LRUCache
+
         self._memory_cache: LRUCache = LRUCache(maxsize=100)
         self._memory_cache_timestamps: dict[str, float] = {}
 

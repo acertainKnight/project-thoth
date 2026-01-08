@@ -71,7 +71,7 @@ class CrossrefResolver:
     - Response parsing according to Crossref schema
     """
 
-    BASE_URL = "https://api.crossref.org/works"
+    BASE_URL = 'https://api.crossref.org/works'
 
     def __init__(
         self,
@@ -165,7 +165,7 @@ class CrossrefResolver:
             cursor = conn.cursor()
             cursor.execute(
                 'SELECT response_data FROM crossref_cache WHERE cache_key = ?',
-                (cache_key,)
+                (cache_key,),
             )
             row = cursor.fetchone()
             conn.close()
@@ -195,7 +195,7 @@ class CrossrefResolver:
                 (cache_key, response_data, timestamp)
                 VALUES (?, ?, ?)
                 """,
-                (cache_key, json.dumps(data), time.time())
+                (cache_key, json.dumps(data), time.time()),
             )
             conn.commit()
             conn.close()
@@ -292,7 +292,7 @@ class CrossrefResolver:
 
                     # Exponential backoff for server errors
                     if e.response.status_code >= 500 and attempt < self.max_retries:
-                        wait_time = min(2 ** attempt, 60)
+                        wait_time = min(2**attempt, 60)
                         logger.info(f'Server error. Retrying in {wait_time}s.')
                         await asyncio.sleep(wait_time)
                         self._stats['retries'] += 1
@@ -309,7 +309,7 @@ class CrossrefResolver:
                     )
 
                     if attempt < self.max_retries:
-                        wait_time = min(2 ** attempt, 30)
+                        wait_time = min(2**attempt, 30)
                         await asyncio.sleep(wait_time)
                         self._stats['retries'] += 1
                         continue
@@ -367,8 +367,7 @@ class CrossrefResolver:
         if citation.year:
             # Filter by year with ±1 year tolerance
             params['filter'] = (
-                f'from-pub-date:{citation.year - 1},'
-                f'until-pub-date:{citation.year + 1}'
+                f'from-pub-date:{citation.year - 1},until-pub-date:{citation.year + 1}'
             )
 
         return params
@@ -389,7 +388,7 @@ class CrossrefResolver:
             authors = []
             for author in work['author']:
                 if 'given' in author and 'family' in author:
-                    authors.append(f"{author['given']} {author['family']}")
+                    authors.append(f'{author["given"]} {author["family"]}')
                 elif 'family' in author:
                     authors.append(author['family'])
 
@@ -406,7 +405,7 @@ class CrossrefResolver:
 
         # Extract container title (journal)
         container_title = None
-        if 'container-title' in work and work['container-title']:
+        if 'container-title' in work and work['container-title']:  # noqa: RUF019
             container_title = work['container-title'][0]
 
         # Extract pages
@@ -510,7 +509,7 @@ class CrossrefResolver:
         tasks = [self.resolve_citation(citation) for citation in citations]
         matches_list = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for citation, matches in zip(citations, matches_list):
+        for citation, matches in zip(citations, matches_list):  # noqa: B905
             if isinstance(matches, Exception):
                 logger.error(
                     f'Error resolving citation {citation.title[:50] if citation.title else "untitled"}: {matches}'
@@ -532,8 +531,8 @@ class CrossrefResolver:
     def _log_stats(self) -> None:
         """Log current statistics."""
         cache_hit_rate = (
-            self._stats['cache_hits'] /
-            (self._stats['cache_hits'] + self._stats['cache_misses'])
+            self._stats['cache_hits']
+            / (self._stats['cache_hits'] + self._stats['cache_misses'])
             if (self._stats['cache_hits'] + self._stats['cache_misses']) > 0
             else 0.0
         )
@@ -569,8 +568,7 @@ class CrossrefResolver:
             if older_than_days is not None:
                 cutoff_time = time.time() - (older_than_days * 86400)
                 cursor.execute(
-                    'DELETE FROM crossref_cache WHERE timestamp < ?',
-                    (cutoff_time,)
+                    'DELETE FROM crossref_cache WHERE timestamp < ?', (cutoff_time,)
                 )
             else:
                 cursor.execute('DELETE FROM crossref_cache')

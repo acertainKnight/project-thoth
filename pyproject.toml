@@ -101,6 +101,7 @@ langchain = [
 vectordb = [
     "chromadb>=0.5.0",
     "langchain-chroma>=0.1.0",
+    "cachetools>=5.3.0",  # Required by BaseRepository
 ]
 
 # Embeddings (VERY HEAVY: ~2GB with PyTorch)
@@ -134,9 +135,10 @@ service-dashboard = [
     "thoth[api,discovery,pdf,langchain,vectordb]",
 ]
 
-# thoth-discovery: Discovery scheduler (~300MB)
+# thoth-discovery: Discovery scheduler (~1.5GB)
+# Needs langchain for AnthropicClient + vectordb for cachetools + pdf for pypdf (pipelines)
 service-discovery = [
-    "thoth[api,discovery]",
+    "thoth[api,discovery,pdf,langchain,vectordb]",
 ]
 
 # thoth-mcp: MCP server with 60+ research tools (~10GB)
@@ -179,6 +181,11 @@ test = [
     "pytest-cov>=6.1.1",
     "pytest-mock>=3.14.0",
     "pytest-timeout>=2.1.0",
+    "pytest-benchmark>=5.1.0", # Performance benchmarking
+    "hypothesis>=6.122.0", # Property-based testing
+    "psutil>=7.0.0", # Memory profiling
+    "respx>=0.22.0",
+    "freezegun>=1.5.5",
 ]
 
 jupyter = [
@@ -205,6 +212,8 @@ all = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+# Note: scripts/ directory is intentionally excluded (not in src/)
+# Migration scripts and one-off utilities should not be part of installed package
 
 ### STANDARDIZED CODE REQUIREMENTS ###################################################
 ### pytest ###########################################################################
@@ -278,4 +287,45 @@ exclude-file = ".codespellignore"
 [dependency-groups]
 dev = [
     "nbstripout>=0.8.1",
+]
+
+### Bandit Security Configuration ################################################
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "venv"]
+skips = ["B101", "B601"]  # Skip assert_used and shell=True warnings
+
+### MyPy Configuration ###########################################################
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+### Coverage Configuration #######################################################
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/site-packages/*",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
 ]

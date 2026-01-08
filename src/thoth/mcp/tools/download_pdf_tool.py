@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-import requests
+import httpx
 
 from ..base_tools import MCPTool, MCPToolCallResult
 
@@ -218,7 +218,7 @@ class DownloadPdfMCPTool(MCPTool):
                 }
 
                 # Make the request
-                response = requests.get(
+                response = httpx.get(
                     download_url, headers=headers, timeout=timeout, stream=True
                 )
                 response.raise_for_status()
@@ -297,7 +297,7 @@ class DownloadPdfMCPTool(MCPTool):
                     content=[{'type': 'text', 'text': response_text.strip()}]
                 )
 
-            except requests.exceptions.Timeout:
+            except httpx.TimeoutException:
                 return MCPToolCallResult(
                     content=[
                         {
@@ -309,7 +309,7 @@ class DownloadPdfMCPTool(MCPTool):
                     isError=True,
                 )
 
-            except requests.exceptions.RequestException as req_error:
+            except httpx.HTTPError as req_error:
                 return MCPToolCallResult(
                     content=[
                         {

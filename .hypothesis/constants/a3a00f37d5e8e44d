@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/mcp/tools/discovery_tools.py
+# hypothesis_version: 6.148.9
+
+[168, 500, ', ', 'api', 'api_config', 'array', 'articles_found', 'articles_processed', 'arxiv', 'biorxiv', 'boolean', 'categories', 'create_arxiv_source', 'create_pubmed_source', 'crossref', 'cs.AI', 'cs.LG', 'date_filter', 'default', 'desc', 'descending', 'description', 'enabled', 'end_date', 'error', 'force_run', 'get_discovery_source', 'integer', 'interval_minutes', 'is_active', 'items', 'keywords', 'lastUpdatedDate', 'max_articles', 'max_articles_per_run', 'maximum', 'minimum', 'name', 'object', 'openalex', 'properties', 'pub_date', 'pubmed', 'query_filters', 'relevance', 'required', 'run_discovery', 'schedule_config', 'schedule_hours', 'sort_by', 'sort_order', 'source', 'source_name', 'source_type', 'start_date', 'string', 'success', 'text', 'type', '🔴 Inactive', '🟢 Active']

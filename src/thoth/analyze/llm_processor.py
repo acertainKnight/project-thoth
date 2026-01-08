@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
-from langchain.schema import Document
-from langchain.text_splitter import MarkdownTextSplitter
+from langchain_core.documents import Document
+from langchain_text_splitters import MarkdownTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable, RunnableConfig
 from langgraph.graph import END, StateGraph
@@ -95,7 +95,9 @@ class LLMProcessor:
         client_kwargs.pop('chunk_overlap', None)  # Not used by get_client
         client_kwargs.pop('doc_processing', None)  # Not used by get_client
         client_kwargs.pop('refine_threshold_multiplier', None)  # Not used by get_client
-        client_kwargs.pop('map_reduce_threshold_multiplier', None)  # Not used by get_client
+        client_kwargs.pop(
+            'map_reduce_threshold_multiplier', None
+        )  # Not used by get_client
 
         # Pass provider if available in config
         provider = getattr(self.llm_service.config.llm_config, 'provider', None)

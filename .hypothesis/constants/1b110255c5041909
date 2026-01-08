@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/mcp/base_tools.py
+# hypothesis_version: 6.148.9
+
+['additionalProperties', 'array', 'boolean', 'default', 'description', 'filter', 'integer', 'k', 'maximum', 'minimum', 'null', 'number', 'object', 'properties', 'query', 'query_name', 'required', 'source_name', 'string', 'text', 'type']

@@ -5,8 +5,8 @@ Provides direct integration with arXiv API for resolving citations to preprints
 and published papers available on arXiv.
 """
 
-import re
-from typing import List, Optional
+import re  # noqa: I001
+from typing import List, Optional  # noqa: UP035
 from dataclasses import dataclass
 import httpx
 from loguru import logger
@@ -31,14 +31,15 @@ class ArxivMatch:
         published: Publication date
         updated: Last update date
     """
+
     arxiv_id: str
-    doi: Optional[str]
+    doi: Optional[str]  # noqa: UP007
     title: str
-    authors: List[str]
-    year: Optional[int]
-    abstract: Optional[str]
+    authors: List[str]  # noqa: UP006
+    year: Optional[int]  # noqa: UP007
+    abstract: Optional[str]  # noqa: UP007
     pdf_url: str
-    categories: List[str]
+    categories: List[str]  # noqa: UP006
     published: str
     updated: str
 
@@ -51,7 +52,7 @@ class ArxivResolver:
     Free API with no authentication required.
     """
 
-    BASE_URL = "https://export.arxiv.org/api/query"
+    BASE_URL = 'https://export.arxiv.org/api/query'
 
     def __init__(self, timeout: int = 30):
         """
@@ -62,13 +63,13 @@ class ArxivResolver:
         """
         self.timeout = timeout
         self.client = httpx.AsyncClient(timeout=timeout, follow_redirects=True)
-        logger.info(f"Initialized ArXivResolver with timeout={timeout}s")
+        logger.info(f'Initialized ArXivResolver with timeout={timeout}s')
 
     async def close(self):
         """Close the HTTP client."""
         await self.client.aclose()
 
-    def _extract_arxiv_id(self, url: str) -> Optional[str]:
+    def _extract_arxiv_id(self, url: str) -> Optional[str]:  # noqa: UP007
         """
         Extract arXiv ID from URL.
 
@@ -91,7 +92,7 @@ class ArxivResolver:
 
         return None
 
-    def _parse_entry(self, entry_xml: str) -> Optional[ArxivMatch]:
+    def _parse_entry(self, entry_xml: str) -> Optional[ArxivMatch]:  # noqa: UP007
         """
         Parse arXiv API entry XML to ArxivMatch.
 
@@ -114,25 +115,35 @@ class ArxivResolver:
 
             # Extract title
             title_match = re.search(r'<title>(.*?)</title>', entry_xml, re.DOTALL)
-            title = title_match.group(1).strip().replace('\n', ' ') if title_match else ""
+            title = (
+                title_match.group(1).strip().replace('\n', ' ') if title_match else ''
+            )
 
             # Extract authors
             authors = []
-            for author_match in re.finditer(r'<author>.*?<name>(.*?)</name>.*?</author>', entry_xml, re.DOTALL):
+            for author_match in re.finditer(
+                r'<author>.*?<name>(.*?)</name>.*?</author>', entry_xml, re.DOTALL
+            ):
                 authors.append(author_match.group(1).strip())
 
             # Extract published date
             published_match = re.search(r'<published>(.*?)</published>', entry_xml)
-            published = published_match.group(1).strip() if published_match else ""
+            published = published_match.group(1).strip() if published_match else ''
             year = int(published[:4]) if published else None
 
             # Extract updated date
             updated_match = re.search(r'<updated>(.*?)</updated>', entry_xml)
-            updated = updated_match.group(1).strip() if updated_match else ""
+            updated = updated_match.group(1).strip() if updated_match else ''
 
             # Extract abstract
-            abstract_match = re.search(r'<summary>(.*?)</summary>', entry_xml, re.DOTALL)
-            abstract = abstract_match.group(1).strip().replace('\n', ' ') if abstract_match else None
+            abstract_match = re.search(
+                r'<summary>(.*?)</summary>', entry_xml, re.DOTALL
+            )
+            abstract = (
+                abstract_match.group(1).strip().replace('\n', ' ')
+                if abstract_match
+                else None
+            )
 
             # Extract DOI if available
             doi = None
@@ -146,7 +157,7 @@ class ArxivResolver:
                 categories.append(cat_match.group(1))
 
             # Build PDF URL
-            pdf_url = f"https://arxiv.org/pdf/{arxiv_id}.pdf"
+            pdf_url = f'https://arxiv.org/pdf/{arxiv_id}.pdf'
 
             return ArxivMatch(
                 arxiv_id=arxiv_id,
@@ -162,10 +173,10 @@ class ArxivResolver:
             )
 
         except Exception as e:
-            logger.error(f"Error parsing arXiv entry: {e}")
+            logger.error(f'Error parsing arXiv entry: {e}')
             return None
 
-    async def resolve_citation(self, citation: Citation) -> List[ArxivMatch]:
+    async def resolve_citation(self, citation: Citation) -> List[ArxivMatch]:  # noqa: UP006
         """
         Resolve citation using arXiv API.
 
@@ -176,7 +187,7 @@ class ArxivResolver:
             List of ArxivMatch objects
         """
         if not citation.title:
-            logger.debug("No title provided, cannot search arXiv")
+            logger.debug('No title provided, cannot search arXiv')
             return []
 
         try:
@@ -201,7 +212,7 @@ class ArxivResolver:
                 'sortOrder': 'descending',
             }
 
-            logger.debug(f"Searching arXiv with query: {title_query}")
+            logger.debug(f'Searching arXiv with query: {title_query}')
 
             response = await self.client.get(self.BASE_URL, params=params)
             response.raise_for_status()
@@ -213,21 +224,24 @@ class ArxivResolver:
             entries = re.findall(r'<entry>(.*?)</entry>', xml_content, re.DOTALL)
 
             if not entries:
-                logger.debug(f"No arXiv results found for: {citation.title}")
+                logger.debug(f'No arXiv results found for: {citation.title}')
                 return []
 
             matches = []
             for entry_xml in entries:
-                match = self._parse_entry(f"<entry>{entry_xml}</entry>")
+                match = self._parse_entry(f'<entry>{entry_xml}</entry>')
                 if match:
                     matches.append(match)
 
-            logger.info(f"Found {len(matches)} arXiv matches for: {citation.title[:50]}...")
+            title_preview = citation.title[:50] if citation.title else 'Unknown'
+            logger.info(
+                f'Found {len(matches)} arXiv matches for: {title_preview}...'
+            )
             return matches
 
         except httpx.HTTPError as e:
-            logger.error(f"HTTP error querying arXiv: {e}")
+            logger.error(f'HTTP error querying arXiv: {e}')
             return []
         except Exception as e:
-            logger.error(f"Error resolving citation via arXiv: {e}")
+            logger.error(f'Error resolving citation via arXiv: {e}')
             return []

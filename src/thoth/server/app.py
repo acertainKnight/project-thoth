@@ -21,6 +21,7 @@ from starlette.middleware.cors import CORSMiddleware
 # Optional: MCP monitoring (requires mcp extras)
 try:
     from thoth.mcp.monitoring import mcp_health_router
+
     MCP_HEALTH_AVAILABLE = True
 except ImportError:
     mcp_health_router = None  # type: ignore
@@ -33,7 +34,7 @@ try:
     from thoth.server.hot_reload import SettingsFileWatcher
 except ImportError:
     SettingsFileWatcher = None  # Not available in all service configurations
-from thoth.server.routers import (
+from thoth.server.routers import (  # noqa: I001
     agent,
     browser_workflows,
     chat,
@@ -56,24 +57,20 @@ base_url: str = None
 current_config: dict[str, Any] = {}
 
 # Service manager initialized when the server starts
-service_manager = None
+# Global watcher instance for settings hot-reload (kept global for lifecycle management)
+_settings_watcher: Optional[SettingsFileWatcher] = None  # noqa: UP007
 
-# Global agent instance - will be initialized when server starts
-research_agent = None
-agent_adapter = None
-llm_router = None
+# Global discovery scheduler instance (kept global for lifecycle management)
+discovery_scheduler: Optional[DiscoveryScheduler] = None  # noqa: UP007
 
-# Chat persistence manager - will be initialized when server starts
-chat_manager: ChatPersistenceManager = None
-
-# Global watcher instance for settings hot-reload
-_settings_watcher: Optional[SettingsFileWatcher] = None
-
-# Global discovery scheduler instance - will be initialized when server starts
-discovery_scheduler: Optional[DiscoveryScheduler] = None
-
-# Global workflow execution service - will be initialized when server starts
+# Global workflow execution service (kept global for lifecycle management)
 workflow_execution_service = None
+
+# NOTE: The following have been moved to app.state for better thread safety:
+# - service_manager (accessed via dependencies.get_service_manager)
+# - research_agent (accessed via dependencies.get_research_agent)
+# - chat_manager (accessed via dependencies.get_chat_manager)
+# - agent_adapter, llm_router (not needed in routers)
 
 
 def _should_enable_hot_reload() -> bool:
@@ -87,12 +84,12 @@ def _should_enable_hot_reload() -> bool:
 
 def _on_settings_reload():
     """Callback when settings are reloaded."""
-    logger.info("Settings file changed, reloading configuration...")
+    logger.info('Settings file changed, reloading configuration...')
     try:
         config.reload_settings()
-        logger.success("Configuration reloaded successfully!")
+        logger.success('Configuration reloaded successfully!')
     except Exception as e:
-        logger.error(f"Failed to reload configuration: {e}")
+        logger.error(f'Failed to reload configuration: {e}')
 
 
 async def shutdown_mcp_server(timeout: float = 10.0) -> None:
@@ -137,7 +134,7 @@ async def shutdown_mcp_server(timeout: float = 10.0) -> None:
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
+async def lifespan(app: FastAPI):
     """Handle FastAPI application lifespan events."""
     global _settings_watcher, discovery_scheduler, workflow_execution_service
 
@@ -150,40 +147,45 @@ async def lifespan(_app: FastAPI):
             settings_file = config.vault_root / '_thoth' / 'settings.json'
 
             if settings_file.exists():
-                logger.info(f"Enabling hot-reload for {settings_file}")
+                logger.info(f'Enabling hot-reload for {settings_file}')
                 _settings_watcher = SettingsFileWatcher(
                     settings_file=settings_file,
                     debounce_seconds=2.0,
-                    validate_before_reload=True
+                    validate_before_reload=True,
                 )
                 _settings_watcher.add_callback(_on_settings_reload)
                 _settings_watcher.start()
-                logger.success("Settings hot-reload enabled!")
+                logger.success('Settings hot-reload enabled!')
             else:
-                logger.warning(f"Settings file not found: {settings_file}")
+                logger.warning(f'Settings file not found: {settings_file}')
         except Exception as e:
-            logger.error(f"Failed to start settings watcher: {e}")
-            logger.warning("Continuing without hot-reload")
+            logger.error(f'Failed to start settings watcher: {e}')
+            logger.warning('Continuing without hot-reload')
     else:
-        logger.info("Hot-reload disabled (not in Docker environment)")
+        logger.info('Hot-reload disabled (not in Docker environment)')
 
+    # Get service_manager from app.state (set by start_obsidian_server)
+    service_manager = getattr(app.state, 'service_manager', None)
+    
     # Initialize PostgreSQL connection pool if postgres service exists
-    if service_manager and 'postgres' in service_manager._services:
+    if service_manager and hasattr(service_manager, 'postgres'):
         try:
-            postgres_svc = service_manager._services['postgres']
+            postgres_svc = service_manager.postgres
             await postgres_svc.initialize()
-            logger.success("PostgreSQL connection pool initialized")
+            logger.success('PostgreSQL connection pool initialized')
         except Exception as e:
-            logger.error(f"Failed to initialize PostgreSQL: {e}")
-            logger.warning("Continuing without PostgreSQL (some features may not work)")
+            logger.error(f'Failed to initialize PostgreSQL: {e}')
+            logger.warning('Continuing without PostgreSQL (some features may not work)')
 
     # Initialize WorkflowExecutionService after PostgreSQL is ready
-    if service_manager and 'postgres' in service_manager._services:
+    if service_manager and hasattr(service_manager, 'postgres'):
         try:
-            from thoth.discovery.browser.workflow_execution_service import WorkflowExecutionService
+            from thoth.discovery.browser.workflow_execution_service import (
+                WorkflowExecutionService,
+            )
 
-            logger.info("Initializing workflow execution service...")
-            postgres_svc = service_manager._services['postgres']
+            logger.info('Initializing workflow execution service...')
+            postgres_svc = service_manager.postgres
             workflow_execution_service = WorkflowExecutionService(
                 postgres_service=postgres_svc,
                 max_concurrent_browsers=5,
@@ -191,18 +193,24 @@ async def lifespan(_app: FastAPI):
                 max_retries=3,
             )
             await workflow_execution_service.initialize()
-            logger.success("Workflow execution service initialized successfully")
+            logger.success('Workflow execution service initialized successfully')
         except Exception as e:
-            logger.error(f"Failed to initialize workflow execution service: {e}")
-            logger.warning("Continuing without workflow execution service (browser workflows will not work)")
+            logger.error(f'Failed to initialize workflow execution service: {e}')
+            logger.warning(
+                'Continuing without workflow execution service (browser workflows will not work)'
+            )
             workflow_execution_service = None
+    
+    # Store workflow_execution_service in app.state for router access
+    if workflow_execution_service is not None:
+        app.state.workflow_execution_service = workflow_execution_service
 
     # Initialize discovery scheduler after PostgreSQL is ready
     if service_manager:
         try:
             from thoth.discovery.discovery_manager import DiscoveryManager
 
-            logger.info("Initializing discovery scheduler...")
+            logger.info('Initializing discovery scheduler...')
             discovery_manager = DiscoveryManager()
 
             # Get required services for research question scheduling
@@ -210,25 +218,29 @@ async def lifespan(_app: FastAPI):
             discovery_orchestrator = None
 
             try:
-                research_question_service = service_manager.get_service('research_question')
+                research_question_service = service_manager.get_service(
+                    'research_question'
+                )
             except Exception as e:
-                logger.warning(f"Research question service not available: {e}")
+                logger.warning(f'Research question service not available: {e}')
 
             try:
-                discovery_orchestrator = service_manager.get_service('discovery_orchestrator')
+                discovery_orchestrator = service_manager.get_service(
+                    'discovery_orchestrator'
+                )
             except Exception as e:
-                logger.warning(f"Discovery orchestrator service not available: {e}")
+                logger.warning(f'Discovery orchestrator service not available: {e}')
 
             # Get the current running event loop
             event_loop = asyncio.get_running_loop()
-            logger.info(f"Passing event loop to scheduler: {event_loop}")
+            logger.info(f'Passing event loop to scheduler: {event_loop}')
 
-            # Initialize scheduler with optional research question support and event loop
+            # Initialize scheduler with optional research question support and event loop  # noqa: W505
             discovery_scheduler = DiscoveryScheduler(
                 discovery_manager=discovery_manager,
                 research_question_service=research_question_service,
                 discovery_orchestrator=discovery_orchestrator,
-                event_loop=event_loop  # Pass event loop for async operations from sync thread
+                event_loop=event_loop,  # Pass event loop for async operations from sync thread
             )
 
             # Sync scheduler with existing discovery sources
@@ -236,19 +248,23 @@ async def lifespan(_app: FastAPI):
 
             # Start the scheduler
             discovery_scheduler.start()
-            logger.success("Discovery scheduler started successfully")
+            logger.success('Discovery scheduler started successfully')
 
             if research_question_service and discovery_orchestrator:
-                logger.info("Research question scheduling enabled")
+                logger.info('Research question scheduling enabled')
             else:
-                logger.info("Research question scheduling disabled (services not available)")
+                logger.info(
+                    'Research question scheduling disabled (services not available)'
+                )
 
         except Exception as e:
-            logger.error(f"Failed to initialize discovery scheduler: {e}")
-            logger.warning("Continuing without discovery scheduler (scheduled discovery will not work)")
+            logger.error(f'Failed to initialize discovery scheduler: {e}')
+            logger.warning(
+                'Continuing without discovery scheduler (scheduled discovery will not work)'
+            )
             discovery_scheduler = None
 
-    logger.success("API server startup complete")
+    logger.success('API server startup complete')
 
     try:
         yield
@@ -262,29 +278,29 @@ async def lifespan(_app: FastAPI):
         # Shutdown workflow execution service
         if workflow_execution_service is not None:
             try:
-                logger.info("Shutting down workflow execution service...")
+                logger.info('Shutting down workflow execution service...')
                 await workflow_execution_service.shutdown()
-                logger.success("Workflow execution service shutdown complete")
+                logger.success('Workflow execution service shutdown complete')
             except Exception as e:
-                logger.error(f"Error shutting down workflow execution service: {e}")
+                logger.error(f'Error shutting down workflow execution service: {e}')
 
         # Stop discovery scheduler
         if discovery_scheduler is not None:
             try:
-                logger.info("Stopping discovery scheduler...")
+                logger.info('Stopping discovery scheduler...')
                 discovery_scheduler.stop()
-                logger.success("Discovery scheduler stopped")
+                logger.success('Discovery scheduler stopped')
             except Exception as e:
-                logger.error(f"Error stopping discovery scheduler: {e}")
+                logger.error(f'Error stopping discovery scheduler: {e}')
 
         # Stop settings watcher
         if _settings_watcher is not None:
             try:
-                logger.info("Stopping settings watcher...")
+                logger.info('Stopping settings watcher...')
                 _settings_watcher.stop()
-                logger.success("Settings watcher stopped")
+                logger.success('Settings watcher stopped')
             except Exception as e:
-                logger.error(f"Error stopping settings watcher: {e}")
+                logger.error(f'Error stopping settings watcher: {e}')
 
         try:
             await websocket.shutdown_background_tasks(timeout=5.0)
@@ -321,68 +337,74 @@ def create_app() -> FastAPI:
         app.include_router(
             mcp_health_router, tags=['mcp-health']
         )  # Enterprise MCP monitoring
-        logger.debug("MCP health monitoring enabled")
+        logger.debug('MCP health monitoring enabled')
     else:
-        logger.debug("MCP health monitoring not available (requires mcp extras)")
+        logger.debug('MCP health monitoring not available (requires mcp extras)')
 
     app.include_router(websocket.router, tags=['websocket'])
     app.include_router(chat.router, prefix='/chat', tags=['chat'])
     app.include_router(agent.router, prefix='/agents', tags=['agent'])
     app.include_router(research.router, prefix='/research', tags=['research'])
-    app.include_router(research_questions.router, tags=['research-questions'])  # Week 4: Research question management
-    app.include_router(browser_workflows.router, prefix='/api/workflows', tags=['workflows'])  # Browser workflow management
+    app.include_router(
+        research_questions.router, tags=['research-questions']
+    )  # Week 4: Research question management
+    app.include_router(
+        browser_workflows.router, prefix='/api/workflows', tags=['workflows']
+    )  # Browser workflow management
     app.include_router(config_router.router, prefix='/config', tags=['config'])
     app.include_router(operations.router, prefix='/operations', tags=['operations'])
     app.include_router(tools.router, prefix='/tools', tags=['tools'])
 
     # Add hot-reload health check endpoint
-    @app.get("/health/hot-reload")
+    @app.get('/health/hot-reload')
     async def health_hot_reload():
         """Check hot-reload status."""
         settings_file = config.vault_root / '_thoth' / 'settings.json'
         reload_count = getattr(config, 'reload_callback_count', 0)
 
         return {
-            "enabled": _settings_watcher is not None,
-            "settings_file": str(settings_file),
-            "callback_count": reload_count,
-            "status": "active" if _settings_watcher is not None else "disabled",
-            "docker_env": os.getenv('DOCKER_ENV', 'false').lower() == 'true',
-            "hot_reload_env": os.getenv('THOTH_HOT_RELOAD', '0') == '1'
+            'enabled': _settings_watcher is not None,
+            'settings_file': str(settings_file),
+            'callback_count': reload_count,
+            'status': 'active' if _settings_watcher is not None else 'disabled',
+            'docker_env': os.getenv('DOCKER_ENV', 'false').lower() == 'true',
+            'hot_reload_env': os.getenv('THOTH_HOT_RELOAD', '0') == '1',
         }
 
     # Add manual reload endpoint for testing
-    @app.post("/api/reload-config")
+    @app.post('/api/reload-config')
     async def reload_config():
         """Manually trigger config reload (for testing)."""
         try:
-            logger.info("Manual config reload requested")
+            logger.info('Manual config reload requested')
             config.reload_settings()
 
             # Trigger all registered callbacks if watcher is active
             if _settings_watcher is not None:
                 _settings_watcher._trigger_reload()
                 callback_count = len(_settings_watcher._callbacks)
-                logger.success(f"Config reloaded successfully with {callback_count} callbacks")
+                logger.success(
+                    f'Config reloaded successfully with {callback_count} callbacks'
+                )
                 return {
-                    "status": "success",
-                    "message": f"Config reloaded successfully ({callback_count} callbacks executed)",
-                    "timestamp": config._last_reload_time if hasattr(config, '_last_reload_time') else None
+                    'status': 'success',
+                    'message': f'Config reloaded successfully ({callback_count} callbacks executed)',
+                    'timestamp': config._last_reload_time
+                    if hasattr(config, '_last_reload_time')
+                    else None,
                 }
             else:
-                logger.warning("Manual reload: watcher not active, only config reloaded")
+                logger.warning(
+                    'Manual reload: watcher not active, only config reloaded'
+                )
                 return {
-                    "status": "success",
-                    "message": "Config reloaded (hot-reload not enabled, callbacks not executed)",
-                    "timestamp": None
+                    'status': 'success',
+                    'message': 'Config reloaded (hot-reload not enabled, callbacks not executed)',
+                    'timestamp': None,
                 }
         except Exception as e:
-            logger.error(f"Manual reload failed: {e}")
-            return {
-                "status": "error",
-                "message": str(e),
-                "timestamp": None
-            }
+            logger.error(f'Manual reload failed: {e}')
+            return {'status': 'error', 'message': str(e), 'timestamp': None}
 
     return app
 
@@ -446,7 +468,9 @@ async def start_server(
     try:
         # Get configuration
         # config imported globally from thoth.config
-        current_config = config.settings.model_dump() if hasattr(config, 'settings') else {}
+        current_config = (
+            config.settings.model_dump() if hasattr(config, 'settings') else {}
+        )
 
         # Set up directories
         pdf_dir = config.pdf_dir
@@ -512,25 +536,13 @@ async def start_server(
             logger.warning(f'Failed to initialize Thoth orchestrator: {e}')
             thoth_orchestrator = None
 
-        # Set up router dependencies
+        # Phase 5 COMPLETE: All routers now use FastAPI Depends() for dependency injection
+        # set_dependencies() calls removed - dependencies injected from app.state
+        
+        # Still need to set directories for health router (not migrated - not necessary)
         health.set_directories(pdf_dir, notes_dir, base_url)
-        websocket.set_dependencies(service_manager, research_agent, chat_manager)
-        chat.set_chat_manager(chat_manager)
-        # agent.set_dependencies(research_agent, current_config, thoth_orchestrator)  # Disabled: agent router doesn't have set_dependencies
-        research.set_dependencies(research_agent, chat_manager)
-        operations.set_service_manager(service_manager)
-        tools.set_dependencies(research_agent, service_manager)
-
-        # Initialize browser workflow dependencies
-        if workflow_execution_service is not None:
-            postgres_svc = service_manager._services.get('postgres')
-            if postgres_svc:
-                browser_workflows.set_dependencies(postgres_svc, workflow_execution_service)
-                logger.info('Browser workflow dependencies initialized')
-            else:
-                logger.warning('PostgreSQL service not available for browser workflows')
-        else:
-            logger.warning('Workflow execution service not available')
+        
+        logger.info('✅ Phase 5: All router dependencies injected via FastAPI Depends()')
 
         logger.info('Thoth server initialization completed successfully')
 
@@ -564,6 +576,14 @@ def start_obsidian_server(
 
         # Create the FastAPI app
         app = create_app()
+
+        # Store dependencies in app.state for router access
+        app.state.service_manager = service_manager
+        app.state.research_agent = research_agent
+        app.state.chat_manager = chat_manager
+        app.state.workflow_execution_service = workflow_execution_service
+        
+        logger.info('Dependencies stored in app.state for router access')
 
         # Configure uvicorn
         config = uvicorn.Config(
@@ -603,7 +623,15 @@ def start_obsidian_server(
 
 
 # Create the app instance for direct use
+# Note: When used this way (imported directly), dependencies must be set separately
+# Typically used by: python -m uvicorn thoth.server.app:app
 app = create_app()
+
+# Initialize empty app.state for direct imports (will be populated by lifespan or explicit initialization)
+app.state.service_manager = None
+app.state.research_agent = None  
+app.state.chat_manager = None
+app.state.workflow_execution_service = None
 
 # Export the main functions
 __all__ = ['app', 'create_app', 'start_obsidian_server', 'start_server']

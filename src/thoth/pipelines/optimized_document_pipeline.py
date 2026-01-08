@@ -202,7 +202,7 @@ class OptimizedDocumentPipeline(BasePipeline):
             },
         )
 
-        # Background RAG indexing with optimized thread pool (use no_images version for embeddings)
+        # Background RAG indexing with optimized thread pool (use no_images version for embeddings)  # noqa: W505
         self._schedule_background_rag_indexing(no_images_markdown_path, note_path)
 
         return Path(note_path), Path(new_pdf_path), Path(new_markdown_path)
@@ -417,7 +417,12 @@ class OptimizedDocumentPipeline(BasePipeline):
             return self.services.citation.extract_citations(markdown_path)
 
     def _generate_note(
-        self, pdf_path: Path, markdown_path: Path, analysis, citations: list[Citation], no_images_markdown: str | None = None
+        self,
+        pdf_path: Path,
+        markdown_path: Path,
+        analysis,
+        citations: list[Citation],
+        no_images_markdown: str | None = None,
     ) -> tuple[str, str, str]:
         """Generate note using the note service."""
         note_path, new_pdf_path, new_markdown_path = self.services.note.create_note(

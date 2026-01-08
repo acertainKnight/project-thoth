@@ -1,769 +1,547 @@
 # Thoth Usage Guide
 
-This guide covers the day-to-day usage of Thoth Research Assistant for research workflows, document processing, and knowledge management.
+Day-to-day usage patterns, best practices, and workflows for Thoth Research Assistant.
 
 ## Table of Contents
 
-- [Getting Started](#getting-started)
-- [Command Line Interface](#command-line-interface)
-- [Obsidian Plugin Usage](#obsidian-plugin-usage)
-- [Research Workflows](#research-workflows)
+- [Daily Workflow](#daily-workflow)
 - [Document Processing](#document-processing)
-- [Knowledge Management](#knowledge-management)
-- [API Usage](#api-usage)
-- [Advanced Features](#advanced-features)
+- [Research Discovery](#research-discovery)
+- [Using the Obsidian Plugin](#using-the-obsidian-plugin)
+- [Working with Agents](#working-with-agents)
+- [Citation Management](#citation-management)
+- [Best Practices](#best-practices)
+- [Tips & Tricks](#tips--tricks)
 
-## Getting Started
+## Daily Workflow
 
-### Multi-Service Workflow (Recommended)
+### Starting Your Research Session
 
-1. **Start all Thoth services**
-   ```bash
-   # Development environment
-   ./scripts/start-all-services.sh dev
-
-   # Or production environment
-   ./scripts/start-all-services.sh prod
-
-   # Check all services are running
-   ./scripts/start-all-services.sh status
-   ```
-
-2. **Deploy Obsidian plugin**
-   ```bash
-   make deploy-plugin
-   ```
-
-3. **Open Obsidian and start a research chat**
-   - Press `Ctrl/Cmd+P` → "Open Research Chat"
-   - Or click the Thoth icon in the ribbon
-
-4. **Begin your research with memory capabilities**
-   ```
-   "Find recent papers on transformer architectures in NLP and remember my research focus"
-   ```
-
-### Traditional Single-Service Workflow
-
-1. **Start Thoth services**
-   ```bash
-   make deploy-plugin
-   make start-api
-   ```
-
-2. **Open Obsidian and start a research chat**
-   - Press `Ctrl/Cmd+P` → "Open Research Chat"
-   - Or click the Thoth icon in the ribbon
-
-3. **Begin your research**
-   ```
-   "Find recent papers on transformer architectures in NLP"
-   ```
-
-## Command Line Interface
-
-### Core Commands
-
-#### General Help
 ```bash
-python -m thoth --help              # Show all commands
-python -m thoth <command> --help    # Help for specific command
-```
-
-#### Service Management
-```bash
-# Multi-service management
-./scripts/start-all-services.sh dev         # Start all services (dev)
-./scripts/start-all-services.sh prod        # Start all services (prod)
-./scripts/start-all-services.sh status      # Check service status
-./scripts/stop-all-services.sh              # Stop all services
-
-# Individual service management
-make -f Makefile.services start-memory      # Memory service only
-make -f Makefile.services start-chat        # Chat agent only
-make -f Makefile.services start-monitoring  # Monitoring only
-make -f Makefile.services health-check      # Check all service health
-make -f Makefile.services logs-all          # View all logs
-```
-
-#### Agent Operations
-```bash
-# Start interactive research assistant with full tool access
-python -m thoth agent
-
-# Test memory integration
-python scripts/test_memory_mcp_integration.py
-```
-
-#### System Operations
-```bash
-# Start unified server (includes API + MCP)
-python -m thoth server start --api-host 0.0.0.0 --api-port 8000
-
-# Traditional API server (legacy)
-python -m thoth api --host 127.0.0.1 --port 8000
-
-# Monitor PDF directory for processing
-python -m thoth monitor --watch-dir ./papers --optimized
-
-# Monitor with API server integration
-python -m thoth monitor --watch-dir ./papers --api-server --optimized
-
-# Locate specific PDF by title or DOI
-python -m thoth locate-pdf "Attention Is All You Need"
-```
-
-#### Memory Operations (New)
-```bash
-# Memory system health check
-curl http://localhost:8283/health
-
-# Test memory tools via agent
-python -m thoth agent
-# In chat: "Use memory_health_check to verify the memory system"
-# In chat: "Use memory_stats to show memory usage"
-```
-
-#### Discovery Operations
-```bash
-# List all discovery sources
-python -m thoth discovery list
-
-# Run discovery for a specific source
-python -m thoth discovery run --source "source_name" --max-articles 50
-
-# Show details about a discovery source
-python -m thoth discovery show --name "source_name"
-
-# Create a new discovery source (interactive)
-python -m thoth discovery create
-```
-
-#### RAG Operations
-```bash
-# Index documents for RAG search
-python -m thoth rag index --force
-
-# Search the knowledge base
-python -m thoth rag search --query "attention mechanisms" --k 10
-
-# Ask questions about the knowledge base
-python -m thoth rag ask --question "What are the latest attention mechanisms?" --k 5
-
-# Filter search by document type
-python -m thoth rag search --query "transformers" --filter-type "markdown" --k 10
-```
-
-#### MCP Server
-```bash
-# Start MCP server for CLI integration
-python -m thoth mcp stdio
-
-# HTTP MCP server
-python -m thoth mcp http --host localhost --port 8001
-
-# SSE (Server-Sent Events) server
-python -m thoth mcp sse --host localhost --port 8002
-```
-
-#### System Operations
-```bash
-# Check system status
-python -m thoth system status
-
-# Health check
-python -m thoth system health
-
-# Performance monitoring
-python -m thoth performance monitor --duration 60
-
-# Clear caches
-python -m thoth system clean-cache
-```
-
-### CLI Examples
-
-#### Multi-Service Research Workflow Example
-```bash
-# 1. Start all services
-./scripts/start-all-services.sh dev
+# 1. Start Thoth services (if not already running)
+make dev  # or make prod for production
 
 # 2. Verify services are healthy
-./scripts/start-all-services.sh status
+make health
 
-# 3. Test memory integration
-python scripts/test_memory_mcp_integration.py
-
-# 4. Set up document monitoring
-python -m thoth monitor --watch-dir ./papers --optimized
-
-# 5. List and run discovery sources
-python -m thoth discovery list
-python -m thoth discovery run --source "arxiv_ml" --max-articles 30
-
-# 6. Index documents for RAG
-python -m thoth rag index --force
-
-# 7. Search and query knowledge base
-python -m thoth rag search --query "attention mechanisms" --k 10
-python -m thoth rag ask --question "Compare different attention mechanisms in transformers"
-
-# 8. Interactive research session with memory
-python -m thoth agent
-# In chat: "Remember that I'm researching transformer efficiency. Find related papers."
+# 3. Open Obsidian and enable Thoth plugin
+# Click the Thoth icon in the left ribbon
 ```
 
-#### Traditional Single-Service Workflow Example
-```bash
-# 1. Start the API server
-python -m thoth server start --api-host 0.0.0.0 --api-port 8000
+### Typical Research Workflow
 
-# 2. Set up document monitoring
-python -m thoth monitor --watch-dir ./papers --api-server --optimized
-
-# 3. List and run discovery sources
-python -m thoth discovery list
-python -m thoth discovery run --source "arxiv_ml" --max-articles 30
-
-# 4. Index documents for RAG
-python -m thoth rag index --force
-
-# 5. Search and query knowledge base
-python -m thoth rag search --query "attention mechanisms" --k 10
-python -m thoth rag ask --question "Compare different attention mechanisms in transformers"
-
-# 6. Interactive research session
-python -m thoth agent
-```
-
-## Obsidian Plugin Usage
-
-### Main Interface
-
-#### Ribbon Icon
-- Click the Thoth message icon to open the main chat interface
-- Right-click for quick actions menu
-
-#### Command Palette Integration
-Access Thoth commands via `Ctrl/Cmd+P`:
-- **Open Research Chat** - Main chat interface
-- **Start Thoth Agent** - Start background services
-- **Stop Thoth Agent** - Stop background services
-- **Restart Thoth Agent** - Restart services
-- **Insert Research Query** - Process selected text
-
-### Chat Interface
-
-#### Basic Chat Operations
-1. **Start a conversation**
-   - Type your research question
-   - Press Enter or click Send
-   - Wait for AI response
-
-2. **Multi-turn conversations**
-   - Ask follow-up questions
-   - Reference previous responses
-   - Build on earlier research
-
-3. **Document references**
-   - Ask about specific papers: "Tell me about the paper 'Attention Is All You Need'"
-   - Query your document collection: "What papers do I have about neural networks?"
-
-#### Advanced Chat Features
-
-##### Multi-Chat Windows
-- Open multiple research conversations simultaneously
-- Switch between different research topics
-- Each chat maintains independent context
-
-##### Chat Session Management
-- **Save sessions**: Conversations are automatically saved
-- **Load previous sessions**: Access chat history from settings
-- **Export conversations**: Save chat logs as Markdown files
-
-##### Special Commands
-```
-/help                    # Show available commands
-/clear                   # Clear current conversation
-/export                  # Export chat to file
-/settings               # Open plugin settings
-/status                 # Show system status
-/memory_stats           # Show memory system usage (with Letta)
-/memory_search <query>  # Search archival memory
-```
-
-##### Memory Integration Commands (New)
-With the Letta memory system, you can use these natural language commands:
-```
-"Remember that I'm researching transformer efficiency"
-"What did we discuss about attention mechanisms earlier?"
-"Store this important finding: [your finding]"
-"Search my past research about neural architectures"
-"What are my current research focus areas?"
-```
-
-### Settings Configuration
-
-#### API Configuration
-- **Primary LLM Model**: Choose your preferred language model
-- **Analysis Model**: Specialized model for document analysis
-- **Temperature**: Control response creativity (0.0-1.0)
-- **Max Tokens**: Set response length limits
-
-#### Directory Settings
-- **Workspace Directory**: Main working directory
-- **PDF Directory**: Where PDFs are stored and monitored
-- **Data Directory**: Database and cache location
-- **Logs Directory**: Log file location
-
-#### Behavior Settings
-- **Auto-start Agent**: Start services when Obsidian loads
-- **Show Status Bar**: Display connection status
-- **Enable Notifications**: Show processing notifications
-- **Chat History Limit**: Number of messages to retain
-
-## Research Workflows
-
-### Academic Paper Analysis
-
-#### 1. Paper Discovery
-```bash
-# Discover papers by topic
-python -m thoth discovery start --query "neural architecture search" --max-articles 25
-
-# Discover from specific venues
-python -m thoth discovery arxiv --query "transformers" --date-range "2023-01-01,2024-01-01"
-```
-
-#### 2. Document Processing
-```bash
-# Process discovered papers
-python -m thoth pdf process --input-dir ./data/pdfs --extract-citations --extract-metadata
-```
-
-#### 3. Analysis and Summarization
-Via Obsidian chat:
-```
-"Analyze the papers in my collection about attention mechanisms and provide:
-1. Key innovations in each paper
-2. Common themes and trends
-3. Gaps in current research
-4. Potential future directions"
-```
-
-#### 4. Citation Analysis
-```bash
-# Extract and analyze citations
-python -m thoth citations analyze --input-dir ./processed-papers
-
-# Build citation network
-python -m thoth knowledge build --focus citations
-```
-
-### Literature Review Workflow
-
-#### Step 1: Define Research Scope
-```
-Via Obsidian: "Help me plan a literature review on 'multimodal learning in computer vision'. What key topics should I cover?"
-```
-
-#### Step 2: Systematic Discovery
-```bash
-# Comprehensive search across sources
-python -m thoth discovery start --query "multimodal learning computer vision" --max-articles 100
-python -m thoth discovery start --query "vision-language models" --max-articles 50
-python -m thoth discovery start --query "cross-modal attention" --max-articles 30
-```
-
-#### Step 3: Document Organization
-```bash
-# Process and categorize papers
-python -m thoth pdf process --input-dir ./literature-review-pdfs --extract-all
-python -m thoth tags auto-tag --source-dir ./processed-papers
-```
-
-#### Step 4: Synthesis and Writing
-Via Obsidian:
-```
-"Based on my paper collection, create a structured outline for a literature review on multimodal learning, including:
-- Historical development
-- Current approaches
-- Key challenges
-- Future directions"
-```
-
-### Comparative Analysis
-
-#### Compare Methodologies
-```
-"Compare the attention mechanisms used in these papers: [list specific papers or ask Thoth to identify relevant papers]"
-```
-
-#### Trend Analysis
-```
-"Analyze the evolution of transformer architectures from 2017 to 2024 based on my paper collection"
-```
-
-#### Gap Analysis
-```
-"Identify research gaps in current work on federated learning based on the papers I've collected"
-```
+1. **Discover Papers**: Find relevant research using multi-source discovery
+2. **Download PDFs**: Save papers to `_thoth/data/pdfs/` directory
+3. **Automatic Processing**: PDF Monitor processes them automatically
+4. **Review Notes**: Generated notes appear in `_thoth/data/notes/`
+5. **Chat with Agent**: Ask questions about processed papers
+6. **Build Knowledge**: Citations and relationships tracked automatically
 
 ## Document Processing
 
-### PDF Processing Options
+### Processing Single PDF
 
-#### Basic Processing
+**Via Obsidian Plugin** (Recommended):
+1. Open Obsidian
+2. Click Thoth ribbon icon
+3. Drop PDF into `_thoth/data/pdfs/` folder
+4. Wait for processing notification
+5. Note appears in `_thoth/data/notes/`
+
+**Via Command Line**:
 ```bash
-# Simple PDF processing
-python -m thoth pdf process --file research-paper.pdf
+# Process single paper
+python -m thoth pdf process /path/to/paper.pdf
+
+# With options
+python -m thoth pdf process paper.pdf \
+    --generate-tags \
+    --enrich-citations \
+    --build-index
 ```
-
-#### Advanced Processing
-```bash
-# Full extraction with metadata
-python -m thoth pdf process \
-  --file research-paper.pdf \
-  --extract-citations \
-  --extract-metadata \
-  --extract-figures \
-  --ocr-images
-```
-
-#### Batch Processing
-```bash
-# Process entire directory
-python -m thoth pdf process \
-  --input-dir ./research-papers \
-  --output-dir ./processed \
-  --parallel 4 \
-  --extract-all
-```
-
-### Document Monitoring
-
-#### Real-time Processing
-```bash
-# Monitor directory for new PDFs
-python -m thoth pdf monitor --directory ./incoming-papers --auto-process
-```
-
-#### Scheduled Processing
-```bash
-# Schedule periodic processing
-python -m thoth pdf schedule --directory ./papers --interval 3600  # Every hour
-```
-
-### Text Extraction and Analysis
-
-#### Content Extraction
-- **Main text**: Article body and abstract
-- **Citations**: Bibliography and in-text references
-- **Metadata**: Title, authors, publication info
-- **Figures**: Captions and referenced images
-- **Tables**: Structured data extraction
-
-#### Quality Assessment
-- **Confidence scores**: OCR and extraction quality
-- **Completeness**: Missing sections identification
-- **Language detection**: Multi-language support
-
-## Knowledge Management
-
-### Vector Database Operations
-
-#### Building Knowledge Base
-```bash
-# Build from processed documents
-python -m thoth rag build --source-dir ./processed-papers
-
-# Incremental updates
-python -m thoth rag update --new-documents ./new-papers
-
-# Rebuild with different embedding model
-python -m thoth rag rebuild --embedding-model sentence-transformers/all-mpnet-base-v2
-```
-
-#### Querying Knowledge Base
-```bash
-# Direct queries
-python -m thoth rag query "What are the main challenges in federated learning?"
-
-# Similarity search
-python -m thoth rag similar --document "paper-id-123" --top-k 10
-
-# Advanced queries with filters
-python -m thoth rag query "transformer architecture" --filter "year:2023" --top-k 5
-```
-
-### Knowledge Graph Operations
-
-#### Graph Construction
-```bash
-# Build knowledge graph
-python -m thoth knowledge build --source-dir ./processed-papers
-
-# Focus on specific relationships
-python -m thoth knowledge build --focus citations,authors,concepts
-```
-
-#### Graph Querying
-```bash
-# Find related concepts
-python -m thoth knowledge query --concept "attention mechanism" --relationship "related_to"
-
-# Author networks
-python -m thoth knowledge authors --name "Yoshua Bengio" --depth 2
-
-# Citation paths
-python -m thoth knowledge path --from "paper-1" --to "paper-2"
-```
-
-#### Graph Export
-```bash
-# Export for visualization
-python -m thoth knowledge export --format graphml --output research-graph.graphml
-python -m thoth knowledge export --format json --output research-data.json
-```
-
-### Tag Management
-
-#### Automatic Tagging
-```bash
-# Auto-tag documents
-python -m thoth tags auto-tag --source-dir ./processed-papers
-
-# Custom tag models
-python -m thoth tags train --training-data ./tagged-examples
-```
-
-#### Manual Tag Operations
-```bash
-# Add tags
-python -m thoth tags add --document "paper-id" --tags "deep-learning,computer-vision"
-
-# Query by tags
-python -m thoth tags query --tags "machine-learning,nlp" --operator AND
-```
-
-## API Usage
-
-### REST API Endpoints
-
-#### Authentication
-```python
-import requests
-
-# Most endpoints don't require authentication for local usage
-base_url = "http://localhost:8000"
-```
-
-#### Chat Operations
-```python
-# Create chat session
-response = requests.post(f"{base_url}/chat/sessions",
-                        json={"title": "Research Session"})
-session_id = response.json()["id"]
-
-# Send message
-response = requests.post(f"{base_url}/chat/sessions/{session_id}/messages",
-                        json={"message": "Summarize recent ML papers"})
-print(response.json()["response"])
-
-# Get chat history
-history = requests.get(f"{base_url}/chat/sessions/{session_id}/messages")
-```
-
-#### Document Operations
-```python
-# Upload document
-with open("paper.pdf", "rb") as f:
-    response = requests.post(f"{base_url}/documents/upload",
-                           files={"file": f})
-
-# Process document
-doc_id = response.json()["document_id"]
-processing = requests.post(f"{base_url}/documents/{doc_id}/process")
-
-# Get processing status
-status = requests.get(f"{base_url}/documents/{doc_id}/status")
-```
-
-#### Search and Query
-```python
-# Vector search
-search_results = requests.post(f"{base_url}/search/vector",
-                              json={"query": "attention mechanisms",
-                                    "top_k": 10})
-
-# Knowledge graph query
-graph_results = requests.post(f"{base_url}/knowledge/query",
-                             json={"concept": "neural networks",
-                                   "max_depth": 2})
-```
-
-### WebSocket Integration
-
-#### Real-time Chat
-```python
-import websocket
-import json
-
-def on_message(ws, message):
-    data = json.loads(message)
-    print(f"AI: {data['response']}")
-
-def on_open(ws):
-    ws.send(json.dumps({
-        "type": "chat",
-        "message": "Hello, how can you help with my research?"
-    }))
-
-ws = websocket.WebSocketApp("ws://localhost:8000/ws/chat",
-                           on_message=on_message,
-                           on_open=on_open)
-ws.run_forever()
-```
-
-#### Processing Updates
-```python
-# Monitor document processing
-def on_processing_update(ws, message):
-    data = json.loads(message)
-    print(f"Processing: {data['status']} - {data['progress']}%")
-
-ws = websocket.WebSocketApp("ws://localhost:8000/ws/processing",
-                           on_message=on_processing_update)
-```
-
-## Advanced Features
-
-### Custom Prompt Templates
-
-#### Creating Templates
-Create custom prompts in `./prompts/` directory:
-
-```markdown
-# analysis_template.md
-Analyze the following research paper:
-
-Title: {{title}}
-Authors: {{authors}}
-Abstract: {{abstract}}
-
-Please provide:
-1. Main contributions
-2. Methodology summary
-3. Key findings
-4. Limitations
-5. Future work suggestions
-```
-
-#### Using Templates
-```bash
-python -m thoth agent research --template analysis_template --document paper-id-123
-```
-
-### Plugin Development
-
-#### Custom Discovery Plugins
-```python
-# src/thoth/discovery/plugins/custom_source.py
-from thoth.discovery.plugins.base import DiscoveryPlugin
-
-class CustomSourcePlugin(DiscoveryPlugin):
-    def discover(self, query: str, max_results: int) -> List[Document]:
-        # Implement custom discovery logic
-        pass
-```
-
-#### Custom Processing Pipelines
-```python
-# src/thoth/pipelines/custom_pipeline.py
-from thoth.pipelines.base import BasePipeline
-
-class CustomPipeline(BasePipeline):
-    def process_document(self, document: Document) -> ProcessedDocument:
-        # Implement custom processing
-        pass
-```
-
-### Integration with External Tools
-
-#### Citation Managers
-```bash
-# Export to Zotero format
-python -m thoth citations export --format zotero --output library.json
-
-# Import from Mendeley
-python -m thoth citations import --source mendeley --file library.bib
-```
-
-#### Version Control Integration
-```bash
-# Track research progress
-git add .
-git commit -m "Added analysis of transformer papers"
-
-# Create research branches
-git checkout -b literature-review-multimodal
-```
-
-#### Jupyter Notebook Integration
-```python
-# In Jupyter notebook
-from thoth import ThothPipeline
-
-pipeline = ThothPipeline()
-results = pipeline.query("What are the latest developments in computer vision?")
-```
-
-## Performance Optimization
 
 ### Batch Processing
+
 ```bash
-# Process multiple documents efficiently
-python -m thoth pdf process --input-dir ./papers --batch-size 10 --parallel 4
+# Process entire directory
+python -m thoth pdf process ./papers/ --parallel
+
+# Process with filtering
+python -m thoth pdf process ./papers/ \
+    --pattern "*.pdf" \
+    --parallel \
+    --max-workers 4
 ```
 
-### Caching Configuration
-```bash
-# Enable aggressive caching
-export THOTH_CACHE_TTL=3600
-export THOTH_ENABLE_CACHE=true
+### Monitoring for Auto-Processing
 
-# Clear caches when needed
-python -m thoth system clear-cache
+**Automatic** (recommended):
+```bash
+# PDF Monitor runs automatically in development mode
+make dev
+# Now just drop PDFs into _thoth/data/pdfs/
 ```
 
-### Memory Management
+**Manual monitoring**:
 ```bash
-# For large document collections
-export THOTH_MAX_MEMORY=16GB
-export THOTH_CHUNK_SIZE=1024
-export THOTH_MAX_CONCURRENT=2
+# Monitor specific directory
+python -m thoth pdf monitor --watch-dir ./new-papers/
+
+# With options
+python -m thoth pdf monitor \
+    --watch-dir ./papers/ \
+    --recursive \
+    --debounce 2  # Wait 2 seconds before processing
 ```
 
-## Troubleshooting Common Issues
+### Processing Options
 
-### Performance Issues
-- Reduce batch sizes
-- Enable caching
-- Use faster embedding models
-- Increase system resources
+Configure processing in `_thoth/settings.json`:
 
-### Processing Failures
-- Check PDF quality and format
-- Verify API key validity
-- Monitor disk space
-- Check log files
+```json
+{
+  "processing": {
+    "generate_tags": true,
+    "enrich_citations": true,
+    "build_index": true,
+    "chunk_size": 500,
+    "chunk_overlap": 50
+  }
+}
+```
 
-### Connection Issues
-- Verify service status: `make status`
-- Restart services: `make restart-api`
-- Check firewall settings
-- Validate endpoint URLs
+**Options Explained**:
+- `generate_tags`: AI-generated topic tags
+- `enrich_citations`: Lookup DOIs and metadata
+- `build_index`: Add to RAG vector index
+- `chunk_size`: Semantic chunk size (tokens)
+- `chunk_overlap`: Overlap between chunks
+
+## Research Discovery
+
+### Multi-Source Search
+
+**ArXiv Discovery**:
+```bash
+# Search ArXiv
+python -m thoth discovery search "transformer architectures" \
+    --source arxiv \
+    --max-results 50
+
+# Filter by category
+python -m thoth discovery search "machine learning" \
+    --source arxiv \
+    --categories cs.LG cs.AI \
+    --date-range "last_7_days"
+```
+
+**Semantic Scholar**:
+```bash
+# Search Semantic Scholar
+python -m thoth discovery search "large language models" \
+    --source semantic_scholar \
+    --fields computer_science \
+    --min-citations 10
+```
+
+**Combined Search**:
+```bash
+# Search all sources
+python -m thoth discovery search "neural networks" \
+    --sources arxiv semantic_scholar \
+    --max-results 100 \
+    --relevance-threshold 0.7
+```
+
+### Automated Discovery
+
+**Schedule Regular Discovery**:
+```bash
+# Schedule daily discovery at 9 AM
+python -m thoth discovery schedule \
+    --query "reinforcement learning" \
+    --source arxiv \
+    --cron "0 9 * * *" \
+    --max-articles 50
+```
+
+**Schedule Configuration** in `settings.json`:
+```json
+{
+  "discovery": {
+    "auto_start_scheduler": true,
+    "schedules": [
+      {
+        "name": "Daily ML Papers",
+        "query": "machine learning",
+        "source": "arxiv",
+        "cron": "0 9 * * *",
+        "max_articles": 50
+      }
+    ]
+  }
+}
+```
+
+### Browser Workflows
+
+For sites without APIs:
+
+```bash
+# Create custom workflow
+python -m thoth discovery workflow create conference_papers.json
+
+# Execute workflow
+python -m thoth discovery workflow execute conference_papers
+```
+
+Example workflow (`conference_papers.json`):
+```json
+{
+  "name": "Conference Paper Download",
+  "steps": [
+    {"action": "navigate", "url": "https://conference.org/papers"},
+    {"action": "wait", "selector": ".paper-list"},
+    {"action": "extract", "selector": ".paper-item"},
+    {"action": "download", "selector": ".pdf-link"}
+  ]
+}
+```
+
+## Using the Obsidian Plugin
+
+### Opening the Chat Interface
+
+**Methods to open chat**:
+1. Click **Thoth icon** in left ribbon (quickest)
+2. Command Palette (`Ctrl/Cmd+P`) → "Open Thoth Chat"
+3. Keyboard shortcut (configure in settings)
+
+### Chat Window Features
+
+**Desktop Mode**:
+- Bottom-right popup (450x600px default)
+- **Drag** title bar to reposition
+- **Resize** by dragging edges
+- **Transparent backdrop** - work in vault while chatting!
+
+**Mobile Mode**:
+- Fullscreen interface
+- Touch-optimized controls
+- Swipe to close
+
+### Multi-Session Chats
+
+**Create New Session**:
+1. Click "New Chat" button
+2. Or Command Palette → "Thoth: New Chat Session"
+
+**Switch Sessions**:
+- Click session tab at top of chat window
+- Or use session dropdown
+
+**Session Management**:
+- **Rename**: Right-click session tab → Rename
+- **Delete**: Right-click session tab → Delete
+- **Archive**: Right-click → Archive (keeps history)
+
+### Research Queries from Selection
+
+1. Select text in any note
+2. Right-click → "Insert Research Query"
+3. Or use keyboard shortcut
+4. Chat opens with selected text as query
+5. Results appear in chat
+
+### Settings Panel
+
+Access via:
+- Plugin settings: Settings → Thoth Research Assistant
+- Or click gear icon in chat window
+
+**Key Settings**:
+- **Connection**: Local vs Remote mode
+- **Auto-start**: Launch agent on Obsidian startup
+- **API Keys**: Configure LLM providers
+- **Directories**: Customize paths
+- **Advanced**: JSON editor for power users
+
+## Working with Agents
+
+### Letta Agent System
+
+Thoth uses **Letta** for persistent, intelligent agents with memory across sessions.
+
+**Access Agent**:
+1. Via Obsidian plugin chat (primary method)
+2. Via REST API at `http://localhost:8283`
+3. Via Letta web UI (if enabled)
+
+### Agent Capabilities
+
+**Available to All Agents**:
+- 54 MCP research tools
+- Persistent memory (PostgreSQL+pgvector)
+- Cross-session continuity
+- Real-time streaming responses
+
+**Tool Categories**:
+- **Query Management**: Save and retrieve research queries
+- **Discovery**: Find papers from multiple sources
+- **Citation Analysis**: Extract and enrich citations
+- **Article Operations**: Manage paper metadata
+- **Processing**: Trigger document pipeline
+- **PDF Content**: Extract text and metadata
+- **RAG Operations**: Semantic search
+- **Analysis**: Deep document analysis
+- **Tag Management**: Organize papers
+- **Browser Workflows**: Custom scraping
+- **Web Search**: Search academic sources
+- **Settings**: Configuration management
+- **Data Management**: Export/import operations
+
+### Common Agent Interactions
+
+**Research Assistance**:
+```
+You: "Find me recent papers on transformer attention mechanisms"
+Agent: [Uses discovery tools to search ArXiv and Semantic Scholar]
+       [Returns ranked list with relevance scores]
+
+You: "Summarize the top 3 papers"
+Agent: [Uses article tools to access papers]
+       [Generates comprehensive summaries]
+```
+
+**Citation Analysis**:
+```
+You: "Extract citations from paper_xyz.pdf"
+Agent: [Uses citation tools to parse references]
+       [Returns structured citation data]
+
+You: "Enrich these citations with DOIs"
+Agent: [Uses enrichment service with 6-stage resolution]
+       [Returns enhanced citations with metadata]
+```
+
+**Literature Review**:
+```
+You: "Help me review papers on reinforcement learning from 2023"
+Agent: [Searches vault for matching papers]
+       [Analyzes citation networks]
+       [Identifies key papers and trends]
+       [Generates structured review]
+```
+
+## Citation Management
+
+### Extracting Citations
+
+```bash
+# Extract from PDF
+python -m thoth citations extract paper.pdf
+
+# Extract and enrich
+python -m thoth citations extract paper.pdf --enrich
+
+# Batch extraction
+python -m thoth citations extract ./papers/ --batch --parallel
+```
+
+### Citation Enrichment
+
+The **6-stage resolution chain** automatically enriches citations:
+
+1. **Crossref**: DOI lookup
+2. **OpenAlex**: Metadata and citation counts
+3. **ArXiv**: ArXiv papers
+4. **Fuzzy Matching**: Handle malformed citations
+5. **Validation**: Confidence scoring
+6. **Decision**: Best match selection
+
+**Enrichment happens automatically** during document processing.
+
+### Citation Network Analysis
+
+```bash
+# Build citation graph
+python -m thoth citations graph --build
+
+# Analyze network
+python -m thoth citations graph --analyze \
+    --metrics pagerank betweenness
+
+# Find influential papers
+python -m thoth citations graph --top-papers 20
+
+# Export visualization
+python -m thoth citations graph --export network.gexf
+```
+
+### Citation Formats
+
+Generate bibliographies:
+
+```bash
+# Format citations in APA
+python -m thoth citations format paper.pdf --style apa
+
+# Format in BibTeX
+python -m thoth citations format paper.pdf --style bibtex
+
+# Other formats: MLA, Chicago, Harvard
+python -m thoth citations format paper.pdf --style mla
+```
+
+## Best Practices
+
+### Organizing Your Vault
+
+**Recommended Structure**:
+```
+your-vault/
+├── _thoth/              # Thoth data (automatic)
+├── Research/            # Your research notes
+│   ├── Projects/
+│   ├── Literature/
+│   └── Ideas/
+├── Papers/              # Manual paper organization
+│   ├── To-Read/
+│   ├── In-Progress/
+│   └── Completed/
+└── Templates/           # Note templates
+```
+
+### Vault Management
+
+**Keep _thoth/ Clean**:
+- Don't manually edit files in `_thoth/data/`
+- Generated notes can be moved out of `_thoth/data/notes/`
+- Logs rotate automatically (check `_thoth/logs/`)
+- Cache is safe to delete (will regenerate)
+
+**Settings Management**:
+- Edit `_thoth/settings.json` for configuration
+- Changes apply immediately in dev mode (~2s)
+- Back up settings.json before major changes
+- Use version control for settings.json
+
+### Performance Tips
+
+1. **Batch Processing**: Process multiple PDFs at once
+2. **Scheduled Discovery**: Run during off-hours
+3. **Cache Warming**: Process common queries first
+4. **Index Maintenance**: Rebuild RAG index periodically
+5. **Log Rotation**: Clear old logs regularly
+
+### API Key Management
+
+**Security**:
+- Never commit `.env` file to git
+- Use environment variables for keys
+- Rotate keys periodically
+- Use separate keys for dev/prod
+
+**Cost Optimization**:
+- Start with free tiers
+- Use caching to reduce API calls
+- Batch operations when possible
+- Monitor API usage regularly
+
+## Tips & Tricks
+
+### Keyboard Shortcuts
+
+Configure in Obsidian Settings → Hotkeys:
+- **Open Chat**: No default (set your own)
+- **New Chat Session**: No default
+- **Insert Research Query**: No default
+
+### Quick Commands
+
+**Via Command Palette** (`Ctrl/Cmd+P`):
+- "Thoth: Open Chat"
+- "Thoth: Start Agent"
+- "Thoth: Stop Agent"
+- "Thoth: Restart Agent"
+- "Thoth: Check Health"
+
+### Obsidian Integration
+
+**Link to Generated Notes**:
+```markdown
+See [[paper_title]] for details on transformers.
+```
+
+**Embed Notes**:
+```markdown
+![[paper_title#Abstract]]
+```
+
+**Query Generated Tags**:
+```markdown
+#machine-learning #transformers #attention
+```
+
+### Advanced Features
+
+**Custom Prompts**:
+Place custom prompts in `_thoth/data/prompts/`:
+```
+_thoth/data/prompts/
+├── summarize.txt
+├── analyze.txt
+└── review.txt
+```
+
+Reference in chat:
+```
+You: "Use my summarize prompt on this paper"
+```
+
+**Research Questions**:
+Create structured research questions:
+```bash
+# Create research question
+python -m thoth research create "How do transformers work?"
+
+# Link papers to question
+python -m thoth research link <question_id> <paper_id>
+
+# Generate synthesis
+python -m thoth research synthesize <question_id>
+```
+
+### Troubleshooting Common Issues
+
+**Chat Not Responding**:
+1. Check backend health: `make health`
+2. Check WebSocket connection in DevTools
+3. Restart plugin in Obsidian
+
+**PDFs Not Processing**:
+1. Check PDF Monitor logs: `docker logs thoth-dev-pdf-monitor`
+2. Verify PDF is in correct directory
+3. Check file permissions (UID 1000)
+4. Try manual processing: `python -m thoth pdf process file.pdf`
+
+**Discovery Not Finding Papers**:
+1. Verify API keys are set
+2. Check query relevance
+3. Adjust relevance threshold in settings
+4. Try different sources
+
+**Memory Issues**:
+1. Clear cache: `rm -rf _thoth/cache/*`
+2. Rebuild indexes: `python -m thoth rag rebuild`
+3. Check Docker container memory: `docker stats`
 
 ---
 
-*For more advanced usage patterns, see the [Examples](examples/) directory and [API Documentation](api.md).*
+For more information:
+- [Setup Guide](setup.md) - Installation and configuration
+- [Architecture](architecture.md) - System design
+- [Quick Reference](quick-reference.md) - Command cheat sheet
+- [GitHub Issues](https://github.com/acertainKnight/project-thoth/issues) - Report problems
+
+Happy researching! 🚀

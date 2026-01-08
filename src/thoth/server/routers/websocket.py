@@ -5,23 +5,21 @@ import threading
 import time
 from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from loguru import logger
+
+from thoth.server.dependencies import (
+    get_chat_manager,
+    get_research_agent,
+    get_service_manager,
+)
+from thoth.services.service_manager import ServiceManager
 
 router = APIRouter()
 
-# Module-level variables that will be set by the main app
-service_manager = None
-research_agent = None
-chat_manager = None
-
-
-def set_dependencies(sm, agent, cm):
-    """Set the dependencies for this router."""
-    global service_manager, research_agent, chat_manager
-    service_manager = sm
-    research_agent = agent
-    chat_manager = cm
+# REMOVED: Module-level globals - Phase 5
+# Dependencies now injected via FastAPI Depends() instead of set_dependencies()
+# Note: WebSocket endpoints get dependencies directly in their signature
 
 
 class ConnectionManager:
@@ -149,7 +147,11 @@ def get_operation_status(operation_id: str) -> dict[str, Any] | None:
 
 
 @router.websocket('/ws/chat')
-async def websocket_chat(websocket: WebSocket) -> None:
+async def websocket_chat(
+    websocket: WebSocket,
+    research_agent=Depends(get_research_agent),
+    chat_manager=Depends(get_chat_manager)
+) -> None:
     """
     WebSocket endpoint for real-time chat with the research agent.
 

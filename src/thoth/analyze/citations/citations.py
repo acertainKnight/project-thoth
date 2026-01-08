@@ -365,6 +365,7 @@ class CitationProcessor:
             # Resolve "auto" to actual worker count
             if worker_config == 'auto':
                 import os
+
                 max_workers = max(1, os.cpu_count() or 4)
             else:
                 max_workers = int(worker_config)
@@ -633,13 +634,15 @@ class CitationProcessor:
                     citation.pdf_url = location.url
                     citation.pdf_source = location.source
                     citation.is_open_access = location.is_oa
+                    title_preview = citation.title[:50] if citation.title else 'Unknown'
                     logger.debug(
-                        f"Found PDF for '{citation.title[:50]}' from {location.source}"
+                        f"Found PDF for '{title_preview}' from {location.source}"
                     )
                     return True
             except Exception as e:
+                title_preview = citation.title[:50] if citation.title else 'Unknown'
                 logger.warning(
-                    f"Failed to locate PDF for citation '{citation.title[:50]}': {e}"
+                    f"Failed to locate PDF for citation '{title_preview}': {e}"
                 )
             return False
 
@@ -650,6 +653,7 @@ class CitationProcessor:
             # Resolve "auto" to actual worker count
             if worker_config == 'auto':
                 import os
+
                 max_workers = max(1, os.cpu_count() or 5)
             else:
                 max_workers = int(worker_config)

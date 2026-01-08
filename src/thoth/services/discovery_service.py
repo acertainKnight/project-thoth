@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-import requests
+import httpx
 
 from thoth.discovery.api_sources import (
     BioRxivAPISource,
@@ -498,7 +498,7 @@ class DiscoveryService(BaseService):
 
             # Download the PDF
             self.logger.info(f'Downloading PDF from: {pdf_url}')
-            response = requests.get(pdf_url, timeout=30, stream=True)
+            response = httpx.get(pdf_url, timeout=30, stream=True)
             response.raise_for_status()
 
             with open(pdf_path, 'wb') as f:

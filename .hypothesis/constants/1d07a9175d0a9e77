@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/mcp/monitoring.py
+# hypothesis_version: 6.148.9
+
+[0.0, 0.1, 0.95, 2.0, 5.0, 100.0, 200, 500, '/health', '/mcp', '/metrics', '/refresh-cache', '/servers', 'MCP Health', 'closed', 'error', 'message', 'response_time_max', 'success', 'success_rate_min', 'thoth-mcp', 'timestamp']

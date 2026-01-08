@@ -19,11 +19,9 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
 
     def __init__(self, postgres_service, **kwargs):
         """Initialize workflow executions repository."""
-        super().__init__(
-            postgres_service, table_name='workflow_executions', **kwargs
-        )
+        super().__init__(postgres_service, table_name='workflow_executions', **kwargs)
 
-    async def create(self, execution_data: dict[str, Any]) -> Optional[UUID]:
+    async def create(self, execution_data: dict[str, Any]) -> Optional[UUID]:  # noqa: UP007
         """
         Create a new workflow execution record.
 
@@ -48,7 +46,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
                 execution_data['status'] = 'running'
 
             columns = list(execution_data.keys())
-            placeholders = [f"${i+1}" for i in range(len(columns))]
+            placeholders = [f'${i + 1}' for i in range(len(columns))]
 
             query = f"""
                 INSERT INTO {self.table_name} ({', '.join(columns)})
@@ -62,14 +60,14 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             if 'workflow_id' in execution_data:
                 self._invalidate_cache(str(execution_data['workflow_id']))
 
-            logger.debug(f"Created workflow execution: {result}")
+            logger.debug(f'Created workflow execution: {result}')
             return result
 
         except Exception as e:
-            logger.error(f"Failed to create workflow execution: {e}")
+            logger.error(f'Failed to create workflow execution: {e}')
             return None
 
-    async def get_by_id(self, execution_id: UUID) -> Optional[dict[str, Any]]:
+    async def get_by_id(self, execution_id: UUID) -> Optional[dict[str, Any]]:  # noqa: UP007
         """
         Get a workflow execution by ID.
 
@@ -79,13 +77,13 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
         Returns:
             Optional[dict[str, Any]]: Execution data or None
         """
-        cache_key = self._cache_key("id", str(execution_id))
+        cache_key = self._cache_key('id', str(execution_id))
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
 
         try:
-            query = f"SELECT * FROM {self.table_name} WHERE id = $1"
+            query = f'SELECT * FROM {self.table_name} WHERE id = $1'
             result = await self.postgres.fetchrow(query, execution_id)
 
             if result:
@@ -96,7 +94,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             return None
 
         except Exception as e:
-            logger.error(f"Failed to get execution {execution_id}: {e}")
+            logger.error(f'Failed to get execution {execution_id}: {e}')
             return None
 
     async def get_by_workflow_id(
@@ -112,7 +110,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
         Returns:
             list[dict[str, Any]]: List of execution records ordered by started_at DESC
         """
-        cache_key = self._cache_key("workflow", str(workflow_id), f"limit_{limit}")
+        cache_key = self._cache_key('workflow', str(workflow_id), f'limit_{limit}')
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
@@ -131,9 +129,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             return executions
 
         except Exception as e:
-            logger.error(
-                f"Failed to get executions for workflow {workflow_id}: {e}"
-            )
+            logger.error(f'Failed to get executions for workflow {workflow_id}: {e}')
             return []
 
     async def get_recent_executions(
@@ -162,7 +158,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
 
         except Exception as e:
             logger.error(
-                f"Failed to get recent executions for workflow {workflow_id}: {e}"
+                f'Failed to get recent executions for workflow {workflow_id}: {e}'
             )
             return []
 
@@ -170,7 +166,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
         self,
         execution_id: UUID,
         status: str,
-        error_message: Optional[str] = None,
+        error_message: Optional[str] = None,  # noqa: UP007
     ) -> bool:
         """
         Update the status of a workflow execution.
@@ -195,8 +191,8 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
                 updates['error_message'] = error_message
 
             # Build SET clause
-            set_clauses = [f"{col} = ${i+2}" for i, col in enumerate(updates.keys())]
-            values = [execution_id] + list(updates.values())
+            set_clauses = [f'{col} = ${i + 2}' for i, col in enumerate(updates.keys())]
+            values = [execution_id] + list(updates.values())  # noqa: RUF005
 
             query = f"""
                 UPDATE {self.table_name}
@@ -212,16 +208,14 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             if workflow_id:
                 self._invalidate_cache(str(workflow_id))
 
-            logger.debug(f"Updated execution {execution_id} status to {status}")
+            logger.debug(f'Updated execution {execution_id} status to {status}')
             return True
 
         except Exception as e:
-            logger.error(f"Failed to update execution status for {execution_id}: {e}")
+            logger.error(f'Failed to update execution status for {execution_id}: {e}')
             return False
 
-    async def get_success_rate(
-        self, workflow_id: UUID, days: int = 7
-    ) -> float:
+    async def get_success_rate(self, workflow_id: UUID, days: int = 7) -> float:
         """
         Calculate the success rate for a workflow over a time period.
 
@@ -252,7 +246,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
 
         except Exception as e:
             logger.error(
-                f"Failed to calculate success rate for workflow {workflow_id}: {e}"
+                f'Failed to calculate success rate for workflow {workflow_id}: {e}'
             )
             return 0.0
 
@@ -295,9 +289,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
 
             # Calculate success rate
             if stats['total_executions'] > 0:
-                stats['success_rate'] = (
-                    stats['successful'] / stats['total_executions']
-                )
+                stats['success_rate'] = stats['successful'] / stats['total_executions']
             else:
                 stats['success_rate'] = 0.0
 
@@ -305,7 +297,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
 
         except Exception as e:
             logger.error(
-                f"Failed to get execution statistics for workflow {workflow_id}: {e}"
+                f'Failed to get execution statistics for workflow {workflow_id}: {e}'
             )
             return {}
 
@@ -334,12 +326,13 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
 
         except Exception as e:
             logger.error(
-                f"Failed to get failed executions for workflow {workflow_id}: {e}"
+                f'Failed to get failed executions for workflow {workflow_id}: {e}'
             )
             return []
 
     async def get_running_executions(
-        self, workflow_id: Optional[UUID] = None
+        self,
+        workflow_id: Optional[UUID] = None,  # noqa: UP007
     ) -> list[dict[str, Any]]:
         """
         Get all currently running executions.
@@ -368,13 +361,11 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
 
             return [dict(row) for row in results]
 
-        except Exception as e:
-            logger.error("Failed to get running executions: {e}")
+        except Exception as e:  # noqa: F841
+            logger.error('Failed to get running executions: {e}')
             return []
 
-    async def update_results(
-        self, execution_id: UUID, results: dict[str, Any]
-    ) -> bool:
+    async def update_results(self, execution_id: UUID, results: dict[str, Any]) -> bool:
         """
         Update the results of a workflow execution.
 
@@ -389,7 +380,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
 
     async def get_average_duration(
         self, workflow_id: UUID, days: int = 7
-    ) -> Optional[float]:
+    ) -> Optional[float]:  # noqa: UP007
         """
         Get average execution duration in seconds.
 
@@ -418,6 +409,6 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
 
         except Exception as e:
             logger.error(
-                f"Failed to get average duration for workflow {workflow_id}: {e}"
+                f'Failed to get average duration for workflow {workflow_id}: {e}'
             )
             return None

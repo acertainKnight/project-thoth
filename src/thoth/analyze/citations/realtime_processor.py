@@ -23,16 +23,16 @@ Usage:
 import asyncio
 import hashlib
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from dataclasses import dataclass, field  # noqa: F401
+from datetime import datetime, timedelta  # noqa: F401
+from typing import Any, Dict, Optional  # noqa: UP035
 
 from cachetools import LRUCache, TTLCache
 from loguru import logger
 
 from thoth.analyze.citations.resolution_chain import CitationResolutionChain
 from thoth.analyze.citations.resolution_types import (
-    APISource,
+    APISource,  # noqa: F401
     CitationResolutionStatus,
     ConfidenceLevel,
     ResolutionMetadata,
@@ -52,6 +52,7 @@ class RealTimeConfig:
         negative_cache_ttl_hours: Time-to-live for negative cache entries
         enable_negative_cache: Whether to cache failed resolution attempts
     """
+
     timeout_seconds: int = 15
     cache_size: int = 1000
     negative_cache_ttl_hours: int = 1
@@ -72,6 +73,7 @@ class CacheStatistics:
         errors: Number of resolution attempts that errored
         total_resolution_time_ms: Cumulative resolution time in milliseconds
     """
+
     total_requests: int = 0
     positive_cache_hits: int = 0
     negative_cache_hits: int = 0
@@ -124,12 +126,12 @@ class RealtimeCitationProcessor:
         positive_cache: LRU cache for successfully resolved citations
         negative_cache: TTL cache for failed resolution attempts
         statistics: Performance and usage statistics
-    """
+    """  # noqa: W505
 
     def __init__(
         self,
-        config: Optional[RealTimeConfig] = None,
-        resolution_chain: Optional[CitationResolutionChain] = None,
+        config: Optional[RealTimeConfig] = None,  # noqa: UP007
+        resolution_chain: Optional[CitationResolutionChain] = None,  # noqa: UP007
     ):
         """
         Initialize real-time citation processor.
@@ -147,8 +149,7 @@ class RealtimeCitationProcessor:
         # Initialize negative result cache (TTL) - expires after N hours
         negative_cache_ttl_seconds = self.config.negative_cache_ttl_hours * 3600
         self.negative_cache: TTLCache = TTLCache(
-            maxsize=self.config.cache_size,
-            ttl=negative_cache_ttl_seconds
+            maxsize=self.config.cache_size, ttl=negative_cache_ttl_seconds
         )
 
         # Initialize statistics
@@ -158,9 +159,9 @@ class RealtimeCitationProcessor:
         self._cache_lock = asyncio.Lock()
 
         logger.info(
-            f"RealtimeCitationProcessor initialized with timeout={self.config.timeout_seconds}s, "
-            f"cache_size={self.config.cache_size}, "
-            f"negative_cache_ttl={self.config.negative_cache_ttl_hours}h"
+            f'RealtimeCitationProcessor initialized with timeout={self.config.timeout_seconds}s, '
+            f'cache_size={self.config.cache_size}, '
+            f'negative_cache_ttl={self.config.negative_cache_ttl_hours}h'
         )
 
     def _normalize_citation_key(self, citation: Citation) -> str:
@@ -177,21 +178,21 @@ class RealtimeCitationProcessor:
             Normalized cache key (MD5 hash)
         """
         # Extract components for key
-        title = (citation.title or "").lower().strip()
-        year = str(citation.year or "")
-        author = ""
+        title = (citation.title or '').lower().strip()
+        year = str(citation.year or '')
+        author = ''
         if citation.authors and len(citation.authors) > 0:
             author = citation.authors[0].lower().strip()
 
         # Create stable key from normalized components
-        key_components = f"{title}|{year}|{author}"
+        key_components = f'{title}|{year}|{author}'
 
         # Use MD5 hash for consistent, manageable key length
         key_hash = hashlib.md5(key_components.encode('utf-8')).hexdigest()
 
         return key_hash
 
-    async def _check_positive_cache(self, cache_key: str) -> Optional[ResolutionResult]:
+    async def _check_positive_cache(self, cache_key: str) -> Optional[ResolutionResult]:  # noqa: UP007
         """
         Check positive result cache.
 
@@ -204,7 +205,7 @@ class RealtimeCitationProcessor:
         async with self._cache_lock:
             result = self.positive_cache.get(cache_key)
             if result:
-                logger.debug(f"Positive cache HIT for key: {cache_key[:16]}...")
+                logger.debug(f'Positive cache HIT for key: {cache_key[:16]}...')
                 self.statistics.positive_cache_hits += 1
                 return result
             return None
@@ -225,15 +226,13 @@ class RealtimeCitationProcessor:
         async with self._cache_lock:
             is_negative = cache_key in self.negative_cache
             if is_negative:
-                logger.debug(f"Negative cache HIT for key: {cache_key[:16]}...")
+                logger.debug(f'Negative cache HIT for key: {cache_key[:16]}...')
                 self.statistics.negative_cache_hits += 1
                 return True
             return False
 
     async def _store_positive_cache(
-        self,
-        cache_key: str,
-        result: ResolutionResult
+        self, cache_key: str, result: ResolutionResult
     ) -> None:
         """
         Store result in positive cache.
@@ -245,8 +244,8 @@ class RealtimeCitationProcessor:
         async with self._cache_lock:
             self.positive_cache[cache_key] = result
             logger.debug(
-                f"Stored in positive cache: {cache_key[:16]}... "
-                f"(status={result.status}, confidence={result.confidence_score:.2f})"
+                f'Stored in positive cache: {cache_key[:16]}... '
+                f'(status={result.status}, confidence={result.confidence_score:.2f})'
             )
 
     async def _store_negative_cache(self, cache_key: str) -> None:
@@ -262,8 +261,8 @@ class RealtimeCitationProcessor:
         async with self._cache_lock:
             self.negative_cache[cache_key] = datetime.utcnow()
             logger.debug(
-                f"Stored in negative cache: {cache_key[:16]}... "
-                f"(TTL={self.config.negative_cache_ttl_hours}h)"
+                f'Stored in negative cache: {cache_key[:16]}... '
+                f'(TTL={self.config.negative_cache_ttl_hours}h)'
             )
 
     async def resolve_citation(self, citation: Citation) -> ResolutionResult:
@@ -291,7 +290,7 @@ class RealtimeCitationProcessor:
 
         logger.info(
             f"Resolving citation: '{citation.title or citation.text[:50]}...' "
-            f"(cache_key: {cache_key[:16]}...)"
+            f'(cache_key: {cache_key[:16]}...)'
         )
 
         # Step 1: Check positive cache
@@ -313,9 +312,9 @@ class RealtimeCitationProcessor:
                 metadata=ResolutionMetadata(
                     attempt_count=0,
                     last_attempt_time=datetime.utcnow(),
-                    error_message="Previously failed resolution (negative cache)",
-                    additional_info={"negative_cache_hit": True}
-                )
+                    error_message='Previously failed resolution (negative cache)',
+                    additional_info={'negative_cache_hit': True},
+                ),
             )
 
         # Step 3: Attempt resolution with timeout
@@ -323,13 +322,13 @@ class RealtimeCitationProcessor:
 
         try:
             logger.debug(
-                f"Cache MISS - attempting resolution with {self.config.timeout_seconds}s timeout"
+                f'Cache MISS - attempting resolution with {self.config.timeout_seconds}s timeout'
             )
 
             # Wrap resolution in timeout
             result = await asyncio.wait_for(
                 self.resolution_chain.resolve(citation),
-                timeout=self.config.timeout_seconds
+                timeout=self.config.timeout_seconds,
             )
 
             # Track resolution time
@@ -341,10 +340,10 @@ class RealtimeCitationProcessor:
                 result.metadata.processing_time_ms = elapsed_ms
 
             logger.info(
-                f"Resolution completed: status={result.status}, "
-                f"confidence={result.confidence_score:.2f}, "
-                f"source={result.source}, "
-                f"time={elapsed_ms:.1f}ms"
+                f'Resolution completed: status={result.status}, '
+                f'confidence={result.confidence_score:.2f}, '
+                f'source={result.source}, '
+                f'time={elapsed_ms:.1f}ms'
             )
 
             # Step 4: Cache the result
@@ -355,14 +354,14 @@ class RealtimeCitationProcessor:
 
             return result
 
-        except asyncio.TimeoutError:
+        except asyncio.TimeoutError:  # noqa: UP041
             # Handle timeout - return PENDING for batch retry
             self.statistics.timeouts += 1
             elapsed_ms = (time.perf_counter() - start_time) * 1000
 
             logger.warning(
-                f"Resolution TIMEOUT after {self.config.timeout_seconds}s "
-                f"(actual: {elapsed_ms:.1f}ms) - marking as PENDING for batch retry"
+                f'Resolution TIMEOUT after {self.config.timeout_seconds}s '
+                f'(actual: {elapsed_ms:.1f}ms) - marking as PENDING for batch retry'
             )
 
             result = ResolutionResult(
@@ -375,13 +374,10 @@ class RealtimeCitationProcessor:
                 metadata=ResolutionMetadata(
                     attempt_count=1,
                     last_attempt_time=datetime.utcnow(),
-                    error_message=f"Timeout after {self.config.timeout_seconds}s",
+                    error_message=f'Timeout after {self.config.timeout_seconds}s',
                     processing_time_ms=elapsed_ms,
-                    additional_info={
-                        "timeout": True,
-                        "batch_retry_recommended": True
-                    }
-                )
+                    additional_info={'timeout': True, 'batch_retry_recommended': True},
+                ),
             )
 
             return result
@@ -392,9 +388,9 @@ class RealtimeCitationProcessor:
             elapsed_ms = (time.perf_counter() - start_time) * 1000
 
             logger.error(
-                f"Resolution ERROR: {type(e).__name__}: {str(e)} "
-                f"(time={elapsed_ms:.1f}ms)",
-                exc_info=True
+                f'Resolution ERROR: {type(e).__name__}: {str(e)} '  # noqa: RUF010
+                f'(time={elapsed_ms:.1f}ms)',
+                exc_info=True,
             )
 
             result = ResolutionResult(
@@ -407,10 +403,10 @@ class RealtimeCitationProcessor:
                 metadata=ResolutionMetadata(
                     attempt_count=1,
                     last_attempt_time=datetime.utcnow(),
-                    error_message=f"{type(e).__name__}: {str(e)}",
+                    error_message=f'{type(e).__name__}: {str(e)}',  # noqa: RUF010
                     processing_time_ms=elapsed_ms,
-                    additional_info={"error_type": type(e).__name__}
-                )
+                    additional_info={'error_type': type(e).__name__},
+                ),
             )
 
             # Cache error to avoid repeated failures
@@ -418,7 +414,7 @@ class RealtimeCitationProcessor:
 
             return result
 
-    def get_cache_stats(self) -> Dict[str, Any]:
+    def get_cache_stats(self) -> Dict[str, Any]:  # noqa: UP006
         """
         Get comprehensive cache and performance statistics.
 
@@ -431,37 +427,33 @@ class RealtimeCitationProcessor:
         """
         stats = {
             # Cache size
-            "positive_cache_size": len(self.positive_cache),
-            "positive_cache_maxsize": self.positive_cache.maxsize,
-            "negative_cache_size": len(self.negative_cache),
-            "negative_cache_maxsize": self.negative_cache.maxsize,
-
+            'positive_cache_size': len(self.positive_cache),
+            'positive_cache_maxsize': self.positive_cache.maxsize,
+            'negative_cache_size': len(self.negative_cache),
+            'negative_cache_maxsize': self.negative_cache.maxsize,
             # Hit rates
-            "total_requests": self.statistics.total_requests,
-            "cache_hit_rate": self.statistics.hit_rate,
-            "positive_hit_rate": self.statistics.positive_hit_rate,
-            "negative_hit_rate": self.statistics.negative_hit_rate,
-
+            'total_requests': self.statistics.total_requests,
+            'cache_hit_rate': self.statistics.hit_rate,
+            'positive_hit_rate': self.statistics.positive_hit_rate,
+            'negative_hit_rate': self.statistics.negative_hit_rate,
             # Request breakdown
-            "positive_cache_hits": self.statistics.positive_cache_hits,
-            "negative_cache_hits": self.statistics.negative_cache_hits,
-            "cache_misses": self.statistics.cache_misses,
-            "timeouts": self.statistics.timeouts,
-            "errors": self.statistics.errors,
-
+            'positive_cache_hits': self.statistics.positive_cache_hits,
+            'negative_cache_hits': self.statistics.negative_cache_hits,
+            'cache_misses': self.statistics.cache_misses,
+            'timeouts': self.statistics.timeouts,
+            'errors': self.statistics.errors,
             # Performance
-            "average_resolution_time_ms": self.statistics.average_resolution_time_ms,
-            "total_resolution_time_ms": self.statistics.total_resolution_time_ms,
-
+            'average_resolution_time_ms': self.statistics.average_resolution_time_ms,
+            'total_resolution_time_ms': self.statistics.total_resolution_time_ms,
             # Configuration
-            "timeout_seconds": self.config.timeout_seconds,
-            "negative_cache_ttl_hours": self.config.negative_cache_ttl_hours,
-            "negative_cache_enabled": self.config.enable_negative_cache,
+            'timeout_seconds': self.config.timeout_seconds,
+            'negative_cache_ttl_hours': self.config.negative_cache_ttl_hours,
+            'negative_cache_enabled': self.config.enable_negative_cache,
         }
 
         return stats
 
-    async def clear_cache(self) -> Dict[str, int]:
+    async def clear_cache(self) -> Dict[str, int]:  # noqa: UP006
         """
         Clear all caches (positive and negative).
 
@@ -478,12 +470,12 @@ class RealtimeCitationProcessor:
             self.negative_cache.clear()
 
             logger.info(
-                f"Caches cleared: positive={positive_count}, negative={negative_count}"
+                f'Caches cleared: positive={positive_count}, negative={negative_count}'
             )
 
             return {
-                "positive_cleared": positive_count,
-                "negative_cleared": negative_count
+                'positive_cleared': positive_count,
+                'negative_cleared': negative_count,
             }
 
     async def clear_negative_cache(self) -> int:
@@ -494,16 +486,16 @@ class RealtimeCitationProcessor:
 
         Returns:
             Number of entries cleared from negative cache
-        """
+        """  # noqa: W505
         async with self._cache_lock:
             count = len(self.negative_cache)
             self.negative_cache.clear()
 
-            logger.info(f"Negative cache cleared: {count} entries removed")
+            logger.info(f'Negative cache cleared: {count} entries removed')
 
             return count
 
-    def get_cache_contents(self) -> Dict[str, Any]:
+    def get_cache_contents(self) -> Dict[str, Any]:  # noqa: UP006
         """
         Get detailed cache contents for debugging and inspection.
 
@@ -515,29 +507,39 @@ class RealtimeCitationProcessor:
         """
         positive_entries = []
         for key, result in self.positive_cache.items():
-            positive_entries.append({
-                "cache_key": key,
-                "status": result.status,
-                "confidence_score": result.confidence_score,
-                "source": result.source,
-                "resolved_at": result.resolved_at.isoformat() if result.resolved_at else None,
-                "citation_preview": result.citation[:100] if result.citation else None
-            })
+            positive_entries.append(
+                {
+                    'cache_key': key,
+                    'status': result.status,
+                    'confidence_score': result.confidence_score,
+                    'source': result.source,
+                    'resolved_at': result.resolved_at.isoformat()
+                    if result.resolved_at
+                    else None,
+                    'citation_preview': result.citation[:100]
+                    if result.citation
+                    else None,
+                }
+            )
 
         negative_entries = []
         for key, timestamp in self.negative_cache.items():
-            negative_entries.append({
-                "cache_key": key,
-                "cached_at": timestamp.isoformat() if isinstance(timestamp, datetime) else str(timestamp)
-            })
+            negative_entries.append(
+                {
+                    'cache_key': key,
+                    'cached_at': timestamp.isoformat()
+                    if isinstance(timestamp, datetime)
+                    else str(timestamp),
+                }
+            )
 
         return {
-            "positive_entries": positive_entries,
-            "negative_entries": negative_entries,
-            "total_size": len(positive_entries) + len(negative_entries)
+            'positive_entries': positive_entries,
+            'negative_entries': negative_entries,
+            'total_size': len(positive_entries) + len(negative_entries),
         }
 
-    async def warm_cache(self, citations: list[Citation]) -> Dict[str, int]:
+    async def warm_cache(self, citations: list[Citation]) -> Dict[str, int]:  # noqa: UP006
         """
         Pre-populate cache with a batch of citations.
 
@@ -553,35 +555,33 @@ class RealtimeCitationProcessor:
                 - failed: Failed resolutions (added to negative cache)
                 - errors: Errors during resolution
         """
-        stats = {
-            "total": len(citations),
-            "resolved": 0,
-            "failed": 0,
-            "errors": 0
-        }
+        stats = {'total': len(citations), 'resolved': 0, 'failed': 0, 'errors': 0}
 
-        logger.info(f"Cache warming started for {len(citations)} citations")
+        logger.info(f'Cache warming started for {len(citations)} citations')
 
         for citation in citations:
             try:
                 result = await self.resolve_citation(citation)
 
                 if result.status == CitationResolutionStatus.RESOLVED:
-                    stats["resolved"] += 1
-                elif result.status in (CitationResolutionStatus.UNRESOLVED, CitationResolutionStatus.PENDING):
-                    stats["failed"] += 1
+                    stats['resolved'] += 1
+                elif result.status in (
+                    CitationResolutionStatus.UNRESOLVED,
+                    CitationResolutionStatus.PENDING,
+                ):
+                    stats['failed'] += 1
                 else:
-                    stats["errors"] += 1
+                    stats['errors'] += 1
 
             except Exception as e:
-                logger.error(f"Error warming cache for citation: {e}")
-                stats["errors"] += 1
+                logger.error(f'Error warming cache for citation: {e}')
+                stats['errors'] += 1
 
         logger.info(
-            f"Cache warming completed: "
-            f"resolved={stats['resolved']}, "
-            f"failed={stats['failed']}, "
-            f"errors={stats['errors']}"
+            f'Cache warming completed: '
+            f'resolved={stats["resolved"]}, '
+            f'failed={stats["failed"]}, '
+            f'errors={stats["errors"]}'
         )
 
         return stats

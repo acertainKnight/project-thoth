@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/discovery/emulator_scraper.py
+# hypothesis_version: 6.148.9
+
+['--headless', '--no-sandbox']

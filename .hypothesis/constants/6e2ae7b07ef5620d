@@ -1,0 +1,4 @@
+# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/utilities/schemas/citations.py
+# hypothesis_version: 6.148.9
+
+['-', ':', ';', 'ArxivPaper', 'Citation', 'CitationExtraction', 'OpenCitation', 'abstract', 'affiliations', 'author', 'authors', 'backup_id', 'citation_count', 'doi', 'id', 'issue', 'journal', 'journal_ref', 'page', 'pages', 'pdf_url', 'pub_date', 'published', 'text', 'title', 'url', 'venue', 'volume', 'year']

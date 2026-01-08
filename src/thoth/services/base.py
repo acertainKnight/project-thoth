@@ -4,13 +4,13 @@ Base service class for Thoth services.
 This module provides the base class and common functionality for all services.
 """
 
-from pathlib import Path
+from pathlib import Path  # noqa: I001
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
 from loguru import logger
 
-from thoth.config import config, Config
+from thoth.config import config, Config  # noqa: F401
 
 
 class ServiceError(Exception):
@@ -80,11 +80,12 @@ class BaseService:
                 environment.
         """
         from thoth.config import config as global_config
+
         self._config = thoth_config or global_config
         self._logger = logger.bind(service=self.__class__.__name__)
 
     @property
-    def config(self) -> Config:
+    def config(self) -> Config:  # noqa: F811
         """Get the configuration object."""
         return self._config
 
@@ -123,7 +124,9 @@ class BaseService:
 
         # Check if this is an expected API key error during early initialization
         error_str = str(error)
-        if 'API key not found' in error_str or ('OPENROUTER' in error_str.upper() and 'API' in error_str.upper()):
+        if 'API key not found' in error_str or (
+            'OPENROUTER' in error_str.upper() and 'API' in error_str.upper()
+        ):
             self.logger.debug(error_msg)
         else:
             self.logger.error(error_msg)
