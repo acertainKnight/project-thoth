@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
-from langchain.schema import Document
-from langchain.text_splitter import MarkdownTextSplitter
+from langchain_core.documents import Document
+from langchain_text_splitters import MarkdownTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable, RunnableConfig
 from langgraph.graph import END, StateGraph

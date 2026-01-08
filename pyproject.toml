@@ -101,6 +101,7 @@ langchain = [
 vectordb = [
     "chromadb>=0.5.0",
     "langchain-chroma>=0.1.0",
+    "cachetools>=5.3.0",  # Required by BaseRepository
 ]
 
 # Embeddings (VERY HEAVY: ~2GB with PyTorch)
@@ -134,9 +135,10 @@ service-dashboard = [
     "thoth[api,discovery,pdf,langchain,vectordb]",
 ]
 
-# thoth-discovery: Discovery scheduler (~300MB)
+# thoth-discovery: Discovery scheduler (~1.5GB)
+# Needs langchain for AnthropicClient + vectordb for cachetools + pdf for pypdf (pipelines)
 service-discovery = [
-    "thoth[api,discovery]",
+    "thoth[api,discovery,pdf,langchain,vectordb]",
 ]
 
 # thoth-mcp: MCP server with 60+ research tools (~10GB)

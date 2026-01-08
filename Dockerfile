@@ -1,6 +1,9 @@
 # Multi-stage build for optimized image size
 FROM python:3.12-slim as builder
 
+# Build argument for service-specific extras
+ARG SERVICE_EXTRAS="api,discovery,vectordb,test"
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
@@ -20,8 +23,8 @@ COPY pyproject.toml ./
 COPY README.md ./
 COPY src/ ./src/
 
-# Install dependencies
-RUN uv pip install --system --no-cache -e ".[api,discovery,vector,test]"
+# Install dependencies using SERVICE_EXTRAS build arg
+RUN uv pip install --system --no-cache -e ".[${SERVICE_EXTRAS}]"
 
 # Production stage
 FROM python:3.12-slim

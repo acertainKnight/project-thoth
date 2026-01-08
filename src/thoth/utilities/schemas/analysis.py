@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal, TypedDict
 
-from langchain.schema import Document
+from langchain_core.documents import Document
 from pydantic import BaseModel, Field, field_validator
 
 

@@ -9,7 +9,7 @@ from pathlib import Path  # noqa: I001
 from typing import Any
 
 from langchain.chains import RetrievalQA
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from loguru import logger
 

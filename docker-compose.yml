@@ -61,32 +61,20 @@ x-thoth-common: &thoth-common
 
 services:
   # ==============================================================================
-  # Letta Memory Server
+  # Letta Memory Server (Generic Self-Hosted Instance)
+  # Shared across multiple projects - configure via .env.letta
   # ==============================================================================
   letta:
     image: letta/letta:latest
-    container_name: thoth-letta
+    container_name: letta-server
+    env_file:
+      - .env.letta
     environment:
-      - LETTA_SERVER_HOST=0.0.0.0
-      - LETTA_SERVER_PORT=8283
+      # Database URI must be set here for Docker networking
       - LETTA_PG_URI=postgresql://letta:letta_password@letta-postgres:5432/letta
-      - LETTA_PG_POOL_SIZE=20
-      - LETTA_PG_MAX_OVERFLOW=30
-      - LETTA_PG_POOL_TIMEOUT=30
-      - LETTA_PG_POOL_RECYCLE=1800
-      - LETTA_SERVER_PASSWORD=letta_dev_password
-      - LETTA_SERVER_CORS_ORIGINS=https://app.letta.com,https://lambda-workstation.tail71634c.ts.net,http://localhost:8283,http://127.0.0.1:8283
-      - TOOL_EXEC_VENV_NAME=letta-tools
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
-      - VLLM_API_BASE=${VLLM_API_BASE:-}
-      - LETTA_DATA_DIR=/letta/.persist
-      - HOME=/letta
-      - LETTA_SERVER_LOG_LEVEL=DEBUG
     volumes:
-      - thoth-letta-data:/letta/.persist
-      - thoth-letta-home:/letta
+      - letta-data:/letta/.persist
+      - letta-home:/letta
       - ./docker/letta/init-schema.sh:/init-schema.sh:ro
     command: ["bash", "/init-schema.sh"]
     ports:
@@ -95,6 +83,8 @@ services:
       - thoth-network
     depends_on:
       letta-postgres:
+        condition: service_healthy
+      letta-redis:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -110,7 +100,7 @@ services:
   # ==============================================================================
   letta-nginx:
     image: nginx:alpine
-    container_name: thoth-letta-nginx
+    container_name: letta-nginx
     volumes:
       - ./docker/nginx/letta-sse.conf:/etc/nginx/nginx.conf:ro
     ports:
@@ -129,18 +119,36 @@ services:
       start_period: 10s
 
   # ==============================================================================
-  # PostgreSQL Database for Letta
+  # Redis (Required for Letta streaming)
+  # In-memory data store for background task queuing
+  # ==============================================================================
+  letta-redis:
+    image: redis:7-alpine
+    container_name: letta-redis
+    networks:
+      - thoth-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ==============================================================================
+  # PostgreSQL Database (Shared by Letta and Thoth)
+  # Contains two databases: 'letta' for agents, 'thoth' for Thoth data
   # ==============================================================================
   letta-postgres:
     image: pgvector/pgvector:pg15
-    container_name: thoth-letta-postgres
+    container_name: letta-postgres
     environment:
       - POSTGRES_DB=letta
       - POSTGRES_USER=letta
       - POSTGRES_PASSWORD=letta_password
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8
     volumes:
-      - thoth-letta-postgres:/var/lib/postgresql/data
+      - letta-postgres:/var/lib/postgresql/data
       - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/01-init-databases.sh:ro
       - ./docker/postgres/init-vector.sql:/docker-entrypoint-initdb.d/02-init-vector.sql:ro
     networks:
@@ -278,7 +286,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: runtime
       args:
         SERVICE_EXTRAS: "service-dashboard"
     container_name: thoth-dashboard
@@ -307,26 +314,65 @@ services:
           memory: 128M
           cpus: '0.05'
 
+  # ==============================================================================
+  # Thoth Discovery Scheduler
+  # Runs automated daily paper discovery searches
+  # ==============================================================================
+  thoth-discovery:
+    <<: *thoth-common
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_EXTRAS: "service-discovery"
+    container_name: thoth-discovery
+    command: [
+      "python", "-m", "thoth.cli.main", "discovery", "scheduler", "start"
+    ]
+    depends_on:
+      letta-postgres:
+        condition: service_healthy
+      thoth-api:
+        condition: service_started
+    healthcheck:
+      test: [
+        "CMD", "python", "-c",
+        "from thoth.services.discovery_scheduler import DiscoveryScheduler; import sys; sys.exit(0)"
+      ]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.05'
+
 # ==============================================================================
 # Persistent Volumes
 # ==============================================================================
 volumes:
-  thoth-letta-data:
+  # Letta volumes (generic, can be used by multiple projects)
+  letta-data:
     driver: local
-    name: thoth-letta-data
+    name: letta-data
 
-  thoth-letta-postgres:
+  letta-postgres:
     driver: local
-    name: thoth-letta-postgres
+    name: letta-postgres
 
-  thoth-letta-home:
+  letta-home:
     driver: local
-    name: thoth-letta-home
+    name: letta-home
 
+  # Thoth-specific volumes
   thoth-app-home:
     driver: local
     name: thoth-app-home
-
 
   thoth-tmp-cache:
     driver: local
