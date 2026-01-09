@@ -64,6 +64,9 @@ _settings_watcher: Optional[SettingsFileWatcher] = None  # noqa: UP007
 # Global watcher instance for schema hot-reload (kept global for lifecycle management)
 _schema_watcher: Optional[SettingsFileWatcher] = None  # noqa: UP007
 
+# Global watcher instance for custom prompts hot-reload (kept global for lifecycle management)
+_prompts_watcher: Optional[SettingsFileWatcher] = None  # noqa: UP007
+
 # Global discovery scheduler instance (kept global for lifecycle management)
 discovery_scheduler: Optional[DiscoveryScheduler] = None  # noqa: UP007
 
@@ -116,6 +119,17 @@ def _on_schema_reload():
         logger.error(f'Failed to reload analysis schema: {e}')
 
 
+def _on_prompts_reload():
+    """Callback when custom prompt files are reloaded."""
+    logger.info('Custom prompt files changed, reloading prompts...')
+    try:
+        # Trigger config reload to reload prompt templates
+        config.reload_settings()
+        logger.success('Custom prompts reloaded!')
+    except Exception as e:
+        logger.error(f'Failed to reload custom prompts: {e}')
+
+
 async def shutdown_mcp_server(timeout: float = 10.0) -> None:
     """Gracefully shutdown the MCP server background task."""
     if not hasattr(_start_mcp_server_background, '_background_tasks'):
@@ -160,7 +174,7 @@ async def shutdown_mcp_server(timeout: float = 10.0) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle FastAPI application lifespan events."""
-    global _settings_watcher, _schema_watcher, discovery_scheduler, workflow_execution_service
+    global _settings_watcher, _schema_watcher, _prompts_watcher, discovery_scheduler, workflow_execution_service
 
     # Startup
     logger.info('Starting Thoth server application...')
@@ -206,6 +220,44 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f'Failed to start schema watcher: {e}')
             logger.warning('Continuing without schema hot-reload')
+        
+        # Custom prompts directory watcher (only if not using default prompts)
+        try:
+            prompts_dir = config.prompts_dir
+            # Check if prompts_dir is in vault (custom) vs repo (default)
+            repo_prompts_dir = Path(__file__).parent.parent.parent / 'templates' / 'prompts'
+            is_custom_prompts = prompts_dir.resolve() != repo_prompts_dir.resolve()
+            
+            if is_custom_prompts and prompts_dir.exists():
+                logger.info(f'Enabling hot-reload for custom prompts: {prompts_dir}')
+                # Watch the directory for any .j2 file changes
+                _prompts_watcher = SettingsFileWatcher(
+                    settings_file=prompts_dir / '.watch_trigger',  # Dummy file for directory watching
+                    debounce_seconds=2.0,
+                    validate_before_reload=False,  # Don't validate since it's not JSON
+                )
+                _prompts_watcher.add_callback(_on_prompts_reload)
+                # Start watching the directory
+                _prompts_watcher._observer = Observer()
+                _prompts_watcher._event_handler = _PromptsChangeHandler(
+                    watcher=_prompts_watcher,
+                    prompts_dir=prompts_dir
+                )
+                _prompts_watcher._observer.schedule(
+                    _prompts_watcher._event_handler,
+                    str(prompts_dir),
+                    recursive=True
+                )
+                _prompts_watcher._observer.start()
+                _prompts_watcher._is_running = True
+                logger.success(f'Custom prompts hot-reload enabled! Watching: {prompts_dir}')
+            elif is_custom_prompts:
+                logger.info(f'Custom prompts directory not found yet: {prompts_dir}')
+            else:
+                logger.debug('Using default prompts (no hot-reload needed)')
+        except Exception as e:
+            logger.error(f'Failed to start prompts watcher: {e}')
+            logger.warning('Continuing without prompts hot-reload')
     else:
         logger.info('Hot-reload disabled (not in Docker environment)')
 
@@ -354,6 +406,14 @@ async def lifespan(app: FastAPI):
                 logger.success('Schema watcher stopped')
             except Exception as e:
                 logger.error(f'Error stopping schema watcher: {e}')
+        
+        if _prompts_watcher is not None:
+            try:
+                logger.info('Stopping prompts watcher...')
+                _prompts_watcher.stop()
+                logger.success('Prompts watcher stopped')
+            except Exception as e:
+                logger.error(f'Error stopping prompts watcher: {e}')
 
         try:
             await websocket.shutdown_background_tasks(timeout=5.0)
