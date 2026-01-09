@@ -395,9 +395,10 @@ class AnalysisSchemaService(BaseService):
                 return [{'name': 'default', 'description': 'Default AnalysisResponse schema'}]
             
             presets = []
-            for name, config in self._schema_config['presets'].items():
+            for preset_id, config in self._schema_config['presets'].items():
                 presets.append({
-                    'name': name,
+                    'id': preset_id,
+                    'name': config.get('name', preset_id),
                     'description': config.get('description', ''),
                 })
             
