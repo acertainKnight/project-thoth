@@ -61,6 +61,9 @@ current_config: dict[str, Any] = {}
 # Global watcher instance for settings hot-reload (kept global for lifecycle management)
 _settings_watcher: Optional[SettingsFileWatcher] = None  # noqa: UP007
 
+# Global watcher instance for schema hot-reload (kept global for lifecycle management)
+_schema_watcher: Optional[SettingsFileWatcher] = None  # noqa: UP007
+
 # Global discovery scheduler instance (kept global for lifecycle management)
 discovery_scheduler: Optional[DiscoveryScheduler] = None  # noqa: UP007
 
@@ -91,6 +94,26 @@ def _on_settings_reload():
         logger.success('Configuration reloaded successfully!')
     except Exception as e:
         logger.error(f'Failed to reload configuration: {e}')
+
+
+def _on_schema_reload():
+    """Callback when analysis schema file is reloaded."""
+    logger.info('Analysis schema file changed, reloading schema...')
+    try:
+        # Get schema service from processing service if available
+        from thoth.services.service_manager import ServiceManager
+        
+        manager = ServiceManager()
+        if hasattr(manager, 'processing') and manager.processing:
+            schema_service = manager.processing.analysis_schema_service
+            schema_service.load_schema(force_reload=True)
+            logger.success(
+                f'Analysis schema reloaded! Active preset: {schema_service.get_active_preset_name()}'
+            )
+        else:
+            logger.debug('Processing service not available, skipping schema reload')
+    except Exception as e:
+        logger.error(f'Failed to reload analysis schema: {e}')
 
 
 async def shutdown_mcp_server(timeout: float = 10.0) -> None:
@@ -137,13 +160,14 @@ async def shutdown_mcp_server(timeout: float = 10.0) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle FastAPI application lifespan events."""
-    global _settings_watcher, discovery_scheduler, workflow_execution_service
+    global _settings_watcher, _schema_watcher, discovery_scheduler, workflow_execution_service
 
     # Startup
     logger.info('Starting Thoth server application...')
 
     # Initialize settings watcher if enabled
     if _should_enable_hot_reload():
+        # Settings file watcher
         try:
             settings_file = config.vault_root / '_thoth' / 'settings.json'
 
@@ -161,7 +185,27 @@ async def lifespan(app: FastAPI):
                 logger.warning(f'Settings file not found: {settings_file}')
         except Exception as e:
             logger.error(f'Failed to start settings watcher: {e}')
-            logger.warning('Continuing without hot-reload')
+            logger.warning('Continuing without settings hot-reload')
+        
+        # Analysis schema file watcher
+        try:
+            schema_file = config.analysis_schema_path
+            
+            if schema_file.exists():
+                logger.info(f'Enabling hot-reload for {schema_file}')
+                _schema_watcher = SettingsFileWatcher(
+                    settings_file=schema_file,
+                    debounce_seconds=2.0,
+                    validate_before_reload=True,
+                )
+                _schema_watcher.add_callback(_on_schema_reload)
+                _schema_watcher.start()
+                logger.success('Analysis schema hot-reload enabled!')
+            else:
+                logger.info(f'Schema file not found yet: {schema_file} (will be created on first use)')
+        except Exception as e:
+            logger.error(f'Failed to start schema watcher: {e}')
+            logger.warning('Continuing without schema hot-reload')
     else:
         logger.info('Hot-reload disabled (not in Docker environment)')
 
@@ -302,6 +346,14 @@ async def lifespan(app: FastAPI):
                 logger.success('Settings watcher stopped')
             except Exception as e:
                 logger.error(f'Error stopping settings watcher: {e}')
+        
+        if _schema_watcher is not None:
+            try:
+                logger.info('Stopping schema watcher...')
+                _schema_watcher.stop()
+                logger.success('Schema watcher stopped')
+            except Exception as e:
+                logger.error(f'Error stopping schema watcher: {e}')
 
         try:
             await websocket.shutdown_background_tasks(timeout=5.0)
