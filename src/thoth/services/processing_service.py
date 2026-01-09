@@ -14,6 +14,7 @@ from mistralai.models import OCRResponse, UploadFileOut
 from pypdf import PdfReader
 
 from thoth.analyze.llm_processor import LLMProcessor
+from thoth.services.analysis_schema_service import AnalysisSchemaService
 from thoth.services.base import BaseService, ServiceError
 from thoth.services.llm_service import LLMService
 from thoth.utilities.schemas import AnalysisResponse
@@ -49,6 +50,7 @@ class ProcessingService(BaseService):
         self._llm_service = llm_service
         self._ocr_service = None
         self._citation_service = None
+        self._analysis_schema_service = None
 
     def _save_markdown_to_postgres(
         self, paper_title: str, markdown_content: str
@@ -109,6 +111,14 @@ class ProcessingService(BaseService):
         if self._llm_service is None:
             self._llm_service = LLMService(self.config)
         return self._llm_service
+    
+    @property
+    def analysis_schema_service(self) -> AnalysisSchemaService:
+        """Get or create the analysis schema service."""
+        if self._analysis_schema_service is None:
+            self._analysis_schema_service = AnalysisSchemaService(self.config)
+            self._analysis_schema_service.initialize()
+        return self._analysis_schema_service
 
     def initialize(self) -> None:
         """Initialize the processing service."""
@@ -262,8 +272,12 @@ class ProcessingService(BaseService):
                     raise ServiceError(f'File not found: {content}')
                 content = content.read_text(encoding='utf-8')
 
+            # Get analysis model and custom instructions from schema service
+            analysis_model = self.analysis_schema_service.get_active_model()
+            custom_instructions = self.analysis_schema_service.get_preset_instructions()
+            
             # Analyze content
-            self.logger.info('Analyzing content with LLM')
+            self.logger.info(f'Analyzing content with LLM using schema: {self.analysis_schema_service.get_active_preset_name()}')
             self.llm_processor = LLMProcessor(
                 llm_service=self.llm_service,
                 model=self.config.llm_config.model,
@@ -273,6 +287,8 @@ class ProcessingService(BaseService):
                 chunk_size=self.config.llm_config.chunk_size,
                 chunk_overlap=self.config.llm_config.chunk_overlap,
                 model_kwargs=self.config.llm_config.model_settings.model_dump(),
+                analysis_model=analysis_model,
+                custom_instructions=custom_instructions,
             )
             analysis = self.llm_processor.analyze_content(
                 content,

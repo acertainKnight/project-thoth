@@ -1,0 +1,284 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0",
+  "lastModified": "2026-01-09T00:00:00Z",
+  "_comment": "Analysis schema configuration - customize what information is extracted from papers",
+  
+  "active_preset": "standard",
+  
+  "presets": {
+    "standard": {
+      "name": "Standard Analysis",
+      "description": "Balanced analysis for most papers - extracts core information with good detail",
+      "fields": {
+        "title": {
+          "type": "string",
+          "required": true,
+          "description": "The title of the research paper"
+        },
+        "authors": {
+          "type": "array",
+          "items": "string",
+          "required": true,
+          "description": "A list of the authors of the paper"
+        },
+        "year": {
+          "type": "integer",
+          "required": true,
+          "description": "The publication year of the paper"
+        },
+        "doi": {
+          "type": "string",
+          "required": false,
+          "description": "The Digital Object Identifier (DOI) of the paper"
+        },
+        "journal": {
+          "type": "string",
+          "required": false,
+          "description": "The journal or venue where the paper was published"
+        },
+        "abstract": {
+          "type": "string",
+          "required": false,
+          "description": "The abstract of the content as it appears in the document"
+        },
+        "key_points": {
+          "type": "string",
+          "required": false,
+          "description": "10-15 key points extracted from the content. These should be bullet points that are easy to read and understand, but do not include the punctuation marks for the bullet points. These should be the most important points of the content."
+        },
+        "summary": {
+          "type": "string",
+          "required": false,
+          "description": "A summary of the content. This should be a multi-paragraph summary of the content that is easy to read and understand."
+        },
+        "objectives": {
+          "type": "string",
+          "required": false,
+          "description": "Primary objectives or research questions addressed"
+        },
+        "methodology": {
+          "type": "string",
+          "required": false,
+          "description": "Detailed description of the methods and study design. Include the model design architecture if applicable."
+        },
+        "results": {
+          "type": "string",
+          "required": false,
+          "description": "Key quantitative or qualitative results. This should be a summary of the results of the study."
+        },
+        "discussion": {
+          "type": "string",
+          "required": false,
+          "description": "Interpretation of the results and their implications. What does this article contribute to the field?"
+        },
+        "strengths": {
+          "type": "string",
+          "required": false,
+          "description": "Strengths and positive aspects of the study"
+        },
+        "weaknesses": {
+          "type": "string",
+          "required": false,
+          "description": "Weaknesses, shortcomings, or areas of concern"
+        },
+        "tags": {
+          "type": "array",
+          "items": "string",
+          "required": false,
+          "description": "List of clear, simple, and consistent tags or keywords for the article"
+        }
+      },
+      "instructions": "Provide comprehensive analysis focusing on objectives, methodology, results, and critical evaluation. Extract 10-15 key points and a detailed multi-paragraph summary."
+    },
+    
+    "detailed": {
+      "name": "Detailed Analysis",
+      "description": "Exhaustive analysis for important papers - captures every available detail",
+      "fields": {
+        "title": {
+          "type": "string",
+          "required": true,
+          "description": "The title of the research paper"
+        },
+        "authors": {
+          "type": "array",
+          "items": "string",
+          "required": true,
+          "description": "A list of the authors of the paper"
+        },
+        "year": {
+          "type": "integer",
+          "required": true,
+          "description": "The publication year of the paper"
+        },
+        "doi": {
+          "type": "string",
+          "required": false,
+          "description": "The Digital Object Identifier (DOI) of the paper"
+        },
+        "journal": {
+          "type": "string",
+          "required": false,
+          "description": "The journal or venue where the paper was published"
+        },
+        "abstract": {
+          "type": "string",
+          "required": false,
+          "description": "The abstract of the content as it appears in the document"
+        },
+        "key_points": {
+          "type": "string",
+          "required": false,
+          "description": "10-15 key points extracted from the content"
+        },
+        "summary": {
+          "type": "string",
+          "required": false,
+          "description": "A multi-paragraph summary of the content"
+        },
+        "objectives": {
+          "type": "string",
+          "required": false,
+          "description": "Primary objectives or research questions addressed"
+        },
+        "methodology": {
+          "type": "string",
+          "required": false,
+          "description": "Detailed description of the methods and study design. Include the model design architecture if applicable. This should be an extremely detailed description."
+        },
+        "data": {
+          "type": "string",
+          "required": false,
+          "description": "Datasets or data sources used, including size and key characteristics"
+        },
+        "experimental_setup": {
+          "type": "string",
+          "required": false,
+          "description": "Experimental or analytical setup, including controls and variables. This should be a detailed description."
+        },
+        "evaluation_metrics": {
+          "type": "string",
+          "required": false,
+          "description": "Metrics used to evaluate performance or results"
+        },
+        "results": {
+          "type": "string",
+          "required": false,
+          "description": "Key quantitative or qualitative results"
+        },
+        "discussion": {
+          "type": "string",
+          "required": false,
+          "description": "Interpretation of the results and their implications. What does this article contribute to the field? What advancements does it bring? How can this be applied in other domains?"
+        },
+        "strengths": {
+          "type": "string",
+          "required": false,
+          "description": "Strengths and positive aspects of the study, including the model architecture, data, and methodology"
+        },
+        "weaknesses": {
+          "type": "string",
+          "required": false,
+          "description": "Weaknesses, shortcomings, or areas of concern"
+        },
+        "limitations": {
+          "type": "string",
+          "required": false,
+          "description": "Explicitly stated or inferred limitations, weaknesses, shortcomings, or areas of concern"
+        },
+        "future_work": {
+          "type": "string",
+          "required": false,
+          "description": "Suggested future work or open questions"
+        },
+        "related_work": {
+          "type": "string",
+          "required": false,
+          "description": "Key related works and how this paper differs"
+        },
+        "tags": {
+          "type": "array",
+          "items": "string",
+          "required": false,
+          "description": "List of clear, simple, and consistent tags or keywords"
+        }
+      },
+      "instructions": "Extract every available detail from the paper. Provide exhaustive descriptions of methodology, experimental setup, data characteristics, evaluation metrics, and results. Include comprehensive critical analysis covering strengths, weaknesses, limitations, and future directions."
+    },
+    
+    "minimal": {
+      "name": "Minimal Analysis",
+      "description": "Quick overview for rapid screening - extracts only essential information",
+      "fields": {
+        "title": {
+          "type": "string",
+          "required": true,
+          "description": "The title of the research paper"
+        },
+        "authors": {
+          "type": "array",
+          "items": "string",
+          "required": true,
+          "description": "A list of the authors of the paper"
+        },
+        "year": {
+          "type": "integer",
+          "required": true,
+          "description": "The publication year of the paper"
+        },
+        "abstract": {
+          "type": "string",
+          "required": false,
+          "description": "The abstract as it appears in the document"
+        },
+        "key_points": {
+          "type": "string",
+          "required": false,
+          "description": "3-5 most important key points from the paper"
+        },
+        "tags": {
+          "type": "array",
+          "items": "string",
+          "required": false,
+          "description": "3-5 primary topic tags"
+        }
+      },
+      "instructions": "Provide a brief overview - focus on title, authors, abstract, and 3-5 key points. Keep it concise for rapid screening."
+    },
+    
+    "custom": {
+      "name": "Custom Schema",
+      "description": "User-defined analysis schema - modify fields and instructions as needed",
+      "fields": {
+        "title": {
+          "type": "string",
+          "required": true,
+          "description": "The title of the research paper"
+        },
+        "authors": {
+          "type": "array",
+          "items": "string",
+          "required": true,
+          "description": "A list of the authors"
+        },
+        "year": {
+          "type": "integer",
+          "required": true,
+          "description": "Publication year"
+        },
+        "summary": {
+          "type": "string",
+          "required": false,
+          "description": "Summary of the paper"
+        },
+        "custom_field_example": {
+          "type": "string",
+          "required": false,
+          "description": "Add your own custom fields here - this is just an example. Delete this and add fields you want extracted."
+        }
+      },
+      "instructions": "Add your custom extraction instructions here. Guide the LLM on what specific information to extract and how to format it."
+    }
+  }
+}

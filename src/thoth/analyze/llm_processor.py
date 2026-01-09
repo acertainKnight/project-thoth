@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
+from pydantic import BaseModel
 from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
@@ -45,6 +46,8 @@ class LLMProcessor:
         model_kwargs: dict[str, Any] | None = None,
         refine_threshold_multiplier: float = 0.8,  # Threshold multiplier for choosing refine over direct
         map_reduce_threshold_multiplier: float = 2.5,  # Threshold multiplier for choosing map_reduce over refine
+        analysis_model: type[BaseModel] | None = None,  # Custom analysis schema model
+        custom_instructions: str | None = None,  # Additional extraction instructions
     ):
         """
         Initializes the LLMProcessor.
@@ -63,6 +66,8 @@ class LLMProcessor:
                 'refine'.
             map_reduce_threshold_multiplier: Multiplier for max_context_length to
                 choose 'map_reduce'.
+            analysis_model: Custom Pydantic model for analysis response (defaults to AnalysisResponse).
+            custom_instructions: Additional instructions to guide extraction.
         """
         self.llm_service = llm_service
         self.model = model
@@ -70,6 +75,8 @@ class LLMProcessor:
         self.max_context_length = max_context_length
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.analysis_model = analysis_model or AnalysisResponse  # Use provided or default
+        self.custom_instructions = custom_instructions or ''
         self.prompts_dir = Path(prompts_dir) / model.split('/')[0]
         # Default prompts packaged with Thoth
         self.default_prompts_dir = (
@@ -116,9 +123,9 @@ class LLMProcessor:
         logger.debug(f'Chunk overlap: {self.chunk_overlap}')
         logger.debug(f'Model kwargs: {self.model_kwargs}')
 
-        # Create a structured LLM that returns the AnalysisResponse format
+        # Create a structured LLM that returns the analysis model format
         self.structured_llm = self.llm.with_structured_output(
-            AnalysisResponse,
+            self.analysis_model,
             include_raw=False,  # We only need the parsed object
             method='json_schema',  # Must be json_schema for openrouter
         )
@@ -247,11 +254,12 @@ class LLMProcessor:
         content = state.get('original_content')
         if not content:
             raise ValueError('Original content not found in state for direct analysis.')
-        logger.debug(f'Analysis schema: {AnalysisResponse.model_json_schema()}')
+        logger.debug(f'Analysis schema: {self.analysis_model.model_json_schema()}')
         result = self.direct_chain.invoke(
             {
                 'content': content,
-                'analysis_schema': AnalysisResponse.model_json_schema(),
+                'analysis_schema': self.analysis_model.model_json_schema(),
+                'custom_instructions': self.custom_instructions,
             }
         )
         logger.debug(f'Direct analysis result: {result}')
@@ -275,7 +283,8 @@ class LLMProcessor:
             result = self.map_chain.invoke(
                 {
                     'content': chunk.page_content,
-                    'analysis_schema': AnalysisResponse.model_json_schema(),
+                    'analysis_schema': self.analysis_model.model_json_schema(),
+                'custom_instructions': self.custom_instructions,
                 }
             )
             chunk_results.append(result)
@@ -294,7 +303,8 @@ class LLMProcessor:
         final_result = self.reduce_chain.invoke(
             {
                 'section_analyses': chunk_results,
-                'analysis_schema': AnalysisResponse.model_json_schema(),
+                'analysis_schema': self.analysis_model.model_json_schema(),
+                'custom_instructions': self.custom_instructions,
             }
         )
         logger.debug(f'Reduce phase result: {final_result}')
@@ -323,7 +333,8 @@ class LLMProcessor:
                 current_analysis = self.direct_chain.invoke(
                     {
                         'content': chunk.page_content,
-                        'analysis_schema': AnalysisResponse.model_json_schema(),
+                        'analysis_schema': self.analysis_model.model_json_schema(),
+                'custom_instructions': self.custom_instructions,
                     }
                 )
                 logger.debug(f'Initial analysis: {current_analysis}')
@@ -344,7 +355,8 @@ class LLMProcessor:
                     {
                         'existing_analysis': current_analysis.model_dump(),  # Pass as dict
                         'new_section': chunk.page_content,
-                        'analysis_schema': AnalysisResponse.model_json_schema(),
+                        'analysis_schema': self.analysis_model.model_json_schema(),
+                'custom_instructions': self.custom_instructions,
                     }
                 )
                 current_analysis = refined_analysis  # Update for next iteration

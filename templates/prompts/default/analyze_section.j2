@@ -6,6 +6,11 @@ Instructions for Gemini:
 - Clean any non-content artefacts (headers, footnotes) before analysis.
 - Base statements on the section text—avoid speculation.
 - Output only a valid JSON object matching the schema below. Do not include any commentary, markdown, or extra formatting.
+{% if custom_instructions %}
+
+Additional extraction instructions:
+{{ custom_instructions }}
+{% endif %}
 
 Section content:
 """

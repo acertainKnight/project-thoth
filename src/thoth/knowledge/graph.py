@@ -310,6 +310,13 @@ class CitationGraph:
 
                         if existing:
                             # Update existing paper
+                            # Extract schema metadata from analysis_data if present
+                            schema_name = 'default'
+                            schema_version = 'default'
+                            if analysis_json and isinstance(analysis_json, dict):
+                                schema_name = analysis_json.get('_schema_name', 'default')
+                                schema_version = analysis_json.get('_schema_version', 'default')
+                            
                             await conn.execute("""
                                 UPDATE papers SET
                                     doi = COALESCE(NULLIF($1, ''), doi),
@@ -325,27 +332,38 @@ class CitationGraph:
                                     analysis_data = $11::jsonb,
                                     llm_model = COALESCE($12, llm_model),
                                     keywords = $13::jsonb,
+                                    analysis_schema_name = $14,
+                                    analysis_schema_version = $15,
                                     updated_at = CURRENT_TIMESTAMP
-                                WHERE id = $14
+                                WHERE id = $16
                             """,
                                 doi, arxiv_id, title, authors_json,
                                 metadata.get('abstract'), year, metadata.get('venue'),
                                 data.get('pdf_path'), data.get('note_path'), markdown_content,
                                 analysis_json, data.get('llm_model'), keywords_json,
+                                schema_name, schema_version,
                                 existing['id']
                             )
                             nodes_updated += 1
                         else:
                             # Try to insert new paper - may still fail due to unique constraints
                             try:
+                                # Extract schema metadata from analysis_data if present
+                                schema_name = 'default'
+                                schema_version = 'default'
+                                if analysis_json and isinstance(analysis_json, dict):
+                                    schema_name = analysis_json.get('_schema_name', 'default')
+                                    schema_version = analysis_json.get('_schema_version', 'default')
+                                
                                 await conn.execute("""
-                                    INSERT INTO papers (doi, arxiv_id, title, authors, abstract, year, venue, pdf_path, note_path, markdown_content, analysis_data, llm_model, keywords)
-                                    VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13::jsonb)
+                                    INSERT INTO papers (doi, arxiv_id, title, authors, abstract, year, venue, pdf_path, note_path, markdown_content, analysis_data, llm_model, keywords, analysis_schema_name, analysis_schema_version)
+                                    VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13::jsonb, $14, $15)
                                 """,
                                     doi, arxiv_id, title, authors_json,
                                     metadata.get('abstract'), year, metadata.get('venue'),
                                     data.get('pdf_path'), data.get('note_path'), markdown_content,
-                                    analysis_json, data.get('llm_model'), keywords_json
+                                    analysis_json, data.get('llm_model'), keywords_json,
+                                    schema_name, schema_version
                                 )
                                 nodes_inserted += 1
                             except asyncpg.exceptions.UniqueViolationError:
@@ -850,6 +868,29 @@ class CitationGraph:
 
         # Generate article ID for the main document
         article_id = self._generate_article_id(article_citation)
+        
+        # Add schema metadata to analysis if not already present
+        if analysis and not isinstance(analysis, dict):
+            # Convert Pydantic model to dict and add schema metadata
+            analysis_dict = analysis.model_dump()
+            # Try to get schema info from service manager if available
+            if self.service_manager and hasattr(self.service_manager, 'processing'):
+                try:
+                    schema_service = self.service_manager.processing.analysis_schema_service
+                    analysis_dict['_schema_name'] = schema_service.get_active_preset_name()
+                    analysis_dict['_schema_version'] = schema_service.get_schema_version()
+                except Exception as e:
+                    logger.debug(f'Could not get schema metadata: {e}')
+                    analysis_dict['_schema_name'] = 'default'
+                    analysis_dict['_schema_version'] = 'default'
+            else:
+                analysis_dict['_schema_name'] = 'default'
+                analysis_dict['_schema_version'] = 'default'
+            analysis = analysis_dict
+        elif isinstance(analysis, dict) and '_schema_name' not in analysis:
+            # Dict provided but no schema metadata
+            analysis['_schema_name'] = 'default'
+            analysis['_schema_version'] = 'default'
 
         # Add or update the main article with all its details
         self.add_article(

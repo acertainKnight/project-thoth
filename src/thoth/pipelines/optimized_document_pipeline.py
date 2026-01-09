@@ -432,8 +432,19 @@ class OptimizedDocumentPipeline(BasePipeline):
             citations=citations,
         )
 
-        # Get LLM model from config for tracking
+        # Get LLM model and schema info from config for tracking
         llm_model = getattr(self.services.config.llm_config, 'model', None)
+        
+        # Attach schema metadata to analysis if processing service has schema service
+        if hasattr(self.services, 'processing') and hasattr(self.services.processing, 'analysis_schema_service'):
+            schema_service = self.services.processing.analysis_schema_service
+            # Add schema metadata to analysis dict representation
+            if isinstance(analysis, dict):
+                analysis['_schema_name'] = schema_service.get_active_preset_name()
+                analysis['_schema_version'] = schema_service.get_schema_version()
+            else:
+                # It's a Pydantic model, we'll add metadata when converting to dict
+                pass  # Will be handled in process_citations
 
         article_id = self.citation_tracker.process_citations(
             pdf_path=new_pdf_path,

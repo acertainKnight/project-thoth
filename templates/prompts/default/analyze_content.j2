@@ -5,6 +5,11 @@ Instructions for Gemini:
 - Populate every property in the schema in as much detail as possible. If information is unavailable, use null.
 - Do not use bullet-point style strings for lists; use multiple observations inside a string value.
 - Clean the source text by removing footers, headers, and artifacts before analyzing.
+{% if custom_instructions %}
+
+Additional extraction instructions:
+{{ custom_instructions }}
+{% endif %}
 
 Input paper content:
 """
