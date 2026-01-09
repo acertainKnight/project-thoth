@@ -86,6 +86,13 @@ from .browser_workflow_tools import (
     UpdateWorkflowStatusMCPTool,
     DeleteWorkflowMCPTool,
 )
+from .schema_tools import (
+    GetSchemaInfoTool,
+    ListSchemaPresetsTool,
+    SetSchemaPresetTool,
+    GetPresetDetailsTool,
+    ValidateSchemaFileTool,
+)
 
 # List of all available MCP tool classes
 MCP_TOOL_CLASSES = [
@@ -155,6 +162,12 @@ MCP_TOOL_CLASSES = [
     GetWorkflowDetailsMCPTool,
     UpdateWorkflowStatusMCPTool,
     DeleteWorkflowMCPTool,
+    # Schema management tools
+    GetSchemaInfoTool,
+    ListSchemaPresetsTool,
+    SetSchemaPresetTool,
+    GetPresetDetailsTool,
+    ValidateSchemaFileTool,
 ]
 
 

@@ -60,6 +60,7 @@ def main() -> None:
     performance.configure_subparser(subparsers)
     rag.configure_subparser(subparsers)
     research.configure_subparser(subparsers)
+    schema.configure_subparser(subparsers)
     server.configure_subparser(subparsers)
     system.configure_subparser(subparsers)
 

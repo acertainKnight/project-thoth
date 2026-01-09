@@ -1086,6 +1086,9 @@ class Config:
         self.queries_dir = resolve_path(paths.queries)
         self.agent_storage_dir = resolve_path(paths.agent_storage)
         self.logs_dir = resolve_path(paths.logs)
+        
+        # Analysis schema path (for customizable document analysis)
+        self.analysis_schema_path = resolve_path('data/analysis_schema.json')
 
         # Resolve discovery paths
         self.discovery_sources_dir = resolve_path(paths.discovery.sources)
@@ -1112,6 +1115,7 @@ class Config:
             self.discovery_sources_dir,
             self.discovery_results_dir,
             self.discovery_chrome_configs_dir,
+            self.analysis_schema_path.parent,  # Create parent dir for schema file
         ]:
             try:
                 dir_path.mkdir(parents=True, exist_ok=True)

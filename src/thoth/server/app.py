@@ -43,6 +43,7 @@ from thoth.server.routers import (  # noqa: I001
     operations,
     research,
     research_questions,
+    schema,
     tools,
     websocket,
 )
@@ -353,6 +354,7 @@ def create_app() -> FastAPI:
     )  # Browser workflow management
     app.include_router(config_router.router, prefix='/config', tags=['config'])
     app.include_router(operations.router, prefix='/operations', tags=['operations'])
+    app.include_router(schema.router, tags=['schema'])
     app.include_router(tools.router, prefix='/tools', tags=['tools'])
 
     # Add hot-reload health check endpoint
