@@ -107,6 +107,10 @@ RUN mkdir -p /workspace/{data,cache} \
     && mkdir -p /workspace/logs/letta \
     && chown -R thoth:thoth /workspace
 
+# Create cache directories for CacheService
+RUN mkdir -p /app/cache/{ocr,analysis,citations,api_responses,embeddings} \
+    && chown -R thoth:thoth /app/cache
+
 # Switch back to thoth user for runtime
 USER thoth
 
