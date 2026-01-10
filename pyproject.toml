@@ -147,7 +147,7 @@ service-discovery = [
 # Agent management handled separately by Letta platform (port 8283)
 # Requires api (asyncpg), pdf (pypdf), and full langchain stack
 service-mcp = [
-    "thoth[api,pdf,mcp,discovery,langchain,vectordb,embeddings]",
+    "thoth[api,pdf,mcp,discovery,langchain,vectordb,embeddings,memory]",
 ]
 
 # thoth-monitor: PDF processing with embeddings (~13GB with OCR tools)
