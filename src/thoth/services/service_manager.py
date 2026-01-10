@@ -12,8 +12,16 @@ from thoth.services.base import BaseService
 from thoth.services.citation_service import CitationService
 from thoth.services.discovery_orchestrator import DiscoveryOrchestrator
 from thoth.services.discovery_service import DiscoveryService
-from thoth.services.letta_filesystem_service import LettaFilesystemService
 from thoth.services.llm_service import LLMService
+
+# Optional: Letta filesystem service (requires letta extras with pgvector)
+try:
+    from thoth.services.letta_filesystem_service import LettaFilesystemService
+
+    LETTA_FILESYSTEM_AVAILABLE = True
+except ImportError:
+    LettaFilesystemService = None  # type: ignore
+    LETTA_FILESYSTEM_AVAILABLE = False
 
 # Optional: Processing service (requires pdf extras with mistralai)
 try:
@@ -92,9 +100,9 @@ class ServiceManager:
         research_question: ResearchQuestionService
         tag: TagService
         skill: SkillService
-        letta_filesystem: LettaFilesystemService
         
         # Optional services (may be None if extras not installed)
+        letta_filesystem: LettaFilesystemService | None  # Requires 'memory' extras
         processing: ProcessingService | None  # Requires 'pdf' extras
         rag: RAGService | None  # Requires 'embeddings' extras
         cache: CacheService | None  # Requires optimization extras
@@ -216,8 +224,13 @@ class ServiceManager:
         self._services['skill'] = SkillService(config=self.config)
         self._services['skill'].initialize()
 
-        # Initialize Letta filesystem service for vault-to-Letta sync
-        self._services['letta_filesystem'] = LettaFilesystemService(config=self.config)
+        # Initialize Letta filesystem service (optional - requires memory extras)
+        if LETTA_FILESYSTEM_AVAILABLE:
+            self._services['letta_filesystem'] = LettaFilesystemService(config=self.config)
+            self.logger.debug('Letta filesystem service initialized')
+        else:
+            self._services['letta_filesystem'] = None
+            self.logger.debug('Letta filesystem service not available (requires memory extras with pgvector)')
 
         # Initialize optimized services if available
         if OPTIMIZED_SERVICES_AVAILABLE:
