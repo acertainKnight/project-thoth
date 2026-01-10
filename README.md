@@ -21,17 +21,19 @@ Thoth revolutionizes academic research by combining cutting-edge AI with intuiti
 - **Faster Analysis**: AI-powered paper summarization and citation analysis
 - **Smart Integration**: Native Obsidian plugin with real-time sync and WebSocket streaming
 - **Multi-Source Discovery**: Automated paper discovery from ArXiv, Semantic Scholar, and custom sources
-- **Persistent Memory**: Advanced agent system with PostgreSQL+pgvector for cross-session memory
-- **Production-Ready**: Microservices architecture with hot-reload and comprehensive testing (998 tests)
+- **Unified Storage**: PostgreSQL+pgvector for all data - vectors, relational, and metadata
+- **Flexible Deployment**: Local mode (3 containers) or microservices mode (6 containers)
+- **Production-Ready**: Hot-reload, comprehensive testing (998 tests), resource efficient
 
 ## Project Statistics
 
 - **Codebase**: 237 Python files, 26 TypeScript files
 - **Testing**: 998 tests (unit, integration, e2e, benchmarks) with property-based testing
-- **Services**: 32 microservices orchestrated via centralized dependency injection
+- **Services**: 32 services orchestrated via centralized dependency injection
 - **Tools**: 54 MCP research tools across 16 specialized modules
 - **Citation System**: 20 modules, 500K+ lines, sophisticated 6-stage resolution chain
-- **Docker**: 7 optimized containers (200MB - 2.5GB per service)
+- **Docker**: Local mode (3 containers, ~3.5GB) or microservices (6 containers)
+- **Database**: PostgreSQL+pgvector for all data (vectors + relational)
 - **Code Quality**: Ruff formatting, comprehensive linting, security scanning
 
 ## Table of Contents
@@ -71,15 +73,19 @@ make prod
 ```
 
 **Quick Commands:**
-- `make dev` - Development mode with hot-reload and debug logging
-- `make prod` - Production mode with optimized containers
+- `make dev` - Local mode (3 containers, ~3.5GB RAM)
+- `make microservices` - Microservices mode (6 containers, for debugging)
+- `make prod` - Production local mode
 - `make health` - Check all services health status
-- `make dev-logs` - View development logs (follow mode)
-- `make prod-logs` - View production logs
+- `make dev-logs` - View development logs
+
+**Deployment Modes:**
+- **Local Mode** (default): All services in one container for simplicity
+- **Microservices Mode**: Each service in separate containers for debugging
 
 **Services Available:**
-- **Development**: API (8000), MCP (8001), ChromaDB (8003), Discovery (8004), Letta (8283)
-- **Production**: API (8080), MCP HTTP (8082), MCP SSE (8081), Letta (8283), Letta Nginx (8284)
+- **Development**: API (8000), MCP (8001), Letta (8283)
+- **Production**: API (8080), MCP (8081), Letta (8283)
 
 **Configuration:**
 - All settings in `vault/_thoth/settings.json` (syncs with Obsidian!)
