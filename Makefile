@@ -199,8 +199,6 @@ health: ## Check health of all services
 	@curl -sf http://localhost:8000/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
 	@echo -n "  MCP (8001):      "
 	@curl -sf http://localhost:8001/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
-	@echo -n "  ChromaDB (8003): "
-	@curl -sf http://localhost:8003/api/v1/heartbeat >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
 	@echo -n "  Letta (8283):    "
 	@curl -sf http://localhost:8283/v1/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
 
@@ -319,9 +317,6 @@ local-start: ## Start services locally (Letta in Docker, rest local)
 	@echo "$(CYAN)Starting Letta + PostgreSQL (Docker)...$(NC)"
 	@docker compose -f docker-compose.dev.yml up -d letta-postgres letta
 	@sleep 3
-	@echo "$(CYAN)Starting ChromaDB...$(NC)"
-	@uv run chroma run --host 0.0.0.0 --port 8003 --path ./workspace/data/chromadb > ./workspace/logs/chromadb.log 2>&1 &
-	@sleep 2
 	@echo "$(CYAN)Starting API server...$(NC)"
 	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT_PATH}"; \
 	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/_thoth" THOTH_SETTINGS_FILE="$$VAULT/_thoth/settings.json" DOCKER_ENV=false THOTH_LETTA_URL=http://localhost:8283 LOG_LEVEL=WARNING uv run python -m thoth api --host 0.0.0.0 --port 8000 > ./workspace/logs/api.log 2>&1 &'
@@ -343,7 +338,6 @@ local-start: ## Start services locally (Letta in Docker, rest local)
 	@echo "  • Letta Memory: http://localhost:8283 $(CYAN)(Docker)$(NC)"
 	@echo "  • API Server: http://localhost:8000 $(CYAN)(Local)$(NC)"
 	@echo "  • MCP Server: http://localhost:8001 $(CYAN)(Local)$(NC)"
-	@echo "  • ChromaDB: http://localhost:8003 $(CYAN)(Local)$(NC)"
 	@echo "  • Discovery: http://localhost:8004 $(CYAN)(Local)$(NC)"
 	@echo "  • PDF Monitor: Watching $(WATCH_DIR) $(CYAN)(Local)$(NC)"
 	@echo ""
@@ -448,8 +442,6 @@ prod-status: ## Check production server status
 	@curl -sf http://localhost:8080/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
 	@echo -n "  MCP (8081):      "
 	@curl -sf http://localhost:8081/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
-	@echo -n "  ChromaDB (8003): "
-	@curl -sf http://localhost:8003/api/v1/heartbeat >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
 	@echo -n "  Letta (8283):    "
 	@curl -sf http://localhost:8283/v1/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
 	@echo ""
@@ -457,7 +449,6 @@ prod-status: ## Check production server status
 	@echo "  • API Server:    $(CYAN)http://localhost:8080$(NC)"
 	@echo "  • MCP Server:    $(CYAN)http://localhost:8081$(NC)"
 	@echo "  • Letta Memory:  $(CYAN)http://localhost:8283$(NC)"
-	@echo "  • ChromaDB:      $(CYAN)http://localhost:8003$(NC)"
 
 .PHONY: prod-clean
 prod-clean: ## Clean production deployment (WARNING: deletes volumes)
@@ -495,7 +486,6 @@ local-stop: ## Stop local services and Letta Docker containers
 	-@pkill -f "python.*thoth mcp" 2>/dev/null || true
 	-@pkill -f "python.*thoth discovery" 2>/dev/null || true
 	-@pkill -f "python.*thoth monitor" 2>/dev/null || true
-	-@pkill -f "chroma run" 2>/dev/null || true
 	@sleep 1
 	@echo "$(CYAN)Stopping Letta Docker containers...$(NC)"
 	-@docker compose -f docker-compose.dev.yml stop letta letta-postgres 2>/dev/null || true
