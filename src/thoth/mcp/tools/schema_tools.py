@@ -17,8 +17,9 @@ class GetSchemaInfoTool(MCPTool):
     name = "get_schema_info"
     description = "Get information about the currently active analysis schema including preset name, version, and available fields"
     
-    def get_parameters(self) -> dict[str, Any]:
-        """Define tool parameters."""
+    @property
+    def input_schema(self) -> dict[str, Any]:
+        """Define tool input schema."""
         return {
             "type": "object",
             "properties": {},
@@ -66,8 +67,9 @@ class ListSchemaPresetsTool(MCPTool):
     name = "list_schema_presets"
     description = "List all available analysis schema presets with their descriptions"
     
-    def get_parameters(self) -> dict[str, Any]:
-        """Define tool parameters."""
+    @property
+    def input_schema(self) -> dict[str, Any]:
+        """Define tool input schema."""
         return {
             "type": "object",
             "properties": {},
@@ -107,8 +109,9 @@ class SetSchemaPresetTool(MCPTool):
     name = "set_schema_preset"
     description = "Switch the active analysis schema preset (e.g., 'standard', 'detailed', 'minimal')"
     
-    def get_parameters(self) -> dict[str, Any]:
-        """Define tool parameters."""
+    @property
+    def input_schema(self) -> dict[str, Any]:
+        """Define tool input schema."""
         return {
             "type": "object",
             "properties": {
@@ -178,8 +181,9 @@ class GetPresetDetailsTool(MCPTool):
     name = "get_preset_details"
     description = "Get detailed information about a specific analysis schema preset including all fields and their specifications"
     
-    def get_parameters(self) -> dict[str, Any]:
-        """Define tool parameters."""
+    @property
+    def input_schema(self) -> dict[str, Any]:
+        """Define tool input schema."""
         return {
             "type": "object",
             "properties": {
@@ -248,8 +252,9 @@ class ValidateSchemaFileTool(MCPTool):
     name = "validate_schema_file"
     description = "Validate the analysis schema configuration file for syntax and structure errors"
     
-    def get_parameters(self) -> dict[str, Any]:
-        """Define tool parameters."""
+    @property
+    def input_schema(self) -> dict[str, Any]:
+        """Define tool input schema."""
         return {
             "type": "object",
             "properties": {},
