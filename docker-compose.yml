@@ -211,9 +211,6 @@ services:
         condition: service_healthy
     environment:
       # Base Thoth environment
-      - THOTH_CHROMADB_HOST=chromadb
-      - THOTH_CHROMADB_PORT=8003
-      - THOTH_CHROMADB_URL=http://chromadb:8003
       - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
       - OBSIDIAN_VAULT_PATH=/vault
       - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json

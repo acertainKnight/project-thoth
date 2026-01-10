@@ -34,29 +34,7 @@ services:
       retries: 3
       start_period: 30s
 
-  # ChromaDB Vector Database
-  chromadb:
-    image: chromadb/chroma:latest
-    container_name: thoth-dev-chromadb
-    environment:
-      - CHROMA_SERVER_HOST=0.0.0.0
-      - CHROMA_SERVER_HTTP_PORT=8000
-      - IS_PERSISTENT=TRUE
-      - PERSIST_DIRECTORY=/chroma/chroma
-      - ANONYMIZED_TELEMETRY=FALSE
-    volumes:
-      - thoth-dev-chroma-data:/chroma/chroma
-    ports:
-      - "8003:8000"
-    networks:
-      - thoth-dev-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "sh", "-c", "grep -q ':1F40 ' /proc/net/tcp && echo ChromaDB healthy || exit 1"]
-      interval: 15s
-      timeout: 8s
-      retries: 5
-      start_period: 45s
+
 
   # ==============================================================================
   # Thoth Microservices
@@ -130,7 +108,6 @@ services:
       - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
 
       # Service discovery (REQUIRED - inter-service communication URLs)
-      - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_LETTA_URL=http://letta:8283
       - THOTH_MCP_URL=http://thoth-mcp:8001
       - THOTH_DISCOVERY_URL=http://thoth-discovery:8004
@@ -161,7 +138,7 @@ services:
     networks:
       - thoth-dev-network
     depends_on:
-      chromadb:
+      letta-postgres:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -195,7 +172,6 @@ services:
       - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
 
       # Service discovery (REQUIRED - inter-service communication URLs)
-      - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_LETTA_URL=http://letta:8283
       - THOTH_API_URL=http://thoth-api:8000
       - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
@@ -220,8 +196,10 @@ services:
     networks:
       - thoth-dev-network
     depends_on:
-      - chromadb
-      - thoth-api
+      letta-postgres:
+        condition: service_healthy
+      thoth-api:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -255,7 +233,6 @@ services:
       - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
 
       # Service discovery (REQUIRED - inter-service communication URLs)
-      - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_API_URL=http://thoth-api:8000
       - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
 
@@ -283,7 +260,8 @@ services:
     networks:
       - thoth-dev-network
     depends_on:
-      - chromadb
+      letta-postgres:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
@@ -318,7 +296,6 @@ services:
 
       # Service discovery (REQUIRED - inter-service communication URLs)
       - THOTH_API_URL=http://thoth-api:8000
-      - THOTH_CHROMADB_URL=http://chromadb:8003
       - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
 
       # Development settings (REQUIRED - dev-specific configuration)
@@ -344,8 +321,8 @@ services:
     networks:
       - thoth-dev-network
     depends_on:
-      - thoth-api
-      - chromadb
+      thoth-api:
+        condition: service_healthy
     restart: unless-stopped
 
 
@@ -381,10 +358,6 @@ volumes:
   thoth-dev-letta-postgres:
     driver: local
     name: thoth-dev-letta-postgres
-
-  thoth-dev-chroma-data:
-    driver: local
-    name: thoth-dev-chroma-data
 
   # NOTE: workspace is now local bind mount (./workspace)
   # See bind mount volumes in services above
