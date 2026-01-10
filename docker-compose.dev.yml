@@ -1,6 +1,22 @@
 # ==============================================================================
 # Thoth AI Research Assistant - Development Configuration
-# Microservices architecture for local development
+# 
+# Two deployment modes available:
+#
+# 1. LOCAL MODE (default):
+#    docker compose up
+#    - Runs thoth-all-in-one container (API, MCP, Discovery, PDF Monitor)
+#    - 3 containers total (thoth-all-in-one, letta, postgres)
+#    - Lower resource usage (~3.5GB RAM)
+#    - Faster startup (~30s)
+#
+# 2. MICROSERVICES MODE (advanced):
+#    docker compose --profile microservices up
+#    - Runs each service in separate containers
+#    - 6 containers total (api, mcp, discovery, pdf-monitor, letta, postgres)
+#    - Better for debugging individual services
+#    - Higher resource usage (~4.5GB RAM)
+#
 # ==============================================================================
 
 version: '3.8'
@@ -34,32 +50,72 @@ services:
       retries: 3
       start_period: 30s
 
-  # ChromaDB Vector Database
-  chromadb:
-    image: chromadb/chroma:latest
-    container_name: thoth-dev-chromadb
-    environment:
-      - CHROMA_SERVER_HOST=0.0.0.0
-      - CHROMA_SERVER_HTTP_PORT=8000
-      - IS_PERSISTENT=TRUE
-      - PERSIST_DIRECTORY=/chroma/chroma
-      - ANONYMIZED_TELEMETRY=FALSE
-    volumes:
-      - thoth-dev-chroma-data:/chroma/chroma
-    ports:
-      - "8003:8000"
-    networks:
-      - thoth-dev-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "sh", "-c", "grep -q ':1F40 ' /proc/net/tcp && echo ChromaDB healthy || exit 1"]
-      interval: 15s
-      timeout: 8s
-      retries: 5
-      start_period: 45s
+
 
   # ==============================================================================
-  # Thoth Microservices
+  # Thoth Services
+  # ==============================================================================
+  # By default, runs thoth-all-in-one (local mode)
+  # Use --profile microservices for separate services
+  # ==============================================================================
+
+  # ==============================================================================
+  # Thoth All-in-One Container (DEFAULT - Local Mode)
+  # ==============================================================================
+  thoth-all-in-one:
+    build:
+      context: .
+      dockerfile: docker/all-in-one/Dockerfile
+      target: development
+    container_name: thoth-dev-all-in-one
+    user: "1000:1000"
+    env_file:
+      - .env
+    environment:
+      # Vault configuration
+      - OBSIDIAN_VAULT_PATH=/vault
+      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
+
+      # Service discovery
+      - THOTH_LETTA_URL=http://letta:8283
+      - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
+
+      # Development settings
+      - THOTH_LOG_LEVEL=DEBUG
+      - THOTH_HOT_RELOAD=1
+      - DOCKER_ENV=true
+
+      # API Keys
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - API_MISTRAL_KEY=${API_MISTRAL_KEY:-}
+      - API_OPENROUTER_KEY=${API_OPENROUTER_KEY:-}
+      - API_SEMANTIC_SCHOLAR_KEY=${API_SEMANTIC_SCHOLAR_KEY:-}
+      - API_WEB_SEARCH_KEY=${API_WEB_SEARCH_KEY:-}
+    volumes:
+      - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw
+      - ./src:/app/src:ro
+      - ./data/prompts:/app/prompts:ro
+    ports:
+      - "8000:8000"  # API
+      - "8001:8001"  # MCP
+    networks:
+      - thoth-dev-network
+    depends_on:
+      letta-postgres:
+        condition: service_healthy
+      letta:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ==============================================================================
+  # Infrastructure Services
   # ==============================================================================
 
   # Letta Memory Service
@@ -106,8 +162,13 @@ services:
       retries: 3
       start_period: 60s
 
+  # ==============================================================================
+  # Microservices Mode (use --profile microservices)
+  # ==============================================================================
+
   # Main API Server
   thoth-api:
+    profiles: ["microservices"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -130,7 +191,6 @@ services:
       - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
 
       # Service discovery (REQUIRED - inter-service communication URLs)
-      - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_LETTA_URL=http://letta:8283
       - THOTH_MCP_URL=http://thoth-mcp:8001
       - THOTH_DISCOVERY_URL=http://thoth-discovery:8004
@@ -161,7 +221,7 @@ services:
     networks:
       - thoth-dev-network
     depends_on:
-      chromadb:
+      letta-postgres:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -173,6 +233,7 @@ services:
 
   # MCP Server (Model Context Protocol)
   thoth-mcp:
+    profiles: ["microservices"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -195,7 +256,6 @@ services:
       - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
 
       # Service discovery (REQUIRED - inter-service communication URLs)
-      - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_LETTA_URL=http://letta:8283
       - THOTH_API_URL=http://thoth-api:8000
       - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
@@ -220,8 +280,10 @@ services:
     networks:
       - thoth-dev-network
     depends_on:
-      - chromadb
-      - thoth-api
+      letta-postgres:
+        condition: service_healthy
+      thoth-api:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -232,6 +294,7 @@ services:
 
   # Discovery Service
   thoth-discovery:
+    profiles: ["microservices"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -255,7 +318,6 @@ services:
       - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
 
       # Service discovery (REQUIRED - inter-service communication URLs)
-      - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_API_URL=http://thoth-api:8000
       - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
 
@@ -283,7 +345,8 @@ services:
     networks:
       - thoth-dev-network
     depends_on:
-      - chromadb
+      letta-postgres:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
@@ -294,6 +357,7 @@ services:
 
   # PDF Monitor Service
   thoth-pdf-monitor:
+    profiles: ["microservices"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -318,7 +382,6 @@ services:
 
       # Service discovery (REQUIRED - inter-service communication URLs)
       - THOTH_API_URL=http://thoth-api:8000
-      - THOTH_CHROMADB_URL=http://chromadb:8003
       - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
 
       # Development settings (REQUIRED - dev-specific configuration)
@@ -344,8 +407,8 @@ services:
     networks:
       - thoth-dev-network
     depends_on:
-      - thoth-api
-      - chromadb
+      thoth-api:
+        condition: service_healthy
     restart: unless-stopped
 
 
@@ -353,8 +416,9 @@ services:
   # Development Tools
   # ==============================================================================
 
-  # Development proxy for easy access
+  # Development proxy for easy access (optional)
   nginx-dev:
+    profiles: ["microservices"]
     image: nginx:alpine
     container_name: thoth-dev-nginx
     volumes:
@@ -381,10 +445,6 @@ volumes:
   thoth-dev-letta-postgres:
     driver: local
     name: thoth-dev-letta-postgres
-
-  thoth-dev-chroma-data:
-    driver: local
-    name: thoth-dev-chroma-data
 
   # NOTE: workspace is now local bind mount (./workspace)
   # See bind mount volumes in services above

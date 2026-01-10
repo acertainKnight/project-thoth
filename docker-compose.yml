@@ -1,6 +1,22 @@
 # ==============================================================================
-# Thoth AI Research Assistant - Docker Compose Configuration
-# Multi-container production setup with independent service scaling
+# Thoth AI Research Assistant - Production Configuration
+#
+# Two deployment modes available:
+#
+# 1. LOCAL MODE (default):
+#    docker compose up
+#    - Runs thoth-all-in-one container (API, MCP, Discovery, PDF Monitor, Dashboard)
+#    - 3 containers total (thoth-all-in-one, letta, postgres)
+#    - Optimized for small self-hosted deployments
+#    - Lower resource usage (~3.5GB RAM)
+#
+# 2. MICROSERVICES MODE (advanced):
+#    docker compose --profile microservices up
+#    - Runs each service in separate containers
+#    - 7 containers total (api, mcp, monitor, dashboard, discovery, letta, postgres)
+#    - Better for scaling individual services
+#    - Higher resource usage (~5GB RAM)
+#
 # ==============================================================================
 
 version: '3.8'
@@ -60,6 +76,46 @@ x-thoth-common: &thoth-common
   restart: unless-stopped
 
 services:
+  # ==============================================================================
+  # Thoth All-in-One Container (DEFAULT - Local Mode)
+  # ==============================================================================
+  thoth-all-in-one:
+    <<: *thoth-common
+    build:
+      context: .
+      dockerfile: docker/all-in-one/Dockerfile
+      target: production
+    container_name: thoth-all-in-one
+    command: []  # Uses entrypoint.sh which starts supervisor
+    ports:
+      - "8080:8000"  # API
+      - "8081:8001"  # MCP
+    depends_on:
+      letta-postgres:
+        condition: service_healthy
+      letta:
+        condition: service_healthy
+      letta-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  # ==============================================================================
+  # Infrastructure Services (Shared by all modes)
+  # ==============================================================================
+
   # ==============================================================================
   # Letta Memory Server (Generic Self-Hosted Instance)
   # Shared across multiple projects - configure via .env.letta
@@ -162,10 +218,15 @@ services:
       start_period: 30s
 
   # ==============================================================================
+  # Microservices Mode (use --profile microservices)
+  # ==============================================================================
+
+  # ==============================================================================
   # Thoth API Server
   # Main REST API for frontend and external integrations
   # ==============================================================================
   thoth-api:
+    profiles: ["microservices"]
     <<: *thoth-common
     build:
       context: .
@@ -198,6 +259,7 @@ services:
   # Model Context Protocol server for Claude integration
   # ==============================================================================
   thoth-mcp:
+    profiles: ["microservices"]
     <<: *thoth-common
     build:
       context: .
@@ -211,9 +273,6 @@ services:
         condition: service_healthy
     environment:
       # Base Thoth environment
-      - THOTH_CHROMADB_HOST=chromadb
-      - THOTH_CHROMADB_PORT=8003
-      - THOTH_CHROMADB_URL=http://chromadb:8003
       - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
       - OBSIDIAN_VAULT_PATH=/vault
       - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
@@ -252,6 +311,7 @@ services:
   # Watches vault directory for new PDFs and processes them automatically
   # ==============================================================================
   thoth-monitor:
+    profiles: ["microservices"]
     <<: *thoth-common
     build:
       context: .
@@ -282,6 +342,7 @@ services:
   # Automatically exports new discovery results and imports sentiment changes
   # ==============================================================================
   thoth-dashboard:
+    profiles: ["microservices"]
     <<: *thoth-common
     build:
       context: .
@@ -319,6 +380,7 @@ services:
   # Runs automated daily paper discovery searches
   # ==============================================================================
   thoth-discovery:
+    profiles: ["microservices"]
     <<: *thoth-common
     build:
       context: .

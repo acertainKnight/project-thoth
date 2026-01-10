@@ -47,14 +47,16 @@ help: ## Show available commands
 	@echo "  $(GREEN)deploy-and-start$(NC)     Deploy plugin + start ecosystem"
 	@echo ""
 	@echo "$(YELLOW)🔧 Development Mode:$(NC)"
-	@echo "  $(GREEN)dev$(NC)                  Start dev environment with hot-reload"
+	@echo "  $(GREEN)dev$(NC)                  Start dev environment - local mode (3 containers)"
+	@echo "  $(GREEN)microservices$(NC)        Start dev in microservices mode (6 containers)"
 	@echo "  $(GREEN)dev-status$(NC)           Check dev environment status"
 	@echo "  $(GREEN)dev-logs$(NC)             View development logs (follow)"
 	@echo "  $(GREEN)dev-stop$(NC)             Stop development environment"
 	@echo "  $(GREEN)test-config$(NC)          Test configuration loading"
 	@echo ""
 	@echo "$(YELLOW)🚀 Production Mode:$(NC)"
-	@echo "  $(GREEN)prod$(NC)                 Start production server"
+	@echo "  $(GREEN)prod$(NC)                 Start production - local mode (3 containers)"
+	@echo "  $(GREEN)prod-microservices$(NC)   Start production in microservices mode (7 containers)"
 	@echo "  $(GREEN)prod-status$(NC)          Check production server status"
 	@echo "  $(GREEN)prod-logs$(NC)            View production logs (follow)"
 	@echo "  $(GREEN)prod-stop$(NC)            Stop production server"
@@ -142,8 +144,9 @@ deploy-plugin: _check-vault _build-plugin ## Deploy Obsidian plugin with complet
 # =============================================================================
 
 .PHONY: dev
-dev: ## Start development environment with hot-reload
-	@echo "$(YELLOW)Starting Thoth development environment...$(NC)"
+dev: ## Start development environment with hot-reload (local mode)
+	@echo "$(YELLOW)Starting Thoth development environment (local mode)...$(NC)"
+	@echo "$(CYAN)Using unified all-in-one container (3 total containers)$(NC)"
 	@if [ -z "$(OBSIDIAN_VAULT_PATH)" ]; then \
 		if [ -f .env.vault ]; then \
 			echo "$(CYAN)Loading vault path from .env.vault...$(NC)"; \
@@ -167,6 +170,33 @@ dev: ## Start development environment with hot-reload
 	@echo ""
 	@make dev-status
 
+.PHONY: microservices
+microservices: ## Start development in microservices mode (6 containers)
+	@echo "$(YELLOW)Starting Thoth in microservices mode...$(NC)"
+	@echo "$(CYAN)Using separate containers for each service (6 total containers)$(NC)"
+	@if [ -z "$(OBSIDIAN_VAULT_PATH)" ]; then \
+		if [ -f .env.vault ]; then \
+			echo "$(CYAN)Loading vault path from .env.vault...$(NC)"; \
+			export $$(cat .env.vault | grep -v '^#' | xargs); \
+		fi; \
+	fi; \
+	if [ -z "$(OBSIDIAN_VAULT_PATH)" ] && [ -z "$$OBSIDIAN_VAULT_PATH" ]; then \
+		echo "$(RED)ERROR: OBSIDIAN_VAULT_PATH not set$(NC)"; \
+		echo ""; \
+		echo "$(YELLOW)Set it in one of these ways:$(NC)"; \
+		echo "  1. Export: export OBSIDIAN_VAULT_PATH=/path/to/vault"; \
+		echo "  2. .env.vault: echo 'OBSIDIAN_VAULT_PATH=/path/to/vault' > .env.vault"; \
+		echo "  3. Command: make microservices OBSIDIAN_VAULT_PATH=/path/to/vault"; \
+		exit 1; \
+	fi; \
+	VAULT_PATH="$${OBSIDIAN_VAULT_PATH:-$(OBSIDIAN_VAULT_PATH)}"; \
+	echo "$(CYAN)Using vault: $$VAULT_PATH$(NC)"; \
+	OBSIDIAN_VAULT_PATH="$$VAULT_PATH" docker compose -f docker-compose.dev.yml --profile microservices up -d
+	@echo ""
+	@echo "$(GREEN)✅ Microservices mode started$(NC)"
+	@echo ""
+	@make dev-status
+
 .PHONY: dev-status
 dev-status: ## Check development environment status
 	@echo "$(YELLOW)Development Services Status:$(NC)"
@@ -182,9 +212,9 @@ dev-logs: ## View development logs (follow)
 	@docker compose -f docker-compose.dev.yml logs -f
 
 .PHONY: dev-stop
-dev-stop: ## Stop development environment
+dev-stop: ## Stop development environment (both modes)
 	@echo "$(YELLOW)Stopping development environment...$(NC)"
-	@docker compose -f docker-compose.dev.yml down
+	@docker compose -f docker-compose.dev.yml --profile microservices down
 	@echo "$(GREEN)✅ Development environment stopped$(NC)"
 
 # =============================================================================
@@ -199,8 +229,6 @@ health: ## Check health of all services
 	@curl -sf http://localhost:8000/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
 	@echo -n "  MCP (8001):      "
 	@curl -sf http://localhost:8001/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
-	@echo -n "  ChromaDB (8003): "
-	@curl -sf http://localhost:8003/api/v1/heartbeat >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
 	@echo -n "  Letta (8283):    "
 	@curl -sf http://localhost:8283/v1/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
 
@@ -319,9 +347,6 @@ local-start: ## Start services locally (Letta in Docker, rest local)
 	@echo "$(CYAN)Starting Letta + PostgreSQL (Docker)...$(NC)"
 	@docker compose -f docker-compose.dev.yml up -d letta-postgres letta
 	@sleep 3
-	@echo "$(CYAN)Starting ChromaDB...$(NC)"
-	@uv run chroma run --host 0.0.0.0 --port 8003 --path ./workspace/data/chromadb > ./workspace/logs/chromadb.log 2>&1 &
-	@sleep 2
 	@echo "$(CYAN)Starting API server...$(NC)"
 	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT_PATH}"; \
 	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/_thoth" THOTH_SETTINGS_FILE="$$VAULT/_thoth/settings.json" DOCKER_ENV=false THOTH_LETTA_URL=http://localhost:8283 LOG_LEVEL=WARNING uv run python -m thoth api --host 0.0.0.0 --port 8000 > ./workspace/logs/api.log 2>&1 &'
@@ -343,7 +368,6 @@ local-start: ## Start services locally (Letta in Docker, rest local)
 	@echo "  • Letta Memory: http://localhost:8283 $(CYAN)(Docker)$(NC)"
 	@echo "  • API Server: http://localhost:8000 $(CYAN)(Local)$(NC)"
 	@echo "  • MCP Server: http://localhost:8001 $(CYAN)(Local)$(NC)"
-	@echo "  • ChromaDB: http://localhost:8003 $(CYAN)(Local)$(NC)"
 	@echo "  • Discovery: http://localhost:8004 $(CYAN)(Local)$(NC)"
 	@echo "  • PDF Monitor: Watching $(WATCH_DIR) $(CYAN)(Local)$(NC)"
 	@echo ""
@@ -364,9 +388,10 @@ stop: ## Stop all Thoth services (both dev and prod)
 # =============================================================================
 
 .PHONY: prod
-prod: ## Start production server (uses docker-compose.yml)
-	@echo "$(GREEN)🚀 Starting Thoth Production Server$(NC)"
-	@echo "====================================="
+prod: ## Start production server (local mode with 3 containers)
+	@echo "$(GREEN)🚀 Starting Thoth Production Server (Local Mode)$(NC)"
+	@echo "=========================================================="
+	@echo "$(CYAN)Using unified all-in-one container (3 total containers)$(NC)"
 	@echo ""
 	@bash -c ' \
 		if [ -z "$(OBSIDIAN_VAULT_PATH)" ]; then \
@@ -418,10 +443,44 @@ prod: ## Start production server (uses docker-compose.yml)
 		make prod-status; \
 	'
 
+.PHONY: prod-microservices
+prod-microservices: ## Start production in microservices mode (7 containers)
+	@echo "$(GREEN)🚀 Starting Thoth Production (Microservices Mode)$(NC)"
+	@echo "====================================================="
+	@echo "$(CYAN)Using separate containers for each service (7 containers)$(NC)"
+	@echo ""
+	@bash -c ' \
+		if [ -z "$(OBSIDIAN_VAULT_PATH)" ]; then \
+			if [ -f .env.vault ]; then \
+				echo "$(CYAN)Loading vault path from .env.vault...$(NC)"; \
+				source .env.vault; \
+			fi; \
+		fi; \
+		if [ -f .env.production ]; then \
+			echo "$(CYAN)Loading production config from .env.production...$(NC)"; \
+			source .env.production; \
+		fi; \
+		VAULT_PATH="$${OBSIDIAN_VAULT_PATH:-$(OBSIDIAN_VAULT_PATH)}"; \
+		if [ -z "$$VAULT_PATH" ] && [ -z "$$THOTH_DATA_MOUNT" ]; then \
+			echo "$(RED)ERROR: OBSIDIAN_VAULT_PATH not set$(NC)"; \
+			exit 1; \
+		fi; \
+		if [ -z "$$THOTH_DATA_MOUNT" ] && [ -n "$$VAULT_PATH" ]; then \
+			export THOTH_DATA_MOUNT="$$VAULT_PATH/_thoth"; \
+		fi; \
+		echo "$(CYAN)Vault: $$VAULT_PATH$(NC)"; \
+		export THOTH_DATA_MOUNT; \
+		export OBSIDIAN_VAULT_PATH="$$VAULT_PATH"; \
+		USER_ID=$$(id -u) GROUP_ID=$$(id -g) docker compose -f docker-compose.yml --profile microservices up -d --build; \
+		echo ""; \
+		echo "$(GREEN)✅ Production Microservices Started!$(NC)"; \
+		make prod-status; \
+	'
+
 .PHONY: prod-stop
-prod-stop: ## Stop production server
+prod-stop: ## Stop production server (both modes)
 	@echo "$(YELLOW)Stopping production services...$(NC)"
-	@docker compose -f docker-compose.yml down
+	@docker compose -f docker-compose.yml --profile microservices down
 	@echo "$(GREEN)✅ Production services stopped$(NC)"
 
 .PHONY: prod-restart
@@ -448,8 +507,6 @@ prod-status: ## Check production server status
 	@curl -sf http://localhost:8080/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
 	@echo -n "  MCP (8081):      "
 	@curl -sf http://localhost:8081/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
-	@echo -n "  ChromaDB (8003): "
-	@curl -sf http://localhost:8003/api/v1/heartbeat >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
 	@echo -n "  Letta (8283):    "
 	@curl -sf http://localhost:8283/v1/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
 	@echo ""
@@ -457,7 +514,6 @@ prod-status: ## Check production server status
 	@echo "  • API Server:    $(CYAN)http://localhost:8080$(NC)"
 	@echo "  • MCP Server:    $(CYAN)http://localhost:8081$(NC)"
 	@echo "  • Letta Memory:  $(CYAN)http://localhost:8283$(NC)"
-	@echo "  • ChromaDB:      $(CYAN)http://localhost:8003$(NC)"
 
 .PHONY: prod-clean
 prod-clean: ## Clean production deployment (WARNING: deletes volumes)
@@ -495,7 +551,6 @@ local-stop: ## Stop local services and Letta Docker containers
 	-@pkill -f "python.*thoth mcp" 2>/dev/null || true
 	-@pkill -f "python.*thoth discovery" 2>/dev/null || true
 	-@pkill -f "python.*thoth monitor" 2>/dev/null || true
-	-@pkill -f "chroma run" 2>/dev/null || true
 	@sleep 1
 	@echo "$(CYAN)Stopping Letta Docker containers...$(NC)"
 	-@docker compose -f docker-compose.dev.yml stop letta letta-postgres 2>/dev/null || true

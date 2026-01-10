@@ -32,8 +32,10 @@ from thoth.server.chat_models import ChatPersistenceManager
 # Optional hot reload for development (requires watchdog package)
 try:
     from thoth.server.hot_reload import SettingsFileWatcher
+    from watchdog.observers import Observer
 except ImportError:
     SettingsFileWatcher = None  # Not available in all service configurations
+    Observer = None
 from thoth.server.routers import (  # noqa: I001
     agent,
     browser_workflows,
@@ -128,6 +130,48 @@ def _on_prompts_reload():
         logger.success('Custom prompts reloaded!')
     except Exception as e:
         logger.error(f'Failed to reload custom prompts: {e}')
+
+
+class _PromptsChangeHandler:
+    """Handler for file system events on custom prompt files."""
+    
+    def __init__(self, watcher, prompts_dir: Path):
+        self.watcher = watcher
+        self.prompts_dir = prompts_dir.resolve()
+    
+    def on_modified(self, event):
+        """Called when a file is modified."""
+        if event.is_directory:
+            return
+        
+        event_path = Path(event.src_path)
+        
+        # Only watch .j2 files (Jinja2 templates)
+        if event_path.suffix == '.j2':
+            logger.debug(f'Prompt file modified: {event_path}')
+            self.watcher._schedule_reload()
+    
+    def on_created(self, event):
+        """Called when a file is created."""
+        if event.is_directory:
+            return
+        
+        event_path = Path(event.src_path)
+        
+        if event_path.suffix == '.j2':
+            logger.info(f'Prompt file created: {event_path}')
+            self.watcher._schedule_reload()
+    
+    def on_deleted(self, event):
+        """Called when a file is deleted."""
+        if event.is_directory:
+            return
+        
+        event_path = Path(event.src_path)
+        
+        if event_path.suffix == '.j2':
+            logger.info(f'Prompt file deleted: {event_path}')
+            self.watcher._schedule_reload()
 
 
 async def shutdown_mcp_server(timeout: float = 10.0) -> None:

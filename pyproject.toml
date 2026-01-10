@@ -156,6 +156,10 @@ service-monitor = [
     "thoth[api,pdf,discovery,mcp,langchain,vectordb,embeddings]",
 ]
 
+service-all = [
+    "thoth[api,pdf,mcp,discovery,langchain,vectordb,embeddings,memory]",
+]
+
 # ==============================================================================
 # Development and Testing
 # ==============================================================================
