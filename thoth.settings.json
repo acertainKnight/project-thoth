@@ -116,7 +116,9 @@
         "folderName": "thoth_processed_articles",
         "embeddingModel": "openai/text-embedding-3-small",
         "autoSync": false,
-        "syncOnStartup": false
+        "syncOnStartup": false,
+        "debounceSeconds": 5,
+        "_debounceComment": "Seconds to wait after last file change before syncing (prevents syncing on every keystroke)"
       }
     },
     "thoth": {
