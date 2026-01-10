@@ -12,7 +12,14 @@ from loguru import logger
 
 from thoth.config import config
 from thoth.pipeline import ThothPipeline
-from thoth.services.letta_filesystem_service import LettaFilesystemService
+
+# Check if Letta filesystem service is available
+try:
+    from thoth.services.letta_filesystem_service import LettaFilesystemService
+    LETTA_AVAILABLE = True
+except ImportError:
+    LETTA_AVAILABLE = False
+    LettaFilesystemService = None  # type: ignore
 
 
 def handle_sync_filesystem(args, pipeline: ThothPipeline) -> int:
@@ -26,6 +33,11 @@ def handle_sync_filesystem(args, pipeline: ThothPipeline) -> int:
     Returns:
         Exit code (0 for success, 1 for failure)
     """
+    if not LETTA_AVAILABLE:
+        logger.error('Letta filesystem service not available')
+        logger.error('Please install letta extras: uv sync --extra memory')
+        return 1
+    
     try:
         # Initialize service
         letta_service = LettaFilesystemService(config)
@@ -107,6 +119,11 @@ def handle_folder_info(args, pipeline: ThothPipeline) -> int:
     Returns:
         Exit code (0 for success, 1 for failure)
     """
+    if not LETTA_AVAILABLE:
+        logger.error('Letta filesystem service not available')
+        logger.error('Please install letta extras: uv sync --extra memory')
+        return 1
+    
     try:
         letta_service = LettaFilesystemService(config)
         letta_service.initialize()
