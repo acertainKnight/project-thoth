@@ -36,6 +36,7 @@ from thoth.services.note_service import NoteService  # noqa: I001
 from thoth.services.pdf_locator_service import PdfLocatorService
 from thoth.services.query_service import QueryService
 from thoth.services.research_question_service import ResearchQuestionService
+from thoth.services.skill_service import SkillService
 from thoth.services.tag_service import TagService
 from thoth.services.web_search_service import WebSearchService
 from thoth.services.postgres_service import PostgresService
@@ -89,6 +90,7 @@ class ServiceManager:
         postgres: PostgresService
         research_question: ResearchQuestionService
         tag: TagService
+        skill: SkillService
         
         # Optional services (may be None if extras not installed)
         processing: ProcessingService | None  # Requires 'pdf' extras
@@ -207,6 +209,10 @@ class ServiceManager:
             else:
                 self.logger.warning(f'TagService initialization skipped: {e}')
             self._services['tag'] = None
+
+        # Initialize skill service for agent skills management
+        self._services['skill'] = SkillService(config=self.config)
+        self._services['skill'].initialize()
 
         # Initialize optimized services if available
         if OPTIMIZED_SERVICES_AVAILABLE:

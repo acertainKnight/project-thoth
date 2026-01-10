@@ -33,17 +33,11 @@ from .data_management_tools import (
     GenerateReadingListMCPTool,
     SyncWithObsidianMCPTool,
 )
-from .discovery_tools import (
-    CreateArxivSourceMCPTool,
-    CreateBiorxivSourceMCPTool,
-    CreateCrossrefSourceMCPTool,
-    CreateOpenalexSourceMCPTool,
-    CreatePubmedSourceMCPTool,
-    DeleteDiscoverySourceMCPTool,
-    GetDiscoverySourceMCPTool,
-    ListDiscoverySourcesMCPTool,
-    RunDiscoveryMCPTool,
-)
+# REMOVED: discovery_tools.py - deprecated in favor of research_question_tools.py
+# Old tools incorrectly treated ArXiv/PubMed as user-created "sources"
+# New research question tools properly separate concerns:
+#   - Built-in APIs (arxiv, pubmed) are sources you SELECT from
+#   - Research questions define WHAT to search for and WHICH sources to use
 from .download_pdf_tool import (
     DownloadPdfMCPTool,
 )
@@ -65,6 +59,15 @@ from .query_tools import (
     GetQueryMCPTool,
     ListQueriesMCPTool,
     UpdateQueryMCPTool,
+)
+from .research_question_tools import (
+    CreateResearchQuestionMCPTool,
+    DeleteResearchQuestionMCPTool,
+    GetResearchQuestionMCPTool,
+    ListAvailableSourcesMCPTool,
+    ListResearchQuestionsMCPTool,
+    RunDiscoveryForQuestionMCPTool,
+    UpdateResearchQuestionMCPTool,
 )
 from .tag_tools import (
     ConsolidateAndRetagMCPTool,
@@ -102,16 +105,14 @@ MCP_TOOL_CLASSES = [
     GetQueryMCPTool,
     UpdateQueryMCPTool,
     DeleteQueryMCPTool,
-    # Discovery source tools
-    ListDiscoverySourcesMCPTool,
-    CreateArxivSourceMCPTool,
-    CreatePubmedSourceMCPTool,
-    CreateCrossrefSourceMCPTool,
-    CreateOpenalexSourceMCPTool,
-    CreateBiorxivSourceMCPTool,
-    GetDiscoverySourceMCPTool,
-    RunDiscoveryMCPTool,
-    DeleteDiscoverySourceMCPTool,
+    # Research question tools (NEW - replaces old discovery source tools)
+    ListAvailableSourcesMCPTool,
+    CreateResearchQuestionMCPTool,
+    ListResearchQuestionsMCPTool,
+    GetResearchQuestionMCPTool,
+    UpdateResearchQuestionMCPTool,
+    DeleteResearchQuestionMCPTool,
+    RunDiscoveryForQuestionMCPTool,
     # Processing tools
     ProcessPdfMCPTool,
     BatchProcessPdfsMCPTool,
@@ -193,16 +194,12 @@ __all__ = [  # noqa: RUF022
     'ConsolidateAndRetagMCPTool',
     'ConsolidateTagsMCPTool',
     'CreateBrowserWorkflowMCPTool',
-    'CreateArxivSourceMCPTool',
-    'CreateBiorxivSourceMCPTool',
-    'CreateCrossrefSourceMCPTool',
     'CreateCustomIndexMCPTool',
-    'CreateOpenalexSourceMCPTool',
-    'CreatePubmedSourceMCPTool',
     'CreateQueryMCPTool',
+    'CreateResearchQuestionMCPTool',
     'DeleteArticleMCPTool',
-    'DeleteDiscoverySourceMCPTool',
     'DeleteQueryMCPTool',
+    'DeleteResearchQuestionMCPTool',
     'DeleteWorkflowMCPTool',
     'DownloadPdfMCPTool',
     'EvaluateArticleMCPTool',
@@ -216,12 +213,13 @@ __all__ = [  # noqa: RUF022
     'GenerateReadingListMCPTool',
     'GenerateResearchSummaryMCPTool',
     'GetArticleDetailsMCPTool',
-    'GetDiscoverySourceMCPTool',
     'GetQueryMCPTool',
+    'GetResearchQuestionMCPTool',
     'GetTaskStatusMCPTool',
     'GetWorkflowDetailsMCPTool',
     'ListArticlesMCPTool',
-    'ListDiscoverySourcesMCPTool',
+    'ListAvailableSourcesMCPTool',
+    'ListResearchQuestionsMCPTool',
     'ListQueriesMCPTool',
     'ListWorkflowsMCPTool',
     'LocatePdfMCPTool',
@@ -232,12 +230,13 @@ __all__ = [  # noqa: RUF022
     'OptimizeSearchMCPTool',
     'ProcessPdfMCPTool',
     'ReindexCollectionMCPTool',
-    'RunDiscoveryMCPTool',
+    'RunDiscoveryForQuestionMCPTool',
     'SearchArticlesMCPTool',
     'SuggestTagsMCPTool',
     'SyncWithObsidianMCPTool',
     'UpdateArticleMetadataMCPTool',
     'UpdateQueryMCPTool',
+    'UpdateResearchQuestionMCPTool',
     'UpdateWorkflowStatusMCPTool',
     'ValidatePdfSourcesMCPTool',
     'WebSearchMCPTool',
