@@ -12,6 +12,7 @@ from thoth.services.base import BaseService
 from thoth.services.citation_service import CitationService
 from thoth.services.discovery_orchestrator import DiscoveryOrchestrator
 from thoth.services.discovery_service import DiscoveryService
+from thoth.services.letta_filesystem_service import LettaFilesystemService
 from thoth.services.llm_service import LLMService
 
 # Optional: Processing service (requires pdf extras with mistralai)
@@ -91,6 +92,7 @@ class ServiceManager:
         research_question: ResearchQuestionService
         tag: TagService
         skill: SkillService
+        letta_filesystem: LettaFilesystemService
         
         # Optional services (may be None if extras not installed)
         processing: ProcessingService | None  # Requires 'pdf' extras
@@ -213,6 +215,9 @@ class ServiceManager:
         # Initialize skill service for agent skills management
         self._services['skill'] = SkillService(config=self.config)
         self._services['skill'].initialize()
+
+        # Initialize Letta filesystem service for vault-to-Letta sync
+        self._services['letta_filesystem'] = LettaFilesystemService(config=self.config)
 
         # Initialize optimized services if available
         if OPTIMIZED_SERVICES_AVAILABLE:
