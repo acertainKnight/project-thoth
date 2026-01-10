@@ -109,7 +109,15 @@
       "recallMemoryEnabled": true,
       "enableSmartTruncation": true,
       "consolidationIntervalHours": 24,
-      "fallbackEnabled": true
+      "fallbackEnabled": true,
+      "filesystem": {
+        "_comment": "Letta filesystem for syncing vault files to agents",
+        "enabled": true,
+        "folderName": "thoth_processed_articles",
+        "embeddingModel": "openai/text-embedding-3-small",
+        "autoSync": false,
+        "syncOnStartup": false
+      }
     },
     "thoth": {
       "_comment": "Database URL should be stored in .env as DATABASE_URL",
