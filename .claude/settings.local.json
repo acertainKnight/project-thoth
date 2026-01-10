@@ -13,7 +13,11 @@
       "Bash(timeout 180 bash -c 'while ps aux | grep -q \"\"\"\"[d]ocker compose build\"\"\"\"; do sleep 5; done')",
       "Bash(docker compose:*)",
       "Bash(docker logs:*)",
-      "Bash(docker ps:*)"
+      "Bash(docker ps:*)",
+      "Bash(echo:*)",
+      "Bash(chmod:*)",
+      "Bash(source ~/.bashrc)",
+      "Bash(bash:*)"
     ],
     "deny": []
   },
