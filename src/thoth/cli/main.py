@@ -37,6 +37,7 @@ from . import (  # noqa: E402
     performance,
     rag,
     research,
+    schema,
     server,
     system,
 )
