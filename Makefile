@@ -338,6 +338,59 @@ start: ## Start complete Thoth ecosystem (uses docker-compose.dev.yml)
 	@echo "$(YELLOW)Note: 'make start' uses development mode$(NC)"
 	@echo "$(CYAN)For production, use: make prod$(NC)"
 	@echo ""
+
+# =============================================================================
+# LETTA & THOTH INDEPENDENT SERVICE MANAGEMENT
+# =============================================================================
+# Letta is now independent and can be used by multiple projects.
+# Start Letta first, then start Thoth.
+
+.PHONY: letta-start
+letta-start: ## Start INDEPENDENT Letta services (generic, multi-project)
+	@echo "$(YELLOW)Starting INDEPENDENT Letta services...$(NC)"
+	@echo "$(CYAN)Letta can be used by multiple projects$(NC)"
+	@bash scripts/letta-start.sh
+
+.PHONY: letta-stop
+letta-stop: ## Stop Letta services (WARNING: affects ALL projects)
+	@echo "$(YELLOW)Stopping Letta services...$(NC)"
+	@echo "$(RED)⚠️  WARNING: This will affect ALL projects using Letta!$(NC)"
+	@bash scripts/letta-stop.sh
+
+.PHONY: letta-status
+letta-status: ## Check Letta services status
+	@bash scripts/letta-status.sh
+
+.PHONY: letta-restart
+letta-restart: ## Restart Letta services (WARNING: affects ALL projects)
+	@bash scripts/letta-restart.sh
+
+.PHONY: letta-logs
+letta-logs: ## View Letta server logs
+	@docker logs -f letta-server
+
+.PHONY: thoth-start
+thoth-start: ## Start Thoth services (requires Letta to be running)
+	@echo "$(YELLOW)Starting Thoth services...$(NC)"
+	@bash scripts/thoth-start.sh
+
+.PHONY: thoth-stop
+thoth-stop: ## Stop Thoth services (does NOT stop Letta)
+	@echo "$(YELLOW)Stopping Thoth services...$(NC)"
+	@bash scripts/thoth-stop.sh
+
+.PHONY: thoth-status
+thoth-status: ## Check Thoth services status
+	@bash scripts/thoth-status.sh
+
+.PHONY: thoth-restart
+thoth-restart: ## Restart Thoth services (does NOT restart Letta)
+	@bash scripts/thoth-restart.sh
+
+.PHONY: thoth-logs
+thoth-logs: ## View Thoth logs
+	@docker logs -f thoth-all-in-one
+
 	@make dev
 
 .PHONY: local-start

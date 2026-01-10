@@ -1,6 +1,9 @@
 #!/bin/bash
-# Start Letta and PostgreSQL services
+# Start Letta services INDEPENDENTLY (not managed by Thoth)
 # Usage: letta-start.sh
+#
+# Letta is a generic self-hosted service that can be used by multiple projects.
+# This script starts it independently so restarting Thoth won't affect Letta.
 
 set -e
 
@@ -9,8 +12,10 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 cd "$PROJECT_ROOT"
 
-echo "🚀 Starting Letta services..."
-docker compose up -d letta-postgres letta-redis letta letta-nginx
+echo "🚀 Starting INDEPENDENT Letta services..."
+echo "📦 Using docker-compose.letta.yml"
+echo "🔧 This is a generic Letta instance (can be used by multiple projects)"
+docker compose -f docker-compose.letta.yml up -d
 
 echo ""
 echo "⏳ Waiting for services to be healthy..."

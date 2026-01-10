@@ -1,0 +1,145 @@
+# ==============================================================================
+# Letta Self-Hosted Memory Server - Independent Infrastructure
+# ==============================================================================
+# This is a GENERIC Letta instance that can be shared across multiple projects.
+# It runs independently from Thoth and other projects.
+#
+# Usage:
+#   Start:   docker compose -f docker-compose.letta.yml up -d
+#   Stop:    docker compose -f docker-compose.letta.yml stop
+#   Status:  docker compose -f docker-compose.letta.yml ps
+#
+# Or use convenience commands:
+#   letta-start, letta-stop, letta-status, letta-restart
+#
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ==============================================================================
+  # PostgreSQL Database (with pgvector for embeddings)
+  # ==============================================================================
+  letta-postgres:
+    image: pgvector/pgvector:pg15
+    container_name: letta-postgres
+    environment:
+      - POSTGRES_DB=letta
+      - POSTGRES_USER=letta
+      - POSTGRES_PASSWORD=letta_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    volumes:
+      - letta-postgres:/var/lib/postgresql/data
+      - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/01-init-databases.sh:ro
+      - ./docker/postgres/init-vector.sql:/docker-entrypoint-initdb.d/02-init-vector.sql:ro
+    ports:
+      - "5432:5432"  # Exposed for direct access
+    networks:
+      - letta-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U letta -d letta && pg_isready -U thoth -d thoth"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ==============================================================================
+  # Redis (Required for Letta streaming and job queuing)
+  # ==============================================================================
+  letta-redis:
+    image: redis:7-alpine
+    container_name: letta-redis
+    networks:
+      - letta-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ==============================================================================
+  # Letta Memory Server
+  # ==============================================================================
+  letta:
+    image: letta/letta:latest
+    container_name: letta-server
+    env_file:
+      - .env.letta
+    environment:
+      # Database URI must be set here for Docker networking
+      - LETTA_PG_URI=postgresql://letta:letta_password@letta-postgres:5432/letta
+    volumes:
+      - letta-data:/letta/.persist
+      - letta-home:/letta
+      - ./docker/letta/init-schema.sh:/init-schema.sh:ro
+    command: ["bash", "/init-schema.sh"]
+    ports:
+      - "8283:8283"
+    networks:
+      - letta-network
+    depends_on:
+      letta-postgres:
+        condition: service_healthy
+      letta-redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8283/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  # ==============================================================================
+  # Nginx SSE Proxy for Letta
+  # Optimized reverse proxy to handle Server-Sent Events streaming
+  # ==============================================================================
+  letta-nginx:
+    image: nginx:alpine
+    container_name: letta-nginx
+    volumes:
+      - ./docker/nginx/letta-sse.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8284:8284"
+    networks:
+      - letta-network
+    depends_on:
+      letta:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8284/nginx-health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  letta-network:
+    driver: bridge
+    name: letta-network
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+
+# ==============================================================================
+# Persistent Volumes
+# ==============================================================================
+volumes:
+  letta-data:
+    driver: local
+    name: letta-data
+
+  letta-postgres:
+    driver: local
+    name: letta-postgres
+
+  letta-home:
+    driver: local
+    name: letta-home

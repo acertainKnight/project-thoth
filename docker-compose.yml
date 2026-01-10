@@ -1,21 +1,25 @@
 # ==============================================================================
 # Thoth AI Research Assistant - Production Configuration
 #
+# IMPORTANT: Letta services are now INDEPENDENT!
+# Start Letta first: letta-start (or docker compose -f docker-compose.letta.yml up -d)
+# Then start Thoth: thoth-start (or docker compose up -d)
+#
 # Two deployment modes available:
 #
 # 1. LOCAL MODE (default):
 #    docker compose up
 #    - Runs thoth-all-in-one container (API, MCP, Discovery, PDF Monitor, Dashboard)
-#    - 3 containers total (thoth-all-in-one, letta, postgres)
+#    - 1 container (connects to external Letta services)
 #    - Optimized for small self-hosted deployments
 #    - Lower resource usage (~3.5GB RAM)
 #
 # 2. MICROSERVICES MODE (advanced):
 #    docker compose --profile microservices up
 #    - Runs each service in separate containers
-#    - 7 containers total (api, mcp, monitor, dashboard, discovery, letta, postgres)
+#    - 5 containers (api, mcp, monitor, dashboard, discovery)
 #    - Better for scaling individual services
-#    - Higher resource usage (~5GB RAM)
+#    - Higher resource usage (~4GB RAM)
 #
 # ==============================================================================
 
@@ -29,7 +33,7 @@ x-thoth-common: &thoth-common
   # This common config is for shared runtime settings only
   user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
   environment: &thoth-env
-    # Database connections
+    # Database connections (connects to external Letta postgres)
     - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
 
     # Vault-relative path configuration
@@ -72,6 +76,7 @@ x-thoth-common: &thoth-common
 
   networks:
     - thoth-network
+    - letta-network  # Connect to external Letta network
 
   restart: unless-stopped
 
@@ -90,13 +95,7 @@ services:
     ports:
       - "8080:8000"  # API
       - "8081:8001"  # MCP
-    depends_on:
-      letta-postgres:
-        condition: service_healthy
-      letta:
-        condition: service_healthy
-      letta-redis:
-        condition: service_healthy
+    # NO DEPENDENCIES ON LETTA - it runs independently
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -111,111 +110,6 @@ services:
         reservations:
           memory: 1G
           cpus: '0.5'
-
-  # ==============================================================================
-  # Infrastructure Services (Shared by all modes)
-  # ==============================================================================
-
-  # ==============================================================================
-  # Letta Memory Server (Generic Self-Hosted Instance)
-  # Shared across multiple projects - configure via .env.letta
-  # ==============================================================================
-  letta:
-    image: letta/letta:latest
-    container_name: letta-server
-    env_file:
-      - .env.letta
-    environment:
-      # Database URI must be set here for Docker networking
-      - LETTA_PG_URI=postgresql://letta:letta_password@letta-postgres:5432/letta
-    volumes:
-      - letta-data:/letta/.persist
-      - letta-home:/letta
-      - ./docker/letta/init-schema.sh:/init-schema.sh:ro
-    command: ["bash", "/init-schema.sh"]
-    ports:
-      - "8283:8283"
-    networks:
-      - thoth-network
-    depends_on:
-      letta-postgres:
-        condition: service_healthy
-      letta-redis:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8283/v1/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
-
-  # ==============================================================================
-  # Nginx SSE Proxy for Letta
-  # Optimized reverse proxy to handle Server-Sent Events streaming
-  # ==============================================================================
-  letta-nginx:
-    image: nginx:alpine
-    container_name: letta-nginx
-    volumes:
-      - ./docker/nginx/letta-sse.conf:/etc/nginx/nginx.conf:ro
-    ports:
-      - "8284:8284"
-    networks:
-      - thoth-network
-    depends_on:
-      letta:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8284/nginx-health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ==============================================================================
-  # Redis (Required for Letta streaming)
-  # In-memory data store for background task queuing
-  # ==============================================================================
-  letta-redis:
-    image: redis:7-alpine
-    container_name: letta-redis
-    networks:
-      - thoth-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  # ==============================================================================
-  # PostgreSQL Database (Shared by Letta and Thoth)
-  # Contains two databases: 'letta' for agents, 'thoth' for Thoth data
-  # ==============================================================================
-  letta-postgres:
-    image: pgvector/pgvector:pg15
-    container_name: letta-postgres
-    environment:
-      - POSTGRES_DB=letta
-      - POSTGRES_USER=letta
-      - POSTGRES_PASSWORD=letta_password
-      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
-    volumes:
-      - letta-postgres:/var/lib/postgresql/data
-      - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/01-init-databases.sh:ro
-      - ./docker/postgres/init-vector.sql:/docker-entrypoint-initdb.d/02-init-vector.sql:ro
-    networks:
-      - thoth-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U letta -d letta && pg_isready -U thoth -d thoth"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
 
   # ==============================================================================
   # Microservices Mode (use --profile microservices)
@@ -236,9 +130,7 @@ services:
     command: ["python", "-m", "thoth", "server", "start", "--api-host", "0.0.0.0", "--api-port", "8000", "--no-discovery"]
     ports:
       - "8080:8000"
-    depends_on:
-      letta-postgres:
-        condition: service_healthy
+    # NO DEPENDENCIES - connects to external Letta
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
       interval: 30s
@@ -268,9 +160,7 @@ services:
     container_name: thoth-mcp
     # Full mode with concurrent HTTP and SSE transports (blocking bug FIXED)
     command: ["python", "-m", "thoth", "mcp", "full", "--host", "0.0.0.0", "--http-port", "8000", "--sse-port", "8001"]
-    depends_on:
-      letta-postgres:
-        condition: service_healthy
+    # NO DEPENDENCIES - connects to external Letta
     environment:
       # Base Thoth environment
       - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
@@ -392,8 +282,6 @@ services:
       "python", "-m", "thoth.cli.main", "discovery", "scheduler", "start"
     ]
     depends_on:
-      letta-postgres:
-        condition: service_healthy
       thoth-api:
         condition: service_started
     healthcheck:
@@ -418,19 +306,6 @@ services:
 # Persistent Volumes
 # ==============================================================================
 volumes:
-  # Letta volumes (generic, can be used by multiple projects)
-  letta-data:
-    driver: local
-    name: letta-data
-
-  letta-postgres:
-    driver: local
-    name: letta-postgres
-
-  letta-home:
-    driver: local
-    name: letta-home
-
   # Thoth-specific volumes
   thoth-app-home:
     driver: local
@@ -450,3 +325,8 @@ networks:
     ipam:
       config:
         - subnet: 172.20.0.0/16
+
+  # External Letta network - must be created by docker-compose.letta.yml
+  letta-network:
+    external: true
+    name: letta-network
