@@ -17,10 +17,12 @@ from thoth.services.llm_service import LLMService
 # Optional: Letta filesystem service (requires letta extras with pgvector)
 try:
     from thoth.services.letta_filesystem_service import LettaFilesystemService
+    from thoth.services.letta_filesystem_watcher import LettaFilesystemWatcherService
 
     LETTA_FILESYSTEM_AVAILABLE = True
 except ImportError:
     LettaFilesystemService = None  # type: ignore
+    LettaFilesystemWatcherService = None  # type: ignore
     LETTA_FILESYSTEM_AVAILABLE = False
 
 # Optional: Processing service (requires pdf extras with mistralai)
@@ -103,6 +105,7 @@ class ServiceManager:
         
         # Optional services (may be None if extras not installed)
         letta_filesystem: LettaFilesystemService | None  # Requires 'memory' extras
+        letta_filesystem_watcher: LettaFilesystemWatcherService | None  # Requires 'memory' extras
         processing: ProcessingService | None  # Requires 'pdf' extras
         rag: RAGService | None  # Requires 'embeddings' extras
         cache: CacheService | None  # Requires optimization extras
@@ -228,8 +231,17 @@ class ServiceManager:
         if LETTA_FILESYSTEM_AVAILABLE:
             self._services['letta_filesystem'] = LettaFilesystemService(config=self.config)
             self.logger.debug('Letta filesystem service initialized')
+            
+            # Initialize Letta filesystem watcher (auto-sync on file changes)
+            self._services['letta_filesystem_watcher'] = LettaFilesystemWatcherService(
+                config=self.config,
+                letta_filesystem_service=self._services['letta_filesystem']
+            )
+            # Start watcher if autoSync is enabled in config
+            self._services['letta_filesystem_watcher'].start()
         else:
             self._services['letta_filesystem'] = None
+            self._services['letta_filesystem_watcher'] = None
             self.logger.debug('Letta filesystem service not available (requires memory extras with pgvector)')
 
         # Initialize optimized services if available
