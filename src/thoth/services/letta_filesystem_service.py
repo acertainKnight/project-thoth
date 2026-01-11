@@ -45,7 +45,8 @@ class LettaFilesystemService(BaseService):
         """Initialize the Letta filesystem service."""
         try:
             # Initialize Letta REST API connection
-            self._base_url = self.config.memory.letta.server_url
+            letta_config = self.config.memory_config.get('letta', {})
+            self._base_url = letta_config.get('server_url', 'http://letta-server:8283')
             self._token = os.getenv('LETTA_SERVER_PASSWORD', 'letta_dev_password')
             
             self.logger.info(f'Initializing Letta REST client with base_url: {self._base_url}')
