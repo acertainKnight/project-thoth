@@ -9,7 +9,7 @@ version: '3.8'
 services:
   # ==============================================================================
   # Thoth App Overrides
-  # Local development customizations
+  # UV-recommended docker compose watch for hot-reload development
   # ==============================================================================
   thoth-app:
     # Use development Dockerfile with UV best practices
@@ -26,31 +26,51 @@ services:
 
     volumes:
       # Mount source code for hot-reload development (no rebuild needed!)
-      # Editable install means Python picks up changes immediately!
       - ./src:/app/src
       - ./pyproject.toml:/app/pyproject.toml:ro
 
       # Mount local configuration if it exists
       - ./config.local.yml:/app/config.local.yml:ro
 
-      # Mount local workspace directory (commented out to use main docker-compose.yml mount)
-      # - ./workspace:/workspace
-
     # Override port mappings for development (maintain remapping to avoid conflicts)
     ports:
       - "8080:8000"  # API server (remapped to avoid local dev conflicts)
       - "8081:8001"  # MCP server (remapped to avoid local dev conflicts)
       - "5678:5678"  # Debug port
+    
+    develop:
+      # UV best practice: use docker compose watch
+      watch:
+        # Sync source code changes automatically
+        - action: sync
+          path: ./src
+          target: /app/src
+        
+        # Rebuild on dependency changes only
+        - action: rebuild
+          path: ./pyproject.toml
 
   # ==============================================================================
   # Thoth Monitor Overrides
-  # Mount source code for hot-reload development
+  # UV-recommended docker compose watch for hot-reload development
   # ==============================================================================
   thoth-monitor:
     volumes:
       # Mount source code for hot-reload development
       - ./src:/app/src
       - ./pyproject.toml:/app/pyproject.toml:ro
+    
+    develop:
+      # UV best practice: use docker compose watch
+      watch:
+        # Sync source code changes automatically
+        - action: sync
+          path: ./src
+          target: /app/src
+        
+        # Rebuild on dependency changes only
+        - action: rebuild
+          path: ./pyproject.toml
 
   # ==============================================================================
   # Thoth MCP Overrides
@@ -70,9 +90,59 @@ services:
         - action: sync
           path: ./src
           target: /app/src
-          # No ignore needed - .venv is already excluded by volume mount
         
         # Rebuild on dependency changes only
+        - action: rebuild
+          path: ./pyproject.toml
+
+  # ==============================================================================
+  # Thoth API Overrides
+  # UV-recommended docker compose watch for hot-reload development
+  # ==============================================================================
+  thoth-api:
+    volumes:
+      - ./src:/app/src
+      - ./pyproject.toml:/app/pyproject.toml:ro
+    
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+        - action: rebuild
+          path: ./pyproject.toml
+
+  # ==============================================================================
+  # Thoth Discovery Overrides
+  # UV-recommended docker compose watch for hot-reload development
+  # ==============================================================================
+  thoth-discovery:
+    volumes:
+      - ./src:/app/src
+      - ./pyproject.toml:/app/pyproject.toml:ro
+    
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+        - action: rebuild
+          path: ./pyproject.toml
+
+  # ==============================================================================
+  # Thoth Dashboard Overrides
+  # UV-recommended docker compose watch for hot-reload development
+  # ==============================================================================
+  thoth-dashboard:
+    volumes:
+      - ./src:/app/src
+      - ./pyproject.toml:/app/pyproject.toml:ro
+    
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
         - action: rebuild
           path: ./pyproject.toml
 
