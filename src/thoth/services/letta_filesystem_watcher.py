@@ -215,7 +215,7 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
             # Get or create the folder
             folder_id = await self.letta_service.get_or_create_folder(
                 name=folder_name,
-                embedding_config={'embedding_model': embedding_model}
+                embedding_model=embedding_model
             )
             
             if not folder_id:

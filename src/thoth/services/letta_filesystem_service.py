@@ -13,6 +13,7 @@ import os
 
 import requests
 from loguru import logger
+from letta_client import Letta
 
 from thoth.services.base import BaseService, ServiceError
 
@@ -40,6 +41,7 @@ class LettaFilesystemService(BaseService):
         self._token: str | None = None
         self._folder_id: str | None = None
         self._sync_state: dict[str, dict[str, Any]] = {}  # file_path -> {size, mtime, letta_file_id}
+        self._letta_client: Letta | None = None
 
     def initialize(self) -> None:
         """Initialize the Letta filesystem service."""
@@ -55,7 +57,10 @@ class LettaFilesystemService(BaseService):
             self._base_url = config_url
             self._token = os.getenv('LETTA_SERVER_PASSWORD', 'letta_dev_password')
             
-            self.logger.info(f'Initializing Letta REST client with base_url: {self._base_url}')
+            self.logger.info(f'Initializing Letta client with base_url: {self._base_url}')
+            
+            # Create Letta client
+            self._letta_client = Letta(base_url=self._base_url, token=self._token)
             
             # Test connection
             response = requests.get(
@@ -104,25 +109,21 @@ class LettaFilesystemService(BaseService):
         try:
             self.logger.info(f'Creating Letta folder: {name} with embedding: {embedding_model}')
             
-            # Create folder via REST API  
-            # Letta requires embedding_endpoint_type and embedding_dim
-            embedding_config = {
-                'embedding_model': embedding_model,
-                'embedding_endpoint_type': 'openai',  # For openai/text-embedding-*
-                'embedding_dim': 1536  # Dimension for text-embedding-3-small
-            }
-            response = await asyncio.to_thread(
-                requests.post,
-                f'{self._base_url}/v1/folders',
-                headers=self._get_headers(),
-                json={'name': name, 'embedding_config': embedding_config}
+            # Create folder via Letta client
+            from letta_client.types import EmbeddingConfig
+            embedding_config = EmbeddingConfig(
+                embedding_model=embedding_model,
+                embedding_endpoint_type='openai',  # For openai/text-embedding-*
+                embedding_dim=1536  # Dimension for text-embedding-3-small
             )
             
-            if response.status_code not in (200, 201):
-                raise ServiceError(f'Failed to create folder: {response.text}')
+            folder = await asyncio.to_thread(
+                self._letta_client.folders.create,
+                name=name,
+                embedding_config=embedding_config
+            )
             
-            folder = response.json()
-            folder_id = folder['id']
+            folder_id = folder.id
             self._folder_id = folder_id
             
             self.logger.info(f'Created Letta folder: {folder_id}')
@@ -149,24 +150,17 @@ class LettaFilesystemService(BaseService):
         """
         self._ensure_initialized()
         try:
-            # List existing folders via REST API
-            response = await asyncio.to_thread(
-                requests.get,
-                f'{self._base_url}/v1/folders',
-                headers=self._get_headers()
+            # List existing folders via Letta client
+            folders = await asyncio.to_thread(
+                self._letta_client.folders.list
             )
-            
-            if response.status_code != 200:
-                raise ServiceError(f'Failed to list folders: {response.text}')
-            
-            folders = response.json()
             
             # Check if folder with this name exists
             for folder in folders:
-                if folder.get('name') == name:
-                    self.logger.info(f'Found existing Letta folder: {folder["id"]}')
-                    self._folder_id = folder['id']
-                    return folder['id']
+                if folder.name == name:
+                    self.logger.info(f'Found existing Letta folder: {folder.id}')
+                    self._folder_id = folder.id
+                    return folder.id
             
             # Folder doesn't exist, create it
             return await self.create_folder(name, embedding_model)
@@ -200,65 +194,72 @@ class LettaFilesystemService(BaseService):
             
             self.logger.info(f'Uploading file to Letta: {file_path.name}')
             
-            # Upload file via REST API
+            # Upload file via Letta client
             with open(file_path, 'rb') as f:
-                files = {'file': (file_path.name, f, 'application/octet-stream')}
-                response = await asyncio.to_thread(
-                    requests.post,
-                    f'{self._base_url}/v1/folders/{folder_id}/files',
-                    headers={'Authorization': f'Bearer {self._token}'},  # Don't include Content-Type, let requests set it
-                    files=files
+                result = await asyncio.to_thread(
+                    self._letta_client.folders.files.upload,
+                    folder_id,
+                    file=f
                 )
             
-            if response.status_code not in (200, 201, 202):
-                raise ServiceError(f'Failed to upload file: {response.text}')
+            # result is FileMetadata object
+            job_id = result.job_id if hasattr(result, 'job_id') else None
+            if not job_id:
+                # File might have been processed immediately
+                self.logger.info(f'File uploaded successfully (no async job): {file_path.name}')
+                stat = file_path.stat()
+                self._sync_state[str(file_path)] = {
+                    'size': stat.st_size,
+                    'mtime': stat.st_mtime,
+                    'letta_file_id': result.id if hasattr(result, 'id') else None
+                }
+                return {
+                    'success': True,
+                    'file': file_path.name,
+                    'file_id': result.id if hasattr(result, 'id') else None
+                }
             
-            result = response.json()
-            job_id = result.get('job_id') or result.get('id')
-            
-            # Wait for processing job to complete
-            max_wait = 300  # 5 minutes
-            elapsed = 0
-            while elapsed < max_wait:
-                job_response = await asyncio.to_thread(
-                    requests.get,
-                    f'{self._base_url}/v1/jobs/{job_id}',
-                    headers=self._get_headers()
-                )
-                
-                if job_response.status_code != 200:
+            # If job_id exists, wait for processing job to complete
+            if job_id:
+                max_wait = 300  # 5 minutes
+                elapsed = 0
+                while elapsed < max_wait:
+                    try:
+                        job_status = await asyncio.to_thread(
+                            self._letta_client.jobs.retrieve,
+                            job_id
+                        )
+                        
+                        if job_status.status == 'completed':
+                            self.logger.info(f'File uploaded successfully: {file_path.name}')
+                            
+                            # Update sync state
+                            stat = file_path.stat()
+                            self._sync_state[str(file_path)] = {
+                                'size': stat.st_size,
+                                'mtime': stat.st_mtime,
+                                'letta_file_id': result.id if hasattr(result, 'id') else None
+                            }
+                            
+                            return {
+                                'success': True,
+                                'file': file_path.name,
+                                'job_id': job_id
+                            }
+                            
+                        elif job_status.status == 'failed':
+                            error_msg = getattr(job_status, 'error', 'Unknown error')
+                            raise ServiceError(f'Upload job failed: {error_msg}')
+                        
+                    except Exception as e:
+                        # Job might not exist yet
+                        self.logger.debug(f'Waiting for job {job_id}: {e}')
+                    
+                    # Wait before checking again
                     await asyncio.sleep(2)
                     elapsed += 2
-                    continue
                 
-                job_status = job_response.json()
-                
-                if job_status.get('status') == 'completed':
-                    self.logger.info(f'File uploaded successfully: {file_path.name}')
-                    
-                    # Update sync state
-                    stat = file_path.stat()
-                    self._sync_state[str(file_path)] = {
-                        'size': stat.st_size,
-                        'mtime': stat.st_mtime,
-                        'letta_file_id': job_status.get('metadata', {}).get('file_id')
-                    }
-                    
-                    return {
-                        'success': True,
-                        'file': file_path.name,
-                        'job_id': job_id
-                    }
-                    
-                elif job_status.get('status') == 'failed':
-                    error_msg = job_status.get('metadata', {}).get('error', 'Unknown error')
-                    raise ServiceError(f'Upload job failed: {error_msg}')
-                
-                # Wait before checking again
-                await asyncio.sleep(2)
-                elapsed += 2
-            
-            raise ServiceError(f'Upload job timed out after {max_wait}s')
+                raise ServiceError(f'Upload job timed out after {max_wait}s')
             
         except Exception as e:
             self.logger.error(f'Failed to upload file {file_path.name}: {e}')
@@ -359,14 +360,12 @@ class LettaFilesystemService(BaseService):
         try:
             self.logger.info(f'Attaching folder {folder_id} to agent {agent_id}')
             
-            response = await asyncio.to_thread(
-                requests.post,
-                f'{self._base_url}/v1/agents/{agent_id}/folders/{folder_id}',
-                headers=self._get_headers()
+            # Use agents.folders.attach method
+            await asyncio.to_thread(
+                self._letta_client.agents.folders.attach,
+                agent_id,
+                folder_id
             )
-            
-            if response.status_code not in (200, 201, 204):
-                raise ServiceError(f'Failed to attach folder: {response.text}')
             
             self.logger.info('Folder attached successfully')
             return True
