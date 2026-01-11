@@ -18,22 +18,20 @@ wait_for_postgres() {
     echo "  ✓ PostgreSQL is ready!"
 }
 
-# Function to ensure cache directories exist
+# Function to ensure cache directories exist  
 setup_cache_directories() {
     echo "==> Setting up cache directories..."
     
-    # Remove any broken brace expansion directories
-    rm -rf /app/cache/{ocr,analysis,citations,api_responses,embeddings} 2>/dev/null || true
-    
-    # Create cache directories with proper permissions
-    mkdir -p /app/cache/ocr
-    mkdir -p /app/cache/analysis
-    mkdir -p /app/cache/citations
-    mkdir -p /app/cache/api_responses
-    mkdir -p /app/cache/embeddings
-    
-    # Ensure thoth user owns all cache directories
-    chown -R thoth:thoth /app/cache
+    # Run as root to fix permissions (only if we're root or can sudo)
+    if [ "$(id -u)" = "0" ]; then
+        # We're root, do the setup
+        mkdir -p /app/cache/ocr /app/cache/analysis /app/cache/citations /app/cache/api_responses /app/cache/embeddings
+        chown -R thoth:thoth /app/cache 2>/dev/null || true
+        chmod -R 775 /app/cache
+    else
+        # We're not root, just ensure directories exist (permissions already set in Dockerfile)
+        mkdir -p /app/cache/ocr /app/cache/analysis /app/cache/citations /app/cache/api_responses /app/cache/embeddings || true
+    fi
     
     echo "  ✓ Cache directories ready!"
 }
