@@ -253,7 +253,7 @@ class LettaFilesystemWatcherService:
         
         # Get debounce settings from config
         letta_config = config.memory_config.letta if hasattr(config.memory_config, 'letta') else None
-        filesystem_config = letta_config.get('filesystem', {})
+        filesystem_config = getattr(letta_config, 'filesystem', None) if letta_config else None
         debounce_seconds = filesystem_config.get('debounceSeconds', 5)
         
         # Create watcher
