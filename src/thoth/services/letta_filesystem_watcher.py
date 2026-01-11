@@ -51,6 +51,7 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
         self._pending_sync = False
         self._last_change_time: Optional[float] = None
         self._sync_task: Optional[asyncio.Task] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
         
         # Observer for file system events
         self.observer: Optional[Observer] = None
@@ -66,6 +67,14 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
         if self._running:
             self.logger.warning('Watcher already running')
             return
+
+        # Capture the current event loop for thread-safe async operations
+        try:
+            self._loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop - shouldn't happen but handle gracefully
+            self.logger.warning('No running event loop found - async sync will not work')
+            self._loop = None
 
         # Get notes directory from config
         notes_dir = self.config.notes_dir
@@ -161,9 +170,15 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
         self._pending_sync = True
         self._last_change_time = time.time()
 
-        # If no sync task running, start one
-        if not self._sync_task or self._sync_task.done():
-            self._sync_task = asyncio.create_task(self._debounced_sync())
+        # Schedule async task in main event loop (thread-safe)
+        if self._loop and (not self._sync_task or self._sync_task.done()):
+            try:
+                # Run coroutine in the main event loop from this thread
+                future = asyncio.run_coroutine_threadsafe(self._debounced_sync(), self._loop)
+                # Store the future as our sync task
+                self._sync_task = future  # type: ignore
+            except Exception as e:
+                self.logger.error(f'Failed to schedule sync: {e}')
 
     async def _debounced_sync(self) -> None:
         """
