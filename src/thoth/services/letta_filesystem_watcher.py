@@ -208,9 +208,9 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
             
             # Get folder configuration
             letta_config = self.config.memory_config.letta if hasattr(self.config.memory_config, 'letta') else None
-            filesystem_config = letta_config.get('filesystem', {})
-            folder_name = getattr(filesystem_config, 'folderName', 'thoth_processed_articles') if filesystem_config else 'thoth_processed_articles'
-            embedding_model = getattr(filesystem_config, 'embeddingModel', 'openai/text-embedding-3-small') if filesystem_config else 'openai/text-embedding-3-small'
+            filesystem_config = getattr(letta_config, 'filesystem', None) if letta_config else None
+            folder_name = getattr(filesystem_config, 'folder_name', 'thoth_processed_articles') if filesystem_config else 'thoth_processed_articles'
+            embedding_model = getattr(filesystem_config, 'embedding_model', 'openai/text-embedding-3-small') if filesystem_config else 'openai/text-embedding-3-small'
             
             # Get or create the folder
             folder_id = await self.letta_service.get_or_create_folder(
