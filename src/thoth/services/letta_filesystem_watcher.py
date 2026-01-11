@@ -63,7 +63,7 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
         )
 
     def start(self) -> None:
-        """Start watching the notes directory."""
+        """Start watching the PDF directory."""
         if self._running:
             self.logger.warning('Watcher already running')
             return
@@ -76,19 +76,28 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
             self.logger.warning('No running event loop found - async sync will not work')
             self._loop = None
 
-        # Get notes directory from config
-        notes_dir = self.config.notes_dir
-        if not notes_dir.exists():
-            self.logger.warning(f'Notes directory does not exist: {notes_dir}')
-            notes_dir.mkdir(parents=True, exist_ok=True)
+        # Watch PDF directory - where processed papers are stored
+        pdf_dir = self.config.pdf_dir
+        
+        # If pdf_dir is empty, try the actual Obsidian location
+        if not pdf_dir.exists() or not list(pdf_dir.glob('*.pdf')):
+            # Check for PDFs in /vault/thoth/papers/pdfs
+            alt_pdf_dir = self.config.vault_root / 'thoth' / 'papers' / 'pdfs'
+            if alt_pdf_dir.exists():
+                pdf_dir = alt_pdf_dir
+                self.logger.info(f'Using alternative PDF location: {pdf_dir}')
+        
+        if not pdf_dir.exists():
+            self.logger.warning(f'PDF directory does not exist: {pdf_dir}')
+            pdf_dir.mkdir(parents=True, exist_ok=True)
 
         # Start watchdog observer
         self.observer = Observer()
-        self.observer.schedule(self, str(notes_dir), recursive=True)
+        self.observer.schedule(self, str(pdf_dir), recursive=True)
         self.observer.start()
         self._running = True
         
-        self.logger.info(f'Started watching: {notes_dir}')
+        self.logger.info(f'Started watching: {pdf_dir}')
 
     def stop(self) -> None:
         """Stop watching the notes directory."""
@@ -147,8 +156,8 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
         Returns:
             True if file should trigger sync
         """
-        # Only sync markdown files
-        if path.suffix != '.md':
+        # Sync PDF and markdown files
+        if path.suffix not in {'.pdf', '.md'}:
             return False
 
         # Ignore hidden files and temp files
@@ -210,7 +219,11 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
             letta_config = self.config.memory_config.letta if hasattr(self.config.memory_config, 'letta') else None
             filesystem_config = getattr(letta_config, 'filesystem', None) if letta_config else None
             folder_name = getattr(filesystem_config, 'folder_name', 'thoth_processed_articles') if filesystem_config else 'thoth_processed_articles'
-            embedding_model = getattr(filesystem_config, 'embedding_model', 'openai/text-embedding-3-small') if filesystem_config else 'openai/text-embedding-3-small'
+            embedding_model = getattr(filesystem_config, 'embedding_model', 'text-embedding-3-small') if filesystem_config else 'text-embedding-3-small'
+            
+            # Remove 'openai/' prefix if present (OpenAI API doesn't accept it)
+            if embedding_model.startswith('openai/'):
+                embedding_model = embedding_model.replace('openai/', '')
             
             # Get or create the folder
             folder_id = await self.letta_service.get_or_create_folder(
@@ -222,9 +235,18 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
                 self.logger.error('Failed to get or create Letta folder')
                 return
             
+            # Determine which directory to sync (PDF directory with processed papers)
+            pdf_dir = self.config.pdf_dir
+            # If pdf_dir is empty, try the actual Obsidian location
+            if not pdf_dir.exists() or not list(pdf_dir.glob('*.pdf')):
+                alt_pdf_dir = self.config.vault_root / 'thoth' / 'papers' / 'pdfs'
+                if alt_pdf_dir.exists():
+                    pdf_dir = alt_pdf_dir
+            
             # Sync files to the folder
             result = await self.letta_service.sync_vault_to_folder(
-                folder_id=folder_id
+                folder_id=folder_id,
+                notes_dir=pdf_dir  # Sync PDFs from papers directory
             )
             
             if result:
