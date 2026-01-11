@@ -270,7 +270,7 @@ class LettaFilesystemWatcherService:
         """Start the watcher."""
         letta_config = self.config.memory_config.letta if hasattr(self.config.memory_config, 'letta') else None
         filesystem_config = getattr(letta_config, 'filesystem', None) if letta_config else None
-        auto_sync = getattr(filesystem_config, 'autoSync', False) if filesystem_config else False
+        auto_sync = getattr(filesystem_config, 'auto_sync', False) if filesystem_config else False
         
         if auto_sync:
             self.watcher.start()
