@@ -46,7 +46,13 @@ class LettaFilesystemService(BaseService):
         try:
             # Initialize Letta REST API connection
             letta_config = self.config.memory_config.letta if hasattr(self.config.memory_config, 'letta') else {}
-            self._base_url = getattr(letta_config, 'server_url', 'http://letta-server:8283') if letta_config else 'http://letta-server:8283'
+            config_url = getattr(letta_config, 'server_url', 'http://localhost:8283') if letta_config else 'http://localhost:8283'
+            
+            # If in Docker, replace localhost with service name
+            if os.getenv('DOCKER_ENV') or os.getenv('THOTH_DOCKER'):
+                config_url = config_url.replace('localhost', 'letta-server')
+            
+            self._base_url = config_url
             self._token = os.getenv('LETTA_SERVER_PASSWORD', 'letta_dev_password')
             
             self.logger.info(f'Initializing Letta REST client with base_url: {self._base_url}')
