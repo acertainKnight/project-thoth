@@ -17,7 +17,8 @@
       "Bash(echo:*)",
       "Bash(chmod:*)",
       "Bash(source ~/.bashrc)",
-      "Bash(bash:*)"
+      "Bash(bash:*)",
+      "Bash(docker exec:*)"
     ],
     "deny": []
   },
