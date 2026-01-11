@@ -89,7 +89,7 @@ RUN chmod -R a+r /app/src && \
     find /app/src -type d -exec chmod a+rx {} \;
 
 # Create cache directories for CacheService (as root before switching users)
-RUN mkdir -p /app/cache/{ocr,analysis,citations,api_responses,embeddings} && \
+RUN mkdir -p /app/cache/ocr /app/cache/analysis /app/cache/citations /app/cache/api_responses /app/cache/embeddings && \
     chown -R thoth:thoth /app/cache && \
     chmod -R 755 /app/cache
 
