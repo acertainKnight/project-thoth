@@ -194,8 +194,8 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
             # Get folder configuration
             letta_config = self.config.memory_config.letta if hasattr(self.config.memory_config, 'letta') else None
             filesystem_config = letta_config.get('filesystem', {})
-            folder_name = filesystem_config.get('folderName', 'thoth_processed_articles')
-            embedding_model = filesystem_config.get('embeddingModel', 'openai/text-embedding-3-small')
+            folder_name = getattr(filesystem_config, 'folderName', 'thoth_processed_articles') if filesystem_config else 'thoth_processed_articles'
+            embedding_model = getattr(filesystem_config, 'embeddingModel', 'openai/text-embedding-3-small') if filesystem_config else 'openai/text-embedding-3-small'
             
             # Get or create the folder
             folder_id = await self.letta_service.get_or_create_folder(
@@ -254,7 +254,7 @@ class LettaFilesystemWatcherService:
         # Get debounce settings from config
         letta_config = config.memory_config.letta if hasattr(config.memory_config, 'letta') else None
         filesystem_config = getattr(letta_config, 'filesystem', None) if letta_config else None
-        debounce_seconds = filesystem_config.get('debounceSeconds', 5)
+        debounce_seconds = getattr(filesystem_config, 'debounceSeconds', 5) if filesystem_config else 5
         
         # Create watcher
         self.watcher = LettaFilesystemWatcher(
