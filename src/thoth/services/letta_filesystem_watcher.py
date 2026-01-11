@@ -192,7 +192,7 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
             self.logger.info('Auto-syncing vault files to Letta filesystem...')
             
             # Get folder configuration
-            letta_config = self.config.memory_config.get('letta', {})
+            letta_config = self.config.memory_config.letta if hasattr(self.config.memory_config, 'letta') else None
             filesystem_config = letta_config.get('filesystem', {})
             folder_name = filesystem_config.get('folderName', 'thoth_processed_articles')
             embedding_model = filesystem_config.get('embeddingModel', 'openai/text-embedding-3-small')
@@ -252,7 +252,7 @@ class LettaFilesystemWatcherService:
         self.letta_service = letta_filesystem_service
         
         # Get debounce settings from config
-        letta_config = config.memory_config.get('letta', {})
+        letta_config = config.memory_config.letta if hasattr(config.memory_config, 'letta') else None
         filesystem_config = letta_config.get('filesystem', {})
         debounce_seconds = filesystem_config.get('debounceSeconds', 5)
         
@@ -268,7 +268,9 @@ class LettaFilesystemWatcherService:
 
     def start(self) -> None:
         """Start the watcher."""
-        auto_sync = self.config.memory_config.get('letta', {}).get('filesystem', {}).get('autoSync', False)
+        letta_config = self.config.memory_config.letta if hasattr(self.config.memory_config, 'letta') else None
+        filesystem_config = getattr(letta_config, 'filesystem', None) if letta_config else None
+        auto_sync = getattr(filesystem_config, 'autoSync', False) if filesystem_config else False
         
         if auto_sync:
             self.watcher.start()
