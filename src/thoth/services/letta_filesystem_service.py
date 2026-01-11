@@ -292,17 +292,23 @@ class LettaFilesystemService(BaseService):
             
             self.logger.info(f'Starting vault sync from: {notes_path}')
             
-            # Find all markdown files
+            # Find all PDF and markdown files
+            pdf_files = list(notes_path.glob('**/*.pdf'))
             md_files = list(notes_path.glob('**/*.md'))
+            all_files = pdf_files + md_files
             
             stats = {
-                'total_files': len(md_files),
+                'total_files': len(all_files),
+                'pdfs': len(pdf_files),
+                'markdown': len(md_files),
                 'uploaded': 0,
                 'skipped': 0,
                 'errors': []
             }
             
-            for file_path in md_files:
+            self.logger.info(f'Found {len(pdf_files)} PDFs and {len(md_files)} markdown files')
+            
+            for file_path in all_files:
                 try:
                     # Check if file needs upload
                     stat = file_path.stat()
