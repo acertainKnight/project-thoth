@@ -422,6 +422,20 @@ class RAGConfig(BaseModel):
         populate_by_name = True
 
 
+class LettaFilesystemConfig(BaseModel):
+    """Letta filesystem synchronization configuration."""
+
+    enabled: bool = True
+    folder_name: str = Field(default='thoth_processed_articles', alias='folderName')
+    embedding_model: str = Field(default='openai/text-embedding-3-small', alias='embeddingModel')
+    auto_sync: bool = Field(default=False, alias='autoSync')
+    sync_on_startup: bool = Field(default=False, alias='syncOnStartup')
+    debounce_seconds: int = Field(default=5, alias='debounceSeconds')
+
+    class Config:
+        populate_by_name = True
+
+
 class LettaMemoryConfig(BaseModel):
     """Letta memory configuration."""
 
@@ -435,6 +449,7 @@ class LettaMemoryConfig(BaseModel):
         default=24, alias='consolidationIntervalHours'
     )
     fallback_enabled: bool = Field(default=True, alias='fallbackEnabled')
+    filesystem: LettaFilesystemConfig = Field(default_factory=LettaFilesystemConfig)
 
     class Config:
         populate_by_name = True
