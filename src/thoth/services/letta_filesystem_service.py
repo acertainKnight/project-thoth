@@ -90,7 +90,7 @@ class LettaFilesystemService(BaseService):
     async def create_folder(
         self,
         name: str,
-        embedding_model: str = 'openai/text-embedding-3-small'
+        embedding_model: str = 'text-embedding-3-small'
     ) -> str:
         """
         Create a Letta folder for storing vault files.
@@ -136,7 +136,7 @@ class LettaFilesystemService(BaseService):
     async def get_or_create_folder(
         self,
         name: str,
-        embedding_model: str = 'openai/text-embedding-3-small'
+        embedding_model: str = 'text-embedding-3-small'
     ) -> str:
         """
         Get existing folder or create if doesn't exist.
