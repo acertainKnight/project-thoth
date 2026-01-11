@@ -104,12 +104,18 @@ class LettaFilesystemService(BaseService):
         try:
             self.logger.info(f'Creating Letta folder: {name} with embedding: {embedding_model}')
             
-            # Create folder via REST API
+            # Create folder via REST API  
+            # Letta requires embedding_endpoint_type and embedding_dim
+            embedding_config = {
+                'embedding_model': embedding_model,
+                'embedding_endpoint_type': 'openai',  # For openai/text-embedding-*
+                'embedding_dim': 1536  # Dimension for text-embedding-3-small
+            }
             response = await asyncio.to_thread(
                 requests.post,
                 f'{self._base_url}/v1/folders',
                 headers=self._get_headers(),
-                json={'name': name, 'embedding_config': {'embedding_model': embedding_model}}
+                json={'name': name, 'embedding_config': embedding_config}
             )
             
             if response.status_code not in (200, 201):
