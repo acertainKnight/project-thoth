@@ -88,6 +88,11 @@ RUN chmod 755 /entrypoint.sh && chown root:root /entrypoint.sh
 RUN chmod -R a+r /app/src && \
     find /app/src -type d -exec chmod a+rx {} \;
 
+# Create cache directories for CacheService (as root before switching users)
+RUN mkdir -p /app/cache/{ocr,analysis,citations,api_responses,embeddings} && \
+    chown -R thoth:thoth /app/cache && \
+    chmod -R 755 /app/cache
+
 # Switch to non-root user temporarily for Playwright install
 USER thoth
 

@@ -52,3 +52,27 @@ services:
       - ./src:/app/src
       - ./pyproject.toml:/app/pyproject.toml:ro
 
+  # ==============================================================================
+  # Thoth MCP Overrides
+  # UV-recommended docker compose watch for hot-reload development
+  # See: https://docs.astral.sh/uv/guides/integration/docker/#configuring-watch-with-docker-compose
+  # ==============================================================================
+  thoth-mcp:
+    volumes:
+      # Mount source code for hot-reload development (no rebuild needed!)
+      - ./src:/app/src
+      - ./pyproject.toml:/app/pyproject.toml:ro
+    
+    develop:
+      # UV best practice: use docker compose watch
+      watch:
+        # Sync source code changes automatically
+        - action: sync
+          path: ./src
+          target: /app/src
+          # No ignore needed - .venv is already excluded by volume mount
+        
+        # Rebuild on dependency changes only
+        - action: rebuild
+          path: ./pyproject.toml
+
