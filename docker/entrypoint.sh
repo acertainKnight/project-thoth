@@ -18,6 +18,26 @@ wait_for_postgres() {
     echo "  ✓ PostgreSQL is ready!"
 }
 
+# Function to ensure cache directories exist
+setup_cache_directories() {
+    echo "==> Setting up cache directories..."
+    
+    # Remove any broken brace expansion directories
+    rm -rf /app/cache/{ocr,analysis,citations,api_responses,embeddings} 2>/dev/null || true
+    
+    # Create cache directories with proper permissions
+    mkdir -p /app/cache/ocr
+    mkdir -p /app/cache/analysis
+    mkdir -p /app/cache/citations
+    mkdir -p /app/cache/api_responses
+    mkdir -p /app/cache/embeddings
+    
+    # Ensure thoth user owns all cache directories
+    chown -R thoth:thoth /app/cache
+    
+    echo "  ✓ Cache directories ready!"
+}
+
 # Function to run database migrations
 run_migrations() {
     echo "==> Running database migrations..."
@@ -36,6 +56,9 @@ run_migrations() {
 
 # Main entrypoint logic
 main() {
+    # Setup cache directories (always needed)
+    setup_cache_directories
+    
     # Wait for dependencies
     wait_for_postgres
 
