@@ -106,6 +106,11 @@ from .schema_tools import (
     GetPresetDetailsTool,
     ValidateSchemaFileTool,
 )
+from .skill_tools import (
+    ListSkillsMCPTool,
+    LoadSkillMCPTool,
+    UnloadSkillMCPTool,
+)
 
 # List of all available MCP tool classes
 MCP_TOOL_CLASSES = [
@@ -188,6 +193,10 @@ MCP_TOOL_CLASSES = [
     GetArticleFullContentMCPTool,
     FindArticlesByAuthorsMCPTool,
     GetCitationContextMCPTool,
+    # Skill management tools
+    ListSkillsMCPTool,
+    LoadSkillMCPTool,
+    UnloadSkillMCPTool,
 ]
 
 
@@ -237,6 +246,7 @@ __all__ = [  # noqa: RUF022
     'GenerateReadingListMCPTool',
     'GenerateResearchSummaryMCPTool',
     'GetArticleDetailsMCPTool',
+    'GetArticleDetailsMCPTool',
     'GetArticleFullContentMCPTool',
     'GetCitationContextMCPTool',
     'GetQueryMCPTool',
@@ -247,7 +257,9 @@ __all__ = [  # noqa: RUF022
     'ListAvailableSourcesMCPTool',
     'ListResearchQuestionsMCPTool',
     'ListQueriesMCPTool',
+    'ListSkillsMCPTool',
     'ListWorkflowsMCPTool',
+    'LoadSkillMCPTool',
     'LocatePdfMCPTool',
     'MCPTool',
     'MCPToolCallResult',
@@ -261,6 +273,7 @@ __all__ = [  # noqa: RUF022
     'SearchByTopicMCPTool',
     'SuggestTagsMCPTool',
     'SyncWithObsidianMCPTool',
+    'UnloadSkillMCPTool',
     'UpdateArticleMetadataMCPTool',
     'UpdateQueryMCPTool',
     'UpdateResearchQuestionMCPTool',
