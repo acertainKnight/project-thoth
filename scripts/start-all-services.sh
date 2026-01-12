@@ -125,9 +125,9 @@ show_service_status() {
         echo -e "  API Server: ${RED}✗ Unhealthy${NC}"
     fi
 
-    if curl -s -f "http://localhost:8001/health" > /dev/null 2>&1; then
+    if curl -s -f "http://localhost:8082/health" > /dev/null 2>&1; then
         echo -e "  MCP Server: ${GREEN}✓ Healthy${NC}"
-        echo -e "  URL: ${CYAN}http://localhost:8001${NC}"
+        echo -e "  URL: ${CYAN}http://localhost:8082${NC}"
     else
         echo -e "  MCP Server: ${RED}✗ Unhealthy${NC}"
     fi
@@ -279,7 +279,7 @@ main() {
 
     echo -e "${YELLOW}Service URLs:${NC}"
     echo "  Main API: http://localhost:8000"
-    echo "  MCP Server: http://localhost:8001"
+    echo "  MCP Server: http://localhost:8082"
     echo "  Memory Service: http://localhost:8283"
     echo "  Vector DB: http://localhost:8003"
     echo "  Prometheus: http://localhost:9090"

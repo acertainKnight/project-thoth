@@ -84,7 +84,7 @@ make prod
 - **Microservices Mode**: Each service in separate containers for debugging
 
 **Services Available:**
-- **Development**: API (8000), MCP (8001), Letta (8283)
+- **Development**: API (8000), MCP (8082), Letta (8283)
 - **Production**: API (8080), MCP (8081), Letta (8283)
 
 **Configuration:**
@@ -136,7 +136,7 @@ make dev
 | Service | Development | Production | Purpose |
 |---------|-------------|------------|---------|
 | **API Server** | 8000 | 8080 | REST API & document processing |
-| **MCP Server HTTP** | 8001 | 8082 | Model Context Protocol (HTTP transport) |
+| **MCP Server HTTP** | 8082 | 8082 | Model Context Protocol (HTTP transport with /mcp and /sse endpoints) |
 | **MCP Server SSE** | - | 8081 | Model Context Protocol (Server-Sent Events) |
 | **ChromaDB** | 8003 | - | Vector database (dev only) |
 | **Letta** | 8283 | 8283 | Agent memory system |
@@ -247,7 +247,7 @@ Thoth uses a **production-ready microservices architecture** with service-specif
 ```mermaid
 graph TD
     A[Obsidian Plugin] --> B[API Server :8000/:8080]
-    C[CLI/MCP Client] --> D[MCP Server :8001/:8081]
+    C[CLI/MCP Client] --> D[MCP Server :8082]
 
     B --> E[ServiceManager]
     D --> E
@@ -432,7 +432,7 @@ python -m thoth discovery schedule \
 python -m thoth mcp tools
 
 # Start MCP server (HTTP/SSE dual transport)
-python -m thoth mcp start --port 8001
+python -m thoth mcp start --port 8000
 
 # Server info
 python -m thoth mcp info

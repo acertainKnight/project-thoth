@@ -116,7 +116,7 @@ python -m thoth discovery stop
 
 ```bash
 # Start MCP server
-python -m thoth mcp full --host 0.0.0.0 --http-port 8000 --sse-port 8001
+python -m thoth mcp start --host 0.0.0.0 --http-port 8000
 
 # List available tools
 python -m thoth mcp tools
@@ -542,7 +542,7 @@ uv run mypy src/thoth
 |---------|------|---------|
 | API | 8080 | REST API (external) |
 | MCP HTTP | 8082 | MCP tools (external, maps to internal 8000) |
-| MCP SSE | 8081 | MCP SSE transport (external, maps to internal 8001) |
+| MCP HTTP | 8082 | MCP HTTP transport (includes /mcp POST and /sse streaming endpoints) |
 | ChromaDB | 8003 | Vector DB |
 | Discovery | 8004 | Discovery service |
 | Letta | 8283 | Agent memory |

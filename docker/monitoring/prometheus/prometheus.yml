@@ -43,7 +43,7 @@ scrape_configs:
   # ==============================================================================
   - job_name: 'thoth-mcp'
     static_configs:
-      - targets: ['thoth-app-prod:8001']
+      - targets: ['thoth-app-prod:8000']
     metrics_path: '/metrics'
     scrape_interval: 30s
     scrape_timeout: 10s

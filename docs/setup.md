@@ -115,7 +115,7 @@ make health
 
 # Expected output:
 # API Server: ✓ Running on port 8000
-# MCP Server: ✓ Running on port 8001
+# MCP Server: ✓ Running on port 8082 (HTTP transport with /mcp and /sse endpoints)
 # Letta: ✓ Running on port 8283
 # PostgreSQL: ✓ Running
 # ChromaDB: ✓ Running on port 8003
@@ -197,7 +197,7 @@ cp .env.example .env
 python -m thoth server start --port 8000
 
 # Terminal 2: Start MCP server
-python -m thoth mcp start --port 8001
+python -m thoth mcp start --port 8000
 
 # Terminal 3: Start Letta
 letta server --port 8283
@@ -394,7 +394,7 @@ make health
 
 # Or check manually:
 curl http://localhost:8000/health | jq
-curl http://localhost:8001/health | jq
+curl http://localhost:8082/health | jq
 curl http://localhost:8283/v1/health | jq
 ```
 
@@ -407,7 +407,7 @@ curl -X POST http://localhost:8000/chat \
   -d '{"message": "Hello, Thoth!"}'
 
 # Test MCP tools
-curl http://localhost:8001/tools | jq
+curl http://localhost:8082/tools | jq
 ```
 
 ### Test Document Processing
@@ -441,7 +441,7 @@ tail -f "$OBSIDIAN_VAULT_PATH/_thoth/logs/thoth.log"
 
 #### Port Already in Use
 
-**Symptom**: Error binding to port 8000/8001/8283
+**Symptom**: Error binding to port 8000/8082/8283
 
 **Solution**:
 ```bash
