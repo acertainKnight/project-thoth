@@ -192,7 +192,7 @@ services:
 
       # Service discovery (REQUIRED - inter-service communication URLs)
       - THOTH_LETTA_URL=http://letta:8283
-      - THOTH_MCP_URL=http://thoth-mcp:8001
+      - THOTH_MCP_URL=http://thoth-mcp:8000
       - THOTH_DISCOVERY_URL=http://thoth-discovery:8004
       - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
 

@@ -119,8 +119,9 @@ make dev-stop
 ```
 
 **Services Available:**
-- API Server: http://localhost:8000
-- MCP Server: http://localhost:8001
+- API Server: http://localhost:8080
+- MCP Server (HTTP): http://localhost:8082
+- MCP Server (SSE): http://localhost:8081
 - Letta Memory: http://localhost:8283
 
 ### Microservices Mode
@@ -211,7 +212,8 @@ Configure Thoth in `vault/_thoth/settings.json`:
     },
     "mcp": {
       "host": "0.0.0.0",
-      "port": 8001,
+      "httpPort": 8000,
+      "ssePort": 8001,
       "autoStart": true,
       "enabled": true
     }
@@ -229,14 +231,16 @@ Configure Thoth in `vault/_thoth/settings.json`:
 ### Port Mapping
 
 #### Development (Local Mode)
-- `8000` → API Server
-- `8001` → MCP Server
+- `8080` → API Server (internal 8000)
+- `8082` → MCP Server (internal 8000 - includes /mcp POST and /sse streaming)
+- `8081` → MCP SSE-only transport (internal 8001 - not used by Letta)
 - `8283` → Letta Memory
-- `5433` → PostgreSQL (exposed for dev)
+- `5432` → PostgreSQL (shared with Letta)
 
 #### Production (Local Mode)
-- `8080` → API Server
-- `8081` → MCP Server
+- `8080` → API Server (internal 8000)
+- `8082` → MCP Server (internal 8000 - includes /mcp POST and /sse streaming)
+- `8081` → MCP SSE-only transport (internal 8001 - not used by Letta)
 - `8283` → Letta Memory
 
 #### Microservices Mode (same ports as local)

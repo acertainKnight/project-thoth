@@ -187,6 +187,8 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    networks:
+      - letta-network
     deploy:
       resources:
         limits:

@@ -96,7 +96,7 @@ Thoth is a **production-ready microservices architecture** designed for academic
 - Streaming responses (SSE)
 
 **Exposed Ports**:
-- Development: 8001 (HTTP)
+- Development: 8082 external (8000 internal HTTP, 8001 internal SSE)
 - Production: 8081 (SSE), 8082 (HTTP)
 
 #### 3. PDF Monitor (Dockerfile: `docker/pdf-monitor/Dockerfile`, ~2.5GB)
@@ -310,7 +310,7 @@ ServiceManager
 ```
 
 **Transports**:
-- **HTTP** (port 8001/8082): Simple request/response
+- **HTTP** (port 8000 internal/8082 external): Request/response with SSE streaming
 - **SSE** (port 8081): Server-Sent Events for streaming
 - **Stdio**: CLI integration
 
@@ -496,7 +496,7 @@ Letta retrieves agent state from PostgreSQL+pgvector
     ▼
 Letta generates response with MCP tools
     │
-    ├─ Call MCP Server (8001) for tool execution
+    ├─ Call MCP Server (8000 internal) for tool execution
     ├─ Stream response chunks via SSE
     └─ Update memory in PostgreSQL
     │

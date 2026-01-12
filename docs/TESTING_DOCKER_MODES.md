@@ -33,8 +33,9 @@ make health
 ```
 
 **Expected Results:**
-- [ ] API (8000): ✓ Healthy
-- [ ] MCP (8001): ✓ Healthy
+- [ ] API (8080): ✓ Healthy
+- [ ] MCP HTTP (8082): ✓ Healthy
+- [ ] MCP SSE (8081): ✓ Healthy
 - [ ] Letta (8283): ✓ Healthy
 
 ### Service Logs
@@ -61,8 +62,8 @@ docker exec thoth-dev-all-in-one tail -f /vault/_thoth/logs/monitor-stdout.log
 # Test API endpoint
 curl http://localhost:8000/health
 
-# Test MCP endpoint
-curl http://localhost:8001/health
+# Test MCP HTTP endpoint
+curl http://localhost:8082/health
 
 # Test file upload (if applicable)
 # Process a PDF through the API
@@ -143,7 +144,7 @@ make health
 
 ```bash
 # Check inter-service communication
-docker exec thoth-dev-api curl http://thoth-mcp:8001/health
+docker exec thoth-dev-api curl http://thoth-mcp:8000/health
 docker exec thoth-dev-mcp curl http://thoth-api:8000/health
 ```
 
@@ -383,8 +384,8 @@ docker restart thoth-dev-all-in-one
 docker ps
 
 # Check health endpoints
-curl http://localhost:8000/health
-curl http://localhost:8001/health
+curl http://localhost:8080/health
+curl http://localhost:8082/health
 
 # Check inter-service connectivity
 docker exec thoth-dev-all-in-one curl http://localhost:8000/health

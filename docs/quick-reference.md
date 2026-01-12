@@ -116,7 +116,7 @@ python -m thoth discovery stop
 
 ```bash
 # Start MCP server
-python -m thoth mcp start --port 8001
+python -m thoth mcp full --host 0.0.0.0 --http-port 8000 --sse-port 8001
 
 # List available tools
 python -m thoth mcp tools
@@ -276,13 +276,13 @@ curl http://localhost:8000/research/results/<id> | jq
 
 ```bash
 # List tools
-curl http://localhost:8001/tools | jq
+curl http://localhost:8082/tools | jq
 
 # Get tool schema
-curl http://localhost:8001/tools/<tool_name>/schema | jq
+curl http://localhost:8082/tools/<tool_name>/schema | jq
 
 # Execute tool
-curl -X POST http://localhost:8001/tools/<tool_name> \
+curl -X POST http://localhost:8082/tools/<tool_name> \
   -H "Content-Type: application/json" \
   -d '{"param1": "value1"}'
 ```
@@ -540,8 +540,9 @@ uv run mypy src/thoth
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| API | 8000 | REST API |
-| MCP HTTP | 8001 | MCP tools |
+| API | 8080 | REST API (external) |
+| MCP HTTP | 8082 | MCP tools (external, maps to internal 8000) |
+| MCP SSE | 8081 | MCP SSE transport (external, maps to internal 8001) |
 | ChromaDB | 8003 | Vector DB |
 | Discovery | 8004 | Discovery service |
 | Letta | 8283 | Agent memory |
