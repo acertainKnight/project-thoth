@@ -71,11 +71,14 @@ services:
     environment:
       # Database URI must be set here for Docker networking
       - LETTA_PG_URI=postgresql://letta:letta_password@letta-postgres:5432/letta
+      # Thoth MCP Server URL (for auto-configuration)
+      - THOTH_MCP_URL=http://thoth-mcp:8000
     volumes:
       - letta-data:/letta/.persist
       - letta-home:/letta
       - ./docker/letta/init-schema.sh:/init-schema.sh:ro
-    command: ["bash", "/init-schema.sh"]
+      - ./docker/letta/init-mcp-config.sh:/init-mcp-config.sh:ro
+    command: ["bash", "-c", "/init-mcp-config.sh && /init-schema.sh"]
     ports:
       - "8283:8283"
     networks:

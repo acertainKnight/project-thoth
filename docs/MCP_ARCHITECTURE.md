@@ -3,7 +3,7 @@
 **Author**: Staff Engineer Review  
 **Date**: January 2026  
 **Status**: Production  
-**Primary Transport**: Server-Sent Events (Port 8001)  
+**Primary Transport**: HTTP with SSE Streaming (Port 8000)  
 
 ---
 
@@ -146,8 +146,8 @@ CLI Tools    Web Clients   Letta/Claude    (Future transports)
 
 | Transport | Use Case | Clients | Streaming | Production Port |
 |-----------|----------|---------|-----------|-----------------|
-| **SSE** | Real-time agents | Letta, LangChain | ✅ Full | 8081 (primary) |
-| **HTTP** | Web APIs, testing | Any HTTP client | ❌ Request/response | 8082 |
+| **HTTP** | Real-time agents, Web APIs | Letta, LangChain, Any HTTP client | ✅ SSE Streaming | 8082 (primary) |
+| **SSE** | Dedicated SSE transport | Legacy SSE clients | ✅ Full | 8081 |
 | **stdio** | Local CLI tools | MCP CLI utilities | ✅ Bidirectional | N/A (stdin/out) |
 
 ### 3. SSE Transport Deep Dive
@@ -201,7 +201,7 @@ async def sse_endpoint_standard():
 Nginx SSE proxy (port 8284) sits in front of SSE transport:
 ```nginx
 location /sse {
-    proxy_pass http://thoth-mcp:8001;
+    proxy_pass http://thoth-mcp:8000;
     proxy_http_version 1.1;
     proxy_set_header Connection "";
     proxy_buffering off;            # Critical for SSE
@@ -688,7 +688,7 @@ async def _handle_health(self, request_id: Any):
 **Letta Connection Flow**:
 ```
 1. Letta agent created via API (port 8283)
-2. Letta configures MCP server URL: http://thoth-mcp:8001
+2. Letta configures MCP server URL: http://thoth-mcp:8000
 3. Letta opens SSE connection to /sse endpoint
 4. Letta sends tool calls via POST /mcp
 5. Thoth streams responses via SSE
