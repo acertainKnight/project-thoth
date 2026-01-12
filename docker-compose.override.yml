@@ -35,7 +35,7 @@ services:
     # Override port mappings for development (maintain remapping to avoid conflicts)
     ports:
       - "8080:8000"  # API server (remapped to avoid local dev conflicts)
-      - "8081:8001"  # MCP server (remapped to avoid local dev conflicts)
+      - "8082:8000"  # MCP server HTTP transport (includes /mcp and /sse endpoints)
       - "5678:5678"  # Debug port
     
     develop:

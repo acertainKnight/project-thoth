@@ -27,7 +27,7 @@ scrape_configs:
   # Thoth MCP Server metrics
   - job_name: 'thoth-mcp'
     static_configs:
-      - targets: ['thoth-mcp:8001']
+      - targets: ['thoth-mcp:8000']
     metrics_path: '/metrics'
     scrape_interval: 10s
     scrape_timeout: 5s

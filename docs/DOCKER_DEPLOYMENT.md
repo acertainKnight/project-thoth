@@ -76,7 +76,7 @@ Thoth offers two deployment architectures to suit different use cases:
 - **Docker Compose:** 2.0+ (included with Docker Desktop)
 - **RAM:** Minimum 4GB available, 8GB recommended
 - **Disk:** ~5GB for images and data
-- **Ports:** 8000, 8001, 8283, 5432/5433 must be available
+- **Ports:** 8000, 8082, 8283, 5432/5433 must be available
 
 ### Software
 
@@ -213,7 +213,7 @@ Configure Thoth in `vault/_thoth/settings.json`:
     "mcp": {
       "host": "0.0.0.0",
       "httpPort": 8000,
-      "ssePort": 8001,
+      "httpPort": 8000,
       "autoStart": true,
       "enabled": true
     }
@@ -233,7 +233,7 @@ Configure Thoth in `vault/_thoth/settings.json`:
 #### Development (Local Mode)
 - `8080` → API Server (internal 8000)
 - `8082` → MCP Server (internal 8000 - includes /mcp POST and /sse streaming)
-- `8081` → MCP SSE-only transport (internal 8001 - not used by Letta)
+- `8082` → MCP HTTP transport (internal 8000 - includes /mcp and /sse endpoints)
 - `8283` → Letta Memory
 - `5432` → PostgreSQL (shared with Letta)
 
@@ -406,7 +406,7 @@ docker ps | grep thoth
 docker logs thoth-dev-all-in-one 2>&1 | tail -50
 
 # Verify ports
-netstat -tulpn | grep -E '8000|8001|8283'
+netstat -tulpn | grep -E '8000|8082|8283'
 ```
 
 ### Memory Issues

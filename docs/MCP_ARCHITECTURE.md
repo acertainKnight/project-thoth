@@ -617,10 +617,10 @@ services:
     command: ["python", "-m", "thoth", "mcp", "full",
               "--host", "0.0.0.0",
               "--http-port", "8000",
-              "--sse-port", "8001"]
+              "--http-port", "8000"]
     ports:
       - "8082:8000"  # HTTP external
-      - "8081:8001"  # SSE external (primary)
+      - "8082:8000"  # HTTP transport (includes /mcp and /sse endpoints)
     depends_on:
       - letta-postgres
     environment:
@@ -629,7 +629,7 @@ services:
 ```
 
 **Port Mapping Strategy**:
-- **Internal**: Standard ports (8000 HTTP, 8001 SSE)
+- **Internal**: Port 8000 (HTTP transport with /mcp POST and /sse streaming)
 - **External**: Production ports (8082 HTTP, 8081 SSE)
 - **Why**: Avoid conflicts, clear service separation
 

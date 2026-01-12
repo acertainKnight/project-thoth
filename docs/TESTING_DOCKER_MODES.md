@@ -8,7 +8,7 @@ This document provides a comprehensive testing checklist for both local and micr
 - [ ] Ensure `.env` file exists with required API keys
 - [ ] Docker and Docker Compose installed
 - [ ] At least 4GB RAM available
-- [ ] Ports 8000, 8001, 8283, 5432/5433 available
+- [ ] Ports 8000, 8082, 8283, 5432/5433 available
 
 ## Phase 1: Local Mode Testing (Default)
 
@@ -136,7 +136,7 @@ make health
 
 **Expected Results:**
 - [ ] API (8000): ✓ Healthy
-- [ ] MCP (8001): ✓ Healthy
+- [ ] MCP (8082): ✓ Healthy
 - [ ] Letta (8283): ✓ Healthy
 - [ ] All individual service containers running
 

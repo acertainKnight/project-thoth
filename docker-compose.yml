@@ -94,7 +94,7 @@ services:
     command: []  # Uses entrypoint.sh which starts supervisor
     ports:
       - "8080:8000"  # API
-      - "8081:8001"  # MCP
+      - "8082:8000"  # MCP (HTTP transport includes /mcp POST and /sse streaming)
     # NO DEPENDENCIES ON LETTA - it runs independently
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -158,8 +158,8 @@ services:
       dockerfile: docker/mcp/Dockerfile
       target: production
     container_name: thoth-mcp
-    # Full mode with concurrent HTTP and SSE transports (blocking bug FIXED)
-    command: ["python", "-m", "thoth", "mcp", "full", "--host", "0.0.0.0", "--http-port", "8000", "--sse-port", "8001"]
+    # HTTP-only mode (includes /mcp POST and /sse streaming endpoints)
+    command: ["python", "-m", "thoth", "mcp", "start", "--host", "0.0.0.0", "--http-port", "8000"]
     # NO DEPENDENCIES - connects to external Letta
     environment:
       # Base Thoth environment
@@ -176,11 +176,9 @@ services:
       # MCP-specific settings
       - MCP_HOST=0.0.0.0
       - MCP_HTTP_PORT=8000
-      - MCP_SSE_PORT=8001
       - MCP_ENABLE_FILES=true
     ports:
-      - "8082:8000"  # HTTP transport
-      - "8081:8001"  # SSE transport
+      - "8082:8000"  # HTTP transport (includes /mcp and /sse endpoints)
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

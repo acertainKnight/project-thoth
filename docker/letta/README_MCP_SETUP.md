@@ -55,7 +55,7 @@ The auto-generated configuration in `/letta/.letta/mcp-servers.json`:
 
 **External Access (Host → Thoth MCP):**
 - Port 8082: Maps to internal 8000 (HTTP transport - includes /mcp and /sse endpoints)
-- Port 8081: Maps to internal 8001 (separate SSE transport - not needed for Letta)
+- Port 8082: Maps to internal 8000 (HTTP transport with /mcp and /sse endpoints)
 
 ## Verifying Setup
 
@@ -146,7 +146,8 @@ docker logs letta-server | grep -i mcp
 **Symptom**: Using port 8001 instead of 8000
 
 **Solution**: Update MCP URL to `http://thoth-mcp:8000/mcp`
-- Port 8000 is the HTTP transport (supports SSE streaming)
+- Port 8000 is the only port (HTTP transport includes /mcp POST and /sse streaming)
+- Port 8001 no longer exists (removed redundant SSE-only transport)
 - Port 8001 is SSE-only transport (legacy)
 
 ## Manual Configuration

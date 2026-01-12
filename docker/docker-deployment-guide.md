@@ -14,7 +14,7 @@ This guide covers the microservices Docker architecture for Thoth, featuring:
          ▼                       ▼                       ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Thoth API     │    │   MCP Server    │    │ Research Agent  │
-│   (Port 8000)   │    │   (Port 8001)   │    │  (Port 8005)    │
+│   (Port 8000)   │    │   (Port 8000)   │    │  (Port 8005)    │
 │   [Scalable]    │    │   [Scalable]    │    │   [Scalable]    │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
@@ -46,7 +46,7 @@ This guide covers the microservices Docker architecture for Thoth, featuring:
 ### Production Ports (docker-compose.yml - Base Production)
 - **8080**: Thoth API Server (external → 8000 internal)
 - **8082**: MCP Server HTTP transport (external → 8000 internal)
-- **8081**: MCP Server SSE transport (external → 8001 internal)
+- **8082**: MCP Server HTTP transport (external → 8000 internal, includes /mcp and /sse endpoints)
 - **8283**: Letta Memory Service
 - **8284**: Letta Nginx SSE Proxy
 - **(internal)**: PostgreSQL Database (5432, no external access)
@@ -64,7 +64,7 @@ Adds to base production:
 ### Development Ports (docker-compose.dev.yml)
 - **80/443**: Development Nginx proxy (nginx-dev)
 - **8000**: Thoth API Server (with hot-reload)
-- **8001**: MCP Server
+- **8082**: MCP Server
 - **8003**: ChromaDB Vector Database
 - **8004**: Discovery Service
 - **8283**: Letta Memory Service
@@ -201,7 +201,7 @@ curl http://localhost:8284/nginx-health  # Letta Nginx SSE Proxy
 
 # Check service health (Development - docker-compose.dev.yml)
 curl http://localhost:8000/health  # API Server
-curl http://localhost:8001/health  # MCP Server
+curl http://localhost:8082/health  # MCP Server
 curl http://localhost:8004/health  # Discovery Service
 curl http://localhost:8003/api/v1/heartbeat  # ChromaDB
 curl http://localhost:8283/v1/health  # Letta Memory

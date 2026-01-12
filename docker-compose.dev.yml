@@ -98,7 +98,7 @@ services:
       - ./data/prompts:/app/prompts:ro
     ports:
       - "8000:8000"  # API
-      - "8001:8001"  # MCP
+      - "8082:8000"  # MCP (HTTP transport includes /mcp and /sse endpoints)
     networks:
       - thoth-dev-network
     depends_on:
@@ -276,7 +276,7 @@ services:
       - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
       - ./src:/app/src:ro  # Mount source for development
     ports:
-      - "8001:8001"
+      - "8082:8000"  # HTTP transport (includes /mcp and /sse endpoints)
     networks:
       - thoth-dev-network
     depends_on:
@@ -286,7 +286,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 15s
       timeout: 5s
       retries: 3

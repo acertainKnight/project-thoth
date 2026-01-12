@@ -96,7 +96,7 @@ Thoth is a **production-ready microservices architecture** designed for academic
 - Streaming responses (SSE)
 
 **Exposed Ports**:
-- Development: 8082 external (8000 internal HTTP, 8001 internal SSE)
+- Development: 8082 external (8000 internal HTTP with /mcp and /sse endpoints)
 - Production: 8081 (SSE), 8082 (HTTP)
 
 #### 3. PDF Monitor (Dockerfile: `docker/pdf-monitor/Dockerfile`, ~2.5GB)
