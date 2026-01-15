@@ -90,6 +90,32 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
 
+      - name: Debug environment
+        env:
+          THOTH_DISABLE_AUTODETECT: "1"
+        run: |
+          echo "=== Environment Variables ==="
+          env | grep THOTH || echo "No THOTH vars"
+          echo ""
+          echo "=== Python Version ==="
+          uv run python --version
+          echo ""
+          echo "=== Test Fixtures ==="
+          ls -la tests/fixtures/ || echo "No fixtures dir"
+          echo ""
+          echo "=== Pytest Version ==="
+          uv run python -m pytest --version
+          echo ""
+          echo "=== Try importing thoth.config ==="
+          uv run python -c "from thoth.config import config; print('Config imported successfully')" || echo "Config import failed"
+
+      - name: Run single test (debug)
+        env:
+          THOTH_DISABLE_AUTODETECT: "1"
+        run: |
+          echo "Running single test to check basic setup..."
+          uv run python -m pytest tests/unit/config/test_callbacks.py::TestRegisterCallback::test_register_callback_success -vv --tb=long || echo "Single test failed"
+
       - name: Run unit tests
         env:
           THOTH_DISABLE_AUTODETECT: "1"
