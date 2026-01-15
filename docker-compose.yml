@@ -185,8 +185,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
-    networks:
-      - letta-network
+    # networks inherited from thoth-common (thoth-network + letta-network)
     deploy:
       resources:
         limits:
@@ -208,7 +207,7 @@ services:
       dockerfile: docker/pdf-monitor/Dockerfile
       target: production
     container_name: thoth-monitor
-    command: ["python", "-m", "thoth", "system", "monitor", "--optimized", "--recursive", "--watch-dir", "/vault/thoth/papers"]
+    command: ["python", "-m", "thoth", "monitor", "--optimized", "--recursive", "--watch-dir", "/vault/thoth/papers"]
     depends_on:
       thoth-api:
         condition: service_started
@@ -287,7 +286,7 @@ services:
     healthcheck:
       test: [
         "CMD", "python", "-c",
-        "from thoth.services.discovery_scheduler import DiscoveryScheduler; import sys; sys.exit(0)"
+        "from thoth.services.discovery_scheduler import ResearchQuestionScheduler; import sys; sys.exit(0)"
       ]
       interval: 60s
       timeout: 10s
