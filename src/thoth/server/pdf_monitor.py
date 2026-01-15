@@ -302,8 +302,7 @@ class PDFTracker:
                             new_pdf_path = EXCLUDED.new_pdf_path,
                             note_path = EXCLUDED.note_path,
                             file_size = EXCLUDED.file_size,
-                            file_mtime = EXCLUDED.file_mtime,
-                            processed_at = NOW()
+                            file_mtime = EXCLUDED.file_mtime
                     """,
                         str(pdf_path),
                         metadata.get('new_pdf_path'),

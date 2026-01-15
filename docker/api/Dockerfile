@@ -77,6 +77,11 @@ RUN mkdir -p /app /workspace /data/logs /data/cache \
 # Copy the application and virtual environment from builder stage
 COPY --from=builder --chown=thoth:thoth /app /app
 
+# Create cache directories for CacheService (as root before switching users)
+RUN mkdir -p /app/cache/ocr /app/cache/analysis /app/cache/citations /app/cache/api_responses /app/cache/embeddings && \
+    chown -R thoth:thoth /app/cache && \
+    chmod -R 755 /app/cache
+
 # Make sure we can run uv in the runtime
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
