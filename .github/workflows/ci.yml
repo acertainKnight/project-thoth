@@ -90,11 +90,15 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
 
+      - name: Setup test vault
+        run: |
+          mkdir -p ${{ github.workspace }}/test_vault/_thoth
+          echo '{}' > ${{ github.workspace }}/test_vault/_thoth/settings.json
+      
       - name: Debug environment
         env:
           OBSIDIAN_VAULT_PATH: ${{ github.workspace }}/test_vault
         run: |
-          mkdir -p ${{ github.workspace }}/test_vault/_thoth
           echo "=== Environment Variables ==="
           env | grep THOTH || echo "No THOTH vars"
           echo ""
@@ -169,6 +173,7 @@ jobs:
           OBSIDIAN_VAULT_PATH: ${{ github.workspace }}/test_vault
         run: |
           mkdir -p ${{ github.workspace }}/test_vault/_thoth
+          echo '{}' > ${{ github.workspace }}/test_vault/_thoth/settings.json
           uv run python -m pytest tests/integration/ -v --tb=short || true
 
   # Security scanning
