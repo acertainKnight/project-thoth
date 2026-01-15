@@ -159,7 +159,7 @@ services:
       target: production
     container_name: thoth-mcp
     # HTTP-only mode (includes /mcp POST and /sse streaming endpoints)
-    command: ["python", "-m", "thoth", "mcp", "start", "--host", "0.0.0.0", "--http-port", "8000"]
+    command: ["python", "-m", "thoth", "mcp", "http", "--host", "0.0.0.0", "--port", "8000"]
     # NO DEPENDENCIES - connects to external Letta
     environment:
       # Base Thoth environment
@@ -208,7 +208,7 @@ services:
       dockerfile: docker/pdf-monitor/Dockerfile
       target: production
     container_name: thoth-monitor
-    command: ["python", "-m", "thoth", "monitor", "--optimized", "--recursive"]
+    command: ["python", "-m", "thoth", "system", "monitor", "--optimized", "--recursive", "--watch-dir", "/vault/thoth/papers"]
     depends_on:
       thoth-api:
         condition: service_started
@@ -241,7 +241,7 @@ services:
         SERVICE_EXTRAS: "service-dashboard"
     container_name: thoth-dashboard
     command: [
-      "python", "-m", "thoth.cli.main", "research", "start-dashboard",
+      "python", "-m", "thoth", "research", "start-dashboard",
       "--check-interval", "60"
     ]
     depends_on:
@@ -279,7 +279,7 @@ services:
         SERVICE_EXTRAS: "service-discovery"
     container_name: thoth-discovery
     command: [
-      "python", "-m", "thoth.cli.main", "discovery", "scheduler", "start"
+      "python", "-m", "thoth", "discovery", "scheduler", "start"
     ]
     depends_on:
       thoth-api:
