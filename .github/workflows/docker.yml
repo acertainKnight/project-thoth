@@ -58,13 +58,19 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build ${{ matrix.service }}
+        env:
+          OBSIDIAN_VAULT_PATH: /tmp/test_vault
         run: |
-          docker compose build ${{ matrix.service }}
+          docker compose --profile microservices build ${{ matrix.service }}
           echo "✓ ${{ matrix.service }} built successfully"
 
       - name: Test ${{ matrix.service }} image
+        env:
+          OBSIDIAN_VAULT_PATH: /tmp/test_vault
         run: |
-          docker compose run --rm ${{ matrix.service }} python --version
+          mkdir -p /tmp/test_vault/_thoth
+          echo '{}' > /tmp/test_vault/_thoth/settings.json
+          docker compose --profile microservices run --rm ${{ matrix.service }} python --version
           echo "✓ ${{ matrix.service }} container starts successfully"
 
   build-base-image:
@@ -126,9 +132,11 @@ jobs:
           echo "OBSIDIAN_VAULT_PATH=/tmp/test-vault" > .env.test
 
       - name: Start services (without database)
+        env:
+          OBSIDIAN_VAULT_PATH: /tmp/test-vault
         run: |
           # Build all services
-          docker compose build thoth-api thoth-mcp thoth-monitor
+          docker compose --profile microservices build thoth-api thoth-mcp thoth-monitor
 
           # Verify builds succeeded
           docker images | grep thoth
