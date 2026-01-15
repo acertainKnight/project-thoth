@@ -92,7 +92,7 @@ jobs:
 
       - name: Run unit tests
         env:
-          OBSIDIAN_VAULT_PATH: ${{ github.workspace }}/tests/fixtures/test_vault
+          THOTH_DISABLE_AUTODETECT: "1"
         run: uv run python -m pytest tests/unit/ -v --tb=short --cov=src/thoth --cov-report=xml --cov-report=term
 
       - name: Upload coverage to Codecov
@@ -139,7 +139,7 @@ jobs:
       - name: Run integration tests
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/thoth_test
-          OBSIDIAN_VAULT_PATH: ${{ github.workspace }}/tests/fixtures/test_vault
+          THOTH_DISABLE_AUTODETECT: "1"
         run: uv run python -m pytest tests/integration/ -v --tb=short || true
 
   # Security scanning
