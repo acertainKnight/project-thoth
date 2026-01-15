@@ -92,8 +92,9 @@ jobs:
 
       - name: Debug environment
         env:
-          THOTH_DISABLE_AUTODETECT: "1"
+          OBSIDIAN_VAULT_PATH: ${{ github.workspace }}/test_vault
         run: |
+          mkdir -p ${{ github.workspace }}/test_vault/_thoth
           echo "=== Environment Variables ==="
           env | grep THOTH || echo "No THOTH vars"
           echo ""
@@ -111,14 +112,14 @@ jobs:
 
       - name: Run diagnostic test
         env:
-          THOTH_DISABLE_AUTODETECT: "1"
+          OBSIDIAN_VAULT_PATH: ${{ github.workspace }}/test_vault
         run: |
           echo "Running CI diagnostic test..."
           uv run python -m pytest tests/unit/test_ci_debug.py::test_ci_environment_debug -vv -s
 
       - name: Run unit tests
         env:
-          THOTH_DISABLE_AUTODETECT: "1"
+          OBSIDIAN_VAULT_PATH: ${{ github.workspace }}/test_vault
         run: uv run python -m pytest tests/unit/ -v --tb=short --cov=src/thoth --cov-report=xml --cov-report=term
 
       - name: Upload coverage to Codecov
@@ -165,8 +166,10 @@ jobs:
       - name: Run integration tests
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/thoth_test
-          THOTH_DISABLE_AUTODETECT: "1"
-        run: uv run python -m pytest tests/integration/ -v --tb=short || true
+          OBSIDIAN_VAULT_PATH: ${{ github.workspace }}/test_vault
+        run: |
+          mkdir -p ${{ github.workspace }}/test_vault/_thoth
+          uv run python -m pytest tests/integration/ -v --tb=short || true
 
   # Security scanning
   security:
