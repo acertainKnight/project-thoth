@@ -109,12 +109,12 @@ jobs:
           echo "=== Try importing thoth.config ==="
           uv run python -c "from thoth.config import config; print('Config imported successfully')" || echo "Config import failed"
 
-      - name: Run single test (debug)
+      - name: Run diagnostic test
         env:
           THOTH_DISABLE_AUTODETECT: "1"
         run: |
-          echo "Running single test to check basic setup..."
-          uv run python -m pytest tests/unit/config/test_callbacks.py::TestRegisterCallback::test_register_callback_success -vv --tb=long || echo "Single test failed"
+          echo "Running CI diagnostic test..."
+          uv run python -m pytest tests/unit/test_ci_debug.py::test_ci_environment_debug -vv -s
 
       - name: Run unit tests
         env:
