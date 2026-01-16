@@ -191,6 +191,11 @@ class NoteService(BaseService):
             ServiceError: If note creation fails
         """
         try:
+            # Handle dict analysis (from some callers that serialize it)
+            if isinstance(analysis, dict):
+                from thoth.utilities.schemas import AnalysisResponse
+                analysis = AnalysisResponse(**analysis)
+            
             self.validate_input(
                 pdf_path=pdf_path,
                 markdown_path=markdown_path,
