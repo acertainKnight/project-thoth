@@ -425,9 +425,8 @@ class CitationEnhancer:
                 f'  Retries: {enrich_stats["retries"]}'
             )
 
-            # Close async resources
-            await resolution_chain.close()
-            await enrichment_service.close()
+            # NOTE: Don't close clients here - they're reused across multiple PDFs
+            # Clients will be closed when the service itself shuts down
 
             logger.info(
                 f'Enhanced citation resolution complete: {len(enriched_citations)} '
