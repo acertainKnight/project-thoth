@@ -273,10 +273,11 @@ class AnalysisSchemaService(BaseService):
                 )
         
         # Create dynamic model with custom name
+        # Inherit from AnalysisResponse to pass isinstance checks
         model_name = f'DynamicAnalysisResponse_{preset_name.title()}'
         return create_model(
             model_name,
-            __base__=BaseModel,
+            __base__=AnalysisResponse,
             **field_definitions
         )
     
