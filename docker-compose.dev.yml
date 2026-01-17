@@ -76,7 +76,7 @@ services:
     build:
       context: .
       dockerfile: docker/all-in-one/Dockerfile
-      target: development
+      # target: development  # Not using multi-stage build
     container_name: thoth-dev-all-in-one
     user: "1000:1000"
     env_file:
@@ -184,7 +184,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: development
+      # target: development  # Not using multi-stage build
     container_name: thoth-dev-api
     user: "1000:1000"  # Run as host user for proper file permissions
     env_file:
@@ -247,7 +247,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: development
+      # target: development  # Not using multi-stage build
     container_name: thoth-dev-mcp
     user: "1000:1000"  # Run as host user for proper file permissions
     env_file:
@@ -307,7 +307,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: development
+      # target: development  # Not using multi-stage build
     container_name: thoth-dev-discovery
     user: "1000:1000"  # Run as host user for proper file permissions
     env_file:
@@ -367,7 +367,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: development
+      # target: development  # Not using multi-stage build
     container_name: thoth-dev-pdf-monitor
     user: "1000:1000"  # Run as host user for proper file permissions
     command: ["python", "-m", "thoth", "monitor"]
