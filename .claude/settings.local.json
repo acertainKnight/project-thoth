@@ -23,7 +23,15 @@
       "Bash(timeout 60 bash:*)",
       "Bash(curl:*)",
       "Bash(docker stop:*)",
-      "Bash(docker rm:*)"
+      "Bash(docker rm:*)",
+      "Bash(cat:*)",
+      "Bash(letta-code --info:*)",
+      "Bash($HOME/.nvm/versions/node/v20.19.5/bin/letta:*)",
+      "Bash(/home/nick-hallmark/.nvm/versions/node/v20.19.5/bin/letta agents:*)",
+      "Bash(LETTA_BASE_URL=\"http://localhost:8284\" LETTA_API_KEY=\"letta_dev_password\" /home/nick-hallmark/.nvm/versions/node/v20.19.5/bin/letta agents:*)",
+      "Bash(LETTA_BASE_URL=\"http://localhost:8283\" LETTA_API_KEY=\"letta_dev_password\" /home/nick-hallmark/.nvm/versions/node/v20.19.5/bin/letta agents:*)",
+      "Bash(LETTA_BASE_URL=\"http://localhost:8283\" LETTA_API_KEY=\"letta_dev_password\" /home/nick-hallmark/.nvm/versions/node/v20.19.5/bin/letta:*)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": []
   },
