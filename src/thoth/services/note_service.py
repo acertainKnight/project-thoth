@@ -118,9 +118,9 @@ class NoteService(BaseService):
         return content
 
     def _save_markdown_to_postgres(
-        self, title: str, markdown_content: str, pdf_path: str, note_path: str
+        self, title: str, markdown_content: str, pdf_path: str, note_path: str, markdown_path: str = None
     ) -> None:
-        """Update markdown content in PostgreSQL papers table."""
+        """Update markdown content and file paths in PostgreSQL papers table."""
         import asyncpg  # noqa: I001
         import asyncio
 
@@ -135,18 +135,23 @@ class NoteService(BaseService):
         async def save():
             conn = await asyncpg.connect(db_url)
             try:
-                await conn.execute(
+                result = await conn.execute(
                     """
                     UPDATE papers
-                    SET markdown_content = $1, pdf_path = $2, note_path = $3, updated_at = NOW()
-                    WHERE title = $4
+                    SET markdown_content = $1, pdf_path = $2, note_path = $3, markdown_path = $4, updated_at = NOW()
+                    WHERE title = $5
                 """,
                     markdown_content,
                     pdf_path,
                     note_path,
+                    markdown_path,
                     title,
                 )
-                self.logger.info(f'Updated markdown in PostgreSQL for: {title}')
+                rows_affected = int(result.split()[-1]) if result else 0
+                if rows_affected > 0:
+                    self.logger.info(f'Updated paths in PostgreSQL for: {title}')
+                else:
+                    self.logger.warning(f'Paper not found in database: {title}')
             finally:
                 await conn.close()
 
@@ -254,6 +259,7 @@ class NoteService(BaseService):
                 markdown_content,
                 str(final_pdf_path),
                 str(note_path),
+                str(final_markdown_path),
             )
 
             self.log_operation(
