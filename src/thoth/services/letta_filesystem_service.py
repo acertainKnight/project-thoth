@@ -53,7 +53,11 @@ class LettaFilesystemService(BaseService):
             # If in Docker, replace localhost with service name
             if os.getenv('DOCKER_ENV') or os.getenv('THOTH_DOCKER'):
                 config_url = config_url.replace('localhost', 'letta-server')
-            
+
+            # Ensure trailing slash to avoid 307 redirects
+            if not config_url.endswith('/'):
+                config_url = config_url + '/'
+
             self._base_url = config_url
             self._token = os.getenv('LETTA_SERVER_PASSWORD', 'letta_dev_password')
             
@@ -62,10 +66,11 @@ class LettaFilesystemService(BaseService):
             # Create Letta client
             self._letta_client = Letta(base_url=self._base_url, token=self._token)
             
-            # Test connection
+            # Test connection (allow redirects for trailing slash)
             response = requests.get(
-                f'{self._base_url}/v1/health',
-                headers=self._get_headers()
+                f'{self._base_url}v1/health/',
+                headers=self._get_headers(),
+                allow_redirects=True
             )
             if response.status_code == 200:
                 self.logger.info('Letta Filesystem Service initialized successfully')
