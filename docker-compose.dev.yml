@@ -185,6 +185,8 @@ services:
       context: .
       dockerfile: Dockerfile
       # target: development  # Not using multi-stage build
+      args:
+        SERVICE_EXTRAS: "service-api"  # Includes api,discovery,pdf,langchain,vectordb,memory
     container_name: thoth-dev-api
     user: "1000:1000"  # Run as host user for proper file permissions
     env_file:
@@ -248,6 +250,8 @@ services:
       context: .
       dockerfile: Dockerfile
       # target: development  # Not using multi-stage build
+      args:
+        SERVICE_EXTRAS: "service-mcp"  # Includes api,pdf,mcp,discovery,langchain,vectordb,embeddings,memory
     container_name: thoth-dev-mcp
     user: "1000:1000"  # Run as host user for proper file permissions
     env_file:
@@ -308,6 +312,8 @@ services:
       context: .
       dockerfile: Dockerfile
       # target: development  # Not using multi-stage build
+      args:
+        SERVICE_EXTRAS: "service-discovery"  # Includes api,discovery,pdf,langchain,vectordb
     container_name: thoth-dev-discovery
     user: "1000:1000"  # Run as host user for proper file permissions
     env_file:
@@ -368,6 +374,8 @@ services:
       context: .
       dockerfile: Dockerfile
       # target: development  # Not using multi-stage build
+      args:
+        SERVICE_EXTRAS: "service-monitor"  # Includes api,pdf,discovery,mcp,langchain,vectordb,embeddings
     container_name: thoth-dev-pdf-monitor
     user: "1000:1000"  # Run as host user for proper file permissions
     command: ["python", "-m", "thoth", "monitor"]
@@ -412,6 +420,7 @@ services:
       - ./data/prompts:/app/prompts:ro  # System prompts
     networks:
       - thoth-dev-network
+      - letta-network  # Connect to external Letta network for PostgreSQL access
     depends_on:
       thoth-api:
         condition: service_healthy
