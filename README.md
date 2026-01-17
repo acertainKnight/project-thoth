@@ -72,27 +72,52 @@ make dev
 make prod
 ```
 
+**🎉 First-Time Setup (Automatic)**
+
+When you run `make dev` for the first time, it will automatically:
+
+1. **Create `.env.letta`** from template (no manual copy needed)
+2. **Check if Letta is running** (memory system)
+3. **Prompt to start Letta** if not running (just press 'y')
+4. **Start all services** and connect them
+
+**No configuration needed!** Everything works out of the box.
+
+> 📘 **About Letta**: Thoth uses [Letta](https://www.letta.com/) as a standalone memory system that stores your agents and conversations. It runs independently and is shared across projects. [Learn more →](docs/LETTA_SETUP.md)
+
 **Quick Commands:**
-- `make dev` - Local mode (3 containers, ~3.5GB RAM)
-- `make microservices` - Microservices mode (6 containers, for debugging)
+- `make dev` - Local mode (auto-starts Letta if needed)
+- `make microservices` - Microservices mode (for debugging)
 - `make prod` - Production local mode
 - `make health` - Check all services health status
 - `make dev-logs` - View development logs
+- `make letta-status` - Check Letta memory system status
 
 **Deployment Modes:**
 - **Local Mode** (default): All services in one container for simplicity
 - **Microservices Mode**: Each service in separate containers for debugging
+- **Letta**: Standalone memory service (automatically managed)
 
-**Services Available:**
-- **Development**: API (8000), MCP (8082), Letta (8283)
-- **Production**: API (8080), MCP (8081), Letta (8283)
+**Services Automatically Started:**
+- **Thoth API**: 8000 (dev) / 8080 (prod) - Main REST API
+- **Thoth MCP**: 8082 (dev) / 8081 (prod) - Model Context Protocol
+- **Letta Memory**: 8283 - Agent & memory storage (auto-started)
+- **Letta Database**: 5432 - PostgreSQL with pgvector (auto-started)
+- **Letta SSE**: 8284 - Streaming proxy (auto-started)
 
 **Configuration:**
 - All settings in `vault/_thoth/settings.json` (syncs with Obsidian!)
 - No scattered environment variables - one file for everything
 - Hot-reload: Edit settings → changes apply in ~2 seconds (dev mode)
 
-📖 **Full Documentation**: See [Setup Guide](docs/setup.md), [Architecture](docs/architecture.md), and [Usage Guide](docs/usage.md)
+**Letta Memory System:**
+- Automatically managed by `make dev` - no manual setup needed
+- First-time setup: Creates `.env.letta` and starts Letta automatically
+- Shared across all projects - agents persist between restarts
+- Built-in safeguards prevent duplicate instances
+- See [LETTA_SETUP.md](docs/LETTA_SETUP.md) for details
+
+📖 **Full Documentation**: See [Setup Guide](docs/setup.md), [Letta Setup](docs/LETTA_SETUP.md), [Architecture](docs/architecture.md), and [Usage Guide](docs/usage.md)
 
 ### Option 2: Local Development
 
