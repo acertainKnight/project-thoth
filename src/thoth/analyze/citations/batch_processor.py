@@ -187,11 +187,17 @@ class RateLimiter:
         self.burst = burst or int(rate)
         self.tokens = self.burst
         self.last_update = time.monotonic()
-        self._lock = asyncio.Lock()
+        self._lock: Optional[asyncio.Lock] = None  # Lazy init to avoid event loop binding
+
+    def _get_lock(self) -> asyncio.Lock:
+        """Get or create the lock (lazy init to avoid event loop binding)."""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     async def acquire(self):
         """Acquire permission to make a request (blocks if rate limit reached)."""
-        async with self._lock:
+        async with self._get_lock():
             now = time.monotonic()
             elapsed = now - self.last_update
 

@@ -147,6 +147,10 @@ deploy-plugin: _check-vault _build-plugin ## Deploy Obsidian plugin with complet
 dev: ## Start development environment with hot-reload (local mode)
 	@echo "$(YELLOW)Starting Thoth development environment (local mode)...$(NC)"
 	@echo "$(CYAN)Using unified all-in-one container (3 total containers)$(NC)"
+	@echo ""
+	@# Check if Letta is running, start if needed
+	@bash scripts/check-letta.sh || exit 1
+	@echo ""
 	@if [ -z "$(OBSIDIAN_VAULT_PATH)" ]; then \
 		if [ -f .env.vault ]; then \
 			echo "$(CYAN)Loading vault path from .env.vault...$(NC)"; \
@@ -164,7 +168,7 @@ dev: ## Start development environment with hot-reload (local mode)
 	fi; \
 	VAULT_PATH="$${OBSIDIAN_VAULT_PATH:-$(OBSIDIAN_VAULT_PATH)}"; \
 	echo "$(CYAN)Using vault: $$VAULT_PATH$(NC)"; \
-	OBSIDIAN_VAULT_PATH="$$VAULT_PATH" docker compose -f docker-compose.dev.yml up -d
+	OBSIDIAN_VAULT_PATH="$$VAULT_PATH" docker compose -f docker-compose.dev.yml --profile standalone up -d
 	@echo ""
 	@echo "$(GREEN)✅ Development environment started$(NC)"
 	@echo ""
@@ -174,6 +178,10 @@ dev: ## Start development environment with hot-reload (local mode)
 microservices: ## Start development in microservices mode (6 containers)
 	@echo "$(YELLOW)Starting Thoth in microservices mode...$(NC)"
 	@echo "$(CYAN)Using separate containers for each service (6 total containers)$(NC)"
+	@echo ""
+	@# Check if Letta is running, start if needed
+	@bash scripts/check-letta.sh || exit 1
+	@echo ""
 	@if [ -z "$(OBSIDIAN_VAULT_PATH)" ]; then \
 		if [ -f .env.vault ]; then \
 			echo "$(CYAN)Loading vault path from .env.vault...$(NC)"; \

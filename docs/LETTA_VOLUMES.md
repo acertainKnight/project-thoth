@@ -1,26 +1,31 @@
 # Letta Docker Volumes - Important Information
 
-## ⚠️ Warning: Multiple PostgreSQL Volumes
+> **📘 See Also**: [LETTA_ARCHITECTURE.md](./LETTA_ARCHITECTURE.md) for the complete architecture documentation including safeguards and usage patterns.
 
-Your system has **two separate Letta PostgreSQL setups** that use different volumes:
+## ✅ Current Architecture (January 2026)
 
-### 1. Production Setup (RECOMMENDED)
-- **Compose file**: `docker-compose.yml`
-- **Volume**: `letta-postgres`
-- **Container**: `letta-postgres`
-- **Agents**: 12 (most recent data)
-- **Start command**: `letta-start` or `docker compose -f docker-compose.yml up -d letta-postgres letta letta-redis letta-nginx`
+Letta is now a **standalone shared service** that prevents accidental data loss from `make dev`:
 
-### 2. Dev/Microservices Setup
+### Standalone Letta Setup (RECOMMENDED ✅)
+- **Compose file**: `docker-compose.letta.yml`
+- **Volume**: `letta-postgres` (14 agents preserved)
+- **Container**: `letta-server`, `letta-postgres`
+- **Start command**: `make letta-start` or `docker compose -f docker-compose.letta.yml up -d`
+- **Safeguard**: Automatically checked by `make dev`
+
+### Thoth Dev Environment
 - **Compose file**: `docker-compose.dev.yml`
-- **Volume**: `thoth-dev-letta-postgres`
-- **Container**: `thoth-dev-letta-postgres`
-- **Agents**: 6 (older test data from Nov 2025)
-- **Start command**: `docker compose -f docker-compose.dev.yml up`
+- **Behavior**: Connects to standalone Letta (no longer starts its own)
+- **Start command**: `make dev` (automatically checks and starts Letta if needed)
+- **Old volumes**: `thoth-dev-letta-postgres` (deprecated, no longer used)
 
 ## 🎯 Default Behavior
 
-The `letta-start` alias and script have been configured to **always use production mode** to prevent accidental data loss.
+The `make dev` command now:
+1. ✅ Checks if standalone Letta is running
+2. ✅ Offers to start Letta if not running
+3. ✅ Connects to standalone Letta (never starts its own)
+4. ✅ Preserves all agents across restarts
 
 ## 📊 Check Which Volume is Active
 
@@ -79,5 +84,25 @@ docker volume ls | grep letta
 docker volume inspect letta-postgres
 ```
 
+## 🔄 Migration Complete (January 16, 2026)
+
+**What Changed:**
+- ✅ Letta is now standalone (docker-compose.letta.yml)
+- ✅ `make dev` no longer starts its own Letta
+- ✅ Automatic safeguards prevent duplicate instances
+- ✅ All 14 agents preserved and accessible
+- ✅ `scripts/check-letta.sh` verifies Letta before starting
+
+**Breaking Changes:**
+- `docker compose up` (without `-f docker-compose.dev.yml`) is deprecated
+- `thoth-dev-letta` containers are no longer used
+- Must use `make dev` or manually start Letta first
+
+## 📚 Additional Documentation
+
+- **Architecture**: [LETTA_ARCHITECTURE.md](./LETTA_ARCHITECTURE.md) - Complete architectural overview
+- **Setup**: [setup.md](./setup.md) - Installation and configuration
+- **Docker Deployment**: [DOCKER_DEPLOYMENT.md](./DOCKER_DEPLOYMENT.md) - Docker-specific guidance
+
 ## 📅 Last Updated
-January 9, 2026 - After recovery of production agents
+January 16, 2026 - After migration to standalone Letta architecture

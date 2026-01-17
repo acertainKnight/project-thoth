@@ -96,12 +96,23 @@ SEMANTIC_SCHOLAR_KEY=your_semantic_scholar_key_here
 
 #### Step 4: Start Development Environment
 
+> **📘 Letta Memory System**: Thoth uses Letta as a standalone memory service. The first time you run `make dev`, it will automatically:
+> 1. Create `.env.letta` from `.env.letta.example` (if it doesn't exist)
+> 2. Check if Letta is running
+> 3. Prompt to start Letta if not running
+> 4. Connect Thoth to Letta
+>
+> See [LETTA_SETUP.md](./LETTA_SETUP.md) for detailed information.
+
 ```bash
-# Start all services with hot-reload
+# Start all services with hot-reload (automatically starts Letta if needed)
 make dev
 
-# This will:
-# 1. Build Docker images
+# First-time users: This will:
+# 1. Create .env.letta from example (if needed)
+# 2. Check if Letta is running
+# 3. Prompt to start Letta
+# 4. Build Docker images
 # 2. Start 8 services (API, MCP, Monitor, Agent, Discovery, Letta, PostgreSQL, ChromaDB)
 # 3. Deploy Obsidian plugin
 # 4. Initialize databases
