@@ -299,11 +299,11 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "http://localhost:8001/health"]
       interval: 15s
       timeout: 5s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 60s
 
   # Discovery Service
   thoth-discovery:
@@ -356,16 +356,16 @@ services:
       - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
       - ./src:/app/src:ro  # Mount source for development
     ports:
-      - "8004:8004"
+      - "8004:8000"  # Map external 8004 to internal 8000 (FastAPI default)
     networks:
       - thoth-dev-network
       - letta-network  # Connect to external Letta network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      test: ["CMD", "curl", "http://localhost:8000/health"]
       interval: 15s
       timeout: 5s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 60s
 
   # PDF Monitor Service
   thoth-pdf-monitor:
@@ -425,6 +425,8 @@ services:
       thoth-api:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      disable: true  # Monitor is a CLI tool, doesn't expose HTTP endpoints
 
 
   # ==============================================================================
