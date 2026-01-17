@@ -206,16 +206,27 @@ class CitationGraph:
                 citations = await conn.fetch("""
                     SELECT
                         p1.doi as source_doi,
+                        p1.title as source_title,
                         p2.doi as target_doi,
+                        p2.title as target_title,
                         c.citation_context as context
                     FROM citations c
                     JOIN papers p1 ON c.citing_paper_id = p1.id
                     JOIN papers p2 ON c.cited_paper_id = p2.id
                 """)
                 for citation in citations:
+                    # Use DOI if available, otherwise fall back to title-based ID
+                    source_node = citation['source_doi'] or f"title:{citation['source_title']}"
+                    target_node = citation['target_doi'] or f"title:{citation['target_title']}"
+                    
+                    # Skip if either node ID is invalid
+                    if not source_node or not target_node:
+                        logger.warning(f"Skipping citation with invalid node IDs: source={source_node}, target={target_node}")
+                        continue
+                    
                     self.graph.add_edge(
-                        citation['source_doi'],
-                        citation['target_doi'],
+                        source_node,
+                        target_node,
                         context=citation['context']
                     )
 
