@@ -18,7 +18,12 @@
       "Bash(chmod:*)",
       "Bash(source ~/.bashrc)",
       "Bash(bash:*)",
-      "Bash(docker exec:*)"
+      "Bash(docker exec:*)",
+      "Bash(docker inspect:*)",
+      "Bash(timeout 60 bash:*)",
+      "Bash(curl:*)",
+      "Bash(docker stop:*)",
+      "Bash(docker rm:*)"
     ],
     "deny": []
   },

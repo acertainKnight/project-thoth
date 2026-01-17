@@ -26,7 +26,7 @@ def _configure_safe_environment() -> None:
 _configure_safe_environment()
 
 from thoth.initialization import initialize_thoth  # noqa: E402
-from thoth.pipeline import ThothPipeline  # noqa: E402 - Still imported for backward compat
+# ThothPipeline imported lazily when needed (line 81)
 
 from . import (  # noqa: E402
     discovery,
@@ -78,6 +78,7 @@ def main() -> None:
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
+        from thoth.pipeline import ThothPipeline  # Lazy import
         pipeline = ThothPipeline()
 
     if hasattr(args, 'func'):

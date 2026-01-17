@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop, feature/* ]
+    branches: [ main, develop, feature/*, fix/* ]
   pull_request:
     branches: [ main, develop ]
 
@@ -90,9 +90,40 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
 
+      - name: Setup test vault
+        run: |
+          mkdir -p ${{ github.workspace }}/test_vault/_thoth
+          echo '{}' > ${{ github.workspace }}/test_vault/_thoth/settings.json
+      
+      - name: Debug environment
+        env:
+          OBSIDIAN_VAULT_PATH: ${{ github.workspace }}/test_vault
+        run: |
+          echo "=== Environment Variables ==="
+          env | grep THOTH || echo "No THOTH vars"
+          echo ""
+          echo "=== Python Version ==="
+          uv run python --version
+          echo ""
+          echo "=== Test Fixtures ==="
+          ls -la tests/fixtures/ || echo "No fixtures dir"
+          echo ""
+          echo "=== Pytest Version ==="
+          uv run python -m pytest --version
+          echo ""
+          echo "=== Try importing thoth.config ==="
+          uv run python -c "from thoth.config import config; print('Config imported successfully')" || echo "Config import failed"
+
+      - name: Run diagnostic test
+        env:
+          OBSIDIAN_VAULT_PATH: ${{ github.workspace }}/test_vault
+        run: |
+          echo "Running CI diagnostic test..."
+          uv run python -m pytest tests/unit/test_ci_debug.py::test_ci_environment_debug -vv -s
+
       - name: Run unit tests
         env:
-          THOTH_DISABLE_AUTODETECT: "1"
+          OBSIDIAN_VAULT_PATH: ${{ github.workspace }}/test_vault
         run: uv run python -m pytest tests/unit/ -v --tb=short --cov=src/thoth --cov-report=xml --cov-report=term
 
       - name: Upload coverage to Codecov
@@ -139,8 +170,11 @@ jobs:
       - name: Run integration tests
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/thoth_test
-          THOTH_DISABLE_AUTODETECT: "1"
-        run: uv run python -m pytest tests/integration/ -v --tb=short || true
+          OBSIDIAN_VAULT_PATH: ${{ github.workspace }}/test_vault
+        run: |
+          mkdir -p ${{ github.workspace }}/test_vault/_thoth
+          echo '{}' > ${{ github.workspace }}/test_vault/_thoth/settings.json
+          uv run python -m pytest tests/integration/ -v --tb=short || true
 
   # Security scanning
   security:

@@ -156,13 +156,19 @@ class RealtimeCitationProcessor:
         self.statistics = CacheStatistics()
 
         # Lock for thread-safe cache access
-        self._cache_lock = asyncio.Lock()
+        self._cache_lock: Optional[asyncio.Lock] = None  # Lazy init to avoid event loop binding
 
         logger.info(
             f'RealtimeCitationProcessor initialized with timeout={self.config.timeout_seconds}s, '
             f'cache_size={self.config.cache_size}, '
             f'negative_cache_ttl={self.config.negative_cache_ttl_hours}h'
         )
+
+    def _get_cache_lock(self) -> asyncio.Lock:
+        """Get or create the cache lock (lazy init to avoid event loop binding)."""
+        if self._cache_lock is None:
+            self._cache_lock = asyncio.Lock()
+        return self._cache_lock
 
     def _normalize_citation_key(self, citation: Citation) -> str:
         """
@@ -202,7 +208,7 @@ class RealtimeCitationProcessor:
         Returns:
             Cached ResolutionResult if found, None otherwise
         """
-        async with self._cache_lock:
+        async with self._get_cache_lock():
             result = self.positive_cache.get(cache_key)
             if result:
                 logger.debug(f'Positive cache HIT for key: {cache_key[:16]}...')
@@ -223,7 +229,7 @@ class RealtimeCitationProcessor:
         if not self.config.enable_negative_cache:
             return False
 
-        async with self._cache_lock:
+        async with self._get_cache_lock():
             is_negative = cache_key in self.negative_cache
             if is_negative:
                 logger.debug(f'Negative cache HIT for key: {cache_key[:16]}...')
@@ -241,7 +247,7 @@ class RealtimeCitationProcessor:
             cache_key: Normalized cache key
             result: Resolution result to cache
         """
-        async with self._cache_lock:
+        async with self._get_cache_lock():
             self.positive_cache[cache_key] = result
             logger.debug(
                 f'Stored in positive cache: {cache_key[:16]}... '
@@ -258,7 +264,7 @@ class RealtimeCitationProcessor:
         if not self.config.enable_negative_cache:
             return
 
-        async with self._cache_lock:
+        async with self._get_cache_lock():
             self.negative_cache[cache_key] = datetime.utcnow()
             logger.debug(
                 f'Stored in negative cache: {cache_key[:16]}... '
@@ -462,7 +468,7 @@ class RealtimeCitationProcessor:
                 - positive_cleared: Number of entries cleared from positive cache
                 - negative_cleared: Number of entries cleared from negative cache
         """
-        async with self._cache_lock:
+        async with self._get_cache_lock():
             positive_count = len(self.positive_cache)
             negative_count = len(self.negative_cache)
 
@@ -487,7 +493,7 @@ class RealtimeCitationProcessor:
         Returns:
             Number of entries cleared from negative cache
         """  # noqa: W505
-        async with self._cache_lock:
+        async with self._get_cache_lock():
             count = len(self.negative_cache)
             self.negative_cache.clear()
 

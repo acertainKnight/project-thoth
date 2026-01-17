@@ -21,10 +21,12 @@ Thoth offers two deployment architectures to suit different use cases:
 ### Local Mode (Default) ⭐
 **Best for:** Personal use, laptops, small self-hosted deployments
 
-- **Containers:** 3 (thoth-all-in-one, letta, postgres)
+> **📘 Letta Setup**: Letta runs as a standalone service. See [LETTA_SETUP.md](./LETTA_SETUP.md) for details.
+
+- **Containers:** 5 (thoth-all-in-one, letta-server, letta-postgres, letta-redis, letta-nginx)
 - **Resource Usage:** ~3.5GB RAM
-- **Startup Time:** ~30 seconds
-- **Management:** Simple, one unified container
+- **Startup Time:** ~30 seconds (Letta auto-starts if needed)
+- **Management:** Simple, one unified Thoth container + standalone Letta
 - **Services:** API, MCP, Discovery, PDF Monitor (all in one container)
 
 ### Microservices Mode

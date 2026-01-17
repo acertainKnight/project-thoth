@@ -36,9 +36,10 @@ try:
 except ImportError:
     SettingsFileWatcher = None  # Not available in all service configurations
     Observer = None
+
+# Import routers - browser_workflows is optional (requires playwright)
 from thoth.server.routers import (  # noqa: I001
     agent,
-    browser_workflows,
     chat,
     config as config_router,
     health,
@@ -49,6 +50,19 @@ from thoth.server.routers import (  # noqa: I001
     tools,
     websocket,
 )
+
+# Browser workflows router is optional (requires playwright)
+try:
+    from thoth.server.routers import browser_workflows
+    BROWSER_WORKFLOWS_AVAILABLE = True
+except ImportError as e:
+    import warnings
+    warnings.warn(
+        f"Browser workflows not available (missing playwright): {e}",
+        ImportWarning
+    )
+    browser_workflows = None
+    BROWSER_WORKFLOWS_AVAILABLE = False
 from thoth.services.llm_router import LLMRouter
 from thoth.config import config
 from thoth.discovery.scheduler import DiscoveryScheduler
@@ -505,9 +519,13 @@ def create_app() -> FastAPI:
     app.include_router(
         research_questions.router, tags=['research-questions']
     )  # Week 4: Research question management
-    app.include_router(
-        browser_workflows.router, prefix='/api/workflows', tags=['workflows']
-    )  # Browser workflow management
+    
+    # Browser workflows router (optional - only if playwright is available)
+    if BROWSER_WORKFLOWS_AVAILABLE and browser_workflows:
+        app.include_router(
+            browser_workflows.router, prefix='/api/workflows', tags=['workflows']
+        )  # Browser workflow management
+    
     app.include_router(config_router.router, prefix='/config', tags=['config'])
     app.include_router(operations.router, prefix='/operations', tags=['operations'])
     app.include_router(schema.router, tags=['schema'])

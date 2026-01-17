@@ -104,7 +104,7 @@ class OpenAlexResolver:
         # Rate limiting state
         self._last_request_time = 0.0
         self._min_interval = 1.0 / requests_per_second
-        self._rate_lock = asyncio.Lock()
+        self._rate_lock: Optional[asyncio.Lock] = None  # Lazy init to avoid event loop binding
 
         # Statistics
         self._requests_made = 0
@@ -116,9 +116,15 @@ class OpenAlexResolver:
             + (f', polite pool email: {email}' if email else '')
         )
 
+    def _get_rate_lock(self) -> asyncio.Lock:
+        """Get or create the rate limit lock (lazy init to avoid event loop binding)."""
+        if self._rate_lock is None:
+            self._rate_lock = asyncio.Lock()
+        return self._rate_lock
+
     async def _enforce_rate_limit(self) -> None:
         """Enforce rate limiting between requests."""
-        async with self._rate_lock:
+        async with self._get_rate_lock():
             current_time = time.monotonic()
             time_since_last = current_time - self._last_request_time
 

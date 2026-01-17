@@ -1,10 +1,20 @@
 from .arxiv_plugin import ArxivPlugin
 from .base import BaseDiscoveryPlugin, DiscoveryPluginRegistry
-from .browser_workflow_plugin import BrowserWorkflowPlugin
+
+# Browser workflow plugin is optional (requires playwright)
+try:
+    from .browser_workflow_plugin import BrowserWorkflowPlugin
+    BROWSER_WORKFLOW_AVAILABLE = True
+except ImportError:
+    BROWSER_WORKFLOW_AVAILABLE = False
+    BrowserWorkflowPlugin = None
 
 plugin_registry = DiscoveryPluginRegistry()
 plugin_registry.register('arxiv', ArxivPlugin)
-plugin_registry.register('browser_workflow', BrowserWorkflowPlugin)
+
+# Only register browser workflow plugin if available
+if BROWSER_WORKFLOW_AVAILABLE:
+    plugin_registry.register('browser_workflow', BrowserWorkflowPlugin)
 
 __all__ = [
     'ArxivPlugin',
@@ -12,4 +22,5 @@ __all__ = [
     'BrowserWorkflowPlugin',
     'DiscoveryPluginRegistry',
     'plugin_registry',
+    'BROWSER_WORKFLOW_AVAILABLE',
 ]
