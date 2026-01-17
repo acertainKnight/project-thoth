@@ -64,7 +64,7 @@ services:
   # Letta Memory Server
   # ==============================================================================
   letta:
-    image: letta/letta:latest
+    image: letta/letta:0.16.2  # Latest version - test if conversations endpoint exists
     container_name: letta-server
     env_file:
       - .env.letta
