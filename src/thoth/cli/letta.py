@@ -6,6 +6,8 @@ filesystem, enabling agents to access vault content via Letta's file tools.
 """
 
 import asyncio
+import os
+import webbrowser
 from pathlib import Path
 
 from loguru import logger
@@ -164,6 +166,141 @@ def handle_folder_info(args, pipeline: ThothPipeline) -> int:
         return 1
 
 
+def handle_auth_login(args, pipeline: ThothPipeline) -> int:
+    """
+    Handle OAuth login to Letta Cloud.
+
+    Args:
+        args: Command line arguments
+        pipeline: ThothPipeline instance
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    try:
+        logger.info('Opening browser for Letta Cloud authentication...')
+        logger.info('Please log in at: https://app.letta.com/auth/cli')
+        logger.info('')
+
+        # Try to auto-open browser
+        try:
+            webbrowser.open('https://app.letta.com/auth/cli')
+            logger.info('✓ Browser opened automatically')
+        except Exception:
+            logger.warning('⚠️  Could not open browser automatically')
+            logger.info('Please manually visit: https://app.letta.com/auth/cli')
+
+        logger.info('')
+        logger.info('After logging in, credentials will be saved to: ~/.letta/credentials')
+
+        # Try to use Letta SDK to complete OAuth flow
+        try:
+            from letta_client import Letta
+            client = Letta()  # Triggers OAuth flow if not authenticated
+            user_info = client.user.get()
+            logger.info('')
+            logger.success(f'✓ Successfully authenticated as: {user_info.email}')
+            logger.success(f'✓ Credentials saved to: ~/.letta/credentials')
+            return 0
+        except Exception as e:
+            logger.error('')
+            logger.error(f'✗ Authentication failed: {e}')
+            logger.info('Please try again or use API key authentication instead')
+            logger.info('Get your API key from: https://app.letta.com/api-keys')
+            logger.info('Then set: export LETTA_CLOUD_API_KEY=letta_sk_...')
+            return 1
+
+    except Exception as e:
+        logger.error(f'Login failed: {e}')
+        import traceback
+        traceback.print_exc()
+        return 1
+
+
+def handle_auth_logout(args, pipeline: ThothPipeline) -> int:
+    """
+    Handle logout from Letta Cloud.
+
+    Args:
+        args: Command line arguments
+        pipeline: ThothPipeline instance
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    try:
+        creds_path = Path.home() / '.letta' / 'credentials'
+
+        if creds_path.exists():
+            os.remove(creds_path)
+            logger.success('✓ Logged out successfully')
+            logger.info(f'✓ Removed credentials from: {creds_path}')
+        else:
+            logger.info('No active session found')
+
+        return 0
+
+    except Exception as e:
+        logger.error(f'Logout failed: {e}')
+        return 1
+
+
+def handle_auth_status(args, pipeline: ThothPipeline) -> int:
+    """
+    Check authentication status.
+
+    Args:
+        args: Command line arguments
+        pipeline: ThothPipeline instance
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    try:
+        creds_path = Path.home() / '.letta' / 'credentials'
+
+        if creds_path.exists():
+            logger.info('✓ Authenticated with Letta Cloud')
+            logger.info(f'  Credentials: {creds_path}')
+
+            # Try to get user info
+            try:
+                from letta_client import Letta
+                client = Letta()
+                user_info = client.user.get()
+                logger.info(f'  User: {user_info.email}')
+                if hasattr(user_info, 'org_name'):
+                    logger.info(f'  Organization: {user_info.org_name}')
+            except Exception as e:
+                logger.warning(f'  Warning: Could not fetch user info: {e}')
+        else:
+            logger.info('✗ Not authenticated')
+            logger.info('  Run "thoth letta auth login" to authenticate with Letta Cloud')
+            logger.info('  Or set LETTA_CLOUD_API_KEY for API key authentication')
+
+        # Check environment variables
+        logger.info('')
+        logger.info('Environment configuration:')
+        mode = os.getenv('LETTA_MODE', 'self-hosted')
+        logger.info(f'  Mode: {mode}')
+
+        if mode == 'cloud':
+            cloud_key = os.getenv('LETTA_CLOUD_API_KEY')
+            if cloud_key:
+                logger.info(f'  API Key: {cloud_key[:20]}...')
+            else:
+                logger.info('  API Key: Not set')
+        else:
+            server_url = os.getenv('LETTA_SERVER_URL', 'http://localhost:8283')
+            logger.info(f'  Server URL: {server_url}')
+
+        return 0
+
+    except Exception as e:
+        logger.error(f'Status check failed: {e}')
+        return 1
+
+
 def configure_subparser(subparsers) -> None:
     """
     Configure the letta subcommand parser.
@@ -214,3 +351,35 @@ def configure_subparser(subparsers) -> None:
         help='List Letta folders'
     )
     info_parser.set_defaults(func=handle_folder_info)
+
+    # Auth subcommand
+    auth_parser = letta_subparsers.add_parser(
+        'auth',
+        help='Manage Letta Cloud authentication'
+    )
+    auth_subparsers = auth_parser.add_subparsers(
+        dest='auth_command',
+        help='Authentication command',
+        required=True
+    )
+
+    # auth login
+    login_parser = auth_subparsers.add_parser(
+        'login',
+        help='Login to Letta Cloud via OAuth'
+    )
+    login_parser.set_defaults(func=handle_auth_login)
+
+    # auth logout
+    logout_parser = auth_subparsers.add_parser(
+        'logout',
+        help='Logout from Letta Cloud'
+    )
+    logout_parser.set_defaults(func=handle_auth_logout)
+
+    # auth status
+    status_parser = auth_subparsers.add_parser(
+        'status',
+        help='Check authentication status'
+    )
+    status_parser.set_defaults(func=handle_auth_status)
