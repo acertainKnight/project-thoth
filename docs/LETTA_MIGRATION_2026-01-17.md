@@ -40,19 +40,31 @@ CREATE SEQUENCE messages_sequence_id_seq OWNED BY messages.sequence_id;
 ALTER TABLE messages ALTER COLUMN sequence_id SET DEFAULT nextval('messages_sequence_id_seq');
 ```
 
-### 4. Agent Restoration
-Restored 15/16 agents via Letta API (AI/ML Expert failed due to "/" in name):
-- ✅ thoth_main_orchestrator
-- ✅ system_citation_analyzer
-- ✅ system_discovery_scout
-- ✅ system_analysis_expert
-- ✅ system_maintenance
-- ✅ organization_curator
-- ✅ document_librarian
-- ✅ Lead Engineer (3 variants)
-- ✅ Nameless Agent (3 instances)
-- ✅ Memo, Incognito
-- ❌ AI/ML Expert (name validation failed)
+### 4. Agent Restoration (with Memory Blocks)
+
+**Initial Issue:** First restoration attempt only restored agents with 2 default memory blocks (loaded_skills, skills), losing all custom memory (24 blocks for Lead Engineer including project knowledge, persona, component documentation).
+
+**Solution:** Per [Letta API documentation](https://docs.letta.com/api-reference/agents/create), use `memory_blocks` parameter (not `blocks`) with simplified block structure:
+
+```python
+payload = {
+    "name": agent['name'],
+    "memory_blocks": [  # Correct parameter name
+        {
+            "label": block['label'],
+            "value": block['value'],
+            "limit": block.get('limit', 10000),
+            # Strip auto-generated fields: id, created_by_id, created_at, etc.
+        }
+    ]
+}
+```
+
+**Result:** Successfully restored agents with full memory:
+- ✅ Lead Engineer: 24 memory blocks restored
+- ✅ Lead Engineer - Autolabeler: 9 memory blocks restored
+- ✅ thoth_main_orchestrator, system agents, etc.
+- ❌ AI/ML Expert (name contains "/" - validation failed)
 
 ### 5. Configuration Changes
 
@@ -102,25 +114,68 @@ curl http://localhost:8283/v1/health/
   └── ... (14 more agents)
 ```
 
+## Automated Migration System
+
+Created comprehensive migration automation for future upgrades:
+
+### Scripts
+1. **`scripts/letta-migrate.sh [version]`** - Full migration workflow
+   - Backs up all agents to `~/letta-backup-YYYYMMDD-HHMMSS/`
+   - Updates Docker image version
+   - Recreates database with fresh schema
+   - Installs pgvector extension
+   - Restores agents with full memory blocks
+   - Applies compatibility fixes
+
+2. **`scripts/restore-agents.py <backup_dir> <letta_url>`** - Agent restoration
+   - Uses proper `memory_blocks` parameter per Letta API spec
+   - Strips auto-generated fields (id, created_by_id, etc.)
+   - Verifies memory block restoration
+   - Handles agents with invalid names
+
+3. **`scripts/letta-update.sh [version]`** - Simple wrapper for migrations
+
+### Usage
+
+```bash
+# Migrate to specific version
+./scripts/letta-migrate.sh 0.16.3
+
+# Update to latest
+./scripts/letta-update.sh latest
+
+# Manual restoration from backup
+python3 scripts/restore-agents.py ~/letta-backup-20260117 http://localhost:8283
+```
+
 ## Future Migrations
 
-To avoid this issue:
-1. **Never use `latest` tag** - always pin specific versions
-2. **Backup before upgrades**: `~/letta-backup-YYYYMMDD/`
-3. **Test compatibility** between Letta Server and Letta Code versions
-4. **Check release notes** for breaking schema changes
+To ensure safe upgrades:
+1. **Use automation**: Run `./scripts/letta-migrate.sh [version]` instead of manual steps
+2. **Pin versions**: Never use `latest` tag in production
+3. **Test first**: Try migration on dev environment
+4. **Check compatibility**: Verify Letta Server/Code version compatibility
+5. **Review release notes**: Check for breaking schema changes
 
 ## Rollback Procedure (if needed)
 
 ```bash
 # 1. Stop Letta
-docker compose -f docker-compose.letta.yml stop
+./scripts/letta-stop.sh
 
-# 2. Restore from backup (if you have pg_dump)
-docker exec -i letta-postgres pg_restore -U letta -d letta < backup.dump
+# 2. Restore previous Docker version
+sed -i 's|image: letta/letta:.*|image: letta/letta:0.16.2|' docker-compose.letta.yml
 
-# 3. Or recreate database and restore agents
-python3 /tmp/restore-agents-simple.py
+# 3. Recreate database
+docker exec letta-postgres psql -U letta -d postgres -c "DROP DATABASE letta;"
+docker exec letta-postgres psql -U letta -d postgres -c "CREATE DATABASE letta OWNER letta;"
+docker exec letta-postgres psql -U letta -d letta -c "CREATE EXTENSION vector;"
+
+# 4. Start Letta
+./scripts/letta-start.sh
+
+# 5. Restore agents with memory
+python3 scripts/restore-agents.py ~/letta-backup-20260117 http://localhost:8283
 ```
 
 ## References

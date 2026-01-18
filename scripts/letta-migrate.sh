@@ -115,61 +115,17 @@ echo -e "${GREEN}✓ Compatibility fixes applied${NC}"
 echo ""
 
 # Step 8: Restore agents
-echo -e "${YELLOW}[8/8] Restoring agents...${NC}"
-RESTORED=0
-FAILED=0
+echo -e "${YELLOW}[8/8] Restoring agents with full memory blocks...${NC}"
 
-# Use Python script for restoration
-python3 << 'EOF'
-import json
-import glob
-import os
-import sys
-import requests
+# Use dedicated restoration script
+python3 "$SCRIPT_DIR/restore-agents.py" "$BACKUP_DIR" "$LETTA_URL"
+RESTORE_STATUS=$?
 
-backup_dir = sys.argv[1]
-letta_url = sys.argv[2]
-files = sorted(glob.glob(f"{backup_dir}/*.json"))
-
-restored = 0
-failed = 0
-
-for fpath in files:
-    with open(fpath) as f:
-        agent = json.load(f)
-
-    agent_name = agent.get('name', 'Unknown')
-
-    # Create simplified payload
-    payload = {
-        "name": agent['name'],
-        "description": agent.get('description'),
-        "system": agent.get('system'),
-        "agent_type": agent.get('agent_type'),
-        "llm_config": agent.get('llm_config'),
-        "embedding_config": agent.get('embedding_config'),
-        "memory": agent.get('memory'),
-    }
-
-    try:
-        resp = requests.post(f"{letta_url}/v1/agents/", json=payload, timeout=30)
-        if resp.status_code in [200, 201]:
-            new_id = resp.json().get('id', 'unknown')
-            print(f"  ✓ Restored: {agent_name} ({new_id})")
-            restored += 1
-        else:
-            error = resp.json().get('detail', resp.text)[:80]
-            print(f"  ✗ Failed: {agent_name} - {error}")
-            failed += 1
-    except Exception as e:
-        print(f"  ✗ Failed: {agent_name} - {str(e)[:80]}")
-        failed += 1
-
-print(f"\n{'='*60}")
-print(f"Restored: {restored}, Failed: {failed}")
-print(f"{'='*60}")
-sys.exit(0 if failed == 0 else 1)
-EOF
+if [ $RESTORE_STATUS -eq 0 ]; then
+    echo -e "${GREEN}✓ Agent restoration completed successfully${NC}"
+else
+    echo -e "${RED}⚠️  Some agents failed to restore (see details above)${NC}"
+fi
 
 echo ""
 echo -e "${BLUE}========================================${NC}"
