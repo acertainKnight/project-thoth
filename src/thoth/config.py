@@ -439,7 +439,36 @@ class LettaFilesystemConfig(BaseModel):
 class LettaMemoryConfig(BaseModel):
     """Letta memory configuration."""
 
+    # Deployment mode
+    mode: str = Field(
+        default='self-hosted',
+        alias='mode',
+        description='Deployment mode: "cloud" for Letta Cloud, "self-hosted" for local server'
+    )
+    
+    # Self-hosted configuration
     server_url: str = Field(default='http://localhost:8283', alias='serverUrl')
+    
+    # Cloud configuration
+    cloud_api_key: str = Field(
+        default='',
+        alias='cloudApiKey',
+        description='Letta Cloud API key (optional if using OAuth)'
+    )
+    
+    # OAuth configuration
+    oauth_enabled: bool = Field(
+        default=True,
+        alias='oauthEnabled',
+        description='Use OAuth for Letta Cloud authentication (recommended)'
+    )
+    oauth_credentials_path: str = Field(
+        default='~/.letta/credentials',
+        alias='oauthCredentialsPath',
+        description='Path to OAuth credentials file'
+    )
+    
+    # Agent configuration
     agent_name: str = Field(default='thoth_research_agent', alias='agentName')
     core_memory_limit: int = Field(default=10000, alias='coreMemoryLimit')
     archival_memory_enabled: bool = Field(default=True, alias='archivalMemoryEnabled')
@@ -978,9 +1007,14 @@ class Secrets(BaseSettings):
     database_url: str = Field(default='', alias='DATABASE_URL')
 
     # Letta/Memory
+    letta_mode: str = Field(default='self-hosted', alias='LETTA_MODE')
     letta_api_key: str = Field(default='', alias='LETTA_API_KEY')
     letta_server_url: str = Field(
         default='http://localhost:8283', alias='LETTA_SERVER_URL'
+    )
+    letta_cloud_api_key: str = Field(default='', alias='LETTA_CLOUD_API_KEY')
+    letta_credentials_path: str = Field(
+        default='~/.letta/credentials', alias='LETTA_CREDENTIALS_PATH'
     )
 
     # Web Search
