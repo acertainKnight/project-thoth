@@ -83,7 +83,7 @@ When you run `make dev` for the first time, it will automatically:
 
 **No configuration needed!** Everything works out of the box.
 
-> 📘 **About Letta**: Thoth uses [Letta](https://www.letta.com/) as a standalone memory system that stores your agents and conversations. It runs independently and is shared across projects. [Learn more →](docs/LETTA_SETUP.md)
+> 📘 **About Letta**: Thoth uses [Letta](https://www.letta.com/) as a standalone memory system that stores your agents and conversations. You can use either **Letta Cloud** (hosted, includes free tier) or **self-hosted** (local Docker). [Learn more →](docs/LETTA_CLOUD_SETUP.md) | [Self-hosted setup →](docs/LETTA_SETUP.md)
 
 **Quick Commands:**
 - `make dev` - Local mode (auto-starts Letta if needed)
@@ -504,6 +504,54 @@ All configuration is managed through `vault/_thoth/settings.json` with hot-reloa
 | `SEMANTIC_SCHOLAR_KEY` | Semantic Scholar API key | No |
 | `GOOGLE_API_KEY` | Google Search API key | No |
 | `OPENCITATIONS_KEY` | OpenCitations API key | No |
+| `LETTA_MODE` | Letta mode: `cloud` or `self-hosted` | No (default: `self-hosted`) |
+| `LETTA_CLOUD_API_KEY` | Letta Cloud API key (if not using OAuth) | No |
+
+### Letta Configuration
+
+Thoth can use either **Letta Cloud** or **self-hosted Letta** for agent memory:
+
+#### Option 1: Letta Cloud (Easiest)
+
+Hosted service with free tier - no local Letta container needed.
+
+**Quick setup:**
+```bash
+thoth letta setup
+```
+
+Follow the interactive wizard to configure OAuth or API key authentication.
+
+**Manual setup:**
+```bash
+# Authenticate with OAuth (recommended)
+thoth letta auth login
+
+# Or use API key from app.letta.com/api-keys
+export LETTA_CLOUD_API_KEY=letta_sk_...
+
+# Update settings.json
+{
+  "memory": {
+    "letta": {
+      "mode": "cloud"
+    }
+  }
+}
+```
+
+**Full guide**: [LETTA_CLOUD_SETUP.md](docs/LETTA_CLOUD_SETUP.md)
+
+#### Option 2: Self-Hosted (Default)
+
+Local Docker container - full control, all data local.
+
+**Quick setup:**
+```bash
+docker compose -f docker-compose.letta.yml up -d
+```
+
+Already configured by default - no changes needed!
 
 ### Directory Structure
 
