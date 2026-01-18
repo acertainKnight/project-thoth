@@ -114,11 +114,11 @@ END \$\$;
 echo -e "${GREEN}✓ Compatibility fixes applied${NC}"
 echo ""
 
-# Step 8: Restore agents
-echo -e "${YELLOW}[8/8] Restoring agents with full memory blocks...${NC}"
+# Step 8: Restore agents with complete data
+echo -e "${YELLOW}[8/8] Restoring agents (memory, tools, rules, tags)...${NC}"
 
-# Use dedicated restoration script
-python3 "$SCRIPT_DIR/restore-agents.py" "$BACKUP_DIR" "$LETTA_URL"
+# Use complete restoration script
+python3 "$SCRIPT_DIR/restore-agents-complete.py" "$BACKUP_DIR" "$LETTA_URL"
 RESTORE_STATUS=$?
 
 if [ $RESTORE_STATUS -eq 0 ]; then
