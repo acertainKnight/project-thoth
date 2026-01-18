@@ -46,46 +46,98 @@ class LettaFilesystemService(BaseService):
     def initialize(self) -> None:
         """Initialize the Letta filesystem service."""
         try:
-            # Initialize Letta REST API connection
             letta_config = self.config.memory_config.letta if hasattr(self.config.memory_config, 'letta') else {}
-            config_url = getattr(letta_config, 'server_url', 'http://localhost:8283') if letta_config else 'http://localhost:8283'
+            mode = getattr(letta_config, 'mode', 'self-hosted')
             
-            # If in Docker, replace localhost with service name
-            if os.getenv('DOCKER_ENV') or os.getenv('THOTH_DOCKER'):
-                config_url = config_url.replace('localhost', 'letta-server')
-
-            # Ensure trailing slash to avoid 307 redirects
-            if not config_url.endswith('/'):
-                config_url = config_url + '/'
-
-            self._base_url = config_url
-            self._token = os.getenv('LETTA_SERVER_PASSWORD', 'letta_dev_password')
+            # Override with environment variable if set
+            mode = os.getenv('LETTA_MODE', mode)
             
-            self.logger.info(f'Initializing Letta client with base_url: {self._base_url}')
+            if mode == 'cloud':
+                # Letta Cloud mode
+                self.logger.info('Initializing Letta client in cloud mode')
+                oauth_enabled = getattr(letta_config, 'oauth_enabled', True)
+                cloud_api_key = os.getenv('LETTA_CLOUD_API_KEY') or getattr(letta_config, 'cloud_api_key', '')
+                
+                if oauth_enabled and not cloud_api_key:
+                    # Use OAuth credentials from ~/.letta/credentials
+                    credentials_path = os.getenv('LETTA_CREDENTIALS_PATH') or getattr(
+                        letta_config, 'oauth_credentials_path', '~/.letta/credentials'
+                    )
+                    credentials_path = os.path.expanduser(credentials_path)
+                    
+                    if not os.path.exists(credentials_path):
+                        raise ServiceError(
+                            'Letta Cloud OAuth credentials not found. '
+                            'Run "thoth letta auth login" to authenticate, '
+                            'or set LETTA_CLOUD_API_KEY environment variable.'
+                        )
+                    
+                    self.logger.info(f'Using Letta Cloud with OAuth credentials from {credentials_path}')
+                    self._letta_client = Letta()  # Auto-loads from ~/.letta/credentials
+                    self._base_url = 'https://api.letta.com/'
+                    self._token = None  # OAuth handles authentication
+                
+                elif cloud_api_key:
+                    # Use explicit API key
+                    self.logger.info('Using Letta Cloud with API key')
+                    self._letta_client = Letta(token=cloud_api_key)
+                    self._base_url = 'https://api.letta.com/'
+                    self._token = cloud_api_key
+                
+                else:
+                    raise ServiceError(
+                        'Letta Cloud mode requires either OAuth credentials or API key. '
+                        'Run "thoth letta auth login" or set LETTA_CLOUD_API_KEY'
+                    )
             
-            # Create Letta client
-            self._letta_client = Letta(base_url=self._base_url, token=self._token)
-            
-            # Test connection (allow redirects for trailing slash)
-            response = requests.get(
-                f'{self._base_url}v1/health/',
-                headers=self._get_headers(),
-                allow_redirects=True
-            )
-            if response.status_code == 200:
-                self.logger.info('Letta Filesystem Service initialized successfully')
             else:
-                self.logger.warning(f'Letta health check returned {response.status_code}')
+                # Self-hosted mode (existing logic)
+                self.logger.info('Initializing Letta client in self-hosted mode')
+                server_url = getattr(letta_config, 'server_url', 'http://localhost:8283')
+                
+                # Override with environment variable if set
+                server_url = os.getenv('LETTA_SERVER_URL', server_url)
+                
+                # If in Docker, replace localhost with service name
+                if os.getenv('DOCKER_ENV') or os.getenv('THOTH_DOCKER'):
+                    server_url = server_url.replace('localhost', 'letta-server')
+
+                # Ensure trailing slash to avoid 307 redirects
+                if not server_url.endswith('/'):
+                    server_url = server_url + '/'
+
+                self._base_url = server_url
+                self._token = os.getenv('LETTA_API_KEY') or os.getenv('LETTA_SERVER_PASSWORD', 'letta_dev_password')
+                
+                self.logger.info(f'Using self-hosted Letta at: {self._base_url}')
+                self._letta_client = Letta(base_url=self._base_url, token=self._token)
+            
+            # Test connection
+            try:
+                response = requests.get(
+                    f'{self._base_url}v1/health/',
+                    headers=self._get_headers() if self._token else {},
+                    allow_redirects=True,
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    self.logger.info(f'Letta connection successful ({mode} mode)')
+                else:
+                    self.logger.warning(f'Letta health check returned {response.status_code}')
+            except Exception as health_error:
+                self.logger.warning(f'Could not verify Letta connection: {health_error}')
+                # Don't fail initialization - health check might not be available
+                
         except Exception as e:
             self.logger.error(f'Failed to initialize Letta client: {e}')
             raise ServiceError(f'Letta client initialization failed: {e}')
     
     def _get_headers(self) -> dict[str, str]:
         """Get HTTP headers for Letta API requests."""
-        return {
-            'Authorization': f'Bearer {self._token}',
-            'Content-Type': 'application/json'
-        }
+        headers = {'Content-Type': 'application/json'}
+        if self._token:
+            headers['Authorization'] = f'Bearer {self._token}'
+        return headers
 
     def _ensure_initialized(self) -> None:
         """Ensure the service is initialized."""
