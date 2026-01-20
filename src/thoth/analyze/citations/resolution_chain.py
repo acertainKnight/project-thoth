@@ -110,7 +110,12 @@ class CitationResolutionChain:
 
         logger.info('Initialized CitationResolutionChain with all API sources')
 
-    async def resolve(self, citation: Citation) -> ResolutionResult:
+    async def resolve(
+        self,
+        citation: Citation,
+        _recursion_depth: int = 0,
+        _max_depth: int = 3,
+    ) -> ResolutionResult:
         """
         Resolve a single citation through the resolution chain.
 
@@ -124,10 +129,29 @@ class CitationResolutionChain:
 
         Args:
             citation: Citation to resolve
+            _recursion_depth: Internal recursion tracking (default: 0)
+            _max_depth: Maximum recursion depth allowed (default: 3)
 
         Returns:
             ResolutionResult with resolution outcome and metadata
         """
+        # Circuit breaker: prevent infinite recursion
+        if _recursion_depth >= _max_depth:
+            logger.warning(
+                f'Maximum recursion depth ({_max_depth}) reached for citation: '
+                f'{citation.text or citation.title or "Unknown"}. Returning UNRESOLVED.'
+            )
+            metadata = ResolutionMetadata()
+            metadata.error_message = f'Max recursion depth ({_max_depth}) exceeded'
+            return ResolutionResult(
+                citation=citation.text or citation.title or 'Unknown citation',
+                status=CitationResolutionStatus.UNRESOLVED,
+                confidence_score=0.0,
+                confidence_level=ConfidenceLevel.NONE,
+                source=None,
+                matched_data=None,
+                metadata=metadata,
+            )
         start_time = time.time()
         metadata = ResolutionMetadata()
         candidates: List[MatchCandidate] = []  # noqa: UP006
