@@ -237,23 +237,30 @@ class AnalysisSchemaService(BaseService):
             raise ServiceError(f'Failed to generate model for preset "{preset_name}": {e}') from e
     
     def _build_pydantic_model(
-        self, 
-        preset_name: str, 
+        self,
+        preset_name: str,
         preset_config: dict[str, Any]
     ) -> Type[BaseModel]:
         """
         Build a dynamic Pydantic model from preset configuration.
-        
+
         Args:
             preset_name: Name of the preset
             preset_config: Preset configuration with fields
-            
+
         Returns:
             Type[BaseModel]: Generated Pydantic model
         """
         field_definitions = {}
-        
+
+        # Get base AnalysisResponse field names to avoid redefinition
+        base_fields = set(AnalysisResponse.model_fields.keys())
+
         for field_name, field_spec in preset_config['fields'].items():
+            # Skip fields that already exist in AnalysisResponse to preserve inheritance
+            if field_name in base_fields:
+                self.logger.debug(f'Skipping base field "{field_name}" - using AnalysisResponse definition')
+                continue
             # Map JSON type to Python type
             field_type = self._map_json_type_to_python(field_spec['type'], field_spec)
             

@@ -684,19 +684,8 @@ async def start_server(
 
             await asyncio.sleep(2)
 
-        # Initialize research agent (after MCP server is running)
-        try:
-            from thoth.ingestion.agent_v2.core.agent import (
-                create_research_assistant_async,
-            )
-
-            research_agent = await create_research_assistant_async(
-                service_manager=service_manager
-            )
-            logger.info('Research agent initialized successfully')
-        except Exception as e:
-            logger.error(f'Failed to initialize research agent: {e}')
-            research_agent = None
+        # research_agent has been deprecated and migrated to Letta native agents
+        research_agent = None
 
         # Initialize Letta orchestrator for agent management
         thoth_orchestrator = None

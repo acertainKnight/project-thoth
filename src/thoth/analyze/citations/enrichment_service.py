@@ -14,6 +14,7 @@ Key Features:
 """
 
 import asyncio
+import threading
 from typing import Any, Dict, List, Optional  # noqa: UP035
 
 import httpx
@@ -64,10 +65,10 @@ class CitationEnrichmentService:
         self.max_retries = max_retries
         self.requests_per_second = requests_per_second
 
-        # Rate limiting
+        # Rate limiting - use threading.Lock to avoid event loop binding issues
         self._min_interval = 1.0 / requests_per_second
         self._last_request_time = 0.0
-        self._rate_lock: Optional[asyncio.Lock] = None  # Lazy init to avoid event loop binding
+        self._rate_lock = threading.Lock()  # Thread-safe lock for rate limiting
 
         # HTTP client (created on first use)
         self._client: Optional[httpx.AsyncClient] = None  # noqa: UP007
@@ -106,17 +107,11 @@ class CitationEnrichmentService:
             self._client = None
         logger.info(f'Enrichment service closed. Stats: {self._stats}')
 
-    def _get_rate_lock(self) -> asyncio.Lock:
-        """Get or create the rate limit lock (lazy init to avoid event loop binding)."""
-        if self._rate_lock is None:
-            self._rate_lock = asyncio.Lock()
-        return self._rate_lock
-    
     async def _enforce_rate_limit(self) -> None:
-        """Enforce rate limiting between requests."""
-        async with self._get_rate_lock():
-            import time
+        """Enforce rate limiting between requests using thread-safe lock."""
+        import time
 
+        with self._rate_lock:  # Use synchronous context manager
             current_time = time.monotonic()
             time_since_last = current_time - self._last_request_time
 
