@@ -793,25 +793,30 @@ class PDFMonitor:
         """
         Process any existing PDF files in the watch directory.
         """
-        logger.debug(f'Checking for existing PDF files in {self.watch_dir}')
+        logger.info(f'📂 Checking for existing PDF files in {self.watch_dir}')
 
         # Use recursive glob if recursive flag is set
         glob_pattern = '**/*.pdf' if self.recursive else '*.pdf'
 
-        for pdf_file in self.watch_dir.glob(glob_pattern):
-            if self.recursive:
-                # Only process files when recursive is True
-                if not pdf_file.is_file():
-                    continue
+        # Count files first
+        pdf_files = list(self.watch_dir.glob(glob_pattern))
+        if self.recursive:
+            pdf_files = [f for f in pdf_files if f.is_file()]
 
-            logger.debug(f'Processing existing PDF: {pdf_file}')
+        logger.info(f'📊 Found {len(pdf_files)} PDF files to process')
+
+        for i, pdf_file in enumerate(pdf_files, 1):
+            logger.info(f'📄 Processing PDF {i}/{len(pdf_files)}: {pdf_file.name}')
 
             try:
                 # The pipeline now handles tracking and reprocessing checks
+                logger.info(f'▶️  Calling pipeline.process_pdf() for {pdf_file.name}...')
                 self.pipeline.process_pdf(pdf_file)
                 self.files_processed += 1
+                logger.info(f'✅ Successfully processed {pdf_file.name}')
             except Exception as e:
-                logger.error(f'Error processing existing file {pdf_file}: {e!s}')
+                logger.error(f'❌ Error processing existing file {pdf_file}: {e!s}')
+                logger.exception('Full traceback:')
 
         # Update last check time
         from datetime import datetime
