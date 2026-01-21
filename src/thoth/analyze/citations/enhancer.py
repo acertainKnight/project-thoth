@@ -129,7 +129,23 @@ class CitationEnhancer:
         if self.use_resolution_chain:
             logger.info('Using new resolution chain for parallel enhancement')  # noqa: F823
             # enhance_with_resolution_chain is now async, so we need to run it
-            return asyncio.run(self.enhance_with_resolution_chain(citations))
+            # Use a thread-safe approach that works from ThreadPoolExecutor context
+            import concurrent.futures
+            import threading
+
+            def run_async_in_thread():
+                """Run async function in a new thread with its own event loop."""
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    return loop.run_until_complete(self.enhance_with_resolution_chain(citations))
+                finally:
+                    loop.close()
+
+            # Run the async function in a separate thread
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(run_async_in_thread)
+                return future.result()
 
         # Legacy path: Use Semantic Scholar's existing batch processing first
         if self.use_semanticscholar and self.semanticscholar_tool:
