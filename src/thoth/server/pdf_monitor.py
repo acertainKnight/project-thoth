@@ -248,15 +248,17 @@ class PDFTracker:
 
         try:
             loop = asyncio.get_running_loop()
+            # If there's a running loop, we need to run in a thread to avoid blocking
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(lambda: asyncio.run(load()))
+                future.result()  # Wait for completion
         except RuntimeError:
             # No event loop running, create one
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(load())
             loop.close()
-        else:
-            # Already have a running loop
-            asyncio.create_task(load())
 
     def _save_tracked_files(self):
         """
