@@ -210,20 +210,27 @@ class PDFTracker:
         import asyncpg  # noqa: I001
         import asyncio
 
+        print("PDFTracker: _load_from_postgres() called", flush=True)
         db_url = (
             getattr(self.config.secrets, 'database_url', None)
             if hasattr(self.config, 'secrets')
             else None
         )
         if not db_url:
+            print("PDFTracker: No DATABASE_URL found!", flush=True)
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
+        print(f"PDFTracker: DATABASE_URL configured: {db_url[:30]}...", flush=True)
+
         async def load():
+            print("PDFTracker: Connecting to PostgreSQL...", flush=True)
             conn = await asyncpg.connect(db_url)
             try:
+                print("PDFTracker: Connected, fetching rows...", flush=True)
                 rows = await conn.fetch(
                     'SELECT pdf_path, new_pdf_path, note_path, file_size, file_mtime FROM processed_pdfs'
                 )
+                print(f"PDFTracker: Fetched {len(rows)} rows from database", flush=True)
                 for row in rows:
                     # Stored paths are already relative (e.g., "thoth/papers/pdfs/file.pdf")  # noqa: W505
                     pdf_path_key = row['pdf_path']
@@ -242,9 +249,11 @@ class PDFTracker:
 
                     self.processed_files[str(pdf_path_key)] = tracked_info
 
+                print(f"PDFTracker: Loaded {len(rows)} files into processed_files dict", flush=True)
                 logger.info(f'Loaded {len(rows)} processed PDFs from PostgreSQL')
             finally:
                 await conn.close()
+                print("PDFTracker: Database connection closed", flush=True)
 
         try:
             loop = asyncio.get_running_loop()
