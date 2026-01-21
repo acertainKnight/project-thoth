@@ -162,7 +162,35 @@ class OptimizedDocumentPipeline(BasePipeline):
             )
             note_path = self.pdf_tracker.get_note_path(pdf_path)
             if note_path:
-                return note_path
+                # Get the processed metadata to return all paths
+                from thoth.server.pdf_monitor import PDFTracker
+                vault_relative = None
+                if self.pdf_tracker.vault_resolver:
+                    try:
+                        resolved = pdf_path.resolve()
+                        if self.pdf_tracker.vault_resolver.is_vault_relative(resolved):
+                            vault_relative = self.pdf_tracker.vault_resolver.make_relative(resolved)
+                    except ValueError:
+                        pass
+
+                # Look up the processed metadata
+                metadata = None
+                if vault_relative and vault_relative in self.pdf_tracker.processed_files:
+                    metadata = self.pdf_tracker.processed_files[vault_relative]
+                else:
+                    abs_path = str(pdf_path.resolve())
+                    if abs_path in self.pdf_tracker.processed_files:
+                        metadata = self.pdf_tracker.processed_files[abs_path]
+
+                if metadata:
+                    # Return the tuple of (note_path, new_pdf_path, new_markdown_path)
+                    new_pdf_path = Path(metadata.get('new_pdf_path', str(pdf_path)))
+                    new_markdown_path = Path(metadata.get('new_markdown_path', str(pdf_path).replace('.pdf', '.md')))
+                    return (note_path, new_pdf_path, new_markdown_path)
+                else:
+                    # If metadata not found, return best guess tuple
+                    return (note_path, pdf_path, Path(str(pdf_path).replace('.pdf', '.md')))
+
             self.logger.warning(
                 f'File {pdf_path} was processed, but note path not found in tracker. Reprocessing.'
             )
@@ -175,12 +203,15 @@ class OptimizedDocumentPipeline(BasePipeline):
         no_images_markdown_content = no_images_markdown_path.read_text(encoding='utf-8')
 
         # Parallel analysis with dynamic worker scaling
+        self.logger.info(f'Starting parallel analysis for {pdf_path.name}...')
         analysis, citations = self._parallel_analysis_and_citations_sync(
             no_images_markdown_path
         )
+        self.logger.info(f'Analysis completed, found {len(citations)} citations')
 
         # PRIORITY 2: Generate note asynchronously using background executor
         # This enables parallel document processing by not blocking on note generation
+        self.logger.info(f'Submitting note generation task for {pdf_path.name}...')
         note_future = self._background_tasks_executor.submit(
             self._generate_note,
             pdf_path=pdf_path,
@@ -189,6 +220,7 @@ class OptimizedDocumentPipeline(BasePipeline):
             citations=citations,
             no_images_markdown=no_images_markdown_content,
         )
+        self.logger.info(f'Waiting for note generation to complete...')
         note_path, new_pdf_path, new_markdown_path = note_future.result()
         self.logger.info(f'Note generation completed: {note_path}')
 
