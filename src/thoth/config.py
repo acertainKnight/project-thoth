@@ -728,7 +728,7 @@ class CitationConfig(BaseModel):
         default_factory=CitationProcessingConfig
     )
     use_resolution_chain: bool = Field(
-        default=True,
+        default=False,  # Temporarily disabled - causing hangs in ThreadPoolExecutor context
         alias='useResolutionChain',
         description='Enable improved citation resolution chain with Crossref, ArXiv, OpenAlex, and Semantic Scholar',
     )
