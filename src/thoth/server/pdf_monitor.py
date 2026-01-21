@@ -803,28 +803,39 @@ class PDFMonitor:
         """
         Process any existing PDF files in the watch directory.
         """
+        print(f"MONITOR: 📂 _process_existing_files() entered, checking {self.watch_dir}", flush=True)
         logger.info(f'📂 Checking for existing PDF files in {self.watch_dir}')
 
         # Use recursive glob if recursive flag is set
         glob_pattern = '**/*.pdf' if self.recursive else '*.pdf'
+        print(f"MONITOR: 🔍 Using glob pattern: {glob_pattern}", flush=True)
 
         # Count files first
+        print("MONITOR: 🔄 Globbing for PDF files...", flush=True)
         pdf_files = list(self.watch_dir.glob(glob_pattern))
+        print(f"MONITOR: 📋 Found {len(pdf_files)} PDF files before filtering", flush=True)
+
         if self.recursive:
             pdf_files = [f for f in pdf_files if f.is_file()]
+            print(f"MONITOR: 📋 After filtering: {len(pdf_files)} files", flush=True)
 
         logger.info(f'📊 Found {len(pdf_files)} PDF files to process')
+        print(f"MONITOR: 📊 Starting to process {len(pdf_files)} PDFs", flush=True)
 
         for i, pdf_file in enumerate(pdf_files, 1):
+            print(f"MONITOR: 📄 Processing #{i}/{len(pdf_files)}: {pdf_file.name}", flush=True)
             logger.info(f'📄 Processing PDF {i}/{len(pdf_files)}: {pdf_file.name}')
 
             try:
                 # The pipeline now handles tracking and reprocessing checks
+                print(f"MONITOR: ▶️  Calling pipeline.process_pdf() for {pdf_file.name}...", flush=True)
                 logger.info(f'▶️  Calling pipeline.process_pdf() for {pdf_file.name}...')
                 self.pipeline.process_pdf(pdf_file)
+                print(f"MONITOR: ✅ process_pdf() returned for {pdf_file.name}", flush=True)
                 self.files_processed += 1
                 logger.info(f'✅ Successfully processed {pdf_file.name}')
             except Exception as e:
+                print(f"MONITOR: ❌ Exception processing {pdf_file.name}: {e!s}", flush=True)
                 logger.error(f'❌ Error processing existing file {pdf_file}: {e!s}')
                 logger.exception('Full traceback:')
 
