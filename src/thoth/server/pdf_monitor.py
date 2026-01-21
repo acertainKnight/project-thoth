@@ -682,16 +682,21 @@ class PDFMonitor:
         This method initiates the file system monitor and begins watching
         for new PDF files.
         """
+        print("MONITOR: 🚀 PDFMonitor.start() method entered", flush=True)
         logger.info('🚀 PDFMonitor.start() method called')
+        print(f"MONITOR: 🔍 WATCHDOG_AVAILABLE = {WATCHDOG_AVAILABLE}", flush=True)
         logger.info(f'🔍 WATCHDOG_AVAILABLE = {WATCHDOG_AVAILABLE}')
 
         if not WATCHDOG_AVAILABLE:
+            print("MONITOR: ⚠️  Watchdog not available!", flush=True)
             logger.warning('Watchdog not available, PDF monitoring disabled')
             return
 
         # Process existing files first
+        print("MONITOR: 📋 About to call _process_existing_files()...", flush=True)
         logger.info('📋 About to call _process_existing_files()...')
         self._process_existing_files()
+        print("MONITOR: ✅ _process_existing_files() completed", flush=True)
         logger.info('✅ _process_existing_files() completed')
 
         # Set up and start the observer
