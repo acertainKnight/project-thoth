@@ -81,6 +81,7 @@ def initialize_thoth(
         markdown_dir=config.markdown_dir,
         notes_dir=config.notes_dir,
         service_manager=services,  # Pass ServiceManager for note generation
+        config=config,  # CRITICAL FIX: Pass config to avoid creating new instance
     )
     
     # Set citation tracker in services that need it

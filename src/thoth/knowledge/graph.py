@@ -59,6 +59,7 @@ class CitationGraph:
         markdown_dir: Path | None = None,
         notes_dir: Path | None = None,
         service_manager: 'ServiceManager | None' = None,
+        config: 'Config | None' = None,  # CRITICAL FIX: Accept config to avoid creating new instance
     ) -> None:
         """
         Initialize the CitationGraph (database-only, no file system dependencies).
@@ -85,6 +86,8 @@ class CitationGraph:
         self.pdf_dir = pdf_dir
         self.markdown_dir = markdown_dir
         self.notes_dir = notes_dir
+        # CRITICAL FIX: Store config to avoid creating new instance later
+        self.config = config
 
         self.graph: nx.DiGraph = nx.DiGraph()
         self._load_graph()
@@ -184,9 +187,14 @@ class CitationGraph:
         """Load graph from PostgreSQL."""
         import asyncpg
         import asyncio
-        from thoth.config import Config
 
-        config = Config()
+        # CRITICAL FIX: Use existing config instead of creating new instance
+        if self.config is None:
+            from thoth.config import config as global_config
+            config = global_config
+        else:
+            config = self.config
+
         db_url = getattr(config.secrets, 'database_url', None) if hasattr(config, 'secrets') else None
         if not db_url:
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
