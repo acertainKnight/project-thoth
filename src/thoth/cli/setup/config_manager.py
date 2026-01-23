@@ -14,8 +14,6 @@ from typing import Any, Dict, Optional
 from loguru import logger
 from pydantic import ValidationError
 
-from thoth.config import Config
-
 
 class ConfigManager:
     """Manages configuration loading, merging, and saving."""
@@ -37,7 +35,10 @@ class ConfigManager:
         Load existing settings.json file.
 
         Returns:
-            Dictionary of settings, or None if file doesn't exist
+            Dictionary of settings, or None if file doesn't exist or cannot be read
+
+        Raises:
+            ValueError: If file contains invalid JSON
         """
         if not self.settings_path.exists():
             logger.info('No existing settings.json found')
@@ -51,9 +52,12 @@ class ConfigManager:
         except json.JSONDecodeError as e:
             logger.error(f'Failed to parse settings.json: {e}')
             raise ValueError(f'Invalid JSON in settings.json: {e}')
+        except PermissionError as e:
+            logger.error(f'Permission denied reading settings.json: {e}')
+            return None
         except Exception as e:
             logger.error(f'Failed to load settings.json: {e}')
-            raise
+            return None
 
     def deep_merge(
         self, existing: Dict[str, Any], updates: Dict[str, Any]
@@ -102,16 +106,17 @@ class ConfigManager:
             ValidationError: If validation fails
         """
         try:
-            # Temporarily write to test file for Config to load
+            # Temporarily write to test file for Settings to load
             test_path = self.settings_path.parent / 'settings.test.json'
             with open(test_path, 'w', encoding='utf-8') as f:
                 json.dump(settings, f, indent=2)
 
-            # Try loading with Config (validates via Pydantic)
+            # Try loading with Settings.from_json_file (validates via Pydantic)
             try:
-                # Create temporary config with test file
-                # This validates all Pydantic models
-                test_config = Config._load_settings(test_path)
+                # Load with Settings.from_json_file which validates all Pydantic models
+                from thoth.config import Settings
+
+                Settings.from_json_file(test_path)  # Validates via Pydantic
                 logger.info('Settings validation successful')
                 return True
             finally:
