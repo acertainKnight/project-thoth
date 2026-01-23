@@ -9,11 +9,22 @@ from __future__ import annotations  # noqa: I001
 
 import asyncio  # noqa: F401
 from datetime import datetime
-from typing import Any, Optional  # noqa: F401
+from typing import TYPE_CHECKING, Any, Optional  # noqa: F401
 from uuid import UUID
 
 from loguru import logger
-from playwright.async_api import BrowserContext, Error as PlaywrightError, Page
+
+# Make playwright imports optional to avoid blocking if not installed
+if TYPE_CHECKING:
+    from playwright.async_api import BrowserContext, Page
+else:
+    try:
+        from playwright.async_api import BrowserContext, Error as PlaywrightError, Page
+    except ImportError:
+        # Playwright not installed - create placeholders
+        BrowserContext = None  # type: ignore
+        Page = None  # type: ignore
+        PlaywrightError = Exception  # type: ignore
 
 from thoth.discovery.browser.action_executor import ActionExecutor
 from thoth.discovery.browser.browser_manager import BrowserManager, BrowserManagerError  # noqa: F401

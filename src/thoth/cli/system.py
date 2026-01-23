@@ -8,18 +8,33 @@ from thoth.initialization import initialize_thoth
 from thoth.pipeline import ThothPipeline
 from thoth.server.app import start_obsidian_server
 from thoth.server.pdf_monitor import PDFMonitor
-from thoth.config import config
+# CRITICAL FIX: Don't import config at module level - it triggers circular import deadlock
+# Import config locally where needed instead
 
 
 def run_monitor(args, pipeline: ThothPipeline) -> int:
     """
     Run the PDF monitor.
-    
+
     Now always uses OptimizedDocumentPipeline via initialize_thoth().
     The --optimized flag is maintained for backward compatibility but has no effect.
     """
-    # config imported globally from thoth.config
-    watch_dir = Path(args.watch_dir) if args.watch_dir else config.pdf_dir
+    # CRITICAL FIX: Import config locally to avoid circular import deadlock
+    from thoth.config import config
+
+    # Use watch_directories from settings if no CLI arg provided
+    if args.watch_dir:
+        watch_dir = Path(args.watch_dir)
+    elif hasattr(config, 'servers_config') and hasattr(config.servers_config, 'monitor'):
+        watch_dirs = config.servers_config.monitor.watch_directories
+        if watch_dirs:
+            # Use first watch directory (relative to vault root)
+            watch_dir = config.vault_root / watch_dirs[0].lstrip('/')
+        else:
+            watch_dir = config.pdf_dir
+    else:
+        watch_dir = config.pdf_dir
+
     watch_dir.mkdir(parents=True, exist_ok=True)
 
     # Always use optimized pipeline via initialize_thoth()

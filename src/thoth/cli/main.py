@@ -25,9 +25,13 @@ def _configure_safe_environment() -> None:
 # Configure environment variables before importing any ML libraries
 _configure_safe_environment()
 
+from loguru import logger  # noqa: E402
+logger.info('===== main.py: About to import initialize_thoth =====')
 from thoth.initialization import initialize_thoth  # noqa: E402
+logger.info('===== main.py: initialize_thoth imported successfully =====')
 # ThothPipeline imported lazily when needed (line 81)
 
+logger.info('===== main.py: About to import CLI submodules =====')
 from . import (  # noqa: E402
     discovery,
     letta,
@@ -41,10 +45,12 @@ from . import (  # noqa: E402
     server,
     system,
 )
+logger.info('===== main.py: CLI submodules imported successfully =====')
 
 
 def main() -> None:
     """Main entry point for the Thoth CLI."""
+    logger.info('===== main(): Function called, parsing arguments =====')
     parser = argparse.ArgumentParser(
         description='Thoth - Academic PDF processing system'
     )

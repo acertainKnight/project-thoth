@@ -8,9 +8,20 @@ actions with intelligent element selection, retry mechanisms, and dynamic conten
 import asyncio  # noqa: I001
 import logging
 import re
-from typing import Any, Dict, List, Optional, Union  # noqa: F401, UP035
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union  # noqa: F401, UP035
 
-from playwright.async_api import Page, ElementHandle, TimeoutError as PlaywrightTimeout
+# Make playwright imports optional to avoid blocking if not installed
+if TYPE_CHECKING:
+    from playwright.async_api import ElementHandle, Page
+    PlaywrightTimeout = TimeoutError
+else:
+    try:
+        from playwright.async_api import Page, ElementHandle, TimeoutError as PlaywrightTimeout
+    except ImportError:
+        # Playwright not installed - create placeholders
+        Page = None  # type: ignore
+        ElementHandle = None  # type: ignore
+        PlaywrightTimeout = TimeoutError  # type: ignore
 
 from thoth.utilities.schemas.browser_workflow import (
     WorkflowAction,

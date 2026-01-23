@@ -95,10 +95,16 @@ class SemanticScholarAPI:
             )
 
     def _init_persistent_cache(self) -> None:
-        """Initialize SQLite persistent cache database."""
+        """Initialize SQLite persistent cache database with WAL mode for concurrent writes."""
         try:
             conn = sqlite3.connect(str(self.db_path))
             cursor = conn.cursor()
+
+            # ALWAYS enable WAL mode for concurrent read/write access
+            # This is persistent and will convert existing databases to WAL
+            current_mode = cursor.execute("PRAGMA journal_mode=WAL").fetchone()[0]
+            cursor.execute("PRAGMA synchronous=NORMAL")  # Better performance with WAL
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS api_cache (
                     cache_key TEXT PRIMARY KEY,
@@ -115,7 +121,7 @@ class SemanticScholarAPI:
             """)
             conn.commit()
             conn.close()
-            logger.info(f'Initialized persistent cache at {self.db_path}')
+            logger.info(f'Semantic Scholar cache at {self.db_path} using {current_mode} mode')
         except Exception as e:
             logger.error(f'Failed to initialize persistent cache: {e}')
 

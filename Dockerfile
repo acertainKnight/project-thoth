@@ -27,7 +27,7 @@ COPY src/ ./src/
 RUN uv pip install --system --no-cache -e ".[${SERVICE_EXTRAS}]"
 
 # Production stage
-FROM python:3.12-slim
+FROM python:3.12-slim as production
 
 # Install runtime dependencies only
 RUN apt-get update && apt-get install -y \

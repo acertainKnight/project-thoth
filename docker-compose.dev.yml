@@ -378,7 +378,7 @@ services:
         SERVICE_EXTRAS: "service-monitor"  # Includes api,pdf,discovery,mcp,langchain,vectordb,embeddings
     container_name: thoth-dev-pdf-monitor
     user: "1000:1000"  # Run as host user for proper file permissions
-    command: ["python", "-m", "thoth", "monitor"]
+    command: ["python", "-m", "thoth.run_monitor_standalone"]
     env_file:
       - .env
     environment:
@@ -427,6 +427,116 @@ services:
     restart: unless-stopped
     healthcheck:
       disable: true  # Monitor is a CLI tool, doesn't expose HTTP endpoints
+
+  # Monitor Service (optimized PDF processing)
+  thoth-monitor:
+    profiles: ["microservices"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_EXTRAS: "service-monitor"  # Includes api,pdf,discovery,mcp,langchain,vectordb,embeddings
+    container_name: thoth-dev-monitor
+    user: "1000:1000"  # Run as host user for proper file permissions
+    command: ["python", "-m", "thoth.run_monitor_standalone"]
+    env_file:
+      - .env
+    environment:
+      # Vault configuration (REQUIRED - tells config.py where to find settings)
+      - OBSIDIAN_VAULT_PATH=/vault
+      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
+
+      # Service discovery (REQUIRED - inter-service communication URLs)
+      - THOTH_API_URL=http://thoth-api:8000
+      - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
+
+      # Development settings (REQUIRED - dev-specific configuration)
+      - THOTH_LOG_LEVEL=DEBUG
+
+      # Hot-reload configuration
+      - THOTH_HOT_RELOAD=1
+      - DOCKER_ENV=true
+
+      # Monitor settings (REQUIRED - service-specific configuration)
+      - THOTH_PDF_MONITOR_INTERVAL=30
+
+      # API Keys (REQUIRED - loaded from .env file)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - API_MISTRAL_KEY=${API_MISTRAL_KEY:-}
+    volumes:
+      - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
+      - ./src:/app/src:ro  # Mount source for development
+      - ./data/prompts:/app/prompts:ro  # System prompts
+    networks:
+      - thoth-dev-network
+      - letta-network  # Connect to external Letta network for PostgreSQL access
+    depends_on:
+      thoth-api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "from pathlib import Path; import sys; sys.exit(0 if Path('/vault/_thoth/data/output/processed_pdfs.json').exists() else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Dashboard Service
+  thoth-dashboard:
+    profiles: ["microservices"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_EXTRAS: "service-dashboard"
+    container_name: thoth-dev-dashboard
+    user: "1000:1000"  # Run as host user for proper file permissions
+    command: [
+      "python", "-m", "thoth", "research", "start-dashboard",
+      "--check-interval", "60"
+    ]
+    env_file:
+      - .env
+    environment:
+      # Vault configuration (REQUIRED - tells config.py where to find settings)
+      - OBSIDIAN_VAULT_PATH=/vault
+      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
+
+      # Service discovery (REQUIRED - inter-service communication URLs)
+      - THOTH_API_URL=http://thoth-api:8000
+      - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
+
+      # Development settings (REQUIRED - dev-specific configuration)
+      - THOTH_LOG_LEVEL=DEBUG
+
+      # Hot-reload configuration
+      - THOTH_HOT_RELOAD=1
+      - DOCKER_ENV=true
+
+      # API Keys (REQUIRED - loaded from .env file)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
+      - ./src:/app/src:ro  # Mount source for development
+      - ./data/prompts:/app/prompts:ro  # System prompts
+    networks:
+      - thoth-dev-network
+      - letta-network  # Connect to external Letta network
+    depends_on:
+      thoth-api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: [
+        "CMD", "python", "-c",
+        "from pathlib import Path; import sys; sys.exit(0 if Path('/vault/Research/Dashboard').exists() else 1)"
+      ]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 
   # ==============================================================================

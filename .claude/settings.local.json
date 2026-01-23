@@ -31,7 +31,13 @@
       "Bash(LETTA_BASE_URL=\"http://localhost:8284\" LETTA_API_KEY=\"letta_dev_password\" /home/nick-hallmark/.nvm/versions/node/v20.19.5/bin/letta agents:*)",
       "Bash(LETTA_BASE_URL=\"http://localhost:8283\" LETTA_API_KEY=\"letta_dev_password\" /home/nick-hallmark/.nvm/versions/node/v20.19.5/bin/letta agents:*)",
       "Bash(LETTA_BASE_URL=\"http://localhost:8283\" LETTA_API_KEY=\"letta_dev_password\" /home/nick-hallmark/.nvm/versions/node/v20.19.5/bin/letta:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(docker restart:*)",
+      "Bash(git show:*)",
+      "Bash(find:*)",
+      "Bash(docker top:*)",
+      "Bash(python:*)",
+      "Bash(xargs:*)"
     ],
     "deny": []
   },

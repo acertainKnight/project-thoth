@@ -322,48 +322,47 @@ class LettaFilesystemService(BaseService):
             self.logger.error(f'Failed to upload file {file_path.name}: {e}')
             raise ServiceError(f'File upload failed: {e}')
 
-    async def sync_vault_to_folder(
+    async def sync_directory_to_folder(
         self,
         folder_id: str,
-        notes_dir: Path | None = None
+        source_dir: Path,
+        file_extensions: list[str] = ['.pdf', '.md']
     ) -> dict[str, Any]:
         """
-        Sync all vault markdown files to Letta folder.
+        Sync files from a single directory to Letta folder.
 
         Only uploads files that:
         - Are new (not in sync state)
         - Have been modified (size or mtime changed)
+        - Match the specified file extensions
 
         Args:
             folder_id: Letta folder ID
-            notes_dir: Directory containing notes (defaults to config.notes_dir)
+            source_dir: Directory to sync from
+            file_extensions: List of file extensions to include (e.g., ['.pdf', '.md'])
 
         Returns:
             Dict with sync statistics
         """
         try:
-            notes_path = notes_dir or self.config.notes_dir
-            
-            if not notes_path.exists():
-                raise ServiceError(f'Notes directory does not exist: {notes_path}')
-            
-            self.logger.info(f'Starting vault sync from: {notes_path}')
-            
-            # Find all PDF and markdown files
-            pdf_files = list(notes_path.glob('**/*.pdf'))
-            md_files = list(notes_path.glob('**/*.md'))
-            all_files = pdf_files + md_files
-            
+            if not source_dir.exists():
+                raise ServiceError(f'Source directory does not exist: {source_dir}')
+
+            self.logger.info(f'Syncing from: {source_dir}')
+
+            # Find all files matching extensions
+            all_files = []
+            for ext in file_extensions:
+                all_files.extend(list(source_dir.glob(f'**/*{ext}')))
+
             stats = {
                 'total_files': len(all_files),
-                'pdfs': len(pdf_files),
-                'markdown': len(md_files),
                 'uploaded': 0,
                 'skipped': 0,
                 'errors': []
             }
-            
-            self.logger.info(f'Found {len(pdf_files)} PDFs and {len(md_files)} markdown files')
+
+            self.logger.info(f'Found {len(all_files)} files to sync')
             
             for file_path in all_files:
                 try:

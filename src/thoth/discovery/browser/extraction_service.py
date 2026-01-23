@@ -8,14 +8,26 @@ deduplication, and error handling for browser-based discovery workflows.
 from __future__ import annotations  # noqa: I001
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional  # noqa: UP035
+from typing import TYPE_CHECKING, Any, Dict, List, Optional  # noqa: UP035
 
 from loguru import logger
-from playwright.async_api import (
-    ElementHandle,
-    Page,
-    TimeoutError as PlaywrightTimeoutError,
-)
+
+# Make playwright imports optional to avoid blocking if not installed
+if TYPE_CHECKING:
+    from playwright.async_api import ElementHandle, Page
+    PlaywrightTimeoutError = TimeoutError
+else:
+    try:
+        from playwright.async_api import (
+            ElementHandle,
+            Page,
+            TimeoutError as PlaywrightTimeoutError,
+        )
+    except ImportError:
+        # Playwright not installed - create placeholders
+        ElementHandle = None  # type: ignore
+        Page = None  # type: ignore
+        PlaywrightTimeoutError = TimeoutError  # type: ignore
 
 from thoth.utilities.schemas import ScrapedArticleMetadata
 
