@@ -135,6 +135,13 @@ docs/*IMPLEMENTATION*.md
 *-report.md
 *-summary.md
 *-status.md
+*plan.md
+*implementation.md
+*findings.md
+*incident.md
+*review.md
+*complete.md
+*analysis.md
 implementation-plan.md
 
 # Internal analysis/summary files (not for repo)

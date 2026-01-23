@@ -171,7 +171,7 @@ class ObsidianDetector:
 
     @staticmethod
     def search_vaults(
-        search_paths: list[Path] | None = None, max_depth: int = 3
+        search_paths: list[Path] | None = None, max_depth: int = 3, timeout: int = 10
     ) -> list[ObsidianVault]:
         """
         Search for Obsidian vaults.
@@ -179,17 +179,21 @@ class ObsidianDetector:
         Args:
             search_paths: Paths to search (uses defaults if None)
             max_depth: Maximum directory depth to search
+            timeout: Maximum time in seconds to search (default: 10)
 
         Returns:
             List of found vaults
         """
+        import time
+
+        start_time = time.time()
+
         if search_paths is None:
-            # Default search paths
+            # Default search paths (limit to likely locations)
             search_paths = [
                 Path.home() / 'Documents',
                 Path.home() / 'Obsidian',
                 Path.home() / 'obsidian',
-                Path.home(),
             ]
 
         vaults = []
@@ -198,9 +202,19 @@ class ObsidianDetector:
             if not search_path.exists():
                 continue
 
+            # Check timeout
+            if time.time() - start_time > timeout:
+                logger.warning(f'Vault search timeout after {timeout}s')
+                break
+
             try:
                 # Look for .obsidian directories
                 for obsidian_dir in search_path.rglob('.obsidian'):
+                    # Check timeout again (inner loop)
+                    if time.time() - start_time > timeout:
+                        logger.warning(f'Vault search timeout in {search_path}')
+                        break
+
                     # Check depth
                     depth = len(obsidian_dir.relative_to(search_path).parts)
                     if depth > max_depth:

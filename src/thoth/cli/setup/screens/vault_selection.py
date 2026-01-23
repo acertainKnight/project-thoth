@@ -43,7 +43,29 @@ class VaultSelectionScreen(BaseScreen):
         self.show_info("Detecting Obsidian installation and vaults...")
 
         try:
-            # Detect Obsidian
+            # First, check if vault is already configured via environment
+            env_vault = ObsidianDetector.detect_vault_from_env()
+            if env_vault:
+                logger.info(f"Vault detected from environment: {env_vault}")
+                # Create a vault entry from the environment variable
+                self.vaults = [
+                    ObsidianVault(
+                        path=env_vault,
+                        name=env_vault.name,
+                        has_thoth_workspace=(env_vault / "_thoth").exists(),
+                        config_exists=(
+                            env_vault / "_thoth" / "settings.json"
+                        ).exists(),
+                    )
+                ]
+                self.clear_messages()
+                self.show_info(
+                    f"Found vault from environment: {env_vault.name}"
+                )
+                self.refresh()
+                return
+
+            # Detect Obsidian installation
             self.obsidian_status = ObsidianDetector.get_status()
 
             if not self.obsidian_status.installed:
@@ -56,7 +78,7 @@ class VaultSelectionScreen(BaseScreen):
                     f"Obsidian detected: {self.obsidian_status.version or 'unknown version'}"
                 )
 
-            # Get vaults
+            # Get vaults (with timeout protection)
             self.vaults = self.obsidian_status.vaults
 
             if not self.vaults:

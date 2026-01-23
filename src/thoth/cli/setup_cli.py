@@ -7,12 +7,8 @@ Provides CLI entry point for the setup wizard.
 from __future__ import annotations
 
 from argparse import ArgumentParser, Namespace
-from typing import TYPE_CHECKING
 
 from loguru import logger
-
-if TYPE_CHECKING:
-    from thoth.pipeline import ThothPipeline
 
 
 def configure_subparser(subparsers: ArgumentParser) -> None:
@@ -43,13 +39,12 @@ def configure_subparser(subparsers: ArgumentParser) -> None:
     setup_parser.set_defaults(func=run_setup)
 
 
-def run_setup(args: Namespace, _pipeline: ThothPipeline) -> None:
+def run_setup(args: Namespace) -> None:
     """
     Run the setup wizard.
 
     Args:
         args: Command line arguments
-        _pipeline: ThothPipeline instance (unused, for compatibility)
     """
     logger.info("Starting Thoth setup wizard")
 

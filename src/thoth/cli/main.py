@@ -26,8 +26,10 @@ def _configure_safe_environment() -> None:
 _configure_safe_environment()
 
 from loguru import logger  # noqa: E402
+
 logger.info('===== main.py: About to import initialize_thoth =====')
 from thoth.initialization import initialize_thoth  # noqa: E402
+
 logger.info('===== main.py: initialize_thoth imported successfully =====')
 # ThothPipeline imported lazily when needed (line 81)
 
@@ -46,6 +48,7 @@ from . import (  # noqa: E402
     setup_cli,
     system,
 )
+
 logger.info('===== main.py: CLI submodules imported successfully =====')
 
 
@@ -77,10 +80,19 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # Skip initialization for setup command (it configures Thoth before initialization)
+    if args.command == 'setup':
+        if hasattr(args, 'func'):
+            if inspect.iscoroutinefunction(args.func):
+                asyncio.run(args.func(args))
+            else:
+                args.func(args)
+        return
+
     # Initialize Thoth using the new factory function
     # This replaces ThothPipeline() and provides cleaner access to components
-    services, document_pipeline, citation_tracker = initialize_thoth()
-    
+    _services, _document_pipeline, _citation_tracker = initialize_thoth()
+
     # Create ThothPipeline wrapper for backward compatibility with CLI commands
     # that still expect it (will be removed once all commands are updated)
     import warnings
