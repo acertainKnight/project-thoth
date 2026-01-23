@@ -171,25 +171,26 @@ class ObsidianDetector:
 
     @staticmethod
     def search_vaults(
-        search_paths: list[Path] | None = None, max_depth: int = 3, timeout: int = 10
+        search_paths: list[Path] | None = None, max_depth: int = 2, timeout: int = 5
     ) -> list[ObsidianVault]:
         """
-        Search for Obsidian vaults.
+        Search for Obsidian vaults using os.walk for better control.
 
         Args:
             search_paths: Paths to search (uses defaults if None)
-            max_depth: Maximum directory depth to search
-            timeout: Maximum time in seconds to search (default: 10)
+            max_depth: Maximum directory depth to search (default: 2)
+            timeout: Maximum time in seconds to search (default: 5)
 
         Returns:
             List of found vaults
         """
+        import os
         import time
 
         start_time = time.time()
 
         if search_paths is None:
-            # Default search paths (limit to likely locations)
+            # Default search paths (limit to likely locations only)
             search_paths = [
                 Path.home() / 'Documents',
                 Path.home() / 'Obsidian',
@@ -197,57 +198,86 @@ class ObsidianDetector:
             ]
 
         vaults = []
+        dirs_checked = 0
+        max_dirs = 1000  # Limit total directories checked
+
+        logger.info(f'Starting vault search (timeout: {timeout}s, max_depth: {max_depth})')
 
         for search_path in search_paths:
             if not search_path.exists():
+                logger.debug(f'Skipping non-existent path: {search_path}')
                 continue
 
-            # Check timeout
-            if time.time() - start_time > timeout:
-                logger.warning(f'Vault search timeout after {timeout}s')
-                break
+            logger.info(f'Searching in: {search_path}')
 
             try:
-                # Look for .obsidian directories
-                for obsidian_dir in search_path.rglob('.obsidian'):
-                    # Check timeout again (inner loop)
+                # Use os.walk for better control over traversal
+                for root, dirs, _files in os.walk(search_path):
+                    # Check timeout frequently
                     if time.time() - start_time > timeout:
-                        logger.warning(f'Vault search timeout in {search_path}')
-                        break
+                        logger.warning(f'Vault search timeout after {timeout}s (checked {dirs_checked} dirs)')
+                        return vaults
+
+                    # Limit total directories checked
+                    dirs_checked += 1
+                    if dirs_checked > max_dirs:
+                        logger.warning(f'Reached max directory limit ({max_dirs})')
+                        return vaults
 
                     # Check depth
-                    depth = len(obsidian_dir.relative_to(search_path).parts)
+                    try:
+                        depth = len(Path(root).relative_to(search_path).parts)
+                    except ValueError:
+                        continue
+
+                    # Skip if too deep
                     if depth > max_depth:
+                        dirs.clear()  # Don't descend into subdirectories
                         continue
 
-                    vault_path = obsidian_dir.parent
+                    # Skip common large directories that won't have vaults
+                    dirs[:] = [
+                        d for d in dirs
+                        if d not in {
+                            'node_modules', '.git', '.cache', 'venv', 'env',
+                            '__pycache__', '.venv', 'target', 'build', 'dist',
+                            '.npm', '.nvm', 'Library', 'Applications',
+                        }
+                    ]
 
-                    # Validate vault
-                    if not ObsidianDetector.is_valid_vault(vault_path):
-                        continue
+                    # Check if current directory contains .obsidian
+                    if '.obsidian' in dirs:
+                        vault_path = Path(root)
+                        obsidian_dir = vault_path / '.obsidian'
 
-                    # Check for Thoth workspace
-                    thoth_dir = vault_path / '_thoth'
-                    has_thoth = thoth_dir.exists() and thoth_dir.is_dir()
+                        # Validate vault
+                        if ObsidianDetector.is_valid_vault(vault_path):
+                            # Check for Thoth workspace
+                            thoth_dir = vault_path / '_thoth'
+                            has_thoth = thoth_dir.exists() and thoth_dir.is_dir()
 
-                    # Check for settings.json
-                    settings_file = thoth_dir / 'settings.json'
-                    config_exists = settings_file.exists()
+                            # Check for settings.json
+                            settings_file = thoth_dir / 'settings.json'
+                            config_exists = settings_file.exists()
 
-                    vault = ObsidianVault(
-                        path=vault_path,
-                        name=vault_path.name,
-                        has_thoth_workspace=has_thoth,
-                        config_exists=config_exists,
-                    )
+                            vault = ObsidianVault(
+                                path=vault_path,
+                                name=vault_path.name,
+                                has_thoth_workspace=has_thoth,
+                                config_exists=config_exists,
+                            )
 
-                    vaults.append(vault)
-                    logger.info(f'Found vault: {vault_path}')
+                            vaults.append(vault)
+                            logger.info(f'Found vault: {vault_path}')
+
+                            # Don't search inside vault directories
+                            dirs.clear()
 
             except (PermissionError, OSError) as e:
                 logger.debug(f'Error searching {search_path}: {e}')
                 continue
 
+        logger.info(f'Search complete: found {len(vaults)} vault(s) after checking {dirs_checked} directories')
         return vaults
 
     @classmethod

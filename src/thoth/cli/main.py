@@ -27,12 +27,6 @@ _configure_safe_environment()
 
 from loguru import logger  # noqa: E402
 
-logger.info('===== main.py: About to import initialize_thoth =====')
-from thoth.initialization import initialize_thoth  # noqa: E402
-
-logger.info('===== main.py: initialize_thoth imported successfully =====')
-# ThothPipeline imported lazily when needed (line 81)
-
 logger.info('===== main.py: About to import CLI submodules =====')
 from . import (  # noqa: E402
     discovery,
@@ -89,8 +83,12 @@ def main() -> None:
                 args.func(args)
         return
 
-    # Initialize Thoth using the new factory function
+    # Initialize Thoth using the new factory function (lazy import to avoid premature config loading)
     # This replaces ThothPipeline() and provides cleaner access to components
+    logger.info('===== main(): About to import initialize_thoth =====')
+    from thoth.initialization import initialize_thoth  # noqa: PLC0415
+    logger.info('===== main(): initialize_thoth imported successfully =====')
+
     _services, _document_pipeline, _citation_tracker = initialize_thoth()
 
     # Create ThothPipeline wrapper for backward compatibility with CLI commands
