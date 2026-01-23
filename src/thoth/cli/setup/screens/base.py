@@ -82,6 +82,15 @@ class BaseScreen(Screen):
         padding: 1;
         margin: 1 0;
     }
+
+    .help-text {
+        color: $text-muted;
+        margin: 0 0 1 0;
+    }
+
+    .no-vaults {
+        color: $warning;
+    }
     """
 
     BINDINGS: ClassVar[list[tuple[str, str, str]]] = [

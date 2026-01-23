@@ -82,9 +82,17 @@ class VaultSelectionScreen(BaseScreen):
             self.vaults = self.obsidian_status.vaults
 
             if not self.vaults:
-                self.show_info(
-                    "No vaults found. You can specify a custom vault path below."
+                self.clear_messages()
+                self.show_error(
+                    "No vaults found automatically. Please enter your vault path below."
                 )
+                # Focus the custom path input
+                await asyncio.sleep(0.1)  # Let UI update
+                try:
+                    custom_input = self.query_one("#custom-path", Input)
+                    custom_input.focus()
+                except Exception:
+                    pass  # Input might not be mounted yet
             else:
                 self.clear_messages()
                 logger.info(f"Found {len(self.vaults)} vault(s)")
@@ -103,11 +111,10 @@ class VaultSelectionScreen(BaseScreen):
         Returns:
             Content widgets
         """
-        yield Static("[bold]Detected Vaults:[/bold]", classes="section-title")
-
-        # Vault list
-        with Vertical(id="vault-list"):
-            if self.vaults:
+        # Vault list section (only show if we have vaults)
+        if self.vaults:
+            yield Static("[bold]Detected Vaults:[/bold]", classes="section-title")
+            with Vertical(id="vault-list"):
                 with RadioSet(id="vault-radio"):
                     for vault in self.vaults:
                         status = ""
@@ -117,18 +124,32 @@ class VaultSelectionScreen(BaseScreen):
                             f"{vault.name} - {vault.path}{status}",
                             value=str(vault.path),
                         )
-            else:
-                yield Static(
-                    "[dim]No vaults detected yet. Searching...[/dim]",
-                    classes="no-vaults",
-                )
 
-        # Custom path option
-        yield Label("\n[bold]Or specify custom vault path:[/bold]")
+            # Custom path as alternative
+            yield Label("\n[bold]Or enter vault path manually:[/bold]")
+        else:
+            # No vaults found - make custom path primary
+            yield Static(
+                "[yellow]⚠ No vaults found automatically[/yellow]",
+                classes="section-title",
+            )
+            yield Static(
+                "[dim]Searching timed out or no vaults in common locations.[/dim]"
+            )
+            yield Label("\n[bold cyan]Please enter your Obsidian vault path:[/bold cyan]")
+
+        # Custom path input (always shown)
         yield Input(
-            placeholder="/path/to/your/obsidian/vault",
+            placeholder="/path/to/your/obsidian/vault (e.g., ~/Documents/MyVault)",
             id="custom-path",
         )
+
+        # Help text
+        if not self.vaults:
+            yield Static(
+                "\n[dim]Tip: You can also set OBSIDIAN_VAULT_PATH environment variable[/dim]",
+                classes="help-text",
+            )
 
     async def validate_and_proceed(self) -> dict[str, Any] | None:
         """
@@ -137,9 +158,14 @@ class VaultSelectionScreen(BaseScreen):
         Returns:
             Dict with selected vault path, or None if invalid
         """
-        # Get selected vault from radio buttons
-        radio_set = self.query_one("#vault-radio", RadioSet)
-        selected_value = radio_set.pressed_button
+        # Get selected vault from radio buttons (if any vaults were found)
+        selected_value = None
+        if self.vaults:
+            try:
+                radio_set = self.query_one("#vault-radio", RadioSet)
+                selected_value = radio_set.pressed_button
+            except Exception:
+                pass  # Radio set might not exist if no vaults
 
         if selected_value:
             self.selected_vault = Path(selected_value.value)
@@ -151,7 +177,10 @@ class VaultSelectionScreen(BaseScreen):
             if custom_path_str:
                 self.selected_vault = Path(custom_path_str).expanduser().resolve()
             else:
-                self.show_error("Please select a vault or specify a custom path")
+                if self.vaults:
+                    self.show_error("Please select a vault or enter a custom path")
+                else:
+                    self.show_error("Please enter your Obsidian vault path")
                 return None
 
         # Validate vault path
