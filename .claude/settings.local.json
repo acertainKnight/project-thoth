@@ -37,7 +37,8 @@
       "Bash(find:*)",
       "Bash(docker top:*)",
       "Bash(python:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(journalctl:*)"
     ],
     "deny": []
   },

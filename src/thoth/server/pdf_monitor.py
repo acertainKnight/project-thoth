@@ -725,8 +725,20 @@ class PDFMonitor:
         print("MONITOR: ✅ _process_existing_files() completed", flush=True)
         logger.info('✅ _process_existing_files() completed')
 
+        # DEBUG: Explicit trace before observer start
+        print("MONITOR: 🔍 Line 728: About to call _start_observer()...", flush=True)
+        logger.info('🔍 Line 728: About to call _start_observer()...')
+
         # Set up and start the observer
-        self._start_observer()
+        try:
+            print("MONITOR: 🔍 Line 732: Calling _start_observer()...", flush=True)
+            self._start_observer()
+            print("MONITOR: ✅ Line 734: _start_observer() returned successfully", flush=True)
+            logger.info('✅ _start_observer() returned successfully')
+        except Exception as e:
+            print(f"MONITOR: ❌ EXCEPTION in _start_observer(): {e!s}", flush=True)
+            logger.exception('EXCEPTION in _start_observer():')
+            raise
 
         # Track current watch directory and mark as running
         self._current_watch_dir = self.watch_dir
@@ -887,11 +899,22 @@ class PDFMonitor:
         """
         Start or restart the observer with current watch directory.
         """
+        print("MONITOR: 🎯 _start_observer() ENTERED", flush=True)
+        logger.info('🎯 _start_observer() ENTERED')
+
+        print("MONITOR: 🔍 Creating PDFHandler...", flush=True)
         event_handler = PDFHandler(self.pipeline)
+        print("MONITOR: ✅ PDFHandler created", flush=True)
+
+        print(f"MONITOR: 🔍 Scheduling observer for {self.watch_dir}...", flush=True)
         self.observer.schedule(
             event_handler, str(self.watch_dir), recursive=self.recursive
         )
+        print("MONITOR: ✅ Observer scheduled", flush=True)
+
+        print("MONITOR: 🔍 Starting observer thread...", flush=True)
         self.observer.start()
+        print("MONITOR: ✅ Observer thread started", flush=True)
         logger.info(f'Observer started watching {self.watch_dir}')
 
     def _on_config_reload(self):

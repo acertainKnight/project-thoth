@@ -1,6 +1,23 @@
 # Easy Installation Guide
 
-This guide provides multiple installation methods for Thoth, from simplest (no Python required) to most flexible.
+This guide provides multiple installation methods for Thoth, **including methods that require NO Python installation**.
+
+---
+
+## 🆘 **NO Python? No Problem!**
+
+**See [NO-PYTHON-INSTALL.md](./NO-PYTHON-INSTALL.md) for complete Python-free installation guide.**
+
+**Quick options:**
+```bash
+# One-line installer (auto-detects best method)
+curl -fsSL https://raw.githubusercontent.com/yourusername/project-thoth/main/install.sh | bash
+
+# Docker-only method
+curl -fsSL https://raw.githubusercontent.com/yourusername/project-thoth/main/docker-setup.sh | bash
+```
+
+---
 
 ## 🚀 Quick Install (Recommended for Users)
 

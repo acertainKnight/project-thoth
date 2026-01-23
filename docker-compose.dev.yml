@@ -367,67 +367,6 @@ services:
       retries: 3
       start_period: 60s
 
-  # PDF Monitor Service
-  thoth-pdf-monitor:
-    profiles: ["microservices"]
-    build:
-      context: .
-      dockerfile: Dockerfile
-      # target: development  # Not using multi-stage build
-      args:
-        SERVICE_EXTRAS: "service-monitor"  # Includes api,pdf,discovery,mcp,langchain,vectordb,embeddings
-    container_name: thoth-dev-pdf-monitor
-    user: "1000:1000"  # Run as host user for proper file permissions
-    command: ["python", "-m", "thoth.run_monitor_standalone"]
-    env_file:
-      - .env
-    environment:
-      # =============================================================================
-      # SIMPLIFIED CONFIGURATION - All paths loaded from settings.json via config.py
-      # =============================================================================
-      # Previously had 40+ environment variables that duplicated settings.json.
-      # Removed: LETTA_DIR, LETTA_LOGS_DIR, LETTA_CACHE_DIR, LETTA_CONFIG_DIR,
-      #          HOME (all path-related variables now managed by config.py)
-      # =============================================================================
-
-      # Vault configuration (REQUIRED - tells config.py where to find settings)
-      - OBSIDIAN_VAULT_PATH=/vault
-      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
-
-      # Service discovery (REQUIRED - inter-service communication URLs)
-      - THOTH_API_URL=http://thoth-api:8000
-      - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
-
-      # Development settings (REQUIRED - dev-specific configuration)
-      - THOTH_LOG_LEVEL=DEBUG
-
-      # Hot-reload configuration
-      # Automatically reload when vault/_thoth/settings.json changes
-      # No container restart needed!
-      - THOTH_HOT_RELOAD=1
-      - DOCKER_ENV=true
-
-      # Monitor settings (REQUIRED - service-specific configuration)
-      - THOTH_PDF_MONITOR_INTERVAL=30
-
-      # API Keys (REQUIRED - loaded from .env file)
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - API_MISTRAL_KEY=${API_MISTRAL_KEY:-}
-    volumes:
-      - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
-      - ./src:/app/src:ro  # Mount source for development
-      - ./data/prompts:/app/prompts:ro  # System prompts
-    networks:
-      - thoth-dev-network
-      - letta-network  # Connect to external Letta network for PostgreSQL access
-    depends_on:
-      thoth-api:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      disable: true  # Monitor is a CLI tool, doesn't expose HTTP endpoints
-
   # Monitor Service (optimized PDF processing)
   thoth-monitor:
     profiles: ["microservices"]
