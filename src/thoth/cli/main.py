@@ -83,10 +83,11 @@ def main() -> None:
                 args.func(args)
         return
 
-    # Initialize Thoth using the new factory function (lazy import to avoid premature config loading)
-    # This replaces ThothPipeline() and provides cleaner access to components
+    # Initialize Thoth using the new factory function
+    # Lazy import to avoid premature config loading
+    # Replaces ThothPipeline() and provides cleaner access to components
     logger.info('===== main(): About to import initialize_thoth =====')
-    from thoth.initialization import initialize_thoth  # noqa: PLC0415
+    from thoth.initialization import initialize_thoth
     logger.info('===== main(): initialize_thoth imported successfully =====')
 
     _services, _document_pipeline, _citation_tracker = initialize_thoth()

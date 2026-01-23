@@ -248,7 +248,6 @@ class ObsidianDetector:
                     # Check if current directory contains .obsidian
                     if '.obsidian' in dirs:
                         vault_path = Path(root)
-                        obsidian_dir = vault_path / '.obsidian'
 
                         # Validate vault
                         if ObsidianDetector.is_valid_vault(vault_path):
