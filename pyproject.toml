@@ -37,6 +37,7 @@ api = [
     "sqlalchemy>=2.0.39",
     "alembic>=1.13.0",
     "asyncpg", # PostgreSQL async driver
+    "psycopg2-binary>=2.9.10", # PostgreSQL synchronous driver for pdf_monitor
     "aiofiles>=24.1.0",
     "httpx>=0.27.0",
     "requests>=2.32.3",
@@ -190,6 +191,12 @@ test = [
     "psutil>=7.0.0", # Memory profiling
     "respx>=0.22.0",
     "freezegun>=1.5.5",
+]
+
+setup = [
+    "textual>=0.80.0",  # TUI framework for setup wizard
+    "rich>=13.0.0",     # Rich text and formatting
+    "psutil>=7.0.0",    # System information and process management
 ]
 
 jupyter = [
