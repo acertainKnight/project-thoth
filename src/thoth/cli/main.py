@@ -43,6 +43,7 @@ from . import (  # noqa: E402
     research,
     schema,
     server,
+    setup_cli,
     system,
 )
 logger.info('===== main.py: CLI submodules imported successfully =====')
@@ -71,6 +72,7 @@ def main() -> None:
     research.configure_subparser(subparsers)
     schema.configure_subparser(subparsers)
     server.configure_subparser(subparsers)
+    setup_cli.configure_subparser(subparsers)
     system.configure_subparser(subparsers)
 
     args = parser.parse_args()
