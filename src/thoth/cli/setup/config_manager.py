@@ -1,15 +1,17 @@
+
 """
 Configuration manager for setup wizard.
 
 Handles loading, merging, validating, and saving configuration files
 with atomic writes and automatic backups.
 """
+from __future__ import annotations
 
 import json
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from loguru import logger
 from pydantic import ValidationError
@@ -30,7 +32,7 @@ class ConfigManager:
         self.backup_dir = vault_path / '_thoth' / 'backups'
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
-    def load_existing(self) -> Optional[Dict[str, Any]]:
+    def load_existing(self) -> dict[str, Any] | None:
         """
         Load existing settings.json file.
 
@@ -45,13 +47,13 @@ class ConfigManager:
             return None
 
         try:
-            with open(self.settings_path, 'r', encoding='utf-8') as f:
+            with open(self.settings_path, encoding='utf-8') as f:
                 settings = json.load(f)
             logger.info(f'Loaded existing settings from {self.settings_path}')
             return settings
         except json.JSONDecodeError as e:
             logger.error(f'Failed to parse settings.json: {e}')
-            raise ValueError(f'Invalid JSON in settings.json: {e}')
+            raise ValueError(f'Invalid JSON in settings.json: {e}') from e
         except PermissionError as e:
             logger.error(f'Permission denied reading settings.json: {e}')
             return None
@@ -60,8 +62,8 @@ class ConfigManager:
             return None
 
     def deep_merge(
-        self, existing: Dict[str, Any], updates: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, existing: dict[str, Any], updates: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Deep merge two dictionaries, preserving existing values.
 
@@ -92,7 +94,7 @@ class ConfigManager:
 
         return result
 
-    def validate_schema(self, settings: Dict[str, Any]) -> bool:
+    def validate_schema(self, settings: dict[str, Any]) -> bool:
         """
         Validate settings against Pydantic models.
 
@@ -131,7 +133,7 @@ class ConfigManager:
             logger.error(f'Unexpected validation error: {e}')
             raise
 
-    def backup(self) -> Optional[Path]:
+    def backup(self) -> Path | None:
         """
         Create timestamped backup of existing settings.
 
@@ -152,7 +154,7 @@ class ConfigManager:
             logger.error(f'Failed to create backup: {e}')
             raise
 
-    def atomic_save(self, settings: Dict[str, Any]) -> None:
+    def atomic_save(self, settings: dict[str, Any]) -> None:
         """
         Save settings atomically using temp file + rename pattern.
 
@@ -182,7 +184,7 @@ class ConfigManager:
             logger.error(f'Failed to save settings: {e}')
             raise
 
-    def save_with_backup(self, settings: Dict[str, Any]) -> Path:
+    def save_with_backup(self, settings: dict[str, Any]) -> Path:
         """
         Save settings with automatic backup of existing file.
 

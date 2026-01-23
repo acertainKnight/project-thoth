@@ -1,13 +1,15 @@
+
 """
 Input validators for setup wizard.
 
 Provides validation functions for API keys, paths, URLs, ports, and other inputs.
 """
+from __future__ import annotations
 
 import re
 import socket
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import ClassVar
 from urllib.parse import urlparse
 
 import psutil
@@ -24,7 +26,7 @@ class APIKeyValidator:
     """Validates API keys for different providers."""
 
     # API key patterns for different providers
-    PATTERNS = {
+    PATTERNS: ClassVar[dict[str, str]] = {
         'openai': r'^sk-[A-Za-z0-9]{20,}$',
         'anthropic': r'^sk-ant-[A-Za-z0-9\-_]{95,}$',
         'google': r'^[A-Za-z0-9\-_]{39}$',
@@ -34,7 +36,7 @@ class APIKeyValidator:
     }
 
     @classmethod
-    def validate(cls, provider: str, api_key: str) -> Tuple[bool, Optional[str]]:
+    def validate(cls, provider: str, api_key: str) -> tuple[bool, str | None]:
         """
         Validate API key format for a provider.
 
@@ -70,7 +72,7 @@ class PathValidator:
     @staticmethod
     def validate_directory(
         path: str, must_exist: bool = False, must_be_writable: bool = True
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Validate a directory path.
 
@@ -144,7 +146,7 @@ class URLValidator:
     @staticmethod
     def validate_url(
         url: str, check_reachable: bool = False
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Validate a URL.
 
@@ -192,7 +194,7 @@ class URLValidator:
         return True, None
 
     @staticmethod
-    def validate_database_url(url: str) -> Tuple[bool, Optional[str]]:
+    def validate_database_url(url: str) -> tuple[bool, str | None]:
         """
         Validate PostgreSQL database URL.
 
@@ -231,7 +233,7 @@ class PortValidator:
     """Validates port numbers and availability."""
 
     @staticmethod
-    def validate_port(port: int) -> Tuple[bool, Optional[str]]:
+    def validate_port(port: int) -> tuple[bool, str | None]:
         """
         Validate port number.
 
@@ -275,7 +277,7 @@ class PortValidator:
     @staticmethod
     def get_port_status(
         port: int, host: str = 'localhost'
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Get port availability status with details.
 
@@ -321,7 +323,7 @@ class EmailValidator:
     EMAIL_PATTERN = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
     @classmethod
-    def validate(cls, email: str) -> Tuple[bool, Optional[str]]:
+    def validate(cls, email: str) -> tuple[bool, str | None]:
         """
         Validate email address format.
 

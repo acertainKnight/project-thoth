@@ -1,13 +1,14 @@
+
 """
 Docker detection and validation.
 
 Detects Docker installation, daemon status, and Docker Compose availability.
 """
+from __future__ import annotations
 
 import platform
 import subprocess
 from dataclasses import dataclass
-from typing import Optional
 
 from loguru import logger
 
@@ -17,12 +18,12 @@ class DockerStatus:
     """Docker installation and runtime status."""
 
     installed: bool
-    version: Optional[str]
+    version: str | None
     daemon_running: bool
     compose_available: bool
-    compose_version: Optional[str]
+    compose_version: str | None
     platform: str
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 class DockerDetector:
@@ -39,7 +40,7 @@ class DockerDetector:
         return platform.system().lower()
 
     @staticmethod
-    def check_docker_installed() -> tuple[bool, Optional[str]]:
+    def check_docker_installed() -> tuple[bool, str | None]:
         """
         Check if Docker is installed.
 
@@ -101,7 +102,7 @@ class DockerDetector:
             return False
 
     @staticmethod
-    def check_compose_available() -> tuple[bool, Optional[str]]:
+    def check_compose_available() -> tuple[bool, str | None]:
         """
         Check if Docker Compose is available.
 

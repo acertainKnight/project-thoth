@@ -1,10 +1,10 @@
+
 """
 Progress tracking for setup wizard.
 
 Provides progress bars, spinners, and status indicators for long-running operations.
 """
-
-from typing import Optional
+from __future__ import annotations
 
 from rich.console import Console
 from rich.progress import (
@@ -31,8 +31,8 @@ class ProgressTracker:
         self.total_steps = total_steps
         self.current_step = 0
         self.console = Console()
-        self.progress: Optional[Progress] = None
-        self.task_id: Optional[TaskID] = None
+        self.progress: Progress | None = None
+        self.task_id: TaskID | None = None
 
     def start(self) -> None:
         """Start progress tracking."""
@@ -172,7 +172,7 @@ class StatusIndicator:
         Returns:
             Formatted string with info indicator
         """
-        return f'[blue]ℹ[/blue] {message}'
+        return f'[blue]i[/blue] {message}'
 
     @staticmethod
     def pending(message: str) -> str:

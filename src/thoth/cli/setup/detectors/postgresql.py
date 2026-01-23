@@ -1,12 +1,13 @@
+
 """
 PostgreSQL detection and connection testing.
 
 Tests PostgreSQL connectivity, validates pgvector extension, and checks health.
 """
+from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Optional
 from urllib.parse import urlparse
 
 from loguru import logger
@@ -17,12 +18,12 @@ class PostgreSQLStatus:
     """PostgreSQL connection and status information."""
 
     connected: bool
-    version: Optional[str]
+    version: str | None
     pgvector_available: bool
-    host: Optional[str]
-    port: Optional[int]
-    database: Optional[str]
-    error_message: Optional[str] = None
+    host: str | None
+    port: int | None
+    database: str | None
+    error_message: str | None = None
 
 
 class PostgreSQLDetector:
@@ -119,7 +120,7 @@ class PostgreSQLDetector:
             finally:
                 await conn.close()
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return PostgreSQLStatus(
                 connected=False,
                 version=None,
@@ -186,7 +187,7 @@ class PostgreSQLDetector:
     @staticmethod
     async def create_database(
         admin_url: str, database_name: str, timeout: int = 10
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Create a new database.
 
@@ -243,7 +244,7 @@ class PostgreSQLDetector:
     @staticmethod
     async def install_pgvector(
         database_url: str, timeout: int = 10
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Install pgvector extension in database.
 

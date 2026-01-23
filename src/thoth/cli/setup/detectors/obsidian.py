@@ -1,15 +1,16 @@
+
 """
 Obsidian installation detection and vault discovery.
 
 Detects Obsidian installation across platforms and finds valid Obsidian vaults.
 """
+from __future__ import annotations
 
 import platform
-import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import ClassVar
 
 from loguru import logger
 
@@ -29,9 +30,9 @@ class ObsidianStatus:
     """Obsidian installation status."""
 
     installed: bool
-    version: Optional[str]
-    install_path: Optional[Path]
-    vaults: List[ObsidianVault]
+    version: str | None
+    install_path: Path | None
+    vaults: list[ObsidianVault]
     platform: str
 
 
@@ -39,7 +40,7 @@ class ObsidianDetector:
     """Detects Obsidian installation and vaults."""
 
     # Platform-specific installation paths
-    INSTALL_PATHS = {
+    INSTALL_PATHS: ClassVar[dict[str, list]] = {
         'darwin': ['/Applications/Obsidian.app'],  # macOS
         'linux': [
             '/usr/bin/obsidian',
@@ -57,7 +58,7 @@ class ObsidianDetector:
     }
 
     # Download URLs
-    DOWNLOAD_URLS = {
+    DOWNLOAD_URLS: ClassVar[dict[str, str]] = {
         'darwin': 'https://obsidian.md/download',
         'linux': 'https://obsidian.md/download',
         'windows': 'https://obsidian.md/download',
@@ -74,7 +75,7 @@ class ObsidianDetector:
         return platform.system().lower()
 
     @classmethod
-    def check_installed(cls) -> tuple[bool, Optional[str], Optional[Path]]:
+    def check_installed(cls) -> tuple[bool, str | None, Path | None]:
         """
         Check if Obsidian is installed.
 
@@ -116,7 +117,7 @@ class ObsidianDetector:
         return False, None, None
 
     @staticmethod
-    def _get_version(install_path: Path) -> Optional[str]:
+    def _get_version(install_path: Path) -> str | None:
         """
         Try to get Obsidian version.
 
@@ -170,8 +171,8 @@ class ObsidianDetector:
 
     @staticmethod
     def search_vaults(
-        search_paths: Optional[List[Path]] = None, max_depth: int = 3
-    ) -> List[ObsidianVault]:
+        search_paths: list[Path] | None = None, max_depth: int = 3
+    ) -> list[ObsidianVault]:
         """
         Search for Obsidian vaults.
 
@@ -236,7 +237,7 @@ class ObsidianDetector:
         return vaults
 
     @classmethod
-    def get_status(cls, search_paths: Optional[List[Path]] = None) -> ObsidianStatus:
+    def get_status(cls, search_paths: list[Path] | None = None) -> ObsidianStatus:
         """
         Get comprehensive Obsidian status.
 
@@ -272,7 +273,7 @@ class ObsidianDetector:
         return cls.DOWNLOAD_URLS.get(platform_name, 'https://obsidian.md/download')
 
     @staticmethod
-    def detect_vault_from_env() -> Optional[Path]:
+    def detect_vault_from_env() -> Path | None:
         """
         Detect vault path from environment variables.
 

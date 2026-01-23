@@ -1,11 +1,12 @@
+
 """
 Letta server detection and health checking.
 
 Detects Letta server installation, tests connectivity, and validates API endpoints.
 """
+from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import httpx
 from loguru import logger
@@ -18,9 +19,9 @@ class LettaStatus:
     available: bool
     url: str
     mode: str  # 'self-hosted' or 'cloud'
-    version: Optional[str]
+    version: str | None
     healthy: bool
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 class LettaDetector:
@@ -33,8 +34,8 @@ class LettaDetector:
 
     @staticmethod
     async def check_server(
-        url: str, timeout: int = 5, api_key: Optional[str] = None
-    ) -> tuple[bool, Optional[str], bool]:
+        url: str, timeout: int = 5, api_key: str | None = None
+    ) -> tuple[bool, str | None, bool]:
         """
         Check if Letta server is available and healthy.
 
@@ -93,8 +94,8 @@ class LettaDetector:
 
     @staticmethod
     def check_server_sync(
-        url: str, timeout: int = 5, api_key: Optional[str] = None
-    ) -> tuple[bool, Optional[str], bool]:
+        url: str, timeout: int = 5, api_key: str | None = None
+    ) -> tuple[bool, str | None, bool]:
         """
         Synchronous wrapper for check_server.
 
@@ -121,8 +122,8 @@ class LettaDetector:
     @classmethod
     def get_status(
         cls,
-        url: Optional[str] = None,
-        api_key: Optional[str] = None,
+        url: str | None = None,
+        api_key: str | None = None,
         mode: str = 'self-hosted',
     ) -> LettaStatus:
         """
