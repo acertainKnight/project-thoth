@@ -91,6 +91,25 @@ class BaseScreen(Screen):
     .no-vaults {
         color: $warning;
     }
+
+    .feature-section {
+        margin: 1 0;
+        padding: 1;
+        border: solid $primary-darken-2;
+    }
+
+    .feature-header {
+        text-style: bold;
+        color: $accent;
+    }
+
+    .feature-description {
+        margin: 0 0 1 0;
+    }
+
+    .review-section {
+        margin: 1 0;
+    }
     """
 
     BINDINGS: ClassVar[list[tuple[str, str, str]]] = [

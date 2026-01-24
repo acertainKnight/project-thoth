@@ -394,8 +394,8 @@ class DependencyCheckScreen(BaseScreen):
             self.show_error(f"Failed to install dependencies: {e}")
 
     async def on_next_screen(self) -> None:
-        """Navigate to installation screen."""
-        from .installation import InstallationScreen
+        """Navigate to optional features screen."""
+        from .optional_features import OptionalFeaturesScreen
 
-        logger.info("Proceeding to installation")
-        await self.app.push_screen(InstallationScreen())
+        logger.info("Proceeding to optional features")
+        await self.app.push_screen(OptionalFeaturesScreen())

@@ -15,6 +15,7 @@ from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Button, ProgressBar, Static
 
+from ..transaction import Transaction
 from .base import BaseScreen
 
 
@@ -38,6 +39,7 @@ class InstallationScreen(BaseScreen):
             "Validating installation",
         ]
         self.current_step = 0
+        self.transaction = Transaction()
 
     def on_mount(self) -> None:
         """Run when screen is mounted."""
@@ -50,7 +52,7 @@ class InstallationScreen(BaseScreen):
         self._install_task = asyncio.create_task(self.run_installation())
 
     async def run_installation(self) -> None:
-        """Run the installation process."""
+        """Run the installation process with transaction support."""
         self.show_info("Starting installation...")
 
         try:
@@ -92,7 +94,8 @@ class InstallationScreen(BaseScreen):
             await self.validate_installation()
             await asyncio.sleep(0.5)
 
-            # Complete
+            # Complete - commit transaction
+            self.transaction.commit()
             progress_bar.update(progress=100)
             status_text.update("[green]Installation complete![/green]")
             self.installation_complete = True
@@ -103,7 +106,10 @@ class InstallationScreen(BaseScreen):
 
         except Exception as e:
             logger.error(f"Installation failed: {e}")
-            self.show_error(f"Installation failed: {e}")
+            self.show_error(f"Installation failed: {e}. Rolling back changes...")
+            # Rollback on error
+            self.transaction.rollback()
+            self.show_error("Installation rolled back. Please fix errors and try again.")
 
     async def create_workspace(self) -> None:
         """Create Thoth workspace directory in vault."""
@@ -111,12 +117,25 @@ class InstallationScreen(BaseScreen):
             raise ValueError("No vault path specified")
 
         thoth_dir = self.vault_path / "_thoth"
-        thoth_dir.mkdir(parents=True, exist_ok=True)
+        if not thoth_dir.exists():
+            thoth_dir.mkdir(parents=True, exist_ok=True)
+            self.transaction.record_create_directory(thoth_dir)
 
         # Create subdirectories
-        (thoth_dir / "data").mkdir(exist_ok=True)
-        (thoth_dir / "logs").mkdir(exist_ok=True)
-        (thoth_dir / "cache").mkdir(exist_ok=True)
+        data_dir = thoth_dir / "data"
+        if not data_dir.exists():
+            data_dir.mkdir(exist_ok=True)
+            self.transaction.record_create_directory(data_dir)
+
+        logs_dir = thoth_dir / "logs"
+        if not logs_dir.exists():
+            logs_dir.mkdir(exist_ok=True)
+            self.transaction.record_create_directory(logs_dir)
+
+        cache_dir = thoth_dir / "cache"
+        if not cache_dir.exists():
+            cache_dir.mkdir(exist_ok=True)
+            self.transaction.record_create_directory(cache_dir)
 
         logger.info(f"Created workspace at {thoth_dir}")
 
@@ -150,9 +169,16 @@ class InstallationScreen(BaseScreen):
         if existing:
             settings = config_manager.deep_merge(existing, settings)
 
+        # Create backup before modifying
+        settings_path = self.vault_path / "_thoth" / "settings.json"
+        if settings_path.exists():
+            backup_path = config_manager.backup()
+            self.transaction.record_modify_config(settings_path, backup_path)
+
         # Validate and save
         config_manager.validate_schema(settings)
         config_manager.atomic_save(settings)
+        self.transaction.record_write_file(settings_path)
 
         logger.info("Configuration saved")
 
