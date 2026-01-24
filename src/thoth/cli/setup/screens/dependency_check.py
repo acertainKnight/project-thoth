@@ -312,20 +312,70 @@ class DependencyCheckScreen(BaseScreen):
             # Start PostgreSQL via Docker Compose
             if not self.postgres_status or not self.postgres_status.available:
                 self.show_info("Starting PostgreSQL via Docker Compose...")
-                # TODO: Implement Docker Compose startup
-                # For now, show instructions
-                self.show_info(
-                    "Run 'docker compose up -d postgres' to start PostgreSQL"
-                )
+                try:
+                    import subprocess
+                    from pathlib import Path
+
+                    # Find docker-compose.yml in project root
+                    compose_file = Path.cwd() / "docker-compose.yml"
+                    dev_compose_file = Path.cwd() / "docker-compose.dev.yml"
+
+                    if compose_file.exists() or dev_compose_file.exists():
+                        # Start PostgreSQL service
+                        result = subprocess.run(
+                            ["docker", "compose", "up", "-d", "postgres"],
+                            capture_output=True,
+                            text=True,
+                            timeout=60,
+                        )
+
+                        if result.returncode == 0:
+                            self.show_info("PostgreSQL started successfully")
+                        else:
+                            self.show_error(f"Failed to start PostgreSQL: {result.stderr}")
+                    else:
+                        self.show_info("docker-compose.yml not found. Run 'docker compose up -d postgres' manually")
+
+                except subprocess.TimeoutExpired:
+                    self.show_error("Docker Compose startup timed out")
+                except Exception as e:
+                    logger.error(f"Error starting PostgreSQL: {e}")
+                    self.show_info("Run 'docker compose up -d postgres' manually")
 
             progress_bar.update(progress=60)
 
             # Start Letta via Docker Compose
             if not self.letta_status or not self.letta_status.available:
                 self.show_info("Starting Letta via Docker Compose...")
-                # TODO: Implement Docker Compose startup
-                # For now, show instructions
-                self.show_info("Run 'docker compose up -d letta' to start Letta")
+                try:
+                    import subprocess
+                    from pathlib import Path
+
+                    # Find docker-compose.yml in project root
+                    compose_file = Path.cwd() / "docker-compose.yml"
+                    dev_compose_file = Path.cwd() / "docker-compose.dev.yml"
+
+                    if compose_file.exists() or dev_compose_file.exists():
+                        # Start Letta service
+                        result = subprocess.run(
+                            ["docker", "compose", "up", "-d", "letta"],
+                            capture_output=True,
+                            text=True,
+                            timeout=60,
+                        )
+
+                        if result.returncode == 0:
+                            self.show_info("Letta started successfully")
+                        else:
+                            self.show_error(f"Failed to start Letta: {result.stderr}")
+                    else:
+                        self.show_info("docker-compose.yml not found. Run 'docker compose up -d letta' manually")
+
+                except subprocess.TimeoutExpired:
+                    self.show_error("Docker Compose startup timed out")
+                except Exception as e:
+                    logger.error(f"Error starting Letta: {e}")
+                    self.show_info("Run 'docker compose up -d letta' manually")
 
             progress_bar.update(progress=90)
 

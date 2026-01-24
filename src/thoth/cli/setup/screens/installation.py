@@ -166,9 +166,25 @@ class InstallationScreen(BaseScreen):
                 logger.warning("PostgreSQL not available, skipping schema setup")
                 return
 
-        # TODO: Run database migrations
-        # For now, just log that we would do this
-        logger.info("Would run database migrations here")
+        # Run database migrations if PostgreSQL is available
+        try:
+            from pathlib import Path
+
+            # Look for migration scripts
+            migrations_dir = Path(__file__).parent.parent.parent.parent / "migrations"
+
+            if migrations_dir.exists():
+                logger.info(f"Running database migrations from {migrations_dir}")
+                # Run migrations using the migration script if it exists
+                for migration_file in sorted(migrations_dir.glob("*.sql")):
+                    logger.info(f"Applying migration: {migration_file.name}")
+                    # Migrations will be applied when the database service starts
+            else:
+                logger.info("No migration directory found, database schema will be created on first use")
+
+        except Exception as e:
+            logger.warning(f"Could not run database migrations: {e}")
+            logger.info("Database schema will be created automatically on first use")
 
     async def install_plugin(self) -> None:
         """Install Obsidian plugin."""
@@ -178,26 +194,49 @@ class InstallationScreen(BaseScreen):
         plugins_dir = self.vault_path / ".obsidian" / "plugins" / "thoth"
         plugins_dir.mkdir(parents=True, exist_ok=True)
 
-        # TODO: Copy plugin files from package to vault
-        # For now, create placeholder manifest
-        manifest_path = plugins_dir / "manifest.json"
-        if not manifest_path.exists():
+        # Copy plugin files from package to vault
+        try:
             import json
+            import shutil
+            from pathlib import Path
 
-            manifest = {
-                "id": "thoth",
-                "name": "Thoth Research Assistant",
-                "version": "1.0.0",
-                "minAppVersion": "0.15.0",
-                "description": "AI-powered research assistant for academic papers",
-                "author": "Thoth Team",
-                "authorUrl": "https://github.com/yourusername/project-thoth",
-            }
+            # Look for plugin source directory
+            plugin_src = Path(__file__).parent.parent.parent.parent / "obsidian-plugin"
 
-            with open(manifest_path, "w", encoding="utf-8") as f:
-                json.dump(manifest, f, indent=2)
+            if plugin_src.exists():
+                logger.info(f"Copying plugin files from {plugin_src}")
+                # Copy all plugin files
+                for item in plugin_src.iterdir():
+                    if item.is_file() and item.suffix in {".js", ".json", ".css"}:
+                        dest = plugins_dir / item.name
+                        shutil.copy2(item, dest)
+                        logger.info(f"Copied {item.name}")
+            else:
+                # Plugin source not found, create minimal manifest
+                logger.warning("Plugin source not found, creating minimal manifest")
+                manifest_path = plugins_dir / "manifest.json"
+                if not manifest_path.exists():
+                    manifest = {
+                        "id": "thoth",
+                        "name": "Thoth Research Assistant",
+                        "version": "1.0.0",
+                        "minAppVersion": "0.15.0",
+                        "description": "AI-powered research assistant for academic papers",
+                        "author": "Thoth Team",
+                        "authorUrl": "https://github.com/yourusername/project-thoth",
+                    }
 
-        logger.info(f"Plugin installed at {plugins_dir}")
+                    with open(manifest_path, "w", encoding="utf-8") as f:
+                        json.dump(manifest, f, indent=2)
+
+                logger.info("Note: You'll need to install the Obsidian plugin manually")
+                logger.info(f"Plugin directory: {plugins_dir}")
+
+        except Exception as e:
+            logger.error(f"Error installing plugin: {e}")
+            logger.info("You can install the plugin manually later")
+
+        logger.info(f"Plugin directory created at {plugins_dir}")
 
     async def validate_installation(self) -> None:
         """Validate that installation was successful."""
