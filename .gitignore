@@ -72,6 +72,14 @@ htmlcov/
 *.db
 *.sqlite
 *.sqlite3
+*.db-wal
+*.db-shm
+
+# Backups (NEVER commit backup files!)
+backups/
+*.dump
+*.sql.gz
+*.backup
 
 # Docker
 .docker-data/
