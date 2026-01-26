@@ -78,8 +78,20 @@ class ReviewScreen(BaseScreen):
         # Letta Configuration
         with Vertical(classes="review-section"):
             letta_available = wizard_data.get("letta_available", False)
+            letta_mode = wizard_data.get("letta_mode", "self-hosted")
             letta_status = "[green]Ready[/green]" if letta_available else "[yellow]Not started[/yellow]"
-            yield Static(f"\n[cyan]Letta Memory:[/cyan] {letta_status}")
+            
+            # Show mode and relevant details
+            if letta_mode == "cloud":
+                has_api_key = bool(wizard_data.get("letta_api_key"))
+                api_key_status = "[green]configured[/green]" if has_api_key else "[red]missing[/red]"
+                yield Static(f"\n[cyan]Letta Memory:[/cyan] {letta_status}")
+                yield Static(f"  Mode: Letta Cloud")
+                yield Static(f"  API Key: {api_key_status}")
+            else:
+                yield Static(f"\n[cyan]Letta Memory:[/cyan] {letta_status}")
+                yield Static(f"  Mode: Self-Hosted (Docker)")
+                yield Static(f"  Server: http://localhost:8283")
 
         # Optional Features
         with Vertical(classes="review-section"):

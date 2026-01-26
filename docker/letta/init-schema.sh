@@ -39,5 +39,47 @@ else:
     exit(1)
 EOF
 
+# Register Thoth MCP server in database
+echo "==> Registering Thoth MCP server in database..."
+python3 << 'EOF'
+import os
+import uuid
+from sqlalchemy import create_engine, text
+
+pg_uri = os.environ.get('LETTA_PG_URI')
+engine = create_engine(pg_uri)
+
+# Check if MCP server already registered
+with engine.connect() as conn:
+    result = conn.execute(text("SELECT COUNT(*) FROM mcp_server WHERE server_name = 'thoth-research-tools'"))
+    count = result.scalar()
+
+    if count == 0:
+        # Insert MCP server registration
+        # Note: Letta requires 'mcp_server-' prefix (underscore, not hyphen)
+        mcp_server_id = f"mcp_server-{uuid.uuid4()}"
+        conn.execute(text("""
+            INSERT INTO mcp_server (
+                id, server_name, server_type, server_url,
+                organization_id, is_deleted,
+                _created_by_id, _last_updated_by_id
+            ) VALUES (
+                :id, :name, :type, :url,
+                'org-00000000-0000-4000-8000-000000000000', false,
+                'user-00000000-0000-4000-8000-000000000000',
+                'user-00000000-0000-4000-8000-000000000000'
+            )
+        """), {
+            "id": mcp_server_id,
+            "name": "thoth-research-tools",
+            "type": "streamable_http",
+            "url": "http://thoth-mcp:8000/mcp"
+        })
+        conn.commit()
+        print(f"✓ Registered Thoth MCP server: {mcp_server_id}")
+    else:
+        print("✓ Thoth MCP server already registered")
+EOF
+
 echo "==> Starting Letta server..."
 exec letta server --host 0.0.0.0 --port 8283 --ade

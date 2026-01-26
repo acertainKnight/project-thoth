@@ -203,8 +203,8 @@ class VaultSelectionScreen(BaseScreen):
         return {"vault_path": self.selected_vault}
 
     async def on_next_screen(self) -> None:
-        """Navigate to configuration screen."""
-        from .configuration import ConfigurationScreen
+        """Navigate to Letta mode selection screen."""
+        from .letta_mode_selection import LettaModeSelectionScreen
 
-        logger.info("Proceeding to configuration")
-        await self.app.push_screen(ConfigurationScreen())
+        logger.info("Proceeding to Letta mode selection")
+        await self.app.push_screen(LettaModeSelectionScreen())

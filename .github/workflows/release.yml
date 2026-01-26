@@ -119,8 +119,46 @@ jobs:
           asset_name: thoth-${{ needs.create-release.outputs.version }}.tar.gz
           asset_content_type: application/gzip
 
-  build-docker:
-    name: Build Docker Image
+  build-setup-image:
+    name: Build Setup Image
+    needs: create-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}-setup,value=${{ needs.create-release.outputs.version }}
+            type=raw,value=setup
+
+      - name: Build and push setup image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.setup
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-all-in-one:
+    name: Build All-in-One Image
     needs: create-release
     runs-on: ubuntu-latest
 
@@ -146,16 +184,61 @@ jobs:
             type=semver,pattern={{version}},value=${{ needs.create-release.outputs.version }}
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.create-release.outputs.version }}
             type=semver,pattern={{major}},value=${{ needs.create-release.outputs.version }}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
 
-      - name: Build and push
+      - name: Build and push all-in-one image
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./docker/all-in-one/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.create-release.outputs.version }}
+
+  build-service-images:
+    name: Build Service Images
+    needs: create-release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api, mcp, pdf-monitor, discovery]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.service }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.create-release.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.create-release.outputs.version }}
+            type=raw,value=latest
+
+      - name: Build and push ${{ matrix.service }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,scope=${{ matrix.service }},mode=max
           build-args: |
             VERSION=${{ needs.create-release.outputs.version }}

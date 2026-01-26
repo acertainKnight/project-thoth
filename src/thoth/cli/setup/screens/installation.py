@@ -148,6 +148,17 @@ class InstallationScreen(BaseScreen):
 
         config_manager = ConfigManager(self.vault_path)
 
+        # Get Letta configuration from wizard data
+        letta_mode = "self-hosted"
+        letta_api_key = ""
+        letta_url = "http://localhost:8283"
+        
+        if hasattr(self.app, "wizard_data"):
+            letta_mode = self.app.wizard_data.get("letta_mode", "self-hosted")
+            letta_api_key = self.app.wizard_data.get("letta_api_key", "")
+            if letta_mode == "cloud":
+                letta_url = "https://api.letta.com"
+        
         # Build configuration dict
         settings = {
             "version": "1.0.0",
@@ -159,10 +170,16 @@ class InstallationScreen(BaseScreen):
                 "database": "thoth",
             },
             "letta": {
-                "url": "http://localhost:8283",
-                "mode": "self-hosted",
+                "url": letta_url,
+                "mode": letta_mode,
             },
         }
+        
+        # Add API key to apiKeys section if cloud mode
+        if letta_mode == "cloud" and letta_api_key:
+            if "apiKeys" not in settings:
+                settings["apiKeys"] = {}
+            settings["apiKeys"]["lettaApiKey"] = letta_api_key
 
         # Merge with existing config if present
         existing = config_manager.load_existing()

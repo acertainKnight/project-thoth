@@ -38,7 +38,10 @@
       "Bash(docker top:*)",
       "Bash(python:*)",
       "Bash(xargs:*)",
-      "Bash(journalctl:*)"
+      "Bash(journalctl:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.letta.com)",
+      "Bash(python3:*)"
     ],
     "deny": []
   },

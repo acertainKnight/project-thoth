@@ -2,6 +2,45 @@
 
 Comprehensive installation and configuration guide for Thoth Research Assistant.
 
+## Quick Start (Setup Wizard)
+
+**Recommended for most users (No Python Required):**
+
+**Linux/Mac:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/main/install.sh | bash
+```
+
+**Windows:**
+```powershell
+# 1. Install WSL2 (one-time, PowerShell as Administrator)
+wsl --install
+
+# 2. Restart computer
+
+# 3. Open Ubuntu terminal and run:
+curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/main/install.sh | bash
+```
+
+**What happens:**
+- Checks for Docker (guides installation if needed)
+- Runs interactive setup wizard
+- Installs `thoth` command globally
+- Optionally starts services immediately
+- **No Python installation needed!**
+
+The wizard will guide you through:
+1. Vault selection
+2. **Letta mode** (Cloud vs Self-Hosted) 
+3. Dependency checking
+4. LLM provider configuration
+5. Optional features (RAG, Discovery, Citations)
+6. Review and installation
+
+**Continue reading for manual setup** or troubleshooting.
+
+---
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)

@@ -129,7 +129,8 @@ class HTTPTransport(MCPTransport):
     """
     HTTP transport for MCP using FastAPI.
 
-    Provides traditional HTTP endpoints for MCP communication.
+    Provides traditional HTTP endpoints for MCP communication with optional
+    Bearer token authentication for secure external access.
     """
 
     def __init__(
@@ -137,10 +138,12 @@ class HTTPTransport(MCPTransport):
         protocol_handler: MCPProtocolHandler,
         host: str = 'localhost',
         port: int = 8000,
+        auth_token: str | None = None,
     ):
         super().__init__(protocol_handler)
         self.host = host
         self.port = port
+        self.auth_token = auth_token  # Bearer token for authentication
         self.app = FastAPI(
             title='Thoth MCP Server',
             description='Model Context Protocol server for Thoth research assistant',
@@ -149,12 +152,48 @@ class HTTPTransport(MCPTransport):
         self.server: uvicorn.Server | None = None
         self._setup_routes()
 
+    def _check_auth(self, request: Request) -> bool:
+        """
+        Check Bearer token authentication if auth_token is configured.
+
+        Args:
+            request: FastAPI request object
+
+        Returns:
+            True if authenticated or auth not required, False otherwise
+        """
+        if not self.auth_token:
+            # Auth not configured - allow all requests
+            return True
+
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return False
+
+        token = auth_header[7:]  # Remove 'Bearer ' prefix
+        return token == self.auth_token
+
     def _setup_routes(self):
         """Set up HTTP routes for MCP."""
 
         @self.app.post('/mcp')
         async def handle_mcp_request(request: Request):
             """Handle MCP JSON-RPC requests and notifications."""
+            # Check authentication
+            if not self._check_auth(request):
+                return Response(
+                    status_code=401,
+                    content=json.dumps({
+                        'jsonrpc': '2.0',
+                        'error': {
+                            'code': -32001,
+                            'message': 'Unauthorized - Invalid or missing Bearer token'
+                        },
+                        'id': None
+                    }),
+                    media_type='application/json'
+                )
+
             try:
                 body = await request.json()
                 message = self.protocol_handler.parse_message(json.dumps(body))
@@ -239,7 +278,8 @@ class SSETransport(MCPTransport):
     """
     Server-Sent Events transport for MCP.
 
-    Provides streaming communication with real-time updates.
+    Provides streaming communication with real-time updates, with optional
+    Bearer token authentication for secure external access.
     """
 
     def __init__(
@@ -247,10 +287,12 @@ class SSETransport(MCPTransport):
         protocol_handler: MCPProtocolHandler,
         host: str = 'localhost',
         port: int = 8001,
+        auth_token: str | None = None,
     ):
         super().__init__(protocol_handler)
         self.host = host
         self.port = port
+        self.auth_token = auth_token  # Bearer token for authentication
         self.app = FastAPI(
             title='Thoth MCP SSE Server',
             description='MCP Server with Server-Sent Events support',
@@ -260,12 +302,48 @@ class SSETransport(MCPTransport):
         self.server: uvicorn.Server | None = None
         self._setup_routes()
 
+    def _check_auth(self, request: Request) -> bool:
+        """
+        Check Bearer token authentication if auth_token is configured.
+
+        Args:
+            request: FastAPI request object
+
+        Returns:
+            True if authenticated or auth not required, False otherwise
+        """
+        if not self.auth_token:
+            # Auth not configured - allow all requests
+            return True
+
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return False
+
+        token = auth_header[7:]  # Remove 'Bearer ' prefix
+        return token == self.auth_token
+
     def _setup_routes(self):
         """Set up SSE routes for MCP."""
 
         @self.app.post('/mcp')
         async def handle_mcp_request(request: Request):
             """Handle MCP JSON-RPC requests."""
+            # Check authentication
+            if not self._check_auth(request):
+                return Response(
+                    status_code=401,
+                    content=json.dumps({
+                        'jsonrpc': '2.0',
+                        'error': {
+                            'code': -32001,
+                            'message': 'Unauthorized - Invalid or missing Bearer token'
+                        },
+                        'id': None
+                    }),
+                    media_type='application/json'
+                )
+
             try:
                 body = await request.json()
                 message = self.protocol_handler.parse_message(json.dumps(body))
@@ -295,8 +373,16 @@ class SSETransport(MCPTransport):
                 )
 
         @self.app.get('/sse')
-        async def sse_endpoint_standard():
+        async def sse_endpoint_standard(request: Request):
             """Standard SSE endpoint for MCP clients (Letta compatibility)."""
+            # Check authentication
+            if not self._check_auth(request):
+                return Response(
+                    status_code=401,
+                    content='Unauthorized - Invalid or missing Bearer token',
+                    media_type='text/plain'
+                )
+
             import uuid
 
             client_id = str(uuid.uuid4())
@@ -330,8 +416,15 @@ class SSETransport(MCPTransport):
             )
 
         @self.app.get('/events/{client_id}')
-        async def sse_endpoint(client_id: str):
+        async def sse_endpoint(client_id: str, request: Request):
             """Server-Sent Events endpoint for real-time updates."""
+            # Check authentication
+            if not self._check_auth(request):
+                return Response(
+                    status_code=401,
+                    content='Unauthorized - Invalid or missing Bearer token',
+                    media_type='text/plain'
+                )
 
             async def event_stream():
                 # Create client queue

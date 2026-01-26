@@ -244,3 +244,66 @@ class ConfigManager:
             self.backup_dir.glob('settings_*.json'), key=lambda p: p.stat().st_mtime, reverse=True
         )
         return backups
+
+    def save_letta_config(self, mode: str, api_key: str = '') -> None:
+        """
+        Save Letta configuration to settings.json.
+
+        Args:
+            mode: 'self-hosted' or 'cloud'
+            api_key: API key for cloud mode (optional)
+
+        Raises:
+            ValueError: If mode is invalid or settings cannot be saved
+        """
+        if mode not in ('self-hosted', 'cloud'):
+            raise ValueError(f"Invalid Letta mode: {mode}. Must be 'self-hosted' or 'cloud'")
+
+        # Load existing settings
+        settings = self.load_existing() or {}
+
+        # Update Letta configuration
+        if 'letta' not in settings:
+            settings['letta'] = {}
+
+        settings['letta']['mode'] = mode
+
+        # Set URL based on mode
+        if mode == 'cloud':
+            settings['letta']['url'] = 'https://api.letta.com'
+            # Save API key if provided
+            if api_key:
+                if 'apiKeys' not in settings:
+                    settings['apiKeys'] = {}
+                settings['apiKeys']['lettaApiKey'] = api_key
+        else:
+            settings['letta']['url'] = 'http://localhost:8283'
+
+        # Save atomically with backup
+        self.save_with_backup(settings)
+        logger.info(f"Saved Letta configuration: mode={mode}")
+
+    def load_letta_config(self) -> dict[str, str]:
+        """
+        Load Letta configuration from settings.json.
+
+        Returns:
+            Dictionary with 'mode', 'url', and 'api_key' (if available)
+        """
+        settings = self.load_existing()
+
+        if not settings:
+            return {
+                'mode': 'self-hosted',
+                'url': 'http://localhost:8283',
+                'api_key': '',
+            }
+
+        letta_config = settings.get('letta', {})
+        api_keys = settings.get('apiKeys', {})
+
+        return {
+            'mode': letta_config.get('mode', 'self-hosted'),
+            'url': letta_config.get('url', 'http://localhost:8283'),
+            'api_key': api_keys.get('lettaApiKey', ''),
+        }

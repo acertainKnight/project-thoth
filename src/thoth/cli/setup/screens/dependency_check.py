@@ -33,24 +33,36 @@ class DependencyCheckScreen(BaseScreen):
         self.postgres_status: PostgreSQLStatus | None = None
         self.letta_status: LettaStatus | None = None
         self.all_ready = False
+        self.letta_mode: str = "self-hosted"  # Default to self-hosted
+        self.letta_api_key: str = ""
 
     def on_mount(self) -> None:
         """Run when screen is mounted."""
+        # Read Letta mode from wizard data
+        if hasattr(self.app, "wizard_data"):
+            self.letta_mode = self.app.wizard_data.get("letta_mode", "self-hosted")
+            self.letta_api_key = self.app.wizard_data.get("letta_api_key", "")
+            logger.info(f"Letta mode from wizard: {self.letta_mode}")
+
         self._check_task = asyncio.create_task(self.check_dependencies())
 
     async def check_dependencies(self) -> None:
         """Check all dependencies."""
-        self.show_info("Checking dependencies...")
+        if self.letta_mode == "cloud":
+            self.show_info("Checking dependencies (Letta Cloud mode)...")
+        else:
+            self.show_info("Checking dependencies...")
 
         try:
-            # Check Docker
+            # For cloud mode, we still need Docker for PostgreSQL (Thoth's DB)
+            # but NOT for Letta
             await self.check_docker()
 
             # Check PostgreSQL (if Docker is available)
             if self.docker_status and self.docker_status.available:
                 await self.check_postgresql()
 
-            # Check Letta
+            # Check Letta (behavior depends on mode)
             await self.check_letta()
 
             # Check if all dependencies are ready
@@ -59,9 +71,19 @@ class DependencyCheckScreen(BaseScreen):
             if self.all_ready:
                 self.show_info("All dependencies are ready!")
             else:
-                self.show_info(
-                    "Some dependencies need to be installed. Click Install to proceed."
-                )
+                # If self-hosted Letta failed, offer cloud fallback
+                if (
+                    self.letta_mode == "self-hosted"
+                    and not (self.letta_status and self.letta_status.available)
+                ):
+                    self.show_error(
+                        "Letta self-hosted setup unavailable. "
+                        "Consider using Letta Cloud instead."
+                    )
+                else:
+                    self.show_info(
+                        "Some dependencies need to be installed. Click Install to proceed."
+                    )
 
             self.refresh()
 
@@ -116,9 +138,19 @@ class DependencyCheckScreen(BaseScreen):
             self.postgres_status = await PostgreSQLDetector.get_status()
 
     async def check_letta(self) -> None:
-        """Check Letta server."""
-        logger.info("Checking Letta...")
-        self.letta_status = LettaDetector.get_status()
+        """Check Letta server (cloud or self-hosted based on mode)."""
+        if self.letta_mode == "cloud":
+            logger.info("Checking Letta Cloud...")
+            self.letta_status = LettaDetector.get_status(
+                url="https://api.letta.com",
+                api_key=self.letta_api_key,
+                mode="cloud",
+            )
+        else:
+            logger.info("Checking Letta (self-hosted)...")
+            self.letta_status = LettaDetector.get_status(
+                mode="self-hosted",
+            )
 
         if self.letta_status.available:
             logger.info(
@@ -126,7 +158,7 @@ class DependencyCheckScreen(BaseScreen):
                 f"(version: {self.letta_status.version or 'unknown'})"
             )
         else:
-            logger.warning("Letta not available")
+            logger.warning(f"Letta not available ({self.letta_mode} mode)")
 
     def _are_all_dependencies_ready(self) -> bool:
         """
@@ -135,15 +167,28 @@ class DependencyCheckScreen(BaseScreen):
         Returns:
             True if all dependencies are available
         """
-        docker_ready = (
-            self.docker_status
-            and self.docker_status.available
-            and self.docker_status.compose_available
-        )
-        postgres_ready = self.postgres_status and self.postgres_status.available
+        # Letta status
         letta_ready = self.letta_status and self.letta_status.available
 
-        return bool(docker_ready and postgres_ready and letta_ready)
+        # For cloud mode, Docker/PostgreSQL not required for Letta (only for Thoth)
+        if self.letta_mode == "cloud":
+            # In cloud mode, we still need Docker+PostgreSQL for Thoth itself
+            docker_ready = (
+                self.docker_status
+                and self.docker_status.available
+                and self.docker_status.compose_available
+            )
+            postgres_ready = self.postgres_status and self.postgres_status.available
+            return bool(docker_ready and postgres_ready and letta_ready)
+        else:
+            # Self-hosted mode needs Docker for everything
+            docker_ready = (
+                self.docker_status
+                and self.docker_status.available
+                and self.docker_status.compose_available
+            )
+            postgres_ready = self.postgres_status and self.postgres_status.available
+            return bool(docker_ready and postgres_ready and letta_ready)
 
     def compose_content(self) -> ComposeResult:
         """
@@ -259,6 +304,7 @@ class DependencyCheckScreen(BaseScreen):
             "letta_available": self.letta_status.available
             if self.letta_status
             else False,
+            "letta_mode": self.letta_mode,
         }
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:

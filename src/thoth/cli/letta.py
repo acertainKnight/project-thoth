@@ -644,6 +644,135 @@ def handle_switch_mode(args, pipeline: ThothPipeline) -> int:
         return 1
 
 
+def handle_configure_mode(args, pipeline: ThothPipeline) -> int:
+    """
+    Configure Letta mode (cloud or self-hosted).
+
+    Args:
+        args: Command line arguments
+        pipeline: ThothPipeline instance
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    from thoth.cli.setup.config_manager import ConfigManager
+
+    mode = args.mode
+    api_key = args.api_key or ''
+
+    # If switching to cloud without API key, prompt for it
+    if mode == 'cloud' and not api_key:
+        logger.error('Cloud mode requires an API key')
+        logger.info('Get your API key at: https://app.letta.com/api-keys')
+        api_key = prompt_text('Enter your Letta Cloud API key', password=True)
+        if not api_key:
+            logger.error('API key required for cloud mode')
+            return 1
+
+    try:
+        # Initialize config manager
+        config_manager = ConfigManager(config.vault_root)
+
+        # Test connection for cloud mode
+        if mode == 'cloud':
+            logger.info('Testing Letta Cloud connection...')
+            from thoth.cli.setup.detectors.letta import LettaDetector
+
+            available, version, healthy = LettaDetector.check_server_sync(
+                url='https://api.letta.com',
+                api_key=api_key,
+                timeout=10
+            )
+
+            if not available or not healthy:
+                logger.error('Failed to connect to Letta Cloud')
+                logger.error('Please verify your API key at https://app.letta.com/api-keys')
+                return 1
+
+            logger.info(f'Successfully connected to Letta Cloud (version: {version})')
+
+        # Save configuration
+        config_manager.save_letta_config(mode=mode, api_key=api_key)
+        logger.info(f'Letta mode set to: {mode}')
+
+        if mode == 'self-hosted':
+            logger.info('Self-hosted Letta will use: http://localhost:8283')
+            logger.info('Make sure Letta Docker container is running')
+        else:
+            logger.info('Using Letta Cloud: https://api.letta.com')
+
+        logger.info('Configuration saved successfully')
+        return 0
+
+    except Exception as e:
+        logger.error(f'Failed to configure Letta mode: {e}')
+        return 1
+
+
+def handle_letta_status(args, pipeline: ThothPipeline) -> int:
+    """
+    Show current Letta configuration and connection status.
+
+    Args:
+        args: Command line arguments
+        pipeline: ThothPipeline instance
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    from thoth.cli.setup.config_manager import ConfigManager
+    from thoth.cli.setup.detectors.letta import LettaDetector
+
+    try:
+        # Load configuration
+        config_manager = ConfigManager(config.vault_root)
+        letta_config = config_manager.load_letta_config()
+
+        mode = letta_config['mode']
+        url = letta_config['url']
+        api_key = letta_config['api_key']
+
+        # Print configuration
+        logger.info('=== Letta Configuration ===')
+        logger.info(f'Mode: {mode}')
+        logger.info(f'URL: {url}')
+
+        if mode == 'cloud':
+            if api_key:
+                logger.info('API Key: ***configured***')
+            else:
+                logger.warning('API Key: NOT SET')
+                logger.info('Get your API key at: https://app.letta.com/api-keys')
+        else:
+            logger.info('Server: http://localhost:8283 (Docker)')
+
+        # Test connection
+        logger.info('\n=== Connection Status ===')
+        logger.info('Testing connection...')
+
+        available, version, healthy = LettaDetector.check_server_sync(
+            url=url,
+            api_key=api_key if mode == 'cloud' else None,
+            timeout=5
+        )
+
+        if available and healthy:
+            logger.info(f'✓ Connected successfully')
+            logger.info(f'Version: {version or "unknown"}')
+        else:
+            logger.error('✗ Connection failed')
+            if mode == 'cloud':
+                logger.error('Check your API key and internet connection')
+            else:
+                logger.error('Check if Letta Docker container is running')
+
+        return 0 if (available and healthy) else 1
+
+    except Exception as e:
+        logger.error(f'Failed to check Letta status: {e}')
+        return 1
+
+
 def configure_subparser(subparsers) -> None:
     """
     Configure the letta subcommand parser.
@@ -740,3 +869,27 @@ def configure_subparser(subparsers) -> None:
         help='Interactive mode switcher (cloud <-> self-hosted)'
     )
     switch_parser.set_defaults(func=handle_switch_mode)
+
+    # Configure mode (new command)
+    configure_parser = letta_subparsers.add_parser(
+        'configure',
+        help='Configure Letta mode (cloud or self-hosted)'
+    )
+    configure_parser.add_argument(
+        'mode',
+        choices=['cloud', 'self-hosted'],
+        help='Letta mode: cloud or self-hosted'
+    )
+    configure_parser.add_argument(
+        '--api-key',
+        type=str,
+        help='Letta Cloud API key (required for cloud mode)'
+    )
+    configure_parser.set_defaults(func=handle_configure_mode)
+
+    # Status command (new command)
+    status_parser = letta_subparsers.add_parser(
+        'status',
+        help='Show current Letta configuration and connection status'
+    )
+    status_parser.set_defaults(func=handle_letta_status)

@@ -39,6 +39,7 @@ from . import (  # noqa: E402
     research,
     schema,
     server,
+    service,
     setup_cli,
     system,
 )
@@ -69,6 +70,7 @@ def main() -> None:
     research.configure_subparser(subparsers)
     schema.configure_subparser(subparsers)
     server.configure_subparser(subparsers)
+    service.configure_subparser(subparsers)
     setup_cli.configure_subparser(subparsers)
     system.configure_subparser(subparsers)
 
