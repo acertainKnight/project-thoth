@@ -308,10 +308,8 @@ export class MultiChatModal extends Modal {
 
     const tabs = [
       { id: 'chat', label: '💬 Chat', icon: 'message-circle' },
-      { id: 'agents', label: '🤖 Agents', icon: 'bot' },
-      { id: 'commands', label: '⚡ Commands', icon: 'terminal' },
-      { id: 'tools', label: '🔧 Tools', icon: 'wrench' },
-      { id: 'status', label: '📊 Status', icon: 'activity' }
+      { id: 'conversations', label: '📝 Conversations', icon: 'message-square' },
+      { id: 'research', label: '🔬 Research', icon: 'beaker' }
     ];
 
     tabs.forEach(tab => {
@@ -331,7 +329,7 @@ export class MultiChatModal extends Modal {
   switchTab(tabId: string) {
     // Update tab buttons
     this.tabContainer.querySelectorAll('.thoth-tab-button').forEach((btn, index) => {
-      if (index === ['chat', 'agents', 'commands', 'tools', 'status'].indexOf(tabId)) {
+      if (index === ['chat', 'conversations', 'research'].indexOf(tabId)) {
         btn.addClass('active');
       } else {
         btn.removeClass('active');
@@ -352,17 +350,11 @@ export class MultiChatModal extends Modal {
       case 'chat':
         this.renderChatTab();
         break;
-      case 'agents':
-        this.renderAgentsTab();
+      case 'conversations':
+        this.renderConversationsTab();
         break;
-      case 'commands':
-        this.renderCommandsTab();
-        break;
-      case 'tools':
-        this.renderToolsTab();
-        break;
-      case 'status':
-        this.renderStatusTab();
+      case 'research':
+        this.renderResearchTab();
         break;
     }
   }
@@ -449,48 +441,37 @@ export class MultiChatModal extends Modal {
     this.createActivityLog(statusArea);
   }
 
-  async renderAgentsTab() {
-    const agentsArea = this.contentContainer.createEl('div', { cls: 'agents-area' });
+  async renderConversationsTab() {
+    const conversationsArea = this.contentContainer.createEl('div', { cls: 'conversations-area' });
 
-    // Header with create agent button
-    const header = agentsArea.createEl('div', { cls: 'agents-header' });
-    header.createEl('h3', { text: '🤖 Agent Management' });
-
+    // Header with create conversation button
+    const header = conversationsArea.createEl('div', { cls: 'conversations-header' });
+    
     const createBtn = header.createEl('button', {
-      text: '+ Create Agent',
-      cls: 'create-agent-btn'
+      text: '+ New Conversation',
+      cls: 'create-conversation-btn'
     });
 
-    createBtn.onclick = () => {
-      this.showCreateAgentDialog();
+    createBtn.onclick = async () => {
+      await this.createNewSession();
+      this.switchTab('chat'); // Switch to chat after creating
     };
 
-    // Info section
-    const infoSection = agentsArea.createEl('div', { cls: 'agents-info' });
-    infoSection.createEl('p', {
-      text: 'Agents are specialized AI assistants for specific research tasks. Create custom agents or use @agent-name to interact with them.',
-      cls: 'agents-description'
+    // Search box
+    const searchContainer = conversationsArea.createEl('div', { cls: 'conversation-search' });
+    const searchInput = searchContainer.createEl('input', {
+      type: 'text',
+      placeholder: 'Search conversations...',
+      cls: 'conversation-search-input'
     });
 
-    // Usage examples
-    const usageSection = agentsArea.createEl('div', { cls: 'usage-examples' });
-    usageSection.createEl('h4', { text: 'Usage Examples:' });
+    searchInput.oninput = () => {
+      this.filterConversations(searchInput.value);
+    };
 
-    const examples = [
-      'Create a citation analysis agent: "create an agent that analyzes citation patterns"',
-      'Use an existing agent: "@citation-analyzer analyze this paper\'s references"',
-      'List available agents: "list my agents"'
-    ];
-
-    const examplesList = usageSection.createEl('ul');
-    examples.forEach(example => {
-      const li = examplesList.createEl('li');
-      li.createEl('code', { text: example });
-    });
-
-    // Agents list
-    const agentsListContainer = agentsArea.createEl('div', { cls: 'agents-list-container' });
-    await this.loadAndDisplayAgents(agentsListContainer);
+    // Conversations list
+    const conversationsListContainer = conversationsArea.createEl('div', { cls: 'conversations-list-container' });
+    await this.loadAndDisplayConversations(conversationsListContainer);
   }
 
   async loadAndDisplayAgents(container: HTMLElement) {
@@ -2259,5 +2240,212 @@ export class MultiChatModal extends Modal {
     } catch (error) {
       new Notice('Failed to refresh status');
     }
+  }
+
+  // Conversations tab methods
+  async loadAndDisplayConversations(container: HTMLElement) {
+    try {
+      container.empty();
+
+      const loadingEl = container.createEl('div', { text: 'Loading conversations...', cls: 'loading' });
+
+      // Use existing chat sessions data
+      await this.loadChatSessions();
+
+      loadingEl.remove();
+
+      if (this.chatSessions.length === 0) {
+        container.createEl('div', {
+          text: 'No conversations yet. Create your first one!',
+          cls: 'empty-state'
+        });
+        return;
+      }
+
+      // Sort by most recent first
+      const sortedSessions = [...this.chatSessions].sort((a, b) => {
+        const dateA = new Date(b.created_at || 0).getTime();
+        const dateB = new Date(a.created_at || 0).getTime();
+        return dateA - dateB;
+      });
+
+      // Display conversation cards
+      sortedSessions.forEach(session => {
+        this.createConversationCard(container, session);
+      });
+
+    } catch (error) {
+      container.empty();
+      container.createEl('div', {
+        text: `Error loading conversations: ${error.message}`,
+        cls: 'error-message'
+      });
+    }
+  }
+
+  createConversationCard(container: HTMLElement, session: ChatSession) {
+    const card = container.createEl('div', { cls: 'conversation-card' });
+    
+    if (session.id === this.activeSessionId) {
+      card.addClass('active');
+    }
+
+    // Title
+    const titleEl = card.createEl('div', { 
+      text: session.title || 'Untitled Conversation',
+      cls: 'conversation-title'
+    });
+
+    // Metadata (time and message count)
+    const metaEl = card.createEl('div', { cls: 'conversation-meta' });
+    
+    const timeAgo = this.getTimeAgo(session.created_at);
+    const messageCount = session.message_count || 0;
+    
+    metaEl.setText(`${timeAgo} • ${messageCount} message${messageCount !== 1 ? 's' : ''}`);
+
+    // Click to switch
+    card.onclick = async () => {
+      await this.switchToSession(session.id);
+      this.switchTab('chat');
+    };
+
+    // Actions (delete, rename)
+    const actionsEl = card.createEl('div', { cls: 'conversation-actions' });
+    
+    const renameBtn = actionsEl.createEl('button', { 
+      text: '✏️',
+      cls: 'conversation-action-btn',
+      attr: { 'aria-label': 'Rename' }
+    });
+    
+    renameBtn.onclick = async (e) => {
+      e.stopPropagation();
+      await this.renameConversation(session);
+    };
+
+    const deleteBtn = actionsEl.createEl('button', { 
+      text: '🗑️',
+      cls: 'conversation-action-btn delete',
+      attr: { 'aria-label': 'Delete' }
+    });
+    
+    deleteBtn.onclick = async (e) => {
+      e.stopPropagation();
+      await this.deleteConversation(session);
+    };
+  }
+
+  getTimeAgo(dateString: string): string {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+    
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+    
+    return date.toLocaleDateString();
+  }
+
+  async renameConversation(session: ChatSession) {
+    const newTitle = await this.promptForInput('Rename Conversation', session.title || '');
+    if (newTitle && newTitle !== session.title) {
+      session.title = newTitle;
+      await this.saveSessionToBackend(session);
+      this.renderTabContent(); // Refresh
+    }
+  }
+
+  async deleteConversation(session: ChatSession) {
+    const confirmed = confirm(`Delete conversation "${session.title || 'Untitled'}"?`);
+    if (confirmed) {
+      this.chatSessions = this.chatSessions.filter(s => s.id !== session.id);
+      if (this.activeSessionId === session.id) {
+        this.activeSessionId = null;
+        if (this.chatSessions.length > 0) {
+          await this.switchToSession(this.chatSessions[0].id);
+        } else {
+          await this.createNewSession();
+        }
+      }
+      await this.saveChatSessions();
+      this.renderTabContent(); // Refresh
+    }
+  }
+
+  filterConversations(query: string) {
+    const cards = this.contentContainer.querySelectorAll('.conversation-card');
+    const lowerQuery = query.toLowerCase();
+    
+    cards.forEach(card => {
+      const titleEl = card.querySelector('.conversation-title');
+      const title = titleEl?.textContent?.toLowerCase() || '';
+      
+      if (title.includes(lowerQuery)) {
+        (card as HTMLElement).style.display = '';
+      } else {
+        (card as HTMLElement).style.display = 'none';
+      }
+    });
+  }
+
+  async promptForInput(title: string, defaultValue: string = ''): Promise<string | null> {
+    return new Promise((resolve) => {
+      const modal = new Modal(this.app);
+      modal.titleEl.setText(title);
+      
+      const input = modal.contentEl.createEl('input', { 
+        type: 'text',
+        value: defaultValue
+      });
+      input.style.width = '100%';
+      input.style.marginBottom = '10px';
+      
+      const buttonsEl = modal.contentEl.createEl('div');
+      buttonsEl.style.display = 'flex';
+      buttonsEl.style.justifyContent = 'flex-end';
+      buttonsEl.style.gap = '10px';
+      
+      const cancelBtn = buttonsEl.createEl('button', { text: 'Cancel' });
+      cancelBtn.onclick = () => {
+        modal.close();
+        resolve(null);
+      };
+      
+      const okBtn = buttonsEl.createEl('button', { text: 'OK', cls: 'mod-cta' });
+      okBtn.onclick = () => {
+        modal.close();
+        resolve(input.value);
+      };
+      
+      input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          modal.close();
+          resolve(input.value);
+        }
+      });
+      
+      modal.open();
+      input.focus();
+    });
+  }
+
+  // Research tab methods (placeholder for now)
+  renderResearchTab() {
+    const researchArea = this.contentContainer.createEl('div', { cls: 'research-area' });
+
+    // Placeholder for now
+    researchArea.createEl('h3', { text: '🔬 Research Dashboard' });
+    researchArea.createEl('p', { 
+      text: 'Live discovery results and research management coming soon!',
+      cls: 'placeholder-text'
+    });
   }
 }

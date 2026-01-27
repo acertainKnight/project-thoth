@@ -1,5 +1,12 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
-import { exec, spawn, ChildProcess } from 'child_process';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, Platform } from 'obsidian';
+// Note: child_process only available on desktop
+let exec: any, spawn: any, ChildProcess: any;
+if (typeof process !== 'undefined' && !Platform.isMobile) {
+  const cp = require('child_process');
+  exec = cp.exec;
+  spawn = cp.spawn;
+  ChildProcess = cp.ChildProcess;
+}
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -33,36 +40,50 @@ export default class ThothPlugin extends Plugin {
   async onload() {
     await this.loadSettings();
 
+    // Mobile detection: auto-enable remote mode on mobile devices
+    if (Platform.isMobile && !this.settings.remoteMode) {
+      console.log('Thoth: Mobile device detected, enabling remote mode');
+      this.settings.remoteMode = true;
+      await this.saveSettings();
+      
+      // Show helpful notice if no remote URL configured
+      if (!this.settings.remoteEndpointUrl) {
+        new Notice('📱 Thoth: Mobile requires remote mode. Please configure your remote server URL in settings.', 8000);
+      }
+    }
+
     // Add ribbon icon for chat
     const ribbonIconEl = this.addRibbonIcon('message-circle', 'Open Thoth Chat', (evt: MouseEvent) => {
       this.openChatModal();
     });
     ribbonIconEl.addClass('thoth-ribbon-icon');
 
-    // Add commands
-    this.addCommand({
-      id: 'start-thoth-agent',
-      name: 'Start Thoth Agent',
-      callback: () => {
-        this.startAgent();
-      }
-    });
+    // Add commands (skip local agent commands on mobile)
+    if (!Platform.isMobile) {
+      this.addCommand({
+        id: 'start-thoth-agent',
+        name: 'Start Thoth Agent',
+        callback: () => {
+          this.startAgent();
+        }
+      });
 
-    this.addCommand({
-      id: 'stop-thoth-agent',
-      name: 'Stop Thoth Agent',
-      callback: () => {
-        this.stopAgent();
-      }
-    });
+      this.addCommand({
+        id: 'stop-thoth-agent',
+        name: 'Stop Thoth Agent',
+        callback: () => {
+          this.stopAgent();
+        }
+      });
 
-    this.addCommand({
-      id: 'restart-thoth-agent',
-      name: 'Restart Thoth Agent',
-      callback: () => {
-        this.restartAgent();
-      }
-    });
+      this.addCommand({
+        id: 'restart-thoth-agent',
+        name: 'Restart Thoth Agent',
+        callback: () => {
+          this.restartAgent();
+        }
+      });
+    }
 
     this.addCommand({
       id: 'open-research-chat',
@@ -2462,28 +2483,47 @@ class ThothSettingTab extends PluginSettingTab {
   private addConnectionSettings(containerEl: HTMLElement): void {
     const section = containerEl.createEl('div', { cls: 'thoth-settings-section' });
     section.createEl('h2', { text: '🌐 Connection Settings' });
-    section.createEl('p', { text: 'Configure how Obsidian connects to the Thoth agent', cls: 'thoth-section-desc' });
+    
+    // Mobile-specific notice
+    if (Platform.isMobile) {
+      const mobileNotice = section.createEl('div', { cls: 'thoth-mobile-notice' });
+      mobileNotice.createEl('p', { 
+        text: '📱 Mobile requires connecting to a Thoth server running on another device (desktop, server, etc.)',
+        cls: 'thoth-section-desc'
+      });
+      section.createEl('p', { text: 'Configure your remote Thoth server connection below:', cls: 'thoth-section-desc' });
+    } else {
+      section.createEl('p', { text: 'Configure how Obsidian connects to the Thoth agent', cls: 'thoth-section-desc' });
+    }
 
-    new Setting(section)
-      .setName('Remote Mode')
-      .setDesc('Connect to a remote Thoth server (WSL, Docker, or remote machine)')
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.remoteMode)
-          .onChange(async (value) => {
-            this.plugin.settings.remoteMode = value;
-            await this.plugin.saveSettings();
-            this.display();
-          })
-      );
+    // Only show remote mode toggle on desktop (mobile is always remote)
+    if (!Platform.isMobile) {
+      new Setting(section)
+        .setName('Remote Mode')
+        .setDesc('Connect to a remote Thoth server (WSL, Docker, or remote machine)')
+        .addToggle((toggle) =>
+          toggle
+            .setValue(this.plugin.settings.remoteMode)
+            .onChange(async (value) => {
+              this.plugin.settings.remoteMode = value;
+              await this.plugin.saveSettings();
+              this.display();
+            })
+        );
+    }
 
-    if (this.plugin.settings.remoteMode) {
+    // Show remote URL setting if remote mode OR on mobile (mobile is always remote)
+    if (this.plugin.settings.remoteMode || Platform.isMobile) {
       new Setting(section)
         .setName('Remote Endpoint URL')
-        .setDesc('Full URL of the remote Thoth server')
+        .setDesc(Platform.isMobile 
+          ? 'URL of your Thoth server (e.g., https://your-server.tail1234.ts.net:8000)'
+          : 'Full URL of the remote Thoth server')
         .addText((text) =>
           text
-            .setPlaceholder('http://localhost:8000')
+            .setPlaceholder(Platform.isMobile 
+              ? 'https://your-server.example.com:8000'
+              : 'http://localhost:8000')
             .setValue(this.plugin.settings.remoteEndpointUrl)
             .onChange(async (value) => {
               this.plugin.settings.remoteEndpointUrl = value;

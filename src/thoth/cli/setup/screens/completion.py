@@ -7,6 +7,8 @@ Shows installation summary and next steps.
 from __future__ import annotations
 
 import subprocess
+import urllib.request
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +31,13 @@ class CompletionScreen(BaseScreen):
         )
         self.services_started = False
         self.auto_start_asked = False
+        self.plugin_installed = False
+    
+    async def on_mount(self) -> None:
+        """Called when screen is mounted."""
+        # Install plugin when screen loads
+        if not self.plugin_installed:
+            self.plugin_installed = await self.install_obsidian_plugin()
 
     def compose_content(self) -> ComposeResult:
         """
@@ -75,15 +84,21 @@ You can stop services anytime with: [cyan]thoth stop[/cyan]
             """
         else:
             # After start choice - show next steps
+            plugin_status = "✓ Installed" if self.plugin_installed else "⚠ Install manually"
             completion_text = f"""
 [bold green]✓ Setup complete!{'  Services running!' if self.services_started else ''}[/bold green]
+
+[bold]Installation Summary:[/bold]
+
+  • [cyan]Obsidian Plugin:[/cyan] {plugin_status}
+  • [cyan]Services:[/cyan] {'Running' if self.services_started else 'Stopped'}
 
 [bold]Next Steps:[/bold]
 
   1. [bold]Restart Obsidian[/bold] to load the Thoth plugin
-  2. [bold]Enable the plugin[/bold] in Settings → Community Plugins
+  2. [bold]Enable the plugin[/bold] in Settings → Community Plugins → Thoth
   3. [bold]Upload vault files[/bold] with: [cyan]thoth letta sync[/cyan]
-  4. [bold]Open Thoth[/bold] from the Obsidian ribbon
+  4. [bold]Open Thoth[/bold] from the Obsidian ribbon icon
 
 [bold]Useful Commands:[/bold]
 
@@ -118,6 +133,110 @@ You can stop services anytime with: [cyan]thoth stop[/cyan]
             # After auto-start choice: show docs and finish
             yield Button("Open Documentation", id="docs", variant="default")
             yield Button("Finish", id="finish", variant="success")
+
+    async def install_obsidian_plugin(self) -> bool:
+        """
+        Install Obsidian plugin to vault.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        vault_path = self.app.wizard_data.get("vault_path", "")
+        if not vault_path:
+            return False
+        
+        vault_root = Path(vault_path).resolve()
+        plugin_dir = vault_root / ".obsidian" / "plugins" / "thoth-obsidian"
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.show_info("[bold]Installing Obsidian plugin...[/bold]")
+        
+        try:
+            # Try to download pre-built plugin from latest release
+            latest_release_url = "https://api.github.com/repos/acertainknight/project-thoth/releases/latest"
+            
+            try:
+                with urllib.request.urlopen(latest_release_url, timeout=10) as response:
+                    import json
+                    release_data = json.loads(response.read().decode())
+                    
+                    # Find plugin zip in assets
+                    plugin_asset = None
+                    for asset in release_data.get("assets", []):
+                        if asset["name"].startswith("thoth-obsidian-") and asset["name"].endswith(".zip"):
+                            plugin_asset = asset
+                            break
+                    
+                    if plugin_asset:
+                        # Download plugin
+                        self.show_info(f"Downloading plugin v{release_data['tag_name']}...")
+                        zip_path = plugin_dir / "plugin.zip"
+                        
+                        urllib.request.urlretrieve(plugin_asset["browser_download_url"], zip_path)
+                        
+                        # Extract
+                        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                            zip_ref.extractall(plugin_dir)
+                        
+                        zip_path.unlink()  # Remove zip
+                        self.show_success("✓ Plugin downloaded from release")
+                        return True
+            
+            except Exception as e:
+                logger.debug(f"Could not download plugin from release: {e}")
+                self.show_info("Release version not available, building locally...")
+            
+            # Fallback: Build plugin locally
+            project_root = vault_root
+            while project_root.name != "project-thoth" and project_root != project_root.parent:
+                project_root = project_root.parent
+            
+            plugin_src = project_root / "obsidian-plugin" / "thoth-obsidian"
+            
+            if not plugin_src.exists():
+                self.show_warning("Plugin source not found, skipping plugin install")
+                return False
+            
+            # Build plugin
+            self.show_info("Building plugin from source...")
+            result = subprocess.run(
+                ["npm", "install"],
+                cwd=plugin_src,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            
+            if result.returncode != 0:
+                self.show_warning("npm install failed, skipping plugin")
+                return False
+            
+            result = subprocess.run(
+                ["npm", "run", "build"],
+                cwd=plugin_src,
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            if result.returncode != 0:
+                self.show_warning("npm build failed, skipping plugin")
+                return False
+            
+            # Copy built files
+            import shutil
+            for file in ["main.js", "manifest.json", "styles.css"]:
+                src = plugin_src / file
+                if src.exists():
+                    shutil.copy(src, plugin_dir / file)
+            
+            self.show_success("✓ Plugin built and installed")
+            return True
+        
+        except Exception as e:
+            logger.error(f"Plugin installation failed: {e}")
+            self.show_warning(f"Could not install plugin: {e}")
+            return False
 
     async def start_services(self) -> None:
         """Start Docker Compose services."""
