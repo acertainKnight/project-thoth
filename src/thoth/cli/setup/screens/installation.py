@@ -200,34 +200,62 @@ class InstallationScreen(BaseScreen):
         logger.info("Configuration saved")
 
     async def setup_database(self) -> None:
-        """Set up database schema."""
+        """Set up database schema using migration manager."""
         # Check if database is available
+        postgres_available = False
         if hasattr(self.app, "wizard_data"):
             postgres_available = self.app.wizard_data.get("postgres_available", False)
 
-            if not postgres_available:
-                logger.warning("PostgreSQL not available, skipping schema setup")
-                return
+        if not postgres_available:
+            logger.warning("PostgreSQL not available, skipping schema setup")
+            logger.info("Database schema will need to be initialized manually")
+            return
 
-        # Run database migrations if PostgreSQL is available
+        # Run database migrations using the migration manager
         try:
-            from pathlib import Path
+            from thoth.migrations.migration_manager import MigrationManager
 
-            # Look for migration scripts
-            migrations_dir = Path(__file__).parent.parent.parent.parent / "migrations"
+            # Build database URL from settings
+            database_url = "postgresql://thoth:thoth_password@localhost:5432/thoth"
 
-            if migrations_dir.exists():
-                logger.info(f"Running database migrations from {migrations_dir}")
-                # Run migrations using the migration script if it exists
-                for migration_file in sorted(migrations_dir.glob("*.sql")):
-                    logger.info(f"Applying migration: {migration_file.name}")
-                    # Migrations will be applied when the database service starts
+            # Try to get custom database URL if configured
+            if self.vault_path:
+                settings_path = self.vault_path / "_thoth" / "settings.json"
+                if settings_path.exists():
+                    import json
+                    with open(settings_path, 'r') as f:
+                        settings = json.load(f)
+                        if "database" in settings:
+                            db = settings["database"]
+                            host = db.get("host", "localhost")
+                            port = db.get("port", 5432)
+                            database = db.get("database", "thoth")
+                            user = db.get("user", "thoth")
+                            password = db.get("password", "thoth_password")
+                            database_url = f"postgresql://{user}:{password}@{host}:{port}/{database}"
+
+            logger.info(f"Initializing database schema...")
+            migration_manager = MigrationManager(database_url)
+
+            # Apply all migrations
+            success = await migration_manager.initialize_database()
+
+            if success:
+                logger.success("✓ Database schema initialized successfully!")
+
+                # Show migration status
+                status = await migration_manager.get_migration_status()
+                if status['applied_count'] > 0:
+                    logger.info(f"Applied {status['applied_count']} migration(s)")
+                    if status['last_migration']:
+                        last = status['last_migration']
+                        logger.info(f"Current version: {last['version']} ({last['name']})")
             else:
-                logger.info("No migration directory found, database schema will be created on first use")
+                raise RuntimeError("Database initialization failed")
 
         except Exception as e:
-            logger.warning(f"Could not run database migrations: {e}")
-            logger.info("Database schema will be created automatically on first use")
+            logger.error(f"Failed to initialize database: {e}")
+            raise RuntimeError(f"Database setup failed: {e}") from e
 
     async def install_plugin(self) -> None:
         """Install Obsidian plugin."""

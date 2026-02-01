@@ -29,6 +29,7 @@ from loguru import logger  # noqa: E402
 
 logger.info('===== main.py: About to import CLI submodules =====')
 from . import (  # noqa: E402
+    database,
     discovery,
     letta,
     mcp,
@@ -59,6 +60,7 @@ def main() -> None:
 
     # Register sub-commands from modules
     # agent.configure_subparser(subparsers)  # DEPRECATED: Use Letta REST API (port 8283)  # noqa: W505
+    database.configure_subparser(subparsers)
     discovery.configure_subparser(subparsers)
     letta.configure_subparser(subparsers)
     mcp.configure_subparser(subparsers)
@@ -76,8 +78,8 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Skip initialization for setup command (it configures Thoth before initialization)
-    if args.command == 'setup':
+    # Skip initialization for setup and db commands (they don't need full Thoth initialization)
+    if args.command in ['setup', 'db']:
         if hasattr(args, 'func'):
             if inspect.iscoroutinefunction(args.func):
                 asyncio.run(args.func(args))
