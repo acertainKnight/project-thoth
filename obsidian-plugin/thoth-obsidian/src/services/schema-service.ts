@@ -413,35 +413,36 @@ export class SchemaService implements ISchemaService {
 
   /**
    * Fallback validation when backend is unreachable
+   * Only validates plugin-specific settings (not backend settings)
    */
   private fallbackValidation(config: Partial<ThothSettings>): ValidationResult {
     const errors: ValidationError[] = [];
     const warnings: ValidationWarning[] = [];
 
-    // Basic validation for essential fields
-    if (!config.mistralKey) {
+    // Validate plugin-specific settings
+    if (config.remoteMode && !config.remoteEndpointUrl) {
       errors.push({
-        field: 'mistralKey',
-        message: 'Mistral API Key is required',
+        field: 'remoteEndpointUrl',
+        message: 'Remote endpoint URL is required when remote mode is enabled',
         code: 'REQUIRED_FIELD'
       });
     }
 
-    if (!config.openrouterKey) {
-      errors.push({
-        field: 'openrouterKey',
-        message: 'OpenRouter API Key is required',
-        code: 'REQUIRED_FIELD'
-      });
+    // Validate URL format if provided
+    if (config.remoteEndpointUrl) {
+      try {
+        new URL(config.remoteEndpointUrl);
+      } catch {
+        errors.push({
+          field: 'remoteEndpointUrl',
+          message: 'Invalid URL format',
+          code: 'INVALID_FORMAT'
+        });
+      }
     }
 
-    if (!config.workspaceDirectory) {
-      errors.push({
-        field: 'workspaceDirectory',
-        message: 'Workspace Directory is required',
-        code: 'REQUIRED_FIELD'
-      });
-    }
+    // Note: Backend settings (API keys, directories) are validated by the backend
+    // This fallback only validates plugin UI/connection settings
 
     if (config.remoteMode && !config.remoteEndpointUrl) {
       errors.push({

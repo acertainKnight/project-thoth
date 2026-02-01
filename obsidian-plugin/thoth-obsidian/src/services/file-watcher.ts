@@ -194,11 +194,18 @@ export class FileWatcher implements IFileWatcher {
       }
 
       // If not found, try to create it
-      const defaultSettings: Partial<ThothSettings> = {
-        workspaceDirectory: '',
-        obsidianDirectory: '',
-        mistralKey: '',
-        openrouterKey: ''
+      // Note: This creates a backend settings file (not plugin settings)
+      // Backend manages its own settings in vault/_thoth/settings.json
+      const defaultSettings = {
+        api_keys: {
+          mistral: '',
+          openrouter: '',
+          openai: '',
+          anthropic: '',
+          semantic_scholar: ''
+        },
+        workspace_directory: '',
+        obsidian_directory: ''
       };
 
       const content = JSON.stringify(defaultSettings, null, 2);

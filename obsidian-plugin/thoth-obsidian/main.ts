@@ -23,7 +23,7 @@ const execAsync = promisify(exec);
 export default class ThothPlugin extends Plugin {
   settings: ThothSettings;
   statusBarItem: HTMLElement;
-  process: ChildProcess | null = null;
+  process: any = null; // ChildProcess type only available on desktop
   isAgentRunning: boolean = false;
   isRestarting: boolean = false;
   socket: WebSocket | null = null;
@@ -141,50 +141,18 @@ export default class ThothPlugin extends Plugin {
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-
-    // Auto-generate base URL if not set
-    if (!this.settings.endpointBaseUrl) {
-      this.settings.endpointBaseUrl = `http://${this.settings.endpointHost}:${this.settings.endpointPort}`;
-    }
+    const savedData = await this.loadData();
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, savedData);
   }
 
   async saveSettings() {
     await this.saveData(this.settings);
-
-    // Sync settings to backend if agent is running
-    if (this.isAgentRunning) {
-      await this.syncSettingsToBackend();
-    }
-  }
-
-  async syncSettingsToBackend() {
-    try {
-      const endpoint = this.getEndpointUrl();
-      const response = await fetch(`${endpoint}/agent/sync-settings`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(this.settings),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Settings synced to backend:', result.synced_keys);
-      } else {
-        console.warn('Failed to sync settings to backend:', response.statusText);
-      }
-    } catch (error) {
-      console.warn('Could not sync settings to backend:', error);
-    }
   }
 
   public getEndpointUrl(): string {
-    if (this.settings.remoteMode && this.settings.remoteEndpointUrl) {
-      return this.settings.remoteEndpointUrl.replace(/\/$/, ''); // Remove trailing slash
-    }
-    return `http://${this.settings.endpointHost}:${this.settings.endpointPort}`;
+    // Use plugin's endpoint URL
+    const baseUrl = this.settings.remoteEndpointUrl || 'http://localhost:8000';
+    return baseUrl.replace(/\/$/, ''); // Remove trailing slash
   }
 
     async startAgent(): Promise<void> {
@@ -229,9 +197,6 @@ export default class ThothPlugin extends Plugin {
           this.updateStatusBar();
           new Notice('Connected to remote Thoth server successfully!');
           await this.connectWebSocket();
-
-          // Sync settings to remote server
-          await this.syncSettingsToBackend();
           return;
         } else {
           throw new Error(`Server responded with status: ${response.status}`);
@@ -243,21 +208,10 @@ export default class ThothPlugin extends Plugin {
       }
     }
 
-    // Validate settings for local mode
-    if (!this.settings.mistralKey && !this.settings.openrouterKey) {
-      new Notice('Please configure API keys in settings first');
-      return;
-    }
-
-    // Local mode - start the process
-    // Ensure .env file is up to date before starting agent
-    try {
-      await this.updateEnvironmentFile();
-      new Notice('Configuration updated, starting Thoth agent...');
-    } catch (error) {
-      console.error('Failed to update environment file:', error);
-      new Notice('Warning: Could not update configuration file');
-    }
+    // Get vault path (where backend settings file is located)
+    const vaultPath = (this.app.vault.adapter as any).basePath;
+    
+    new Notice('Starting Thoth agent...');
 
     try {
       const cmd = 'uv';
@@ -266,20 +220,21 @@ export default class ThothPlugin extends Plugin {
         'python',
         '-m',
         'thoth',
-        'api',
+        'server',
         '--host',
-        this.settings.endpointHost,
+        'localhost',
         '--port',
-        this.settings.endpointPort.toString()
+        '8000'
       ];
 
+      // Backend reads settings from vault/_thoth/settings.json
       const env = {
         ...process.env,
-        ...this.getEnvironmentVariables()
+        OBSIDIAN_VAULT_PATH: vaultPath,
       };
 
       this.process = spawn(cmd, args, {
-        cwd: this.settings.workspaceDirectory,
+        cwd: vaultPath,
         env: env,
         stdio: ['ignore', 'pipe', 'pipe']
       });
@@ -316,7 +271,7 @@ export default class ThothPlugin extends Plugin {
         if (this.process) {
           // Test if the server is responding
           try {
-            const response = await fetch(`${this.settings.endpointBaseUrl}/health`);
+            const response = await fetch(`${this.getEndpointUrl()}/health`);
               if (response.ok) {
                 this.isAgentRunning = true;
                 this.updateStatusBar();
@@ -328,7 +283,7 @@ export default class ThothPlugin extends Plugin {
             // Give it more time
             setTimeout(async () => {
               try {
-                const response = await fetch(`${this.settings.endpointBaseUrl}/health`);
+                const response = await fetch(`${this.getEndpointUrl()}/health`);
                 if (response.ok) {
                   this.isAgentRunning = true;
                   this.updateStatusBar();
@@ -390,44 +345,13 @@ export default class ThothPlugin extends Plugin {
     this.updateStatusBar();
 
     try {
-      if (this.settings.remoteMode) {
-        // Remote restart via API
-        new Notice('Restarting remote Thoth agent...');
-
-        const endpoint = this.getEndpointUrl();
-        const response = await fetch(`${endpoint}/agent/restart`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            update_config: true,
-            new_config: {
-              api_keys: {
-                mistral: this.settings.mistralKey,
-                openrouter: this.settings.openrouterKey,
-              },
-              directories: {
-                workspace: this.settings.workspaceDirectory,
-                notes: this.settings.obsidianDirectory,
-              },
-              settings: {
-                endpoint_host: this.settings.endpointHost,
-                endpoint_port: this.settings.endpointPort,
-              }
-            }
-          }),
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          new Notice(`Remote agent restart initiated: ${result.message}`);
-
-          // Wait for the agent to restart and become available
-          await this.waitForAgentRestart();
-        } else {
-          throw new Error(`Remote restart failed: ${response.statusText}`);
-        }
+      // Backend reads settings from file directly - just restart
+      if (Platform.isMobile || this.getEndpointUrl().includes('http')) {
+        // Remote/mobile - can't restart server
+        new Notice('Remote server restart not supported. Please restart backend manually if needed.');
+        this.isRestarting = false;
+        this.updateStatusBar();
+        return;
       } else {
         // Local restart
         new Notice('Restarting Thoth agent...');
@@ -527,153 +451,8 @@ export default class ThothPlugin extends Plugin {
     }
   }
 
-  private getEnvironmentVariables() {
-    return {
-      // API Keys
-      API_MISTRAL_KEY: this.settings.mistralKey,
-      API_OPENROUTER_KEY: this.settings.openrouterKey,
-      API_OPENCITATIONS_KEY: this.settings.opencitationsKey,
-      API_GOOGLE_API_KEY: this.settings.googleApiKey,
-      API_GOOGLE_SEARCH_ENGINE_ID: this.settings.googleSearchEngineId,
-      API_SEMANTIC_SCHOLAR_KEY: this.settings.semanticScholarKey,
-      API_WEB_SEARCH_KEY: this.settings.webSearchKey,
-      API_WEB_SEARCH_PROVIDERS: this.settings.webSearchProviders,
-
-      // Directories
-      WORKSPACE_DIR: this.settings.workspaceDirectory,
-      NOTES_DIR: this.settings.obsidianDirectory,
-      DATA_DIR: this.settings.dataDirectory,
-      KNOWLEDGE_DIR: this.settings.knowledgeDirectory,
-      LOGS_DIR: this.settings.logsDirectory,
-      QUERIES_DIR: this.settings.queriesDirectory,
-      AGENT_STORAGE_DIR: this.settings.agentStorageDirectory,
-      PDF_DIR: this.settings.pdfDirectory,
-      PROMPTS_DIR: this.settings.promptsDirectory || path.join(this.settings.workspaceDirectory, 'templates/prompts'),
-
-      // Server settings
-      ENDPOINT_HOST: this.settings.endpointHost,
-      ENDPOINT_PORT: this.settings.endpointPort.toString(),
-      ENDPOINT_BASE_URL: this.settings.endpointBaseUrl,
-
-      // Plugin Configuration
-      RESEARCH_AGENT_AUTO_START: this.settings.researchAgentAutoStart.toString(),
-      RESEARCH_AGENT_DEFAULT_QUERIES: this.settings.researchAgentDefaultQueries.toString(),
-      RESEARCH_AGENT_MEMORY_ENABLED: this.settings.researchAgentMemoryEnabled.toString(),
-      AGENT_MAX_TOOL_CALLS: this.settings.agentMaxToolCalls.toString(),
-      AGENT_TIMEOUT_SECONDS: this.settings.agentTimeoutSeconds.toString(),
-
-      // Discovery Configuration
-      DISCOVERY_AUTO_START_SCHEDULER: this.settings.discoveryAutoStartScheduler.toString(),
-      DISCOVERY_DEFAULT_MAX_ARTICLES: this.settings.discoveryDefaultMaxArticles.toString(),
-      DISCOVERY_DEFAULT_INTERVAL_MINUTES: this.settings.discoveryDefaultIntervalMinutes.toString(),
-      DISCOVERY_RATE_LIMIT_DELAY: this.settings.discoveryRateLimitDelay.toString(),
-      DISCOVERY_CHROME_EXTENSION_ENABLED: this.settings.discoveryChromeExtensionEnabled.toString(),
-      DISCOVERY_CHROME_EXTENSION_PORT: this.settings.discoveryChromeExtensionPort.toString(),
-
-      // Logging Configuration
-      LOG_LEVEL: this.settings.logLevel,
-      LOG_FORMAT: this.settings.logFormat,
-      LOG_ROTATION: this.settings.logRotation,
-      LOG_RETENTION: this.settings.logRetention,
-      ENABLE_PERFORMANCE_MONITORING: this.settings.enablePerformanceMonitoring.toString(),
-      METRICS_INTERVAL: this.settings.metricsInterval.toString(),
-
-      // Security & Performance
-      ENCRYPTION_KEY: this.settings.encryptionKey,
-      SESSION_TIMEOUT: this.settings.sessionTimeout.toString(),
-      API_RATE_LIMIT: this.settings.apiRateLimit.toString(),
-      HEALTH_CHECK_TIMEOUT: this.settings.healthCheckTimeout.toString(),
-      DEVELOPMENT_MODE: this.settings.developmentMode.toString(),
-
-      // LLM Configuration
-      PRIMARY_LLM_MODEL: this.settings.primaryLlmModel,
-      ANALYSIS_LLM_MODEL: this.settings.analysisLlmModel,
-      RESEARCH_AGENT_MODEL: this.settings.researchAgentModel,
-      LLM_TEMPERATURE: this.settings.llmTemperature.toString(),
-      ANALYSIS_LLM_TEMPERATURE: this.settings.analysisLlmTemperature.toString(),
-      LLM_MAX_OUTPUT_TOKENS: this.settings.llmMaxOutputTokens.toString(),
-      ANALYSIS_LLM_MAX_OUTPUT_TOKENS: this.settings.analysisLlmMaxOutputTokens.toString(),
-
-      // Remote Connection
-      REMOTE_MODE: this.settings.remoteMode.toString(),
-      REMOTE_ENDPOINT_URL: this.settings.remoteEndpointUrl,
-
-      // Cors Origins
-      CORS_ORIGINS: this.settings.corsOrigins.join(','),
-    };
-  }
-
-  private async updateEnvironmentFile(): Promise<void> {
-    try {
-      // Generate comprehensive .env file with all settings
-      const lines = [
-        '# Thoth AI Research Agent Configuration',
-        '# Generated by Obsidian Plugin',
-        '',
-        '# ----------------------------------------------------------------------------------',
-        '# --- 1. API Keys ---',
-        '# ----------------------------------------------------------------------------------',
-        `API_MISTRAL_KEY=${this.settings.mistralKey}`,
-        `API_OPENROUTER_KEY=${this.settings.openrouterKey}`,
-        `API_OPENCITATIONS_KEY=${this.settings.opencitationsKey}`,
-        `API_GOOGLE_API_KEY=${this.settings.googleApiKey}`,
-        `API_GOOGLE_SEARCH_ENGINE_ID=${this.settings.googleSearchEngineId}`,
-        `API_SEMANTIC_SCHOLAR_KEY=${this.settings.semanticScholarKey}`,
-        `API_WEB_SEARCH_KEY=${this.settings.webSearchKey}`,
-        `API_WEB_SEARCH_PROVIDERS=${this.settings.webSearchProviders}`,
-        '',
-        '# ----------------------------------------------------------------------------------',
-        '# --- 2. Directory Configuration ---',
-        '# ----------------------------------------------------------------------------------',
-        `WORKSPACE_DIR=${this.settings.workspaceDirectory}`,
-        `NOTES_DIR=${this.settings.obsidianDirectory}`,
-        `DATA_DIR=${this.settings.dataDirectory}`,
-        `KNOWLEDGE_DIR=${this.settings.knowledgeDirectory}`,
-        `LOGS_DIR=${this.settings.logsDirectory}`,
-        `QUERIES_DIR=${this.settings.queriesDirectory}`,
-        `AGENT_STORAGE_DIR=${this.settings.agentStorageDirectory}`,
-        `PDF_DIR=${this.settings.pdfDirectory}`,
-        `PROMPTS_DIR=${this.settings.promptsDirectory || `${this.settings.workspaceDirectory}/templates/prompts`}`,
-        '',
-        '# ----------------------------------------------------------------------------------',
-        '# --- 3. Server Configuration ---',
-        '# ----------------------------------------------------------------------------------',
-        `ENDPOINT_HOST=${this.settings.endpointHost}`,
-        `ENDPOINT_PORT=${this.settings.endpointPort}`,
-        `ENDPOINT_BASE_URL=${this.settings.endpointBaseUrl}`,
-        '',
-        '# ----------------------------------------------------------------------------------',
-        '# --- 4. Plugin Configuration ---',
-        '# ----------------------------------------------------------------------------------',
-        `# Plugin auto-start: ${this.settings.researchAgentAutoStart}`,
-        `# Show status bar: ${this.settings.showStatusBar}`,
-        `# Remote mode: ${this.settings.remoteMode}`,
-        '',
-        '# ----------------------------------------------------------------------------------',
-        '# --- 5. Default Settings ---',
-        '# ----------------------------------------------------------------------------------',
-        'RESEARCH_AGENT_AUTO_START=false',
-        'RESEARCH_AGENT_DEFAULT_QUERIES=true',
-        'RESEARCH_AGENT_MEMORY_ENABLED=true',
-        'AGENT_MAX_TOOL_CALLS=5',
-        'AGENT_TIMEOUT_SECONDS=300',
-        'LOG_LEVEL=INFO',
-        'LOG_FORMAT=text',
-        'LOG_ROTATION=daily',
-        'LOG_RETENTION=30 days',
-        'ENABLE_PERFORMANCE_MONITORING=true',
-        'METRICS_INTERVAL=60',
-      ];
-
-      const envPath = path.join(this.settings.workspaceDirectory, '.env');
-      await fs.promises.writeFile(envPath, lines.join('\n'));
-
-      console.log('Environment file updated successfully');
-    } catch (error) {
-      console.error('Failed to update environment file:', error);
-      throw error;
-    }
-  }
+  // REMOVED: getEnvironmentVariables() - Backend reads settings file directly
+  // REMOVED: updateEnvironmentFile() - Backend reads settings file directly
 
   updateStatusBar() {
     if (!this.statusBarItem) return;
@@ -1370,13 +1149,7 @@ export default class ThothPlugin extends Plugin {
       }
     });
 
-    this.addCommand({
-      id: 'thoth-sync-config',
-      name: 'Thoth: Sync Configuration to Backend',
-      callback: () => {
-        this.syncSettingsToBackend();
-      }
-    });
+    // REMOVED: Sync configuration command - backend reads settings from file directly
   }
 
   async executeQuickCommand(command: string, args: string[]) {
@@ -2235,740 +2008,79 @@ class ThothSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-
-    // Header
-    const headerEl = containerEl.createEl('div', { cls: 'thoth-settings-header' });
-    headerEl.createEl('h1', { text: '🧠 Thoth Research Assistant' });
-    headerEl.createEl('p', {
-      text: 'Intelligent research assistant for academic work and knowledge discovery',
-      cls: 'thoth-settings-subtitle'
-    });
-
-    // Quick Status
-    this.addQuickStatus(containerEl);
-
-    // Essential Settings (always visible)
-    this.addEssentialSettings(containerEl);
-
-    // Connection Settings
-    this.addConnectionSettings(containerEl);
-
-    // Advanced Settings Toggle
-    const advancedToggle = new Setting(containerEl)
-      .setName('🔧 Show Advanced Settings')
-      .setDesc('Configure LLM models, agent behavior, discovery system, and more')
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.showAdvancedSettings)
-          .onChange(async (value) => {
-            this.plugin.settings.showAdvancedSettings = value;
-            await this.plugin.saveSettings();
-            this.display(); // Refresh to show/hide advanced settings
-          })
-      );
-
-    if (this.plugin.settings.showAdvancedSettings) {
-      this.addAdvancedSettings(containerEl);
-    }
-
-    // Agent Controls (always visible at bottom)
-    this.addAgentControls(containerEl);
-  }
-
-  private addQuickStatus(containerEl: HTMLElement): void {
-    const statusSection = containerEl.createEl('div', { cls: 'thoth-settings-section' });
-    statusSection.createEl('h2', { text: '📊 Quick Status' });
-
-    const statusGrid = statusSection.createEl('div', { cls: 'thoth-status-grid' });
-
-    // Agent Status
-    const agentStatus = statusGrid.createEl('div', { cls: 'thoth-status-item' });
-    agentStatus.createEl('span', { text: 'Agent: ', cls: 'thoth-status-label' });
-    const agentIndicator = agentStatus.createEl('span', { cls: 'thoth-status-indicator' });
-
-    if (this.plugin.isRestarting) {
-      agentIndicator.textContent = 'Restarting...';
-      agentIndicator.className = 'thoth-status-indicator thoth-status-warning';
-    } else if (this.plugin.isAgentRunning) {
-      agentIndicator.textContent = 'Running';
-      agentIndicator.className = 'thoth-status-indicator thoth-status-success';
-    } else {
-      agentIndicator.textContent = 'Stopped';
-      agentIndicator.className = 'thoth-status-indicator thoth-status-error';
-    }
-
-    // API Keys Status
-    const keysStatus = statusGrid.createEl('div', { cls: 'thoth-status-item' });
-    keysStatus.createEl('span', { text: 'API Keys: ', cls: 'thoth-status-label' });
-    const keysIndicator = keysStatus.createEl('span', { cls: 'thoth-status-indicator' });
-
-    const hasKeys = this.plugin.settings.mistralKey && this.plugin.settings.openrouterKey;
-    if (hasKeys) {
-      keysIndicator.textContent = 'Configured';
-      keysIndicator.className = 'thoth-status-indicator thoth-status-success';
-    } else {
-      keysIndicator.textContent = 'Missing';
-      keysIndicator.className = 'thoth-status-indicator thoth-status-error';
-    }
-
-    // Connection Mode
-    const modeStatus = statusGrid.createEl('div', { cls: 'thoth-status-item' });
-    modeStatus.createEl('span', { text: 'Mode: ', cls: 'thoth-status-label' });
-    const modeIndicator = modeStatus.createEl('span', { cls: 'thoth-status-indicator' });
-    modeIndicator.textContent = this.plugin.settings.remoteMode ? 'Remote' : 'Local';
-    modeIndicator.className = 'thoth-status-indicator thoth-status-info';
-  }
-
-  private addEssentialSettings(containerEl: HTMLElement): void {
-    const section = containerEl.createEl('div', { cls: 'thoth-settings-section' });
-    section.createEl('h2', { text: '🔑 Essential Configuration' });
-    section.createEl('p', { text: 'Required settings to get started with Thoth', cls: 'thoth-section-desc' });
-
-    // API Keys Subsection
-    const apiSection = section.createEl('div', { cls: 'thoth-subsection' });
-    apiSection.createEl('h3', { text: 'API Keys' });
-
-    new Setting(apiSection)
-      .setName('Mistral API Key')
-      .setDesc('Required for PDF processing and document analysis')
-      .addText((text) => {
-        text.inputEl.type = 'password';
-        text
-          .setPlaceholder('Enter your Mistral API key')
-          .setValue(this.plugin.settings.mistralKey)
-          .onChange(async (value) => {
-            this.plugin.settings.mistralKey = value;
-            await this.plugin.saveSettings();
-          });
-      })
-      .addExtraButton((button) => {
-        button
-          .setIcon('external-link')
-          .setTooltip('Get Mistral API Key')
-          .onClick(() => window.open('https://console.mistral.ai', '_blank'));
-      });
-
-    new Setting(apiSection)
-      .setName('OpenRouter API Key')
-      .setDesc('Required for AI research capabilities and language models')
-      .addText((text) => {
-        text.inputEl.type = 'password';
-        text
-          .setPlaceholder('Enter your OpenRouter API key')
-          .setValue(this.plugin.settings.openrouterKey)
-          .onChange(async (value) => {
-            this.plugin.settings.openrouterKey = value;
-            await this.plugin.saveSettings();
-          });
-      })
-      .addExtraButton((button) => {
-        button
-          .setIcon('external-link')
-          .setTooltip('Get OpenRouter API Key')
-          .onClick(() => window.open('https://openrouter.ai', '_blank'));
-      });
-
-    // Optional API Keys
-    const optionalApiSection = apiSection.createEl('details', { cls: 'thoth-optional-section' });
-    optionalApiSection.createEl('summary', { text: 'Optional API Keys' });
-
-    new Setting(optionalApiSection)
-      .setName('Google API Key')
-      .setDesc('For Google Scholar and search integration')
-      .addText((text) => {
-        text.inputEl.type = 'password';
-        text
-          .setPlaceholder('Enter your Google API key')
-          .setValue(this.plugin.settings.googleApiKey)
-          .onChange(async (value) => {
-            this.plugin.settings.googleApiKey = value;
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(optionalApiSection)
-      .setName('Semantic Scholar API Key')
-      .setDesc('For enhanced academic paper discovery')
-      .addText((text) => {
-        text.inputEl.type = 'password';
-        text
-          .setPlaceholder('Enter your Semantic Scholar API key')
-          .setValue(this.plugin.settings.semanticScholarKey)
-          .onChange(async (value) => {
-            this.plugin.settings.semanticScholarKey = value;
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(optionalApiSection)
-      .setName('Serper API Key')
-      .setDesc('For general web search integration')
-      .addText((text) => {
-        text.inputEl.type = 'password';
-        text
-          .setPlaceholder('Enter your Serper API key')
-          .setValue(this.plugin.settings.webSearchKey)
-          .onChange(async (value) => {
-            this.plugin.settings.webSearchKey = value;
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(optionalApiSection)
-      .setName('Web Search Providers')
-      .setDesc('Comma-separated providers e.g. "serper,duckduckgo"')
-      .addText((text) => {
-        text
-          .setPlaceholder('serper,duckduckgo')
-          .setValue(this.plugin.settings.webSearchProviders)
-          .onChange(async (value) => {
-            this.plugin.settings.webSearchProviders = value;
-            await this.plugin.saveSettings();
-          });
-      });
-
-    // Directory Settings
-    const dirSection = section.createEl('div', { cls: 'thoth-subsection' });
-    dirSection.createEl('h3', { text: 'Directory Configuration' });
-
-    new Setting(dirSection)
-      .setName('Workspace Directory')
-      .setDesc('Path to your Thoth workspace (where you cloned project-thoth)')
-      .addText((text) =>
-        text
-          .setPlaceholder('e.g., /home/user/project-thoth')
-          .setValue(this.plugin.settings.workspaceDirectory)
-          .onChange(async (value) => {
-            this.plugin.settings.workspaceDirectory = value;
-            // Auto-populate other directories
-            if (value) {
-              this.plugin.settings.dataDirectory = `${value}/data`;
-              this.plugin.settings.knowledgeDirectory = `${value}/knowledge`;
-              this.plugin.settings.logsDirectory = `${value}/logs`;
-              this.plugin.settings.queriesDirectory = `${value}/planning/queries`;
-              this.plugin.settings.agentStorageDirectory = `${value}/knowledge/agent`;
-              this.plugin.settings.pdfDirectory = `${value}/data/pdf`;
-            }
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(dirSection)
-      .setName('Obsidian Notes Directory')
-      .setDesc('Directory in your vault where Thoth will store research notes')
-      .addText((text) =>
-        text
-          .setPlaceholder('e.g., Research/Thoth')
-          .setValue(this.plugin.settings.obsidianDirectory)
-          .onChange(async (value) => {
-            this.plugin.settings.obsidianDirectory = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(dirSection)
-      .setName('Prompts Directory')
-      .setDesc('Folder with custom prompts (leave blank for defaults)')
-      .addText((text) =>
-        text
-          .setPlaceholder('e.g., /path/to/prompts')
-          .setValue(this.plugin.settings.promptsDirectory)
-          .onChange(async (value) => {
-            this.plugin.settings.promptsDirectory = value;
-            await this.plugin.saveSettings();
-          })
-      );
-  }
-
-  private addConnectionSettings(containerEl: HTMLElement): void {
-    const section = containerEl.createEl('div', { cls: 'thoth-settings-section' });
-    section.createEl('h2', { text: '🌐 Connection Settings' });
     
-    // Mobile-specific notice
-    if (Platform.isMobile) {
-      const mobileNotice = section.createEl('div', { cls: 'thoth-mobile-notice' });
-      mobileNotice.createEl('p', { 
-        text: '📱 Mobile requires connecting to a Thoth server running on another device (desktop, server, etc.)',
-        cls: 'thoth-section-desc'
-      });
-      section.createEl('p', { text: 'Configure your remote Thoth server connection below:', cls: 'thoth-section-desc' });
-    } else {
-      section.createEl('p', { text: 'Configure how Obsidian connects to the Thoth agent', cls: 'thoth-section-desc' });
+    // Header
+    containerEl.createEl('h2', { text: 'Thoth Research Assistant' });
+    containerEl.createEl('p', { 
+      text: 'Most settings are now in the Thoth Chat modal. Open the chat to access full settings.' 
+    });
+    
+    // Connection Settings
+    new Setting(containerEl)
+      .setName('Remote Mode')
+      .setDesc('Connect to a remote Thoth server (required for mobile)')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.remoteMode)
+        .onChange(async (value) => {
+          this.plugin.settings.remoteMode = value;
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+    
+    if (this.plugin.settings.remoteMode) {
+      new Setting(containerEl)
+        .setName('Remote Server URL')
+        .setDesc('URL of the remote Thoth server')
+        .addText(text => text
+          .setPlaceholder('http://localhost:8000')
+          .setValue(this.plugin.settings.remoteEndpointUrl)
+          .onChange(async (value) => {
+            this.plugin.settings.remoteEndpointUrl = value;
+            await this.plugin.saveSettings();
+          }));
     }
-
-    // Only show remote mode toggle on desktop (mobile is always remote)
-    if (!Platform.isMobile) {
-      new Setting(section)
-        .setName('Remote Mode')
-        .setDesc('Connect to a remote Thoth server (WSL, Docker, or remote machine)')
-        .addToggle((toggle) =>
-          toggle
-            .setValue(this.plugin.settings.remoteMode)
-            .onChange(async (value) => {
-              this.plugin.settings.remoteMode = value;
-              await this.plugin.saveSettings();
-              this.display();
-            })
-        );
-    }
-
-    // Show remote URL setting if remote mode OR on mobile (mobile is always remote)
-    if (this.plugin.settings.remoteMode || Platform.isMobile) {
-      new Setting(section)
-        .setName('Remote Endpoint URL')
-        .setDesc(Platform.isMobile 
-          ? 'URL of your Thoth server (e.g., https://your-server.tail1234.ts.net:8000)'
-          : 'Full URL of the remote Thoth server')
-        .addText((text) =>
-          text
-            .setPlaceholder(Platform.isMobile 
-              ? 'https://your-server.example.com:8000'
-              : 'http://localhost:8000')
-            .setValue(this.plugin.settings.remoteEndpointUrl)
-            .onChange(async (value) => {
-              this.plugin.settings.remoteEndpointUrl = value;
-              await this.plugin.saveSettings();
-            })
-        );
-
-      // Quick connection test for remote mode
-      const testContainer = section.createEl('div', { cls: 'thoth-test-container' });
-      const testButton = testContainer.createEl('button', {
-        text: 'Test Remote Connection',
-        cls: 'thoth-test-button'
-      });
-      const testResult = testContainer.createEl('span', { cls: 'thoth-test-result' });
-
-      testButton.onclick = async () => {
-        testButton.disabled = true;
-        testButton.textContent = 'Testing...';
-        testResult.textContent = '';
-
-        try {
-          const response = await fetch(`${this.plugin.settings.remoteEndpointUrl}/health`);
-          if (response.ok) {
-            testResult.textContent = '✅ Connection successful';
-            testResult.className = 'thoth-test-result thoth-test-success';
-          } else {
-            testResult.textContent = `❌ Server error: ${response.status}`;
-            testResult.className = 'thoth-test-result thoth-test-error';
-          }
-        } catch (error) {
-          testResult.textContent = `❌ Connection failed: ${error.message}`;
-          testResult.className = 'thoth-test-result thoth-test-error';
-        } finally {
-          testButton.disabled = false;
-          testButton.textContent = 'Test Remote Connection';
-        }
-      };
-    } else {
-      new Setting(section)
-        .setName('Local Host')
-        .setDesc('Host address for local Thoth server')
-        .addText((text) =>
-          text
-            .setPlaceholder('127.0.0.1')
-            .setValue(this.plugin.settings.endpointHost)
-            .onChange(async (value) => {
-              this.plugin.settings.endpointHost = value;
-              this.plugin.settings.endpointBaseUrl = `http://${value}:${this.plugin.settings.endpointPort}`;
-              await this.plugin.saveSettings();
-            })
-        );
-
-      new Setting(section)
-        .setName('Local Port')
-        .setDesc('Port for local Thoth server')
-        .addSlider((slider) =>
-          slider
-            .setLimits(3000, 9999, 1)
-            .setValue(this.plugin.settings.endpointPort)
-            .setDynamicTooltip()
-            .onChange(async (value) => {
-              this.plugin.settings.endpointPort = value;
-              this.plugin.settings.endpointBaseUrl = `http://${this.plugin.settings.endpointHost}:${value}`;
-              await this.plugin.saveSettings();
-            })
-        );
-    }
-  }
-
-  private addAdvancedSettings(containerEl: HTMLElement): void {
-    const section = containerEl.createEl('div', { cls: 'thoth-settings-section thoth-advanced-section' });
-    section.createEl('h2', { text: '⚙️ Advanced Configuration' });
-
-    // LLM Configuration
-    this.addLLMSettings(section);
-
-    // Agent Behavior
-    this.addAgentBehaviorSettings(section);
-
-    // Discovery System
-    this.addDiscoverySettings(section);
-
-    // Logging & Performance
-    this.addLoggingSettings(section);
-
-    // UI Preferences
-    this.addUISettings(section);
-  }
-
-  private addLLMSettings(parentEl: HTMLElement): void {
-    const subsection = parentEl.createEl('details', { cls: 'thoth-subsection' });
-    subsection.createEl('summary', { text: '🤖 Language Model Configuration' });
-
-    const modelOptions = [
-      'anthropic/claude-3-opus',
-      'anthropic/claude-3-sonnet',
-      'anthropic/claude-3-haiku',
-      'openai/gpt-4',
-      'openai/gpt-4-turbo',
-      'openai/gpt-3.5-turbo',
-      'mistral/mistral-large',
-      'mistral/mistral-medium'
-    ];
-
-    new Setting(subsection)
-      .setName('Primary LLM Model')
-      .setDesc('Main language model for research and general tasks')
-      .addDropdown((dropdown) => {
-        modelOptions.forEach(model => dropdown.addOption(model, model));
-        dropdown
-          .setValue(this.plugin.settings.primaryLlmModel)
-          .onChange(async (value) => {
-            this.plugin.settings.primaryLlmModel = value;
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(subsection)
-      .setName('Analysis LLM Model')
-      .setDesc('Specialized model for document analysis and PDF processing')
-      .addDropdown((dropdown) => {
-        modelOptions.forEach(model => dropdown.addOption(model, model));
-        dropdown
-          .setValue(this.plugin.settings.analysisLlmModel)
-          .onChange(async (value) => {
-            this.plugin.settings.analysisLlmModel = value;
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(subsection)
-      .setName('LLM Temperature')
-      .setDesc('Creativity level for responses (0.0 = focused, 1.0 = creative)')
-      .addSlider((slider) =>
-        slider
-          .setLimits(0, 1, 0.1)
-          .setValue(this.plugin.settings.llmTemperature)
-          .setDynamicTooltip()
-          .onChange(async (value) => {
-            this.plugin.settings.llmTemperature = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(subsection)
-      .setName('Max Output Tokens')
-      .setDesc('Maximum response length')
-      .addSlider((slider) =>
-        slider
-          .setLimits(1024, 8192, 256)
-          .setValue(this.plugin.settings.llmMaxOutputTokens)
-          .setDynamicTooltip()
-          .onChange(async (value) => {
-            this.plugin.settings.llmMaxOutputTokens = value;
-            await this.plugin.saveSettings();
-          })
-      );
-  }
-
-  private addAgentBehaviorSettings(parentEl: HTMLElement): void {
-    const subsection = parentEl.createEl('details', { cls: 'thoth-subsection' });
-    subsection.createEl('summary', { text: '🧠 Agent Behavior' });
-
-    new Setting(subsection)
-      .setName('Auto-start Research Agent')
-      .setDesc('Automatically start the research agent when the server starts')
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.researchAgentAutoStart)
-          .onChange(async (value) => {
-            this.plugin.settings.researchAgentAutoStart = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(subsection)
-      .setName('Enable Agent Memory')
-      .setDesc('Allow the agent to remember previous conversations')
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.researchAgentMemoryEnabled)
-          .onChange(async (value) => {
-            this.plugin.settings.researchAgentMemoryEnabled = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(subsection)
-      .setName('Max Tool Calls')
-      .setDesc('Maximum number of tools the agent can use per request')
-      .addSlider((slider) =>
-        slider
-          .setLimits(5, 50, 5)
-          .setValue(this.plugin.settings.agentMaxToolCalls)
-          .setDynamicTooltip()
-          .onChange(async (value) => {
-            this.plugin.settings.agentMaxToolCalls = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(subsection)
-      .setName('Agent Timeout (seconds)')
-      .setDesc('Maximum time to wait for agent responses')
-      .addSlider((slider) =>
-        slider
-          .setLimits(30, 600, 30)
-          .setValue(this.plugin.settings.agentTimeoutSeconds)
-          .setDynamicTooltip()
-          .onChange(async (value) => {
-            this.plugin.settings.agentTimeoutSeconds = value;
-            await this.plugin.saveSettings();
-          })
-      );
-  }
-
-  private addDiscoverySettings(parentEl: HTMLElement): void {
-    const subsection = parentEl.createEl('details', { cls: 'thoth-subsection' });
-    subsection.createEl('summary', { text: '🔍 Discovery System' });
-
-    new Setting(subsection)
-      .setName('Auto-start Discovery Scheduler')
-      .setDesc('Automatically start the discovery scheduler for finding new research')
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.discoveryAutoStartScheduler)
-          .onChange(async (value) => {
-            this.plugin.settings.discoveryAutoStartScheduler = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(subsection)
-      .setName('Max Articles per Discovery')
-      .setDesc('Maximum number of articles to discover per search')
-      .addSlider((slider) =>
-        slider
-          .setLimits(10, 100, 10)
-          .setValue(this.plugin.settings.discoveryDefaultMaxArticles)
-          .setDynamicTooltip()
-          .onChange(async (value) => {
-            this.plugin.settings.discoveryDefaultMaxArticles = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(subsection)
-      .setName('Discovery Interval (minutes)')
-      .setDesc('How often to run automatic discovery searches')
-      .addSlider((slider) =>
-        slider
-          .setLimits(15, 240, 15)
-          .setValue(this.plugin.settings.discoveryDefaultIntervalMinutes)
-          .setDynamicTooltip()
-          .onChange(async (value) => {
-            this.plugin.settings.discoveryDefaultIntervalMinutes = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(subsection)
-      .setName('Enable Chrome Extension Integration')
-      .setDesc('Allow integration with Thoth Chrome extension for web research')
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.discoveryChromeExtensionEnabled)
-          .onChange(async (value) => {
-            this.plugin.settings.discoveryChromeExtensionEnabled = value;
-            await this.plugin.saveSettings();
-          })
-      );
-  }
-
-  private addLoggingSettings(parentEl: HTMLElement): void {
-    const subsection = parentEl.createEl('details', { cls: 'thoth-subsection' });
-    subsection.createEl('summary', { text: '📊 Logging & Performance' });
-
-    const logLevels = ['DEBUG', 'INFO', 'WARNING', 'ERROR'];
-
-    new Setting(subsection)
-      .setName('Log Level')
-      .setDesc('Minimum level of messages to log')
-      .addDropdown((dropdown) => {
-        logLevels.forEach(level => dropdown.addOption(level, level));
-        dropdown
-          .setValue(this.plugin.settings.logLevel)
-          .onChange(async (value) => {
-            this.plugin.settings.logLevel = value;
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(subsection)
-      .setName('Enable Performance Monitoring')
-      .setDesc('Track performance metrics and system health')
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.enablePerformanceMonitoring)
-          .onChange(async (value) => {
-            this.plugin.settings.enablePerformanceMonitoring = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(subsection)
-      .setName('Development Mode')
-      .setDesc('Enable additional debugging features')
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.developmentMode)
-          .onChange(async (value) => {
-            this.plugin.settings.developmentMode = value;
-            await this.plugin.saveSettings();
-          })
-      );
-  }
-
-  private addUISettings(parentEl: HTMLElement): void {
-    const subsection = parentEl.createEl('details', { cls: 'thoth-subsection' });
-    subsection.createEl('summary', { text: '🎨 User Interface' });
-
-    new Setting(subsection)
+    
+    // Plugin Behavior
+    new Setting(containerEl)
+      .setName('Auto-start Agent')
+      .setDesc('Automatically start local agent on Obsidian startup (desktop only)')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.autoStartAgent)
+        .onChange(async (value) => {
+          this.plugin.settings.autoStartAgent = value;
+          await this.plugin.saveSettings();
+        }));
+    
+    new Setting(containerEl)
       .setName('Show Status Bar')
-      .setDesc('Display agent status in Obsidian status bar')
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.showStatusBar)
-          .onChange(async (value) => {
-            this.plugin.settings.showStatusBar = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(subsection)
+      .setDesc('Show Thoth status in the status bar')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.showStatusBar)
+        .onChange(async (value) => {
+          this.plugin.settings.showStatusBar = value;
+          await this.plugin.saveSettings();
+        }));
+    
+    new Setting(containerEl)
       .setName('Show Ribbon Icon')
-      .setDesc('Display chat icon in left ribbon')
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.showRibbonIcon)
-          .onChange(async (value) => {
-            this.plugin.settings.showRibbonIcon = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(subsection)
-      .setName('Compact Mode')
-      .setDesc('Use smaller UI elements to save space')
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.compactMode)
-          .onChange(async (value) => {
-            this.plugin.settings.compactMode = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(subsection)
-      .setName('Chat History Limit')
-      .setDesc('Maximum number of chat messages to remember')
-      .addSlider((slider) =>
-        slider
-          .setLimits(10, 100, 10)
-          .setValue(this.plugin.settings.chatHistoryLimit)
-          .setDynamicTooltip()
-          .onChange(async (value) => {
-            this.plugin.settings.chatHistoryLimit = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(subsection)
-      .setName('Enable Notifications')
-      .setDesc('Show notifications for important events')
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.enableNotifications)
-          .onChange(async (value) => {
-            this.plugin.settings.enableNotifications = value;
-            await this.plugin.saveSettings();
-          })
-      );
-  }
-
-  private addAgentControls(containerEl: HTMLElement): void {
-    const section = containerEl.createEl('div', { cls: 'thoth-settings-section thoth-controls-section' });
-    section.createEl('h2', { text: '🎮 Agent Controls' });
-
-    const controlsGrid = section.createEl('div', { cls: 'thoth-controls-grid' });
-
-    // Start Agent
-    const startButton = controlsGrid.createEl('button', {
-      text: 'Start Agent',
-      cls: 'thoth-control-button thoth-button-start'
-    });
-    startButton.onclick = () => this.plugin.startAgent();
-
-    // Stop Agent
-    const stopButton = controlsGrid.createEl('button', {
-      text: 'Stop Agent',
-      cls: 'thoth-control-button thoth-button-stop'
-    });
-    stopButton.onclick = () => this.plugin.stopAgent();
-
-    // Restart Agent
-    const restartButton = controlsGrid.createEl('button', {
-      text: 'Restart Agent',
-      cls: 'thoth-control-button thoth-button-restart'
-    });
-    restartButton.onclick = () => this.plugin.restartAgent();
-
-    // Test Connection
-    const testButton = controlsGrid.createEl('button', {
-      text: 'Test Connection',
-      cls: 'thoth-control-button thoth-button-test'
-    });
-    testButton.onclick = async () => {
-      testButton.disabled = true;
-      testButton.textContent = 'Testing...';
-
-      try {
-        const endpoint = this.plugin.getEndpointUrl();
-        const response = await fetch(`${endpoint}/health`);
-        if (response.ok) {
-          new Notice('✅ Connection successful!');
-        } else {
-          new Notice(`❌ Connection failed: ${response.statusText}`);
-        }
-      } catch (error) {
-        new Notice(`❌ Connection failed: ${error.message}`);
-      } finally {
-        testButton.disabled = false;
-        testButton.textContent = 'Test Connection';
-      }
+      .setDesc('Show Thoth icon in the left ribbon')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.showRibbonIcon)
+        .onChange(async (value) => {
+          this.plugin.settings.showRibbonIcon = value;
+          await this.plugin.saveSettings();
+        }));
+    
+    // Link to modal settings
+    const linkSetting = new Setting(containerEl)
+      .setName('Full Settings')
+      .setDesc('Open Thoth Chat to access all settings including backend configuration');
+    
+    linkSetting.controlEl.createEl('button', {
+      text: 'Open Thoth Chat',
+      cls: 'mod-cta'
+    }).onclick = () => {
+      new MultiChatModal(this.app, this.plugin).open();
     };
-
-    // Open Chat
-    const chatButton = controlsGrid.createEl('button', {
-      text: 'Open Chat',
-      cls: 'thoth-control-button thoth-button-chat'
-    });
-    chatButton.onclick = () => this.plugin.openChatModal();
   }
 }
-
-// ============================================================================
-// ADDITIONAL MODAL CLASSES FOR ENHANCED UX
-// ============================================================================

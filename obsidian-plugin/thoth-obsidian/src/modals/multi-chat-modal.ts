@@ -1,6 +1,8 @@
-import { App, Modal, Notice } from 'obsidian';
+import { App, Modal, Notice, Menu, SuggestModal } from 'obsidian';
 import { ChatSession, ChatMessage } from '../types';
 import type ThothPlugin from '../../main';
+import { ResearchTabComponent } from '../components/research-tab';
+import { SettingsTabComponent } from '../components/settings-tab';
 
 export class MultiChatModal extends Modal {
   plugin: ThothPlugin;
@@ -21,6 +23,29 @@ export class MultiChatModal extends Modal {
   constructor(app: App, plugin: ThothPlugin) {
     super(app);
     this.plugin = plugin;
+  }
+
+  /**
+   * Fetch with timeout to prevent UI from hanging
+   */
+  private async fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 10000): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timed out - server may be down or slow');
+      }
+      throw error;
+    }
   }
 
   async onOpen() {
@@ -309,7 +334,8 @@ export class MultiChatModal extends Modal {
     const tabs = [
       { id: 'chat', label: '💬 Chat', icon: 'message-circle' },
       { id: 'conversations', label: '📝 Conversations', icon: 'message-square' },
-      { id: 'research', label: '🔬 Research', icon: 'beaker' }
+      { id: 'research', label: '🔬 Research', icon: 'beaker' },
+      { id: 'settings', label: '⚙️ Settings', icon: 'settings' }
     ];
 
     tabs.forEach(tab => {
@@ -329,7 +355,7 @@ export class MultiChatModal extends Modal {
   switchTab(tabId: string) {
     // Update tab buttons
     this.tabContainer.querySelectorAll('.thoth-tab-button').forEach((btn, index) => {
-      if (index === ['chat', 'conversations', 'research'].indexOf(tabId)) {
+      if (index === ['chat', 'conversations', 'research', 'settings'].indexOf(tabId)) {
         btn.addClass('active');
       } else {
         btn.removeClass('active');
@@ -356,54 +382,55 @@ export class MultiChatModal extends Modal {
       case 'research':
         this.renderResearchTab();
         break;
+      case 'settings':
+        this.renderSettingsTab();
+        break;
     }
   }
 
   renderChatTab() {
-    // Top bar with session selector and controls (only for chat tab)
-    const topBar = this.contentContainer.createEl('div', { cls: 'chat-top-bar' });
+    // Top bar with conversation title and status
+    const topBar = this.contentContainer.createEl('div', { cls: 'chat-top-bar modern' });
 
-    // Session selector dropdown
-    const sessionSelector = topBar.createEl('select', { cls: 'session-selector' });
-    this.sessionSelector = sessionSelector;
-    sessionSelector.onchange = () => {
-      const selectedId = sessionSelector.value;
-      if (selectedId && selectedId !== 'new') {
-        this.switchToSession(selectedId);
-        // Note: switchToSession already calls closeSidebar()
-      } else if (selectedId === 'new') {
-        this.createNewSession();
-        // Note: createNewSession already calls closeSidebar()
+    // Left section: Conversation title (clickable to rename)
+    const titleSection = topBar.createEl('div', { cls: 'chat-title-section' });
+    
+    const activeSession = this.chatSessions.find(s => s.id === this.activeSessionId);
+    const titleEl = titleSection.createEl('div', { 
+      text: activeSession?.title || 'New Conversation',
+      cls: 'conversation-title-display',
+      title: 'Click to rename'
+    });
+    
+    titleEl.onclick = async () => {
+      if (activeSession) {
+        await this.renameConversation(activeSession);
       }
     };
 
-    // New chat button
-    const newChatBtn = topBar.createEl('button', {
-      text: '+',
-      cls: 'new-chat-btn compact',
-      title: 'New Chat'
+    // Right section: Status and controls
+    const controlsSection = topBar.createEl('div', { cls: 'chat-controls-section' });
+
+    // Connection status indicator
+    const statusIndicator = controlsSection.createEl('div', { cls: 'connection-status' });
+    this.updateConnectionStatus(statusIndicator);
+
+    // Settings button
+    const settingsBtn = controlsSection.createEl('button', {
+      text: '⚙️',
+      cls: 'settings-btn',
+      title: 'Settings',
+      attr: { 'aria-label': 'Settings' }
     });
-    newChatBtn.onclick = () => {
-      this.createNewSession();
-      // Note: createNewSession already calls closeSidebar()
+    settingsBtn.onclick = () => {
+      this.switchTab('settings');
     };
 
-    // Toggle sidebar button
-    const toggleBtn = topBar.createEl('button', {
-      text: '☰',
-      cls: 'toggle-sidebar-btn',
-      title: 'Toggle Sessions'
-    });
-    toggleBtn.onclick = () => this.toggleSidebar();
-
     // Create chat area within the content container
-    const chatArea = this.contentContainer.createEl('div', { cls: 'chat-area' });
+    const chatArea = this.contentContainer.createEl('div', { cls: 'chat-area modern' });
 
     // Chat content area
     this.chatContentContainer = chatArea.createEl('div', { cls: 'chat-content' });
-
-    // Update session selector
-    this.updateSessionSelector();
 
     // Load active session or show empty state
     if (this.activeSessionId) {
@@ -413,43 +440,63 @@ export class MultiChatModal extends Modal {
     }
   }
 
-  renderCommandsTab() {
-    const commandsArea = this.contentContainer.createEl('div', { cls: 'commands-area' });
-
-    // Create sections like in CommandsModal
-    this.createAgentCommands(commandsArea);
-    this.createDiscoveryCommands(commandsArea);
-    this.createDataCommands(commandsArea);
-    this.createSystemCommands(commandsArea);
+  updateConnectionStatus(container: HTMLElement) {
+    container.empty();
+    
+    // Check connection status
+    const isConnected = this.plugin.isAgentRunning || this.plugin.settings.remoteMode;
+    
+    const statusDot = container.createEl('span', { cls: 'status-dot' });
+    const statusText = container.createEl('span', { cls: 'status-text' });
+    
+    if (isConnected) {
+      statusDot.addClass('connected');
+      statusText.setText('Connected');
+      container.title = 'Server connection active';
+    } else {
+      statusDot.addClass('disconnected');
+      statusText.setText('Disconnected');
+      container.title = 'Not connected to server';
+    }
+    
+    // Make clickable to show details
+    container.addClass('clickable');
+    container.onclick = () => {
+      this.showConnectionDetails();
+    };
   }
 
-  renderToolsTab() {
-    const toolsArea = this.contentContainer.createEl('div', { cls: 'tools-area' });
+  showConnectionDetails() {
+    const endpoint = this.plugin.getEndpointUrl();
+    const isConnected = this.plugin.isAgentRunning || this.plugin.settings.remoteMode;
+    const mode = this.plugin.settings.remoteMode ? 'Remote' : 'Local';
+    
+    const details = `
+Connection Status: ${isConnected ? 'Connected' : 'Disconnected'}
+Mode: ${mode}
+Endpoint: ${endpoint}
 
-    // Create tools sections
-    this.createCitationTools(toolsArea);
-    this.createResearchTools(toolsArea);
-    this.createUtilityTools(toolsArea);
+${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
+    `.trim();
+    
+    new Notice(details, 5000);
   }
 
-  renderStatusTab() {
-    const statusArea = this.contentContainer.createEl('div', { cls: 'status-area' });
-
-    // Create status sections
-    this.createConnectionStatus(statusArea);
-    this.createSystemInfo(statusArea);
-    this.createActivityLog(statusArea);
-  }
+  // Removed old tab methods (commands, tools, status)
+  // These features are now available through:
+  // - Commands: Obsidian command palette (Cmd+P)
+  // - Tools: Automatically available via MCP
+  // - Status: Inline in chat header
 
   async renderConversationsTab() {
     const conversationsArea = this.contentContainer.createEl('div', { cls: 'conversations-area' });
 
     // Header with create conversation button
     const header = conversationsArea.createEl('div', { cls: 'conversations-header' });
-    
+
     const createBtn = header.createEl('button', {
       text: '+ New Conversation',
-      cls: 'create-conversation-btn'
+      cls: 'thoth-new-conversation-btn'
     });
 
     createBtn.onclick = async () => {
@@ -458,11 +505,10 @@ export class MultiChatModal extends Modal {
     };
 
     // Search box
-    const searchContainer = conversationsArea.createEl('div', { cls: 'conversation-search' });
-    const searchInput = searchContainer.createEl('input', {
+    const searchInput = conversationsArea.createEl('input', {
       type: 'text',
       placeholder: 'Search conversations...',
-      cls: 'conversation-search-input'
+      cls: 'thoth-conversation-search'
     });
 
     searchInput.oninput = () => {
@@ -593,10 +639,37 @@ export class MultiChatModal extends Modal {
   }
 
   async confirmDeleteAgent(agentName: string) {
-    if (confirm(`Delete agent @${agentName}? This action cannot be undone.`)) {
-      // TODO: Implement agent deletion API call
-      // For now, just show a notice
-      new Notice(`Agent deletion not yet implemented for @${agentName}`);
+    // Note: This is actually deleting a conversation, not an agent
+    // (Legacy method name from when we called conversations "agents")
+    const sessionId = agentName; // The "name" is actually the session ID
+    
+    if (confirm(`Delete this conversation? This action cannot be undone.`)) {
+      try {
+        const endpoint = this.plugin.getEndpointUrl();
+        const response = await fetch(`${endpoint}/v1/conversations/${sessionId}`, {
+          method: 'DELETE'
+        });
+
+        if (response.ok) {
+          // Remove from local list
+          this.chatSessions = this.chatSessions.filter(s => s.id !== sessionId);
+          
+          // Clear active session if it was deleted
+          if (this.activeSessionId === sessionId) {
+            this.activeSessionId = null;
+            this.plugin.settings.activeChatSessionId = null;
+            await this.plugin.saveSettings();
+          }
+          
+          await this.loadChatSessions(); // Refresh list
+          new Notice('Conversation deleted');
+        } else {
+          throw new Error('Failed to delete conversation');
+        }
+      } catch (error) {
+        console.error('Error deleting conversation:', error);
+        new Notice('Failed to delete conversation');
+      }
     }
   }
 
@@ -1212,11 +1285,23 @@ export class MultiChatModal extends Modal {
   async loadChatSessions() {
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/chat/sessions?active_only=true&limit=50`);
+      // Get conversations for the default agent
+      const agentId = await this.getOrCreateDefaultAgent();
+      const response = await this.fetchWithTimeout(`${endpoint}/v1/conversations?agent_id=${agentId}&limit=50`);
 
       if (response.ok) {
-        const data = await response.json();
-        this.chatSessions = data.sessions || [];
+        const conversations = await response.json();
+        // Map Letta conversations to session format with all required ChatSession properties
+        this.chatSessions = conversations.map((conv: any): ChatSession => ({
+          id: conv.id,
+          title: conv.summary || `Chat ${conv.id.slice(0, 8)}`,
+          created_at: conv.created_at,
+          updated_at: conv.updated_at || conv.created_at,
+          is_active: conv.id === this.activeSessionId,
+          message_count: conv.message_count || 0,
+          last_message_preview: conv.last_message || '',
+          metadata: { agent_id: conv.agent_id }
+        }));
       } else {
         console.warn('Could not load chat sessions from server');
         this.chatSessions = [];
@@ -1224,6 +1309,37 @@ export class MultiChatModal extends Modal {
     } catch (error) {
       console.warn('Failed to load chat sessions:', error);
       this.chatSessions = [];
+    }
+  }
+
+  private cachedAgentId: string | null = null;
+
+  async getOrCreateDefaultAgent(): Promise<string> {
+    // Return cached agent ID if available
+    if (this.cachedAgentId) {
+      return this.cachedAgentId;
+    }
+
+    try {
+      const endpoint = this.plugin.getEndpointUrl();
+      // Get the main Thoth orchestrator agent (auto-created by backend on startup)
+      const listResponse = await this.fetchWithTimeout(`${endpoint}/v1/agents?limit=100`);
+      if (listResponse.ok) {
+        const agents = await listResponse.json();
+        // The main orchestrator is always named "thoth_research_agent"
+        const thothAgent = agents.find((a: any) => a.name === 'thoth_research_agent');
+        
+        if (thothAgent) {
+          this.cachedAgentId = thothAgent.id;
+          return thothAgent.id;
+        }
+      }
+
+      // Agent not found - backend may not have started properly
+      throw new Error('Thoth orchestrator agent not found. Please ensure the Thoth backend is running and has initialized agents.');
+    } catch (error) {
+      console.error('Failed to get Thoth agent:', error);
+      throw error;
     }
   }
 
@@ -1334,19 +1450,30 @@ export class MultiChatModal extends Modal {
     try {
       const sessionTitle = title || `Chat ${this.chatSessions.length + 1}`;
       const endpoint = this.plugin.getEndpointUrl();
+      const agentId = await this.getOrCreateDefaultAgent();
 
-      const response = await fetch(`${endpoint}/chat/sessions`, {
+      const response = await fetch(`${endpoint}/v1/conversations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: sessionTitle,
-          metadata: { source: 'obsidian-multi-chat' }
+          agent_id: agentId,
+          summary: sessionTitle
         })
       });
 
       if (response.ok) {
-        const result = await response.json();
-        const newSession = result.session;
+        const conversation = await response.json();
+        // Map Letta conversation to session format
+        const newSession: ChatSession = {
+          id: conversation.id,
+          title: conversation.summary || sessionTitle,
+          created_at: conversation.created_at,
+          updated_at: conversation.created_at,
+          is_active: true,
+          message_count: 0,
+          last_message_preview: '',
+          metadata: { agent_id: conversation.agent_id }
+        };
 
         this.chatSessions.unshift(newSession);
         this.renderSessionList();
@@ -1386,11 +1513,11 @@ export class MultiChatModal extends Modal {
 
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/chat/sessions/${sessionId}/messages?limit=100`);
+      const response = await fetch(`${endpoint}/v1/conversations/${sessionId}/messages?limit=100`);
 
       if (response.ok) {
-        const data = await response.json();
-        this.renderChatInterface(sessionId, data.messages || []);
+        const messages = await response.json();
+        this.renderChatInterface(sessionId, messages || []);
       } else {
         throw new Error('Failed to load messages');
       }
@@ -1408,10 +1535,20 @@ export class MultiChatModal extends Modal {
       cls: 'chat-messages'
     });
 
-    // Load existing messages
-    messages.forEach(msg => {
-      this.addMessageToChat(messagesContainer, msg.role, msg.content);
-    });
+    // Load existing messages or show empty state
+    if (messages.length === 0) {
+      this.createEmptyState(
+        messagesContainer,
+        '💬',
+        'Start a conversation',
+        'Ask me anything about your research, papers, or knowledge base. I can help you discover papers, analyze citations, and more.',
+        'Try: "Find recent papers on transformers"'
+      );
+    } else {
+      messages.forEach(msg => {
+        this.addMessageToChat(messagesContainer, msg.role, msg.content);
+      });
+    }
 
     // Input area
     const inputArea = this.chatContentContainer.createEl('div', {
@@ -1429,6 +1566,18 @@ export class MultiChatModal extends Modal {
         inputEl.focus();
       }
     });
+
+    // Attachment button
+    const attachBtn = inputArea.createEl('button', {
+      text: '📎',
+      cls: 'chat-attach-btn',
+      attr: { 'aria-label': 'Attach file', 'title': 'Attach file for context' }
+    });
+    
+    attachBtn.onclick = (e: MouseEvent) => {
+      e.preventDefault();
+      this.showAttachmentMenu(inputEl, e);
+    };
 
     const sendBtn = inputArea.createEl('button', {
       text: 'Send',
@@ -1451,37 +1600,49 @@ export class MultiChatModal extends Modal {
       sendBtn.disabled = true;
       sendBtn.textContent = 'Sending...';
 
-      try {
-        // Send to server - use agent endpoint for agent messages
-        const endpoint = this.plugin.getEndpointUrl();
-        const isAgentMessage = this.detectAgentInteraction(message);
-        const apiEndpoint = isAgentMessage ? '/agents/chat' : '/research/chat';
+      // Add thinking indicator
+      const thinkingMsg = this.addThinkingIndicator(messagesContainer);
 
-        const response = await fetch(`${endpoint}${apiEndpoint}`, {
+      try {
+        // Send to Letta conversation
+        const endpoint = this.plugin.getEndpointUrl();
+        const response = await fetch(`${endpoint}/v1/conversations/${sessionId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            message: message,
-            conversation_id: sessionId,
-            user_id: 'obsidian_user', // TODO: Add user identification
-            timestamp: Date.now(),
-            id: crypto.randomUUID()
+            role: 'user',
+            text: message
           })
         });
 
         if (response.ok) {
+          // Remove thinking indicator
+          thinkingMsg.remove();
+          
           const result = await response.json();
-          this.addMessageToChat(messagesContainer, 'assistant', result.response);
+          // Letta returns an array of messages (assistant response)
+          const messages = Array.isArray(result) ? result : [result];
+          messages.forEach((msg: any) => {
+            if (msg.role === 'assistant') {
+              this.addMessageToChat(messagesContainer, 'assistant', msg.text);
+            }
+          });
 
           // Update session list to reflect new message
           await this.loadChatSessions();
           this.renderSessionList();
+          
+          // Show success toast
+          this.showToast('Message sent successfully', 'success');
         } else {
           throw new Error('Failed to send message');
         }
       } catch (error) {
         console.error('Chat error:', error);
+        // Remove thinking indicator
+        thinkingMsg.remove();
         this.addMessageToChat(messagesContainer, 'assistant', `Error: ${error.message}`);
+        this.showToast(`Error: ${error.message}`, 'error');
       } finally {
         sendBtn.disabled = false;
         sendBtn.textContent = 'Send';
@@ -1582,10 +1743,10 @@ export class MultiChatModal extends Modal {
 
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/chat/sessions/${sessionId}`, {
-        method: 'PUT',
+      const response = await fetch(`${endpoint}/v1/conversations/${sessionId}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: newTitle })
+        body: JSON.stringify({ summary: newTitle })
       });
 
       if (response.ok) {
@@ -1643,7 +1804,7 @@ export class MultiChatModal extends Modal {
 
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/chat/sessions/${sessionId}`, {
+      const response = await fetch(`${endpoint}/v1/conversations/${sessionId}`, {
         method: 'DELETE'
       });
 
@@ -2255,10 +2416,14 @@ export class MultiChatModal extends Modal {
       loadingEl.remove();
 
       if (this.chatSessions.length === 0) {
-        container.createEl('div', {
-          text: 'No conversations yet. Create your first one!',
-          cls: 'empty-state'
-        });
+        this.createEmptyState(
+          container,
+          '📝',
+          'No conversations yet',
+          'Start your first conversation to chat with Thoth and explore your research.',
+          '+ New Conversation',
+          () => this.createNewSession().then(() => this.switchTab('chat'))
+        );
         return;
       }
 
@@ -2284,52 +2449,60 @@ export class MultiChatModal extends Modal {
   }
 
   createConversationCard(container: HTMLElement, session: ChatSession) {
-    const card = container.createEl('div', { cls: 'conversation-card' });
-    
+    const card = container.createEl('div', { cls: 'thoth-conversation-card' });
+
+    // Prevent text selection on the card
+    card.style.userSelect = 'none';
+    card.style.cursor = 'pointer';
+
     if (session.id === this.activeSessionId) {
       card.addClass('active');
     }
 
     // Title
-    const titleEl = card.createEl('div', { 
+    const titleEl = card.createEl('div', {
       text: session.title || 'Untitled Conversation',
-      cls: 'conversation-title'
+      cls: 'thoth-card-title'
     });
 
     // Metadata (time and message count)
-    const metaEl = card.createEl('div', { cls: 'conversation-meta' });
-    
+    const metaEl = card.createEl('div', { cls: 'thoth-card-meta' });
+
     const timeAgo = this.getTimeAgo(session.created_at);
     const messageCount = session.message_count || 0;
-    
+
     metaEl.setText(`${timeAgo} • ${messageCount} message${messageCount !== 1 ? 's' : ''}`);
 
     // Click to switch
-    card.onclick = async () => {
+    card.onclick = async (e) => {
+      // Prevent if clicking on buttons
+      if ((e.target as HTMLElement).tagName === 'BUTTON') {
+        return;
+      }
       await this.switchToSession(session.id);
       this.switchTab('chat');
     };
 
     // Actions (delete, rename)
-    const actionsEl = card.createEl('div', { cls: 'conversation-actions' });
-    
-    const renameBtn = actionsEl.createEl('button', { 
+    const actionsEl = card.createEl('div', { cls: 'thoth-card-actions' });
+
+    const renameBtn = actionsEl.createEl('button', {
       text: '✏️',
-      cls: 'conversation-action-btn',
+      cls: 'thoth-card-action',
       attr: { 'aria-label': 'Rename' }
     });
-    
+
     renameBtn.onclick = async (e) => {
       e.stopPropagation();
       await this.renameConversation(session);
     };
 
-    const deleteBtn = actionsEl.createEl('button', { 
+    const deleteBtn = actionsEl.createEl('button', {
       text: '🗑️',
-      cls: 'conversation-action-btn delete',
+      cls: 'thoth-card-action delete',
       attr: { 'aria-label': 'Delete' }
     });
-    
+
     deleteBtn.onclick = async (e) => {
       e.stopPropagation();
       await this.deleteConversation(session);
@@ -2358,7 +2531,7 @@ export class MultiChatModal extends Modal {
     const newTitle = await this.promptForInput('Rename Conversation', session.title || '');
     if (newTitle && newTitle !== session.title) {
       session.title = newTitle;
-      await this.saveSessionToBackend(session);
+      await this.plugin.saveSettings();
       this.renderTabContent(); // Refresh
     }
   }
@@ -2375,19 +2548,19 @@ export class MultiChatModal extends Modal {
           await this.createNewSession();
         }
       }
-      await this.saveChatSessions();
+      await this.plugin.saveSettings();
       this.renderTabContent(); // Refresh
     }
   }
 
   filterConversations(query: string) {
-    const cards = this.contentContainer.querySelectorAll('.conversation-card');
+    const cards = this.contentContainer.querySelectorAll('.thoth-conversation-card');
     const lowerQuery = query.toLowerCase();
-    
+
     cards.forEach(card => {
-      const titleEl = card.querySelector('.conversation-title');
+      const titleEl = card.querySelector('.thoth-card-title');
       const title = titleEl?.textContent?.toLowerCase() || '';
-      
+
       if (title.includes(lowerQuery)) {
         (card as HTMLElement).style.display = '';
       } else {
@@ -2437,15 +2610,138 @@ export class MultiChatModal extends Modal {
     });
   }
 
-  // Research tab methods (placeholder for now)
+  // Research tab
   renderResearchTab() {
     const researchArea = this.contentContainer.createEl('div', { cls: 'research-area' });
 
-    // Placeholder for now
-    researchArea.createEl('h3', { text: '🔬 Research Dashboard' });
-    researchArea.createEl('p', { 
-      text: 'Live discovery results and research management coming soon!',
-      cls: 'placeholder-text'
+    // Render Research Tab component
+    const researchTab = new ResearchTabComponent(researchArea, this.plugin);
+    researchTab.render();
+  }
+
+  // Settings tab
+  renderSettingsTab() {
+    const settingsArea = this.contentContainer.createEl('div', { cls: 'settings-area' });
+
+    // Render Settings Tab component
+    const settingsTab = new SettingsTabComponent(settingsArea, this.plugin);
+    settingsTab.render();
+  }
+
+  // Helper: Add thinking indicator
+  addThinkingIndicator(container: HTMLElement): HTMLElement {
+    const msg = container.createEl('div', { cls: 'message assistant thinking' });
+    const content = msg.createEl('div', { cls: 'message-content' });
+    const indicator = content.createEl('div', { cls: 'thinking-indicator' });
+    indicator.createEl('span', { cls: 'dot' });
+    indicator.createEl('span', { cls: 'dot' });
+    indicator.createEl('span', { cls: 'dot' });
+    content.createEl('span', { text: 'Thinking...' });
+    
+    // Scroll to bottom
+    container.scrollTop = container.scrollHeight;
+    
+    return msg;
+  }
+
+  // Helper: Show toast notification
+  showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
+    const toast = document.body.createEl('div', { 
+      cls: `thoth-toast thoth-toast-${type}`,
+      text: message 
     });
+    
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+      toast.addClass('thoth-toast-fade-out');
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+
+
+  // Helper: Create empty state
+  createEmptyState(container: HTMLElement, icon: string, title: string, description: string, actionText?: string, actionCallback?: () => void) {
+    const emptyState = container.createEl('div', { cls: 'thoth-empty-state' });
+    
+    emptyState.createEl('div', { 
+      cls: 'empty-state-icon',
+      text: icon 
+    });
+    
+    emptyState.createEl('h3', { 
+      cls: 'empty-state-title',
+      text: title 
+    });
+    
+    emptyState.createEl('p', { 
+      cls: 'empty-state-description',
+      text: description 
+    });
+    
+    if (actionText && actionCallback) {
+      const actionBtn = emptyState.createEl('button', {
+        cls: 'empty-state-action',
+        text: actionText
+      });
+      actionBtn.onclick = actionCallback;
+    }
+    
+    return emptyState;
+  }
+
+  // Helper: Show attachment menu
+  showAttachmentMenu(inputEl: HTMLTextAreaElement, event: MouseEvent) {
+    const menu = new Menu();
+    
+    menu.addItem((item) => {
+      item
+        .setTitle('📄 Attach note from vault')
+        .setIcon('document')
+        .onClick(() => {
+          this.attachVaultFile(inputEl);
+        });
+    });
+    
+    menu.addItem((item) => {
+      item
+        .setTitle('🔗 Attach current note')
+        .setIcon('link')
+        .onClick(() => {
+          const activeFile = this.app.workspace.getActiveFile();
+          if (activeFile) {
+            const fileLink = `[[${activeFile.path}]]`;
+            inputEl.value += `\n${fileLink}\n`;
+            inputEl.focus();
+          } else {
+            new Notice('No active file');
+          }
+        });
+    });
+    
+    menu.addItem((item) => {
+      item
+        .setTitle('📋 Paste clipboard')
+        .setIcon('clipboard')
+        .onClick(async () => {
+          try {
+            const text = await navigator.clipboard.readText();
+            inputEl.value += `\n${text}\n`;
+            inputEl.focus();
+          } catch (error) {
+            new Notice('Failed to read clipboard');
+          }
+        });
+    });
+    
+    menu.showAtMouseEvent(event);
+  }
+
+  // Helper: Attach vault file
+  async attachVaultFile(inputEl: HTMLTextAreaElement) {
+    // Simple implementation: Show notice for now
+    // Full file picker would require extending SuggestModal properly
+    new Notice('File attachment: Type [[ to create a wiki link to any note in your vault');
+    inputEl.value += '[[';
+    inputEl.focus();
   }
 }
