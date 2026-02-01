@@ -506,7 +506,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=['*'],  # Allow requests from any origin (including Obsidian)
         allow_credentials=True,
-        allow_methods=['GET', 'POST', 'PUT', 'DELETE'],
+        allow_methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],  # Include OPTIONS and PATCH
         allow_headers=['*'],
     )
 
@@ -533,8 +533,8 @@ def create_app() -> FastAPI:
     # Browser workflows router (optional - only if playwright is available)
     if BROWSER_WORKFLOWS_AVAILABLE and browser_workflows:
         app.include_router(
-            browser_workflows.router, prefix='/api/workflows', tags=['workflows']
-        )  # Browser workflow management
+            browser_workflows.router, tags=['workflows']
+        )  # Browser workflow management (router already has /api/workflows prefix)
     
     app.include_router(config_router.router, prefix='/config', tags=['config'])
     app.include_router(operations.router, prefix='/operations', tags=['operations'])

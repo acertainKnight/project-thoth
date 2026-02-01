@@ -7,16 +7,28 @@ if (typeof process !== 'undefined' && !Platform.isMobile) {
   spawn = cp.spawn;
   ChildProcess = cp.ChildProcess;
 }
-import { promisify } from 'util';
-import * as fs from 'fs';
-import * as path from 'path';
+
+// Desktop-only utilities - loaded conditionally
+let execAsync: any = null;
+
+function initDesktopUtils() {
+  if (typeof process !== 'undefined' && !Platform.isMobile && typeof require !== 'undefined') {
+    try {
+      const util = require('util');
+      execAsync = util.promisify(exec);
+      return true;
+    } catch (error) {
+      console.warn('Desktop utilities not available:', error);
+      return false;
+    }
+  }
+  return false;
+}
 
 // Import modular components
 import { ThothSettings, ChatMessage, ChatSession, ChatWindowState, NotificationProgress, DEFAULT_SETTINGS } from './src/types';
 import { MultiChatModal, CommandsModal, InputModal, ConfirmModal } from './src/modals';
 import { APIUtilities } from './src/utils/api';
-
-const execAsync = promisify(exec);
 
 // Types and interfaces are now imported from ./src/types/
 
@@ -39,6 +51,9 @@ export default class ThothPlugin extends Plugin {
 
   async onload() {
     await this.loadSettings();
+
+    // Initialize desktop utilities if available
+    initDesktopUtils();
 
     // Mobile detection: auto-enable remote mode on mobile devices
     if (Platform.isMobile && !this.settings.remoteMode) {
@@ -150,8 +165,14 @@ export default class ThothPlugin extends Plugin {
   }
 
   public getEndpointUrl(): string {
-    // Use plugin's endpoint URL
+    // Use plugin's Thoth API endpoint URL (for research, discovery, etc.)
     const baseUrl = this.settings.remoteEndpointUrl || 'http://localhost:8000';
+    return baseUrl.replace(/\/$/, ''); // Remove trailing slash
+  }
+
+  public getLettaEndpointUrl(): string {
+    // Use plugin's Letta API endpoint URL (for agent chats)
+    const baseUrl = this.settings.lettaEndpointUrl || 'http://localhost:8284';
     return baseUrl.replace(/\/$/, ''); // Remove trailing slash
   }
 
@@ -2029,13 +2050,24 @@ class ThothSettingTab extends PluginSettingTab {
     
     if (this.plugin.settings.remoteMode) {
       new Setting(containerEl)
-        .setName('Remote Server URL')
-        .setDesc('URL of the remote Thoth server')
+        .setName('Thoth API URL')
+        .setDesc('URL of the Thoth API server (research, discovery, PDF processing)')
         .addText(text => text
           .setPlaceholder('http://localhost:8000')
           .setValue(this.plugin.settings.remoteEndpointUrl)
           .onChange(async (value) => {
             this.plugin.settings.remoteEndpointUrl = value;
+            await this.plugin.saveSettings();
+          }));
+
+      new Setting(containerEl)
+        .setName('Letta API URL')
+        .setDesc('URL of the Letta API server (agent chat functionality)')
+        .addText(text => text
+          .setPlaceholder('http://localhost:8284')
+          .setValue(this.plugin.settings.lettaEndpointUrl)
+          .onChange(async (value) => {
+            this.plugin.settings.lettaEndpointUrl = value;
             await this.plugin.saveSettings();
           }));
     }

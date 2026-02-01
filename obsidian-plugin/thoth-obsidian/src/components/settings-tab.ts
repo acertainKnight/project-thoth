@@ -71,18 +71,33 @@ export class SettingsTabComponent {
       cls: 'thoth-setting-description'
     });
 
-    // Server URL (when remote mode enabled)
+    // Server URLs (when remote mode enabled)
     if (this.settings.remoteMode) {
-      const endpointRow = section.createDiv({ cls: 'thoth-setting-row' });
-      endpointRow.createEl('label', { text: 'Server URL' });
-      const endpointInput = endpointRow.createEl('input', { type: 'text' });
-      endpointInput.value = this.settings.remoteEndpointUrl || 'http://localhost:8000';
-      endpointInput.placeholder = 'http://localhost:8000';
-      endpointInput.oninput = () => {
-        this.settings.remoteEndpointUrl = endpointInput.value;
+      // Thoth API Endpoint
+      const thothEndpointRow = section.createDiv({ cls: 'thoth-setting-row' });
+      thothEndpointRow.createEl('label', { text: 'Thoth API URL' });
+      const thothEndpointInput = thothEndpointRow.createEl('input', { type: 'text' });
+      thothEndpointInput.value = this.settings.remoteEndpointUrl || 'http://localhost:8000';
+      thothEndpointInput.placeholder = 'http://localhost:8000';
+      thothEndpointInput.oninput = () => {
+        this.settings.remoteEndpointUrl = thothEndpointInput.value;
       };
-      endpointRow.createEl('span', {
-        text: 'Thoth backend server URL (local: http://localhost:8000, remote: https://your-server:8284)',
+      thothEndpointRow.createEl('span', {
+        text: 'Thoth backend server for research/discovery (e.g., http://localhost:8000)',
+        cls: 'thoth-setting-description'
+      });
+
+      // Letta API Endpoint
+      const lettaEndpointRow = section.createDiv({ cls: 'thoth-setting-row' });
+      lettaEndpointRow.createEl('label', { text: 'Letta API URL' });
+      const lettaEndpointInput = lettaEndpointRow.createEl('input', { type: 'text' });
+      lettaEndpointInput.value = this.settings.lettaEndpointUrl || 'http://localhost:8284';
+      lettaEndpointInput.placeholder = 'http://localhost:8284';
+      lettaEndpointInput.oninput = () => {
+        this.settings.lettaEndpointUrl = lettaEndpointInput.value;
+      };
+      lettaEndpointRow.createEl('span', {
+        text: 'Letta backend server for AI agent chats (e.g., http://localhost:8284)',
         cls: 'thoth-setting-description'
       });
     }

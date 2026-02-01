@@ -1,5 +1,30 @@
-import { App, TFile, Vault } from 'obsidian';
-import * as path from 'path';
+import { App, TFile, Vault, Platform } from 'obsidian';
+
+// Mobile-compatible path utilities
+const PathUtil = {
+  join: (...parts: string[]): string => {
+    return parts.filter(p => p && p.length > 0)
+      .join('/')
+      .replace(/\/+/g, '/');
+  },
+  dirname: (filepath: string): string => {
+    const lastSlash = filepath.lastIndexOf('/');
+    return lastSlash === -1 ? '' : filepath.substring(0, lastSlash);
+  },
+  basename: (filepath: string): string => {
+    const lastSlash = filepath.lastIndexOf('/');
+    return lastSlash === -1 ? filepath : filepath.substring(lastSlash + 1);
+  },
+  resolve: (filepath: string): string => filepath,
+  relative: (from: string, to: string): string => {
+    const fromParts = from.split('/').filter(Boolean);
+    const toParts = to.split('/').filter(Boolean);
+    let i = 0;
+    while (i < fromParts.length && i < toParts.length && fromParts[i] === toParts[i]) i++;
+    const upCount = fromParts.length - i;
+    return Array(upCount).fill('..').concat(toParts.slice(i)).join('/');
+  }
+};
 
 /**
  * Vault detector interface
@@ -51,7 +76,7 @@ export class VaultDetector implements IVaultDetector {
    * Get the full path to the settings file
    */
   getSettingsFilePath(): string {
-    return path.join(this.currentVaultPath, this.settingsFileName);
+    return PathUtil.join(this.currentVaultPath, this.settingsFileName);
   }
 
   /**
@@ -105,7 +130,7 @@ export class VaultDetector implements IVaultDetector {
     // Method 2: Try to get from vault configuration
     try {
       if (this.app.vault.configDir) {
-        const vaultPath = path.dirname(this.app.vault.configDir);
+        const vaultPath = PathUtil.dirname(this.app.vault.configDir);
         return this.normalizePath(vaultPath);
       }
     } catch (error) {
@@ -138,7 +163,7 @@ export class VaultDetector implements IVaultDetector {
    */
   private normalizePath(dirPath: string): string {
     // Handle different path separators and resolve to absolute path
-    return path.resolve(dirPath);
+    return PathUtil.resolve(dirPath);
   }
 
   /**
@@ -202,6 +227,17 @@ export class VaultDetector implements IVaultDetector {
    * Check if settings file exists in the vault
    */
   async settingsFileExists(): Promise<boolean> {
+    // Mobile: use Vault API
+    if (Platform.isMobile) {
+      try {
+        const file = this.app.vault.getAbstractFileByPath(this.settingsFileName);
+        return file !== null;
+      } catch {
+        return false;
+      }
+    }
+
+    // Desktop: use fs if available
     try {
       const settingsPath = this.getSettingsFilePath();
       // Try to check if file exists using Node.js fs (if available)
@@ -219,6 +255,20 @@ export class VaultDetector implements IVaultDetector {
    * Create settings file if it doesn't exist
    */
   async createSettingsFile(initialSettings: any): Promise<boolean> {
+    // Mobile: use Vault API
+    if (Platform.isMobile) {
+      try {
+        const settingsContent = JSON.stringify(initialSettings, null, 2);
+        await this.app.vault.create(this.settingsFileName, settingsContent);
+        console.log(`Created settings file (mobile): ${this.settingsFileName}`);
+        return true;
+      } catch (error) {
+        console.error('Failed to create settings on mobile:', error);
+        return false;
+      }
+    }
+
+    // Desktop: use fs
     try {
       const settingsPath = this.getSettingsFilePath();
 
@@ -240,6 +290,21 @@ export class VaultDetector implements IVaultDetector {
    * Read settings from vault settings file
    */
   async readVaultSettings(): Promise<any | null> {
+    // Mobile: use Vault API
+    if (Platform.isMobile) {
+      try {
+        const file = this.app.vault.getAbstractFileByPath(this.settingsFileName);
+        if (file instanceof TFile) {
+          const content = await this.app.vault.read(file);
+          return JSON.parse(content);
+        }
+      } catch (error) {
+        console.warn('Could not read settings on mobile:', error);
+      }
+      return null;
+    }
+
+    // Desktop: use fs
     try {
       const settingsPath = this.getSettingsFilePath();
 
@@ -261,6 +326,25 @@ export class VaultDetector implements IVaultDetector {
    * Write settings to vault settings file
    */
   async writeVaultSettings(settings: any): Promise<boolean> {
+    // Mobile: use Vault API
+    if (Platform.isMobile) {
+      try {
+        const settingsContent = JSON.stringify(settings, null, 2);
+        const file = this.app.vault.getAbstractFileByPath(this.settingsFileName);
+        if (file instanceof TFile) {
+          await this.app.vault.modify(file, settingsContent);
+        } else {
+          await this.app.vault.create(this.settingsFileName, settingsContent);
+        }
+        console.log(`Updated vault settings file (mobile): ${this.settingsFileName}`);
+        return true;
+      } catch (error) {
+        console.error('Failed to write settings on mobile:', error);
+        return false;
+      }
+    }
+
+    // Desktop: use fs
     try {
       const settingsPath = this.getSettingsFilePath();
 
@@ -282,14 +366,14 @@ export class VaultDetector implements IVaultDetector {
    * Get relative path from vault root
    */
   getRelativePathFromVault(absolutePath: string): string {
-    return path.relative(this.currentVaultPath, absolutePath);
+    return PathUtil.relative(this.currentVaultPath, absolutePath);
   }
 
   /**
    * Get absolute path from vault-relative path
    */
   getAbsolutePathFromVault(relativePath: string): string {
-    return path.join(this.currentVaultPath, relativePath);
+    return PathUtil.join(this.currentVaultPath, relativePath);
   }
 
   /**
@@ -321,7 +405,7 @@ export class VaultDetector implements IVaultDetector {
     hasSettings: boolean;
   } {
     const files = this.app.vault.getAllLoadedFiles();
-    const vaultName = path.basename(this.currentVaultPath) || 'Unknown';
+    const vaultName = PathUtil.basename(this.currentVaultPath) || 'Unknown';
 
     return {
       path: this.currentVaultPath,

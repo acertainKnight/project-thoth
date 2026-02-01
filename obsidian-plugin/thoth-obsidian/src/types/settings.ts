@@ -10,7 +10,8 @@ import { ChatMessage, ChatWindowState } from './index';
 export interface ThothSettings {
   // === CONNECTION ===
   remoteMode: boolean;              // True = connect to remote server, False = manage local agent (desktop only)
-  remoteEndpointUrl: string;        // Remote server URL (e.g., "http://localhost:8000")
+  remoteEndpointUrl: string;        // Thoth API URL for research/discovery (e.g., "http://localhost:8000")
+  lettaEndpointUrl: string;         // Letta API URL for agent chats (e.g., "http://localhost:8284")
   
   // === API KEYS (optional - for displaying in UI) ===
   apiKeys?: {
@@ -35,6 +36,7 @@ export interface ThothSettings {
   maxChatWindows: number;           // Max concurrent chat windows
   chatWindowStates: ChatWindowState[]; // Saved chat window states
   activeChatSessionId: string | null; // Currently active session
+  lettaAgentId: string | null;      // Cached Letta agent ID (avoids repeated fetches)
   
   // === UI PREFERENCES ===
   theme: 'auto' | 'light' | 'dark';
@@ -47,7 +49,8 @@ export interface ThothSettings {
 export const DEFAULT_SETTINGS: ThothSettings = {
   // Connection
   remoteMode: true,                 // Default to remote mode (works on desktop + mobile)
-  remoteEndpointUrl: 'http://localhost:8000',
+  remoteEndpointUrl: 'http://localhost:8000',  // Thoth API
+  lettaEndpointUrl: 'http://localhost:8284',   // Letta API
   
   // API Keys (empty by default - backend reads from vault/_thoth/settings.json)
   apiKeys: {},
@@ -66,6 +69,7 @@ export const DEFAULT_SETTINGS: ThothSettings = {
   maxChatWindows: 5,
   chatWindowStates: [],
   activeChatSessionId: null,
+  lettaAgentId: null,
   
   // UI Preferences
   theme: 'auto',

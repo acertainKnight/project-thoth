@@ -7,6 +7,9 @@ var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
@@ -21,6 +24,60 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
+// src/modals/input-modal.ts
+var input_modal_exports = {};
+__export(input_modal_exports, {
+  InputModal: () => InputModal
+});
+var import_obsidian, InputModal;
+var init_input_modal = __esm({
+  "src/modals/input-modal.ts"() {
+    import_obsidian = require("obsidian");
+    InputModal = class extends import_obsidian.Modal {
+      constructor(app, promptText, resolve) {
+        super(app);
+        this.promptText = promptText;
+        this.resolve = resolve;
+      }
+      onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
+        contentEl.createEl("h3", { text: this.promptText });
+        this.inputEl = contentEl.createEl("input", { type: "text" });
+        this.inputEl.style.cssText = "width: 100%; padding: 8px; margin: 10px 0; border: 1px solid var(--background-modifier-border); border-radius: 4px;";
+        this.inputEl.focus();
+        const buttonContainer = contentEl.createEl("div");
+        buttonContainer.style.cssText = "display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;";
+        const cancelButton = buttonContainer.createEl("button", { text: "Cancel" });
+        cancelButton.style.cssText = "padding: 8px 16px; border: 1px solid var(--background-modifier-border); background: var(--background-secondary); border-radius: 4px;";
+        cancelButton.onclick = () => {
+          this.resolve(null);
+          this.close();
+        };
+        const okButton = buttonContainer.createEl("button", { text: "OK" });
+        okButton.style.cssText = "padding: 8px 16px; background: var(--interactive-accent); color: var(--text-on-accent); border: none; border-radius: 4px;";
+        okButton.onclick = () => {
+          this.resolve(this.inputEl.value.trim() || null);
+          this.close();
+        };
+        this.inputEl.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            this.resolve(this.inputEl.value.trim() || null);
+            this.close();
+          } else if (e.key === "Escape") {
+            this.resolve(null);
+            this.close();
+          }
+        });
+      }
+      onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
+      }
+    };
+  }
+});
+
 // main.ts
 var main_exports = {};
 __export(main_exports, {
@@ -28,7 +85,6 @@ __export(main_exports, {
 });
 module.exports = __toCommonJS(main_exports);
 var import_obsidian7 = require("obsidian");
-var import_util = require("util");
 
 // src/types/settings.ts
 var DEFAULT_SETTINGS = {
@@ -36,6 +92,9 @@ var DEFAULT_SETTINGS = {
   remoteMode: true,
   // Default to remote mode (works on desktop + mobile)
   remoteEndpointUrl: "http://localhost:8000",
+  // Thoth API
+  lettaEndpointUrl: "http://localhost:8284",
+  // Letta API
   // API Keys (empty by default - backend reads from vault/_thoth/settings.json)
   apiKeys: {},
   // Plugin Behavior
@@ -51,6 +110,7 @@ var DEFAULT_SETTINGS = {
   maxChatWindows: 5,
   chatWindowStates: [],
   activeChatSessionId: null,
+  lettaAgentId: null,
   // UI Preferences
   theme: "auto",
   compactMode: false,
@@ -60,10 +120,11 @@ var DEFAULT_SETTINGS = {
 };
 
 // src/modals/multi-chat-modal.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 
 // src/components/research-tab.ts
-var import_obsidian = require("obsidian");
+var import_obsidian2 = require("obsidian");
+init_input_modal();
 var ResearchTabComponent = class {
   constructor(containerEl, plugin) {
     this.questions = [];
@@ -108,11 +169,11 @@ var ResearchTabComponent = class {
       } else {
         const errorText = await response.text();
         console.error("[ResearchTab] API error:", response.status, errorText);
-        new import_obsidian.Notice(`Failed to load research questions: ${response.status}`);
+        new import_obsidian2.Notice(`Failed to load research questions: ${response.status}`);
       }
     } catch (error) {
       console.error("[ResearchTab] Failed to load research questions:", error);
-      new import_obsidian.Notice("Failed to load research questions");
+      new import_obsidian2.Notice("Failed to load research questions");
     }
   }
   renderQuestionsSection(container) {
@@ -240,10 +301,11 @@ var ResearchTabComponent = class {
       });
     }
     if (article.abstract) {
+      const abstractText = article.abstract;
       const abstractContainer = card.createDiv({ cls: "thoth-abstract-container" });
-      const needsTruncation = article.abstract.length > 200;
+      const needsTruncation = abstractText.length > 200;
       const abstract = abstractContainer.createEl("p", {
-        text: needsTruncation ? article.abstract.slice(0, 200) + "..." : article.abstract,
+        text: needsTruncation ? abstractText.slice(0, 200) + "..." : abstractText,
         cls: "thoth-article-abstract"
       });
       if (needsTruncation) {
@@ -255,7 +317,7 @@ var ResearchTabComponent = class {
         toggleBtn.onclick = (e) => {
           e.stopPropagation();
           isExpanded = !isExpanded;
-          abstract.setText(isExpanded ? article.abstract : article.abstract.slice(0, 200) + "...");
+          abstract.setText(isExpanded ? abstractText : abstractText.slice(0, 200) + "...");
           toggleBtn.setText(isExpanded ? "Show less" : "Show more");
         };
       }
@@ -267,16 +329,18 @@ var ResearchTabComponent = class {
       });
     }
     const actions = card.createDiv({ cls: "thoth-article-actions" });
-    const downloadBtn = actions.createEl("button", {
-      text: "\u2B07 PDF",
-      cls: "thoth-action-btn"
-    });
-    downloadBtn.onclick = () => this.downloadArticle(article);
+    if (article.pdf_url) {
+      const downloadBtn = actions.createEl("button", {
+        text: "\u2B07 PDF",
+        cls: "thoth-action-btn"
+      });
+      downloadBtn.onclick = () => this.downloadArticle(article);
+    }
     const viewBtn = actions.createEl("button", {
       text: "\u{1F441} View",
       cls: `thoth-action-btn ${article.is_viewed ? "active" : ""}`
     });
-    viewBtn.onclick = () => this.toggleViewed(article);
+    viewBtn.onclick = () => this.viewArticle(article);
     const ratingGroup = actions.createDiv({ cls: "thoth-rating-group" });
     const likeBtn = ratingGroup.createEl("button", {
       text: "\u{1F44D}",
@@ -310,7 +374,7 @@ var ResearchTabComponent = class {
       }
     } catch (error) {
       console.error("[ResearchTab] Failed to load articles:", error);
-      new import_obsidian.Notice("Failed to load articles");
+      new import_obsidian2.Notice("Failed to load articles");
     }
   }
   async selectQuestion(question) {
@@ -331,13 +395,13 @@ var ResearchTabComponent = class {
       if (response.ok) {
         article.user_sentiment = sentiment;
         await this.render();
-        new import_obsidian.Notice(`Marked as ${sentiment}`);
+        new import_obsidian2.Notice(`Marked as ${sentiment}`);
       } else {
         throw new Error("Failed to rate article");
       }
     } catch (error) {
       console.error("Error rating article:", error);
-      new import_obsidian.Notice("Failed to rate article");
+      new import_obsidian2.Notice("Failed to rate article");
     }
   }
   async toggleViewed(article) {
@@ -360,7 +424,7 @@ var ResearchTabComponent = class {
       }
     } catch (error) {
       console.error("Error updating viewed status:", error);
-      new import_obsidian.Notice("Failed to update status");
+      new import_obsidian2.Notice("Failed to update status");
     }
   }
   async toggleBookmark(article) {
@@ -378,19 +442,19 @@ var ResearchTabComponent = class {
       if (response.ok) {
         article.is_bookmarked = newValue;
         await this.render();
-        new import_obsidian.Notice(newValue ? "Bookmarked" : "Removed bookmark");
+        new import_obsidian2.Notice(newValue ? "Bookmarked" : "Removed bookmark");
       } else {
         throw new Error("Failed to update bookmark");
       }
     } catch (error) {
       console.error("Error updating bookmark:", error);
-      new import_obsidian.Notice("Failed to update bookmark");
+      new import_obsidian2.Notice("Failed to update bookmark");
     }
   }
   async saveArticle(article) {
     try {
       if (!article.pdf_url) {
-        new import_obsidian.Notice("No PDF URL available for this article");
+        new import_obsidian2.Notice("No PDF URL available for this article");
         return;
       }
       const endpoint = this.plugin.getEndpointUrl();
@@ -403,7 +467,7 @@ var ResearchTabComponent = class {
       );
       if (response.ok) {
         const result = await response.json();
-        new import_obsidian.Notice(`PDF downloaded! File monitor will process automatically.`);
+        new import_obsidian2.Notice(`PDF downloaded! File monitor will process automatically.`);
         article.is_bookmarked = true;
         article.is_viewed = true;
         await this.render();
@@ -414,7 +478,7 @@ var ResearchTabComponent = class {
       }
     } catch (error) {
       console.error("Error saving article:", error);
-      new import_obsidian.Notice(`Failed to save article: ${error.message}`);
+      new import_obsidian2.Notice(`Failed to save article: ${error.message}`);
     }
   }
   async downloadArticle(article) {
@@ -424,37 +488,45 @@ var ResearchTabComponent = class {
     if (!article.is_viewed) {
       await this.toggleViewed(article);
     }
-    if (article.doi) {
-      window.open(`https://doi.org/${article.doi}`, "_blank");
-    } else if (article.pdf_url) {
-      window.open(article.pdf_url, "_blank");
+    const url = article.doi ? `https://doi.org/${article.doi}` : article.pdf_url;
+    if (url) {
+      try {
+        require("electron").shell.openExternal(url);
+      } catch (error) {
+        console.warn("electron.shell not available, using window.open");
+        window.open(url, "_blank");
+      }
     } else {
-      new import_obsidian.Notice("No URL available for this article");
+      new import_obsidian2.Notice("No URL available for this article");
     }
   }
   async runDiscovery(questionId) {
     try {
       const endpoint = this.plugin.getEndpointUrl();
       const response = await fetch(
-        `${endpoint}/api/research/questions/${questionId}/discover`,
+        `${endpoint}/api/research/questions/${questionId}/run`,
         { method: "POST" }
       );
       if (response.ok) {
-        new import_obsidian.Notice("Discovery started - check back in a few minutes");
+        new import_obsidian2.Notice("Discovery started - check back in a few minutes");
         setTimeout(() => this.refresh(), 3e3);
       } else {
         throw new Error("Failed to run discovery");
       }
     } catch (error) {
       console.error("Error running discovery:", error);
-      new import_obsidian.Notice("Failed to run discovery");
+      new import_obsidian2.Notice("Failed to run discovery");
     }
   }
   async createNewQuestion() {
-    const name = prompt("Enter research question name:");
+    const name = await new Promise((resolve) => {
+      new InputModal(this.plugin.app, "Enter research question name:", resolve).open();
+    });
     if (!name)
       return;
-    const keywords = prompt("Enter keywords (comma-separated):");
+    const keywords = await new Promise((resolve) => {
+      new InputModal(this.plugin.app, "Enter keywords (comma-separated):", resolve).open();
+    });
     if (!keywords)
       return;
     const keywordsList = keywords.split(",").map((k) => k.trim()).filter((k) => k);
@@ -478,7 +550,7 @@ var ResearchTabComponent = class {
         })
       });
       if (response.ok) {
-        new import_obsidian.Notice("Research question created!");
+        new import_obsidian2.Notice("Research question created!");
         await this.refresh();
       } else {
         const error = await response.json();
@@ -486,7 +558,7 @@ var ResearchTabComponent = class {
       }
     } catch (error) {
       console.error("Error creating research question:", error);
-      new import_obsidian.Notice(`Failed to create research question: ${error.message}`);
+      new import_obsidian2.Notice(`Failed to create research question: ${error.message}`);
     }
   }
   async filterArticles(filter) {
@@ -508,7 +580,7 @@ var ResearchTabComponent = class {
   }
   async refresh() {
     await this.render();
-    new import_obsidian.Notice("Refreshed");
+    new import_obsidian2.Notice("Refreshed");
   }
   getTimeAgo(date) {
     const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1e3);
@@ -532,12 +604,12 @@ var ResearchTabComponent = class {
       cls: "thoth-create-btn"
     });
     createBtn.onclick = () => {
-      new import_obsidian.Notice("Browser workflow creation coming soon! Use backend API for now.");
+      new import_obsidian2.Notice("Browser workflow creation coming soon! Use backend API for now.");
     };
     const workflowsList = section.createDiv({ cls: "thoth-workflows-list" });
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/browser-workflows`);
+      const response = await fetch(`${endpoint}/api/workflows`);
       if (response.ok) {
         const workflows = await response.json();
         if (workflows.length === 0) {
@@ -584,12 +656,12 @@ var ResearchTabComponent = class {
     runBtn.onclick = async () => {
       try {
         const endpoint = this.plugin.getEndpointUrl();
-        await fetch(`${endpoint}/browser-workflows/${workflow.id}/execute`, {
+        await fetch(`${endpoint}/api/workflows/${workflow.id}/execute`, {
           method: "POST"
         });
-        new import_obsidian.Notice(`Executing workflow: ${workflow.name}`);
+        new import_obsidian2.Notice(`Executing workflow: ${workflow.name}`);
       } catch (error) {
-        new import_obsidian.Notice("Failed to execute workflow");
+        new import_obsidian2.Notice("Failed to execute workflow");
       }
     };
   }
@@ -605,7 +677,7 @@ var ResearchTabComponent = class {
       "Search Knowledge Base",
       "Search your processed articles and notes",
       () => {
-        new import_obsidian.Notice("Opening knowledge base search...");
+        new import_obsidian2.Notice("Opening knowledge base search...");
       }
     );
     this.createQuickAction(
@@ -614,7 +686,7 @@ var ResearchTabComponent = class {
       "Process PDF",
       "Upload and process a new research paper",
       () => {
-        new import_obsidian.Notice("PDF processing UI coming soon! Drop PDFs in your vault/_thoth/data/pdfs folder.");
+        new import_obsidian2.Notice("PDF processing UI coming soon! Drop PDFs in your vault/_thoth/data/pdfs folder.");
       }
     );
     this.createQuickAction(
@@ -626,12 +698,15 @@ var ResearchTabComponent = class {
         try {
           const endpoint = this.plugin.getEndpointUrl();
           const response = await fetch(`${endpoint}/health`);
-          if (response.ok) {
+          if (response.ok || response.status === 503) {
             const data = await response.json();
-            new import_obsidian.Notice(`System healthy. Articles: ${data.article_count || "N/A"}`);
+            const status = data.healthy ? "\u2713 Healthy" : "\u26A0 Partially Degraded";
+            new import_obsidian2.Notice(`System: ${status}. Services: ${Object.keys(data.services || {}).length}`);
+          } else {
+            new import_obsidian2.Notice(`Unable to fetch health status (${response.status})`);
           }
         } catch (error) {
-          new import_obsidian.Notice("Unable to fetch statistics");
+          new import_obsidian2.Notice("Unable to connect to backend");
         }
       }
     );
@@ -665,7 +740,7 @@ var ResearchTabComponent = class {
       const notePath = `${folderPath}/${filename}.md`;
       const existingFile = vault.getAbstractFileByPath(notePath);
       if (existingFile) {
-        new import_obsidian.Notice("Note already exists! Opening it...");
+        new import_obsidian2.Notice("Note already exists! Opening it...");
         const leaf = this.plugin.app.workspace.getLeaf(false);
         await leaf.openFile(existingFile);
         return;
@@ -720,7 +795,7 @@ ${((_c = article.matched_keywords) == null ? void 0 : _c.map((k) => `- ${k}`).jo
       if (!article.is_bookmarked) {
         await this.toggleBookmark(article);
       }
-      new import_obsidian.Notice(`Note created: ${filename}`);
+      new import_obsidian2.Notice(`Note created: ${filename}`);
       const file = vault.getAbstractFileByPath(notePath);
       if (file) {
         const leaf = this.plugin.app.workspace.getLeaf(false);
@@ -728,7 +803,7 @@ ${((_c = article.matched_keywords) == null ? void 0 : _c.map((k) => `- ${k}`).jo
       }
     } catch (error) {
       console.error("Error creating note from article:", error);
-      new import_obsidian.Notice("Failed to create note");
+      new import_obsidian2.Notice("Failed to create note");
     }
   }
   sanitizeFilename(title) {
@@ -740,7 +815,7 @@ ${((_c = article.matched_keywords) == null ? void 0 : _c.map((k) => `- ${k}`).jo
 };
 
 // src/components/settings-tab.ts
-var import_obsidian2 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 var SettingsTabComponent = class {
   constructor(containerEl, plugin) {
     this.containerEl = containerEl;
@@ -757,7 +832,7 @@ var SettingsTabComponent = class {
       cls: "thoth-settings-description"
     });
     this.renderConnectionSection(settingsContainer);
-    if (!import_obsidian2.Platform.isMobile) {
+    if (!import_obsidian3.Platform.isMobile) {
       this.renderPluginBehaviorSection(settingsContainer);
     }
     this.renderUIPreferencesSection(settingsContainer);
@@ -784,16 +859,28 @@ var SettingsTabComponent = class {
       cls: "thoth-setting-description"
     });
     if (this.settings.remoteMode) {
-      const endpointRow = section.createDiv({ cls: "thoth-setting-row" });
-      endpointRow.createEl("label", { text: "Server URL" });
-      const endpointInput = endpointRow.createEl("input", { type: "text" });
-      endpointInput.value = this.settings.remoteEndpointUrl || "http://localhost:8000";
-      endpointInput.placeholder = "http://localhost:8000";
-      endpointInput.oninput = () => {
-        this.settings.remoteEndpointUrl = endpointInput.value;
+      const thothEndpointRow = section.createDiv({ cls: "thoth-setting-row" });
+      thothEndpointRow.createEl("label", { text: "Thoth API URL" });
+      const thothEndpointInput = thothEndpointRow.createEl("input", { type: "text" });
+      thothEndpointInput.value = this.settings.remoteEndpointUrl || "http://localhost:8000";
+      thothEndpointInput.placeholder = "http://localhost:8000";
+      thothEndpointInput.oninput = () => {
+        this.settings.remoteEndpointUrl = thothEndpointInput.value;
       };
-      endpointRow.createEl("span", {
-        text: "Thoth backend server URL (local: http://localhost:8000, remote: https://your-server:8284)",
+      thothEndpointRow.createEl("span", {
+        text: "Thoth backend server for research/discovery (e.g., http://localhost:8000)",
+        cls: "thoth-setting-description"
+      });
+      const lettaEndpointRow = section.createDiv({ cls: "thoth-setting-row" });
+      lettaEndpointRow.createEl("label", { text: "Letta API URL" });
+      const lettaEndpointInput = lettaEndpointRow.createEl("input", { type: "text" });
+      lettaEndpointInput.value = this.settings.lettaEndpointUrl || "http://localhost:8284";
+      lettaEndpointInput.placeholder = "http://localhost:8284";
+      lettaEndpointInput.oninput = () => {
+        this.settings.lettaEndpointUrl = lettaEndpointInput.value;
+      };
+      lettaEndpointRow.createEl("span", {
+        text: "Letta backend server for AI agent chats (e.g., http://localhost:8284)",
         cls: "thoth-setting-description"
       });
     }
@@ -812,7 +899,7 @@ var SettingsTabComponent = class {
     info.createEl("p", {
       text: "Edit that file directly or use the setup wizard to configure backend settings."
     });
-    if (!import_obsidian2.Platform.isMobile) {
+    if (!import_obsidian3.Platform.isMobile) {
       const openBtn = section.createEl("button", {
         text: "\u{1F4DD} Open Backend Settings File",
         cls: "thoth-open-backend-settings-btn"
@@ -823,9 +910,9 @@ var SettingsTabComponent = class {
         const { exec: exec2 } = require("child_process");
         exec2(`xdg-open "${settingsPath}" || open "${settingsPath}" || start "" "${settingsPath}"`, (error) => {
           if (error) {
-            new import_obsidian2.Notice("Could not open settings file. Open manually at: _thoth/settings.json");
+            new import_obsidian3.Notice("Could not open settings file. Open manually at: _thoth/settings.json");
           } else {
-            new import_obsidian2.Notice("Opening backend settings file...");
+            new import_obsidian3.Notice("Opening backend settings file...");
           }
         });
       };
@@ -893,16 +980,16 @@ var SettingsTabComponent = class {
   async saveSettings() {
     try {
       await this.plugin.saveSettings();
-      new import_obsidian2.Notice("Settings saved successfully!");
+      new import_obsidian3.Notice("Settings saved successfully!");
     } catch (error) {
       console.error("Failed to save settings:", error);
-      new import_obsidian2.Notice("Failed to save settings");
+      new import_obsidian3.Notice("Failed to save settings");
     }
   }
 };
 
 // src/modals/multi-chat-modal.ts
-var MultiChatModal = class extends import_obsidian3.Modal {
+var MultiChatModal = class extends import_obsidian4.Modal {
   constructor(app, plugin) {
     super(app);
     this.chatSessions = [];
@@ -910,27 +997,32 @@ var MultiChatModal = class extends import_obsidian3.Modal {
     this.chatWindows = /* @__PURE__ */ new Map();
     // Tab system
     this.currentTab = "chat";
-    this.cachedAgentId = null;
     this.plugin = plugin;
   }
   /**
    * Fetch with timeout to prevent UI from hanging
    */
-  async fetchWithTimeout(url, options = {}, timeoutMs = 1e4) {
+  async fetchWithTimeout(url, options = {}, timeoutMs = 3e4) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
+      console.log(`[MultiChatModal] Fetching: ${url}`);
+      const startTime = Date.now();
       const response = await fetch(url, {
         ...options,
         signal: controller.signal
       });
+      const duration = Date.now() - startTime;
+      console.log(`[MultiChatModal] Response ${response.status} in ${duration}ms`);
       clearTimeout(timeoutId);
       return response;
     } catch (error) {
       clearTimeout(timeoutId);
       if (error.name === "AbortError") {
-        throw new Error("Request timed out - server may be down or slow");
+        console.error(`[MultiChatModal] Request timed out after ${timeoutMs}ms:`, url);
+        throw new Error(`Request timed out after ${timeoutMs / 1e3}s - check network connection`);
       }
+      console.error(`[MultiChatModal] Fetch error:`, error);
       throw error;
     }
   }
@@ -943,9 +1035,18 @@ var MultiChatModal = class extends import_obsidian3.Modal {
     this.createLayout();
     this.renderSessionList();
     if (this.plugin.settings.activeChatSessionId) {
-      await this.switchToSession(this.plugin.settings.activeChatSessionId);
+      const sessionExists = this.chatSessions.find((s) => s.id === this.plugin.settings.activeChatSessionId);
+      if (sessionExists) {
+        await this.switchToSession(this.plugin.settings.activeChatSessionId);
+      } else if (this.chatSessions.length > 0) {
+        await this.switchToSession(this.chatSessions[0].id);
+      } else {
+        await this.createNewSession("Default Chat");
+      }
+    } else if (this.chatSessions.length > 0) {
+      await this.switchToSession(this.chatSessions[0].id);
     } else {
-      await this.createNewSession();
+      await this.createNewSession("Default Chat");
     }
     this.makeDraggable();
     this.setupKeyboardShortcuts();
@@ -1159,7 +1260,7 @@ var MultiChatModal = class extends import_obsidian3.Modal {
       button.onclick = () => this.switchTab(tab.id);
     });
   }
-  switchTab(tabId) {
+  async switchTab(tabId) {
     this.tabContainer.querySelectorAll(".thoth-tab-button").forEach((btn, index) => {
       if (index === ["chat", "conversations", "research", "settings"].indexOf(tabId)) {
         btn.addClass("active");
@@ -1168,9 +1269,9 @@ var MultiChatModal = class extends import_obsidian3.Modal {
       }
     });
     this.currentTab = tabId;
-    this.renderTabContent();
+    await this.renderTabContent();
   }
-  renderTabContent() {
+  async renderTabContent() {
     if (!this.contentContainer)
       return;
     this.contentContainer.empty();
@@ -1182,7 +1283,7 @@ var MultiChatModal = class extends import_obsidian3.Modal {
         this.renderConversationsTab();
         break;
       case "research":
-        this.renderResearchTab();
+        await this.renderResearchTab();
         break;
       case "settings":
         this.renderSettingsTab();
@@ -1206,15 +1307,6 @@ var MultiChatModal = class extends import_obsidian3.Modal {
     const controlsSection = topBar.createEl("div", { cls: "chat-controls-section" });
     const statusIndicator = controlsSection.createEl("div", { cls: "connection-status" });
     this.updateConnectionStatus(statusIndicator);
-    const settingsBtn = controlsSection.createEl("button", {
-      text: "\u2699\uFE0F",
-      cls: "settings-btn",
-      title: "Settings",
-      attr: { "aria-label": "Settings" }
-    });
-    settingsBtn.onclick = () => {
-      this.switchTab("settings");
-    };
     const chatArea = this.contentContainer.createEl("div", { cls: "chat-area modern" });
     this.chatContentContainer = chatArea.createEl("div", { cls: "chat-content" });
     if (this.activeSessionId) {
@@ -1243,17 +1335,17 @@ var MultiChatModal = class extends import_obsidian3.Modal {
     };
   }
   showConnectionDetails() {
-    const endpoint = this.plugin.getEndpointUrl();
+    const lettaEndpoint = this.plugin.getLettaEndpointUrl();
     const isConnected = this.plugin.isAgentRunning || this.plugin.settings.remoteMode;
     const mode = this.plugin.settings.remoteMode ? "Remote" : "Local";
     const details = `
 Connection Status: ${isConnected ? "Connected" : "Disconnected"}
 Mode: ${mode}
-Endpoint: ${endpoint}
+Chat Endpoint: ${lettaEndpoint}
 
-${isConnected ? "\u2713 Ready to chat" : "\u26A0 Start the Thoth server to begin"}
+${isConnected ? "\u2713 Ready to chat with Letta" : "\u26A0 Start the Letta server to begin"}
     `.trim();
-    new import_obsidian3.Notice(details, 5e3);
+    new import_obsidian4.Notice(details, 5e3);
   }
   // Removed old tab methods (commands, tools, status)
   // These features are now available through:
@@ -1286,8 +1378,8 @@ ${isConnected ? "\u2713 Ready to chat" : "\u26A0 Start the Thoth server to begin
     try {
       container.empty();
       const loadingEl = container.createEl("div", { text: "Loading agents...", cls: "loading" });
-      const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/agents/list`);
+      const endpoint = this.plugin.getLettaEndpointUrl();
+      const response = await fetch(`${endpoint}/v1/agents/`);
       loadingEl.remove();
       if (response.ok) {
         const data = await response.json();
@@ -1377,7 +1469,7 @@ ${isConnected ? "\u2713 Ready to chat" : "\u26A0 Start the Thoth server to begin
     const sessionId = agentName;
     if (confirm(`Delete this conversation? This action cannot be undone.`)) {
       try {
-        const endpoint = this.plugin.getEndpointUrl();
+        const endpoint = this.plugin.getLettaEndpointUrl();
         const response = await fetch(`${endpoint}/v1/conversations/${sessionId}`, {
           method: "DELETE"
         });
@@ -1389,13 +1481,13 @@ ${isConnected ? "\u2713 Ready to chat" : "\u26A0 Start the Thoth server to begin
             await this.plugin.saveSettings();
           }
           await this.loadChatSessions();
-          new import_obsidian3.Notice("Conversation deleted");
+          new import_obsidian4.Notice("Conversation deleted");
         } else {
           throw new Error("Failed to delete conversation");
         }
       } catch (error) {
         console.error("Error deleting conversation:", error);
-        new import_obsidian3.Notice("Failed to delete conversation");
+        new import_obsidian4.Notice("Failed to delete conversation");
       }
     }
   }
@@ -2009,9 +2101,9 @@ ${isConnected ? "\u2713 Ready to chat" : "\u26A0 Start the Thoth server to begin
   }
   async loadChatSessions() {
     try {
-      const endpoint = this.plugin.getEndpointUrl();
+      const endpoint = this.plugin.getLettaEndpointUrl();
       const agentId = await this.getOrCreateDefaultAgent();
-      const response = await this.fetchWithTimeout(`${endpoint}/v1/conversations?agent_id=${agentId}&limit=50`);
+      const response = await this.fetchWithTimeout(`${endpoint}/v1/conversations/?agent_id=${agentId}&limit=50`);
       if (response.ok) {
         const conversations = await response.json();
         this.chatSessions = conversations.map((conv) => ({
@@ -2034,19 +2126,25 @@ ${isConnected ? "\u2713 Ready to chat" : "\u26A0 Start the Thoth server to begin
     }
   }
   async getOrCreateDefaultAgent() {
-    if (this.cachedAgentId) {
-      return this.cachedAgentId;
+    if (this.plugin.settings.lettaAgentId) {
+      console.log("[MultiChatModal] Using cached agent ID:", this.plugin.settings.lettaAgentId);
+      return this.plugin.settings.lettaAgentId;
     }
+    console.log("[MultiChatModal] No cached agent ID, fetching from server...");
     try {
-      const endpoint = this.plugin.getEndpointUrl();
-      const listResponse = await this.fetchWithTimeout(`${endpoint}/v1/agents?limit=100`);
+      const endpoint = this.plugin.getLettaEndpointUrl();
+      const listResponse = await this.fetchWithTimeout(`${endpoint}/v1/agents/`);
       if (listResponse.ok) {
         const agents = await listResponse.json();
-        const thothAgent = agents.find((a) => a.name === "thoth_research_agent");
+        console.log("[MultiChatModal] Found agents:", agents.map((a) => a.name));
+        const thothAgent = agents.find((a) => a.name === "thoth_main_orchestrator");
         if (thothAgent) {
-          this.cachedAgentId = thothAgent.id;
+          this.plugin.settings.lettaAgentId = thothAgent.id;
+          await this.plugin.saveSettings();
+          console.log("[MultiChatModal] Cached agent ID for future use:", thothAgent.id);
           return thothAgent.id;
         }
+        console.error("[MultiChatModal] thoth_main_orchestrator not found. Available agents:", agents.map((a) => a.name));
       }
       throw new Error("Thoth orchestrator agent not found. Please ensure the Thoth backend is running and has initialized agents.");
     } catch (error) {
@@ -2134,16 +2232,18 @@ ${isConnected ? "\u2713 Ready to chat" : "\u26A0 Start the Thoth server to begin
   }
   async createNewSession(title) {
     try {
-      const sessionTitle = title || `Chat ${this.chatSessions.length + 1}`;
-      const endpoint = this.plugin.getEndpointUrl();
+      let sessionTitle = title;
+      if (!sessionTitle) {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+        sessionTitle = `New Chat - ${timeStr}`;
+      }
+      const endpoint = this.plugin.getLettaEndpointUrl();
       const agentId = await this.getOrCreateDefaultAgent();
-      const response = await fetch(`${endpoint}/v1/conversations`, {
+      const response = await fetch(`${endpoint}/v1/conversations/?agent_id=${agentId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          agent_id: agentId,
-          summary: sessionTitle
-        })
+        body: JSON.stringify({})
       });
       if (response.ok) {
         const conversation = await response.json();
@@ -2161,13 +2261,15 @@ ${isConnected ? "\u2713 Ready to chat" : "\u26A0 Start the Thoth server to begin
         this.renderSessionList();
         await this.switchToSession(newSession.id);
         this.closeSidebar();
-        new import_obsidian3.Notice(`Created new chat: ${sessionTitle}`);
+        new import_obsidian4.Notice(`Created: ${sessionTitle}`);
       } else {
-        throw new Error("Failed to create session");
+        const errorText = await response.text();
+        console.error(`[MultiChatModal] Failed to create session: ${response.status}`, errorText);
+        throw new Error(`Failed to create session: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
-      console.error("Error creating session:", error);
-      new import_obsidian3.Notice("Failed to create new chat session");
+      console.error("[MultiChatModal] Error creating session:", error);
+      new import_obsidian4.Notice(`Failed to create new chat session: ${error.message}`);
     }
   }
   async switchToSession(sessionId) {
@@ -2181,7 +2283,7 @@ ${isConnected ? "\u2713 Ready to chat" : "\u26A0 Start the Thoth server to begin
   async loadChatMessages(sessionId) {
     this.chatContentContainer.empty();
     try {
-      const endpoint = this.plugin.getEndpointUrl();
+      const endpoint = this.plugin.getLettaEndpointUrl();
       const response = await fetch(`${endpoint}/v1/conversations/${sessionId}/messages?limit=100`);
       if (response.ok) {
         const messages = await response.json();
@@ -2199,7 +2301,18 @@ ${isConnected ? "\u2713 Ready to chat" : "\u26A0 Start the Thoth server to begin
     const messagesContainer = this.chatContentContainer.createEl("div", {
       cls: "chat-messages"
     });
-    if (messages.length === 0) {
+    const chatMessages = messages.filter((msg) => {
+      const messageType = msg.message_type || msg.type;
+      if (messageType === "user_message" || messageType === "assistant_message") {
+        return true;
+      }
+      const role = msg.role;
+      if (role === "user" || role === "assistant") {
+        return true;
+      }
+      return false;
+    });
+    if (chatMessages.length === 0) {
       this.createEmptyState(
         messagesContainer,
         "\u{1F4AC}",
@@ -2208,8 +2321,11 @@ ${isConnected ? "\u2713 Ready to chat" : "\u26A0 Start the Thoth server to begin
         'Try: "Find recent papers on transformers"'
       );
     } else {
-      messages.forEach((msg) => {
-        this.addMessageToChat(messagesContainer, msg.role, msg.content);
+      chatMessages.forEach((msg) => {
+        const messageType = msg.message_type || msg.type;
+        const role = messageType === "user_message" ? "user" : messageType === "assistant_message" ? "assistant" : msg.role;
+        const content = msg.text || msg.content;
+        this.addMessageToChat(messagesContainer, role, content);
       });
     }
     const inputArea = this.chatContentContainer.createEl("div", {
@@ -2248,29 +2364,78 @@ ${isConnected ? "\u2713 Ready to chat" : "\u26A0 Start the Thoth server to begin
       sendBtn.textContent = "Sending...";
       const thinkingMsg = this.addThinkingIndicator(messagesContainer);
       try {
-        const endpoint = this.plugin.getEndpointUrl();
+        const endpoint = this.plugin.getLettaEndpointUrl();
         const response = await fetch(`${endpoint}/v1/conversations/${sessionId}/messages`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            role: "user",
-            text: message
+            input: message,
+            stream: true,
+            // Enable streaming for real-time token display
+            stream_tokens: true
+            // Stream individual tokens
           })
         });
-        if (response.ok) {
+        if (response.ok && response.body) {
           thinkingMsg.remove();
-          const result = await response.json();
-          const messages2 = Array.isArray(result) ? result : [result];
-          messages2.forEach((msg) => {
-            if (msg.role === "assistant") {
-              this.addMessageToChat(messagesContainer, "assistant", msg.text);
+          const messageAccumulator = /* @__PURE__ */ new Map();
+          let assistantMessageEl = null;
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done)
+              break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n\n");
+            buffer = lines.pop() || "";
+            for (const line of lines) {
+              if (!line.trim().startsWith("data:"))
+                continue;
+              const jsonStr = line.replace(/^data:\s*/, "").trim();
+              if (!jsonStr || jsonStr === "[DONE]")
+                continue;
+              try {
+                const msg = JSON.parse(jsonStr);
+                if (msg.message_type === "assistant_message") {
+                  const messageId = msg.id;
+                  const delta = msg.content || msg.text || "";
+                  if (delta && messageId) {
+                    const existing = messageAccumulator.get(messageId) || "";
+                    messageAccumulator.set(messageId, existing + delta);
+                    const fullContent = messageAccumulator.get(messageId) || "";
+                    if (!assistantMessageEl) {
+                      assistantMessageEl = messagesContainer.createEl("div", {
+                        cls: "chat-message assistant"
+                      });
+                      assistantMessageEl.createEl("div", {
+                        text: "Assistant",
+                        cls: "message-role"
+                      });
+                      assistantMessageEl.createEl("div", {
+                        text: "",
+                        cls: "message-content"
+                      });
+                    }
+                    const contentEl = assistantMessageEl.querySelector(".message-content");
+                    if (contentEl) {
+                      contentEl.textContent = fullContent;
+                    }
+                    this.scrollToBottom(messagesContainer, true);
+                  }
+                }
+              } catch (e) {
+                console.warn("[MultiChatModal] Failed to parse SSE message:", jsonStr.substring(0, 100));
+              }
             }
-          });
+          }
           await this.loadChatSessions();
           this.renderSessionList();
-          this.showToast("Message sent successfully", "success");
         } else {
-          throw new Error("Failed to send message");
+          const errorBody = await response.text();
+          console.error(`[MultiChatModal] Message send failed: ${response.status}`, errorBody);
+          throw new Error(`Failed to send message: ${response.status}`);
         }
       } catch (error) {
         console.error("Chat error:", error);
@@ -2348,11 +2513,20 @@ ${isConnected ? "\u2713 Ready to chat" : "\u26A0 Start the Thoth server to begin
     const session = this.chatSessions.find((s) => s.id === sessionId);
     if (!session)
       return;
-    const newTitle = prompt("Enter new title:", session.title);
+    const newTitle = await new Promise((resolve) => {
+      const modal = new (init_input_modal(), __toCommonJS(input_modal_exports)).InputModal(
+        this.plugin.app,
+        "Enter new session name:",
+        resolve,
+        session.title
+        // Default value
+      );
+      modal.open();
+    });
     if (!newTitle || newTitle === session.title)
       return;
     try {
-      const endpoint = this.plugin.getEndpointUrl();
+      const endpoint = this.plugin.getLettaEndpointUrl();
       const response = await fetch(`${endpoint}/v1/conversations/${sessionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -2361,13 +2535,13 @@ ${isConnected ? "\u2713 Ready to chat" : "\u26A0 Start the Thoth server to begin
       if (response.ok) {
         session.title = newTitle;
         this.renderSessionList();
-        new import_obsidian3.Notice("Session renamed");
+        new import_obsidian4.Notice("Session renamed");
       } else {
         throw new Error("Failed to rename session");
       }
     } catch (error) {
       console.error("Error renaming session:", error);
-      new import_obsidian3.Notice("Failed to rename session");
+      new import_obsidian4.Notice("Failed to rename session");
     }
   }
   detectAgentInteraction(message) {
@@ -2395,10 +2569,18 @@ ${isConnected ? "\u2713 Ready to chat" : "\u26A0 Start the Thoth server to begin
     const session = this.chatSessions.find((s) => s.id === sessionId);
     if (!session)
       return;
-    if (!confirm(`Delete "${session.title}"? This cannot be undone.`))
+    const confirmed = await new Promise((resolve) => {
+      const modal = new (init_input_modal(), __toCommonJS(input_modal_exports)).InputModal(
+        this.plugin.app,
+        `Delete "${session.title}"? Type "DELETE" to confirm:`,
+        (result) => resolve(result === "DELETE")
+      );
+      modal.open();
+    });
+    if (!confirmed)
       return;
     try {
-      const endpoint = this.plugin.getEndpointUrl();
+      const endpoint = this.plugin.getLettaEndpointUrl();
       const response = await fetch(`${endpoint}/v1/conversations/${sessionId}`, {
         method: "DELETE"
       });
@@ -2411,873 +2593,16 @@ ${isConnected ? "\u2713 Ready to chat" : "\u26A0 Start the Thoth server to begin
           this.renderEmptyState();
         }
         this.renderSessionList();
-        new import_obsidian3.Notice("Session deleted");
+        new import_obsidian4.Notice("Session deleted");
       } else {
         throw new Error("Failed to delete session");
       }
     } catch (error) {
       console.error("Error deleting session:", error);
-      new import_obsidian3.Notice("Failed to delete session");
+      new import_obsidian4.Notice("Failed to delete session");
     }
   }
   // Commands tab functionality (integrated from CommandsModal)
-  createAgentCommands(contentEl) {
-    const section = contentEl.createEl("div", { cls: "thoth-command-section" });
-    section.createEl("h3").innerHTML = "\u{1F916} Agent Management";
-    section.createEl("p", { text: "Control the Thoth research agent" });
-    const commandGrid = section.createEl("div", { cls: "thoth-command-grid" });
-    const commands = [
-      {
-        title: "Start Agent",
-        desc: "Launch the research agent",
-        action: () => this.plugin.startAgent()
-      },
-      {
-        title: "Stop Agent",
-        desc: "Stop the research agent",
-        action: () => this.plugin.stopAgent()
-      },
-      {
-        title: "Restart Agent",
-        desc: "Restart the research agent",
-        action: () => this.plugin.restartAgent()
-      },
-      {
-        title: "Agent Health Check",
-        desc: "Check agent status and health",
-        action: () => this.runHealthCheck()
-      }
-    ];
-    commands.forEach((cmd) => {
-      const button = commandGrid.createEl("div", { cls: "thoth-command-button" });
-      button.createEl("div", { text: cmd.title, cls: "command-title" });
-      button.createEl("div", { text: cmd.desc, cls: "command-desc" });
-      button.onclick = () => {
-        cmd.action();
-        new import_obsidian3.Notice(`Executed: ${cmd.title}`);
-      };
-    });
-  }
-  createDiscoveryCommands(contentEl) {
-    const section = contentEl.createEl("div", { cls: "thoth-command-section" });
-    section.createEl("h3").innerHTML = "\u{1F50D} Discovery System";
-    section.createEl("p", { text: "Manage content discovery and indexing" });
-    const commandGrid = section.createEl("div", { cls: "thoth-command-grid" });
-    const commands = [
-      {
-        title: "Start Discovery",
-        desc: "Begin automated content discovery",
-        action: () => this.runDiscoveryCommand("start")
-      },
-      {
-        title: "Stop Discovery",
-        desc: "Stop content discovery process",
-        action: () => this.runDiscoveryCommand("stop")
-      },
-      {
-        title: "Discovery Status",
-        desc: "Check discovery system status",
-        action: () => this.runDiscoveryCommand("status")
-      },
-      {
-        title: "Add Discovery Source",
-        desc: "Add new content source",
-        action: () => this.plugin.openDiscoverySourceModal()
-      }
-    ];
-    commands.forEach((cmd) => {
-      const button = commandGrid.createEl("div", { cls: "thoth-command-button" });
-      button.createEl("div", { text: cmd.title, cls: "command-title" });
-      button.createEl("div", { text: cmd.desc, cls: "command-desc" });
-      button.onclick = () => {
-        cmd.action();
-        new import_obsidian3.Notice(`Executed: ${cmd.title}`);
-      };
-    });
-  }
-  createDataCommands(contentEl) {
-    const section = contentEl.createEl("div", { cls: "thoth-command-section" });
-    section.createEl("h3").innerHTML = "\u{1F4CA} Data Management";
-    section.createEl("p", { text: "Manage knowledge base and data" });
-    const commandGrid = section.createEl("div", { cls: "thoth-command-grid" });
-    const commands = [
-      {
-        title: "Rebuild Index",
-        desc: "Rebuild the knowledge base index",
-        action: () => this.runDataCommand("rebuild-index")
-      },
-      {
-        title: "Clear Cache",
-        desc: "Clear system caches",
-        action: () => this.runDataCommand("clear-cache")
-      },
-      {
-        title: "Export Data",
-        desc: "Export knowledge base data",
-        action: () => this.runDataCommand("export")
-      },
-      {
-        title: "Backup Data",
-        desc: "Create system backup",
-        action: () => this.runDataCommand("backup")
-      }
-    ];
-    commands.forEach((cmd) => {
-      const button = commandGrid.createEl("div", { cls: "thoth-command-button" });
-      button.createEl("div", { text: cmd.title, cls: "command-title" });
-      button.createEl("div", { text: cmd.desc, cls: "command-desc" });
-      button.onclick = () => {
-        cmd.action();
-        new import_obsidian3.Notice(`Executed: ${cmd.title}`);
-      };
-    });
-  }
-  createSystemCommands(contentEl) {
-    const section = contentEl.createEl("div", { cls: "thoth-command-section" });
-    section.createEl("h3").innerHTML = "\u2699\uFE0F System Operations";
-    section.createEl("p", { text: "System-level operations and utilities" });
-    const commandGrid = section.createEl("div", { cls: "thoth-command-grid" });
-    const commands = [
-      {
-        title: "System Status",
-        desc: "View comprehensive system status",
-        action: () => this.openSystemStatus()
-      },
-      {
-        title: "View Logs",
-        desc: "Open system logs",
-        action: () => this.runSystemCommand("logs")
-      },
-      {
-        title: "Test Connection",
-        desc: "Test server connectivity",
-        action: () => this.runSystemCommand("test-connection")
-      },
-      {
-        title: "Reset Settings",
-        desc: "Reset to default settings",
-        action: () => this.confirmResetSettings()
-      }
-    ];
-    commands.forEach((cmd) => {
-      const button = commandGrid.createEl("div", { cls: "thoth-command-button" });
-      button.createEl("div", { text: cmd.title, cls: "command-title" });
-      button.createEl("div", { text: cmd.desc, cls: "command-desc" });
-      button.onclick = () => {
-        cmd.action();
-        new import_obsidian3.Notice(`Executed: ${cmd.title}`);
-      };
-    });
-  }
-  async runHealthCheck() {
-    try {
-      const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/health`);
-      if (response.ok) {
-        const data = await response.json();
-        new import_obsidian3.Notice(`Agent Health: ${data.status || "OK"}`);
-      } else {
-        new import_obsidian3.Notice("Agent health check failed", 3e3);
-      }
-    } catch (error) {
-      new import_obsidian3.Notice("Could not connect to agent", 3e3);
-    }
-  }
-  async runDiscoveryCommand(command) {
-    try {
-      const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/execute/command`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          command: "discovery",
-          args: [command]
-        })
-      });
-      if (response.ok) {
-        const result = await response.json();
-        new import_obsidian3.Notice(`Discovery ${command}: ${result.message || "Success"}`);
-      } else {
-        throw new Error(`Discovery ${command} failed`);
-      }
-    } catch (error) {
-      new import_obsidian3.Notice(`Discovery ${command} failed: ${error.message}`, 3e3);
-    }
-  }
-  async runDataCommand(command) {
-    try {
-      const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/execute/command`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          command: "data",
-          args: [command]
-        })
-      });
-      if (response.ok) {
-        const result = await response.json();
-        new import_obsidian3.Notice(`Data ${command}: ${result.message || "Success"}`);
-      } else {
-        throw new Error(`Data ${command} failed`);
-      }
-    } catch (error) {
-      new import_obsidian3.Notice(`Data ${command} failed: ${error.message}`, 3e3);
-    }
-  }
-  async runSystemCommand(command) {
-    try {
-      const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/execute/command`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          command: "system",
-          args: [command]
-        })
-      });
-      if (response.ok) {
-        const result = await response.json();
-        new import_obsidian3.Notice(`System ${command}: ${result.message || "Success"}`);
-      } else {
-        throw new Error(`System ${command} failed`);
-      }
-    } catch (error) {
-      new import_obsidian3.Notice(`System ${command} failed: ${error.message}`, 3e3);
-    }
-  }
-  openSystemStatus() {
-    this.switchTab("status");
-    new import_obsidian3.Notice("Switched to Status tab");
-  }
-  async confirmResetSettings() {
-    const confirmed = await this.plugin.showConfirm("Reset all settings to defaults? This cannot be undone.");
-    if (confirmed) {
-      new import_obsidian3.Notice("Settings reset to defaults");
-    }
-  }
-  // Tools tab functionality
-  createCitationTools(contentEl) {
-    const section = contentEl.createEl("div", { cls: "thoth-command-section" });
-    section.createEl("h3").innerHTML = "\u{1F4DD} Citation Tools";
-    section.createEl("p", { text: "Tools for managing citations and references" });
-    const commandGrid = section.createEl("div", { cls: "thoth-command-grid" });
-    const tools = [
-      {
-        title: "Citation Inserter",
-        desc: "Insert formatted citations into your notes",
-        action: () => this.openCitationInserter()
-      },
-      {
-        title: "Reference Manager",
-        desc: "Manage your reference library",
-        action: () => this.openReferenceManager()
-      },
-      {
-        title: "Auto-Cite Selection",
-        desc: "Automatically cite selected text",
-        action: () => this.autoCiteSelection()
-      },
-      {
-        title: "Export Bibliography",
-        desc: "Export bibliography in various formats",
-        action: () => this.exportBibliography()
-      }
-    ];
-    tools.forEach((tool) => {
-      const button = commandGrid.createEl("div", { cls: "thoth-command-button" });
-      button.createEl("div", { text: tool.title, cls: "command-title" });
-      button.createEl("div", { text: tool.desc, cls: "command-desc" });
-      button.onclick = () => {
-        tool.action();
-        new import_obsidian3.Notice(`Executed: ${tool.title}`);
-      };
-    });
-  }
-  createResearchTools(contentEl) {
-    const section = contentEl.createEl("div", { cls: "thoth-command-section" });
-    section.createEl("h3").innerHTML = "\u{1F52C} Research Tools";
-    section.createEl("p", { text: "Advanced research and analysis tools" });
-    const commandGrid = section.createEl("div", { cls: "thoth-command-grid" });
-    const tools = [
-      {
-        title: "Research Assistant",
-        desc: "Open the research assistant interface",
-        action: () => this.openResearchAssistant()
-      },
-      {
-        title: "Topic Explorer",
-        desc: "Explore topics and connections",
-        action: () => this.openTopicExplorer()
-      },
-      {
-        title: "Source Discovery",
-        desc: "Discover new relevant sources",
-        action: () => this.openSourceDiscovery()
-      },
-      {
-        title: "Concept Map",
-        desc: "Generate concept maps from your notes",
-        action: () => this.generateConceptMap()
-      }
-    ];
-    tools.forEach((tool) => {
-      const button = commandGrid.createEl("div", { cls: "thoth-command-button" });
-      button.createEl("div", { text: tool.title, cls: "command-title" });
-      button.createEl("div", { text: tool.desc, cls: "command-desc" });
-      button.onclick = () => {
-        tool.action();
-        new import_obsidian3.Notice(`Executed: ${tool.title}`);
-      };
-    });
-  }
-  createUtilityTools(contentEl) {
-    const section = contentEl.createEl("div", { cls: "thoth-command-section" });
-    section.createEl("h3").innerHTML = "\u{1F6E0}\uFE0F Utility Tools";
-    section.createEl("p", { text: "General utility and helper functions" });
-    const commandGrid = section.createEl("div", { cls: "thoth-command-grid" });
-    const tools = [
-      {
-        title: "Note Templates",
-        desc: "Create notes from templates",
-        action: () => this.openNoteTemplates()
-      },
-      {
-        title: "Quick Actions",
-        desc: "Access quick action menu",
-        action: () => this.openQuickActions()
-      },
-      {
-        title: "File Organization",
-        desc: "Organize and manage files",
-        action: () => this.openFileOrganizer()
-      },
-      {
-        title: "Bulk Operations",
-        desc: "Perform bulk operations on notes",
-        action: () => this.openBulkOperations()
-      }
-    ];
-    tools.forEach((tool) => {
-      const button = commandGrid.createEl("div", { cls: "thoth-command-button" });
-      button.createEl("div", { text: tool.title, cls: "command-title" });
-      button.createEl("div", { text: tool.desc, cls: "command-desc" });
-      button.onclick = () => {
-        tool.action();
-        new import_obsidian3.Notice(`Executed: ${tool.title}`);
-      };
-    });
-  }
-  // Tool action methods
-  async openCitationInserter() {
-    var _a;
-    const activeLeaf = this.app.workspace.activeLeaf;
-    if (((_a = activeLeaf == null ? void 0 : activeLeaf.view) == null ? void 0 : _a.getViewType()) === "markdown") {
-      const editor = activeLeaf.view.editor;
-      if (editor) {
-        await this.plugin.openCitationInserter(editor);
-      } else {
-        new import_obsidian3.Notice("No active editor found");
-      }
-    } else {
-      new import_obsidian3.Notice("Please open a markdown file first");
-    }
-  }
-  openReferenceManager() {
-    new import_obsidian3.Notice("Reference manager coming soon!");
-  }
-  autoCiteSelection() {
-    var _a;
-    const activeLeaf = this.app.workspace.activeLeaf;
-    if (((_a = activeLeaf == null ? void 0 : activeLeaf.view) == null ? void 0 : _a.getViewType()) === "markdown") {
-      const editor = activeLeaf.view.editor;
-      if (editor) {
-        const selection = editor.getSelection();
-        if (selection) {
-          new import_obsidian3.Notice(`Auto-citing: "${selection.substring(0, 50)}..."`);
-        } else {
-          new import_obsidian3.Notice("Please select text to cite");
-        }
-      }
-    } else {
-      new import_obsidian3.Notice("Please open a markdown file first");
-    }
-  }
-  exportBibliography() {
-    new import_obsidian3.Notice("Bibliography export coming soon!");
-  }
-  openResearchAssistant() {
-    this.switchTab("chat");
-    new import_obsidian3.Notice("Research assistant is available in the Chat tab");
-  }
-  openTopicExplorer() {
-    new import_obsidian3.Notice("Topic explorer coming soon!");
-  }
-  openSourceDiscovery() {
-    this.plugin.openDiscoverySourceCreator();
-  }
-  generateConceptMap() {
-    new import_obsidian3.Notice("Concept map generation coming soon!");
-  }
-  openNoteTemplates() {
-    new import_obsidian3.Notice("Note templates coming soon!");
-  }
-  openQuickActions() {
-    this.switchTab("commands");
-    new import_obsidian3.Notice("Quick actions are available in the Commands tab");
-  }
-  openFileOrganizer() {
-    new import_obsidian3.Notice("File organizer coming soon!");
-  }
-  openBulkOperations() {
-    new import_obsidian3.Notice("Bulk operations coming soon!");
-  }
-  // Status tab functionality
-  createConnectionStatus(contentEl) {
-    const section = contentEl.createEl("div", { cls: "status-section" });
-    section.createEl("h3").innerHTML = "\u{1F517} Connection Status";
-    const statusItems = [
-      { label: "Thoth Server", value: "Connected", status: "online" },
-      { label: "WebSocket", value: "Active", status: "online" },
-      { label: "Last Ping", value: "< 1 min ago", status: "online" },
-      { label: "API Version", value: "v1.2.3", status: "online" }
-    ];
-    statusItems.forEach((item) => {
-      const statusItem = section.createEl("div", { cls: "status-item" });
-      const labelContainer = statusItem.createEl("div", { cls: "status-label" });
-      labelContainer.style.display = "flex";
-      labelContainer.style.alignItems = "center";
-      const indicator = labelContainer.createEl("div", {
-        cls: `status-indicator status-${item.status}`
-      });
-      labelContainer.createEl("span", { text: item.label });
-      statusItem.createEl("div", {
-        text: item.value,
-        cls: "status-value"
-      });
-    });
-    const refreshBtn = section.createEl("button", {
-      text: "\u{1F504} Refresh Status",
-      cls: "thoth-command-button"
-    });
-    refreshBtn.style.marginTop = "12px";
-    refreshBtn.onclick = () => {
-      this.refreshConnectionStatus();
-    };
-  }
-  createSystemInfo(contentEl) {
-    var _a;
-    const section = contentEl.createEl("div", { cls: "status-section" });
-    section.createEl("h3").innerHTML = "\u{1F4BB} System Information";
-    const sysInfo = [
-      { label: "Plugin Version", value: "1.0.0" },
-      { label: "Obsidian Version", value: ((_a = this.app.vault.config) == null ? void 0 : _a.version) || "Unknown" },
-      { label: "Active Sessions", value: this.chatSessions.length.toString() },
-      { label: "Cache Size", value: "N/A" },
-      { label: "Uptime", value: "N/A" }
-    ];
-    sysInfo.forEach((item) => {
-      const statusItem = section.createEl("div", { cls: "status-item" });
-      statusItem.createEl("div", { text: item.label, cls: "status-label" });
-      statusItem.createEl("div", { text: item.value, cls: "status-value" });
-    });
-  }
-  createActivityLog(contentEl) {
-    const section = contentEl.createEl("div", { cls: "status-section" });
-    section.createEl("h3").innerHTML = "\u{1F4CB} Recent Activity";
-    const activities = [
-      { time: "2 min ago", action: "Chat session created" },
-      { time: "5 min ago", action: "Health check completed" },
-      { time: "10 min ago", action: "Connected to Thoth server" },
-      { time: "15 min ago", action: "Plugin initialized" }
-    ];
-    activities.forEach((activity) => {
-      const activityItem = section.createEl("div", { cls: "status-item" });
-      activityItem.createEl("div", { text: activity.action, cls: "status-label" });
-      activityItem.createEl("div", { text: activity.time, cls: "status-value" });
-    });
-    const clearBtn = section.createEl("button", {
-      text: "\u{1F5D1}\uFE0F Clear Log",
-      cls: "thoth-command-button"
-    });
-    clearBtn.style.marginTop = "12px";
-    clearBtn.onclick = () => {
-      new import_obsidian3.Notice("Activity log cleared");
-    };
-  }
-  async refreshConnectionStatus() {
-    new import_obsidian3.Notice("Refreshing connection status...");
-    try {
-      await this.runHealthCheck();
-      if (this.currentTab === "status") {
-        this.renderTabContent();
-      }
-      new import_obsidian3.Notice("Status refreshed");
-    } catch (error) {
-      new import_obsidian3.Notice("Failed to refresh status");
-    }
-  }
-  // Conversations tab methods
-  async loadAndDisplayConversations(container) {
-    try {
-      container.empty();
-      const loadingEl = container.createEl("div", { text: "Loading conversations...", cls: "loading" });
-      await this.loadChatSessions();
-      loadingEl.remove();
-      if (this.chatSessions.length === 0) {
-        this.createEmptyState(
-          container,
-          "\u{1F4DD}",
-          "No conversations yet",
-          "Start your first conversation to chat with Thoth and explore your research.",
-          "+ New Conversation",
-          () => this.createNewSession().then(() => this.switchTab("chat"))
-        );
-        return;
-      }
-      const sortedSessions = [...this.chatSessions].sort((a, b) => {
-        const dateA = new Date(b.created_at || 0).getTime();
-        const dateB = new Date(a.created_at || 0).getTime();
-        return dateA - dateB;
-      });
-      sortedSessions.forEach((session) => {
-        this.createConversationCard(container, session);
-      });
-    } catch (error) {
-      container.empty();
-      container.createEl("div", {
-        text: `Error loading conversations: ${error.message}`,
-        cls: "error-message"
-      });
-    }
-  }
-  createConversationCard(container, session) {
-    const card = container.createEl("div", { cls: "thoth-conversation-card" });
-    card.style.userSelect = "none";
-    card.style.cursor = "pointer";
-    if (session.id === this.activeSessionId) {
-      card.addClass("active");
-    }
-    const titleEl = card.createEl("div", {
-      text: session.title || "Untitled Conversation",
-      cls: "thoth-card-title"
-    });
-    const metaEl = card.createEl("div", { cls: "thoth-card-meta" });
-    const timeAgo = this.getTimeAgo(session.created_at);
-    const messageCount = session.message_count || 0;
-    metaEl.setText(`${timeAgo} \u2022 ${messageCount} message${messageCount !== 1 ? "s" : ""}`);
-    card.onclick = async (e) => {
-      if (e.target.tagName === "BUTTON") {
-        return;
-      }
-      await this.switchToSession(session.id);
-      this.switchTab("chat");
-    };
-    const actionsEl = card.createEl("div", { cls: "thoth-card-actions" });
-    const renameBtn = actionsEl.createEl("button", {
-      text: "\u270F\uFE0F",
-      cls: "thoth-card-action",
-      attr: { "aria-label": "Rename" }
-    });
-    renameBtn.onclick = async (e) => {
-      e.stopPropagation();
-      await this.renameConversation(session);
-    };
-    const deleteBtn = actionsEl.createEl("button", {
-      text: "\u{1F5D1}\uFE0F",
-      cls: "thoth-card-action delete",
-      attr: { "aria-label": "Delete" }
-    });
-    deleteBtn.onclick = async (e) => {
-      e.stopPropagation();
-      await this.deleteConversation(session);
-    };
-  }
-  getTimeAgo(dateString) {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 6e4);
-    if (diffMins < 1)
-      return "Just now";
-    if (diffMins < 60)
-      return `${diffMins} min ago`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24)
-      return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
-    const diffDays = Math.floor(diffHours / 24);
-    if (diffDays < 7)
-      return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`;
-    return date.toLocaleDateString();
-  }
-  async renameConversation(session) {
-    const newTitle = await this.promptForInput("Rename Conversation", session.title || "");
-    if (newTitle && newTitle !== session.title) {
-      session.title = newTitle;
-      await this.plugin.saveSettings();
-      this.renderTabContent();
-    }
-  }
-  async deleteConversation(session) {
-    const confirmed = confirm(`Delete conversation "${session.title || "Untitled"}"?`);
-    if (confirmed) {
-      this.chatSessions = this.chatSessions.filter((s) => s.id !== session.id);
-      if (this.activeSessionId === session.id) {
-        this.activeSessionId = null;
-        if (this.chatSessions.length > 0) {
-          await this.switchToSession(this.chatSessions[0].id);
-        } else {
-          await this.createNewSession();
-        }
-      }
-      await this.plugin.saveSettings();
-      this.renderTabContent();
-    }
-  }
-  filterConversations(query) {
-    const cards = this.contentContainer.querySelectorAll(".thoth-conversation-card");
-    const lowerQuery = query.toLowerCase();
-    cards.forEach((card) => {
-      var _a;
-      const titleEl = card.querySelector(".thoth-card-title");
-      const title = ((_a = titleEl == null ? void 0 : titleEl.textContent) == null ? void 0 : _a.toLowerCase()) || "";
-      if (title.includes(lowerQuery)) {
-        card.style.display = "";
-      } else {
-        card.style.display = "none";
-      }
-    });
-  }
-  async promptForInput(title, defaultValue = "") {
-    return new Promise((resolve) => {
-      const modal = new import_obsidian3.Modal(this.app);
-      modal.titleEl.setText(title);
-      const input = modal.contentEl.createEl("input", {
-        type: "text",
-        value: defaultValue
-      });
-      input.style.width = "100%";
-      input.style.marginBottom = "10px";
-      const buttonsEl = modal.contentEl.createEl("div");
-      buttonsEl.style.display = "flex";
-      buttonsEl.style.justifyContent = "flex-end";
-      buttonsEl.style.gap = "10px";
-      const cancelBtn = buttonsEl.createEl("button", { text: "Cancel" });
-      cancelBtn.onclick = () => {
-        modal.close();
-        resolve(null);
-      };
-      const okBtn = buttonsEl.createEl("button", { text: "OK", cls: "mod-cta" });
-      okBtn.onclick = () => {
-        modal.close();
-        resolve(input.value);
-      };
-      input.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") {
-          modal.close();
-          resolve(input.value);
-        }
-      });
-      modal.open();
-      input.focus();
-    });
-  }
-  // Research tab
-  renderResearchTab() {
-    const researchArea = this.contentContainer.createEl("div", { cls: "research-area" });
-    const researchTab = new ResearchTabComponent(researchArea, this.plugin);
-    researchTab.render();
-  }
-  // Settings tab
-  renderSettingsTab() {
-    const settingsArea = this.contentContainer.createEl("div", { cls: "settings-area" });
-    const settingsTab = new SettingsTabComponent(settingsArea, this.plugin);
-    settingsTab.render();
-  }
-  // Helper: Add thinking indicator
-  addThinkingIndicator(container) {
-    const msg = container.createEl("div", { cls: "message assistant thinking" });
-    const content = msg.createEl("div", { cls: "message-content" });
-    const indicator = content.createEl("div", { cls: "thinking-indicator" });
-    indicator.createEl("span", { cls: "dot" });
-    indicator.createEl("span", { cls: "dot" });
-    indicator.createEl("span", { cls: "dot" });
-    content.createEl("span", { text: "Thinking..." });
-    container.scrollTop = container.scrollHeight;
-    return msg;
-  }
-  // Helper: Show toast notification
-  showToast(message, type = "info") {
-    const toast = document.body.createEl("div", {
-      cls: `thoth-toast thoth-toast-${type}`,
-      text: message
-    });
-    setTimeout(() => {
-      toast.addClass("thoth-toast-fade-out");
-      setTimeout(() => toast.remove(), 300);
-    }, 3e3);
-  }
-  // Helper: Create empty state
-  createEmptyState(container, icon, title, description, actionText, actionCallback) {
-    const emptyState = container.createEl("div", { cls: "thoth-empty-state" });
-    emptyState.createEl("div", {
-      cls: "empty-state-icon",
-      text: icon
-    });
-    emptyState.createEl("h3", {
-      cls: "empty-state-title",
-      text: title
-    });
-    emptyState.createEl("p", {
-      cls: "empty-state-description",
-      text: description
-    });
-    if (actionText && actionCallback) {
-      const actionBtn = emptyState.createEl("button", {
-        cls: "empty-state-action",
-        text: actionText
-      });
-      actionBtn.onclick = actionCallback;
-    }
-    return emptyState;
-  }
-  // Helper: Show attachment menu
-  showAttachmentMenu(inputEl, event) {
-    const menu = new import_obsidian3.Menu();
-    menu.addItem((item) => {
-      item.setTitle("\u{1F4C4} Attach note from vault").setIcon("document").onClick(() => {
-        this.attachVaultFile(inputEl);
-      });
-    });
-    menu.addItem((item) => {
-      item.setTitle("\u{1F517} Attach current note").setIcon("link").onClick(() => {
-        const activeFile = this.app.workspace.getActiveFile();
-        if (activeFile) {
-          const fileLink = `[[${activeFile.path}]]`;
-          inputEl.value += `
-${fileLink}
-`;
-          inputEl.focus();
-        } else {
-          new import_obsidian3.Notice("No active file");
-        }
-      });
-    });
-    menu.addItem((item) => {
-      item.setTitle("\u{1F4CB} Paste clipboard").setIcon("clipboard").onClick(async () => {
-        try {
-          const text = await navigator.clipboard.readText();
-          inputEl.value += `
-${text}
-`;
-          inputEl.focus();
-        } catch (error) {
-          new import_obsidian3.Notice("Failed to read clipboard");
-        }
-      });
-    });
-    menu.showAtMouseEvent(event);
-  }
-  // Helper: Attach vault file
-  async attachVaultFile(inputEl) {
-    new import_obsidian3.Notice("File attachment: Type [[ to create a wiki link to any note in your vault");
-    inputEl.value += "[[";
-    inputEl.focus();
-  }
-};
-
-// src/modals/commands-modal.ts
-var import_obsidian4 = require("obsidian");
-var CommandsModal = class extends import_obsidian4.Modal {
-  constructor(app, plugin) {
-    super(app);
-    this.plugin = plugin;
-    this.modalEl.addClass("thoth-commands-modal");
-  }
-  onOpen() {
-    const { contentEl } = this;
-    contentEl.empty();
-    this.addStyles();
-    this.titleEl.setText("\u26A1 Thoth Commands");
-    this.createAgentCommands(contentEl);
-    this.createDiscoveryCommands(contentEl);
-    this.createDataCommands(contentEl);
-    this.createSystemCommands(contentEl);
-  }
-  addStyles() {
-    const style = document.createElement("style");
-    style.textContent = `
-      .thoth-commands-modal {
-        width: 70vw !important;
-        max-width: 800px !important;
-        height: 70vh !important;
-        max-height: 600px !important;
-      }
-
-      .thoth-command-section {
-        margin-bottom: 24px;
-        padding: 16px;
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 8px;
-        background: var(--background-secondary);
-      }
-
-      .thoth-command-section h3 {
-        margin: 0 0 12px 0;
-        color: var(--text-accent);
-        font-size: 16px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .thoth-command-section p {
-        margin: 0 0 16px 0;
-        color: var(--text-muted);
-        font-size: 14px;
-      }
-
-      .thoth-command-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 12px;
-      }
-
-      .thoth-command-button {
-        padding: 12px 16px;
-        border: 1px solid var(--background-modifier-border);
-        background: var(--background-primary);
-        color: var(--text-normal);
-        border-radius: 6px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        text-align: left;
-        font-size: 14px;
-        line-height: 1.4;
-      }
-
-      .thoth-command-button:hover {
-        background: var(--background-modifier-hover);
-        border-color: var(--interactive-accent);
-        transform: translateY(-1px);
-      }
-
-      .thoth-command-button:active {
-        transform: translateY(0);
-      }
-
-      .command-title {
-        font-weight: 600;
-        margin-bottom: 4px;
-      }
-
-      .command-desc {
-        font-size: 12px;
-        color: var(--text-muted);
-      }
-    `;
-    document.head.appendChild(style);
-  }
   createAgentCommands(contentEl) {
     const section = contentEl.createEl("div", { cls: "thoth-command-section" });
     section.createEl("h3").innerHTML = "\u{1F916} Agent Management";
@@ -3504,12 +2829,869 @@ var CommandsModal = class extends import_obsidian4.Modal {
     }
   }
   openSystemStatus() {
-    new import_obsidian4.Notice("System status feature coming soon!");
+    this.switchTab("status");
+    new import_obsidian4.Notice("Switched to Status tab");
   }
   async confirmResetSettings() {
     const confirmed = await this.plugin.showConfirm("Reset all settings to defaults? This cannot be undone.");
     if (confirmed) {
       new import_obsidian4.Notice("Settings reset to defaults");
+    }
+  }
+  // Tools tab functionality
+  createCitationTools(contentEl) {
+    const section = contentEl.createEl("div", { cls: "thoth-command-section" });
+    section.createEl("h3").innerHTML = "\u{1F4DD} Citation Tools";
+    section.createEl("p", { text: "Tools for managing citations and references" });
+    const commandGrid = section.createEl("div", { cls: "thoth-command-grid" });
+    const tools = [
+      {
+        title: "Citation Inserter",
+        desc: "Insert formatted citations into your notes",
+        action: () => this.openCitationInserter()
+      },
+      {
+        title: "Reference Manager",
+        desc: "Manage your reference library",
+        action: () => this.openReferenceManager()
+      },
+      {
+        title: "Auto-Cite Selection",
+        desc: "Automatically cite selected text",
+        action: () => this.autoCiteSelection()
+      },
+      {
+        title: "Export Bibliography",
+        desc: "Export bibliography in various formats",
+        action: () => this.exportBibliography()
+      }
+    ];
+    tools.forEach((tool) => {
+      const button = commandGrid.createEl("div", { cls: "thoth-command-button" });
+      button.createEl("div", { text: tool.title, cls: "command-title" });
+      button.createEl("div", { text: tool.desc, cls: "command-desc" });
+      button.onclick = () => {
+        tool.action();
+        new import_obsidian4.Notice(`Executed: ${tool.title}`);
+      };
+    });
+  }
+  createResearchTools(contentEl) {
+    const section = contentEl.createEl("div", { cls: "thoth-command-section" });
+    section.createEl("h3").innerHTML = "\u{1F52C} Research Tools";
+    section.createEl("p", { text: "Advanced research and analysis tools" });
+    const commandGrid = section.createEl("div", { cls: "thoth-command-grid" });
+    const tools = [
+      {
+        title: "Research Assistant",
+        desc: "Open the research assistant interface",
+        action: () => this.openResearchAssistant()
+      },
+      {
+        title: "Topic Explorer",
+        desc: "Explore topics and connections",
+        action: () => this.openTopicExplorer()
+      },
+      {
+        title: "Source Discovery",
+        desc: "Discover new relevant sources",
+        action: () => this.openSourceDiscovery()
+      },
+      {
+        title: "Concept Map",
+        desc: "Generate concept maps from your notes",
+        action: () => this.generateConceptMap()
+      }
+    ];
+    tools.forEach((tool) => {
+      const button = commandGrid.createEl("div", { cls: "thoth-command-button" });
+      button.createEl("div", { text: tool.title, cls: "command-title" });
+      button.createEl("div", { text: tool.desc, cls: "command-desc" });
+      button.onclick = () => {
+        tool.action();
+        new import_obsidian4.Notice(`Executed: ${tool.title}`);
+      };
+    });
+  }
+  createUtilityTools(contentEl) {
+    const section = contentEl.createEl("div", { cls: "thoth-command-section" });
+    section.createEl("h3").innerHTML = "\u{1F6E0}\uFE0F Utility Tools";
+    section.createEl("p", { text: "General utility and helper functions" });
+    const commandGrid = section.createEl("div", { cls: "thoth-command-grid" });
+    const tools = [
+      {
+        title: "Note Templates",
+        desc: "Create notes from templates",
+        action: () => this.openNoteTemplates()
+      },
+      {
+        title: "Quick Actions",
+        desc: "Access quick action menu",
+        action: () => this.openQuickActions()
+      },
+      {
+        title: "File Organization",
+        desc: "Organize and manage files",
+        action: () => this.openFileOrganizer()
+      },
+      {
+        title: "Bulk Operations",
+        desc: "Perform bulk operations on notes",
+        action: () => this.openBulkOperations()
+      }
+    ];
+    tools.forEach((tool) => {
+      const button = commandGrid.createEl("div", { cls: "thoth-command-button" });
+      button.createEl("div", { text: tool.title, cls: "command-title" });
+      button.createEl("div", { text: tool.desc, cls: "command-desc" });
+      button.onclick = () => {
+        tool.action();
+        new import_obsidian4.Notice(`Executed: ${tool.title}`);
+      };
+    });
+  }
+  // Tool action methods
+  async openCitationInserter() {
+    var _a;
+    const activeLeaf = this.app.workspace.activeLeaf;
+    if (((_a = activeLeaf == null ? void 0 : activeLeaf.view) == null ? void 0 : _a.getViewType()) === "markdown") {
+      const editor = activeLeaf.view.editor;
+      if (editor) {
+        await this.plugin.openCitationInserter(editor);
+      } else {
+        new import_obsidian4.Notice("No active editor found");
+      }
+    } else {
+      new import_obsidian4.Notice("Please open a markdown file first");
+    }
+  }
+  openReferenceManager() {
+    new import_obsidian4.Notice("Reference manager coming soon!");
+  }
+  autoCiteSelection() {
+    var _a;
+    const activeLeaf = this.app.workspace.activeLeaf;
+    if (((_a = activeLeaf == null ? void 0 : activeLeaf.view) == null ? void 0 : _a.getViewType()) === "markdown") {
+      const editor = activeLeaf.view.editor;
+      if (editor) {
+        const selection = editor.getSelection();
+        if (selection) {
+          new import_obsidian4.Notice(`Auto-citing: "${selection.substring(0, 50)}..."`);
+        } else {
+          new import_obsidian4.Notice("Please select text to cite");
+        }
+      }
+    } else {
+      new import_obsidian4.Notice("Please open a markdown file first");
+    }
+  }
+  exportBibliography() {
+    new import_obsidian4.Notice("Bibliography export coming soon!");
+  }
+  openResearchAssistant() {
+    this.switchTab("chat");
+    new import_obsidian4.Notice("Research assistant is available in the Chat tab");
+  }
+  openTopicExplorer() {
+    new import_obsidian4.Notice("Topic explorer coming soon!");
+  }
+  openSourceDiscovery() {
+    this.plugin.openDiscoverySourceCreator();
+  }
+  generateConceptMap() {
+    new import_obsidian4.Notice("Concept map generation coming soon!");
+  }
+  openNoteTemplates() {
+    new import_obsidian4.Notice("Note templates coming soon!");
+  }
+  openQuickActions() {
+    this.switchTab("commands");
+    new import_obsidian4.Notice("Quick actions are available in the Commands tab");
+  }
+  openFileOrganizer() {
+    new import_obsidian4.Notice("File organizer coming soon!");
+  }
+  openBulkOperations() {
+    new import_obsidian4.Notice("Bulk operations coming soon!");
+  }
+  // Status tab functionality
+  createConnectionStatus(contentEl) {
+    const section = contentEl.createEl("div", { cls: "status-section" });
+    section.createEl("h3").innerHTML = "\u{1F517} Connection Status";
+    const statusItems = [
+      { label: "Thoth Server", value: "Connected", status: "online" },
+      { label: "WebSocket", value: "Active", status: "online" },
+      { label: "Last Ping", value: "< 1 min ago", status: "online" },
+      { label: "API Version", value: "v1.2.3", status: "online" }
+    ];
+    statusItems.forEach((item) => {
+      const statusItem = section.createEl("div", { cls: "status-item" });
+      const labelContainer = statusItem.createEl("div", { cls: "status-label" });
+      labelContainer.style.display = "flex";
+      labelContainer.style.alignItems = "center";
+      const indicator = labelContainer.createEl("div", {
+        cls: `status-indicator status-${item.status}`
+      });
+      labelContainer.createEl("span", { text: item.label });
+      statusItem.createEl("div", {
+        text: item.value,
+        cls: "status-value"
+      });
+    });
+    const refreshBtn = section.createEl("button", {
+      text: "\u{1F504} Refresh Status",
+      cls: "thoth-command-button"
+    });
+    refreshBtn.style.marginTop = "12px";
+    refreshBtn.onclick = () => {
+      this.refreshConnectionStatus();
+    };
+  }
+  createSystemInfo(contentEl) {
+    var _a;
+    const section = contentEl.createEl("div", { cls: "status-section" });
+    section.createEl("h3").innerHTML = "\u{1F4BB} System Information";
+    const sysInfo = [
+      { label: "Plugin Version", value: "1.0.0" },
+      { label: "Obsidian Version", value: ((_a = this.app.vault.config) == null ? void 0 : _a.version) || "Unknown" },
+      { label: "Active Sessions", value: this.chatSessions.length.toString() },
+      { label: "Cache Size", value: "N/A" },
+      { label: "Uptime", value: "N/A" }
+    ];
+    sysInfo.forEach((item) => {
+      const statusItem = section.createEl("div", { cls: "status-item" });
+      statusItem.createEl("div", { text: item.label, cls: "status-label" });
+      statusItem.createEl("div", { text: item.value, cls: "status-value" });
+    });
+  }
+  createActivityLog(contentEl) {
+    const section = contentEl.createEl("div", { cls: "status-section" });
+    section.createEl("h3").innerHTML = "\u{1F4CB} Recent Activity";
+    const activities = [
+      { time: "2 min ago", action: "Chat session created" },
+      { time: "5 min ago", action: "Health check completed" },
+      { time: "10 min ago", action: "Connected to Thoth server" },
+      { time: "15 min ago", action: "Plugin initialized" }
+    ];
+    activities.forEach((activity) => {
+      const activityItem = section.createEl("div", { cls: "status-item" });
+      activityItem.createEl("div", { text: activity.action, cls: "status-label" });
+      activityItem.createEl("div", { text: activity.time, cls: "status-value" });
+    });
+    const clearBtn = section.createEl("button", {
+      text: "\u{1F5D1}\uFE0F Clear Log",
+      cls: "thoth-command-button"
+    });
+    clearBtn.style.marginTop = "12px";
+    clearBtn.onclick = () => {
+      new import_obsidian4.Notice("Activity log cleared");
+    };
+  }
+  async refreshConnectionStatus() {
+    new import_obsidian4.Notice("Refreshing connection status...");
+    try {
+      await this.runHealthCheck();
+      if (this.currentTab === "status") {
+        await this.renderTabContent();
+      }
+      new import_obsidian4.Notice("Status refreshed");
+    } catch (error) {
+      new import_obsidian4.Notice("Failed to refresh status");
+    }
+  }
+  // Conversations tab methods
+  async loadAndDisplayConversations(container) {
+    try {
+      container.empty();
+      const loadingEl = container.createEl("div", { text: "Loading conversations...", cls: "loading" });
+      await this.loadChatSessions();
+      loadingEl.remove();
+      if (this.chatSessions.length === 0) {
+        this.createEmptyState(
+          container,
+          "\u{1F4DD}",
+          "No conversations yet",
+          "Start your first conversation to chat with Thoth and explore your research.",
+          "+ New Conversation",
+          () => this.createNewSession().then(() => this.switchTab("chat"))
+        );
+        return;
+      }
+      const sortedSessions = [...this.chatSessions].sort((a, b) => {
+        const dateA = new Date(b.created_at || 0).getTime();
+        const dateB = new Date(a.created_at || 0).getTime();
+        return dateA - dateB;
+      });
+      sortedSessions.forEach((session) => {
+        this.createConversationCard(container, session);
+      });
+    } catch (error) {
+      container.empty();
+      container.createEl("div", {
+        text: `Error loading conversations: ${error.message}`,
+        cls: "error-message"
+      });
+    }
+  }
+  createConversationCard(container, session) {
+    const card = container.createEl("div", { cls: "thoth-conversation-card" });
+    card.style.userSelect = "none";
+    card.style.cursor = "pointer";
+    if (session.id === this.activeSessionId) {
+      card.addClass("active");
+    }
+    const titleEl = card.createEl("div", {
+      text: session.title || "Untitled Conversation",
+      cls: "thoth-card-title"
+    });
+    const metaEl = card.createEl("div", { cls: "thoth-card-meta" });
+    const timeAgo = this.getTimeAgo(session.created_at);
+    const messageCount = session.message_count || 0;
+    metaEl.setText(`${timeAgo} \u2022 ${messageCount} message${messageCount !== 1 ? "s" : ""}`);
+    card.onclick = async (e) => {
+      if (e.target.tagName === "BUTTON") {
+        return;
+      }
+      await this.switchToSession(session.id);
+      this.switchTab("chat");
+    };
+    const actionsEl = card.createEl("div", { cls: "thoth-card-actions" });
+    const renameBtn = actionsEl.createEl("button", {
+      text: "\u270F\uFE0F",
+      cls: "thoth-card-action",
+      attr: { "aria-label": "Rename" }
+    });
+    renameBtn.onclick = async (e) => {
+      e.stopPropagation();
+      await this.renameConversation(session);
+    };
+    const deleteBtn = actionsEl.createEl("button", {
+      text: "\u{1F5D1}\uFE0F",
+      cls: "thoth-card-action delete",
+      attr: { "aria-label": "Delete" }
+    });
+    deleteBtn.onclick = async (e) => {
+      e.stopPropagation();
+      await this.deleteConversation(session);
+    };
+  }
+  getTimeAgo(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 6e4);
+    if (diffMins < 1)
+      return "Just now";
+    if (diffMins < 60)
+      return `${diffMins} min ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24)
+      return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7)
+      return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`;
+    return date.toLocaleDateString();
+  }
+  async renameConversation(session) {
+    const newTitle = await this.promptForInput("Rename Conversation", session.title || "");
+    if (newTitle && newTitle !== session.title) {
+      session.title = newTitle;
+      await this.plugin.saveSettings();
+      await this.renderTabContent();
+    }
+  }
+  async deleteConversation(session) {
+    const confirmed = confirm(`Delete conversation "${session.title || "Untitled"}"?`);
+    if (confirmed) {
+      this.chatSessions = this.chatSessions.filter((s) => s.id !== session.id);
+      if (this.activeSessionId === session.id) {
+        this.activeSessionId = null;
+        if (this.chatSessions.length > 0) {
+          await this.switchToSession(this.chatSessions[0].id);
+        } else {
+          await this.createNewSession();
+        }
+      }
+      await this.plugin.saveSettings();
+      await this.renderTabContent();
+    }
+  }
+  filterConversations(query) {
+    const cards = this.contentContainer.querySelectorAll(".thoth-conversation-card");
+    const lowerQuery = query.toLowerCase();
+    cards.forEach((card) => {
+      var _a;
+      const titleEl = card.querySelector(".thoth-card-title");
+      const title = ((_a = titleEl == null ? void 0 : titleEl.textContent) == null ? void 0 : _a.toLowerCase()) || "";
+      if (title.includes(lowerQuery)) {
+        card.style.display = "";
+      } else {
+        card.style.display = "none";
+      }
+    });
+  }
+  async promptForInput(title, defaultValue = "") {
+    return new Promise((resolve) => {
+      const modal = new import_obsidian4.Modal(this.app);
+      modal.titleEl.setText(title);
+      const input = modal.contentEl.createEl("input", {
+        type: "text",
+        value: defaultValue
+      });
+      input.style.width = "100%";
+      input.style.marginBottom = "10px";
+      const buttonsEl = modal.contentEl.createEl("div");
+      buttonsEl.style.display = "flex";
+      buttonsEl.style.justifyContent = "flex-end";
+      buttonsEl.style.gap = "10px";
+      const cancelBtn = buttonsEl.createEl("button", { text: "Cancel" });
+      cancelBtn.onclick = () => {
+        modal.close();
+        resolve(null);
+      };
+      const okBtn = buttonsEl.createEl("button", { text: "OK", cls: "mod-cta" });
+      okBtn.onclick = () => {
+        modal.close();
+        resolve(input.value);
+      };
+      input.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          modal.close();
+          resolve(input.value);
+        }
+      });
+      modal.open();
+      input.focus();
+    });
+  }
+  // Research tab
+  async renderResearchTab() {
+    const researchArea = this.contentContainer.createEl("div", { cls: "research-area" });
+    const researchTab = new ResearchTabComponent(researchArea, this.plugin);
+    await researchTab.render();
+  }
+  // Settings tab
+  renderSettingsTab() {
+    const settingsArea = this.contentContainer.createEl("div", { cls: "settings-area" });
+    const settingsTab = new SettingsTabComponent(settingsArea, this.plugin);
+    settingsTab.render();
+  }
+  // Helper: Add thinking indicator
+  addThinkingIndicator(container) {
+    const msg = container.createEl("div", { cls: "message assistant thinking" });
+    const content = msg.createEl("div", { cls: "message-content" });
+    const indicator = content.createEl("div", { cls: "thinking-indicator" });
+    indicator.createEl("span", { cls: "dot" });
+    indicator.createEl("span", { cls: "dot" });
+    indicator.createEl("span", { cls: "dot" });
+    content.createEl("span", { text: "Thinking..." });
+    container.scrollTop = container.scrollHeight;
+    return msg;
+  }
+  // Helper: Show toast notification
+  showToast(message, type = "info") {
+    const toast = document.body.createEl("div", {
+      cls: `thoth-toast thoth-toast-${type}`,
+      text: message
+    });
+    setTimeout(() => {
+      toast.addClass("thoth-toast-fade-out");
+      setTimeout(() => toast.remove(), 300);
+    }, 3e3);
+  }
+  // Helper: Create empty state
+  createEmptyState(container, icon, title, description, actionText, actionCallback) {
+    const emptyState = container.createEl("div", { cls: "thoth-empty-state" });
+    emptyState.createEl("div", {
+      cls: "empty-state-icon",
+      text: icon
+    });
+    emptyState.createEl("h3", {
+      cls: "empty-state-title",
+      text: title
+    });
+    emptyState.createEl("p", {
+      cls: "empty-state-description",
+      text: description
+    });
+    if (actionText && actionCallback) {
+      const actionBtn = emptyState.createEl("button", {
+        cls: "empty-state-action",
+        text: actionText
+      });
+      actionBtn.onclick = actionCallback;
+    }
+    return emptyState;
+  }
+  // Helper: Show attachment menu
+  showAttachmentMenu(inputEl, event) {
+    const menu = new import_obsidian4.Menu();
+    menu.addItem((item) => {
+      item.setTitle("\u{1F4C4} Attach note from vault").setIcon("document").onClick(() => {
+        this.attachVaultFile(inputEl);
+      });
+    });
+    menu.addItem((item) => {
+      item.setTitle("\u{1F517} Attach current note").setIcon("link").onClick(() => {
+        const activeFile = this.app.workspace.getActiveFile();
+        if (activeFile) {
+          const fileLink = `[[${activeFile.path}]]`;
+          inputEl.value += `
+${fileLink}
+`;
+          inputEl.focus();
+        } else {
+          new import_obsidian4.Notice("No active file");
+        }
+      });
+    });
+    menu.addItem((item) => {
+      item.setTitle("\u{1F4CB} Paste clipboard").setIcon("clipboard").onClick(async () => {
+        try {
+          const text = await navigator.clipboard.readText();
+          inputEl.value += `
+${text}
+`;
+          inputEl.focus();
+        } catch (error) {
+          new import_obsidian4.Notice("Failed to read clipboard");
+        }
+      });
+    });
+    menu.showAtMouseEvent(event);
+  }
+  // Helper: Attach vault file
+  async attachVaultFile(inputEl) {
+    new import_obsidian4.Notice("File attachment: Type [[ to create a wiki link to any note in your vault");
+    inputEl.value += "[[";
+    inputEl.focus();
+  }
+};
+
+// src/modals/commands-modal.ts
+var import_obsidian5 = require("obsidian");
+var CommandsModal = class extends import_obsidian5.Modal {
+  constructor(app, plugin) {
+    super(app);
+    this.plugin = plugin;
+    this.modalEl.addClass("thoth-commands-modal");
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    this.addStyles();
+    this.titleEl.setText("\u26A1 Thoth Commands");
+    this.createAgentCommands(contentEl);
+    this.createDiscoveryCommands(contentEl);
+    this.createDataCommands(contentEl);
+    this.createSystemCommands(contentEl);
+  }
+  addStyles() {
+    const style = document.createElement("style");
+    style.textContent = `
+      .thoth-commands-modal {
+        width: 70vw !important;
+        max-width: 800px !important;
+        height: 70vh !important;
+        max-height: 600px !important;
+      }
+
+      .thoth-command-section {
+        margin-bottom: 24px;
+        padding: 16px;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 8px;
+        background: var(--background-secondary);
+      }
+
+      .thoth-command-section h3 {
+        margin: 0 0 12px 0;
+        color: var(--text-accent);
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .thoth-command-section p {
+        margin: 0 0 16px 0;
+        color: var(--text-muted);
+        font-size: 14px;
+      }
+
+      .thoth-command-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+      }
+
+      .thoth-command-button {
+        padding: 12px 16px;
+        border: 1px solid var(--background-modifier-border);
+        background: var(--background-primary);
+        color: var(--text-normal);
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-align: left;
+        font-size: 14px;
+        line-height: 1.4;
+      }
+
+      .thoth-command-button:hover {
+        background: var(--background-modifier-hover);
+        border-color: var(--interactive-accent);
+        transform: translateY(-1px);
+      }
+
+      .thoth-command-button:active {
+        transform: translateY(0);
+      }
+
+      .command-title {
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+
+      .command-desc {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  createAgentCommands(contentEl) {
+    const section = contentEl.createEl("div", { cls: "thoth-command-section" });
+    section.createEl("h3").innerHTML = "\u{1F916} Agent Management";
+    section.createEl("p", { text: "Control the Thoth research agent" });
+    const commandGrid = section.createEl("div", { cls: "thoth-command-grid" });
+    const commands = [
+      {
+        title: "Start Agent",
+        desc: "Launch the research agent",
+        action: () => this.plugin.startAgent()
+      },
+      {
+        title: "Stop Agent",
+        desc: "Stop the research agent",
+        action: () => this.plugin.stopAgent()
+      },
+      {
+        title: "Restart Agent",
+        desc: "Restart the research agent",
+        action: () => this.plugin.restartAgent()
+      },
+      {
+        title: "Agent Health Check",
+        desc: "Check agent status and health",
+        action: () => this.runHealthCheck()
+      }
+    ];
+    commands.forEach((cmd) => {
+      const button = commandGrid.createEl("div", { cls: "thoth-command-button" });
+      button.createEl("div", { text: cmd.title, cls: "command-title" });
+      button.createEl("div", { text: cmd.desc, cls: "command-desc" });
+      button.onclick = () => {
+        cmd.action();
+        new import_obsidian5.Notice(`Executed: ${cmd.title}`);
+      };
+    });
+  }
+  createDiscoveryCommands(contentEl) {
+    const section = contentEl.createEl("div", { cls: "thoth-command-section" });
+    section.createEl("h3").innerHTML = "\u{1F50D} Discovery System";
+    section.createEl("p", { text: "Manage content discovery and indexing" });
+    const commandGrid = section.createEl("div", { cls: "thoth-command-grid" });
+    const commands = [
+      {
+        title: "Start Discovery",
+        desc: "Begin automated content discovery",
+        action: () => this.runDiscoveryCommand("start")
+      },
+      {
+        title: "Stop Discovery",
+        desc: "Stop content discovery process",
+        action: () => this.runDiscoveryCommand("stop")
+      },
+      {
+        title: "Discovery Status",
+        desc: "Check discovery system status",
+        action: () => this.runDiscoveryCommand("status")
+      },
+      {
+        title: "Add Discovery Source",
+        desc: "Add new content source",
+        action: () => this.plugin.openDiscoverySourceModal()
+      }
+    ];
+    commands.forEach((cmd) => {
+      const button = commandGrid.createEl("div", { cls: "thoth-command-button" });
+      button.createEl("div", { text: cmd.title, cls: "command-title" });
+      button.createEl("div", { text: cmd.desc, cls: "command-desc" });
+      button.onclick = () => {
+        cmd.action();
+        new import_obsidian5.Notice(`Executed: ${cmd.title}`);
+      };
+    });
+  }
+  createDataCommands(contentEl) {
+    const section = contentEl.createEl("div", { cls: "thoth-command-section" });
+    section.createEl("h3").innerHTML = "\u{1F4CA} Data Management";
+    section.createEl("p", { text: "Manage knowledge base and data" });
+    const commandGrid = section.createEl("div", { cls: "thoth-command-grid" });
+    const commands = [
+      {
+        title: "Rebuild Index",
+        desc: "Rebuild the knowledge base index",
+        action: () => this.runDataCommand("rebuild-index")
+      },
+      {
+        title: "Clear Cache",
+        desc: "Clear system caches",
+        action: () => this.runDataCommand("clear-cache")
+      },
+      {
+        title: "Export Data",
+        desc: "Export knowledge base data",
+        action: () => this.runDataCommand("export")
+      },
+      {
+        title: "Backup Data",
+        desc: "Create system backup",
+        action: () => this.runDataCommand("backup")
+      }
+    ];
+    commands.forEach((cmd) => {
+      const button = commandGrid.createEl("div", { cls: "thoth-command-button" });
+      button.createEl("div", { text: cmd.title, cls: "command-title" });
+      button.createEl("div", { text: cmd.desc, cls: "command-desc" });
+      button.onclick = () => {
+        cmd.action();
+        new import_obsidian5.Notice(`Executed: ${cmd.title}`);
+      };
+    });
+  }
+  createSystemCommands(contentEl) {
+    const section = contentEl.createEl("div", { cls: "thoth-command-section" });
+    section.createEl("h3").innerHTML = "\u2699\uFE0F System Operations";
+    section.createEl("p", { text: "System-level operations and utilities" });
+    const commandGrid = section.createEl("div", { cls: "thoth-command-grid" });
+    const commands = [
+      {
+        title: "System Status",
+        desc: "View comprehensive system status",
+        action: () => this.openSystemStatus()
+      },
+      {
+        title: "View Logs",
+        desc: "Open system logs",
+        action: () => this.runSystemCommand("logs")
+      },
+      {
+        title: "Test Connection",
+        desc: "Test server connectivity",
+        action: () => this.runSystemCommand("test-connection")
+      },
+      {
+        title: "Reset Settings",
+        desc: "Reset to default settings",
+        action: () => this.confirmResetSettings()
+      }
+    ];
+    commands.forEach((cmd) => {
+      const button = commandGrid.createEl("div", { cls: "thoth-command-button" });
+      button.createEl("div", { text: cmd.title, cls: "command-title" });
+      button.createEl("div", { text: cmd.desc, cls: "command-desc" });
+      button.onclick = () => {
+        cmd.action();
+        new import_obsidian5.Notice(`Executed: ${cmd.title}`);
+      };
+    });
+  }
+  async runHealthCheck() {
+    try {
+      const endpoint = this.plugin.getEndpointUrl();
+      const response = await fetch(`${endpoint}/health`);
+      if (response.ok) {
+        const data = await response.json();
+        new import_obsidian5.Notice(`Agent Health: ${data.status || "OK"}`);
+      } else {
+        new import_obsidian5.Notice("Agent health check failed", 3e3);
+      }
+    } catch (error) {
+      new import_obsidian5.Notice("Could not connect to agent", 3e3);
+    }
+  }
+  async runDiscoveryCommand(command) {
+    try {
+      const endpoint = this.plugin.getEndpointUrl();
+      const response = await fetch(`${endpoint}/execute/command`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          command: "discovery",
+          args: [command]
+        })
+      });
+      if (response.ok) {
+        const result = await response.json();
+        new import_obsidian5.Notice(`Discovery ${command}: ${result.message || "Success"}`);
+      } else {
+        throw new Error(`Discovery ${command} failed`);
+      }
+    } catch (error) {
+      new import_obsidian5.Notice(`Discovery ${command} failed: ${error.message}`, 3e3);
+    }
+  }
+  async runDataCommand(command) {
+    try {
+      const endpoint = this.plugin.getEndpointUrl();
+      const response = await fetch(`${endpoint}/execute/command`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          command: "data",
+          args: [command]
+        })
+      });
+      if (response.ok) {
+        const result = await response.json();
+        new import_obsidian5.Notice(`Data ${command}: ${result.message || "Success"}`);
+      } else {
+        throw new Error(`Data ${command} failed`);
+      }
+    } catch (error) {
+      new import_obsidian5.Notice(`Data ${command} failed: ${error.message}`, 3e3);
+    }
+  }
+  async runSystemCommand(command) {
+    try {
+      const endpoint = this.plugin.getEndpointUrl();
+      const response = await fetch(`${endpoint}/execute/command`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          command: "system",
+          args: [command]
+        })
+      });
+      if (response.ok) {
+        const result = await response.json();
+        new import_obsidian5.Notice(`System ${command}: ${result.message || "Success"}`);
+      } else {
+        throw new Error(`System ${command} failed`);
+      }
+    } catch (error) {
+      new import_obsidian5.Notice(`System ${command} failed: ${error.message}`, 3e3);
+    }
+  }
+  openSystemStatus() {
+    new import_obsidian5.Notice("System status feature coming soon!");
+  }
+  async confirmResetSettings() {
+    const confirmed = await this.plugin.showConfirm("Reset all settings to defaults? This cannot be undone.");
+    if (confirmed) {
+      new import_obsidian5.Notice("Settings reset to defaults");
     }
   }
   onClose() {
@@ -3518,50 +3700,8 @@ var CommandsModal = class extends import_obsidian4.Modal {
   }
 };
 
-// src/modals/input-modal.ts
-var import_obsidian5 = require("obsidian");
-var InputModal = class extends import_obsidian5.Modal {
-  constructor(app, promptText, resolve) {
-    super(app);
-    this.promptText = promptText;
-    this.resolve = resolve;
-  }
-  onOpen() {
-    const { contentEl } = this;
-    contentEl.empty();
-    contentEl.createEl("h3", { text: this.promptText });
-    this.inputEl = contentEl.createEl("input", { type: "text" });
-    this.inputEl.style.cssText = "width: 100%; padding: 8px; margin: 10px 0; border: 1px solid var(--background-modifier-border); border-radius: 4px;";
-    this.inputEl.focus();
-    const buttonContainer = contentEl.createEl("div");
-    buttonContainer.style.cssText = "display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;";
-    const cancelButton = buttonContainer.createEl("button", { text: "Cancel" });
-    cancelButton.style.cssText = "padding: 8px 16px; border: 1px solid var(--background-modifier-border); background: var(--background-secondary); border-radius: 4px;";
-    cancelButton.onclick = () => {
-      this.resolve(null);
-      this.close();
-    };
-    const okButton = buttonContainer.createEl("button", { text: "OK" });
-    okButton.style.cssText = "padding: 8px 16px; background: var(--interactive-accent); color: var(--text-on-accent); border: none; border-radius: 4px;";
-    okButton.onclick = () => {
-      this.resolve(this.inputEl.value.trim() || null);
-      this.close();
-    };
-    this.inputEl.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        this.resolve(this.inputEl.value.trim() || null);
-        this.close();
-      } else if (e.key === "Escape") {
-        this.resolve(null);
-        this.close();
-      }
-    });
-  }
-  onClose() {
-    const { contentEl } = this;
-    contentEl.empty();
-  }
-};
+// src/modals/index.ts
+init_input_modal();
 
 // src/modals/confirm-modal.ts
 var import_obsidian6 = require("obsidian");
@@ -3607,7 +3747,20 @@ if (typeof process !== "undefined" && !import_obsidian7.Platform.isMobile) {
   spawn = cp.spawn;
   ChildProcess = cp.ChildProcess;
 }
-var execAsync = (0, import_util.promisify)(exec);
+var execAsync = null;
+function initDesktopUtils() {
+  if (typeof process !== "undefined" && !import_obsidian7.Platform.isMobile && typeof require !== "undefined") {
+    try {
+      const util = require("util");
+      execAsync = util.promisify(exec);
+      return true;
+    } catch (error) {
+      console.warn("Desktop utilities not available:", error);
+      return false;
+    }
+  }
+  return false;
+}
 var ThothPlugin = class extends import_obsidian7.Plugin {
   constructor() {
     super(...arguments);
@@ -3651,6 +3804,7 @@ var ThothPlugin = class extends import_obsidian7.Plugin {
   // 5 minutes
   async onload() {
     await this.loadSettings();
+    initDesktopUtils();
     if (import_obsidian7.Platform.isMobile && !this.settings.remoteMode) {
       console.log("Thoth: Mobile device detected, enabling remote mode");
       this.settings.remoteMode = true;
@@ -3737,6 +3891,10 @@ var ThothPlugin = class extends import_obsidian7.Plugin {
   }
   getEndpointUrl() {
     const baseUrl = this.settings.remoteEndpointUrl || "http://localhost:8000";
+    return baseUrl.replace(/\/$/, "");
+  }
+  getLettaEndpointUrl() {
+    const baseUrl = this.settings.lettaEndpointUrl || "http://localhost:8284";
     return baseUrl.replace(/\/$/, "");
   }
   async startAgent() {
@@ -5241,8 +5399,12 @@ var ThothSettingTab = class extends import_obsidian7.PluginSettingTab {
       this.display();
     }));
     if (this.plugin.settings.remoteMode) {
-      new import_obsidian7.Setting(containerEl).setName("Remote Server URL").setDesc("URL of the remote Thoth server").addText((text) => text.setPlaceholder("http://localhost:8000").setValue(this.plugin.settings.remoteEndpointUrl).onChange(async (value) => {
+      new import_obsidian7.Setting(containerEl).setName("Thoth API URL").setDesc("URL of the Thoth API server (research, discovery, PDF processing)").addText((text) => text.setPlaceholder("http://localhost:8000").setValue(this.plugin.settings.remoteEndpointUrl).onChange(async (value) => {
         this.plugin.settings.remoteEndpointUrl = value;
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian7.Setting(containerEl).setName("Letta API URL").setDesc("URL of the Letta API server (agent chat functionality)").addText((text) => text.setPlaceholder("http://localhost:8284").setValue(this.plugin.settings.lettaEndpointUrl).onChange(async (value) => {
+        this.plugin.settings.lettaEndpointUrl = value;
         await this.plugin.saveSettings();
       }));
     }

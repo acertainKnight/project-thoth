@@ -1145,12 +1145,56 @@ async def update_article_status(
                 detail='Failed to update article status',
             )
 
-        # Fetch updated match
-        updated_match = await match_repo.get_by_id(match_id)
+        # Fetch updated match with paper details using JOIN (same as sentiment endpoint)
+        query = """
+            SELECT
+                rqm.id as match_id,
+                rqm.paper_id,
+                rqm.question_id,
+                rqm.relevance_score,
+                rqm.matched_keywords,
+                rqm.matched_topics,
+                rqm.matched_authors,
+                rqm.discovered_via_source,
+                rqm.is_viewed,
+                rqm.is_bookmarked,
+                rqm.user_sentiment,
+                rqm.sentiment_recorded_at,
+                rqm.matched_at,
+                pm.doi,
+                pm.title,
+                pm.authors,
+                pm.abstract,
+                pm.publication_date,
+                pm.journal,
+                pm.url,
+                pm.pdf_url
+            FROM research_question_matches rqm
+            JOIN paper_metadata pm ON rqm.paper_id = pm.id
+            WHERE rqm.id = $1
+        """
+        updated_match = await match_repo.postgres.fetchrow(query, match_id)
+
+        if not updated_match:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail='Failed to retrieve updated article after status update',
+            )
 
         logger.debug(f'Updated article status for match {match_id}: {updates}')
 
-        return ArticleMatchResponse(**updated_match)
+        # Convert asyncpg.Record to dict and parse JSON fields
+        import json
+        match_data = dict(updated_match)
+
+        # Parse JSON string fields that Pydantic expects as lists
+        if isinstance(match_data.get('authors'), str):
+            try:
+                match_data['authors'] = json.loads(match_data['authors'])
+            except (json.JSONDecodeError, TypeError):
+                match_data['authors'] = []
+
+        return ArticleMatchResponse(**match_data)
 
     except HTTPException:
         raise
@@ -1225,9 +1269,24 @@ async def download_article_pdf(
             )
 
         # Get paper details (includes pdf_url) - after migration uses paper_id
-        article_id = match.get('paper_id') or match.get('article_id')  # Support both for transition
-        pdf_url = match.get('pdf_url')
-        title = match.get('title', 'unknown')
+        paper_id = match.get('paper_id') or match.get('article_id')  # Support both for transition
+
+        # Fetch paper metadata to get pdf_url and title
+        query = """
+            SELECT id, title, pdf_url, url
+            FROM paper_metadata
+            WHERE id = $1
+        """
+        paper = await match_repo.postgres.fetchrow(query, paper_id)
+
+        if not paper:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f'Paper {paper_id} not found',
+            )
+
+        pdf_url = paper['pdf_url']
+        title = paper['title'] or 'unknown'
 
         if not pdf_url:
             raise HTTPException(
@@ -1238,10 +1297,9 @@ async def download_article_pdf(
         # Download PDF using ingestion service
         from pathlib import Path
         from thoth.ingestion.pdf_downloader import download_pdf
-        from thoth.config import get_settings
+        from thoth.config import config
 
-        settings = get_settings()
-        pdf_dir = settings.pdf_dir
+        pdf_dir = config.pdf_dir
 
         # Sanitize filename from article title
         safe_filename = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title)
@@ -1258,11 +1316,11 @@ async def download_article_pdf(
             if not match.get('is_viewed'):
                 await match_repo.mark_as_viewed(match_id)
 
-            logger.info(f'Downloaded PDF for article {article_id} to {downloaded_path}')
+            logger.info(f'Downloaded PDF for article {paper_id} to {downloaded_path}')
 
             result = {
                 'status': 'success',
-                'article_id': str(article_id),
+                'article_id': str(paper_id),
                 'match_id': str(match_id),
                 'downloaded_path': str(downloaded_path),
                 'message': f'PDF downloaded successfully. File monitor will process it automatically.',

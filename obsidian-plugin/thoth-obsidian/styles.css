@@ -682,6 +682,121 @@
   font-weight: 600;
 }
 
+/* Multi-Chat Modal Tab Navigation (used in multi-chat-modal.ts) */
+.thoth-tab-navigation {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--background-modifier-border);
+  margin-bottom: 1rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.thoth-tab-navigation::-webkit-scrollbar {
+  height: 4px;
+}
+
+.thoth-tab-navigation::-webkit-scrollbar-track {
+  background: var(--background-secondary);
+}
+
+.thoth-tab-navigation::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: 2px;
+}
+
+.thoth-tab-button {
+  flex: 1;
+  min-width: fit-content;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.thoth-tab-button:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.thoth-tab-button.active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* Mobile-specific Modal Styles */
+.thoth-mobile-modal {
+  /* iOS safe area support - ensures content doesn't overlap status bar */
+  box-sizing: border-box !important;
+}
+
+/* Push close button below iOS status bar */
+.thoth-mobile-modal .modal-close-button {
+  min-width: 44px !important;
+  min-height: 44px !important;
+  padding: 12px !important;
+  font-size: 24px !important;
+  border-radius: 8px !important;
+  background: var(--background-secondary) !important;
+  border: 1px solid var(--background-modifier-border) !important;
+  /* Push below status bar with safe area inset */
+  top: calc(env(safe-area-inset-top, 0px) + 8px) !important;
+  right: calc(env(safe-area-inset-right, 0px) + 8px) !important;
+  position: absolute !important;
+  z-index: 1001 !important;
+}
+
+.thoth-mobile-modal .modal-close-button:hover,
+.thoth-mobile-modal .modal-close-button:active {
+  background: var(--background-modifier-hover) !important;
+}
+
+/* Push modal title below status bar */
+.thoth-mobile-modal .modal-title {
+  margin-top: calc(env(safe-area-inset-top, 0px) + 8px) !important;
+  padding-left: calc(env(safe-area-inset-left, 0px) + 20px) !important;
+  padding-right: calc(env(safe-area-inset-right, 0px) + 64px) !important; /* Space for close button */
+}
+
+/* Modal content with minimal padding */
+.thoth-mobile-modal .modal-content {
+  padding-bottom: env(safe-area-inset-bottom, 20px) !important;
+  padding-left: env(safe-area-inset-left, 0px) !important;
+  padding-right: env(safe-area-inset-right, 0px) !important;
+  box-sizing: border-box !important;
+}
+
+/* Mobile Tab Navigation - Horizontal Scroll */
+@media (max-width: 768px) {
+  .thoth-tab-navigation {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+
+  .thoth-tab-button {
+    flex: 0 0 auto;
+    min-width: 120px;
+    padding: 0.85rem 1.25rem;
+    font-size: 1rem;
+  }
+
+  /* Larger touch targets on mobile */
+  .thoth-tab-button {
+    min-height: 44px;
+  }
+}
+
 /* Chat Header with Title and Status */
 .thoth-chat-header {
   display: flex;

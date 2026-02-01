@@ -28,22 +28,32 @@ export class MultiChatModal extends Modal {
   /**
    * Fetch with timeout to prevent UI from hanging
    */
-  private async fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 10000): Promise<Response> {
+  private async fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 30000): Promise<Response> {
+    // Increase timeout to 30 seconds for mobile networks
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      console.log(`[MultiChatModal] Fetching: ${url}`);
+      const startTime = Date.now();
+
       const response = await fetch(url, {
         ...options,
         signal: controller.signal
       });
+
+      const duration = Date.now() - startTime;
+      console.log(`[MultiChatModal] Response ${response.status} in ${duration}ms`);
+
       clearTimeout(timeoutId);
       return response;
     } catch (error) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
-        throw new Error('Request timed out - server may be down or slow');
+        console.error(`[MultiChatModal] Request timed out after ${timeoutMs}ms:`, url);
+        throw new Error(`Request timed out after ${timeoutMs/1000}s - check network connection`);
       }
+      console.error(`[MultiChatModal] Fetch error:`, error);
       throw error;
     }
   }
@@ -67,11 +77,25 @@ export class MultiChatModal extends Modal {
     // Load session list
     this.renderSessionList();
 
-    // Load active session or create new one
+    // Load active session or use most recent, or create new one
     if (this.plugin.settings.activeChatSessionId) {
-      await this.switchToSession(this.plugin.settings.activeChatSessionId);
+      // Try to load the previously active session
+      const sessionExists = this.chatSessions.find(s => s.id === this.plugin.settings.activeChatSessionId);
+      if (sessionExists) {
+        await this.switchToSession(this.plugin.settings.activeChatSessionId);
+      } else if (this.chatSessions.length > 0) {
+        // Previous session doesn't exist, use most recent
+        await this.switchToSession(this.chatSessions[0].id);
+      } else {
+        // No sessions exist, create new one
+        await this.createNewSession('Default Chat');
+      }
+    } else if (this.chatSessions.length > 0) {
+      // No active session stored, use most recent existing session
+      await this.switchToSession(this.chatSessions[0].id);
     } else {
-      await this.createNewSession();
+      // No sessions exist at all, create a default one
+      await this.createNewSession('Default Chat');
     }
 
     // Make draggable
@@ -87,7 +111,7 @@ export class MultiChatModal extends Modal {
 
     // Check if we're on mobile
     if ((this.app as any).isMobile) {
-      // Mobile: Full-screen modal
+      // Mobile: Full-screen modal with safe area insets for iOS
       modalEl.addClass('thoth-mobile-modal');
       modalEl.style.position = 'fixed';
       modalEl.style.top = '0';
@@ -103,6 +127,7 @@ export class MultiChatModal extends Modal {
       modalEl.style.transform = 'none';
       modalEl.style.zIndex = '1000';
       modalEl.style.overflow = 'hidden';
+      // Safe area insets handled in CSS for close button and content
     } else {
       // Desktop: Remove backdrop to allow background interaction
       const backdrop = modalEl.parentElement;
@@ -157,6 +182,7 @@ export class MultiChatModal extends Modal {
       titleEl.style.borderBottom = '1px solid var(--background-modifier-border)';
       titleEl.style.borderRadius = '0';
       titleEl.style.fontSize = '16px'; // Larger text for mobile
+      // No extra top padding needed - parent modal handles safe area
       return;
     }
 
@@ -352,7 +378,7 @@ export class MultiChatModal extends Modal {
     });
   }
 
-  switchTab(tabId: string) {
+  async switchTab(tabId: string) {
     // Update tab buttons
     this.tabContainer.querySelectorAll('.thoth-tab-button').forEach((btn, index) => {
       if (index === ['chat', 'conversations', 'research', 'settings'].indexOf(tabId)) {
@@ -362,12 +388,12 @@ export class MultiChatModal extends Modal {
       }
     });
 
-    // Update content
+    // Update content (await for research tab data loading)
     this.currentTab = tabId;
-    this.renderTabContent();
+    await this.renderTabContent();
   }
 
-  renderTabContent() {
+  async renderTabContent() {
     if (!this.contentContainer) return;
 
     this.contentContainer.empty();
@@ -380,7 +406,7 @@ export class MultiChatModal extends Modal {
         this.renderConversationsTab();
         break;
       case 'research':
-        this.renderResearchTab();
+        await this.renderResearchTab(); // Await async data loading
         break;
       case 'settings':
         this.renderSettingsTab();
@@ -415,16 +441,7 @@ export class MultiChatModal extends Modal {
     const statusIndicator = controlsSection.createEl('div', { cls: 'connection-status' });
     this.updateConnectionStatus(statusIndicator);
 
-    // Settings button
-    const settingsBtn = controlsSection.createEl('button', {
-      text: '⚙️',
-      cls: 'settings-btn',
-      title: 'Settings',
-      attr: { 'aria-label': 'Settings' }
-    });
-    settingsBtn.onclick = () => {
-      this.switchTab('settings');
-    };
+    // Settings button removed - use Settings tab instead
 
     // Create chat area within the content container
     const chatArea = this.contentContainer.createEl('div', { cls: 'chat-area modern' });
@@ -467,18 +484,18 @@ export class MultiChatModal extends Modal {
   }
 
   showConnectionDetails() {
-    const endpoint = this.plugin.getEndpointUrl();
+    const lettaEndpoint = this.plugin.getLettaEndpointUrl(); // Chat uses Letta
     const isConnected = this.plugin.isAgentRunning || this.plugin.settings.remoteMode;
     const mode = this.plugin.settings.remoteMode ? 'Remote' : 'Local';
-    
+
     const details = `
 Connection Status: ${isConnected ? 'Connected' : 'Disconnected'}
 Mode: ${mode}
-Endpoint: ${endpoint}
+Chat Endpoint: ${lettaEndpoint}
 
-${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
+${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to begin'}
     `.trim();
-    
+
     new Notice(details, 5000);
   }
 
@@ -527,9 +544,10 @@ ${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
 
       const loadingEl = container.createEl('div', { text: 'Loading agents...', cls: 'loading' });
 
-      // Fetch available agents
-      const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/agents/list`);
+      // Fetch available agents from Letta
+      // Note: Letta API requires trailing slash on collection endpoints
+      const endpoint = this.plugin.getLettaEndpointUrl();
+      const response = await fetch(`${endpoint}/v1/agents/`);
 
       loadingEl.remove();
 
@@ -642,10 +660,10 @@ ${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
     // Note: This is actually deleting a conversation, not an agent
     // (Legacy method name from when we called conversations "agents")
     const sessionId = agentName; // The "name" is actually the session ID
-    
+
     if (confirm(`Delete this conversation? This action cannot be undone.`)) {
       try {
-        const endpoint = this.plugin.getEndpointUrl();
+        const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat
         const response = await fetch(`${endpoint}/v1/conversations/${sessionId}`, {
           method: 'DELETE'
         });
@@ -1284,10 +1302,11 @@ ${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
 
   async loadChatSessions() {
     try {
-      const endpoint = this.plugin.getEndpointUrl();
+      const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat
       // Get conversations for the default agent
+      // Note: Use trailing slash to avoid nginx redirect that duplicates query params
       const agentId = await this.getOrCreateDefaultAgent();
-      const response = await this.fetchWithTimeout(`${endpoint}/v1/conversations?agent_id=${agentId}&limit=50`);
+      const response = await this.fetchWithTimeout(`${endpoint}/v1/conversations/?agent_id=${agentId}&limit=50`);
 
       if (response.ok) {
         const conversations = await response.json();
@@ -1312,27 +1331,37 @@ ${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
     }
   }
 
-  private cachedAgentId: string | null = null;
-
   async getOrCreateDefaultAgent(): Promise<string> {
-    // Return cached agent ID if available
-    if (this.cachedAgentId) {
-      return this.cachedAgentId;
+    // Return cached agent ID from settings (persists across sessions)
+    if (this.plugin.settings.lettaAgentId) {
+      console.log('[MultiChatModal] Using cached agent ID:', this.plugin.settings.lettaAgentId);
+      return this.plugin.settings.lettaAgentId;
     }
 
+    console.log('[MultiChatModal] No cached agent ID, fetching from server...');
+
     try {
-      const endpoint = this.plugin.getEndpointUrl();
+      const endpoint = this.plugin.getLettaEndpointUrl();
       // Get the main Thoth orchestrator agent (auto-created by backend on startup)
-      const listResponse = await this.fetchWithTimeout(`${endpoint}/v1/agents?limit=100`);
+      // Note: Letta API requires trailing slash on collection endpoints
+      const listResponse = await this.fetchWithTimeout(`${endpoint}/v1/agents/`);
       if (listResponse.ok) {
         const agents = await listResponse.json();
-        // The main orchestrator is always named "thoth_research_agent"
-        const thothAgent = agents.find((a: any) => a.name === 'thoth_research_agent');
-        
+        console.log('[MultiChatModal] Found agents:', agents.map((a: any) => a.name));
+
+        // The main orchestrator is named "thoth_main_orchestrator"
+        const thothAgent = agents.find((a: any) => a.name === 'thoth_main_orchestrator');
+
         if (thothAgent) {
-          this.cachedAgentId = thothAgent.id;
+          // Cache in settings for future use
+          this.plugin.settings.lettaAgentId = thothAgent.id;
+          await this.plugin.saveSettings();
+          console.log('[MultiChatModal] Cached agent ID for future use:', thothAgent.id);
           return thothAgent.id;
         }
+
+        // If not found, log all available agent names to help debug
+        console.error('[MultiChatModal] thoth_main_orchestrator not found. Available agents:', agents.map((a: any) => a.name));
       }
 
       // Agent not found - backend may not have started properly
@@ -1448,17 +1477,22 @@ ${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
 
   async createNewSession(title?: string) {
     try {
-      const sessionTitle = title || `Chat ${this.chatSessions.length + 1}`;
-      const endpoint = this.plugin.getEndpointUrl();
+      // Generate better default title with timestamp
+      let sessionTitle = title;
+      if (!sessionTitle) {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        sessionTitle = `New Chat - ${timeStr}`;
+      }
+
+      const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat
       const agentId = await this.getOrCreateDefaultAgent();
 
-      const response = await fetch(`${endpoint}/v1/conversations`, {
+      // Note: Letta API expects agent_id as query param, with trailing slash to avoid nginx redirect
+      const response = await fetch(`${endpoint}/v1/conversations/?agent_id=${agentId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agent_id: agentId,
-          summary: sessionTitle
-        })
+        body: JSON.stringify({})
       });
 
       if (response.ok) {
@@ -1482,13 +1516,15 @@ ${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
         // Auto-close sidebar after creating new session
         this.closeSidebar();
 
-        new Notice(`Created new chat: ${sessionTitle}`);
+        new Notice(`Created: ${sessionTitle}`);
       } else {
-        throw new Error('Failed to create session');
+        const errorText = await response.text();
+        console.error(`[MultiChatModal] Failed to create session: ${response.status}`, errorText);
+        throw new Error(`Failed to create session: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
-      console.error('Error creating session:', error);
-      new Notice('Failed to create new chat session');
+      console.error('[MultiChatModal] Error creating session:', error);
+      new Notice(`Failed to create new chat session: ${error.message}`);
     }
   }
 
@@ -1512,7 +1548,7 @@ ${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
     this.chatContentContainer.empty();
 
     try {
-      const endpoint = this.plugin.getEndpointUrl();
+      const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat messages
       const response = await fetch(`${endpoint}/v1/conversations/${sessionId}/messages?limit=100`);
 
       if (response.ok) {
@@ -1535,8 +1571,26 @@ ${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
       cls: 'chat-messages'
     });
 
+    // Filter messages to only show user and assistant messages
+    // Exclude system messages, reasoning, tool calls, etc.
+    const chatMessages = messages.filter(msg => {
+      // Check message_type field (Letta's primary message type)
+      const messageType = msg.message_type || msg.type;
+      if (messageType === 'user_message' || messageType === 'assistant_message') {
+        return true;
+      }
+
+      // Fallback to role field for backward compatibility
+      const role = msg.role;
+      if (role === 'user' || role === 'assistant') {
+        return true;
+      }
+
+      return false;
+    });
+
     // Load existing messages or show empty state
-    if (messages.length === 0) {
+    if (chatMessages.length === 0) {
       this.createEmptyState(
         messagesContainer,
         '💬',
@@ -1545,8 +1599,17 @@ ${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
         'Try: "Find recent papers on transformers"'
       );
     } else {
-      messages.forEach(msg => {
-        this.addMessageToChat(messagesContainer, msg.role, msg.content);
+      chatMessages.forEach(msg => {
+        // Extract role from message_type or use role field directly
+        const messageType = msg.message_type || msg.type;
+        const role = messageType === 'user_message' ? 'user'
+                   : messageType === 'assistant_message' ? 'assistant'
+                   : msg.role;
+
+        // Use text field if available, otherwise content
+        const content = msg.text || msg.content;
+
+        this.addMessageToChat(messagesContainer, role, content);
       });
     }
 
@@ -1604,38 +1667,103 @@ ${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
       const thinkingMsg = this.addThinkingIndicator(messagesContainer);
 
       try {
-        // Send to Letta conversation
-        const endpoint = this.plugin.getEndpointUrl();
+        // Send to Letta conversation with streaming enabled
+        const endpoint = this.plugin.getLettaEndpointUrl();
         const response = await fetch(`${endpoint}/v1/conversations/${sessionId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            role: 'user',
-            text: message
+            input: message,
+            stream: true,  // Enable streaming for real-time token display
+            stream_tokens: true  // Stream individual tokens
           })
         });
 
-        if (response.ok) {
+        if (response.ok && response.body) {
           // Remove thinking indicator
           thinkingMsg.remove();
-          
-          const result = await response.json();
-          // Letta returns an array of messages (assistant response)
-          const messages = Array.isArray(result) ? result : [result];
-          messages.forEach((msg: any) => {
-            if (msg.role === 'assistant') {
-              this.addMessageToChat(messagesContainer, 'assistant', msg.text);
+
+          // Track messages by ID for accumulation (stream_tokens sends deltas with same ID)
+          const messageAccumulator = new Map<string, string>();
+          let assistantMessageEl: HTMLElement | null = null;
+
+          // Read SSE stream
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            // Decode chunk and add to buffer
+            buffer += decoder.decode(value, { stream: true });
+
+            // Process complete SSE messages (ending with \n\n)
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop() || ''; // Keep incomplete message in buffer
+
+            for (const line of lines) {
+              if (!line.trim().startsWith('data:')) continue;
+
+              const jsonStr = line.replace(/^data:\s*/, '').trim();
+              if (!jsonStr || jsonStr === '[DONE]') continue;
+
+              try {
+                const msg = JSON.parse(jsonStr);
+
+                // Only process assistant_message types
+                if (msg.message_type === 'assistant_message') {
+                  const messageId = msg.id;
+                  const delta = msg.content || msg.text || '';
+
+                  if (delta && messageId) {
+                    // Accumulate deltas by message ID
+                    const existing = messageAccumulator.get(messageId) || '';
+                    messageAccumulator.set(messageId, existing + delta);
+
+                    // Get full accumulated content for this message
+                    const fullContent = messageAccumulator.get(messageId) || '';
+
+                    // Create assistant message element on first chunk
+                    if (!assistantMessageEl) {
+                      assistantMessageEl = messagesContainer.createEl('div', {
+                        cls: 'chat-message assistant'
+                      });
+                      assistantMessageEl.createEl('div', {
+                        text: 'Assistant',
+                        cls: 'message-role'
+                      });
+                      assistantMessageEl.createEl('div', {
+                        text: '',
+                        cls: 'message-content'
+                      });
+                    }
+
+                    // Update content with accumulated text
+                    const contentEl = assistantMessageEl.querySelector('.message-content') as HTMLElement;
+                    if (contentEl) {
+                      contentEl.textContent = fullContent;
+                    }
+
+                    // Auto-scroll to bottom
+                    this.scrollToBottom(messagesContainer, true);
+                  }
+                }
+              } catch (e) {
+                console.warn('[MultiChatModal] Failed to parse SSE message:', jsonStr.substring(0, 100));
+              }
             }
-          });
+          }
 
           // Update session list to reflect new message
           await this.loadChatSessions();
           this.renderSessionList();
-          
-          // Show success toast
-          this.showToast('Message sent successfully', 'success');
         } else {
-          throw new Error('Failed to send message');
+          // Add better error logging with response body
+          const errorBody = await response.text();
+          console.error(`[MultiChatModal] Message send failed: ${response.status}`, errorBody);
+          throw new Error(`Failed to send message: ${response.status}`);
         }
       } catch (error) {
         console.error('Chat error:', error);
@@ -1738,11 +1866,20 @@ ${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
     const session = this.chatSessions.find(s => s.id === sessionId);
     if (!session) return;
 
-    const newTitle = prompt('Enter new title:', session.title);
+    // Use InputModal instead of prompt() (Electron-compatible)
+    const newTitle = await new Promise<string | null>((resolve) => {
+      const modal = new (require('../modals/input-modal').InputModal)(
+        (this.plugin as any).app,
+        'Enter new session name:',
+        resolve,
+        session.title  // Default value
+      );
+      modal.open();
+    });
     if (!newTitle || newTitle === session.title) return;
 
     try {
-      const endpoint = this.plugin.getEndpointUrl();
+      const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat
       const response = await fetch(`${endpoint}/v1/conversations/${sessionId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -1800,10 +1937,19 @@ ${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
     const session = this.chatSessions.find(s => s.id === sessionId);
     if (!session) return;
 
-    if (!confirm(`Delete "${session.title}"? This cannot be undone.`)) return;
+    // Use InputModal for confirmation instead of confirm() (Electron-compatible)
+    const confirmed = await new Promise<boolean>((resolve) => {
+      const modal = new (require('../modals/input-modal').InputModal)(
+        (this.plugin as any).app,
+        `Delete "${session.title}"? Type "DELETE" to confirm:`,
+        (result: string | null) => resolve(result === 'DELETE')
+      );
+      modal.open();
+    });
+    if (!confirmed) return;
 
     try {
-      const endpoint = this.plugin.getEndpointUrl();
+      const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat
       const response = await fetch(`${endpoint}/v1/conversations/${sessionId}`, {
         method: 'DELETE'
       });
@@ -2394,7 +2540,7 @@ ${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
 
       // Re-render status tab to update info
       if (this.currentTab === 'status') {
-        this.renderTabContent();
+        await this.renderTabContent();
       }
 
       new Notice('Status refreshed');
@@ -2532,7 +2678,7 @@ ${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
     if (newTitle && newTitle !== session.title) {
       session.title = newTitle;
       await this.plugin.saveSettings();
-      this.renderTabContent(); // Refresh
+      await this.renderTabContent(); // Refresh (await for research tab)
     }
   }
 
@@ -2549,7 +2695,7 @@ ${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
         }
       }
       await this.plugin.saveSettings();
-      this.renderTabContent(); // Refresh
+      await this.renderTabContent(); // Refresh (await for research tab)
     }
   }
 
@@ -2611,12 +2757,12 @@ ${isConnected ? '✓ Ready to chat' : '⚠ Start the Thoth server to begin'}
   }
 
   // Research tab
-  renderResearchTab() {
+  async renderResearchTab() {
     const researchArea = this.contentContainer.createEl('div', { cls: 'research-area' });
 
-    // Render Research Tab component
+    // Render Research Tab component (async - loads data from API)
     const researchTab = new ResearchTabComponent(researchArea, this.plugin);
-    researchTab.render();
+    await researchTab.render();
   }
 
   // Settings tab

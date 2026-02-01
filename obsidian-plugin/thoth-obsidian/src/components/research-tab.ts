@@ -1,11 +1,12 @@
 /**
  * Research Tab Component
- * 
+ *
  * Displays live discovery results, research questions, and browser workflows.
  * Allows users to view, rate, and download discovered papers.
  */
 
 import { Notice } from 'obsidian';
+import { InputModal } from '../modals/input-modal';
 
 export interface ResearchQuestion {
   id: string;
@@ -315,26 +316,21 @@ export class ResearchTabComponent {
     // Actions
     const actions = card.createDiv({ cls: 'thoth-article-actions' });
 
-    // Download button - grey out if no PDF URL
-    const downloadBtn = actions.createEl('button', {
-      text: '⬇ PDF',
-      cls: `thoth-action-btn ${!article.pdf_url ? 'disabled' : ''}`
-    });
-    downloadBtn.disabled = !article.pdf_url;
-    downloadBtn.onclick = () => {
-      if (article.pdf_url) {
-        this.downloadArticle(article);
-      } else {
-        new Notice('No PDF available for this article');
-      }
-    };
+    // Download button - only show if PDF URL exists
+    if (article.pdf_url) {
+      const downloadBtn = actions.createEl('button', {
+        text: '⬇ PDF',
+        cls: 'thoth-action-btn'
+      });
+      downloadBtn.onclick = () => this.downloadArticle(article);
+    }
 
-    // View button
+    // View button - opens article URL
     const viewBtn = actions.createEl('button', {
       text: '👁 View',
       cls: `thoth-action-btn ${article.is_viewed ? 'active' : ''}`
     });
-    viewBtn.onclick = () => this.toggleViewed(article);
+    viewBtn.onclick = () => this.viewArticle(article);
 
     // Rating buttons
     const ratingGroup = actions.createDiv({ cls: 'thoth-rating-group' });
@@ -509,11 +505,18 @@ export class ResearchTabComponent {
       await this.toggleViewed(article);
     }
 
-    // Show article details in modal or open URL
-    if (article.doi) {
-      window.open(`https://doi.org/${article.doi}`, '_blank');
-    } else if (article.pdf_url) {
-      window.open(article.pdf_url, '_blank');
+    // Open external URL (Electron-safe using require)
+    const url = article.doi ? `https://doi.org/${article.doi}` : article.pdf_url;
+
+    if (url) {
+      try {
+        // Use electron shell to open external links safely
+        require('electron').shell.openExternal(url);
+      } catch (error) {
+        // Fallback for non-electron environments
+        console.warn('electron.shell not available, using window.open');
+        window.open(url, '_blank');
+      }
     } else {
       new Notice('No URL available for this article');
     }
@@ -523,7 +526,7 @@ export class ResearchTabComponent {
     try {
       const endpoint = this.plugin.getEndpointUrl();
       const response = await fetch(
-        `${endpoint}/api/research/questions/${questionId}/discover`,
+        `${endpoint}/api/research/questions/${questionId}/run`,
         { method: 'POST' }
       );
 
@@ -540,11 +543,15 @@ export class ResearchTabComponent {
   }
 
   private async createNewQuestion() {
-    // Prompt for research question details
-    const name = prompt('Enter research question name:');
+    // Use InputModal instead of prompt() (Electron-compatible)
+    const name = await new Promise<string | null>((resolve) => {
+      new InputModal((this.plugin as any).app, 'Enter research question name:', resolve).open();
+    });
     if (!name) return;
 
-    const keywords = prompt('Enter keywords (comma-separated):');
+    const keywords = await new Promise<string | null>((resolve) => {
+      new InputModal((this.plugin as any).app, 'Enter keywords (comma-separated):', resolve).open();
+    });
     if (!keywords) return;
 
     const keywordsList = keywords.split(',').map(k => k.trim()).filter(k => k);
@@ -641,7 +648,7 @@ export class ResearchTabComponent {
     
     try {
       const endpoint = (this.plugin as any).getEndpointUrl();
-      const response = await fetch(`${endpoint}/browser-workflows`);
+      const response = await fetch(`${endpoint}/api/workflows`);
       
       if (response.ok) {
         const workflows = await response.json();
@@ -697,7 +704,7 @@ export class ResearchTabComponent {
     runBtn.onclick = async () => {
       try {
         const endpoint = (this.plugin as any).getEndpointUrl();
-        await fetch(`${endpoint}/browser-workflows/${workflow.id}/execute`, {
+        await fetch(`${endpoint}/api/workflows/${workflow.id}/execute`, {
           method: 'POST'
         });
         new Notice(`Executing workflow: ${workflow.name}`);
@@ -749,12 +756,16 @@ export class ResearchTabComponent {
         try {
           const endpoint = (this.plugin as any).getEndpointUrl();
           const response = await fetch(`${endpoint}/health`);
-          if (response.ok) {
+          // Accept both 200 (healthy) and 503 (partially unhealthy but running)
+          if (response.ok || response.status === 503) {
             const data = await response.json();
-            new Notice(`System healthy. Articles: ${data.article_count || 'N/A'}`);
+            const status = data.healthy ? '✓ Healthy' : '⚠ Partially Degraded';
+            new Notice(`System: ${status}. Services: ${Object.keys(data.services || {}).length}`);
+          } else {
+            new Notice(`Unable to fetch health status (${response.status})`);
           }
         } catch (error) {
-          new Notice('Unable to fetch statistics');
+          new Notice('Unable to connect to backend');
         }
       }
     );
