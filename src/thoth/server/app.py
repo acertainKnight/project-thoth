@@ -237,6 +237,16 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info('Starting Thoth server application...')
 
+    # Initialize Letta agents
+    try:
+        from thoth.services.agent_initialization_service import AgentInitializationService
+        agent_init = AgentInitializationService()
+        agent_ids = await agent_init.initialize_all_agents()
+        logger.info(f'✅ Agents initialized: {", ".join(agent_ids.keys())}')
+    except Exception as e:
+        logger.warning(f'Could not initialize agents: {e}')
+        logger.warning('Continuing without agent initialization - agents may need manual setup')
+
     # Initialize settings watcher if enabled
     if _should_enable_hot_reload():
         # Settings file watcher
