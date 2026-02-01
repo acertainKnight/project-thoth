@@ -156,10 +156,17 @@ class CreateResearchQuestionMCPTool(MCPTool):
                     'minimum': 1,
                     'maximum': 500,
                 },
-                'auto_download_pdfs': {
+                'auto_download_enabled': {
                     'type': 'boolean',
                     'description': 'Automatically download matching PDFs',
-                    'default': True,
+                    'default': False,
+                },
+                'auto_download_min_score': {
+                    'type': 'number',
+                    'description': 'Minimum score threshold for auto-download',
+                    'default': 0.7,
+                    'minimum': 0.0,
+                    'maximum': 1.0,
                 },
             },
             'required': ['name', 'keywords', 'selected_sources'],
@@ -180,7 +187,8 @@ class CreateResearchQuestionMCPTool(MCPTool):
                 schedule_frequency=arguments.get('schedule_frequency', 'daily'),
                 schedule_time=arguments.get('schedule_time'),
                 min_relevance_score=arguments.get('min_relevance_score', 0.7),
-                auto_download_pdfs=arguments.get('auto_download_pdfs', True),
+                auto_download_enabled=arguments.get('auto_download_enabled', False),
+                auto_download_min_score=arguments.get('auto_download_min_score', 0.7),
                 max_articles_per_run=arguments.get('max_articles_per_run', 50),
             )
 

@@ -18,9 +18,14 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
     """Repository for managing article-research question matches with relevance."""
 
     def __init__(self, postgres_service, **kwargs):
-        """Initialize article research match repository."""
+        """
+        Initialize article research match repository.
+
+        NOTE: After migration, uses research_question_matches table.
+        Kept for backward compatibility during transition.
+        """
         super().__init__(
-            postgres_service, table_name='article_research_matches', **kwargs
+            postgres_service, table_name='research_question_matches', **kwargs
         )
 
     async def create_match(
@@ -62,36 +67,36 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                 'discovery_run_id': discovery_run_id,
             }
 
-            # Use ON CONFLICT to handle duplicates
+            # Use ON CONFLICT to handle duplicates (after migration: paper_id, question_id)
             query = """
-                INSERT INTO article_research_matches (
-                    article_id, question_id, relevance_score,
+                INSERT INTO research_question_matches (
+                    paper_id, question_id, relevance_score,
                     matched_keywords, matched_topics, matched_authors,
-                    discovered_via_source, discovery_run_id
+                    discovered_via_source
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                ON CONFLICT (article_id, question_id) DO UPDATE SET
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                ON CONFLICT (paper_id, question_id) DO UPDATE SET
                     relevance_score = GREATEST(
-                        article_research_matches.relevance_score,
+                        research_question_matches.relevance_score,
                         EXCLUDED.relevance_score
                     ),
                     matched_keywords = EXCLUDED.matched_keywords,
                     matched_topics = EXCLUDED.matched_topics,
                     matched_authors = EXCLUDED.matched_authors,
-                    discovered_via_source = EXCLUDED.discovered_via_source
+                    discovered_via_source = EXCLUDED.discovered_via_source,
+                    updated_at = NOW()
                 RETURNING id
             """
 
             match_id = await self.postgres.fetchval(
                 query,
-                article_id,
+                article_id,  # Now paper_id in new schema
                 question_id,
                 relevance_score,
                 matched_keywords or [],
                 matched_topics or [],
                 matched_authors or [],
                 discovered_via_source,
-                discovery_run_id,
             )
 
             # Invalidate cache
@@ -109,19 +114,20 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         question_id: str,
     ) -> Optional[dict[str, Any]]:  # noqa: UP007
         """
-        Check if an article is already matched to a research question.
+        Check if a paper is already matched to a research question.
 
         Args:
-            article_id: Article UUID
+            article_id: Paper UUID (kept as article_id for backward compatibility)
             question_id: Research question UUID
 
         Returns:
             Match record if exists, None otherwise
         """
         try:
+            # After migration: use research_question_matches with paper_id
             query = """
-                SELECT * FROM article_research_matches
-                WHERE article_id = $1 AND question_id = $2
+                SELECT * FROM research_question_matches
+                WHERE paper_id = $1 AND question_id = $2
             """
 
             result = await self.postgres.fetchrow(query, article_id, question_id)
@@ -133,7 +139,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
 
         except Exception as e:
             logger.error(
-                f'Failed to check article-question match {article_id}/{question_id}: {e}'
+                f'Failed to check paper-question match {article_id}/{question_id}: {e}'
             )
             return None
 
@@ -174,30 +180,49 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             return cached
 
         try:
+            # After migration: use research_question_matches + paper_metadata
             query = """
                 SELECT
-                    arm.*,
-                    da.doi, da.title, da.authors, da.abstract,
-                    da.publication_date, da.venue, da.citation_count
-                FROM article_research_matches arm
-                JOIN discovered_articles da ON arm.article_id = da.id
-                WHERE arm.question_id = $1
+                    rqm.id as match_id,
+                    rqm.paper_id,
+                    rqm.question_id,
+                    rqm.relevance_score,
+                    rqm.matched_keywords,
+                    rqm.matched_topics,
+                    rqm.matched_authors,
+                    rqm.discovered_via_source,
+                    rqm.is_viewed,
+                    rqm.is_bookmarked,
+                    rqm.user_sentiment,
+                    rqm.sentiment_recorded_at,
+                    rqm.matched_at,
+                    pm.doi,
+                    pm.title,
+                    pm.authors,
+                    pm.abstract,
+                    pm.publication_date,
+                    pm.journal,
+                    pm.url,
+                    pm.pdf_url
+                FROM research_question_matches rqm
+                JOIN paper_metadata pm ON rqm.paper_id = pm.id
+                WHERE rqm.question_id = $1
             """
             params = [question_id]
 
             if min_relevance is not None:
-                query += f' AND arm.relevance_score >= ${len(params) + 1}'
+                query += f' AND rqm.relevance_score >= ${len(params) + 1}'
                 params.append(min_relevance)
 
             if is_viewed is not None:
-                query += f' AND arm.is_viewed = ${len(params) + 1}'
+                query += f' AND rqm.is_viewed = ${len(params) + 1}'
                 params.append(is_viewed)
 
             if is_bookmarked is not None:
-                query += f' AND arm.is_bookmarked = ${len(params) + 1}'
+                query += f' AND rqm.is_bookmarked = ${len(params) + 1}'
                 params.append(is_bookmarked)
 
-            query += ' ORDER BY arm.relevance_score DESC, arm.matched_at DESC'
+            query += ' ORDER BY rqm.relevance_score DESC, rqm.matched_at DESC'
 
             if limit is not None:
                 query += f' LIMIT ${len(params) + 1}'
@@ -208,7 +233,18 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                 params.append(offset)
 
             results = await self.postgres.fetch(query, *params)
-            data = [dict(row) for row in results]
+            data = []
+            for row in results:
+                row_dict = dict(row)
+                # Authors is already JSONB from paper_metadata, no parsing needed
+                # But keep backward compatibility check
+                if isinstance(row_dict.get('authors'), str):
+                    import json
+                    try:
+                        row_dict['authors'] = json.loads(row_dict['authors'])
+                    except (json.JSONDecodeError, TypeError):
+                        row_dict['authors'] = []
+                data.append(row_dict)
 
             self._set_in_cache(cache_key, data)
             return data
@@ -235,15 +271,15 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         try:
             query = """
                 SELECT
-                    arm.*,
+                    rqm.*,
                     rq.name as question_name,
                     rq.user_id,
                     rq.keywords,
                     rq.topics
-                FROM article_research_matches arm
-                JOIN research_questions rq ON arm.question_id = rq.id
-                WHERE arm.article_id = $1
-                ORDER BY arm.relevance_score DESC
+                FROM research_question_matches rqm
+                JOIN research_questions rq ON rqm.question_id = rq.id
+                WHERE rqm.paper_id = $1
+                ORDER BY rqm.relevance_score DESC
             """
 
             results = await self.postgres.fetch(query, article_id)
@@ -276,16 +312,35 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         try:
             query = """
                 SELECT
-                    arm.*,
-                    da.doi, da.title, da.authors, da.abstract,
-                    da.publication_date, da.venue,
-                    rq.name as question_name, rq.user_id
-                FROM article_research_matches arm
-                JOIN discovered_articles da ON arm.article_id = da.id
-                JOIN research_questions rq ON arm.question_id = rq.id
-                WHERE arm.relevance_score >= $1
-                AND arm.is_viewed = $2
-                ORDER BY arm.relevance_score DESC, arm.matched_at DESC
+                    rqm.id as match_id,
+                    rqm.paper_id,
+                    rqm.question_id,
+                    rqm.relevance_score,
+                    rqm.matched_keywords,
+                    rqm.matched_topics,
+                    rqm.matched_authors,
+                    rqm.discovered_via_source,
+                    rqm.is_viewed,
+                    rqm.is_bookmarked,
+                    rqm.user_sentiment,
+                    rqm.sentiment_recorded_at,
+                    rqm.matched_at,
+                    pm.doi,
+                    pm.title,
+                    pm.authors,
+                    pm.abstract,
+                    pm.publication_date,
+                    pm.journal,
+                    pm.url,
+                    pm.pdf_url,
+                    rq.name as question_name,
+                    rq.user_id
+                FROM research_question_matches rqm
+                JOIN paper_metadata pm ON rqm.paper_id = pm.id
+                JOIN research_questions rq ON rqm.question_id = rq.id
+                WHERE rqm.relevance_score >= $1
+                AND rqm.is_viewed = $2
+                ORDER BY rqm.relevance_score DESC, rqm.matched_at DESC
                 LIMIT $3
             """
 
@@ -427,7 +482,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                     COUNT(*) FILTER (WHERE user_sentiment = 'dislike') as disliked,
                     COUNT(*) FILTER (WHERE user_sentiment = 'skip') as skipped,
                     COUNT(*) FILTER (WHERE user_sentiment IS NULL) as pending
-                FROM article_research_matches
+                FROM research_question_matches
                 WHERE question_id = $1
             """
 
@@ -469,9 +524,8 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                     COUNT(*) FILTER (WHERE is_bookmarked = true) as bookmarked,
                     AVG(relevance_score) as avg_relevance,
                     MAX(relevance_score) as max_relevance,
-                    AVG(user_rating) FILTER (WHERE user_rating IS NOT NULL) as avg_rating,
                     COUNT(DISTINCT discovered_via_source) as source_count
-                FROM article_research_matches
+                FROM research_question_matches
                 WHERE question_id = $1
             """
 
@@ -499,13 +553,13 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         try:
             query = """
                 SELECT
-                    arm.*,
-                    da.doi, da.title, da.authors
-                FROM article_research_matches arm
-                JOIN discovered_articles da ON arm.article_id = da.id
-                WHERE arm.question_id = $1
-                AND arm.discovered_via_source = $2
-                ORDER BY arm.relevance_score DESC, arm.matched_at DESC
+                    rqm.*,
+                    pm.doi, pm.title, pm.authors
+                FROM research_question_matches rqm
+                JOIN paper_metadata pm ON rqm.paper_id = pm.id
+                WHERE rqm.question_id = $1
+                AND rqm.discovered_via_source = $2
+                ORDER BY rqm.relevance_score DESC, rqm.matched_at DESC
                 LIMIT $3
             """
 
@@ -528,7 +582,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         """
         try:
             query = """
-                DELETE FROM article_research_matches
+                DELETE FROM research_question_matches
                 WHERE question_id = $1
             """
 
