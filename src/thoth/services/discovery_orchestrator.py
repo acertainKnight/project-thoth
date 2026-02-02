@@ -477,7 +477,7 @@ class DiscoveryOrchestrator(BaseService):
                 publication_date=article_meta.publication_date,
             )
 
-            return article_id, was_created
+            return paper_id, was_created
 
         except Exception as e:
             self.logger.error(f'Failed to get/create article: {e}', exc_info=True)

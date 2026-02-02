@@ -8,10 +8,12 @@ NOTE: After 2026-01 schema migration:
 - Deduplication handled at paper_metadata level
 """
 
+import json
 from datetime import datetime
 from typing import Any, Optional
 from uuid import UUID
 
+from dateutil import parser as dateutil_parser
 from loguru import logger
 
 from thoth.repositories.base import BaseRepository
@@ -58,15 +60,28 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
             # Create new paper in paper_metadata
             title_normalized = self._normalize_title_python(title)
 
+            # Convert authors list to JSON string if it's a list
+            authors = paper_data.get('authors')
+            if isinstance(authors, list):
+                authors = json.dumps(authors)
+            
+            # Convert publication_date string to datetime if needed
+            publication_date = paper_data.get('publication_date')
+            if isinstance(publication_date, str):
+                try:
+                    publication_date = dateutil_parser.parse(publication_date)
+                except (ValueError, TypeError):
+                    publication_date = None
+            
             insert_data = {
                 'doi': doi,
                 'arxiv_id': arxiv_id,
                 'title': title,
                 'title_normalized': title_normalized,
                 'source_of_truth': 'discovered',
-                'authors': paper_data.get('authors'),
+                'authors': authors,
                 'abstract': paper_data.get('abstract'),
-                'publication_date': paper_data.get('publication_date'),
+                'publication_date': publication_date,
                 'year': paper_data.get('year'),
                 'journal': paper_data.get('journal'),
                 'url': paper_data.get('url'),

@@ -305,7 +305,7 @@ services:
       retries: 5
       start_period: 60s
 
-  # Discovery Service
+  # Discovery Service - Research Question Scheduler
   thoth-discovery:
     profiles: ["microservices"]
     build:
@@ -316,6 +316,7 @@ services:
         SERVICE_EXTRAS: "service-discovery"  # Includes api,discovery,pdf,langchain,vectordb
     container_name: thoth-dev-discovery
     user: "1000:1000"  # Run as host user for proper file permissions
+    command: ["python", "-m", "thoth", "research", "scheduler"]
     env_file:
       - .env
     environment:

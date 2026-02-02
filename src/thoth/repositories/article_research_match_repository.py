@@ -361,7 +361,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
 
         Args:
             match_id: Match UUID
-            viewed_at: Timestamp (default: now)
+            viewed_at: Timestamp (deprecated, column doesn't exist)
 
         Returns:
             bool: True if successful
@@ -369,7 +369,6 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         try:
             data = {
                 'is_viewed': True,
-                'viewed_at': viewed_at or datetime.now(),
             }
 
             return await self.update(match_id, data)

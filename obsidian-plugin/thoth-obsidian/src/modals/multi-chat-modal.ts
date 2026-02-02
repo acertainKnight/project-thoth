@@ -77,25 +77,22 @@ export class MultiChatModal extends Modal {
     // Load session list
     this.renderSessionList();
 
-    // Load active session or use most recent, or create new one
+    // Ensure default conversation exists and get its ID
+    const defaultConvId = await this.getOrCreateDefaultConversation();
+
+    // Load active session or fall back to default
     if (this.plugin.settings.activeChatSessionId) {
       // Try to load the previously active session
       const sessionExists = this.chatSessions.find(s => s.id === this.plugin.settings.activeChatSessionId);
       if (sessionExists) {
         await this.switchToSession(this.plugin.settings.activeChatSessionId);
-      } else if (this.chatSessions.length > 0) {
-        // Previous session doesn't exist, use most recent
-        await this.switchToSession(this.chatSessions[0].id);
       } else {
-        // No sessions exist, create new one
-        await this.createNewSession('Default Chat');
+        // Previous session doesn't exist, use default conversation
+        await this.switchToSession(defaultConvId);
       }
-    } else if (this.chatSessions.length > 0) {
-      // No active session stored, use most recent existing session
-      await this.switchToSession(this.chatSessions[0].id);
     } else {
-      // No sessions exist at all, create a default one
-      await this.createNewSession('Default Chat');
+      // No active session stored, use default conversation
+      await this.switchToSession(defaultConvId);
     }
 
     // Make draggable
@@ -664,6 +661,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     if (confirm(`Delete this conversation? This action cannot be undone.`)) {
       try {
         const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat
+        // Note: NO trailing slash for DELETE - Letta API returns 405 with trailing slash
         const response = await fetch(`${endpoint}/v1/conversations/${sessionId}`, {
           method: 'DELETE'
         });
@@ -927,6 +925,34 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+      
+      .session-title-container {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      
+      .default-badge {
+        display: inline-block;
+        font-size: 10px;
+        opacity: 0.8;
+        flex-shrink: 0;
+      }
+      
+      .session-item.default {
+        border-left: 3px solid var(--interactive-accent);
+        padding-left: 5px;
+      }
+      
+      .thoth-conversation-card.default {
+        border-left: 3px solid var(--interactive-accent);
+      }
+      
+      .thoth-card-title .default-badge {
+        color: var(--interactive-accent);
+        font-size: 14px;
+        margin-left: 4px;
       }
 
       .session-preview {
@@ -1310,6 +1336,10 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
       if (response.ok) {
         const conversations = await response.json();
+        
+        // Get default conversation ID to mark it in metadata
+        const defaultConvId = await this.getOrCreateDefaultConversation();
+        
         // Map Letta conversations to session format with all required ChatSession properties
         this.chatSessions = conversations.map((conv: any): ChatSession => ({
           id: conv.id,
@@ -1319,8 +1349,19 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           is_active: conv.id === this.activeSessionId,
           message_count: conv.message_count || 0,
           last_message_preview: conv.last_message || '',
-          metadata: { agent_id: conv.agent_id }
+          metadata: { 
+            agent_id: conv.agent_id,
+            is_default: conv.id === defaultConvId
+          }
         }));
+        
+        // Sort to ensure default conversation is first in the list
+        this.chatSessions.sort((a, b) => {
+          if (a.metadata?.is_default) return -1;
+          if (b.metadata?.is_default) return 1;
+          // Sort others by updated_at (most recent first)
+          return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+        });
       } else {
         console.warn('Could not load chat sessions from server');
         this.chatSessions = [];
@@ -1372,6 +1413,86 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     }
   }
 
+  async getOrCreateDefaultConversation(): Promise<string> {
+    const endpoint = this.plugin.getLettaEndpointUrl();
+    const agentId = await this.getOrCreateDefaultAgent();
+    
+    console.log('[MultiChatModal] Getting or creating default conversation...');
+    
+    // Try to get the "default" conversation (special Letta endpoint)
+    try {
+      const defaultResponse = await this.fetchWithTimeout(
+        `${endpoint}/v1/conversations/default?agent_id=${agentId}`
+      );
+      if (defaultResponse.ok) {
+        const defaultConv = await defaultResponse.json();
+        console.log('[MultiChatModal] Found default conversation via special endpoint:', defaultConv.id);
+        return defaultConv.id;
+      }
+    } catch (error) {
+      console.log('[MultiChatModal] Special "default" endpoint not available, using fallback approach');
+      // Fall through to list-based approach
+    }
+    
+    // Fallback: Find or create a default conversation
+    try {
+      const listResponse = await this.fetchWithTimeout(
+        `${endpoint}/v1/conversations/?agent_id=${agentId}&limit=50`
+      );
+      
+      if (!listResponse.ok) {
+        throw new Error('Failed to fetch conversations');
+      }
+      
+      const conversations = await listResponse.json();
+      console.log('[MultiChatModal] Found conversations:', conversations.length);
+      
+      // Look for existing default (by title or oldest)
+      let defaultConv = conversations.find((c: any) => 
+        c.summary?.toLowerCase().includes('default') || 
+        c.summary === 'Main Conversation'
+      );
+      
+      if (defaultConv) {
+        console.log('[MultiChatModal] Found existing default conversation by title:', defaultConv.id);
+        return defaultConv.id;
+      }
+      
+      if (conversations.length > 0) {
+        // Use oldest conversation as default
+        const sorted = [...conversations].sort((a: any, b: any) => 
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+        defaultConv = sorted[0];
+        console.log('[MultiChatModal] Using oldest conversation as default:', defaultConv.id);
+        return defaultConv.id;
+      }
+      
+      // No conversations exist, create new default conversation
+      console.log('[MultiChatModal] No conversations exist, creating default...');
+      const createResponse = await this.fetchWithTimeout(
+        `${endpoint}/v1/conversations/?agent_id=${agentId}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ summary: 'Default Conversation' })
+        }
+      );
+      
+      if (!createResponse.ok) {
+        throw new Error('Failed to create default conversation');
+      }
+      
+      defaultConv = await createResponse.json();
+      console.log('[MultiChatModal] Created new default conversation:', defaultConv.id);
+      return defaultConv.id;
+      
+    } catch (error) {
+      console.error('[MultiChatModal] Error in getOrCreateDefaultConversation:', error);
+      throw error;
+    }
+  }
+
   renderSessionList() {
     // Update dropdown selector
     this.updateSessionSelector();
@@ -1390,8 +1511,16 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       }
 
       this.chatSessions.forEach(session => {
+        const classes = ['session-item'];
+        if (session.id === this.activeSessionId) {
+          classes.push('active');
+        }
+        if (session.metadata?.is_default) {
+          classes.push('default');
+        }
+        
         const sessionEl = this.sessionListContainer.createEl('div', {
-          cls: `session-item ${session.id === this.activeSessionId ? 'active' : ''}`
+          cls: classes.join(' ')
         });
 
         sessionEl.onclick = () => {
@@ -1412,21 +1541,33 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           this.renameSession(session.id);
         };
 
-        const deleteBtn = actionsEl.createEl('button', {
-          text: '🗑️',
-          cls: 'session-action-btn',
-          title: 'Delete session'
-        });
-        deleteBtn.onclick = (e) => {
-          e.stopPropagation();
-          this.deleteSession(session.id);
-        };
+        // Delete button removed - Letta API 0.16.3 doesn't support deleting conversations
+        // const deleteBtn = actionsEl.createEl('button', {
+        //   text: '🗑️',
+        //   cls: 'session-action-btn',
+        //   title: 'Delete session'
+        // });
+        // deleteBtn.onclick = (e) => {
+        //   e.stopPropagation();
+        //   this.deleteSession(session.id);
+        // };
+
 
         // Session content
-        sessionEl.createEl('div', {
+        const titleContainer = sessionEl.createEl('div', { cls: 'session-title-container' });
+        titleContainer.createEl('span', {
           text: session.title,
           cls: 'session-title'
         });
+        
+        // Add default badge if this is the default conversation
+        if (session.metadata?.is_default) {
+          titleContainer.createEl('span', {
+            text: '⭐',
+            cls: 'default-badge',
+            attr: { 'title': 'Default conversation' }
+          });
+        }
 
         if (session.last_message_preview) {
           sessionEl.createEl('div', {
@@ -1549,7 +1690,8 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
     try {
       const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat messages
-      const response = await fetch(`${endpoint}/v1/conversations/${sessionId}/messages?limit=100`);
+      // Add order=asc to get messages in chronological order (oldest first)
+      const response = await fetch(`${endpoint}/v1/conversations/${sessionId}/messages?limit=100&order=asc`);
 
       if (response.ok) {
         const messages = await response.json();
@@ -1571,6 +1713,25 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       cls: 'chat-messages'
     });
 
+    /**
+     * Helper function to extract content from message.
+     * Handles both string content and array of content parts (per Letta API).
+     * 
+     * @param msg - The message object
+     * @returns The extracted text content
+     */
+    const extractContent = (msg: any): string => {
+      const content = msg.text || msg.content;
+      if (Array.isArray(content)) {
+        // Handle array of content parts (e.g., [{type: 'text', text: '...'}])
+        return content
+          .filter(part => part.type === 'text' || part.text)
+          .map(part => part.text)
+          .join('');
+      }
+      return content || '';
+    };
+
     // Filter messages to only show user and assistant messages
     // Exclude system messages, reasoning, tool calls, etc.
     const chatMessages = messages.filter(msg => {
@@ -1587,6 +1748,13 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       }
 
       return false;
+    })
+    // Sort by date to ensure chronological order (oldest first)
+    // This provides a fallback in case the API order changes
+    .sort((a, b) => {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      return dateA - dateB;
     });
 
     // Load existing messages or show empty state
@@ -1606,8 +1774,8 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                    : messageType === 'assistant_message' ? 'assistant'
                    : msg.role;
 
-        // Use text field if available, otherwise content
-        const content = msg.text || msg.content;
+        // Use improved content extraction
+        const content = extractContent(msg);
 
         this.addMessageToChat(messagesContainer, role, content);
       });
@@ -1880,6 +2048,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
     try {
       const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat
+      // Note: NO trailing slash for PATCH - Letta API may have issues with trailing slashes
       const response = await fetch(`${endpoint}/v1/conversations/${sessionId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -1937,6 +2106,19 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     const session = this.chatSessions.find(s => s.id === sessionId);
     if (!session) return;
 
+    // Check if this is the default conversation
+    try {
+      const defaultConvId = await this.getOrCreateDefaultConversation();
+      if (sessionId === defaultConvId) {
+        new Notice('Cannot delete the default conversation');
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking default conversation:', error);
+      new Notice('Failed to verify conversation status');
+      return;
+    }
+
     // Use InputModal for confirmation instead of confirm() (Electron-compatible)
     const confirmed = await new Promise<boolean>((resolve) => {
       const modal = new (require('../modals/input-modal').InputModal)(
@@ -1950,6 +2132,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
     try {
       const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat
+      // Note: NO trailing slash for DELETE - Letta API returns 405 with trailing slash
       const response = await fetch(`${endpoint}/v1/conversations/${sessionId}`, {
         method: 'DELETE'
       });
@@ -1958,10 +2141,12 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         this.chatSessions = this.chatSessions.filter(s => s.id !== sessionId);
 
         if (this.activeSessionId === sessionId) {
+          // Switch to default conversation
+          const defaultConvId = await this.getOrCreateDefaultConversation();
           this.activeSessionId = null;
           this.plugin.settings.activeChatSessionId = null;
           await this.plugin.saveSettings();
-          this.renderEmptyState();
+          await this.switchToSession(defaultConvId);
         }
 
         this.renderSessionList();
@@ -2604,12 +2789,26 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     if (session.id === this.activeSessionId) {
       card.addClass('active');
     }
+    
+    // Mark as default if applicable
+    if (session.metadata?.is_default) {
+      card.addClass('default');
+    }
 
     // Title
     const titleEl = card.createEl('div', {
       text: session.title || 'Untitled Conversation',
       cls: 'thoth-card-title'
     });
+    
+    // Add default badge if this is the default conversation
+    if (session.metadata?.is_default) {
+      titleEl.createEl('span', {
+        text: ' ⭐',
+        cls: 'default-badge',
+        attr: { 'title': 'Default conversation' }
+      });
+    }
 
     // Metadata (time and message count)
     const metaEl = card.createEl('div', { cls: 'thoth-card-meta' });
@@ -2643,16 +2842,17 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       await this.renameConversation(session);
     };
 
-    const deleteBtn = actionsEl.createEl('button', {
-      text: '🗑️',
-      cls: 'thoth-card-action delete',
-      attr: { 'aria-label': 'Delete' }
-    });
-
-    deleteBtn.onclick = async (e) => {
-      e.stopPropagation();
-      await this.deleteConversation(session);
-    };
+    // Delete button removed - Letta API 0.16.3 doesn't support deleting conversations
+    // const deleteBtn = actionsEl.createEl('button', {
+    //   text: '🗑️',
+    //   cls: 'thoth-card-action delete',
+    //   attr: { 'aria-label': 'Delete' }
+    // });
+    //
+    // deleteBtn.onclick = async (e) => {
+    //   e.stopPropagation();
+    //   await this.deleteConversation(session);
+    // };
   }
 
   getTimeAgo(dateString: string): string {
@@ -2683,19 +2883,62 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
   }
 
   async deleteConversation(session: ChatSession) {
+    // Check if this is the default conversation
+    try {
+      const defaultConvId = await this.getOrCreateDefaultConversation();
+      if (session.id === defaultConvId) {
+        new Notice('Cannot delete the default conversation');
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking default conversation:', error);
+      new Notice('Failed to verify conversation status');
+      return;
+    }
+
     const confirmed = confirm(`Delete conversation "${session.title || 'Untitled'}"?`);
     if (confirmed) {
-      this.chatSessions = this.chatSessions.filter(s => s.id !== session.id);
-      if (this.activeSessionId === session.id) {
-        this.activeSessionId = null;
-        if (this.chatSessions.length > 0) {
-          await this.switchToSession(this.chatSessions[0].id);
-        } else {
-          await this.createNewSession();
-        }
+      try {
+      // Delete from server
+      const endpoint = this.plugin.getLettaEndpointUrl();
+      // Note: NO trailing slash for DELETE - Letta API returns 405 with trailing slash
+      const deleteUrl = `${endpoint}/v1/conversations/${session.id}`;
+      
+      const response = await this.fetchWithTimeout(deleteUrl, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete conversation from server');
       }
-      await this.plugin.saveSettings();
-      await this.renderTabContent(); // Refresh (await for research tab)
+
+        // Remove from local list
+        this.chatSessions = this.chatSessions.filter(s => s.id !== session.id);
+        
+        // If deleted conversation was active, switch to default
+        if (this.activeSessionId === session.id) {
+          const defaultConvId = await this.getOrCreateDefaultConversation();
+          this.activeSessionId = null;
+          await this.switchToSession(defaultConvId);
+        }
+        
+        // Reload conversations from server to ensure sync
+        await this.loadChatSessions();
+        
+        // Re-render current tab to update UI
+        await this.renderTabContent();
+        
+        // Also update sidebar if on chat tab
+        if (this.currentTab === 'chat') {
+          this.renderSessionList();
+        }
+        
+        await this.plugin.saveSettings();
+        new Notice('Conversation deleted');
+      } catch (error) {
+        console.error('Error deleting conversation:', error);
+        new Notice('Failed to delete conversation');
+      }
     }
   }
 

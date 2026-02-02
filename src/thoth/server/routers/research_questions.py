@@ -269,22 +269,15 @@ async def _get_research_question_service():
 
 
 async def _get_discovery_orchestrator():
-    """Get the discovery orchestrator from service manager."""
+    """Get the discovery orchestrator from service manager or return None for proxy mode."""
     from thoth.server.app import service_manager
 
     if service_manager is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Service manager not initialized',
-        )
+        return None
 
-    if not hasattr(service_manager, 'discovery_orchestrator'):
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Discovery orchestrator not available',
-        )
-
-    return service_manager.discovery_orchestrator
+    # Return orchestrator if available (all-in-one mode)
+    # Return None if not available (microservices mode - will use proxy)
+    return getattr(service_manager, 'discovery_orchestrator', None)
 
 
 async def _get_article_match_repository():
@@ -732,8 +725,24 @@ async def trigger_discovery_run(
         # Trigger discovery run (this is async and non-blocking)
         logger.info(f'Manually triggering discovery for question: {question_id}')
 
-        # Run discovery orchestration
-        await orchestrator.run_discovery_for_question(question_id)
+        # If orchestrator is available locally, use it (all-in-one mode)
+        if orchestrator is not None:
+            # Run discovery in background task (non-blocking)
+            import asyncio
+            asyncio.create_task(orchestrator.run_discovery_for_question(question_id))
+            logger.info(f'Discovery task created for question {question_id}')
+        else:
+            # Microservices mode: Trigger via database flag for discovery scheduler to pick up
+            logger.info('Microservices mode: Marking question for immediate discovery')
+            
+            # Update the question to trigger immediate run by setting next_run_at to now
+            from datetime import datetime
+            await service.repository.update(
+                question_id,
+                {'next_run_at': datetime.now()}
+            )
+            
+            logger.info(f'Question {question_id} marked for immediate discovery by scheduler')
 
         return DiscoveryRunResponse(
             question_id=question_id,
@@ -1304,6 +1313,10 @@ async def download_article_pdf(
         # Sanitize filename from article title
         safe_filename = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title)
         safe_filename = safe_filename[:200]  # Limit length
+        
+        # Ensure .pdf extension
+        if not safe_filename.lower().endswith('.pdf'):
+            safe_filename += '.pdf'
 
         try:
             # Download the PDF
@@ -1333,7 +1346,7 @@ async def download_article_pdf(
                 detail=f'Failed to download PDF: {str(e)}'
             )
 
-        logger.debug(f'Prepared download info for article {article_id}')
+        logger.debug(f'Prepared download info for article {paper_id}')
 
         return result
 

@@ -131,7 +131,7 @@ services:
       target: production
     pull_policy: always
     container_name: thoth-api
-    command: ["python", "-m", "thoth", "server", "start", "--api-host", "0.0.0.0", "--api-port", "8000", "--no-discovery"]
+    command: ["python", "-m", "thoth", "server", "start", "--api-host", "0.0.0.0", "--api-port", "8000"]
     ports:
       - "8080:8000"
     # NO DEPENDENCIES - connects to external Letta
@@ -274,7 +274,7 @@ services:
 
   # ==============================================================================
   # Thoth Discovery Scheduler
-  # Runs automated daily paper discovery searches
+  # Runs automated daily paper discovery searches for research questions
   # ==============================================================================
   thoth-discovery:
     profiles: ["microservices"]
@@ -287,7 +287,7 @@ services:
     pull_policy: always
     container_name: thoth-discovery
     command: [
-      "python", "-m", "thoth", "discovery", "scheduler", "start"
+      "python", "-m", "thoth", "research", "scheduler"
     ]
     depends_on:
       thoth-api:

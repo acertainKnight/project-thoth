@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from loguru import logger
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 
 from thoth.discovery.web_scraper import WebScraper
 from thoth.utilities.schemas import (
@@ -13,11 +13,19 @@ from thoth.utilities.schemas import (
     ScrapedArticleMetadata,
 )
 
+# Lazy import to avoid blocking module load
+if TYPE_CHECKING:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+
 
 class EmulatorScraper:
     """Replay a :class:`BrowserRecording` and scrape the resulting page."""
 
     def __init__(self, driver_path: str | None = None) -> None:
+        # Import selenium only when creating an instance
+        from selenium.webdriver.chrome.options import Options
+        
         options = Options()
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
@@ -33,6 +41,9 @@ class EmulatorScraper:
         max_articles: int = 50,
     ) -> list[ScrapedArticleMetadata]:
         """Replay the recording and scrape the final page."""
+        # Import selenium only when actually scraping
+        from selenium import webdriver
+        
         driver = webdriver.Chrome(self.driver_path, options=self.options)
         try:
             driver.get(recording.start_url)

@@ -198,31 +198,34 @@ class ServiceManager:
         )
 
         # Initialize discovery manager (needed for orchestrator)
-        # TEMPORARY FIX: Disabled due to import deadlock in monitor container
-        # DiscoveryManager and DiscoveryOrchestrator only needed in discovery container
-        # TODO: Fix circular import chain: schemas -> browser_workflow -> (blocking import)
-        logger.warning('DiscoveryManager initialization SKIPPED to avoid import deadlock')
-        logger.warning('This is a temporary fix - discovery features will not work in this container')
-        self._services['discovery_manager'] = None
-        self._services['discovery_orchestrator'] = None
-        logger.info('✓ Discovery services set to None, continuing initialization...')
-
-        # # ORIGINAL CODE (causes deadlock):
-        # from thoth.repositories.available_source_repository import (
-        #     AvailableSourceRepository,
-        # )
-        # source_repo = AvailableSourceRepository(self._services['postgres'])
-        # from thoth.discovery.discovery_manager import DiscoveryManager
-        # self._services['discovery_manager'] = DiscoveryManager(
-        #     sources_config_dir=self.config.discovery_sources_dir,
-        #     source_repo=source_repo,
-        # )
-        # self._services['discovery_orchestrator'] = DiscoveryOrchestrator(
-        #     config=self.config,
-        #     llm_service=self._services['llm'],
-        #     discovery_manager=self._services['discovery_manager'],
-        #     postgres_service=self._services['postgres'],
-        # )
+        # FIXED: Import deadlock resolved by lazy-loading selenium in emulator_scraper.py
+        logger.info('Initializing discovery services...')
+        try:
+            from thoth.repositories.available_source_repository import (
+                AvailableSourceRepository,
+            )
+            source_repo = AvailableSourceRepository(self._services['postgres'])
+            from thoth.discovery.discovery_manager import DiscoveryManager
+            self._services['discovery_manager'] = DiscoveryManager(
+                sources_config_dir=self.config.discovery_sources_dir,
+                source_repo=source_repo,
+            )
+            self._services['discovery_orchestrator'] = DiscoveryOrchestrator(
+                config=self.config,
+                llm_service=self._services['llm'],
+                discovery_manager=self._services['discovery_manager'],
+                postgres_service=self._services['postgres'],
+            )
+            logger.success('✓ Discovery services initialized successfully')
+        except ImportError as e:
+            logger.warning(f'Discovery services unavailable (missing dependencies): {e}')
+            logger.warning('Install browser dependencies: uv sync --extra discovery')
+            self._services['discovery_manager'] = None
+            self._services['discovery_orchestrator'] = None
+        except Exception as e:
+            logger.error(f'Failed to initialize discovery services: {e}', exc_info=True)
+            self._services['discovery_manager'] = None
+            self._services['discovery_orchestrator'] = None
 
         # Tag service requires OpenRouter API key - initialize if available
         logger.info('═══ About to initialize TagService ═══')

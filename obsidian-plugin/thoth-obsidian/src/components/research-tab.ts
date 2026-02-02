@@ -23,7 +23,7 @@ export interface ResearchQuestion {
 
 export interface MatchedArticle {
   match_id: string;
-  article_id: string;
+  paper_id: string;  // Changed from article_id to match backend schema
   title: string;
   authors?: string[];
   abstract?: string;
