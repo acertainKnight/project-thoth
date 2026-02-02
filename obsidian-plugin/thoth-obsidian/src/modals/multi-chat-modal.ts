@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Menu, SuggestModal } from 'obsidian';
+import { App, Modal, Notice, Menu, SuggestModal, MarkdownRenderer, MarkdownView } from 'obsidian';
 import { ChatSession, ChatMessage } from '../types';
 import type ThothPlugin from '../../main';
 import { ResearchTabComponent } from '../components/research-tab';
@@ -1695,17 +1695,17 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
       if (response.ok) {
         const messages = await response.json();
-        this.renderChatInterface(sessionId, messages || []);
+        await this.renderChatInterface(sessionId, messages || []);
       } else {
         throw new Error('Failed to load messages');
       }
     } catch (error) {
       console.error('Error loading messages:', error);
-      this.renderChatInterface(sessionId, []);
+      await this.renderChatInterface(sessionId, []);
     }
   }
 
-  renderChatInterface(sessionId: string, messages: any[]) {
+  async renderChatInterface(sessionId: string, messages: any[]) {
     this.chatContentContainer.empty();
 
     // Messages container
@@ -1767,18 +1767,21 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         'Try: "Find recent papers on transformers"'
       );
     } else {
-      chatMessages.forEach(msg => {
-        // Extract role from message_type or use role field directly
-        const messageType = msg.message_type || msg.type;
-        const role = messageType === 'user_message' ? 'user'
-                   : messageType === 'assistant_message' ? 'assistant'
-                   : msg.role;
+      // Render all messages with markdown support
+      await Promise.all(
+        chatMessages.map(async (msg) => {
+          // Extract role from message_type or use role field directly
+          const messageType = msg.message_type || msg.type;
+          const role = messageType === 'user_message' ? 'user'
+                     : messageType === 'assistant_message' ? 'assistant'
+                     : msg.role;
 
-        // Use improved content extraction
-        const content = extractContent(msg);
+          // Use improved content extraction
+          const content = extractContent(msg);
 
-        this.addMessageToChat(messagesContainer, role, content);
-      });
+          await this.addMessageToChat(messagesContainer, role, content);
+        })
+      );
     }
 
     // Input area
@@ -1821,7 +1824,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       if (!message || sendBtn.disabled) return;
 
       // Add user message to UI
-      this.addMessageToChat(messagesContainer, 'user', message);
+      await this.addMessageToChat(messagesContainer, 'user', message);
       inputEl.value = '';
 
       // Auto-resize input back to minimum height
@@ -1854,6 +1857,15 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           // Track messages by ID for accumulation (stream_tokens sends deltas with same ID)
           const messageAccumulator = new Map<string, string>();
           let assistantMessageEl: HTMLElement | null = null;
+          let contentEl: HTMLElement | null = null;
+
+          // Create debounced render function for smooth streaming updates
+          const debouncedRender = this.debounce(async (content: string) => {
+            if (contentEl) {
+              await this.renderMessageContent(content, contentEl);
+              this.scrollToBottom(messagesContainer, true);
+            }
+          }, 200);
 
           // Read SSE stream
           const reader = response.body.getReader();
@@ -1902,26 +1914,26 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                         text: 'Assistant',
                         cls: 'message-role'
                       });
-                      assistantMessageEl.createEl('div', {
-                        text: '',
+                      contentEl = assistantMessageEl.createEl('div', {
                         cls: 'message-content'
                       });
                     }
 
-                    // Update content with accumulated text
-                    const contentEl = assistantMessageEl.querySelector('.message-content') as HTMLElement;
-                    if (contentEl) {
-                      contentEl.textContent = fullContent;
-                    }
-
-                    // Auto-scroll to bottom
-                    this.scrollToBottom(messagesContainer, true);
+                    // Use debounced render for streaming updates
+                    debouncedRender(fullContent);
                   }
                 }
               } catch (e) {
                 console.warn('[MultiChatModal] Failed to parse SSE message:', jsonStr.substring(0, 100));
               }
             }
+          }
+
+          // Final render with copy buttons after stream completes
+          if (contentEl && messageAccumulator.size > 0) {
+            const finalContent = Array.from(messageAccumulator.values()).join('');
+            await this.renderMessageContent(finalContent, contentEl);
+            this.scrollToBottom(messagesContainer, true);
           }
 
           // Update session list to reflect new message
@@ -1937,7 +1949,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         console.error('Chat error:', error);
         // Remove thinking indicator
         thinkingMsg.remove();
-        this.addMessageToChat(messagesContainer, 'assistant', `Error: ${error.message}`);
+        await this.addMessageToChat(messagesContainer, 'assistant', `Error: ${error.message}`);
         this.showToast(`Error: ${error.message}`, 'error');
       } finally {
         sendBtn.disabled = false;
@@ -1986,7 +1998,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     }, 100);
   }
 
-  addMessageToChat(container: HTMLElement, role: string, content: string) {
+  async addMessageToChat(container: HTMLElement, role: string, content: string) {
     const messageEl = container.createEl('div', {
       cls: `chat-message ${role}`
     });
@@ -1997,9 +2009,11 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     });
 
     const contentEl = messageEl.createEl('div', {
-      text: content,
       cls: 'message-content'
     });
+
+    // Render markdown content
+    await this.renderMessageContent(content, contentEl);
 
     // Auto-scroll to new message with smooth behavior
     setTimeout(() => {
@@ -3132,5 +3146,95 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     new Notice('File attachment: Type [[ to create a wiki link to any note in your vault');
     inputEl.value += '[[';
     inputEl.focus();
+  }
+
+  /**
+   * Render markdown content in a container element
+   */
+  async renderMessageContent(content: string, container: HTMLElement) {
+    // Clear existing content
+    container.empty();
+    
+    // Render markdown using Obsidian's native renderer
+    // Pass null as component since Modal doesn't extend Component
+    await MarkdownRenderer.render(
+      this.app,
+      content,
+      container,
+      '',  // sourcePath
+      null as any
+    );
+
+    // Add copy buttons to code blocks
+    this.addCopyButtonsToCodeBlocks(container);
+  }
+
+  /**
+   * Add copy buttons to all code blocks in a container
+   */
+  addCopyButtonsToCodeBlocks(container: HTMLElement) {
+    const codeBlocks = container.querySelectorAll('pre > code');
+    
+    codeBlocks.forEach((codeEl) => {
+      const pre = codeEl.parentElement;
+      if (!pre) return;
+
+      // Check if button already exists
+      if (pre.querySelector('.code-copy-button')) return;
+
+      // Create copy button
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'code-copy-button';
+      copyBtn.textContent = 'Copy';
+      copyBtn.setAttribute('aria-label', 'Copy code to clipboard');
+
+      // Add click handler
+      copyBtn.addEventListener('click', async () => {
+        const code = codeEl.textContent || '';
+        
+        try {
+          await navigator.clipboard.writeText(code);
+          copyBtn.textContent = 'Copied!';
+          copyBtn.classList.add('copied');
+          
+          // Reset button after 2 seconds
+          setTimeout(() => {
+            copyBtn.textContent = 'Copy';
+            copyBtn.classList.remove('copied');
+          }, 2000);
+        } catch (error) {
+          console.error('Failed to copy code:', error);
+          copyBtn.textContent = 'Failed';
+          setTimeout(() => {
+            copyBtn.textContent = 'Copy';
+          }, 2000);
+        }
+      });
+
+      // Add button to pre element
+      pre.style.position = 'relative';
+      pre.appendChild(copyBtn);
+    });
+  }
+
+  /**
+   * Debounce function to limit how often a function is called
+   */
+  debounce<T extends (...args: any[]) => any>(
+    func: T,
+    wait: number
+  ): (...args: Parameters<T>) => void {
+    let timeout: NodeJS.Timeout | null = null;
+    
+    return (...args: Parameters<T>) => {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      
+      timeout = setTimeout(() => {
+        func(...args);
+        timeout = null;
+      }, wait);
+    };
   }
 }
