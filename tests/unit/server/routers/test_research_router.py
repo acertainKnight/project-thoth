@@ -65,11 +65,14 @@ class TestResearchChatEndpoint:
 
     def test_research_chat_success(self, test_client, mock_research_agent):
         """Test chat returns response from research agent."""
-        # Setup mocks
-        mock_research_agent.chat.return_value = {
-            'response': 'Here is the answer',
-            'tool_calls': []
-        }
+        # Setup async mocks - chat() is async so return_value won't work
+        async def mock_chat_response(*args, **kwargs):
+            return {
+                'response': 'Here is the answer',
+                'tool_calls': []
+            }
+        
+        mock_research_agent.chat = AsyncMock(side_effect=mock_chat_response)
         
         request_data = {'message': 'What is machine learning?'}
         response = test_client.post('/chat', json=request_data)
@@ -82,11 +85,14 @@ class TestResearchChatEndpoint:
 
     def test_research_chat_with_chat_manager(self, test_client, mock_research_agent, mock_chat_manager):
         """Test chat stores messages when chat manager available."""
-        # Setup mocks
-        mock_research_agent.chat.return_value = {
-            'response': 'Here is the answer',
-            'tool_calls': []
-        }
+        # Setup async mocks - chat() is async
+        async def mock_chat_response(*args, **kwargs):
+            return {
+                'response': 'Here is the answer',
+                'tool_calls': []
+            }
+        
+        mock_research_agent.chat = AsyncMock(side_effect=mock_chat_response)
         
         request_data = {
             'message': 'What is machine learning?',

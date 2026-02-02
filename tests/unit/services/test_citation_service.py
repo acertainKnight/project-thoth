@@ -46,11 +46,16 @@ class TestCitationServiceMethods:
         service.initialize()
 
     @patch('thoth.services.citation_service.CitationProcessor')
-    def test_extract_citations_uses_processor(self, mock_processor_class):
+    @patch('thoth.services.llm_service.LLMService')
+    def test_extract_citations_uses_processor(self, mock_llm_service, mock_processor_class):
         """Test extract_citations uses CitationProcessor."""
         mock_processor = Mock()
         mock_processor.extract_citations.return_value = []
         mock_processor_class.return_value = mock_processor
+        
+        # Mock the LLM service to avoid API key errors
+        mock_llm_instance = Mock()
+        mock_llm_service.return_value = mock_llm_instance
         
         service = CitationService()
         result = service.extract_citations("Sample text with citations.")

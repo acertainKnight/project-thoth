@@ -143,6 +143,8 @@ class TestPDFMonitorProcessing:
 
     def test_pdfmonitor_process_existing_files_calls_pipeline(self):
         """Test that _process_existing_files() calls pipeline.process_pdf()."""
+        import warnings
+        
         with tempfile.TemporaryDirectory() as tmpdir:
             watch_dir = Path(tmpdir)
             
@@ -156,7 +158,10 @@ class TestPDFMonitorProcessing:
             mock_pipeline = Mock()
             mock_pipeline.process_pdf = Mock(return_value=('note.md', 'md.md', 'pdf.pdf'))
             
-            monitor = PDFMonitor(watch_dir=watch_dir, pipeline=mock_pipeline)
+            # Suppress deprecation warning for test
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                monitor = PDFMonitor(watch_dir=watch_dir, pipeline=mock_pipeline)
             
             # Call _process_existing_files() directly (don't call start()!)
             monitor._process_existing_files()
@@ -244,7 +249,7 @@ class TestPDFMonitorNewParameter:
             
             monitor = PDFMonitor(watch_dir=watch_dir, document_pipeline=mock_doc_pipeline)
             
-            # Process existing files
+            # Call _process_existing_files() directly to process files
             monitor._process_existing_files()
             
             # Should have called document_pipeline.process_pdf

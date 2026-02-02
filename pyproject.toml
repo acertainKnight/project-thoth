@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "thoth"
 description = "Thoth AI Research Agent - An autonomous system for academic research paper processing and knowledge management"
 readme = "README.md"
-requires-python = ">=3.10, <3.13"
+requires-python = ">=3.11, <3.13"
 version = '0.1.0'
 authors = [{name="Nick Hallmark", email="NHALLMARK3@BLOOMBERG.NET"}]
 

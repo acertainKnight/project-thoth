@@ -131,7 +131,8 @@ class TestAbsolutePathsOutsideVault:
         """Test warning logged for absolute path outside vault."""
         import json
 
-        outside_path = '/absolute/outside/vault'
+        # Use /tmp instead of /absolute (read-only on macOS CI)
+        outside_path = '/tmp/outside_vault_test'
 
         settings_data = get_minimal_settings_json()
         settings_data['paths'] = {'workspace': '/workspace', 'pdf': outside_path}
@@ -456,7 +457,7 @@ class TestPathResolutionLogging:
         settings_data = get_minimal_settings_json()
         settings_data['paths'] = {
             'workspace': '/workspace',
-            'pdf': '/absolute/outside/path',
+            'pdf': '/tmp/outside_vault_path_test',
         }
 
         settings_file = temp_vault / '_thoth' / 'settings.json'

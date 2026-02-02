@@ -59,14 +59,16 @@ jobs:
         run: mypy src/ --ignore-missing-imports || true
 
   # Test matrix across Python versions and OS
+  # Note: Windows not supported - Windows users must use WSL
+  # Minimum Python version: 3.11
   test:
     name: Test Python ${{ matrix.python-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.10", "3.11", "3.12"]
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
