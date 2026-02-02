@@ -26,6 +26,8 @@ def _configure_safe_environment() -> None:
 _configure_safe_environment()
 
 from loguru import logger  # noqa: E402
+from thoth.initialization import initialize_thoth  # noqa: E402
+# ThothPipeline imported lazily when needed (line 81)
 
 logger.info('===== main.py: About to import CLI submodules =====')
 from . import (  # noqa: E402

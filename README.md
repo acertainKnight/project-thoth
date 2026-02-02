@@ -134,6 +134,18 @@ Thoth uses [Letta](https://www.letta.com/) for agent memory. Choose during setup
 
 [Letta Cloud Setup →](docs/LETTA_CLOUD_SETUP.md) | [Self-Hosted Setup →](docs/LETTA_SETUP.md)
 
+**🎉 First-Time Setup (Automatic)**
+
+When you run `make dev` for the first time, it will automatically:
+
+1. **Create `.env.letta`** from template (no manual copy needed)
+2. **Check if Letta is running** (memory system)
+3. **Prompt to start Letta** if not running (just press 'y')
+4. **Start all services** and connect them
+
+**No configuration needed!** Everything works out of the box.
+
+
 **Services Automatically Started:**
 - **Thoth API**: 8000 (dev) / 8080 (prod) - Main REST API
 - **Thoth MCP**: 8082 (dev) / 8081 (prod) - Model Context Protocol

@@ -374,9 +374,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      # target: development  # Not using multi-stage build
       args:
         SERVICE_EXTRAS: "service-monitor"  # Includes api,pdf,discovery,mcp,langchain,vectordb,embeddings
-    container_name: thoth-dev-monitor
+    container_name: thoth-dev-pdf-monitor
     user: "1000:1000"  # Run as host user for proper file permissions
     command: ["python", "-m", "thoth.run_monitor_standalone"]
     env_file:
@@ -477,6 +478,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+=======
+      disable: true  # Monitor is a CLI tool, doesn't expose HTTP endpoints
+>>>>>>> e3a04d06b48405548a5f674c05648f725469d14f
 
 
   # ==============================================================================

@@ -272,6 +272,23 @@ class ServiceManager:
             self._services['letta_filesystem_watcher'] = None
             self.logger.debug('Letta filesystem service not available (requires memory extras with pgvector)')
 
+        # Initialize Letta filesystem service (optional - requires memory extras)
+        if LETTA_FILESYSTEM_AVAILABLE:
+            self._services['letta_filesystem'] = LettaFilesystemService(config=self.config)
+            self.logger.debug('Letta filesystem service initialized')
+            
+            # Initialize Letta filesystem watcher (auto-sync on file changes)
+            self._services['letta_filesystem_watcher'] = LettaFilesystemWatcherService(
+                config=self.config,
+                letta_filesystem_service=self._services['letta_filesystem']
+            )
+            # Start watcher if autoSync is enabled in config
+            self._services['letta_filesystem_watcher'].start()
+        else:
+            self._services['letta_filesystem'] = None
+            self._services['letta_filesystem_watcher'] = None
+            self.logger.debug('Letta filesystem service not available (requires memory extras with pgvector)')
+
         # Initialize optimized services if available
         if OPTIMIZED_SERVICES_AVAILABLE:
             self._services['cache'] = CacheService(config=self.config)
