@@ -53,17 +53,17 @@ class ResearchQuestionCreate(BaseModel):
         pattern=r'^\d{2}:\d{2}$',
         description='Preferred run time in HH:MM format (24-hour)',
     )
-    schedule_days_of_week: list[str] | None = Field(
-        None, description="Days for weekly schedule: ['monday', 'tuesday', ...]"
+    schedule_days_of_week: list[int] | None = Field(
+        None, description="Days for weekly schedule: ISO 8601 (1=Monday, 7=Sunday)"
     )
     min_relevance_score: float = Field(
         default=0.5, ge=0.0, le=1.0, description='Minimum relevance threshold (0.0-1.0)'
     )
-    auto_download_pdfs: bool = Field(
-        default=True, description='Automatically download matching PDFs'
+    auto_download_enabled: bool = Field(
+        default=False, description='Automatically download matching PDFs'
     )
-    auto_process_pdfs: bool = Field(
-        default=False, description='Automatically process downloaded PDFs'
+    auto_download_min_score: float = Field(
+        default=0.7, ge=0.0, le=1.0, description='Minimum score for auto-download'
     )
     max_articles_per_run: int = Field(
         default=50, ge=1, le=500, description='Maximum articles per discovery run'
@@ -99,10 +99,10 @@ class ResearchQuestionUpdate(BaseModel):
     selected_sources: Optional[list[str]] = Field(None, min_items=1)  # noqa: UP007
     schedule_frequency: Optional[str] = None  # noqa: UP007
     schedule_time: Optional[str] = Field(None, pattern=r'^\d{2}:\d{2}$')  # noqa: UP007
-    schedule_days_of_week: Optional[list[str]] = None  # noqa: UP007
+    schedule_days_of_week: Optional[list[int]] = None  # noqa: UP007
     min_relevance_score: Optional[float] = Field(None, ge=0.0, le=1.0)  # noqa: UP007
-    auto_download_pdfs: Optional[bool] = None  # noqa: UP007
-    auto_process_pdfs: Optional[bool] = None  # noqa: UP007
+    auto_download_enabled: Optional[bool] = None  # noqa: UP007
+    auto_download_min_score: Optional[float] = Field(None, ge=0.0, le=1.0)  # noqa: UP007
     max_articles_per_run: Optional[int] = Field(None, ge=1, le=500)  # noqa: UP007
     is_active: Optional[bool] = None  # noqa: UP007
 
@@ -132,10 +132,10 @@ class ResearchQuestionResponse(BaseModel):
     selected_sources: list[str]
     schedule_frequency: str
     schedule_time: Optional[time] = None  # noqa: UP007
-    schedule_days_of_week: Optional[list[str]] = None  # noqa: UP007
+    schedule_days_of_week: Optional[list[int]] = None  # noqa: UP007
     min_relevance_score: float
-    auto_download_pdfs: bool
-    auto_process_pdfs: bool
+    auto_download_enabled: bool
+    auto_download_min_score: float
     max_articles_per_run: int
     is_active: bool
     last_run_at: Optional[datetime] = None  # noqa: UP007
@@ -169,10 +169,10 @@ class DiscoveryRunResponse(BaseModel):
 
 
 class ArticleMatchResponse(BaseModel):
-    """Response model for a matched article."""
+    """Response model for a matched article (paper)."""
 
     match_id: UUID
-    article_id: UUID
+    paper_id: UUID  # Changed from article_id after schema migration
     question_id: UUID
     relevance_score: float
     matched_keywords: list[str]
@@ -184,14 +184,15 @@ class ArticleMatchResponse(BaseModel):
     user_sentiment: Optional[str] = None  # noqa: UP007
     sentiment_recorded_at: Optional[datetime] = None  # noqa: UP007
     matched_at: datetime
-    # Article details
+    # Paper details (from paper_metadata)
     doi: Optional[str] = None  # noqa: UP007
     title: str
     authors: list[str]
     abstract: Optional[str] = None  # noqa: UP007
     publication_date: Optional[datetime] = None  # noqa: UP007
-    venue: Optional[str] = None  # noqa: UP007
-    citation_count: Optional[int] = None  # noqa: UP007
+    journal: Optional[str] = None  # noqa: UP007
+    url: Optional[str] = None  # noqa: UP007
+    pdf_url: Optional[str] = None  # noqa: UP007
 
     class Config:
         from_attributes = True
@@ -268,22 +269,15 @@ async def _get_research_question_service():
 
 
 async def _get_discovery_orchestrator():
-    """Get the discovery orchestrator from service manager."""
+    """Get the discovery orchestrator from service manager or return None for proxy mode."""
     from thoth.server.app import service_manager
 
     if service_manager is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Service manager not initialized',
-        )
+        return None
 
-    if not hasattr(service_manager, 'discovery_orchestrator'):
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Discovery orchestrator not available',
-        )
-
-    return service_manager.discovery_orchestrator
+    # Return orchestrator if available (all-in-one mode)
+    # Return None if not available (microservices mode - will use proxy)
+    return getattr(service_manager, 'discovery_orchestrator', None)
 
 
 async def _get_article_match_repository():
@@ -363,8 +357,8 @@ async def create_research_question(
             schedule_time=question.schedule_time,
             schedule_days_of_week=question.schedule_days_of_week,
             min_relevance_score=question.min_relevance_score,
-            auto_download_pdfs=question.auto_download_pdfs,
-            auto_process_pdfs=question.auto_process_pdfs,
+            auto_download_enabled=question.auto_download_enabled,
+            auto_download_min_score=question.auto_download_min_score,
             max_articles_per_run=question.max_articles_per_run,
         )
 
@@ -731,8 +725,24 @@ async def trigger_discovery_run(
         # Trigger discovery run (this is async and non-blocking)
         logger.info(f'Manually triggering discovery for question: {question_id}')
 
-        # Run discovery orchestration
-        await orchestrator.run_discovery_for_question(question_id)
+        # If orchestrator is available locally, use it (all-in-one mode)
+        if orchestrator is not None:
+            # Run discovery in background task (non-blocking)
+            import asyncio
+            asyncio.create_task(orchestrator.run_discovery_for_question(question_id))
+            logger.info(f'Discovery task created for question {question_id}')
+        else:
+            # Microservices mode: Trigger via database flag for discovery scheduler to pick up
+            logger.info('Microservices mode: Marking question for immediate discovery')
+            
+            # Update the question to trigger immediate run by setting next_run_at to now
+            from datetime import datetime
+            await service.repository.update(
+                question_id,
+                {'next_run_at': datetime.now()}
+            )
+            
+            logger.info(f'Question {question_id} marked for immediate discovery by scheduler')
 
         return DiscoveryRunResponse(
             question_id=question_id,
@@ -1000,33 +1010,34 @@ async def update_article_sentiment(
                 detail='Failed to update article sentiment',
             )
 
-        # Fetch updated match with article details using direct query
-        # We need to get the match with article details joined
+        # Fetch updated match with paper details using direct query (after migration)
+        # Uses research_question_matches + paper_metadata
         query = """
             SELECT
-                arm.id as match_id,
-                arm.article_id,
-                arm.question_id,
-                arm.relevance_score,
-                arm.matched_keywords,
-                arm.matched_topics,
-                arm.matched_authors,
-                arm.discovered_via_source,
-                arm.is_viewed,
-                arm.is_bookmarked,
-                arm.user_sentiment,
-                arm.sentiment_recorded_at,
-                arm.matched_at,
-                da.doi,
-                da.title,
-                da.authors,
-                da.abstract,
-                da.publication_date,
-                da.venue,
-                da.citation_count
-            FROM article_research_matches arm
-            JOIN discovered_articles da ON arm.article_id = da.id
-            WHERE arm.id = $1
+                rqm.id as match_id,
+                rqm.paper_id,
+                rqm.question_id,
+                rqm.relevance_score,
+                rqm.matched_keywords,
+                rqm.matched_topics,
+                rqm.matched_authors,
+                rqm.discovered_via_source,
+                rqm.is_viewed,
+                rqm.is_bookmarked,
+                rqm.user_sentiment,
+                rqm.sentiment_recorded_at,
+                rqm.matched_at,
+                pm.doi,
+                pm.title,
+                pm.authors,
+                pm.abstract,
+                pm.publication_date,
+                pm.journal,
+                pm.url,
+                pm.pdf_url
+            FROM research_question_matches rqm
+            JOIN paper_metadata pm ON rqm.paper_id = pm.id
+            WHERE rqm.id = $1
         """
 
         updated_match = await match_repo.postgres.fetchrow(query, match_id)
@@ -1050,6 +1061,299 @@ async def update_article_sentiment(
         raise
     except Exception as e:
         logger.error(f'Error updating article sentiment: {e}')
+        raise HTTPException(  # noqa: B904
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f'Internal server error: {str(e)}',  # noqa: RUF010
+        )
+
+
+@router.patch(
+    '/{question_id}/articles/{match_id}/status',
+    response_model=ArticleMatchResponse,
+    summary='Update article status',
+    description='Mark article as viewed or bookmarked',
+)
+async def update_article_status(
+    question_id: UUID,
+    match_id: UUID,
+    request: Request,
+    is_viewed: bool | None = Body(None, embed=True),
+    is_bookmarked: bool | None = Body(None, embed=True),
+) -> ArticleMatchResponse:
+    """
+    Update article view/bookmark status.
+
+    Args:
+        question_id: Research question UUID
+        match_id: Article match UUID
+        is_viewed: Mark as viewed (true) or unviewed (false)
+        is_bookmarked: Mark as bookmarked (true) or unbookmarked (false)
+        request: FastAPI request object
+
+    Returns:
+        ArticleMatchResponse: Updated article match
+
+    Raises:
+        HTTPException: 400 if validation fails, 403 if unauthorized, 404 if not found
+    """
+    try:
+        service = await _get_research_question_service()
+        match_repo = await _get_article_match_repository()
+        user_id = _get_user_id_from_request(request)
+
+        # Verify question ownership
+        question = await service.repository.get_by_id(question_id)
+
+        if not question:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f'Research question {question_id} not found',
+            )
+
+        if question['user_id'] != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail='You do not have permission to update this research question',
+            )
+
+        # Get the match
+        match = await match_repo.get_by_id(match_id)
+
+        if not match:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f'Article match {match_id} not found',
+            )
+
+        # Verify match belongs to question
+        if match['question_id'] != question_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f'Article match {match_id} does not belong to question {question_id}',
+            )
+
+        # Update status fields
+        updates = {}
+        if is_viewed is not None:
+            updates['is_viewed'] = is_viewed
+        if is_bookmarked is not None:
+            updates['is_bookmarked'] = is_bookmarked
+
+        if not updates:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Must provide at least one status field to update',
+            )
+
+        # Update in database
+        success = await match_repo.update(match_id, updates)
+
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail='Failed to update article status',
+            )
+
+        # Fetch updated match with paper details using JOIN (same as sentiment endpoint)
+        query = """
+            SELECT
+                rqm.id as match_id,
+                rqm.paper_id,
+                rqm.question_id,
+                rqm.relevance_score,
+                rqm.matched_keywords,
+                rqm.matched_topics,
+                rqm.matched_authors,
+                rqm.discovered_via_source,
+                rqm.is_viewed,
+                rqm.is_bookmarked,
+                rqm.user_sentiment,
+                rqm.sentiment_recorded_at,
+                rqm.matched_at,
+                pm.doi,
+                pm.title,
+                pm.authors,
+                pm.abstract,
+                pm.publication_date,
+                pm.journal,
+                pm.url,
+                pm.pdf_url
+            FROM research_question_matches rqm
+            JOIN paper_metadata pm ON rqm.paper_id = pm.id
+            WHERE rqm.id = $1
+        """
+        updated_match = await match_repo.postgres.fetchrow(query, match_id)
+
+        if not updated_match:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail='Failed to retrieve updated article after status update',
+            )
+
+        logger.debug(f'Updated article status for match {match_id}: {updates}')
+
+        # Convert asyncpg.Record to dict and parse JSON fields
+        import json
+        match_data = dict(updated_match)
+
+        # Parse JSON string fields that Pydantic expects as lists
+        if isinstance(match_data.get('authors'), str):
+            try:
+                match_data['authors'] = json.loads(match_data['authors'])
+            except (json.JSONDecodeError, TypeError):
+                match_data['authors'] = []
+
+        return ArticleMatchResponse(**match_data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f'Error updating article status: {e}')
+        raise HTTPException(  # noqa: B904
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f'Internal server error: {str(e)}',  # noqa: RUF010
+        )
+
+
+@router.post(
+    '/{question_id}/articles/{match_id}/download',
+    summary='Download article PDF',
+    description='Download PDF for a matched article',
+)
+async def download_article_pdf(
+    question_id: UUID,
+    match_id: UUID,
+    request: Request,
+    output_directory: str | None = Body(None, embed=True),
+) -> dict[str, Any]:
+    """
+    Download PDF for a matched article.
+
+    Args:
+        question_id: Research question UUID
+        match_id: Article match UUID
+        output_directory: Optional custom output directory
+        request: FastAPI request object
+
+    Returns:
+        dict: Download result with file path and status
+
+    Raises:
+        HTTPException: 400 if validation fails, 403 if unauthorized, 404 if not found
+    """
+    try:
+        service = await _get_research_question_service()
+        match_repo = await _get_article_match_repository()
+        user_id = _get_user_id_from_request(request)
+
+        # Verify question ownership
+        question = await service.repository.get_by_id(question_id)
+
+        if not question:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f'Research question {question_id} not found',
+            )
+
+        if question['user_id'] != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail='You do not have permission to access this research question',
+            )
+
+        # Get the match
+        match = await match_repo.get_by_id(match_id)
+
+        if not match:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f'Article match {match_id} not found',
+            )
+
+        # Verify match belongs to question
+        if match['question_id'] != question_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f'Article match {match_id} does not belong to question {question_id}',
+            )
+
+        # Get paper details (includes pdf_url) - after migration uses paper_id
+        paper_id = match.get('paper_id') or match.get('article_id')  # Support both for transition
+
+        # Fetch paper metadata to get pdf_url and title
+        query = """
+            SELECT id, title, pdf_url, url
+            FROM paper_metadata
+            WHERE id = $1
+        """
+        paper = await match_repo.postgres.fetchrow(query, paper_id)
+
+        if not paper:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f'Paper {paper_id} not found',
+            )
+
+        pdf_url = paper['pdf_url']
+        title = paper['title'] or 'unknown'
+
+        if not pdf_url:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='No PDF URL available for this article',
+            )
+
+        # Download PDF using ingestion service
+        from pathlib import Path
+        from thoth.ingestion.pdf_downloader import download_pdf
+        from thoth.config import config
+
+        pdf_dir = config.pdf_dir
+
+        # Sanitize filename from article title
+        safe_filename = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title)
+        safe_filename = safe_filename[:200]  # Limit length
+        
+        # Ensure .pdf extension
+        if not safe_filename.lower().endswith('.pdf'):
+            safe_filename += '.pdf'
+
+        try:
+            # Download the PDF
+            downloaded_path = download_pdf(pdf_url, pdf_dir, safe_filename)
+
+            # Mark as bookmarked in database
+            await match_repo.update(match_id, {'is_bookmarked': True})
+
+            # Mark as viewed too
+            if not match.get('is_viewed'):
+                await match_repo.mark_as_viewed(match_id)
+
+            logger.info(f'Downloaded PDF for article {paper_id} to {downloaded_path}')
+
+            result = {
+                'status': 'success',
+                'article_id': str(paper_id),
+                'match_id': str(match_id),
+                'downloaded_path': str(downloaded_path),
+                'message': f'PDF downloaded successfully. File monitor will process it automatically.',
+                'filename': downloaded_path.name
+            }
+        except Exception as e:
+            logger.error(f'Failed to download PDF from {pdf_url}: {e}')
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f'Failed to download PDF: {str(e)}'
+            )
+
+        logger.debug(f'Prepared download info for article {paper_id}')
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f'Error preparing article download: {e}')
         raise HTTPException(  # noqa: B904
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f'Internal server error: {str(e)}',  # noqa: RUF010

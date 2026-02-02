@@ -80,6 +80,39 @@ def filter_server_tools(tools, letta_url):
         return []
 
 
+def get_thoth_mcp_server_id(letta_url):
+    """
+    Get the ID of the Thoth MCP server from Letta.
+    Returns None if not found.
+    """
+    try:
+        resp = requests.get(f"{letta_url}/v1/mcp-servers/", timeout=10)
+        if resp.status_code == 200:
+            servers = resp.json()
+            for server in servers:
+                if server.get('server_name') == 'thoth-research-tools':
+                    return server.get('id')
+        return None
+    except Exception:
+        return None
+
+
+def attach_mcp_server_to_agent(agent_id, mcp_server_id, letta_url):
+    """
+    Attach an MCP server to an agent.
+    Returns True if successful, False otherwise.
+    """
+    try:
+        resp = requests.patch(
+            f"{letta_url}/v1/agents/{agent_id}",
+            json={"mcp_server_ids": [mcp_server_id]},
+            timeout=10
+        )
+        return resp.status_code in [200, 201]
+    except Exception:
+        return False
+
+
 def restore_agent(backup_file, letta_url, delete_existing=True):
     """
     Restore a single agent from backup with complete data.
@@ -162,6 +195,12 @@ def restore_agent(backup_file, letta_url, delete_existing=True):
         new_agent = resp.json()
         new_id = new_agent['id']
 
+        # Attach Thoth MCP server (if available)
+        mcp_attached = False
+        thoth_mcp_id = get_thoth_mcp_server_id(letta_url)
+        if thoth_mcp_id:
+            mcp_attached = attach_mcp_server_to_agent(new_id, thoth_mcp_id, letta_url)
+
         # Verify what was restored
         restored_data = {
             "memory_blocks": f"{len(new_agent.get('memory', {}).get('blocks', []))}/{len(memory_blocks)}",
@@ -169,6 +208,7 @@ def restore_agent(backup_file, letta_url, delete_existing=True):
             "tool_rules": f"{len(new_agent.get('tool_rules', []))}/{len(tool_rules)}",
             "tags": f"{len(new_agent.get('tags', []))}/{len(tags)}",
             "system_prompt": len(new_agent.get('system', '')),
+            "mcp_server": "✓" if mcp_attached else "✗",
         }
 
         return True, agent_name, new_id, restored_data
@@ -229,6 +269,7 @@ def restore_agents(backup_dir, letta_url, filter_names=None):
             print(f"  Tool rules: {data['tool_rules']}")
             print(f"  Tags: {data['tags']}")
             print(f"  System prompt: {data['system_prompt']} chars")
+            print(f"  MCP server: {data['mcp_server']} Thoth Research Tools")
             restored.append((agent_name, new_id, data))
         else:
             print(f"✗ {agent_name}")

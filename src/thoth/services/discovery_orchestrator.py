@@ -17,7 +17,9 @@ from uuid import UUID
 
 from thoth.config import Config
 from thoth.discovery.discovery_manager import DiscoveryManager
-from thoth.repositories.article_repository import ArticleRepository
+from thoth.repositories.research_question_match_repository import (
+    ResearchQuestionMatchRepository,
+)
 from thoth.repositories.article_research_match_repository import (
     ArticleResearchMatchRepository,
 )
@@ -25,6 +27,7 @@ from thoth.repositories.available_source_repository import AvailableSourceReposi
 from thoth.repositories.research_question_repository import ResearchQuestionRepository
 from thoth.services.base import BaseService
 from thoth.services.llm_service import LLMService
+from thoth.utilities.pdf_url_converter import convert_to_pdf_url
 from thoth.utilities.schemas import ScrapedArticleMetadata
 
 
@@ -60,8 +63,8 @@ class DiscoveryOrchestrator(BaseService):
         # Initialize repositories with postgres service
         self.question_repo = ResearchQuestionRepository(postgres_service or config)
         self.source_repo = AvailableSourceRepository(postgres_service or config)
-        self.article_repo = ArticleRepository(postgres_service or config)
-        self.match_repo = ArticleResearchMatchRepository(postgres_service or config)
+        self.match_repo = ResearchQuestionMatchRepository(postgres_service or config)
+        self.legacy_match_repo = ArticleResearchMatchRepository(postgres_service or config)
 
         self.logger.info('DiscoveryOrchestrator initialized')
 
@@ -387,45 +390,21 @@ class DiscoveryOrchestrator(BaseService):
 
         for article_meta in articles:
             try:
-                # Step 1: FAST CHECK - Does article already exist and is it matched?
-                # This prevents expensive LLM scoring of articles we've already processed  # noqa: W505
-                existing_article_id = await self.article_repo.find_duplicate(
-                    doi=article_meta.doi,
-                    arxiv_id=article_meta.arxiv_id,
-                    title=article_meta.title,
+                # Step 1: Get or create paper in paper_metadata (handles deduplication)
+                article_id, was_created = await self._get_or_create_article(
+                    article_meta
                 )
 
-                if existing_article_id:
-                    # Article exists - check if already matched to this question
-                    existing_match = await self.match_repo.get_by_article_and_question(
-                        article_id=existing_article_id,
-                        question_id=question_id,
+                if not article_id:
+                    self.logger.warning(
+                        f'Failed to create paper: {article_meta.title}'
                     )
-
-                    if existing_match:
-                        self.logger.debug(
-                            f"Article '{article_meta.title}' already matched to question, skipping"
-                        )
-                        continue
-
-                    # Article exists but not matched to this question yet
-                    # Use existing article_id, skip creation
-                    article_id = existing_article_id
-                    was_created = False
-                else:
-                    # Step 2: Create new article (only if not found above)
-                    article_id, was_created = await self._get_or_create_article(
-                        article_meta
-                    )
-                    if not article_id:
-                        self.logger.warning(
-                            f'Failed to create article: {article_meta.title}'
-                        )
-                        continue
+                    continue
 
                 processed_count += 1
 
-                # Step 3: Calculate relevance using LLM (only for new potential matches)
+                # Step 2: Calculate relevance using LLM
+                # Note: create_match has ON CONFLICT handling, so duplicate matches are updated
                 relevance_result = await self._calculate_relevance_score(
                     article_meta=article_meta,
                     question=question,
@@ -438,9 +417,9 @@ class DiscoveryOrchestrator(BaseService):
                     )
                     continue
 
-                # Step 4: Store match
+                # Step 3: Store match (using new schema with paper_id)
                 match_id = await self.match_repo.create_match(
-                    article_id=article_id,
+                    paper_id=article_id,  # article_id is now paper_id from paper_metadata
                     question_id=question_id,
                     relevance_score=relevance_result['score'],
                     matched_keywords=relevance_result.get('matched_keywords'),
@@ -454,7 +433,7 @@ class DiscoveryOrchestrator(BaseService):
                         f'(relevance: {relevance_result["score"]:.3f})'
                     )
                 else:
-                    self.logger.error(f'Failed to store match for article {article_id}')
+                    self.logger.error(f'Failed to store match for paper {article_id}')
 
             except Exception as e:
                 self.logger.error(
@@ -469,30 +448,36 @@ class DiscoveryOrchestrator(BaseService):
         article_meta: ScrapedArticleMetadata,
     ) -> tuple[Optional[UUID], bool]:  # noqa: UP007
         """
-        Get or create article with deduplication.
+        Get or create paper in paper_metadata with deduplication.
 
-        Uses existing ArticleRepository deduplication logic.
+        Uses ResearchQuestionMatchRepository to create papers in paper_metadata table.
 
         Args:
             article_meta: Article metadata from source
 
         Returns:
-            Tuple of (article_id, was_created) where article_id is UUID or None if creation failed,
-            and was_created is True if new article was created
+            Tuple of (paper_id, was_created) where paper_id is UUID or None if creation failed,
+            and was_created is True if new paper was created
         """  # noqa: W505
         try:
-            # Use repository's get_or_create pattern
-            article_id, was_created = await self.article_repo.get_or_create_article(
+            # Convert URL to PDF URL if possible (for ArXiv, bioRxiv, etc.)
+            pdf_url = None
+            if article_meta.url:
+                pdf_url = convert_to_pdf_url(article_meta.url)
+
+            # Use repository's find_or_create_paper pattern (creates in paper_metadata)
+            paper_id, was_created = await self.match_repo.find_or_create_paper(
                 title=article_meta.title,
                 abstract=article_meta.abstract,
                 authors=article_meta.authors,
                 doi=article_meta.doi,
                 arxiv_id=article_meta.arxiv_id,
                 url=article_meta.url,
+                pdf_url=pdf_url,
                 publication_date=article_meta.publication_date,
             )
 
-            return article_id, was_created
+            return paper_id, was_created
 
         except Exception as e:
             self.logger.error(f'Failed to get/create article: {e}', exc_info=True)

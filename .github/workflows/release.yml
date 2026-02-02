@@ -24,6 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.get-version.outputs.version }}
+      upload_url: ${{ steps.create-release.outputs.upload_url }}
 
     steps:
       - uses: actions/checkout@v4
@@ -55,6 +56,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create Release
+        id: create-release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -68,14 +70,24 @@ jobs:
             ${{ steps.changelog.outputs.changelog }}
 
             ### Installation
+
+            **One-Command Install (Recommended):**
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | bash
+            ```
+
+            **Python Package:**
             ```bash
             pip install thoth==${{ steps.get-version.outputs.version }}
             ```
 
-            ### Docker
+            **Docker:**
             ```bash
             docker pull ghcr.io/${{ github.repository }}:${{ steps.get-version.outputs.version }}
             ```
+
+            **Obsidian Plugin:**
+            Download `thoth-obsidian-${{ steps.get-version.outputs.version }}.zip` from the assets below and extract to `.obsidian/plugins/thoth-obsidian/`
           draft: false
           prerelease: ${{ contains(steps.get-version.outputs.version, 'alpha') || contains(steps.get-version.outputs.version, 'beta') || contains(steps.get-version.outputs.version, 'rc') }}
 
@@ -119,8 +131,46 @@ jobs:
           asset_name: thoth-${{ needs.create-release.outputs.version }}.tar.gz
           asset_content_type: application/gzip
 
-  build-docker:
-    name: Build Docker Image
+  build-setup-image:
+    name: Build Setup Image
+    needs: create-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}-setup,value=${{ needs.create-release.outputs.version }}
+            type=raw,value=setup
+
+      - name: Build and push setup image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.setup
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-all-in-one:
+    name: Build All-in-One Image
     needs: create-release
     runs-on: ubuntu-latest
 
@@ -146,12 +196,13 @@ jobs:
             type=semver,pattern={{version}},value=${{ needs.create-release.outputs.version }}
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.create-release.outputs.version }}
             type=semver,pattern={{major}},value=${{ needs.create-release.outputs.version }}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
 
-      - name: Build and push
+      - name: Build and push all-in-one image
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./docker/all-in-one/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -159,3 +210,96 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             VERSION=${{ needs.create-release.outputs.version }}
+
+  build-service-images:
+    name: Build Service Images
+    needs: create-release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api, mcp, pdf-monitor, discovery]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.service }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.create-release.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.create-release.outputs.version }}
+            type=raw,value=latest
+
+      - name: Build and push ${{ matrix.service }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,scope=${{ matrix.service }},mode=max
+          build-args: |
+            VERSION=${{ needs.create-release.outputs.version }}
+
+  build-obsidian-plugin:
+    name: Build Obsidian Plugin
+    needs: create-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: obsidian-plugin/thoth-obsidian/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd obsidian-plugin/thoth-obsidian
+          npm ci
+
+      - name: Build plugin
+        run: |
+          cd obsidian-plugin/thoth-obsidian
+          npm run build
+
+      - name: Update manifest version
+        run: |
+          cd obsidian-plugin/thoth-obsidian
+          jq '.version = "${{ needs.create-release.outputs.version }}"' manifest.json > manifest.tmp
+          mv manifest.tmp manifest.json
+
+      - name: Package plugin
+        run: |
+          cd obsidian-plugin/thoth-obsidian
+          mkdir -p release
+          cp main.js manifest.json styles.css release/
+          cd release
+          zip -r ../thoth-obsidian-${{ needs.create-release.outputs.version }}.zip .
+
+      - name: Upload plugin zip to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./obsidian-plugin/thoth-obsidian/thoth-obsidian-${{ needs.create-release.outputs.version }}.zip
+          asset_name: thoth-obsidian-${{ needs.create-release.outputs.version }}.zip
+          asset_content_type: application/zip

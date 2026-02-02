@@ -1,4 +1,4 @@
-import { Setting } from 'obsidian';
+import { Setting, Platform } from 'obsidian';
 import type { UISchema, FieldSchema, GroupSchema, FieldValidationResult } from '../services/schema-service';
 import type { ThothSettings } from '../types';
 import { getGlobalCacheManager, trackPerformance } from '../services/performance-cache';
@@ -625,6 +625,18 @@ export class UIGenerator implements IUIGenerator {
       button.setButtonText('Browse');
       button.setTooltip('Select file');
       button.onClick(async () => {
+        // Mobile: enable manual text input
+        if (Platform.isMobile) {
+          const textComponent = setting.controlEl.querySelector('input[type="text"]') as HTMLInputElement;
+          if (textComponent) {
+            textComponent.disabled = false;
+            textComponent.placeholder = 'Enter file path (file picker not available on mobile)';
+            textComponent.focus();
+          }
+          return;
+        }
+
+        // Desktop: try Electron file picker
         try {
           // Use Electron's file dialog if available
           if (typeof require !== 'undefined') {
@@ -675,6 +687,18 @@ export class UIGenerator implements IUIGenerator {
       button.setButtonText('Browse');
       button.setTooltip('Select directory');
       button.onClick(async () => {
+        // Mobile: enable manual text input
+        if (Platform.isMobile) {
+          const textComponent = setting.controlEl.querySelector('input[type="text"]') as HTMLInputElement;
+          if (textComponent) {
+            textComponent.disabled = false;
+            textComponent.placeholder = 'Enter directory path (directory picker not available on mobile)';
+            textComponent.focus();
+          }
+          return;
+        }
+
+        // Desktop: try Electron directory picker
         try {
           // Use Electron's directory dialog if available
           if (typeof require !== 'undefined') {

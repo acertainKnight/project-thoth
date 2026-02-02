@@ -48,10 +48,10 @@ class ResearchQuestionService(BaseService):
         selected_sources: list[str],
         schedule_frequency: str = 'daily',
         schedule_time: Optional[str] = None,  # noqa: UP007
-        schedule_days_of_week: Optional[list[str]] = None,  # noqa: UP007
+        schedule_days_of_week: Optional[list[int]] = None,  # noqa: UP007
         min_relevance_score: float = 0.5,
-        auto_download_pdfs: bool = True,
-        auto_process_pdfs: bool = False,  # noqa: ARG002
+        auto_download_enabled: bool = False,
+        auto_download_min_score: float = 0.7,
         max_articles_per_run: int = 50,  # noqa: ARG002
     ) -> Optional[UUID]:  # noqa: UP007
         """
@@ -66,10 +66,10 @@ class ResearchQuestionService(BaseService):
             selected_sources: Source selection (['arxiv', 'pubmed'] or ['*'])
             schedule_frequency: 'daily', 'weekly', or 'monthly'
             schedule_time: Preferred run time (HH:MM format)
-            schedule_days_of_week: Days for weekly schedule
+            schedule_days_of_week: Days for weekly schedule (ISO 8601: 1=Mon, 7=Sun)
             min_relevance_score: Minimum relevance threshold (0.0-1.0)
-            auto_download_pdfs: Automatically download matching PDFs
-            auto_process_pdfs: Automatically process downloaded PDFs
+            auto_download_enabled: Automatically download matching PDFs
+            auto_download_min_score: Minimum score threshold for auto-download
             max_articles_per_run: Maximum articles per discovery run
 
         Returns:
@@ -102,12 +102,6 @@ class ResearchQuestionService(BaseService):
             schedule_days_of_week=schedule_days_of_week,
         )
 
-        # Create the question
-        # Note: Repository parameters differ from service parameters
-        # - auto_download_pdfs maps to auto_download_enabled
-        # - auto_download_min_score is hardcoded for now
-        # - next_run_at, auto_process_pdfs, max_articles_per_run are calculated/stored separately  # noqa: W505
-
         # Convert schedule_time string (HH:MM) to time object
         time_obj = None
         if schedule_time:
@@ -129,8 +123,8 @@ class ResearchQuestionService(BaseService):
             schedule_frequency=schedule_frequency,
             schedule_time=time_obj,
             min_relevance_score=min_relevance_score,
-            auto_download_enabled=auto_download_pdfs,
-            auto_download_min_score=0.8 if auto_download_pdfs else 0.7,
+            auto_download_enabled=auto_download_enabled,
+            auto_download_min_score=auto_download_min_score,
         )
 
         if question_id:
@@ -467,7 +461,7 @@ class ResearchQuestionService(BaseService):
         self,
         frequency: str,
         schedule_time: Optional[str] = None,  # noqa: UP007
-        schedule_days_of_week: Optional[list[str]] = None,  # noqa: UP007
+        schedule_days_of_week: Optional[list[int]] = None,  # noqa: UP007
     ) -> datetime:
         """
         Calculate the next scheduled run time.
@@ -475,7 +469,7 @@ class ResearchQuestionService(BaseService):
         Args:
             frequency: 'daily', 'weekly', 'monthly', or 'on-demand'
             schedule_time: Preferred time in HH:MM format
-            schedule_days_of_week: Days for weekly schedule
+            schedule_days_of_week: ISO 8601 days (1=Monday, 7=Sunday)
 
         Returns:
             Next run datetime
@@ -507,20 +501,9 @@ class ResearchQuestionService(BaseService):
             if not schedule_days_of_week:
                 next_run = scheduled_time + timedelta(days=7)
             else:
-                # Find next matching weekday
-                weekday_map = {
-                    'monday': 0,
-                    'tuesday': 1,
-                    'wednesday': 2,
-                    'thursday': 3,
-                    'friday': 4,
-                    'saturday': 5,
-                    'sunday': 6,
-                }
+                # Convert ISO 8601 days (1=Mon, 7=Sun) to Python weekdays (0=Mon, 6=Sun)
                 target_days = [
-                    weekday_map.get(day.lower())
-                    for day in schedule_days_of_week
-                    if day.lower() in weekday_map
+                    (day - 1) % 7 for day in schedule_days_of_week if 1 <= day <= 7
                 ]
 
                 if not target_days:

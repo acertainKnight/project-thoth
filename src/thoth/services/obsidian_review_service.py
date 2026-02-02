@@ -383,20 +383,20 @@ class ObsidianReviewService:
             if question_id:
                 # Query with question filter for precision
                 query = """
-                    SELECT arm.id
-                    FROM article_research_matches arm
-                    JOIN discovered_articles a ON arm.article_id = a.id
-                    WHERE a.title = $1 AND arm.question_id = $2
+                    SELECT rqm.id
+                    FROM research_question_matches rqm
+                    JOIN paper_metadata pm ON rqm.paper_id = pm.id
+                    WHERE pm.title = $1 AND rqm.question_id = $2
                     LIMIT 1
                 """
                 result = await pg.fetchval(query, title, question_id)
             else:
                 # Query without question filter
                 query = """
-                    SELECT arm.id
-                    FROM article_research_matches arm
-                    JOIN discovered_articles a ON arm.article_id = a.id
-                    WHERE a.title = $1
+                    SELECT rqm.id
+                    FROM research_question_matches rqm
+                    JOIN paper_metadata pm ON rqm.paper_id = pm.id
+                    WHERE pm.title = $1
                     LIMIT 1
                 """
                 result = await pg.fetchval(query, title)
@@ -426,10 +426,10 @@ class ObsidianReviewService:
         try:
             pg = self.match_repo.postgres
             query = """
-                SELECT a.title, a.pdf_url, a.url, a.authors
-                FROM article_research_matches arm
-                JOIN discovered_articles a ON arm.article_id = a.id
-                WHERE arm.id = $1
+                SELECT pm.title, pm.pdf_url, pm.url, pm.authors
+                FROM research_question_matches rqm
+                JOIN paper_metadata pm ON rqm.paper_id = pm.id
+                WHERE rqm.id = $1
             """
             result = await pg.fetchrow(query, match_id)
 

@@ -129,10 +129,16 @@ class CrossrefResolver:
         )
 
     def _init_cache(self) -> None:
-        """Initialize SQLite cache database."""
+        """Initialize SQLite cache database with WAL mode for concurrent writes."""
         try:
             conn = sqlite3.connect(str(self.db_path))
             cursor = conn.cursor()
+
+            # ALWAYS enable WAL mode for concurrent read/write access
+            # This is persistent and will convert existing databases to WAL
+            current_mode = cursor.execute("PRAGMA journal_mode=WAL").fetchone()[0]
+            cursor.execute("PRAGMA synchronous=NORMAL")  # Better performance with WAL
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS crossref_cache (
                     cache_key TEXT PRIMARY KEY,
@@ -146,7 +152,7 @@ class CrossrefResolver:
             """)
             conn.commit()
             conn.close()
-            logger.debug(f'Initialized Crossref cache at {self.db_path}')
+            logger.info(f'Crossref cache at {self.db_path} using {current_mode} mode')
         except Exception as e:
             logger.error(f'Failed to initialize Crossref cache: {e}')
 

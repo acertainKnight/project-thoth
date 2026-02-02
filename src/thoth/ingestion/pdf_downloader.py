@@ -54,26 +54,27 @@ def download_pdf(url: str, pdf_dir: Path, filename: str | None = None) -> Path:
 
     # Download with progress bar
     try:
-        response = httpx.get(url, stream=True)
-        response.raise_for_status()
+        # Use httpx.stream() context manager for streaming downloads
+        with httpx.stream('GET', url, follow_redirects=True) as response:
+            response.raise_for_status()
 
-        # Get total file size
-        total_size = int(response.headers.get('content-length', 0))
+            # Get total file size
+            total_size = int(response.headers.get('content-length', 0))
 
-        # Download with progress bar
-        with (
-            open(pdf_path, 'wb') as file,
-            tqdm(
-                desc=filename,
-                total=total_size,
-                unit='iB',
-                unit_scale=True,
-                unit_divisor=1024,
-            ) as progress_bar,
-        ):
-            for data in response.iter_content(chunk_size=1024):
-                size = file.write(data)
-                progress_bar.update(size)
+            # Download with progress bar
+            with (
+                open(pdf_path, 'wb') as file,
+                tqdm(
+                    desc=filename,
+                    total=total_size,
+                    unit='iB',
+                    unit_scale=True,
+                    unit_divisor=1024,
+                ) as progress_bar,
+            ):
+                for data in response.iter_bytes(chunk_size=1024):
+                    size = file.write(data)
+                    progress_bar.update(size)
 
         logger.info(f'Successfully downloaded PDF to {pdf_path}')
         return pdf_path

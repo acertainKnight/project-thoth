@@ -6,19 +6,32 @@ Thoth can connect to either:
 1. **Letta Cloud** (hosted at app.letta.com) - Includes free tier
 2. **Self-hosted Letta** (local Docker container) - Full control
 
-## Quick Start: Interactive Setup Wizard
+## Quick Start: Setup Wizard (Recommended)
 
-The easiest way to configure Letta:
+**New in 2026:** Thoth's main setup wizard now includes Letta mode selection!
+
+```bash
+thoth setup
+```
+
+The setup wizard will:
+1. Detect your Obsidian vault
+2. **Ask you to choose: Letta Cloud or Self-Hosted** ⭐ (NEW!)
+3. For cloud: Validate your API key
+4. Configure all dependencies
+5. Save your settings automatically
+
+**Get your Letta Cloud API key**: https://app.letta.com/api-keys
+
+### Alternative: Letta-Specific Setup
+
+If you just want to configure Letta (not full setup):
 
 ```bash
 thoth letta setup
 ```
 
-This interactive wizard will:
-- Guide you through mode selection (cloud or self-hosted)
-- Handle authentication (OAuth or API key)
-- Update your configuration automatically
-- Provide next steps
+This standalone wizard handles only Letta configuration.
 
 ## Letta Cloud Setup (Manual)
 
@@ -109,11 +122,35 @@ thoth letta sync
 
 ## Switching Modes
 
-Use the interactive mode switcher to change between cloud and self-hosted:
+### Interactive Mode Switcher
 
 ```bash
 thoth letta switch-mode
 ```
+
+### Command Line Mode Switch (NEW)
+
+**Switch to Letta Cloud:**
+```bash
+thoth letta configure cloud --api-key=letta_sk_your_key_here
+```
+
+**Switch to Self-Hosted:**
+```bash
+thoth letta configure self-hosted
+```
+
+### Check Current Status
+
+```bash
+thoth letta status
+```
+
+This shows:
+- Current mode (cloud or self-hosted)
+- Server URL
+- API key status (if cloud)
+- Connection test results
 
 This will:
 - Guide you through authentication (if switching to cloud)

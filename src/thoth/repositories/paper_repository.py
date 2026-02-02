@@ -3,6 +3,12 @@ Paper repository for managing research papers in PostgreSQL.
 
 This module provides specialized methods for paper data access,
 including search, filtering, and relationship queries.
+
+NOTE: After 2026-01 schema migration:
+- papers table is now a VIEW over paper_metadata + processed_papers
+- View provides backward compatibility with same interface
+- For processed papers specifically, use ProcessedPaperRepository
+- For paper metadata only, query paper_metadata table directly if needed
 """
 
 from typing import Any, Dict, List, Optional  # noqa: I001, UP035
@@ -12,7 +18,12 @@ from thoth.repositories.base import BaseRepository
 
 
 class PaperRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
-    """Repository for managing research paper records."""
+    """
+    Repository for managing research paper records.
+
+    Uses the papers VIEW which provides backward compatibility by joining
+    paper_metadata with processed_papers. All queries work as before.
+    """
 
     def __init__(self, postgres_service, **kwargs):
         """Initialize paper repository."""
@@ -253,4 +264,64 @@ class PaperRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
 
         except Exception as e:
             logger.error(f"Failed to perform full-text search for '{search_text}': {e}")
+            return []
+
+    async def get_processed_papers(
+        self, limit: int = 100, offset: int = 0
+    ) -> List[Dict[str, Any]]:  # noqa: UP006
+        """
+        Get only papers with file paths (processed papers).
+
+        Args:
+            limit: Maximum number of results
+            offset: Number of records to skip
+
+        Returns:
+            List[Dict[str, Any]]: Processed papers
+        """
+        try:
+            query = """
+                SELECT * FROM papers
+                WHERE pdf_path IS NOT NULL
+                   OR markdown_path IS NOT NULL
+                   OR note_path IS NOT NULL
+                ORDER BY updated_at DESC
+                LIMIT $1 OFFSET $2
+            """
+            results = await self.postgres.fetch(query, limit, offset)
+            return [dict(row) for row in results]
+
+        except Exception as e:
+            logger.error(f'Failed to get processed papers: {e}')
+            return []
+
+    async def get_citation_metadata(
+        self, limit: int = 100, offset: int = 0
+    ) -> List[Dict[str, Any]]:  # noqa: UP006
+        """
+        Get citation metadata entries (not processed).
+
+        These are papers that were referenced in citations but not read by user.
+
+        Args:
+            limit: Maximum number of results
+            offset: Number of records to skip
+
+        Returns:
+            List[Dict[str, Any]]: Citation metadata papers
+        """
+        try:
+            query = """
+                SELECT * FROM papers
+                WHERE pdf_path IS NULL
+                  AND markdown_path IS NULL
+                  AND note_path IS NULL
+                ORDER BY created_at DESC
+                LIMIT $1 OFFSET $2
+            """
+            results = await self.postgres.fetch(query, limit, offset)
+            return [dict(row) for row in results]
+
+        except Exception as e:
+            logger.error(f'Failed to get citation metadata: {e}')
             return []

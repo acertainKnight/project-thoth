@@ -296,6 +296,7 @@ class OptimizedDocumentPipeline(BasePipeline):
         Run content analysis and citation extraction in parallel (sync version with
         optimized workers).
         """
+        import time
         self.logger.info(
             'Starting optimized parallel content analysis and citation extraction'
         )
@@ -305,8 +306,11 @@ class OptimizedDocumentPipeline(BasePipeline):
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit both tasks to run in parallel
+            self.logger.info(f'DEBUG: Submitting analysis task for {markdown_path.name}...')
             analysis_future = executor.submit(self._analyze_content, markdown_path)
+            self.logger.info(f'DEBUG: Submitting citation extraction task for {markdown_path.name}...')
             citations_future = executor.submit(self._extract_citations, markdown_path)
+            self.logger.info('DEBUG: Both tasks submitted, waiting for completion...')
 
             # Collect results as they complete
             analysis = None
@@ -314,6 +318,7 @@ class OptimizedDocumentPipeline(BasePipeline):
 
             for future in as_completed([analysis_future, citations_future]):
                 try:
+                    self.logger.info(f'DEBUG: Task completed, getting result...')
                     if future == analysis_future:
                         analysis = future.result()
                         self.logger.info('Content analysis completed')
@@ -324,9 +329,11 @@ class OptimizedDocumentPipeline(BasePipeline):
                         )
                 except Exception as e:
                     self.logger.error(f'Task failed: {e}')
+                    self.logger.exception('Full task error traceback:')
                     # Re-raise to handle upstream
                     raise
 
+        self.logger.info('DEBUG: Both tasks returned, exiting parallel execution')
         return analysis, citations
 
     async def _background_rag_indexing_async(
@@ -421,11 +428,17 @@ class OptimizedDocumentPipeline(BasePipeline):
 
     def _analyze_content(self, markdown_path: Path):
         """Analyze content using the processing service."""
-        return self.services.processing.analyze_document(markdown_path)
+        self.logger.info(f'DEBUG: _analyze_content started for {markdown_path.name}')
+        result = self.services.processing.analyze_document(markdown_path)
+        self.logger.info(f'DEBUG: _analyze_content completed for {markdown_path.name}')
+        return result
 
     def _extract_citations(self, markdown_path: Path) -> list[Citation]:
         """Extract citations using the citation service."""
-        return self.services.citation.extract_citations(markdown_path)
+        self.logger.info(f'DEBUG: _extract_citations started for {markdown_path.name}')
+        result = self.services.citation.extract_citations(markdown_path)
+        self.logger.info(f'DEBUG: _extract_citations completed for {markdown_path.name}, found {len(result)} citations')
+        return result
 
     def _extract_citations_batch(self, markdown_path: Path) -> list[Citation]:
         """

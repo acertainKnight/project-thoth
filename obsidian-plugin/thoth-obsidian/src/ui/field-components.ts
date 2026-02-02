@@ -1,4 +1,4 @@
-import { Setting } from 'obsidian';
+import { Setting, Platform } from 'obsidian';
 import { FieldSchema } from '../services/schema-service';
 
 /**
@@ -492,6 +492,17 @@ export class FileFieldComponent extends BaseFieldComponent {
   }
 
   private async openFilePicker(): Promise<void> {
+    // Mobile: skip Electron, enable manual input
+    if (Platform.isMobile) {
+      if (this.inputEl) {
+        this.inputEl.disabled = false;
+        this.inputEl.placeholder = 'Enter file path (file picker not available on mobile)';
+        this.inputEl.focus();
+      }
+      return;
+    }
+
+    // Desktop: try Electron file picker
     try {
       // Try to use Electron's file dialog
       if (typeof require !== 'undefined') {
@@ -592,6 +603,17 @@ export class DirectoryFieldComponent extends BaseFieldComponent {
   }
 
   private async openDirectoryPicker(): Promise<void> {
+    // Mobile: skip Electron, enable manual input
+    if (Platform.isMobile) {
+      if (this.inputEl) {
+        this.inputEl.disabled = false;
+        this.inputEl.placeholder = 'Enter directory path (directory picker not available on mobile)';
+        this.inputEl.focus();
+      }
+      return;
+    }
+
+    // Desktop: try Electron directory picker
     try {
       // Try to use Electron's directory dialog
       if (typeof require !== 'undefined') {

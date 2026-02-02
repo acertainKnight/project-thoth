@@ -1,0 +1,34 @@
+# Dockerfile for Thoth setup wizard
+# Includes Docker CLI for starting services from within container
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies including Docker CLI
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    ca-certificates \
+    gnupg \
+    lsb-release \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y docker-ce-cli docker-compose-plugin \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy only setup-related code
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+
+# Install Thoth with setup dependencies
+RUN pip install --no-cache-dir -e ".[setup]"
+
+# Set environment to avoid buffering
+ENV PYTHONUNBUFFERED=1
+
+# Default command runs setup wizard
+ENTRYPOINT ["python", "-m", "thoth"]
+CMD ["setup"]

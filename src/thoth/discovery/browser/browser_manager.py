@@ -11,17 +11,32 @@ import asyncio
 import json  # noqa: F401
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, Optional  # noqa: F401, UP035
+from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Optional  # noqa: F401, UP035
 from uuid import UUID
 
 from loguru import logger
-from playwright.async_api import (
-    Browser,  # noqa: F401
-    BrowserContext,
-    Error as PlaywrightError,
-    Page,  # noqa: F401
-    async_playwright,
-)
+
+# Make playwright imports optional to avoid blocking if not installed
+if TYPE_CHECKING:
+    from playwright.async_api import Browser, BrowserContext, Page
+    async_playwright = None  # type: ignore
+    PlaywrightError = Exception
+else:
+    try:
+        from playwright.async_api import (
+            Browser,  # noqa: F401
+            BrowserContext,
+            Error as PlaywrightError,
+            Page,  # noqa: F401
+            async_playwright,
+        )
+    except ImportError:
+        # Playwright not installed - create placeholders
+        Browser = None  # type: ignore
+        BrowserContext = None  # type: ignore
+        Page = None  # type: ignore
+        async_playwright = None  # type: ignore
+        PlaywrightError = Exception  # type: ignore
 
 from thoth.config import Config, config
 

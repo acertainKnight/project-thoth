@@ -292,7 +292,7 @@ class DiscoveryDashboardService:
             # Count matches added since last export
             query = """
                 SELECT COUNT(*)
-                FROM article_research_matches
+                FROM research_question_matches
                 WHERE question_id = $1
                     AND matched_at > $2
                     AND user_sentiment IS NULL
@@ -302,7 +302,7 @@ class DiscoveryDashboardService:
             # First export - count all matches without sentiment
             query = """
                 SELECT COUNT(*)
-                FROM article_research_matches
+                FROM research_question_matches
                 WHERE question_id = $1
                     AND user_sentiment IS NULL
             """
@@ -429,27 +429,27 @@ class DiscoveryDashboardService:
         """Fetch article matches for a research question (pending only)."""
         query = """
             SELECT
-                arm.id,
-                arm.article_id,
-                arm.relevance_score,
-                arm.user_sentiment,
-                arm.sentiment_recorded_at,
-                arm.user_rating,
-                a.title,
-                a.authors,
-                a.publication_date,
-                a.abstract,
-                a.url,
-                a.pdf_url
-            FROM article_research_matches arm
-            JOIN discovered_articles a ON arm.article_id = a.id
-            WHERE arm.question_id = $1
-                AND arm.relevance_score >= $2
-                AND arm.user_sentiment IS NULL
+                rqm.id,
+                rqm.paper_id,
+                rqm.relevance_score,
+                rqm.user_sentiment,
+                rqm.sentiment_recorded_at,
+                rqm.user_rating,
+                pm.title,
+                pm.authors,
+                pm.publication_date,
+                pm.abstract,
+                pm.url,
+                pm.pdf_url
+            FROM research_question_matches rqm
+            JOIN paper_metadata pm ON rqm.paper_id = pm.id
+            WHERE rqm.question_id = $1
+                AND rqm.relevance_score >= $2
+                AND rqm.user_sentiment IS NULL
             ORDER BY
-                arm.relevance_score DESC,
-                COALESCE(arm.user_rating, 0) DESC,
-                a.publication_date DESC NULLS LAST
+                rqm.relevance_score DESC,
+                COALESCE(rqm.user_rating, 0) DESC,
+                pm.publication_date DESC NULLS LAST
             LIMIT $3
         """
 
@@ -505,7 +505,7 @@ class DiscoveryDashboardService:
                 COUNT(*) FILTER (WHERE user_sentiment = 'skip') as skipped,
                 COUNT(*) FILTER (WHERE user_sentiment IS NULL) as pending,
                 COUNT(*) as total
-            FROM article_research_matches
+            FROM research_question_matches
             WHERE question_id = $1
         """
 

@@ -4,19 +4,26 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from loguru import logger
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 
 from thoth.utilities.schemas import BrowserRecording
+
+# Lazy import to avoid blocking module load (selenium has heavy imports)
+if TYPE_CHECKING:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
 
 
 class WebEmulatorRecorder:
     """Simple Selenium-based browser recorder."""  # pragma: no cover
 
     def __init__(self, driver_path: str | None = None) -> None:  # pragma: no cover
+        # Import selenium only when actually creating an instance
+        from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options
+        
         options = Options()
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')

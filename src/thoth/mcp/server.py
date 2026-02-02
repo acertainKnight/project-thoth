@@ -79,14 +79,18 @@ class MCPServer:
         transport = StdioTransport(self.protocol_handler)
         self.transport_manager.add_transport('stdio', transport)
 
-    def add_http_transport(self, host: str = 'localhost', port: int = 8002) -> None:
-        """Add HTTP transport for web integration."""
-        transport = HTTPTransport(self.protocol_handler, host, port)
+    def add_http_transport(
+        self, host: str = 'localhost', port: int = 8002, auth_token: str | None = None
+    ) -> None:
+        """Add HTTP transport for web integration with optional Bearer token auth."""
+        transport = HTTPTransport(self.protocol_handler, host, port, auth_token)
         self.transport_manager.add_transport('http', transport)
 
-    def add_sse_transport(self, host: str = 'localhost', port: int = 8001) -> None:
-        """Add SSE transport for streaming (primary transport)."""
-        transport = SSETransport(self.protocol_handler, host, port)
+    def add_sse_transport(
+        self, host: str = 'localhost', port: int = 8001, auth_token: str | None = None
+    ) -> None:
+        """Add SSE transport for streaming (primary transport) with optional Bearer token auth."""
+        transport = SSETransport(self.protocol_handler, host, port, auth_token)
         self.transport_manager.add_transport('sse', transport)
 
     async def start(self) -> None:
@@ -436,6 +440,7 @@ def create_mcp_server(
     enable_sse: bool = True,
     sse_host: str = 'localhost',
     sse_port: int = 8001,
+    auth_token: str | None = None,
 ) -> MCPServer:
     """
     Create and configure an MCP server with transports.
@@ -449,19 +454,26 @@ def create_mcp_server(
         enable_sse: Enable Server-Sent Events transport (default: True, port 8001)
         sse_host: SSE server host
         sse_port: SSE server port (default: 8001, primary)
+        auth_token: Bearer token for authentication (optional, for external access)
 
     Returns:
         Configured MCPServer instance
     """
+    import os
+    
+    # Check for auth token from environment if not provided
+    if auth_token is None:
+        auth_token = os.getenv('THOTH_MCP_AUTH_TOKEN')
+    
     server = MCPServer(service_manager)
 
     if enable_stdio:
         server.add_stdio_transport()
 
     if enable_http:
-        server.add_http_transport(http_host, http_port)
+        server.add_http_transport(http_host, http_port, auth_token)
 
     if enable_sse:
-        server.add_sse_transport(sse_host, sse_port)
+        server.add_sse_transport(sse_host, sse_port, auth_token)
 
     return server

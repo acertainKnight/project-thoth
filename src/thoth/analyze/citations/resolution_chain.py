@@ -529,6 +529,11 @@ class CitationResolutionChain:
         Returns:
             ResolutionResult if successful match found, None otherwise
         """
+        # TEMPORARY FIX: Skip Semantic Scholar due to recursion bug
+        # TODO: Fix recursion issue in Semantic Scholar resolution
+        logger.debug('Skipping Semantic Scholar due to recursion bug')
+        return None
+
         try:
             metadata.api_sources_tried.append(APISource.SEMANTIC_SCHOLAR)
 

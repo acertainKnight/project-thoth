@@ -86,10 +86,12 @@ services:
   # ==============================================================================
   thoth-all-in-one:
     <<: *thoth-common
+    image: ghcr.io/acertainknight/project-thoth:latest
     build:
       context: .
       dockerfile: docker/all-in-one/Dockerfile
       target: production
+    pull_policy: always
     container_name: thoth-all-in-one
     command: []  # Uses entrypoint.sh which starts supervisor
     ports:
@@ -122,12 +124,14 @@ services:
   thoth-api:
     profiles: ["microservices"]
     <<: *thoth-common
+    image: ghcr.io/acertainknight/project-thoth/api:latest
     build:
       context: .
       dockerfile: docker/api/Dockerfile
       target: production
+    pull_policy: always
     container_name: thoth-api
-    command: ["python", "-m", "thoth", "server", "start", "--api-host", "0.0.0.0", "--api-port", "8000", "--no-discovery"]
+    command: ["python", "-m", "thoth", "server", "start", "--api-host", "0.0.0.0", "--api-port", "8000"]
     ports:
       - "8080:8000"
     # NO DEPENDENCIES - connects to external Letta
@@ -153,10 +157,12 @@ services:
   thoth-mcp:
     profiles: ["microservices"]
     <<: *thoth-common
+    image: ghcr.io/acertainknight/project-thoth/mcp:latest
     build:
       context: .
       dockerfile: docker/mcp/Dockerfile
       target: production
+    pull_policy: always
     container_name: thoth-mcp
     # HTTP-only mode (includes /mcp POST and /sse streaming endpoints)
     command: ["python", "-m", "thoth", "mcp", "http", "--host", "0.0.0.0", "--port", "8000"]
@@ -202,10 +208,12 @@ services:
   thoth-monitor:
     profiles: ["microservices"]
     <<: *thoth-common
+    image: ghcr.io/acertainknight/project-thoth/pdf-monitor:latest
     build:
       context: .
       dockerfile: docker/pdf-monitor/Dockerfile
       target: production
+    pull_policy: always
     container_name: thoth-monitor
     command: ["python", "-m", "thoth", "monitor", "--optimized", "--recursive", "--watch-dir", "/vault/thoth/papers"]
     depends_on:
@@ -266,19 +274,20 @@ services:
 
   # ==============================================================================
   # Thoth Discovery Scheduler
-  # Runs automated daily paper discovery searches
+  # Runs automated daily paper discovery searches for research questions
   # ==============================================================================
   thoth-discovery:
     profiles: ["microservices"]
     <<: *thoth-common
+    image: ghcr.io/acertainknight/project-thoth/discovery:latest
     build:
       context: .
-      dockerfile: Dockerfile
-      args:
-        SERVICE_EXTRAS: "service-discovery"
+      dockerfile: docker/discovery/Dockerfile
+      target: production
+    pull_policy: always
     container_name: thoth-discovery
     command: [
-      "python", "-m", "thoth", "discovery", "scheduler", "start"
+      "python", "-m", "thoth", "research", "scheduler"
     ]
     depends_on:
       thoth-api:

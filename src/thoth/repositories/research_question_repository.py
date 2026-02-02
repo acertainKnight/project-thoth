@@ -373,20 +373,20 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
                 query = """
                     SELECT
                         rq.*,
-                        COUNT(DISTINCT arm.article_id) as total_matches,
-                        COUNT(DISTINCT arm.article_id) FILTER (
-                            WHERE arm.relevance_score > 0.7
+                        COUNT(DISTINCT rqm.paper_id) as total_matches,
+                        COUNT(DISTINCT rqm.paper_id) FILTER (
+                            WHERE rqm.relevance_score > 0.7
                         ) as high_relevance_matches,
-                        COUNT(DISTINCT arm.article_id) FILTER (
-                            WHERE arm.is_viewed = false
+                        COUNT(DISTINCT rqm.paper_id) FILTER (
+                            WHERE rqm.is_viewed = false
                         ) as unviewed_matches,
-                        MAX(arm.matched_at) as last_match_at,
+                        MAX(rqm.matched_at) as last_match_at,
                         COUNT(DISTINCT del.id) as total_runs,
                         COUNT(DISTINCT del.id) FILTER (
                             WHERE del.status = 'completed'
                         ) as successful_runs
                     FROM research_questions rq
-                    LEFT JOIN article_research_matches arm ON rq.id = arm.question_id
+                    LEFT JOIN research_question_matches rqm ON rq.id = rqm.question_id
                     LEFT JOIN discovery_execution_log del ON rq.id = del.question_id
                     WHERE rq.id = $1
                     GROUP BY rq.id
@@ -398,10 +398,10 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
                     SELECT
                         COUNT(*) as total_questions,
                         COUNT(*) FILTER (WHERE is_active = true) as active_questions,
-                        COUNT(DISTINCT arm.article_id) as total_matches,
-                        AVG(arm.relevance_score) as avg_relevance_score
+                        COUNT(DISTINCT rqm.paper_id) as total_matches,
+                        AVG(rqm.relevance_score) as avg_relevance_score
                     FROM research_questions rq
-                    LEFT JOIN article_research_matches arm ON rq.id = arm.question_id
+                    LEFT JOIN research_question_matches rqm ON rq.id = rqm.question_id
                 """
                 result = await self.postgres.fetchrow(query)
                 return dict(result) if result else {}

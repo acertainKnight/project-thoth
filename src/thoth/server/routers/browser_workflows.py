@@ -29,6 +29,7 @@ from thoth.utilities.schemas.browser_workflow import (
     BrowserWorkflowCreate,  # noqa: F401
     BrowserWorkflowUpdate,  # noqa: F401
     ExecutionParameters,
+    ExecutionStatus,
     ExecutionTrigger,
     WorkflowAction,  # noqa: F401
 )
@@ -325,10 +326,13 @@ async def list_workflows(
                 workflows = await repo.get_active_workflows()
             else:
                 # Get all and filter inactive
-                all_workflows = await repo.fetch_all()
-                workflows = [w for w in all_workflows if not w.get('is_active', True)]
+                query = 'SELECT * FROM browser_workflows'
+                all_workflows = await repo.postgres.fetch(query)
+                workflows = [dict(w) for w in all_workflows if not w.get('is_active', True)]
         else:
-            workflows = await repo.fetch_all()
+            query = 'SELECT * FROM browser_workflows'
+            result = await repo.postgres.fetch(query)
+            workflows = [dict(w) for w in result]
 
         return [WorkflowResponse(**w) for w in workflows]
 

@@ -2,6 +2,11 @@
 Citation repository for managing paper citations in PostgreSQL.
 
 This module handles citation relationships between papers.
+
+NOTE: After 2026-01 schema migration:
+- citations table references paper_metadata.id via foreign keys
+- JOIN with papers view (backward compatible) or paper_metadata directly
+- All existing queries work unchanged via papers view
 """
 
 from typing import Any, Dict, List, Optional  # noqa: I001, UP035
@@ -11,7 +16,12 @@ from thoth.repositories.base import BaseRepository
 
 
 class CitationRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
-    """Repository for managing citation records."""
+    """
+    Repository for managing citation records.
+
+    Citations reference paper_metadata via foreign keys. JOINs use the papers view
+    for backward compatibility, which provides all necessary paper fields.
+    """
 
     def __init__(self, postgres_service, **kwargs):
         """Initialize citation repository."""

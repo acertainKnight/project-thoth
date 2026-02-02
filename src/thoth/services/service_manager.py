@@ -4,7 +4,11 @@ from typing import Any, TYPE_CHECKING
 
 from loguru import logger
 
-from thoth.discovery.discovery_manager import DiscoveryManager
+# Lazy import to avoid circular dependency deadlock (caused by playwright/selenium imports)
+# DiscoveryManager will be imported only when actually needed
+if TYPE_CHECKING:
+    from thoth.discovery.discovery_manager import DiscoveryManager
+
 from thoth.knowledge.graph import CitationGraph
 from thoth.services.api_gateway import ExternalAPIGateway
 from thoth.services.article_service import ArticleService
@@ -51,7 +55,9 @@ from thoth.services.skill_service import SkillService
 from thoth.services.tag_service import TagService
 from thoth.services.web_search_service import WebSearchService
 from thoth.services.postgres_service import PostgresService
-from thoth.config import config as global_config, Config
+# CRITICAL FIX: Don't import config at module level - triggers circular import deadlock
+# Config will be imported in __init__() when needed (line 129)
+# from thoth.config import Config  # REMOVED - was causing circular import
 
 # Optional optimized services
 try:
@@ -111,14 +117,19 @@ class ServiceManager:
         cache: CacheService | None  # Requires optimization extras
         async_processing: AsyncProcessingService | None  # Requires optimization extras
 
-    def __init__(self, config: Config | None = None):
+    def __init__(self, config: "Config | None" = None):
         """
         Initialize the ServiceManager.
 
         Args:
-            config: Optional configuration object
+            config: Optional configuration object (Config instance)
         """
-        self.config = config or global_config
+        # CRITICAL FIX: Import global_config here to avoid circular import deadlock
+        if config is None:
+            from thoth.config import config as global_config
+            config = global_config
+
+        self.config = config
         self._services = {}
         self._initialized = False
         self.logger = logger.bind(service='ServiceManager')
@@ -187,31 +198,45 @@ class ServiceManager:
         )
 
         # Initialize discovery manager (needed for orchestrator)
-        from thoth.repositories.available_source_repository import (
-            AvailableSourceRepository,
-        )
-
-        source_repo = AvailableSourceRepository(self._services['postgres'])
-        self._services['discovery_manager'] = DiscoveryManager(
-            sources_config_dir=self.config.discovery_sources_dir,
-            source_repo=source_repo,
-        )
-
-        # Initialize discovery orchestrator with dependencies
-        self._services['discovery_orchestrator'] = DiscoveryOrchestrator(
-            config=self.config,
-            llm_service=self._services['llm'],
-            discovery_manager=self._services['discovery_manager'],
-            postgres_service=self._services['postgres'],
-        )
+        # FIXED: Import deadlock resolved by lazy-loading selenium in emulator_scraper.py
+        logger.info('Initializing discovery services...')
+        try:
+            from thoth.repositories.available_source_repository import (
+                AvailableSourceRepository,
+            )
+            source_repo = AvailableSourceRepository(self._services['postgres'])
+            from thoth.discovery.discovery_manager import DiscoveryManager
+            self._services['discovery_manager'] = DiscoveryManager(
+                sources_config_dir=self.config.discovery_sources_dir,
+                source_repo=source_repo,
+            )
+            self._services['discovery_orchestrator'] = DiscoveryOrchestrator(
+                config=self.config,
+                llm_service=self._services['llm'],
+                discovery_manager=self._services['discovery_manager'],
+                postgres_service=self._services['postgres'],
+            )
+            logger.success('✓ Discovery services initialized successfully')
+        except ImportError as e:
+            logger.warning(f'Discovery services unavailable (missing dependencies): {e}')
+            logger.warning('Install browser dependencies: uv sync --extra discovery')
+            self._services['discovery_manager'] = None
+            self._services['discovery_orchestrator'] = None
+        except Exception as e:
+            logger.error(f'Failed to initialize discovery services: {e}', exc_info=True)
+            self._services['discovery_manager'] = None
+            self._services['discovery_orchestrator'] = None
 
         # Tag service requires OpenRouter API key - initialize if available
+        logger.info('═══ About to initialize TagService ═══')
         try:
+            logger.info('Creating TagService instance...')
             self._services['tag'] = TagService(
                 config=self.config,
                 llm_service=self._services['llm'],
                 citation_tracker=None,  # Will be set by pipeline
             )
+            logger.info('✓ TagService created successfully')
         except Exception as e:
             # Check if this is an expected API key error during early initialization
             error_msg = str(e)
@@ -224,8 +249,11 @@ class ServiceManager:
             self._services['tag'] = None
 
         # Initialize skill service for agent skills management
+        logger.info('═══ About to initialize SkillService ═══')
         self._services['skill'] = SkillService(config=self.config)
+        logger.info('✓ SkillService created, calling initialize()...')
         self._services['skill'].initialize()
+        logger.info('✓ SkillService initialized successfully')
 
         # Initialize Letta filesystem service (optional - requires memory extras)
         if LETTA_FILESYSTEM_AVAILABLE:

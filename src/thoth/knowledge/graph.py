@@ -918,7 +918,7 @@ class CitationGraph:
             obsidian_path=article_citation.obsidian_uri,  # This is the note stub
             pdf_path=pdf_path,  # Pass Path object, add_article will take .name
             markdown_path=markdown_path,  # Pass Path object, add_article will take .name
-            analysis=analysis.model_dump(),
+            analysis=analysis if isinstance(analysis, dict) else analysis.model_dump(),
             llm_model=llm_model,
         )
 

@@ -25,10 +25,11 @@ def _configure_safe_environment() -> None:
 # Configure environment variables before importing any ML libraries
 _configure_safe_environment()
 
-from thoth.initialization import initialize_thoth  # noqa: E402
-# ThothPipeline imported lazily when needed (line 81)
+from loguru import logger  # noqa: E402
 
+logger.info('===== main.py: About to import CLI submodules =====')
 from . import (  # noqa: E402
+    database,
     discovery,
     letta,
     mcp,
@@ -39,12 +40,17 @@ from . import (  # noqa: E402
     research,
     schema,
     server,
+    service,
+    setup_cli,
     system,
 )
+
+logger.info('===== main.py: CLI submodules imported successfully =====')
 
 
 def main() -> None:
     """Main entry point for the Thoth CLI."""
+    logger.info('===== main(): Function called, parsing arguments =====')
     parser = argparse.ArgumentParser(
         description='Thoth - Academic PDF processing system'
     )
@@ -54,6 +60,7 @@ def main() -> None:
 
     # Register sub-commands from modules
     # agent.configure_subparser(subparsers)  # DEPRECATED: Use Letta REST API (port 8283)  # noqa: W505
+    database.configure_subparser(subparsers)
     discovery.configure_subparser(subparsers)
     letta.configure_subparser(subparsers)
     mcp.configure_subparser(subparsers)
@@ -65,14 +72,30 @@ def main() -> None:
     research.configure_subparser(subparsers)
     schema.configure_subparser(subparsers)
     server.configure_subparser(subparsers)
+    service.configure_subparser(subparsers)
+    setup_cli.configure_subparser(subparsers)
     system.configure_subparser(subparsers)
 
     args = parser.parse_args()
 
+    # Skip initialization for setup and db commands (they don't need full Thoth initialization)
+    if args.command in ['setup', 'db']:
+        if hasattr(args, 'func'):
+            if inspect.iscoroutinefunction(args.func):
+                asyncio.run(args.func(args))
+            else:
+                args.func(args)
+        return
+
     # Initialize Thoth using the new factory function
-    # This replaces ThothPipeline() and provides cleaner access to components
-    services, document_pipeline, citation_tracker = initialize_thoth()
-    
+    # Lazy import to avoid premature config loading
+    # Replaces ThothPipeline() and provides cleaner access to components
+    logger.info('===== main(): About to import initialize_thoth =====')
+    from thoth.initialization import initialize_thoth
+    logger.info('===== main(): initialize_thoth imported successfully =====')
+
+    _services, _document_pipeline, _citation_tracker = initialize_thoth()
+
     # Create ThothPipeline wrapper for backward compatibility with CLI commands
     # that still expect it (will be removed once all commands are updated)
     import warnings

@@ -206,11 +206,10 @@ class PDFTracker:
             self.processed_files = {}
 
     def _load_from_postgres(self) -> None:
-        """Load processed PDFs tracking from PostgreSQL."""
-        import asyncpg  # noqa: I001
-        import asyncio
+        """Load processed PDFs tracking from PostgreSQL using synchronous psycopg2."""
+        import psycopg2
+        from urllib.parse import urlparse
 
-        print("PDFTracker: _load_from_postgres() called", flush=True)
         db_url = (
             getattr(self.config.secrets, 'database_url', None)
             if hasattr(self.config, 'secrets')
@@ -220,54 +219,57 @@ class PDFTracker:
             print("PDFTracker: No DATABASE_URL found!", flush=True)
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
+        print("PDFTracker: _load_from_postgres() called", flush=True)
         print(f"PDFTracker: DATABASE_URL configured: {db_url[:30]}...", flush=True)
 
-        async def load():
-            print("PDFTracker: Connecting to PostgreSQL...", flush=True)
-            conn = await asyncpg.connect(db_url)
-            try:
-                print("PDFTracker: Connected, fetching rows...", flush=True)
-                rows = await conn.fetch(
-                    'SELECT pdf_path, new_pdf_path, note_path, file_size, file_mtime FROM processed_pdfs'
-                )
-                print(f"PDFTracker: Fetched {len(rows)} rows from database", flush=True)
-                for row in rows:
-                    # Stored paths are already relative (e.g., "thoth/papers/pdfs/file.pdf")  # noqa: W505
-                    pdf_path_key = row['pdf_path']
+        # Parse PostgreSQL URL for psycopg2
+        parsed = urlparse(db_url)
+        conn_params = {
+            'host': parsed.hostname,
+            'port': parsed.port or 5432,
+            'user': parsed.username,
+            'password': parsed.password,
+            'database': parsed.path.lstrip('/'),
+        }
 
-                    # Build tracked file info with database values
-                    tracked_info = {
-                        'new_pdf_path': row['new_pdf_path'],
-                        'note_path': row['note_path'],
-                    }
-
-                    # Add size and mtime from database if available
-                    if row['file_size'] is not None:
-                        tracked_info['size'] = row['file_size']
-                    if row['file_mtime'] is not None:
-                        tracked_info['mtime'] = row['file_mtime']
-
-                    self.processed_files[str(pdf_path_key)] = tracked_info
-
-                print(f"PDFTracker: Loaded {len(rows)} files into processed_files dict", flush=True)
-                logger.info(f'Loaded {len(rows)} processed PDFs from PostgreSQL')
-            finally:
-                await conn.close()
-                print("PDFTracker: Database connection closed", flush=True)
-
+        print("PDFTracker: Connecting to PostgreSQL...", flush=True)
+        conn = psycopg2.connect(**conn_params)
         try:
-            loop = asyncio.get_running_loop()
-            # If there's a running loop, we need to run in a thread to avoid blocking
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(lambda: asyncio.run(load()))
-                future.result()  # Wait for completion
-        except RuntimeError:
-            # No event loop running, create one
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(load())
-            loop.close()
+            print("PDFTracker: Connected, fetching rows...", flush=True)
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT pdf_path, new_pdf_path, note_path, file_size, file_mtime FROM processed_pdfs'
+            )
+            rows = cursor.fetchall()
+            print(f"PDFTracker: Fetched {len(rows)} rows from database", flush=True)
+
+            for row in rows:
+                # Stored paths are already relative (e.g., "thoth/papers/pdfs/file.pdf")
+                pdf_path_key = row[0]  # pdf_path (original path)
+                new_pdf_path = row[1]  # new_pdf_path (renamed path)
+
+                # Build tracked file info with database values
+                tracked_info = {
+                    'new_pdf_path': new_pdf_path,
+                    'note_path': row[2],  # note_path
+                }
+
+                # Add size and mtime from database if available
+                if row[3] is not None:  # file_size
+                    tracked_info['size'] = row[3]
+                if row[4] is not None:  # file_mtime
+                    tracked_info['mtime'] = row[4]
+
+                # Store under original path only
+                # is_processed() will check both pdf_path and new_pdf_path columns
+                self.processed_files[str(pdf_path_key)] = tracked_info
+
+            cursor.close()
+            print(f"PDFTracker: Loaded {len(rows)} files into processed_files dict", flush=True)
+            logger.info(f'Loaded {len(rows)} processed PDFs from PostgreSQL')
+        finally:
+            conn.close()
+            print("PDFTracker: Database connection closed", flush=True)
 
     def _save_tracked_files(self):
         """
@@ -279,9 +281,9 @@ class PDFTracker:
             logger.error(f'Error saving tracked files: {e}')
 
     def _save_to_postgres(self) -> None:
-        """Save processed PDFs tracking to PostgreSQL."""
-        import asyncpg  # noqa: I001
-        import asyncio
+        """Save processed PDFs tracking to PostgreSQL using synchronous psycopg2."""
+        import psycopg2
+        from urllib.parse import urlparse
 
         db_url = (
             getattr(self.config.secrets, 'database_url', None)
@@ -291,57 +293,58 @@ class PDFTracker:
         if not db_url:
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
-        async def save():
-            conn = await asyncpg.connect(db_url)
-            try:
-                for pdf_path_key, metadata in self.processed_files.items():
-                    # Ensure we're storing vault-relative paths
-                    pdf_path = pdf_path_key
-                    if self.vault_resolver and Path(pdf_path_key).is_absolute():
-                        try:
-                            pdf_path = self.vault_resolver.make_relative(
-                                Path(pdf_path_key)
-                            )
-                        except (ValueError, Exception):
-                            # If can't normalize, store as-is
-                            pass
-                    await conn.execute(
-                        """
-                        INSERT INTO processed_pdfs (pdf_path, new_pdf_path, note_path, file_size, file_mtime, processed_at)
-                        VALUES ($1, $2, $3, $4, $5, NOW())
-                        ON CONFLICT (pdf_path) DO UPDATE SET
-                            new_pdf_path = EXCLUDED.new_pdf_path,
-                            note_path = EXCLUDED.note_path,
-                            file_size = EXCLUDED.file_size,
-                            file_mtime = EXCLUDED.file_mtime
+        # Parse PostgreSQL URL for psycopg2
+        parsed = urlparse(db_url)
+        conn_params = {
+            'host': parsed.hostname,
+            'port': parsed.port or 5432,
+            'user': parsed.username,
+            'password': parsed.password,
+            'database': parsed.path.lstrip('/'),
+        }
+
+        conn = psycopg2.connect(**conn_params)
+        try:
+            cursor = conn.cursor()
+            for pdf_path_key, metadata in self.processed_files.items():
+                # Ensure we're storing vault-relative paths
+                pdf_path = pdf_path_key
+                if self.vault_resolver and Path(pdf_path_key).is_absolute():
+                    try:
+                        pdf_path = self.vault_resolver.make_relative(Path(pdf_path_key))
+                    except (ValueError, Exception):
+                        # If can't normalize, store as-is
+                        pass
+
+                cursor.execute(
+                    """
+                    INSERT INTO processed_pdfs (pdf_path, new_pdf_path, note_path, file_size, file_mtime, processed_at)
+                    VALUES (%s, %s, %s, %s, %s, NOW())
+                    ON CONFLICT (pdf_path) DO UPDATE SET
+                        new_pdf_path = EXCLUDED.new_pdf_path,
+                        note_path = EXCLUDED.note_path,
+                        file_size = EXCLUDED.file_size,
+                        file_mtime = EXCLUDED.file_mtime
                     """,
+                    (
                         str(pdf_path),
                         metadata.get('new_pdf_path'),
                         metadata.get('note_path'),
                         metadata.get('size'),
                         metadata.get('mtime'),
-                    )
-                logger.info(
-                    f'Saved {len(self.processed_files)} processed PDFs to PostgreSQL'
+                    ),
                 )
-            finally:
-                await conn.close()
 
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            # No event loop running, create one
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(save())
-            loop.close()
-        else:
-            # Already have a running loop
-            asyncio.create_task(save())
+            conn.commit()
+            cursor.close()
+            logger.info(f'Saved {len(self.processed_files)} processed PDFs to PostgreSQL')
+            print(f"PDFTracker: Saved {len(self.processed_files)} processed PDFs to PostgreSQL", flush=True)
+        finally:
+            conn.close()
 
     def is_processed(self, file_path: Path) -> bool:
         """
-        Check if a file has been processed.
+        Check if a file has been processed by checking both original and renamed paths.
 
         Args:
             file_path: Path to the file to check.
@@ -354,22 +357,34 @@ class PDFTracker:
             resolved = file_path.resolve()
             try:
                 relative_path = self.vault_resolver.make_relative(resolved)
-                is_in_cache = relative_path in self.processed_files
-                logger.debug(
-                    f'Checking processed: {file_path} -> {relative_path} -> {is_in_cache}'
-                )
-                if not is_in_cache:
-                    # Log sample of keys for debugging
-                    sample_keys = list(self.processed_files.keys())[:3]
-                    logger.debug(f'Sample cache keys: {sample_keys}')
-                return is_in_cache
+
+                # Check if path matches the original filename (dict keys)
+                if relative_path in self.processed_files:
+                    logger.debug(f'Found as original path: {relative_path}')
+                    return True
+
+                # Check if path matches a renamed filename (new_pdf_path values)
+                for original_path, metadata in self.processed_files.items():
+                    if metadata.get('new_pdf_path') == relative_path:
+                        logger.debug(f'Found as renamed path: {relative_path} (original: {original_path})')
+                        return True
+
+                logger.debug(f'Not processed: {file_path} -> {relative_path}')
+                return False
             except ValueError as e:
                 logger.debug(f'Could not normalize path {file_path}: {e}')
                 pass
 
-        # Fallback to absolute path
+        # Fallback to absolute path - check both keys and new_pdf_path values
         abs_path = str(file_path.resolve())
-        return abs_path in self.processed_files
+        if abs_path in self.processed_files:
+            return True
+
+        for metadata in self.processed_files.values():
+            if metadata.get('new_pdf_path') == abs_path:
+                return True
+
+        return False
 
     def get_note_path(self, file_path: Path) -> Path | None:
         """
@@ -710,8 +725,20 @@ class PDFMonitor:
         print("MONITOR: ✅ _process_existing_files() completed", flush=True)
         logger.info('✅ _process_existing_files() completed')
 
+        # DEBUG: Explicit trace before observer start
+        print("MONITOR: 🔍 Line 728: About to call _start_observer()...", flush=True)
+        logger.info('🔍 Line 728: About to call _start_observer()...')
+
         # Set up and start the observer
-        self._start_observer()
+        try:
+            print("MONITOR: 🔍 Line 732: Calling _start_observer()...", flush=True)
+            self._start_observer()
+            print("MONITOR: ✅ Line 734: _start_observer() returned successfully", flush=True)
+            logger.info('✅ _start_observer() returned successfully')
+        except Exception as e:
+            print(f"MONITOR: ❌ EXCEPTION in _start_observer(): {e!s}", flush=True)
+            logger.exception('EXCEPTION in _start_observer():')
+            raise
 
         # Track current watch directory and mark as running
         self._current_watch_dir = self.watch_dir
@@ -830,6 +857,19 @@ class PDFMonitor:
             pdf_files = [f for f in pdf_files if f.is_file()]
             print(f"MONITOR: 📋 After filtering: {len(pdf_files)} files", flush=True)
 
+        # CRITICAL FIX: Pre-filter to only unprocessed PDFs BEFORE iterating
+        if self.pipeline.pdf_tracker:
+            unprocessed_files = []
+            for pdf_file in pdf_files:
+                # Check if already processed and unchanged
+                if not (self.pipeline.pdf_tracker.is_processed(pdf_file) and
+                        self.pipeline.pdf_tracker.verify_file_unchanged(pdf_file)):
+                    unprocessed_files.append(pdf_file)
+
+            print(f"MONITOR: 🔍 Pre-filter results: {len(unprocessed_files)} unprocessed out of {len(pdf_files)} total PDFs", flush=True)
+            logger.info(f'🔍 Pre-filter: {len(unprocessed_files)} unprocessed out of {len(pdf_files)} total PDFs')
+            pdf_files = unprocessed_files
+
         logger.info(f'📊 Found {len(pdf_files)} PDF files to process')
         print(f"MONITOR: 📊 Starting to process {len(pdf_files)} PDFs", flush=True)
 
@@ -859,11 +899,22 @@ class PDFMonitor:
         """
         Start or restart the observer with current watch directory.
         """
+        print("MONITOR: 🎯 _start_observer() ENTERED", flush=True)
+        logger.info('🎯 _start_observer() ENTERED')
+
+        print("MONITOR: 🔍 Creating PDFHandler...", flush=True)
         event_handler = PDFHandler(self.pipeline)
+        print("MONITOR: ✅ PDFHandler created", flush=True)
+
+        print(f"MONITOR: 🔍 Scheduling observer for {self.watch_dir}...", flush=True)
         self.observer.schedule(
             event_handler, str(self.watch_dir), recursive=self.recursive
         )
+        print("MONITOR: ✅ Observer scheduled", flush=True)
+
+        print("MONITOR: 🔍 Starting observer thread...", flush=True)
         self.observer.start()
+        print("MONITOR: ✅ Observer thread started", flush=True)
         logger.info(f'Observer started watching {self.watch_dir}')
 
     def _on_config_reload(self):

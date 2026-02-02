@@ -53,50 +53,86 @@ Thoth revolutionizes academic research by combining cutting-edge AI with intuiti
 
 ## Quick Start
 
-### Option 1: Docker (Recommended)
+### One-Command Installation (No Python Required!)
 
-**Simplified setup with vault-relative configuration:**
+**Linux/Mac:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/main/install.sh | bash
+```
+
+**Windows:**
+```powershell
+# 1. Install WSL2 (PowerShell as Administrator, one-time)
+wsl --install
+
+# 2. Restart computer
+
+# 3. Open Ubuntu terminal and run:
+curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/main/install.sh | bash
+```
+
+**What happens:**
+1. ✅ Detects if you have Docker (installs/guides if not)
+2. ✅ Runs interactive setup wizard
+3. ✅ Installs `thoth` command to your PATH
+4. ✅ Optionally starts services immediately
+5. ✅ **No Python knowledge required!**
+
+**Time:** 5 minutes total
+
+### Daily Usage
+
+```bash
+# Start services (~1-1.5GB RAM)
+thoth start
+
+# Check what's running
+thoth status
+
+# Stop services (free RAM)
+thoth stop
+
+# View logs
+thoth logs
+
+# Update to latest
+thoth update
+```
+
+### For Developers
+
+If you want the full development setup:
 
 ```bash
 # Clone repository
 git clone https://github.com/acertainKnight/project-thoth.git
 cd project-thoth
 
-# Set vault path (only requirement)
+# Install dependencies
+uv sync
+
+# Set vault path
 export OBSIDIAN_VAULT_PATH="/path/to/your/obsidian/vault"
 
 # Start development environment (hot-reload enabled)
 make dev
-
-# OR: Start production server (optimized build)
-make prod
 ```
 
-**🎉 First-Time Setup (Automatic)**
+**Development Commands:**
+- `make dev` - Development mode with hot-reload
+- `make dev-stop` - Stop development services
+- `make health` - Check all services health
+- `make dev-logs` - View logs
+- `pytest tests/` - Run test suite (998 tests)
 
-When you run `make dev` for the first time, it will automatically:
+### About Letta
 
-1. **Create `.env.letta`** from template (no manual copy needed)
-2. **Check if Letta is running** (memory system)
-3. **Prompt to start Letta** if not running (just press 'y')
-4. **Start all services** and connect them
+Thoth uses [Letta](https://www.letta.com/) for agent memory. Choose during setup:
 
-**No configuration needed!** Everything works out of the box.
+- **Letta Cloud** - Hosted, free tier, instant setup (just need API key)
+- **Self-Hosted** - Local Docker, full control, works offline
 
-> 📘 **About Letta**: Thoth uses [Letta](https://www.letta.com/) as a standalone memory system that stores your agents and conversations. You can use either **Letta Cloud** (hosted, includes free tier) or **self-hosted** (local Docker). [Learn more →](docs/LETTA_CLOUD_SETUP.md) | [Self-hosted setup →](docs/LETTA_SETUP.md)
-
-**Quick Commands:**
-- `make dev` - Local mode (auto-starts Letta if needed)
-- `make microservices` - Microservices mode (for debugging)
-- `make prod` - Production local mode
-- `make health` - Check all services health status
-- `make dev-logs` - View development logs
-- `make letta-status` - Check Letta memory system status
-
-**Deployment Modes:**
-- **Local Mode** (default): All services in one container for simplicity
-- **Microservices Mode**: Each service in separate containers for debugging
-- **Letta**: Standalone memory service (automatically managed)
+[Letta Cloud Setup →](docs/LETTA_CLOUD_SETUP.md) | [Self-Hosted Setup →](docs/LETTA_SETUP.md)
 
 **Services Automatically Started:**
 - **Thoth API**: 8000 (dev) / 8080 (prod) - Main REST API

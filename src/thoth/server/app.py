@@ -237,6 +237,16 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info('Starting Thoth server application...')
 
+    # Initialize Letta agents
+    try:
+        from thoth.services.agent_initialization_service import AgentInitializationService
+        agent_init = AgentInitializationService()
+        agent_ids = await agent_init.initialize_all_agents()
+        logger.info(f'✅ Agents initialized: {", ".join(agent_ids.keys())}')
+    except Exception as e:
+        logger.warning(f'Could not initialize agents: {e}')
+        logger.warning('Continuing without agent initialization - agents may need manual setup')
+
     # Initialize settings watcher if enabled
     if _should_enable_hot_reload():
         # Settings file watcher
@@ -496,7 +506,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=['*'],  # Allow requests from any origin (including Obsidian)
         allow_credentials=True,
-        allow_methods=['GET', 'POST', 'PUT', 'DELETE'],
+        allow_methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],  # Include OPTIONS and PATCH
         allow_headers=['*'],
     )
 
@@ -523,8 +533,8 @@ def create_app() -> FastAPI:
     # Browser workflows router (optional - only if playwright is available)
     if BROWSER_WORKFLOWS_AVAILABLE and browser_workflows:
         app.include_router(
-            browser_workflows.router, prefix='/api/workflows', tags=['workflows']
-        )  # Browser workflow management
+            browser_workflows.router, tags=['workflows']
+        )  # Browser workflow management (router already has /api/workflows prefix)
     
     app.include_router(config_router.router, prefix='/config', tags=['config'])
     app.include_router(operations.router, prefix='/operations', tags=['operations'])
