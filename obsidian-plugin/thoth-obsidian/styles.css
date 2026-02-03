@@ -775,6 +775,75 @@
   box-sizing: border-box !important;
 }
 
+/* ===== MOBILE KEYBOARD HANDLING ===== */
+
+/* When keyboard is visible, adjust the modal content */
+.thoth-mobile-modal.keyboard-visible .modal-content {
+  /* Smooth transition for layout changes */
+  transition: padding-bottom 0.3s ease-in-out;
+}
+
+/* Adjust chat messages container when keyboard is visible */
+.thoth-mobile-modal.keyboard-visible .chat-messages {
+  /* Allow flexible height adjustment */
+  transition: max-height 0.3s ease-in-out;
+  overflow-y: auto;
+}
+
+/* Keep input area visible and at bottom when keyboard appears */
+.thoth-mobile-modal .chat-input-area {
+  position: relative;
+  flex-shrink: 0;
+  padding: 12px 16px;
+  background: var(--background-primary);
+  border-top: 1px solid var(--background-modifier-border);
+  z-index: 10;
+}
+
+/* Ensure input stays visible when keyboard is shown */
+.thoth-mobile-modal.keyboard-visible .chat-input-area {
+  /* Pin to bottom of visual viewport */
+  position: sticky;
+  bottom: 0;
+  background: var(--background-primary);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Make input area more touch-friendly on mobile */
+@media (max-width: 768px) {
+  .thoth-mobile-modal .chat-input-area {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .thoth-mobile-modal .chat-input {
+    min-height: 48px !important;
+    font-size: 16px !important; /* Prevent zoom on iOS */
+    padding: 14px 16px !important;
+    line-height: 1.5 !important;
+  }
+
+  .thoth-mobile-modal .chat-send-btn {
+    min-height: 48px !important;
+    min-width: 80px !important;
+    padding: 14px 20px !important;
+    font-size: 16px !important;
+    font-weight: 600;
+  }
+
+  .thoth-mobile-modal .chat-attach-btn {
+    min-height: 48px !important;
+    min-width: 48px !important;
+    font-size: 20px !important;
+  }
+
+  /* Smooth scrolling for messages */
+  .thoth-mobile-modal .chat-messages {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 /* Mobile Tab Navigation - Horizontal Scroll */
 @media (max-width: 768px) {
   .thoth-tab-navigation {

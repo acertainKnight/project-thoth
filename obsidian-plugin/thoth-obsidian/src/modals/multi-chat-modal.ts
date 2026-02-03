@@ -110,6 +110,22 @@ export class MultiChatModal extends Modal {
     if ((this.app as any).isMobile) {
       // Mobile: Full-screen modal with safe area insets for iOS
       modalEl.addClass('thoth-mobile-modal');
+      
+      // CRITICAL: Also get the modal container (Obsidian's wrapper)
+      const modalContainer = modalEl.parentElement;
+      if (modalContainer && modalContainer.classList.contains('modal-container')) {
+        // Style the container too
+        modalContainer.style.position = 'fixed';
+        modalContainer.style.top = '0';
+        modalContainer.style.left = '0';
+        modalContainer.style.right = '0';
+        modalContainer.style.bottom = '0';
+        modalContainer.style.width = '100vw';
+        modalContainer.style.height = '100vh';
+        modalContainer.style.maxHeight = '100vh';
+        modalContainer.style.overflow = 'hidden';
+      }
+      
       modalEl.style.position = 'fixed';
       modalEl.style.top = '0';
       modalEl.style.left = '0';
@@ -281,6 +297,323 @@ export class MultiChatModal extends Modal {
   onClose() {
     const { contentEl } = this;
     contentEl.empty();
+
+    // Clean up keyboard listeners
+    if (this.keyboardCleanup) {
+      this.keyboardCleanup();
+    }
+  }
+
+  // Store cleanup function for keyboard listeners
+  private keyboardCleanup: (() => void) | null = null;
+
+  /**
+   * Setup mobile keyboard handling using Focus/Blur events
+   * Tries to use native Capacitor keyboard events if available, falls back to measurement
+   */
+  setupMobileKeyboardHandling(
+    inputEl: HTMLTextAreaElement,
+    messagesContainer: HTMLElement,
+    inputArea: HTMLElement
+  ) {
+    console.log('[MultiChatModal] 🚀 Setting up mobile keyboard handling...');
+
+    const modalContent = this.modalEl;
+    
+    // Get Obsidian's modal container
+    const modalContainer = modalContent.parentElement;
+    const hasContainer = modalContainer && modalContainer.classList.contains('modal-container');
+
+    let isKeyboardVisible = false;
+    let nativeKeyboardHeight: number | null = null;
+
+    // Check for Capacitor Keyboard plugin
+    const capacitorKeyboard = (window as any).Capacitor?.Plugins?.Keyboard;
+    if (capacitorKeyboard) {
+      console.log('[MultiChatModal] ✅ Capacitor Keyboard plugin detected!');
+      
+      // Listen to native keyboard events
+      capacitorKeyboard.addListener('keyboardWillShow', (info: any) => {
+        nativeKeyboardHeight = info.keyboardHeight;
+        console.log('[MultiChatModal] 🎹 Native keyboard height:', nativeKeyboardHeight);
+      });
+      
+      capacitorKeyboard.addListener('keyboardWillHide', () => {
+        nativeKeyboardHeight = null;
+        console.log('[MultiChatModal] 🎹 Native keyboard hidden');
+      });
+    } else {
+      console.log('[MultiChatModal] ⚠️ No Capacitor Keyboard plugin - using fallback');
+    }
+
+    // Check for CSS variable approach
+    const checkCSSVariable = () => {
+      const keyboardOffset = getComputedStyle(document.documentElement)
+        .getPropertyValue('--keyboard-offset');
+      if (keyboardOffset && keyboardOffset !== '0px') {
+        console.log('[MultiChatModal] 📐 CSS --keyboard-offset detected:', keyboardOffset);
+        return parseInt(keyboardOffset);
+      }
+      return null;
+    };
+
+    const handleInputFocus = () => {
+      if (isKeyboardVisible) return; // Already handled
+      
+      // Delay to let keyboard animation start
+      setTimeout(() => {
+        isKeyboardVisible = true;
+        
+        // Try multiple detection methods in order of reliability:
+        const windowHeight = window.innerHeight;
+        let modalHeight: number;
+        let detectionMethod = 'unknown';
+        
+        // Method 1: Native Capacitor keyboard height (most accurate)
+        if (nativeKeyboardHeight !== null) {
+          modalHeight = Math.round(windowHeight - nativeKeyboardHeight);
+          detectionMethod = 'capacitor-native';
+          console.log('[MultiChatModal] ⌨️ Using native keyboard height:', {
+            windowHeight,
+            nativeKeyboardHeight,
+            modalHeight
+          });
+        }
+        // Method 2: CSS variable from Obsidian/theme
+        else {
+          const cssKeyboardOffset = checkCSSVariable();
+          if (cssKeyboardOffset !== null) {
+            modalHeight = Math.round(windowHeight - cssKeyboardOffset);
+            detectionMethod = 'css-variable';
+            console.log('[MultiChatModal] ⌨️ Using CSS keyboard offset:', {
+              windowHeight,
+              cssKeyboardOffset,
+              modalHeight
+            });
+          }
+          // Method 3: Visual Viewport API
+          else {
+            const visualViewport = window.visualViewport;
+            const vpHeight = visualViewport ? visualViewport.height : windowHeight;
+            const inputRect = inputEl.getBoundingClientRect();
+            const inputBottom = inputRect.bottom;
+            
+            if (inputBottom > vpHeight - 50) {
+              // Input is obscured - use viewport height
+              modalHeight = Math.max(300, vpHeight);
+              detectionMethod = 'viewport-measurement';
+              console.log('[MultiChatModal] ⌨️ Using viewport measurement:', {
+                windowHeight,
+                vpHeight,
+                inputBottom,
+                modalHeight
+              });
+            }
+            // Method 4: Fallback estimate (25%)
+            else {
+              const estimatedKeyboardHeight = windowHeight * 0.25;
+              modalHeight = Math.round(windowHeight - estimatedKeyboardHeight);
+              detectionMethod = 'fallback-estimate';
+              console.log('[MultiChatModal] ⌨️ Using 25% estimate:', {
+                windowHeight,
+                estimatedKeyboardHeight,
+                modalHeight
+              });
+            }
+          }
+        }
+        
+        // Add class for CSS styling
+        modalContent.addClass('keyboard-visible');
+        
+        // Adjust Obsidian's container
+        if (hasContainer && modalContainer) {
+          modalContainer.style.height = `${modalHeight}px`;
+          modalContainer.style.maxHeight = `${modalHeight}px`;
+        }
+        
+        // Adjust modal
+        modalContent.style.height = `${modalHeight}px`;
+        modalContent.style.maxHeight = `${modalHeight}px`;
+        
+        // Adjust messages container to fit within available space
+        const inputAreaHeight = inputArea.offsetHeight || 80;
+        const messagesMaxHeight = modalHeight - inputAreaHeight - 120;
+        messagesContainer.style.maxHeight = `${messagesMaxHeight}px`;
+        messagesContainer.style.flexShrink = '1';
+        messagesContainer.style.overflowY = 'auto';
+        
+        // Force browser to recalculate layout
+        if (hasContainer && modalContainer) {
+          modalContainer.offsetHeight;
+        }
+        modalContent.offsetHeight;
+        messagesContainer.offsetHeight;
+        
+        // Scroll to bottom and ensure input is visible
+        this.scrollToBottom(messagesContainer, true);
+        setTimeout(() => {
+          inputEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }, 50);
+      }, 150); // Wait for keyboard animation to start
+    };
+
+    const handleInputBlur = () => {
+      if (!isKeyboardVisible) return; // Already handled
+      
+      // Small delay to handle case where user taps between inputs
+      setTimeout(() => {
+        // Check if another input got focus
+        if (document.activeElement === inputEl) return;
+        
+        isKeyboardVisible = false;
+        console.log('[MultiChatModal] ✅ Keyboard hidden - restoring modal size');
+        
+        // Remove class
+        modalContent.removeClass('keyboard-visible');
+        
+        // Restore full height
+        if (hasContainer && modalContainer) {
+          modalContainer.style.height = '100vh';
+          modalContainer.style.maxHeight = '100vh';
+        }
+        
+        modalContent.style.height = '100vh';
+        modalContent.style.maxHeight = '100vh';
+        
+        // Reset messages container
+        messagesContainer.style.maxHeight = '';
+        messagesContainer.style.flexShrink = '';
+        messagesContainer.style.overflowY = '';
+      }, 100);
+    };
+
+    // Add event listeners
+    inputEl.addEventListener('focus', handleInputFocus);
+    inputEl.addEventListener('blur', handleInputBlur);
+
+    // Store cleanup function
+    this.keyboardCleanup = () => {
+      console.log('[MultiChatModal] 🧹 Cleaning up keyboard handlers');
+      
+      inputEl.removeEventListener('focus', handleInputFocus);
+      inputEl.removeEventListener('blur', handleInputBlur);
+
+      // Restore container and modal height
+      if (hasContainer && modalContainer) {
+        modalContainer.style.height = '';
+        modalContainer.style.maxHeight = '';
+      }
+      
+      modalContent.style.height = '';
+      modalContent.style.maxHeight = '';
+      
+      messagesContainer.style.maxHeight = '';
+      messagesContainer.style.flexShrink = '';
+      messagesContainer.style.overflowY = '';
+      modalContent.removeClass('keyboard-visible');
+    };
+  }
+
+  /**
+   * Fallback keyboard handling for devices without Visual Viewport API
+   * Uses focus/blur events and fixed height adjustments
+   */
+  setupFallbackKeyboardHandling(
+    inputEl: HTMLTextAreaElement,
+    messagesContainer: HTMLElement,
+    inputArea: HTMLElement,
+    debugPanel: HTMLElement,
+    addDebugLine: (text: string) => void
+  ) {
+    console.log('[MultiChatModal] 📱 Using fallback keyboard handling');
+    addDebugLine('📱 Using FALLBACK method');
+    const modalContent = this.modalEl;
+    const modalContainer = modalContent.parentElement;
+
+    const handleFocus = () => {
+      console.log('[MultiChatModal] ⌨️ Fallback: Keyboard detected (focus)');
+      addDebugLine('⌨️ FALLBACK: Keyboard shown (focus)');
+      modalContent.addClass('keyboard-visible');
+
+      // Use a fixed percentage for mobile
+      const screenHeight = window.innerHeight;
+      const keyboardHeight = screenHeight * 0.4; // Assume keyboard takes 40% of screen
+      const availableHeight = screenHeight - keyboardHeight;
+      
+      // CRITICAL FIX: Adjust BOTH modal container and modal height
+      if (modalContainer) {
+        modalContainer.style.height = `${availableHeight}px`;
+        modalContainer.style.maxHeight = `${availableHeight}px`;
+        addDebugLine(`Container: ${availableHeight}px`);
+      }
+      
+      modalContent.style.height = `${availableHeight}px`;
+      modalContent.style.maxHeight = `${availableHeight}px`;
+      
+      addDebugLine(`Modal height: ${availableHeight}px`);
+      
+      const messagesHeight = availableHeight * 0.7; // Use 70% of available height for messages
+      messagesContainer.style.maxHeight = `${messagesHeight}px`;
+      messagesContainer.style.flexShrink = '1';
+      messagesContainer.style.overflowY = 'auto';
+
+      addDebugLine(`Messages: ${messagesHeight}px`);
+      
+      // Force layout recalculation
+      modalContent.offsetHeight;
+
+      // Scroll to bottom
+      setTimeout(() => {
+        this.scrollToBottom(messagesContainer, true);
+        inputEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }, 100);
+    };
+
+    const handleBlur = () => {
+      console.log('[MultiChatModal] 👋 Fallback: Keyboard hidden (blur)');
+      addDebugLine('👋 FALLBACK: Keyboard hidden (blur)');
+      setTimeout(() => {
+        modalContent.removeClass('keyboard-visible');
+        
+        // Restore modal AND container height
+        if (modalContainer) {
+          modalContainer.style.height = '100vh';
+          modalContainer.style.maxHeight = '100vh';
+        }
+        modalContent.style.height = '100vh';
+        modalContent.style.maxHeight = '100vh';
+        
+        messagesContainer.style.maxHeight = '';
+        messagesContainer.style.flexShrink = '';
+        messagesContainer.style.overflowY = '';
+      }, 100);
+    };
+
+    inputEl.addEventListener('focus', handleFocus);
+    inputEl.addEventListener('blur', handleBlur);
+
+    addDebugLine('✅ Fallback listeners attached');
+
+    this.keyboardCleanup = () => {
+      console.log('[MultiChatModal] 🧹 Cleaning up fallback handlers');
+      inputEl.removeEventListener('focus', handleFocus);
+      inputEl.removeEventListener('blur', handleBlur);
+      
+      // Restore modal height
+      modalContent.style.height = '';
+      modalContent.style.maxHeight = '';
+      
+      messagesContainer.style.maxHeight = '';
+      messagesContainer.style.flexShrink = '';
+      messagesContainer.style.overflowY = '';
+      modalContent.removeClass('keyboard-visible');
+
+      // Remove debug panel
+      if (debugPanel.parentNode) {
+        debugPanel.parentNode.removeChild(debugPanel);
+      }
+    };
   }
 
   createLayout() {
@@ -543,8 +876,9 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
       // Fetch available agents from Letta
       // Note: Letta API requires trailing slash on collection endpoints
+      // Use view=basic to avoid fetching full memory blocks (reduces response from 30MB to ~100KB)
       const endpoint = this.plugin.getLettaEndpointUrl();
-      const response = await fetch(`${endpoint}/v1/agents/`);
+      const response = await fetch(`${endpoint}/v1/agents/?view=basic`);
 
       loadingEl.remove();
 
@@ -1322,6 +1656,59 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       .status-warning {
         background-color: var(--color-orange);
       }
+
+      /* Mobile keyboard handling - ensure proper layout adjustment */
+      @media (max-width: 768px) {
+        .thoth-mobile-modal .multi-chat-container.compact {
+          /* Ensure full height utilization */
+          height: 100vh;
+          max-height: 100vh;
+        }
+
+        .thoth-mobile-modal .chat-content {
+          /* Allow content to flex and adjust */
+          flex: 1;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .thoth-mobile-modal .chat-messages {
+          /* Messages container flexes to available space */
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .thoth-mobile-modal .chat-input-area {
+          /* Input area stays at bottom and doesn't shrink */
+          flex-shrink: 0;
+          position: relative;
+          padding: 12px 16px;
+          background: var(--background-primary);
+          border-top: 1px solid var(--background-modifier-border);
+        }
+
+        /* When keyboard is visible, adjust layout */
+        .thoth-mobile-modal.keyboard-visible .chat-content {
+          /* Smooth transition when keyboard appears */
+          transition: all 0.3s ease-in-out;
+        }
+
+        .thoth-mobile-modal.keyboard-visible .chat-messages {
+          /* Allow messages to shrink when keyboard appears */
+          transition: max-height 0.3s ease-in-out;
+        }
+
+        .thoth-mobile-modal.keyboard-visible .chat-input-area {
+          /* Keep input visible and at bottom */
+          position: sticky;
+          bottom: 0;
+          z-index: 100;
+          box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15);
+        }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -1385,7 +1772,8 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       const endpoint = this.plugin.getLettaEndpointUrl();
       // Get the main Thoth orchestrator agent (auto-created by backend on startup)
       // Note: Letta API requires trailing slash on collection endpoints
-      const listResponse = await this.fetchWithTimeout(`${endpoint}/v1/agents/`);
+      // Use view=basic to avoid fetching full memory blocks (30MB+ with all agents!)
+      const listResponse = await this.fetchWithTimeout(`${endpoint}/v1/agents/?view=basic`);
       if (listResponse.ok) {
         const agents = await listResponse.json();
         console.log('[MultiChatModal] Found agents:', agents.map((a: any) => a.name));
@@ -1996,6 +2384,11 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
       this.scrollToBottom(messagesContainer, false);
     }, 100);
+
+    // Mobile keyboard handling
+    if ((this.app as any).isMobile) {
+      this.setupMobileKeyboardHandling(inputEl, messagesContainer, inputArea);
+    }
   }
 
   async addMessageToChat(container: HTMLElement, role: string, content: string) {
