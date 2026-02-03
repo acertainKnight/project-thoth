@@ -160,7 +160,7 @@ services:
       # Service discovery
       - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_LETTA_URL=http://letta:8283
-      - THOTH_MCP_URL=http://thoth-mcp:8000
+      - THOTH_MCP_URL=http://thoth-mcp:8001
       - THOTH_DISCOVERY_URL=http://thoth-discovery:8004
       - THOTH_REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
@@ -390,7 +390,7 @@ services:
       # Service discovery
       - THOTH_CHROMADB_URL=http://chromadb:8003
       - THOTH_LETTA_URL=http://letta:8283
-      - THOTH_MCP_URL=http://thoth-mcp:8000
+      - THOTH_MCP_URL=http://thoth-mcp:8001
       - THOTH_API_URL=http://thoth-api:8000
       - THOTH_REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth

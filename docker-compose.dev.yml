@@ -206,7 +206,7 @@ services:
 
       # Service discovery (REQUIRED - inter-service communication URLs)
       - THOTH_LETTA_URL=http://letta-server:8283
-      - THOTH_MCP_URL=http://thoth-mcp:8000
+      - THOTH_MCP_URL=http://thoth-mcp:8001
       - THOTH_DISCOVERY_URL=http://thoth-discovery:8004
       - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
 
@@ -290,7 +290,7 @@ services:
       - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
       - ./src:/app/src:ro  # Mount source for development
     ports:
-      - "8082:8000"  # HTTP transport (includes /mcp and /sse endpoints)
+      - "8082:8001"  # HTTP transport (includes /mcp and /sse endpoints)
     networks:
       - thoth-dev-network
       - letta-network  # Connect to external Letta network
@@ -299,7 +299,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -470,17 +470,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: [
-        "CMD", "python", "-c",
-        "from pathlib import Path; import sys; sys.exit(0 if Path('/vault/Research/Dashboard').exists() else 1)"
-      ]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-=======
-      disable: true  # Monitor is a CLI tool, doesn't expose HTTP endpoints
->>>>>>> e3a04d06b48405548a5f674c05648f725469d14f
+      disable: true  # Dashboard is a background monitoring service, doesn't expose HTTP endpoints
 
 
   # ==============================================================================

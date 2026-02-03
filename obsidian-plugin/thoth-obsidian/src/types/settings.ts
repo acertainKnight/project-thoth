@@ -50,7 +50,7 @@ export const DEFAULT_SETTINGS: ThothSettings = {
   // Connection
   remoteMode: true,                 // Default to remote mode (works on desktop + mobile)
   remoteEndpointUrl: 'http://localhost:8000',  // Thoth API
-  lettaEndpointUrl: 'http://localhost:8284',   // Letta API
+  lettaEndpointUrl: 'http://localhost:8284',   // Letta API (via nginx proxy)
   
   // API Keys (empty by default - backend reads from vault/_thoth/settings.json)
   apiKeys: {},

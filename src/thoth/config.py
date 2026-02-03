@@ -1401,7 +1401,7 @@ class Config:
     @property
     def mcp_port(self) -> int:
         """Get MCP server port for HTTP connection."""
-        return int(os.getenv('THOTH_MCP_PORT', '8000'))
+        return int(os.getenv('THOTH_MCP_PORT', '8001'))
 
     def __repr__(self) -> str:
         """String representation of config."""

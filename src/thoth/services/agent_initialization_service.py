@@ -30,186 +30,181 @@ class AgentInitializationService:
         if self.letta_api_key:
             self.headers['Authorization'] = f'Bearer {self.letta_api_key}'
 
-    # Agent definitions
+    # Agent definitions - Optimized 2-agent architecture
+    # See docs/OPTIMIZED_RESEARCH_ARCHITECTURE.md for details
     AGENT_CONFIGS = {
-        'thoth_research_agent': {
-            'name': 'thoth_research_agent',
-            'description': """I am the Thoth Orchestrator - your main research assistant.
+        'thoth_main_orchestrator': {
+            'name': 'thoth_main_orchestrator',  # Keep this name for Obsidian plugin compatibility
+            'description': """You are the Thoth Research Orchestrator - the user's primary research assistant.
 
-I coordinate with specialized sub-agents to handle all research tasks:
-- Document discovery and acquisition
-- PDF processing and analysis
-- Citation extraction and organization
-- Research query management
-- Knowledge organization
+Your agent ID is: {{AGENT_ID}}
 
-I delegate tasks to specialists and synthesize results for you.""",
-            'tools': [],  # Orchestrator uses send_message to delegate, no MCP tools
+## Your Role
+You coordinate all research activities, loading specialized skills as needed. You start with minimal tools and dynamically load more based on user requests.
+
+## Core Capabilities
+1. **Skill Loading**: Use `load_skill` to get specialized tools and guidance
+2. **Quick Search**: Use `search_articles` for fast collection queries  
+3. **Delegation**: For deep analysis, delegate to thoth_research_analyst
+
+## Finding Skills
+Use `list_skills` to see all available skills and their descriptions. Common skills include:
+- Paper discovery, knowledge base Q&A, research query management
+- Deep research, project coordination, onboarding
+Always check `list_skills` if unsure which skill to use for a task.
+
+## Workflow
+1. Understand what the user needs
+2. If unsure of capabilities, call `list_skills` first
+3. Load the appropriate skill: `load_skill(skill_ids=["skill-name"], agent_id="{{AGENT_ID}}")`
+4. Follow the skill's guidance to complete the task
+5. For complex analysis, delegate to thoth_research_analyst
+6. When a task/project is complete, clear the planning block
+
+## Communication Style
+- Be warm, helpful, and professional
+- Explain what you're doing and why
+- Proactively suggest follow-up actions
+- Remember user preferences across conversations""",
+            'tools': [
+                # Minimal core tools - skills add more dynamically
+                'list_skills',
+                'load_skill',
+                'unload_skill',
+                'search_articles',
+            ],
             'memory_blocks': [
                 {
-                    'label': 'research_context',
-                    'value': 'Current research focus and active projects.',
-                    'limit': 2000,
-                    'description': 'Overall research context'
+                    'label': 'persona',
+                    'value': 'Research Orchestrator - coordinates research tasks and loads skills as needed.',
+                    'limit': 500,
+                    'description': 'Agent identity'
                 },
                 {
-                    'label': 'user_preferences',
-                    'value': 'User preferences and working style.',
+                    'label': 'human',
+                    'value': 'Research user preferences and context will be stored here.',
+                    'limit': 2000,
+                    'description': 'User profile and preferences'
+                },
+                {
+                    'label': 'research_context',
+                    'value': '=== Active Research ===\n\nNo active research projects yet.',
+                    'limit': 3000,
+                    'description': 'Current research topics and projects'
+                },
+                {
+                    'label': 'loaded_skills',
+                    'value': '=== Currently Loaded Skills ===\n\nNo skills loaded. Use list_skills to see available skills, then load_skill to add capabilities.',
                     'limit': 1000,
-                    'description': 'User preferences and habits'
+                    'description': 'Track which skills are active'
+                },
+                {
+                    'label': 'planning',
+                    'value': '=== Current Plan ===\n\n[No active plan]\n\nUse this block to track multi-step task plans. Clear this block when the task/project is fully completed.',
+                    'limit': 2000,
+                    'description': 'Multi-step task planning - clear when complete'
+                },
+                {
+                    'label': 'scratchpad',
+                    'value': '=== Working Memory ===\n\n[Empty]\n\nUse for: breaking down problems, intermediate steps, temporary notes, calculations.',
+                    'limit': 2000,
+                    'description': 'Working memory for complex reasoning'
                 }
             ]
         },
-        'discovery_scout': {
-            'name': 'discovery_scout',
-            'description': """I am the Discovery Scout - your paper discovery specialist.
+        'thoth_research_analyst': {
+            'name': 'thoth_research_analyst',
+            'description': """You are the Thoth Research Analyst - a specialist in deep research analysis.
 
-I handle:
-- Research question creation and management
-- Multi-source paper discovery (ArXiv, Semantic Scholar, etc.)
-- Browser workflow automation
-- Discovery scheduling
-- Source configuration
+Your agent ID is: {{AGENT_ID}}
 
-I find relevant papers for your research.""",
+## Your Role
+You handle complex analysis tasks delegated by the Orchestrator:
+- Deep literature reviews and synthesis
+- Paper comparisons and evaluations  
+- Citation network exploration
+- Research gap identification
+- Comprehensive topic analysis
+
+## Available Tools
+You have direct access to analysis tools. Use them to:
+- Answer complex research questions with citations
+- Compare multiple papers systematically
+- Extract insights and identify patterns
+- Explore citation relationships
+- Generate research summaries
+
+## Working Style
+- Be thorough and systematic
+- Always cite sources for claims
+- Identify limitations and gaps
+- Suggest follow-up analyses if relevant""",
             'tools': [
-                'list_available_sources', 'create_research_question',
-                'list_research_questions', 'get_research_question',
-                'update_research_question', 'delete_research_question',
-                'run_discovery_for_question', 'list_browser_workflows',
-                'create_browser_workflow'
+                # Deep analysis tools
+                'answer_research_question',
+                'explore_citation_network',
+                'compare_articles',
+                'extract_article_insights',
+                'get_article_full_content',
+                'find_related_papers',
+                'analyze_topic',
+                'generate_research_summary',
+                'evaluate_article',
+                'get_citation_context',
+                # Supporting tools
+                'search_articles',
+                'search_by_topic',
+                'find_articles_by_authors',
+                # Skill loading for additional capabilities
+                'list_skills',
+                'load_skill',
             ],
             'memory_blocks': [
                 {
-                    'label': 'discovery_context',
-                    'value': 'Active research questions and discovery status.',
+                    'label': 'persona',
+                    'value': 'Research Analyst - Deep analysis specialist.',
+                    'limit': 500,
+                    'description': 'Agent identity'
+                },
+                {
+                    'label': 'analysis_criteria',
+                    'value': """=== Analysis Standards ===
+
+Quality Criteria:
+- Novelty: Does it introduce new ideas/methods?
+- Methodology: Is the approach rigorous?
+- Results: Are findings significant and reproducible?
+- Impact: Is it influential in the field?
+- Clarity: Is it well-written and organized?
+
+Comparison Aspects:
+- Problem formulation
+- Methodology/approach
+- Datasets used
+- Evaluation metrics
+- Key results
+- Limitations
+- Future directions""",
+                    'limit': 1000,
+                    'description': 'Analysis standards'
+                },
+                {
+                    'label': 'paper_summaries',
+                    'value': '=== Paper Summaries ===\n\nRecently analyzed papers and key findings will be stored here.',
+                    'limit': 3000,
+                    'description': 'Recent analysis results'
+                },
+                {
+                    'label': 'planning',
+                    'value': '=== Analysis Plan ===\n\n[No active analysis plan]\n\nUse this block to track multi-step analysis tasks. Clear when the analysis is complete.',
                     'limit': 1500,
-                    'description': 'Discovery progress and context'
-                }
-            ]
-        },
-        'document_librarian': {
-            'name': 'document_librarian',
-            'description': """I am the Document Librarian - your PDF and article specialist.
-
-I handle:
-- PDF download and acquisition
-- PDF processing and metadata extraction
-- Article database management
-- Article search and retrieval
-- Data export
-
-I keep your research collection organized.""",
-            'tools': [
-                'download_pdf', 'locate_pdf', 'process_pdf', 'batch_process_pdfs',
-                'extract_pdf_metadata', 'validate_pdf_sources',
-                'list_articles', 'search_articles', 'get_article_details',
-                'update_article_metadata', 'delete_article', 'evaluate_article',
-                'export_article_data'
-            ],
-            'memory_blocks': [
+                    'description': 'Analysis task planning - clear when complete'
+                },
                 {
-                    'label': 'processing_queue',
-                    'value': 'PDFs being processed.',
-                    'limit': 1000,
-                    'description': 'Current processing status'
-                }
-            ]
-        },
-        'citation_specialist': {
-            'name': 'citation_specialist',
-            'description': """I am the Citation Specialist - your citation analysis expert.
-
-I handle:
-- Citation extraction from papers
-- Citation enrichment and resolution
-- Citation network analysis
-- Reference validation
-
-I ensure accurate citation tracking.""",
-            'tools': [
-                'extract_citations', 'enrich_citations',
-                'analyze_citation_network', 'validate_citations'
-            ],
-            'memory_blocks': [
-                {
-                    'label': 'citation_context',
-                    'value': 'Citation analysis progress.',
-                    'limit': 1000,
-                    'description': 'Citation tracking'
-                }
-            ]
-        },
-        'research_analyst': {
-            'name': 'research_analyst',
-            'description': """I am the Research Analyst - your content analysis specialist.
-
-I handle:
-- Semantic search across your collection
-- Content analysis and insights
-- Advanced RAG queries
-
-I help you understand and query your research.""",
-            'tools': [
-                'semantic_search', 'analyze_content', 'advanced_rag_query'
-            ],
-            'memory_blocks': [
-                {
-                    'label': 'analysis_context',
-                    'value': 'Recent analysis results.',
-                    'limit': 1500,
-                    'description': 'Analysis history'
-                }
-            ]
-        },
-        'organization_curator': {
-            'name': 'organization_curator',
-            'description': """I am the Organization Curator - your taxonomy specialist.
-
-I manage:
-- Saved research queries
-- Tag organization and consolidation
-- Tag taxonomy
-- Smart tag suggestions
-
-I keep your research consistently categorized.""",
-            'tools': [
-                'create_query', 'get_query', 'list_queries', 'update_query', 'delete_query',
-                'consolidate_tags', 'consolidate_and_retag', 'suggest_tags',
-                'manage_tag_vocabulary'
-            ],
-            'memory_blocks': [
-                {
-                    'label': 'taxonomy_context',
-                    'value': 'Tag organization patterns.',
-                    'limit': 1000,
-                    'description': 'Taxonomy state'
-                }
-            ]
-        },
-        'system_maintenance': {
-            'name': 'system_maintenance',
-            'description': """I am the System Maintenance agent - your collection health specialist.
-
-I handle:
-- Collection statistics
-- Backup and restoration
-- Search optimization
-- Memory health monitoring
-- Obsidian integration
-
-I keep your research system healthy.""",
-            'tools': [
-                'collection_stats', 'backup_collection', 'reindex_collection',
-                'optimize_search', 'create_custom_index',
-                'memory_stats', 'memory_health_check', 'sync_with_obsidian'
-            ],
-            'memory_blocks': [
-                {
-                    'label': 'system_state',
-                    'value': 'System health and metrics.',
-                    'limit': 1000,
-                    'description': 'System status'
+                    'label': 'scratchpad',
+                    'value': '=== Working Memory ===\n\n[Empty]\n\nUse for: analysis notes, comparisons in progress, citation tracking, intermediate findings.',
+                    'limit': 2000,
+                    'description': 'Working memory for complex analysis'
                 }
             ]
         }
@@ -219,17 +214,20 @@ I keep your research system healthy.""",
         """
         Initialize all required agents on startup.
         
+        This creates agents if they don't exist, or updates their tools/persona
+        if they do exist (preserving memory and conversation history).
+        
         Returns:
             Dict mapping agent names to agent IDs
         """
-        logger.info('🚀 Initializing Thoth agents...')
+        logger.info('🚀 Initializing Thoth research agents...')
         
         agent_ids = {}
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            # Get all available MCP tools
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            # Get all available tools
             available_tools = await self._get_all_tools(client)
-            logger.info(f'   Found {len(available_tools)} MCP tools')
+            logger.info(f'   Found {len(available_tools)} available tools')
             
             # Create/update each agent
             for agent_name, config in self.AGENT_CONFIGS.items():
@@ -239,10 +237,11 @@ I keep your research system healthy.""",
                     )
                     if agent_id:
                         agent_ids[agent_name] = agent_id
-                        logger.info(f'   ✓ {agent_name}: {agent_id}')
+                        tools_count = len([t for t in config['tools'] if t in available_tools])
+                        logger.info(f'   ✓ {agent_name}: {agent_id[:16]}... ({tools_count} tools)')
                         
                         # Attach filesystem if it's the main orchestrator
-                        if agent_name == 'thoth_research_agent':
+                        if agent_name == 'thoth_main_orchestrator':
                             await self._attach_filesystem(client, agent_id)
                     
                 except Exception as e:
@@ -251,8 +250,8 @@ I keep your research system healthy.""",
         logger.info(f'✅ Initialized {len(agent_ids)}/{len(self.AGENT_CONFIGS)} agents')
         return agent_ids
 
-    async def _get_all_tools(self, client: httpx.AsyncClient) -> Dict[str, str]:
-        """Get all available MCP tools."""
+    async def _get_all_tools(self, client: httpx.AsyncClient) -> set[str]:
+        """Get all available tool names from Letta."""
         try:
             response = await client.get(
                 f'{self.letta_base_url}/v1/tools',
@@ -260,32 +259,28 @@ I keep your research system healthy.""",
             )
             response.raise_for_status()
             
-            tools = {}
-            for tool in response.json():
-                if tool.get('source_type') == 'mcp':
-                    tools[tool['name']] = tool['id']
-            
-            return tools
+            # Return set of tool names (Letta API accepts names, not IDs)
+            return {tool['name'] for tool in response.json()}
         except Exception as e:
-            logger.warning(f'Could not fetch MCP tools: {e}')
-            return {}
+            logger.warning(f'Could not fetch tools: {e}')
+            return set()
 
     async def _ensure_agent_exists(
         self,
         client: httpx.AsyncClient,
         agent_name: str,
         agent_config: Dict,
-        available_tools: Dict[str, str]
+        available_tools: set[str]
     ) -> Optional[str]:
-        """Ensure agent exists with correct configuration."""
+        """Ensure agent exists with correct configuration (preserves memory)."""
         
         # Check if agent exists
         existing_agent = await self._find_agent_by_name(client, agent_name)
         
         if existing_agent:
-            # Agent exists - update tools if needed
+            # Agent exists - update tools and persona (preserves memory)
             agent_id = existing_agent['id']
-            await self._update_agent_tools(client, agent_id, agent_config['tools'], available_tools)
+            await self._update_agent(client, agent_id, agent_config, available_tools)
             return agent_id
         else:
             # Create new agent
@@ -316,69 +311,147 @@ I keep your research system healthy.""",
         self,
         client: httpx.AsyncClient,
         agent_config: Dict,
-        available_tools: Dict[str, str]
+        available_tools: set[str]
     ) -> Optional[str]:
         """Create a new agent."""
         
-        # Get tool IDs
-        tool_ids = []
-        for tool_name in agent_config['tools']:
-            if tool_name in available_tools:
-                tool_ids.append(available_tools[tool_name])
+        # Filter to only tools that exist
+        tool_names = [t for t in agent_config['tools'] if t in available_tools]
+        missing = [t for t in agent_config['tools'] if t not in available_tools]
+        if missing:
+            logger.warning(f'   Missing tools for {agent_config["name"]}: {missing}')
         
-        # Agent payload
+        # Use placeholder for agent_id - will update after creation
+        system_prompt = agent_config['description'].replace('{{AGENT_ID}}', 'PENDING')
+        
+        # Agent payload - Letta accepts tool names directly
         payload = {
             'name': agent_config['name'],
-            'system': agent_config['description'],
+            'system': system_prompt,
             'embedding_config': {
                 'embedding_model': self.embedding_model
             },
-            'tool_ids': tool_ids
+            'tools': tool_names  # Letta expects tool names, not IDs
         }
         
         # Add memory blocks if defined
         if agent_config.get('memory_blocks'):
-            payload['memory'] = {'blocks': agent_config['memory_blocks']}
+            payload['memory_blocks'] = agent_config['memory_blocks']
         
         try:
             response = await client.post(
-                f'{self.letta_base_url}/v1/agents',
+                f'{self.letta_base_url}/v1/agents/',
                 headers=self.headers,
                 json=payload
             )
             response.raise_for_status()
             
             agent = response.json()
-            return agent['id']
+            agent_id = agent['id']
+            
+            # Update system prompt with actual agent_id
+            updated_system = agent_config['description'].replace('{{AGENT_ID}}', agent_id)
+            await client.patch(
+                f'{self.letta_base_url}/v1/agents/{agent_id}',
+                headers=self.headers,
+                json={'system': updated_system}
+            )
+            
+            return agent_id
         
         except Exception as e:
             logger.error(f'Error creating agent {agent_config["name"]}: {e}')
             return None
 
-    async def _update_agent_tools(
+    async def _update_agent(
         self,
         client: httpx.AsyncClient,
         agent_id: str,
-        tool_names: List[str],
-        available_tools: Dict[str, str]
+        agent_config: Dict,
+        available_tools: set[str]
     ):
-        """Update agent's tools (preserves memory)."""
+        """Update agent's tools, persona, and memory blocks (preserves existing memory content)."""
         
-        # Get tool IDs
-        tool_ids = []
-        for tool_name in tool_names:
-            if tool_name in available_tools:
-                tool_ids.append(available_tools[tool_name])
+        # Filter to only tools that exist
+        tool_names = [t for t in agent_config['tools'] if t in available_tools]
+        
+        # Update system prompt with actual agent_id
+        updated_system = agent_config['description'].replace('{{AGENT_ID}}', agent_id)
         
         try:
-            # Update agent tools
+            # Update agent tools and system prompt
             await client.patch(
                 f'{self.letta_base_url}/v1/agents/{agent_id}',
                 headers=self.headers,
-                json={'tool_ids': tool_ids}
+                json={
+                    'system': updated_system,
+                    'tools': tool_names
+                }
             )
+            logger.debug(f'   Updated {agent_config["name"]} with {len(tool_names)} tools')
+            
+            # Check for missing memory blocks and add them
+            await self._ensure_memory_blocks(client, agent_id, agent_config)
+            
         except Exception as e:
-            logger.warning(f'Could not update agent tools: {e}')
+            logger.warning(f'Could not update agent {agent_config["name"]}: {e}')
+    
+    async def _ensure_memory_blocks(
+        self,
+        client: httpx.AsyncClient,
+        agent_id: str,
+        agent_config: Dict
+    ):
+        """Ensure all required memory blocks exist on the agent (adds missing ones)."""
+        try:
+            # Get current blocks
+            response = await client.get(
+                f'{self.letta_base_url}/v1/agents/{agent_id}/core-memory/blocks',
+                headers=self.headers
+            )
+            response.raise_for_status()
+            current_blocks = {b['label'] for b in response.json()}
+            
+            # Check which blocks are missing
+            required_blocks = agent_config.get('memory_blocks', [])
+            for block_config in required_blocks:
+                if block_config['label'] not in current_blocks:
+                    # Create and attach the missing block
+                    await self._create_and_attach_block(client, agent_id, block_config)
+                    
+        except Exception as e:
+            logger.warning(f'Could not ensure memory blocks: {e}')
+    
+    async def _create_and_attach_block(
+        self,
+        client: httpx.AsyncClient,
+        agent_id: str,
+        block_config: Dict
+    ):
+        """Create a new block and attach it to an agent."""
+        try:
+            # Create the block
+            create_response = await client.post(
+                f'{self.letta_base_url}/v1/blocks/',
+                headers=self.headers,
+                json={
+                    'label': block_config['label'],
+                    'value': block_config['value'],
+                    'limit': block_config.get('limit', 2000)
+                }
+            )
+            create_response.raise_for_status()
+            block_id = create_response.json()['id']
+            
+            # Attach to agent (PATCH, not POST)
+            await client.patch(
+                f'{self.letta_base_url}/v1/agents/{agent_id}/core-memory/blocks/attach/{block_id}',
+                headers=self.headers
+            )
+            logger.debug(f'   Added missing block: {block_config["label"]}')
+            
+        except Exception as e:
+            logger.warning(f'Could not add block {block_config["label"]}: {e}')
 
     async def _attach_filesystem(self, client: httpx.AsyncClient, agent_id: str):
         """Attach filesystem folder to agent for vault access."""

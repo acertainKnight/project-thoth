@@ -3549,13 +3549,13 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     container.empty();
     
     // Render markdown using Obsidian's native renderer
-    // Pass null as component since Modal doesn't extend Component
+    // Pass the plugin as the Component to avoid memory leaks
     await MarkdownRenderer.render(
       this.app,
       content,
       container,
       '',  // sourcePath
-      null as any
+      this.plugin  // Plugin extends Component
     );
 
     // Add copy buttons to code blocks

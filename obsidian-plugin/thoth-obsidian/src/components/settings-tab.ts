@@ -97,7 +97,7 @@ export class SettingsTabComponent {
         this.settings.lettaEndpointUrl = lettaEndpointInput.value;
       };
       lettaEndpointRow.createEl('span', {
-        text: 'Letta backend server for AI agent chats (e.g., http://localhost:8284)',
+        text: 'Letta backend server for AI agent chats (e.g., http://localhost:8284 or Tailscale URL)',
         cls: 'thoth-setting-description'
       });
     }

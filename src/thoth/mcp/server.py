@@ -32,6 +32,11 @@ class MCPServer:
 
     This server handles the complete MCP protocol including initialization,
     tool calling, resource management, and multiple transport support.
+    
+    Supports role-based tool filtering to reduce tool count per agent:
+    - orchestrator: ~20 tools (discovery, collection, skills)
+    - analyst: ~15 tools (analysis, citation, collection)
+    - full: all tools (default)
     """
 
     def __init__(
@@ -39,6 +44,7 @@ class MCPServer:
         service_manager: ServiceManager,
         server_name: str = 'Thoth Research Assistant',
         server_version: str = '1.0.0',
+        role: str | None = None,
     ):
         """
         Initialize the MCP server.
@@ -47,8 +53,11 @@ class MCPServer:
             service_manager: ServiceManager for accessing Thoth services
             server_name: Name of the MCP server
             server_version: Version of the MCP server
+            role: Optional role for tool filtering ('orchestrator', 'analyst', 'full')
+                  If None or 'full', all tools are exposed.
         """
         self.service_manager = service_manager
+        self.role = role
         self.server_info = MCPServerInfo(name=server_name, version=server_version)
 
         # Initialize protocol handler
@@ -201,9 +210,21 @@ class MCPServer:
             logger.error(f'Error handling initialized notification: {e}')
 
     async def _handle_tools_list(self, request_id: Any) -> JSONRPCResponse:
-        """Handle tools/list request."""
+        """
+        Handle tools/list request.
+        
+        If a role was specified during server initialization, only tools
+        for that role are returned. Otherwise, all tools are returned.
+        """
         try:
-            tools = self.tool_registry.get_tool_schemas()
+            # Use role-based filtering if a role was specified
+            tools = self.tool_registry.get_tool_schemas(role=self.role)
+            
+            if self.role:
+                logger.info(f'Returning {len(tools)} tools for role: {self.role}')
+            else:
+                logger.info(f'Returning all {len(tools)} tools (no role filter)')
+            
             result = {'tools': [tool.model_dump() for tool in tools]}
             return self.protocol_handler.create_response(request_id, result)
         except Exception as e:

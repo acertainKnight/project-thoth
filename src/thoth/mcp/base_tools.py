@@ -188,15 +188,63 @@ class MCPToolRegistry:
 
         return tools
 
-    def get_tool_schemas(self) -> list[MCPToolSchema]:
-        """Get MCP schemas for all registered tools."""
+    def get_tool_schemas(self, role: str | None = None) -> list[MCPToolSchema]:
+        """
+        Get MCP schemas for registered tools, optionally filtered by role.
+        
+        Args:
+            role: Optional role to filter tools (e.g., 'orchestrator', 'analyst')
+                  If None, returns all tools.
+        
+        Returns:
+            List of MCPToolSchema objects for the tools
+        """
+        if role:
+            return [tool.to_schema() for tool in self.get_tools_for_role(role)]
         return [tool.to_schema() for tool in self.get_all_tools()]
 
-    def get_tool_names(self) -> list[str]:
-        """Get names of all registered tools."""
+    def get_tool_names(self, role: str | None = None) -> list[str]:
+        """
+        Get names of registered tools, optionally filtered by role.
+        
+        Args:
+            role: Optional role to filter tools
+        
+        Returns:
+            List of tool names
+        """
+        if role:
+            from .tool_categories import get_tools_for_role
+            role_tools = set(get_tools_for_role(role))
+            all_names = set(self._tools.keys())
+            all_names.update(self._tool_classes.keys())
+            return [name for name in all_names if name in role_tools]
+        
         names = set(self._tools.keys())
         names.update(self._tool_classes.keys())
         return list(names)
+    
+    def get_tools_for_role(self, role: str) -> list[MCPTool]:
+        """
+        Get tools filtered by agent role.
+        
+        Args:
+            role: Agent role ('orchestrator', 'analyst', 'full')
+        
+        Returns:
+            List of MCPTool instances for this role
+        """
+        from .tool_categories import get_tools_for_role
+        
+        role_tool_names = set(get_tools_for_role(role))
+        tools = []
+        
+        for name in role_tool_names:
+            tool = self.get_tool(name)
+            if tool:
+                tools.append(tool)
+        
+        return tools
 
     async def execute_tool(
         self, name: str, arguments: dict[str, Any]
