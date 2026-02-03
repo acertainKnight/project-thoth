@@ -1,6 +1,6 @@
 """Tests for research router endpoints."""
 
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -32,6 +32,14 @@ def mock_chat_manager():
     manager.create_session = Mock()
     manager.add_message = Mock()
     return manager
+
+
+@pytest.fixture
+def mock_llm_router():
+    """Create mock LLM router."""
+    router = Mock()
+    router.select_model = Mock(return_value='gpt-4')
+    return router
 
 
 @pytest.fixture
@@ -69,44 +77,47 @@ class TestResearchChatEndpoint:
             assert response.status_code == 503
             assert 'Research agent not initialized' in response.json()['detail']
 
-    def test_research_chat_success(self, test_client, mock_research_agent):
+    def test_research_chat_success(self, test_client, mock_research_agent, mock_llm_router):
         """Test chat returns response from research agent."""
         # Mock already set up in fixture with default response
-        request_data = {'message': 'What is machine learning?'}
-        response = test_client.post('/chat', json=request_data)
-        
-        assert response.status_code == 200
-        data = response.json()
-        assert 'response' in data
-        assert data['response'] == 'Here is the answer'
-        assert 'tool_calls' in data
+        with patch('thoth.server.routers.research.LLMRouter', return_value=mock_llm_router):
+            request_data = {'message': 'What is machine learning?'}
+            response = test_client.post('/chat', json=request_data)
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert 'response' in data
+            assert data['response'] == 'Here is the answer'
+            assert 'tool_calls' in data
 
-    def test_research_chat_with_chat_manager(self, test_client, mock_research_agent, mock_chat_manager):
+    def test_research_chat_with_chat_manager(self, test_client, mock_research_agent, mock_chat_manager, mock_llm_router):
         """Test chat stores messages when chat manager available."""
         # Mock already set up in fixture with default response
-        request_data = {
-            'message': 'What is machine learning?',
-            'conversation_id': 'conv-123'
-        }
-        response = test_client.post('/chat', json=request_data)
-        
-        assert response.status_code == 200
-        # Verify chat manager was called
-        assert mock_chat_manager.get_session.called
-        assert mock_chat_manager.add_message.called
+        with patch('thoth.server.routers.research.LLMRouter', return_value=mock_llm_router):
+            request_data = {
+                'message': 'What is machine learning?',
+                'conversation_id': 'conv-123'
+            }
+            response = test_client.post('/chat', json=request_data)
+            
+            assert response.status_code == 200
+            # Verify chat manager was called
+            assert mock_chat_manager.get_session.called
+            assert mock_chat_manager.add_message.called
 
-    def test_research_chat_handles_errors_gracefully(self, test_client, mock_research_agent):
+    def test_research_chat_handles_errors_gracefully(self, test_client, mock_research_agent, mock_llm_router):
         """Test chat handles errors and returns error response."""
         # Setup mock to raise exception
         mock_research_agent.chat.side_effect = Exception("Agent error")
         
-        request_data = {'message': 'Test'}
-        response = test_client.post('/chat', json=request_data)
-        
-        assert response.status_code == 200  # Returns 200 with error in body
-        data = response.json()
-        assert 'error' in data
-        assert data['error'] is not None
+        with patch('thoth.server.routers.research.LLMRouter', return_value=mock_llm_router):
+            request_data = {'message': 'Test'}
+            response = test_client.post('/chat', json=request_data)
+            
+            assert response.status_code == 200  # Returns 200 with error in body
+            data = response.json()
+            assert 'error' in data
+            assert data['error'] is not None
 
 
 class TestResearchQueryEndpoint:

@@ -82,6 +82,7 @@ help: ## Show available commands
 	@echo ""
 	@echo "$(YELLOW)🔌 Plugin Development:$(NC)"
 	@echo "  $(GREEN)deploy-plugin$(NC)        Deploy plugin with vault integration"
+	@echo "  $(GREEN)verify-plugin$(NC)        Verify plugin deployment"
 	@echo "  $(GREEN)plugin-dev$(NC)           Plugin watch mode (auto-rebuild)"
 	@echo ""
 	@echo "$(YELLOW)📚 Knowledge Base:$(NC)"
@@ -129,11 +130,27 @@ deploy-and-start: ## 🚀 ONE COMMAND: Deploy plugin + start complete ecosystem
 deploy-plugin: _check-vault _build-plugin ## Deploy Obsidian plugin with complete vault integration
 	@echo "$(YELLOW)Deploying plugin with vault integration...$(NC)"
 	@mkdir -p "$(PLUGIN_DEST_DIR)"
-	@cp -r $(PLUGIN_SRC_DIR)/dist/* "$(PLUGIN_DEST_DIR)/"
-	@cp $(PLUGIN_SRC_DIR)/manifest.json "$(PLUGIN_DEST_DIR)/"
-	@cp $(PLUGIN_SRC_DIR)/styles.css "$(PLUGIN_DEST_DIR)/" 2>/dev/null || true
+	@echo "$(CYAN)  Copying main.js...$(NC)"
+	@cp $(PLUGIN_SRC_DIR)/dist/main.js "$(PLUGIN_DEST_DIR)/main.js"
+	@echo "$(CYAN)  Copying manifest.json...$(NC)"
+	@cp $(PLUGIN_SRC_DIR)/manifest.json "$(PLUGIN_DEST_DIR)/manifest.json"
+	@echo "$(CYAN)  Copying styles.css...$(NC)"
+	@cp $(PLUGIN_SRC_DIR)/styles.css "$(PLUGIN_DEST_DIR)/styles.css"
+	@echo "$(CYAN)  Clearing Obsidian cache...$(NC)"
+	@rm -rf ~/.config/obsidian/Cache/* 2>/dev/null || true
+	@rm -rf ~/.config/obsidian/Code\ Cache/* 2>/dev/null || true
+	@rm -rf ~/.config/obsidian/GPUCache/* 2>/dev/null || true
 	@make _setup-vault-integration OBSIDIAN_VAULT="$(OBSIDIAN_VAULT)"
+	@echo ""
 	@echo "$(GREEN)✅ Plugin deployment complete!$(NC)"
+	@echo ""
+	@echo "$(YELLOW)📱 Next steps:$(NC)"
+	@echo "  1. Close Obsidian completely (don't just reload)"
+	@echo "  2. Reopen Obsidian"
+	@echo "  3. Enable plugin: Settings → Community plugins → Enable 'Thoth'"
+	@echo ""
+	@echo "$(CYAN)Plugin files deployed:$(NC)"
+	@ls -lh "$(PLUGIN_DEST_DIR)/" | grep -E "main.js|manifest.json|styles.css" || true
 
 # =============================================================================
 # SERVICE MANAGEMENT
@@ -644,6 +661,37 @@ plugin-dev: ## Plugin development mode (watch + auto-rebuild)
 	@echo "$(YELLOW)Plugin will auto-rebuild on file changes$(NC)"
 	@cd $(PLUGIN_SRC_DIR) && npm install
 	@cd $(PLUGIN_SRC_DIR) && npm run watch
+
+.PHONY: verify-plugin
+verify-plugin: ## Verify plugin deployment and show file info
+	@echo "$(YELLOW)Verifying Plugin Deployment$(NC)"
+	@echo "=========================="
+	@echo ""
+	@echo "$(CYAN)📁 Plugin Directory:$(NC)"
+	@ls -lh "$(PLUGIN_DEST_DIR)/" 2>/dev/null || (echo "$(RED)❌ Plugin not found$(NC)" && exit 1)
+	@echo ""
+	@echo "$(CYAN)✅ Required Files:$(NC)"
+	@test -f "$(PLUGIN_DEST_DIR)/main.js" && echo "  ✓ main.js ($$(du -h '$(PLUGIN_DEST_DIR)/main.js' | cut -f1))" || echo "  $(RED)✗ main.js missing$(NC)"
+	@test -f "$(PLUGIN_DEST_DIR)/manifest.json" && echo "  ✓ manifest.json ($$(du -h '$(PLUGIN_DEST_DIR)/manifest.json' | cut -f1))" || echo "  $(RED)✗ manifest.json missing$(NC)"
+	@test -f "$(PLUGIN_DEST_DIR)/styles.css" && echo "  ✓ styles.css ($$(du -h '$(PLUGIN_DEST_DIR)/styles.css' | cut -f1))" || echo "  $(RED)✗ styles.css missing$(NC)"
+	@echo ""
+	@echo "$(CYAN)📱 Mobile Keyboard Fix:$(NC)"
+	@if grep -q "keyboard-visible" "$(PLUGIN_DEST_DIR)/styles.css" 2>/dev/null; then \
+		count=$$(grep -c "keyboard-visible" "$(PLUGIN_DEST_DIR)/styles.css"); \
+		echo "  ✓ Mobile keyboard CSS found ($$count occurrences)"; \
+	else \
+		echo "  $(RED)✗ Mobile keyboard CSS missing$(NC)"; \
+	fi
+	@echo ""
+	@echo "$(CYAN)🕐 Last Modified:$(NC)"
+	@stat -c "  %y %n" "$(PLUGIN_DEST_DIR)/main.js" "$(PLUGIN_DEST_DIR)/manifest.json" "$(PLUGIN_DEST_DIR)/styles.css" 2>/dev/null | sed 's|$(PLUGIN_DEST_DIR)/|  |'
+	@echo ""
+	@if [ -f "$(PLUGIN_DEST_DIR)/main.js" ] && [ -f "$(PLUGIN_DEST_DIR)/manifest.json" ] && [ -f "$(PLUGIN_DEST_DIR)/styles.css" ]; then \
+		echo "$(GREEN)✅ Plugin deployment verified!$(NC)"; \
+	else \
+		echo "$(RED)❌ Plugin deployment incomplete$(NC)"; \
+		echo "$(YELLOW)Run: make deploy-plugin$(NC)"; \
+	fi
 
 .PHONY: logs
 logs: ## View Thoth service logs

@@ -58,16 +58,16 @@ jobs:
       - name: Run mypy (type checking)
         run: mypy src/ --ignore-missing-imports || true
 
-  # Test matrix across Python versions and OS
+  # Test matrix across Python versions
+  # Production runs in Docker (Ubuntu), so we only test on Linux
   # Note: Windows not supported - Windows users must use WSL
   # Minimum Python version: 3.11
   test:
-    name: Test Python ${{ matrix.python-version }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: Test Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
         python-version: ["3.11", "3.12"]
 
     steps:
@@ -129,7 +129,7 @@ jobs:
         run: uv run python -m pytest tests/unit/ -v --tb=short --cov=src/thoth --cov-report=xml --cov-report=term
 
       - name: Upload coverage to Codecov
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        if: matrix.python-version == '3.12'
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml
