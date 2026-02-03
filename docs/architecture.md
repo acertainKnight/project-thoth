@@ -15,7 +15,7 @@ Technical deep-dive into the architecture, design patterns, and implementation o
 
 ## System Overview
 
-Thoth is a **production-ready microservices architecture** designed for academic research automation. The system consists of **7 specialized Docker containers**, **32 coordinated services**, and **54 MCP research tools**.
+Thoth is a **production-ready microservices architecture** designed for academic research automation. The system uses a **2-agent architecture** with **skill-based dynamic tool loading**, backed by **54+ MCP research tools** and **6 bundled skills**.
 
 ### High-Level Architecture
 
@@ -56,6 +56,52 @@ Thoth is a **production-ready microservices architecture** designed for academic
 4. **Graceful Degradation**: System works with subset of services
 5. **Type Safety**: Pydantic models throughout
 6. **Async-First**: Non-blocking I/O for scalability
+7. **Skill-Based**: On-demand tool loading for token efficiency
+
+### Agent Architecture
+
+Thoth uses a **2-agent system** with dynamic skill-based tool loading:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ thoth_main_orchestrator (User-Facing)                       │
+│ - Handles all user interactions                             │
+│ - Loads skills on-demand based on task type                 │
+│ - Delegates deep analysis to Research Analyst               │
+│ Memory: persona, human, research_context, loaded_skills,    │
+│         planning, scratchpad                                │
+└─────────────────────────┬───────────────────────────────────┘
+                          │ Delegation
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│ thoth_research_analyst (Deep Analysis)                      │
+│ - Literature reviews and synthesis                          │
+│ - Paper comparisons and evaluations                         │
+│ - Citation network exploration                              │
+│ Memory: persona, analysis_criteria, paper_summaries,        │
+│         planning, scratchpad                                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Skill System
+
+**Bundled Skills** (`src/thoth/.skills/`):
+- `paper-discovery` - Find and curate research papers
+- `knowledge-base-qa` - Answer questions from existing collection
+- `research-query-management` - Set up automated recurring searches
+- `deep-research` - Comprehensive literature analysis
+- `research-project-coordination` - Manage multi-phase projects
+- `onboarding` - Initialize new users
+
+**How Skills Work**:
+1. Agent identifies task type (discovery, Q&A, analysis, etc.)
+2. Agent calls `load_skill(skill_ids=["skill-name"], agent_id="...")`
+3. Required tools are dynamically attached to the agent
+4. Agent follows skill guidance to complete the task
+
+This keeps each agent's default tool count low, improving LLM performance and reducing token usage.
+
+See [Letta Agent Integration](LETTA_AGENT_INTEGRATION.md) for full details.
 
 ## Microservices Architecture
 
