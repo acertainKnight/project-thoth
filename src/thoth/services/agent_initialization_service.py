@@ -78,37 +78,37 @@ Always check `list_skills` if unsure which skill to use for a task.
                     'label': 'persona',
                     'value': 'Research Orchestrator - coordinates research tasks and loads skills as needed.',
                     'limit': 500,
-                    'description': 'Agent identity'
+                    'description': 'Your core identity and role. Update this to refine how you present yourself to users. Keep it concise - this appears in every interaction context.'
                 },
                 {
                     'label': 'human',
                     'value': 'Research user preferences and context will be stored here.',
                     'limit': 2000,
-                    'description': 'User profile and preferences'
+                    'description': 'Store information about the user: their name, research interests, field of study, preferences, past projects, and communication style. Update this as you learn more about them through conversation.'
                 },
                 {
                     'label': 'research_context',
                     'value': '=== Active Research ===\n\nNo active research projects yet.',
                     'limit': 3000,
-                    'description': 'Current research topics and projects'
+                    'description': 'Track the user\'s current research focus: active projects, ongoing literature reviews, research questions being explored, and recent discoveries. Keep this updated as research progresses.'
                 },
                 {
                     'label': 'loaded_skills',
                     'value': '=== Currently Loaded Skills ===\n\nNo skills loaded. Use list_skills to see available skills, then load_skill to add capabilities.',
                     'limit': 1000,
-                    'description': 'Track which skills are active'
+                    'description': 'Track which skills you have currently loaded and what tools they provide. Update when loading/unloading skills. This helps you remember what capabilities you have without re-checking.'
                 },
                 {
                     'label': 'planning',
                     'value': '=== Current Plan ===\n\n[No active plan]\n\nUse this block to track multi-step task plans. Clear this block when the task/project is fully completed.',
                     'limit': 2000,
-                    'description': 'Multi-step task planning - clear when complete'
+                    'description': 'Use for multi-step task tracking. Write out your plan with numbered steps, mark progress as you go. IMPORTANT: Clear this block when the task is fully complete to keep it useful for future tasks.'
                 },
                 {
                     'label': 'scratchpad',
                     'value': '=== Working Memory ===\n\n[Empty]\n\nUse for: breaking down problems, intermediate steps, temporary notes, calculations.',
                     'limit': 2000,
-                    'description': 'Working memory for complex reasoning'
+                    'description': 'Temporary working memory for complex reasoning. Use for: intermediate calculations, comparison notes, draft responses, breaking down problems. Can be freely overwritten - not for permanent storage.'
                 }
             ]
         },
@@ -164,7 +164,7 @@ You have direct access to analysis tools. Use them to:
                     'label': 'persona',
                     'value': 'Research Analyst - Deep analysis specialist.',
                     'limit': 500,
-                    'description': 'Agent identity'
+                    'description': 'Your core identity as an analysis specialist. Keep concise - defines how you approach analysis tasks and present findings.'
                 },
                 {
                     'label': 'analysis_criteria',
@@ -186,25 +186,25 @@ Comparison Aspects:
 - Limitations
 - Future directions""",
                     'limit': 1000,
-                    'description': 'Analysis standards'
+                    'description': 'Your standards for evaluating research quality and comparing papers. Reference these criteria when analyzing papers. Update if the user has specific evaluation needs or domain-specific criteria.'
                 },
                 {
                     'label': 'paper_summaries',
                     'value': '=== Paper Summaries ===\n\nRecently analyzed papers and key findings will be stored here.',
                     'limit': 3000,
-                    'description': 'Recent analysis results'
+                    'description': 'Store summaries of papers you\'ve analyzed recently. Include: title, key findings, methodology, and your assessment. Keep the most relevant/recent analyses. Remove old entries when space is needed.'
                 },
                 {
                     'label': 'planning',
                     'value': '=== Analysis Plan ===\n\n[No active analysis plan]\n\nUse this block to track multi-step analysis tasks. Clear when the analysis is complete.',
                     'limit': 1500,
-                    'description': 'Analysis task planning - clear when complete'
+                    'description': 'Track multi-step analysis tasks. Write numbered steps, mark progress. IMPORTANT: Clear this block when analysis is complete to keep it useful for the next task.'
                 },
                 {
                     'label': 'scratchpad',
                     'value': '=== Working Memory ===\n\n[Empty]\n\nUse for: analysis notes, comparisons in progress, citation tracking, intermediate findings.',
                     'limit': 2000,
-                    'description': 'Working memory for complex analysis'
+                    'description': 'Temporary working space for analysis in progress. Use for: comparison tables, citation lists being built, draft findings, notes between tool calls. Can be freely overwritten - not for permanent storage.'
                 }
             ]
         }
