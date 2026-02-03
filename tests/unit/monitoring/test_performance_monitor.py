@@ -217,10 +217,10 @@ class TestPerformanceMetrics:
 
         assert metric.operation_name == 'test_op'
         assert metric.total_calls == 3
-        assert metric.total_duration == 0.45
-        assert metric.average_duration == 0.15
-        assert metric.min_duration == 0.1
-        assert metric.max_duration == 0.2
+        assert metric.total_duration == pytest.approx(0.45, rel=1e-9)
+        assert metric.average_duration == pytest.approx(0.15, rel=1e-9)
+        assert metric.min_duration == pytest.approx(0.1, rel=1e-9)
+        assert metric.max_duration == pytest.approx(0.2, rel=1e-9)
 
     def test_metrics_with_cache_data(self, performance_monitor):
         """Test metrics include cache hit/miss data."""

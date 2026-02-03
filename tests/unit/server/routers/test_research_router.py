@@ -12,9 +12,15 @@ from thoth.server.routers import research
 
 @pytest.fixture
 def mock_research_agent():
-    """Create mock research agent."""
+    """Create mock research agent with async chat method."""
     agent = Mock()
-    agent.chat = AsyncMock()
+    # Set up async mock that returns a proper response
+    async def default_chat_response(*args, **kwargs):
+        return {
+            'response': 'Here is the answer',
+            'tool_calls': []
+        }
+    agent.chat = AsyncMock(side_effect=default_chat_response)
     return agent
 
 
@@ -65,15 +71,7 @@ class TestResearchChatEndpoint:
 
     def test_research_chat_success(self, test_client, mock_research_agent):
         """Test chat returns response from research agent."""
-        # Setup async mocks - chat() is async so return_value won't work
-        async def mock_chat_response(*args, **kwargs):
-            return {
-                'response': 'Here is the answer',
-                'tool_calls': []
-            }
-        
-        mock_research_agent.chat = AsyncMock(side_effect=mock_chat_response)
-        
+        # Mock already set up in fixture with default response
         request_data = {'message': 'What is machine learning?'}
         response = test_client.post('/chat', json=request_data)
         
@@ -85,15 +83,7 @@ class TestResearchChatEndpoint:
 
     def test_research_chat_with_chat_manager(self, test_client, mock_research_agent, mock_chat_manager):
         """Test chat stores messages when chat manager available."""
-        # Setup async mocks - chat() is async
-        async def mock_chat_response(*args, **kwargs):
-            return {
-                'response': 'Here is the answer',
-                'tool_calls': []
-            }
-        
-        mock_research_agent.chat = AsyncMock(side_effect=mock_chat_response)
-        
+        # Mock already set up in fixture with default response
         request_data = {
             'message': 'What is machine learning?',
             'conversation_id': 'conv-123'

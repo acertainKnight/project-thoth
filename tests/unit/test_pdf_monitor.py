@@ -154,9 +154,13 @@ class TestPDFMonitorProcessing:
             pdf1.touch()
             pdf2.touch()
             
-            # Create mock pipeline
+            # Create mock pipeline with pdf_tracker
             mock_pipeline = Mock()
             mock_pipeline.process_pdf = Mock(return_value=('note.md', 'md.md', 'pdf.pdf'))
+            # Mock pdf_tracker to return False (files not processed)
+            mock_pipeline.pdf_tracker = Mock()
+            mock_pipeline.pdf_tracker.is_processed = Mock(return_value=False)
+            mock_pipeline.pdf_tracker.verify_file_unchanged = Mock(return_value=False)
             
             # Suppress deprecation warning for test
             with warnings.catch_warnings():
@@ -243,9 +247,13 @@ class TestPDFMonitorNewParameter:
             pdf1 = watch_dir / "test.pdf"
             pdf1.touch()
             
-            # Mock document pipeline
+            # Mock document pipeline with pdf_tracker
             mock_doc_pipeline = Mock()
             mock_doc_pipeline.process_pdf = Mock(return_value=('note.md', 'md.md', 'pdf.pdf'))
+            # Mock pdf_tracker to return False (file not processed)
+            mock_doc_pipeline.pdf_tracker = Mock()
+            mock_doc_pipeline.pdf_tracker.is_processed = Mock(return_value=False)
+            mock_doc_pipeline.pdf_tracker.verify_file_unchanged = Mock(return_value=False)
             
             monitor = PDFMonitor(watch_dir=watch_dir, document_pipeline=mock_doc_pipeline)
             
