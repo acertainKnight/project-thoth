@@ -2239,13 +2239,13 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         });
 
         if (response.ok && response.body) {
-          // Remove thinking indicator
-          thinkingMsg.remove();
+          // Don't remove thinking indicator yet - wait for first content token
 
           // Track messages by ID for accumulation (stream_tokens sends deltas with same ID)
           const messageAccumulator = new Map<string, string>();
           let assistantMessageEl: HTMLElement | null = null;
           let contentEl: HTMLElement | null = null;
+          let thinkingRemoved = false; // Track if we've removed the thinking indicator
 
           // Create debounced render function for smooth streaming updates
           const debouncedRender = this.debounce(async (content: string) => {
@@ -2286,6 +2286,12 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                   const delta = msg.content || msg.text || '';
 
                   if (delta && messageId) {
+                    // Remove thinking indicator on first content token
+                    if (!thinkingRemoved) {
+                      thinkingMsg.remove();
+                      thinkingRemoved = true;
+                    }
+
                     // Accumulate deltas by message ID
                     const existing = messageAccumulator.get(messageId) || '';
                     messageAccumulator.set(messageId, existing + delta);
@@ -2315,6 +2321,12 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                 console.warn('[MultiChatModal] Failed to parse SSE message:', jsonStr.substring(0, 100));
               }
             }
+          }
+
+          // Ensure thinking indicator is removed if stream completed without content
+          if (!thinkingRemoved) {
+            thinkingMsg.remove();
+            thinkingRemoved = true;
           }
 
           // Final render with copy buttons after stream completes
