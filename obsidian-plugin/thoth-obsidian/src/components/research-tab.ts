@@ -24,20 +24,25 @@ export interface ResearchQuestion {
 export interface MatchedArticle {
   match_id: string;
   paper_id: string;  // Changed from article_id to match backend schema
+  question_id: string;
   title: string;
   authors?: string[];
   abstract?: string;
   publication_date?: string;
-  venue?: string;
+  journal?: string;
+  venue?: string;  // Legacy field, kept for compatibility
   doi?: string;
+  url?: string;
   pdf_url?: string;
   relevance_score: number;
   matched_keywords?: string[];
   matched_topics?: string[];
+  matched_authors?: string[];
   discovered_via_source?: string;
   is_viewed: boolean;
   is_bookmarked: boolean;
   user_sentiment?: 'like' | 'dislike' | 'skip';
+  sentiment_recorded_at?: string;
   matched_at: string;
 }
 
@@ -381,10 +386,26 @@ export class ResearchTabComponent {
   }
 
   private async rateArticle(article: MatchedArticle, sentiment: 'like' | 'dislike' | 'skip') {
+    if (!this.selectedQuestion) {
+      console.error('[ResearchTab] Cannot rate article: no question selected');
+      new Notice('Please select a research question first');
+      return;
+    }
+
     try {
       const endpoint = this.plugin.getEndpointUrl();
+      const questionId = this.selectedQuestion.id;
+      const matchId = article.match_id;
+      
+      console.log('[ResearchTab] Rating article:', {
+        questionId,
+        matchId,
+        sentiment,
+        articleTitle: article.title
+      });
+      
       const response = await fetch(
-        `${endpoint}/api/research/questions/${this.selectedQuestion!.id}/articles/${article.match_id}/sentiment`,
+        `${endpoint}/api/research/questions/${questionId}/articles/${matchId}/sentiment`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -392,16 +413,31 @@ export class ResearchTabComponent {
         }
       );
 
+      console.log('[ResearchTab] Rating response status:', response.status);
+
       if (response.ok) {
+        const updatedArticle = await response.json();
+        console.log('[ResearchTab] Article rated successfully:', updatedArticle);
         article.user_sentiment = sentiment;
         await this.render();
         new Notice(`Marked as ${sentiment}`);
       } else {
-        throw new Error('Failed to rate article');
+        const errorText = await response.text();
+        console.error('[ResearchTab] Rating API error:', response.status, errorText);
+        let errorMessage = 'Failed to rate article';
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.detail) {
+            errorMessage = errorJson.detail;
+          }
+        } catch {
+          // Use default error message
+        }
+        new Notice(errorMessage);
       }
     } catch (error) {
-      console.error('Error rating article:', error);
-      new Notice('Failed to rate article');
+      console.error('[ResearchTab] Error rating article:', error);
+      new Notice('Failed to rate article - network error');
     }
   }
 

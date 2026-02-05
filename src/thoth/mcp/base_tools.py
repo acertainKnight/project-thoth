@@ -113,21 +113,23 @@ class MCPTool(ABC):
         return True  # Unknown type, allow it
 
     def handle_error(self, error: Exception) -> MCPToolCallResult:
-        """Standard error handling for tools."""
+        """Standard error handling for tools - includes full traceback for debugging."""
         import traceback
 
         # Get full traceback for debugging
         tb_str = traceback.format_exc()
         logger.error(f'Tool error in {self.name}: {error}')
-        logger.error(f'Full traceback for {self.name}:\n{tb_str}')
+        logger.debug(f'Full traceback for {self.name}:\n{tb_str}')
+
+        # Include full traceback in response so downstream agents can see it
+        error_response = (
+            f"Error in {self.name}: {error!s}\n\n"
+            f"Exception Type: {type(error).__name__}\n\n"
+            f"Traceback:\n{tb_str}"
+        )
 
         return MCPToolCallResult(
-            content=[
-                {
-                    'type': 'text',
-                    'text': f' Error in {self.name}: {error!s}\n\n Debug info: {type(error).__name__}',
-                }
-            ],
+            content=[{'type': 'text', 'text': error_response}],
             isError=True,
         )
 

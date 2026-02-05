@@ -55,7 +55,7 @@ class LocatePdfMCPTool(MCPTool):
             output_directory = arguments.get('output_directory')
 
             # First, try to find the article in our knowledge base
-            search_results = self.service_manager.rag.search(
+            search_results = await self.service_manager.rag.search_async(
                 query=article_identifier, k=1
             )
 
@@ -125,42 +125,44 @@ class LocatePdfMCPTool(MCPTool):
                                 # Make sure output directory exists
                                 output_path.mkdir(parents=True, exist_ok=True)
 
-                                # Download the PDF
+                                # Download the PDF using httpx streaming
                                 headers = {
                                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
                                 }
 
-                                response = httpx.get(
-                                    pdf_url, headers=headers, stream=True, timeout=30
-                                )
-                                response.raise_for_status()
+                                with httpx.stream(
+                                    'GET',
+                                    pdf_url,
+                                    headers=headers,
+                                    timeout=30,
+                                    follow_redirects=True,
+                                ) as response:
+                                    response.raise_for_status()
 
-                                # Check content type
-                                content_type = response.headers.get('content-type', '')
-                                if (
-                                    'pdf' not in content_type.lower()
-                                    and not pdf_url.lower().endswith('.pdf')
-                                ):
-                                    # Try to determine from content
-                                    first_bytes = (
-                                        response.content[:1024]
-                                        if hasattr(response, 'content')
-                                        else b''
-                                    )
-                                    if not first_bytes.startswith(b'%PDF'):
-                                        response_text += '**Download Warning:**\n'
-                                        response_text += (
-                                            f'- Content type: {content_type}\n'
-                                        )
-                                        response_text += (
-                                            '- May not be a valid PDF file\n\n'
-                                        )
+                                    # Check content type
+                                    content_type = response.headers.get('content-type', '')
 
-                                # Write file
-                                with open(full_path, 'wb') as f:
-                                    for chunk in response.iter_content(chunk_size=8192):
-                                        if chunk:
-                                            f.write(chunk)
+                                    # Write file with streaming
+                                    first_chunk = None
+                                    with open(full_path, 'wb') as f:
+                                        for chunk in response.iter_bytes(chunk_size=8192):
+                                            if chunk:
+                                                if first_chunk is None:
+                                                    first_chunk = chunk
+                                                    # Check if content looks like PDF
+                                                    if (
+                                                        'pdf' not in content_type.lower()
+                                                        and not pdf_url.lower().endswith('.pdf')
+                                                        and not first_chunk.startswith(b'%PDF')
+                                                    ):
+                                                        response_text += '**Download Warning:**\n'
+                                                        response_text += (
+                                                            f'- Content type: {content_type}\n'
+                                                        )
+                                                        response_text += (
+                                                            '- May not be a valid PDF file\n\n'
+                                                        )
+                                                f.write(chunk)
 
                                 file_size = full_path.stat().st_size
                                 response_text += '**Download Complete:**\n'
@@ -264,7 +266,13 @@ class LocatePdfMCPTool(MCPTool):
 
 
 class ValidatePdfSourcesMCPTool(MCPTool):
-    """MCP tool for testing and validating PDF location sources."""
+    """
+    MCP tool for testing and validating PDF location sources.
+    
+    **DEPRECATED**: This tool is deprecated. PDF source validation is rarely 
+    needed for normal workflows. This tool is no longer registered in the MCP 
+    tool registry.
+    """
 
     @property
     def name(self) -> str:
@@ -440,7 +448,13 @@ class ValidatePdfSourcesMCPTool(MCPTool):
 
 
 class ExtractPdfMetadataMCPTool(MCPTool):
-    """MCP tool for extracting comprehensive metadata from PDF files."""
+    """
+    MCP tool for extracting comprehensive metadata from PDF files.
+    
+    **DEPRECATED**: This tool is deprecated. Metadata extraction is handled 
+    automatically by the PDF monitor service. This tool is no longer registered 
+    in the MCP tool registry.
+    """
 
     @property
     def name(self) -> str:

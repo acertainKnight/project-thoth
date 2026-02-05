@@ -99,10 +99,7 @@ class ViewSettingsMCPTool(MCPTool):
                 )
 
         except Exception as e:
-            return MCPToolCallResult(
-                content=[{'type': 'text', 'text': f'Error viewing settings: {e!s}'}],
-                isError=True,
-            )
+            return self.handle_error(e)
 
 
 class UpdateSettingsMCPTool(MCPTool):
@@ -199,10 +196,7 @@ class UpdateSettingsMCPTool(MCPTool):
                 )
 
         except Exception as e:
-            return MCPToolCallResult(
-                content=[{'type': 'text', 'text': f'Error updating setting: {e!s}'}],
-                isError=True,
-            )
+            return self.handle_error(e)
 
 
 class ValidateSettingsMCPTool(NoInputTool):
@@ -243,10 +237,7 @@ class ValidateSettingsMCPTool(NoInputTool):
                 )
 
         except Exception as e:
-            return MCPToolCallResult(
-                content=[{'type': 'text', 'text': f'Error validating settings: {e!s}'}],
-                isError=True,
-            )
+            return self.handle_error(e)
 
 
 class MigrateSettingsMCPTool(NoInputTool):
@@ -303,10 +294,7 @@ class MigrateSettingsMCPTool(NoInputTool):
                 )
 
         except Exception as e:
-            return MCPToolCallResult(
-                content=[{'type': 'text', 'text': f'Error migrating settings: {e!s}'}],
-                isError=True,
-            )
+            return self.handle_error(e)
 
 
 class ResetSettingsMCPTool(MCPTool):
@@ -430,7 +418,4 @@ class ResetSettingsMCPTool(MCPTool):
             )
 
         except Exception as e:
-            return MCPToolCallResult(
-                content=[{'type': 'text', 'text': f'Error resetting settings: {e!s}'}],
-                isError=True,
-            )
+            return self.handle_error(e)

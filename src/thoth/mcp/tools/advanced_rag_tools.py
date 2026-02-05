@@ -256,7 +256,7 @@ class OptimizeSearchMCPTool(MCPTool):
                         start_time = time.time()
 
                         # Test search performance
-                        results = self.service_manager.rag.search(query=query, k=5)
+                        results = await self.service_manager.rag.search_async(query=query, k=5)
 
                         end_time = time.time()
                         query_time = end_time - start_time
@@ -445,7 +445,7 @@ class CreateCustomIndexMCPTool(MCPTool):
             # Search for documents matching the criteria
             try:
                 # Find documents matching the topic filter
-                search_results = self.service_manager.rag.search(
+                search_results = await self.service_manager.rag.search_async(
                     query=topic_filter, k=max_documents
                 )
 

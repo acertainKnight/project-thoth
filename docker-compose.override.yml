@@ -23,6 +23,8 @@ services:
       # Local development settings
       - THOTH_LOG_LEVEL=DEBUG
       - THOTH_DEV_MODE=1
+      # Prioritize mounted source over installed package for hot-reload
+      - PYTHONPATH=/app/src:${PYTHONPATH:-}
 
     volumes:
       # Mount source code for hot-reload development (no rebuild needed!)
@@ -55,6 +57,9 @@ services:
   # UV-recommended docker compose watch for hot-reload development
   # ==============================================================================
   thoth-monitor:
+    environment:
+      # Prioritize mounted source over installed package for hot-reload
+      - PYTHONPATH=/app/src:${PYTHONPATH:-}
     volumes:
       # Mount source code for hot-reload development
       - ./src:/app/src
@@ -78,6 +83,9 @@ services:
   # See: https://docs.astral.sh/uv/guides/integration/docker/#configuring-watch-with-docker-compose
   # ==============================================================================
   thoth-mcp:
+    environment:
+      # Prioritize mounted source over installed package for hot-reload
+      - PYTHONPATH=/app/src:${PYTHONPATH:-}
     volumes:
       # Mount source code for hot-reload development (no rebuild needed!)
       - ./src:/app/src
@@ -100,6 +108,9 @@ services:
   # UV-recommended docker compose watch for hot-reload development
   # ==============================================================================
   thoth-api:
+    environment:
+      # Prioritize mounted source over installed package for hot-reload
+      - PYTHONPATH=/app/src:${PYTHONPATH:-}
     volumes:
       - ./src:/app/src
       - ./pyproject.toml:/app/pyproject.toml:ro
@@ -117,6 +128,9 @@ services:
   # UV-recommended docker compose watch for hot-reload development
   # ==============================================================================
   thoth-discovery:
+    environment:
+      # Prioritize mounted source over installed package for hot-reload
+      - PYTHONPATH=/app/src:${PYTHONPATH:-}
     volumes:
       - ./src:/app/src
       - ./pyproject.toml:/app/pyproject.toml:ro
@@ -134,6 +148,9 @@ services:
   # UV-recommended docker compose watch for hot-reload development
   # ==============================================================================
   thoth-dashboard:
+    environment:
+      # Prioritize mounted source over installed package for hot-reload
+      - PYTHONPATH=/app/src:${PYTHONPATH:-}
     volumes:
       - ./src:/app/src
       - ./pyproject.toml:/app/pyproject.toml:ro

@@ -3,6 +3,11 @@ MCP-compliant query management tools.
 
 This module provides MCP-compliant tools for managing research queries,
 converted from the original LangChain-based tools.
+
+**DEPRECATED MODULE**: All legacy query tools are deprecated. Use the 
+research_question tools instead, which provide better separation of concerns 
+(research questions define WHAT to search for, sources define WHERE to search). 
+These tools are no longer registered in the MCP tool registry.
 """
 
 from typing import Any

@@ -12,11 +12,11 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from loguru import logger
+
 from thoth.services.skill_service import SkillService
-from thoth.utilities.logger import get_logger
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])
-logger = get_logger(__name__)
 
 
 # Request/Response Models

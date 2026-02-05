@@ -9,7 +9,7 @@ tools:
   - search_articles
   - collection_stats
   - compare_articles
-  - generate_research_summary
+  - answer_research_question
   - explore_citation_network
 ---
 
@@ -33,7 +33,7 @@ This skill uses tools from multiple categories:
 
 **Analysis Phase** (delegate to Research Analyst):
 - `compare_articles` - Cross-paper analysis
-- `generate_research_summary` - Section synthesis
+- `answer_research_question` - Comprehensive synthesis with citations
 - `explore_citation_network` - Citation mapping
 
 **Management**:

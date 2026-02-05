@@ -144,6 +144,62 @@ class RAGService(BaseService):
                 self.handle_error(e, f'indexing directory {directory}')
             ) from e
 
+    async def search_async(
+        self,
+        query: str,
+        k: int = 4,
+        filter: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Search the knowledge base for relevant documents (async version).
+        Use this from async contexts to avoid event loop conflicts.
+
+        Args:
+            query: Search query
+            k: Number of results to return
+            filter: Optional metadata filter
+
+        Returns:
+            list[dict[str, Any]]: Search results with content and metadata
+
+        Raises:
+            ServiceError: If search fails
+        """
+        try:
+            self.validate_input(query=query)
+
+            # Search with scores using async method
+            results_with_scores = await self.rag_manager.search_async(
+                query=query,
+                k=k,
+                filter=filter,
+                return_scores=True,
+            )
+
+            # Format results
+            formatted_results = []
+            for doc, score in results_with_scores:
+                result = {
+                    'content': doc.page_content,
+                    'score': score,
+                    'metadata': doc.metadata,
+                    'title': doc.metadata.get('title', 'Unknown'),
+                    'source': doc.metadata.get('source', 'Unknown'),
+                    'document_type': doc.metadata.get('document_type', 'Unknown'),
+                }
+                formatted_results.append(result)
+
+            self.log_operation(
+                'search_completed',
+                query=query,
+                results=len(formatted_results),
+            )
+
+            return formatted_results
+
+        except Exception as e:
+            raise ServiceError(self.handle_error(e, f"searching for '{query}'")) from e
+
     def search(
         self,
         query: str,
@@ -151,7 +207,7 @@ class RAGService(BaseService):
         filter: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """
-        Search the knowledge base for relevant documents.
+        Search the knowledge base for relevant documents (sync wrapper).
 
         Args:
             query: Search query

@@ -14,7 +14,13 @@ from ..base_tools import MCPTool, MCPToolCallResult, NoInputTool
 
 
 class BackupCollectionMCPTool(MCPTool):
-    """MCP tool for creating backups of the research collection."""
+    """
+    MCP tool for creating backups of the research collection.
+    
+    **DEPRECATED**: This tool is deprecated. Collection backup is an admin task 
+    that should be handled outside of agent workflows. This tool is no longer 
+    registered in the MCP tool registry.
+    """
 
     @property
     def name(self) -> str:
@@ -94,7 +100,7 @@ class BackupCollectionMCPTool(MCPTool):
             # Backup article metadata and content
             try:
                 # Get all articles from the knowledge base
-                all_articles = self.service_manager.rag.search(
+                all_articles = await self.service_manager.rag.search_async(
                     query='', k=1000
                 )  # Get up to 1000 articles
 
@@ -244,7 +250,7 @@ class BackupCollectionMCPTool(MCPTool):
                     chroma_path = full_backup_path / 'vector_embeddings'
                     chroma_path.mkdir(exist_ok=True)
                     # Get all documents and their embeddings
-                    all_docs = self.service_manager.rag.search('', k=10000)
+                    all_docs = await self.service_manager.rag.search_async('', k=10000)
                     embeddings_data = {
                         'documents': all_docs,
                         'backup_date': timestamp,
@@ -308,7 +314,13 @@ class BackupCollectionMCPTool(MCPTool):
 
 
 class ExportArticleDataMCPTool(MCPTool):
-    """MCP tool for exporting article data in various formats."""
+    """
+    MCP tool for exporting article data in various formats.
+    
+    **DEPRECATED**: This tool is deprecated. Data export is an admin task that 
+    should be handled outside of agent workflows. This tool is no longer 
+    registered in the MCP tool registry.
+    """
 
     @property
     def name(self) -> str:
@@ -365,12 +377,12 @@ class ExportArticleDataMCPTool(MCPTool):
 
             # Get articles to export
             if search_query:
-                articles = self.service_manager.rag.search(
+                articles = await self.service_manager.rag.search_async(
                     query=search_query, k=max_articles
                 )
                 source_description = f"matching '{search_query}'"
             else:
-                articles = self.service_manager.rag.search(query='', k=max_articles)
+                articles = await self.service_manager.rag.search_async(query='', k=max_articles)
                 source_description = 'in collection'
 
             if not articles:
@@ -635,7 +647,7 @@ class GenerateReadingListMCPTool(MCPTool):
             reading_time_estimate = arguments.get('reading_time_estimate', True)
 
             # Search for relevant papers
-            search_results = self.service_manager.rag.search(
+            search_results = await self.service_manager.rag.search_async(
                 query=topic_or_query, k=max_papers * 2
             )
 
@@ -840,7 +852,7 @@ class SyncWithObsidianMCPTool(NoInputTool):
                 research_folder.mkdir(exist_ok=True)
 
                 # Get articles and create markdown files
-                all_articles = self.service_manager.rag.search('', k=100)
+                all_articles = await self.service_manager.rag.search_async('', k=100)
                 synced_count = 0
 
                 for article in all_articles:
@@ -915,24 +927,20 @@ thoth_score: {article.get('score', 0)}
                 )
 
             except Exception as e:
-                return MCPToolCallResult(
-                    content=[
-                        {
-                            'type': 'text',
-                            'text': f'**Obsidian Sync Status**\n\n'
-                            f'Unable to check collection status: {e!s}\n\n'
-                            f'**Note:** Obsidian sync is currently in development.\n'
-                            f'Use `export_article_data` with markdown format as a workaround.',
-                        }
-                    ]
-                )
+                return self.handle_error(e)
 
         except Exception as e:
             return self.handle_error(e)
 
 
 class RestoreCollectionBackupMCPTool(MCPTool):
-    """MCP tool for restoring collection backups."""
+    """
+    MCP tool for restoring collection backups.
+    
+    **DEPRECATED**: This tool is deprecated. Collection restoration is a 
+    critical admin task that should be handled outside of agent workflows. This 
+    tool is no longer registered in the MCP tool registry.
+    """
 
     @property
     def name(self) -> str:

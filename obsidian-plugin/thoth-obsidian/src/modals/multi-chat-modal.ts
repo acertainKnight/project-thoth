@@ -20,6 +20,11 @@ export class MultiChatModal extends Modal {
   tabContainer: HTMLElement;
   contentContainer: HTMLElement;
 
+  // Pagination tracking
+  private messageCache: Map<string, any[]> = new Map();
+  private hasMoreMessages: Map<string, boolean> = new Map();
+  private oldestMessageId: Map<string, string> = new Map();
+
   constructor(app: App, plugin: ThothPlugin) {
     super(app);
     this.plugin = plugin;
@@ -2073,23 +2078,62 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
   }
 
 
-  async loadChatMessages(sessionId: string) {
-    this.chatContentContainer.empty();
+  async loadChatMessages(sessionId: string, loadEarlier: boolean = false) {
+    if (!loadEarlier) {
+      this.chatContentContainer.empty();
+      // Clear cache for fresh load
+      this.messageCache.delete(sessionId);
+      this.oldestMessageId.delete(sessionId);
+    }
 
     try {
-      const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat messages
-      // Add order=asc to get messages in chronological order (oldest first)
-      const response = await fetch(`${endpoint}/v1/conversations/${sessionId}/messages?limit=100&order=asc`);
+      const endpoint = this.plugin.getLettaEndpointUrl();
+      
+      // Build URL with pagination support
+      let url = `${endpoint}/v1/conversations/${sessionId}/messages?limit=50&order=asc`;
+      
+      // If loading earlier messages, use cursor-based pagination
+      if (loadEarlier && this.oldestMessageId.has(sessionId)) {
+        const oldestId = this.oldestMessageId.get(sessionId);
+        url += `&before=${oldestId}`;
+      }
+      
+      const response = await fetch(url);
 
       if (response.ok) {
-        const messages = await response.json();
-        await this.renderChatInterface(sessionId, messages || []);
+        const newMessages = await response.json();
+        
+        // Get or initialize cached messages
+        let allMessages = this.messageCache.get(sessionId) || [];
+        
+        if (loadEarlier) {
+          // Prepend earlier messages
+          allMessages = [...newMessages, ...allMessages];
+        } else {
+          // Fresh load
+          allMessages = newMessages;
+        }
+        
+        // Update cache
+        this.messageCache.set(sessionId, allMessages);
+        
+        // Track if there are more messages to load
+        this.hasMoreMessages.set(sessionId, newMessages.length >= 50);
+        
+        // Track oldest message ID for pagination
+        if (allMessages.length > 0) {
+          this.oldestMessageId.set(sessionId, allMessages[0].id);
+        }
+        
+        await this.renderChatInterface(sessionId, allMessages);
       } else {
         throw new Error('Failed to load messages');
       }
     } catch (error) {
       console.error('Error loading messages:', error);
-      await this.renderChatInterface(sessionId, []);
+      if (!loadEarlier) {
+        await this.renderChatInterface(sessionId, []);
+      }
     }
   }
 
@@ -2100,6 +2144,45 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     const messagesContainer = this.chatContentContainer.createEl('div', {
       cls: 'chat-messages'
     });
+
+    // Add "Load More" button if there are more messages
+    if (this.hasMoreMessages.get(sessionId)) {
+      const loadMoreBtn = messagesContainer.createEl('button', {
+        cls: 'load-more-btn',
+        text: 'Load earlier messages'
+      });
+      
+      loadMoreBtn.addEventListener('click', async () => {
+        loadMoreBtn.disabled = true;
+        loadMoreBtn.textContent = 'Loading...';
+        
+        // Save scroll position
+        const scrollHeight = messagesContainer.scrollHeight;
+        const scrollTop = messagesContainer.scrollTop;
+        
+        try {
+          await this.loadChatMessages(sessionId, true);
+          
+          // Restore relative scroll position after loading
+          // This keeps the user viewing the same messages
+          setTimeout(() => {
+            const newScrollHeight = messagesContainer.scrollHeight;
+            const scrollDiff = newScrollHeight - scrollHeight;
+            messagesContainer.scrollTop = scrollTop + scrollDiff;
+          }, 50);
+        } catch (error) {
+          console.error('Error loading earlier messages:', error);
+          loadMoreBtn.disabled = false;
+          loadMoreBtn.textContent = 'Load earlier messages';
+          new Notice('Failed to load earlier messages');
+        }
+      });
+      
+      // Divider
+      messagesContainer.createEl('div', {
+        cls: 'load-more-divider'
+      });
+    }
 
     /**
      * Helper function to extract content from message.
@@ -2120,12 +2203,16 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       return content || '';
     };
 
-    // Filter messages to only show user and assistant messages
-    // Exclude system messages, reasoning, tool calls, etc.
+    // Filter messages to show user, assistant, reasoning, and tool messages
+    // Exclude only system messages
     const chatMessages = messages.filter(msg => {
       // Check message_type field (Letta's primary message type)
       const messageType = msg.message_type || msg.type;
-      if (messageType === 'user_message' || messageType === 'assistant_message') {
+      if (messageType === 'user_message' || 
+          messageType === 'assistant_message' ||
+          messageType === 'reasoning_message' ||
+          messageType === 'tool_call_message' ||
+          messageType === 'tool_return_message') {
         return true;
       }
 
@@ -2158,16 +2245,23 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       // Render all messages with markdown support
       await Promise.all(
         chatMessages.map(async (msg) => {
-          // Extract role from message_type or use role field directly
           const messageType = msg.message_type || msg.type;
-          const role = messageType === 'user_message' ? 'user'
-                     : messageType === 'assistant_message' ? 'assistant'
-                     : msg.role;
 
-          // Use improved content extraction
-          const content = extractContent(msg);
-
-          await this.addMessageToChat(messagesContainer, role, content);
+          // Handle different message types
+          if (messageType === 'reasoning_message') {
+            await this.addReasoningMessage(messagesContainer, msg);
+          } else if (messageType === 'tool_call_message') {
+            await this.addToolCallMessage(messagesContainer, msg);
+          } else if (messageType === 'tool_return_message') {
+            await this.addToolReturnMessage(messagesContainer, msg);
+          } else {
+            // Handle user and assistant messages
+            const role = messageType === 'user_message' ? 'user'
+                       : messageType === 'assistant_message' ? 'assistant'
+                       : msg.role;
+            const content = extractContent(msg);
+            await this.addMessageToChat(messagesContainer, role, content);
+          }
         })
       );
     }
@@ -2246,6 +2340,13 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           let assistantMessageEl: HTMLElement | null = null;
           let contentEl: HTMLElement | null = null;
           let thinkingRemoved = false; // Track if we've removed the thinking indicator
+          
+          // Track elements for different message types during streaming
+          const streamingElements = new Map<string, {
+            element: HTMLElement;
+            type: string;
+            contentEl?: HTMLElement;
+          }>();
 
           // Create debounced render function for smooth streaming updates
           const debouncedRender = this.debounce(async (content: string) => {
@@ -2279,10 +2380,83 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
               try {
                 const msg = JSON.parse(jsonStr);
+                const messageType = msg.message_type;
+                const messageId = msg.id;
 
-                // Only process assistant_message types
-                if (msg.message_type === 'assistant_message') {
-                  const messageId = msg.id;
+                // Handle reasoning_message
+                if (messageType === 'reasoning_message') {
+                  // Update status indicator
+                  if (!thinkingRemoved) {
+                    this.updateStatusIndicator(thinkingMsg, 'Thinking...', '💭');
+                  }
+                  
+                  const reasoning = msg.reasoning || '';
+                  if (reasoning && messageId) {
+                    // Remove thinking indicator when displaying reasoning
+                    if (!thinkingRemoved) {
+                      thinkingMsg.remove();
+                      thinkingRemoved = true;
+                    }
+                    
+                    // Get or create reasoning element
+                    let streamEl = streamingElements.get(messageId);
+                    if (!streamEl) {
+                      await this.addReasoningMessage(messagesContainer, msg);
+                      // Find the element we just created
+                      const elements = messagesContainer.querySelectorAll('.reasoning-block');
+                      const element = elements[elements.length - 1] as HTMLElement;
+                      streamEl = { element, type: 'reasoning' };
+                      streamingElements.set(messageId, streamEl);
+                    }
+                  }
+                }
+                
+                // Handle tool_call_message
+                else if (messageType === 'tool_call_message') {
+                  const toolName = msg.tool_call?.name || 'a tool';
+                  
+                  // Update status indicator
+                  if (!thinkingRemoved) {
+                    this.updateStatusIndicator(thinkingMsg, `Calling ${toolName}...`, '🔧');
+                  }
+                  
+                  if (messageId && !streamingElements.has(messageId)) {
+                    // Remove thinking indicator when displaying tool call
+                    if (!thinkingRemoved) {
+                      thinkingMsg.remove();
+                      thinkingRemoved = true;
+                    }
+                    
+                    await this.addToolCallMessage(messagesContainer, msg);
+                    const elements = messagesContainer.querySelectorAll('.tool-call-card');
+                    const element = elements[elements.length - 1] as HTMLElement;
+                    streamingElements.set(messageId, { element, type: 'tool_call' });
+                  }
+                }
+                
+                // Handle tool_return_message
+                else if (messageType === 'tool_return_message') {
+                  // Update status indicator
+                  if (!thinkingRemoved) {
+                    this.updateStatusIndicator(thinkingMsg, 'Processing results...', '⚙️');
+                  }
+                  
+                  if (messageId && !streamingElements.has(messageId)) {
+                    // Remove thinking indicator when displaying tool return
+                    if (!thinkingRemoved) {
+                      thinkingMsg.remove();
+                      thinkingRemoved = true;
+                    }
+                    
+                    await this.addToolReturnMessage(messagesContainer, msg);
+                    const elements = messagesContainer.querySelectorAll('.tool-return-card');
+                    const element = elements[elements.length - 1] as HTMLElement;
+                    streamingElements.set(messageId, { element, type: 'tool_return' });
+                  }
+                }
+                
+                // Handle assistant_message (with streaming)
+                else if (messageType === 'assistant_message') {
                   const delta = msg.content || msg.text || '';
 
                   if (delta && messageId) {
@@ -2291,7 +2465,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                       thinkingMsg.remove();
                       thinkingRemoved = true;
                     }
-
+                    
                     // Accumulate deltas by message ID
                     const existing = messageAccumulator.get(messageId) || '';
                     messageAccumulator.set(messageId, existing + delta);
@@ -2424,6 +2598,173 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     setTimeout(() => {
       this.scrollToBottom(container);
     }, 100);
+  }
+
+  async addReasoningMessage(container: HTMLElement, msg: any) {
+    const reasoningEl = container.createEl('div', {
+      cls: 'chat-message reasoning-block'
+    });
+
+    const header = reasoningEl.createEl('div', {
+      cls: 'reasoning-header'
+    });
+
+    const icon = header.createEl('span', {
+      cls: 'reasoning-icon',
+      text: '💭'
+    });
+
+    const title = header.createEl('span', {
+      cls: 'reasoning-title',
+      text: 'Thinking...'
+    });
+
+    const toggle = header.createEl('button', {
+      cls: 'reasoning-toggle',
+      text: '▼'
+    });
+
+    const contentEl = reasoningEl.createEl('div', {
+      cls: 'reasoning-content'
+    });
+
+    const reasoning = msg.reasoning || msg.content || '';
+    await this.renderMessageContent(reasoning, contentEl);
+
+    // Make collapsible
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      contentEl.classList.toggle('collapsed');
+      toggle.textContent = contentEl.classList.contains('collapsed') ? '▶' : '▼';
+    });
+
+    // Start collapsed by default
+    contentEl.classList.add('collapsed');
+    toggle.textContent = '▶';
+
+    this.scrollToBottom(container);
+  }
+
+  async addToolCallMessage(container: HTMLElement, msg: any) {
+    const toolEl = container.createEl('div', {
+      cls: 'chat-message tool-call-card'
+    });
+
+    const header = toolEl.createEl('div', {
+      cls: 'tool-call-header'
+    });
+
+    header.createEl('span', {
+      cls: 'tool-call-icon',
+      text: '🔧'
+    });
+
+    const toolCall = msg.tool_call || {};
+    const toolName = toolCall.name || 'Unknown Tool';
+    
+    header.createEl('span', {
+      cls: 'tool-call-name',
+      text: `Calling: ${toolName}`
+    });
+
+    const toggle = header.createEl('button', {
+      cls: 'tool-call-toggle',
+      text: '▼'
+    });
+
+    const contentEl = toolEl.createEl('div', {
+      cls: 'tool-call-content'
+    });
+
+    // Display arguments
+    if (toolCall.arguments) {
+      contentEl.createEl('div', {
+        cls: 'tool-call-label',
+        text: 'Arguments:'
+      });
+
+      const argsEl = contentEl.createEl('pre', {
+        cls: 'tool-call-args'
+      });
+
+      argsEl.createEl('code', {
+        text: JSON.stringify(toolCall.arguments, null, 2)
+      });
+    }
+
+    // Make collapsible
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      contentEl.classList.toggle('collapsed');
+      toggle.textContent = contentEl.classList.contains('collapsed') ? '▶' : '▼';
+    });
+
+    // Start collapsed by default
+    contentEl.classList.add('collapsed');
+    toggle.textContent = '▶';
+
+    this.scrollToBottom(container);
+  }
+
+  async addToolReturnMessage(container: HTMLElement, msg: any) {
+    const toolEl = container.createEl('div', {
+      cls: 'chat-message tool-return-card'
+    });
+
+    const header = toolEl.createEl('div', {
+      cls: 'tool-return-header'
+    });
+
+    header.createEl('span', {
+      cls: 'tool-return-icon',
+      text: '✅'
+    });
+
+    header.createEl('span', {
+      cls: 'tool-return-title',
+      text: 'Tool Result'
+    });
+
+    const toggle = header.createEl('button', {
+      cls: 'tool-return-toggle',
+      text: '▼'
+    });
+
+    const contentEl = toolEl.createEl('div', {
+      cls: 'tool-return-content'
+    });
+
+    const toolReturn = msg.tool_return || msg.content || '';
+    
+    // Try to parse and format JSON results
+    try {
+      const parsed = typeof toolReturn === 'string' ? JSON.parse(toolReturn) : toolReturn;
+      const formatted = JSON.stringify(parsed, null, 2);
+      
+      const resultEl = contentEl.createEl('pre', {
+        cls: 'tool-return-result'
+      });
+
+      resultEl.createEl('code', {
+        text: formatted
+      });
+    } catch {
+      // If not JSON, render as markdown
+      await this.renderMessageContent(String(toolReturn), contentEl);
+    }
+
+    // Make collapsible
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      contentEl.classList.toggle('collapsed');
+      toggle.textContent = contentEl.classList.contains('collapsed') ? '▶' : '▼';
+    });
+
+    // Start collapsed by default
+    contentEl.classList.add('collapsed');
+    toggle.textContent = '▶';
+
+    this.scrollToBottom(container);
   }
 
   private scrollToBottom(container: HTMLElement, smooth: boolean = true) {
@@ -3294,10 +3635,36 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
   async renameConversation(session: ChatSession) {
     const newTitle = await this.promptForInput('Rename Conversation', session.title || '');
-    if (newTitle && newTitle !== session.title) {
-      session.title = newTitle;
-      await this.plugin.saveSettings();
-      await this.renderTabContent(); // Refresh (await for research tab)
+    if (!newTitle || newTitle === session.title) return;
+
+    try {
+      const endpoint = this.plugin.getLettaEndpointUrl();
+      // Sync to Letta API - NO trailing slash for PATCH
+      const response = await fetch(`${endpoint}/v1/conversations/${session.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ summary: newTitle })
+      });
+
+      if (response.ok) {
+        // Update local state after successful API sync
+        session.title = newTitle;
+        
+        // Also update in chatSessions array if present
+        const sessionInList = this.chatSessions.find(s => s.id === session.id);
+        if (sessionInList) {
+          sessionInList.title = newTitle;
+        }
+        
+        await this.plugin.saveSettings();
+        await this.renderTabContent(); // Refresh UI
+        new Notice('Conversation renamed');
+      } else {
+        throw new Error('Failed to rename conversation');
+      }
+    } catch (error) {
+      console.error('Error renaming conversation:', error);
+      new Notice('Failed to rename conversation');
     }
   }
 
@@ -3436,20 +3803,38 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     settingsTab.render();
   }
 
-  // Helper: Add thinking indicator
+  // Helper: Add dynamic status indicator
   addThinkingIndicator(container: HTMLElement): HTMLElement {
-    const msg = container.createEl('div', { cls: 'message assistant thinking' });
+    const msg = container.createEl('div', { cls: 'message assistant thinking status-indicator-dynamic' });
     const content = msg.createEl('div', { cls: 'message-content' });
     const indicator = content.createEl('div', { cls: 'thinking-indicator' });
     indicator.createEl('span', { cls: 'dot' });
     indicator.createEl('span', { cls: 'dot' });
     indicator.createEl('span', { cls: 'dot' });
-    content.createEl('span', { text: 'Thinking...' });
+    const statusText = content.createEl('span', { 
+      text: 'Starting...',
+      cls: 'status-text'
+    });
+    
+    // Store reference to status text for updates
+    (msg as any).__statusText = statusText;
     
     // Scroll to bottom
     container.scrollTop = container.scrollHeight;
     
     return msg;
+  }
+
+  // Helper: Update status indicator
+  updateStatusIndicator(indicator: HTMLElement, status: string, icon?: string) {
+    const statusText = (indicator as any).__statusText;
+    if (statusText) {
+      let displayText = status;
+      if (icon) {
+        displayText = `${icon} ${status}`;
+      }
+      statusText.textContent = displayText;
+    }
   }
 
   // Helper: Show toast notification

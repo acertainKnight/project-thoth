@@ -3,7 +3,7 @@ name: User Onboarding
 description: Initialize a new user's research assistant. Use this on first interaction or when user asks to "get started", "set up", or "introduce yourself". Also use when you don't know the user's research interests.
 tools:
   - search_articles
-  - analyze_topic
+  - collection_stats
 ---
 
 # User Onboarding & Research Profile Setup
@@ -14,8 +14,8 @@ You're meeting a new user or re-familiarizing yourself with an existing one. You
 
 First, see what research they already have:
 
-1. Use `search_articles` with a broad query (like "*" or common terms) to sample what's in their collection
-2. Use `analyze_topic` on a general term to understand their research landscape
+1. Use `collection_stats` to see the size and scope of their collection
+2. Use `search_articles` with a broad query (like "*" or common terms) to sample what's in their collection
 3. The results will show you the scope and topics in their collection
 
 ## Step 2: Summarize What You Found

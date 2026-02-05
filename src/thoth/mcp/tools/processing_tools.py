@@ -9,7 +9,13 @@ from ..base_tools import MCPTool, MCPToolCallResult, NoInputTool
 
 
 class ProcessPdfMCPTool(MCPTool):
-    """MCP tool for processing a single PDF through the pipeline."""
+    """
+    MCP tool for processing a single PDF through the pipeline.
+    
+    **DEPRECATED**: This tool is deprecated. PDFs downloaded via `download_pdf` 
+    are automatically processed by the PDF monitor service. This tool is no 
+    longer registered in the MCP tool registry.
+    """
 
     @property
     def name(self) -> str:
@@ -112,7 +118,13 @@ class ProcessPdfMCPTool(MCPTool):
 
 
 class BatchProcessPdfsMCPTool(MCPTool):
-    """MCP tool for batch processing multiple PDFs."""
+    """
+    MCP tool for batch processing multiple PDFs.
+    
+    **DEPRECATED**: This tool is deprecated. PDFs downloaded via `download_pdf` 
+    are automatically processed by the PDF monitor service. This tool is no 
+    longer registered in the MCP tool registry.
+    """
 
     @property
     def name(self) -> str:
@@ -255,7 +267,7 @@ class GetArticleDetailsMCPTool(MCPTool):
             identifier = arguments['article_identifier']
 
             # Search for the article
-            search_results = self.service_manager.rag.search(query=identifier, k=1)
+            search_results = await self.service_manager.rag.search_async(query=identifier, k=1)
 
             if not search_results:
                 return MCPToolCallResult(
@@ -399,11 +411,11 @@ class ListArticlesMCPTool(MCPTool):
             if search_term:
                 # Use search with higher k value and apply filters
                 k = min(limit + offset + 20, 100)  # Get extra results for filtering
-                results = self.service_manager.rag.search(query=search_term, k=k)
+                results = await self.service_manager.rag.search_async(query=search_term, k=k)
             else:
                 # Get a broader sample of articles
                 # Using a general search to get articles
-                results = self.service_manager.rag.search(
+                results = await self.service_manager.rag.search_async(
                     query='', k=min(limit + offset + 20, 100)
                 )
 
@@ -524,7 +536,7 @@ class CollectionStatsMCPTool(NoInputTool):
             # Try to get document type breakdown with improved error handling
             try:
                 # Sample articles to get type distribution
-                sample_results = self.service_manager.rag.search(query='', k=100)
+                sample_results = await self.service_manager.rag.search_async(query='', k=100)
                 if sample_results:
                     doc_types = {}
                     for result in sample_results:

@@ -46,6 +46,7 @@ class ResearchQuestionService(BaseService):
         topics: list[str],
         authors: list[str],
         selected_sources: list[str],
+        description: Optional[str] = None,  # noqa: UP007
         schedule_frequency: str = 'daily',
         schedule_time: Optional[str] = None,  # noqa: UP007
         schedule_days_of_week: Optional[list[int]] = None,  # noqa: UP007
@@ -64,6 +65,7 @@ class ResearchQuestionService(BaseService):
             topics: Research topics
             authors: Preferred authors
             selected_sources: Source selection (['arxiv', 'pubmed'] or ['*'])
+            description: Optional detailed description of the research question
             schedule_frequency: 'daily', 'weekly', or 'monthly'
             schedule_time: Preferred run time (HH:MM format)
             schedule_days_of_week: Days for weekly schedule (ISO 8601: 1=Mon, 7=Sun)
@@ -116,6 +118,7 @@ class ResearchQuestionService(BaseService):
         question_id = await self.repository.create_question(
             user_id=user_id,
             name=name,
+            description=description,
             keywords=keywords,
             topics=topics,
             authors=authors,

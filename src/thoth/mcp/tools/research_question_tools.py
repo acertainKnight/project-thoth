@@ -9,6 +9,8 @@ that drive the discovery system. Research questions define WHAT to search for
 from typing import Any
 from uuid import UUID
 
+from loguru import logger
+
 from ..base_tools import MCPTool, MCPToolCallResult, NoInputTool
 
 
@@ -57,7 +59,7 @@ class ListAvailableSourcesMCPTool(NoInputTool):
 
                 postgres_service = self.service_manager.postgres
                 workflow_repo = BrowserWorkflowRepository(postgres_service)
-                workflows = await workflow_repo.list_active()
+                workflows = await workflow_repo.get_active_workflows()
 
                 if workflows:
                     content_parts.append({
@@ -70,7 +72,7 @@ class ListAvailableSourcesMCPTool(NoInputTool):
                             'text': f"  - `{workflow['name']}`: {workflow.get('description', 'Custom workflow')}\n",
                         })
             except Exception as e:
-                self.logger.warning(f'Could not load browser workflows: {e}')
+                logger.warning(f'Could not load browser workflows: {e}')
 
             # Add special options
             content_parts.append({
@@ -109,6 +111,10 @@ class CreateResearchQuestionMCPTool(MCPTool):
                     'type': 'string',
                     'description': 'Unique name for the research question',
                 },
+                'description': {
+                    'type': 'string',
+                    'description': 'Optional detailed description of the research question',
+                },
                 'keywords': {
                     'type': 'array',
                     'items': {'type': 'string'},
@@ -134,13 +140,18 @@ class CreateResearchQuestionMCPTool(MCPTool):
                 'schedule_frequency': {
                     'type': 'string',
                     'description': 'How often to run discovery',
-                    'enum': ['daily', 'weekly', 'monthly'],
+                    'enum': ['daily', 'weekly', 'monthly', 'on-demand'],
                     'default': 'daily',
                 },
                 'schedule_time': {
                     'type': 'string',
-                    'description': 'Time to run discovery (HH:MM format)',
+                    'description': 'Time to run discovery (HH:MM format, 24-hour)',
                     'default': '03:00',
+                },
+                'schedule_days_of_week': {
+                    'type': 'array',
+                    'items': {'type': 'integer', 'minimum': 1, 'maximum': 7},
+                    'description': 'Days of week for weekly schedule (ISO 8601: 1=Monday, 7=Sunday)',
                 },
                 'min_relevance_score': {
                     'type': 'number',
@@ -180,12 +191,14 @@ class CreateResearchQuestionMCPTool(MCPTool):
             question_id = await research_question_service.create_research_question(
                 user_id=arguments.get('user_id', 'default_user'),
                 name=arguments['name'],
+                description=arguments.get('description'),
                 keywords=arguments['keywords'],
                 topics=arguments.get('topics', []),
                 authors=arguments.get('authors', []),
                 selected_sources=arguments['selected_sources'],
                 schedule_frequency=arguments.get('schedule_frequency', 'daily'),
                 schedule_time=arguments.get('schedule_time'),
+                schedule_days_of_week=arguments.get('schedule_days_of_week'),
                 min_relevance_score=arguments.get('min_relevance_score', 0.7),
                 auto_download_enabled=arguments.get('auto_download_enabled', False),
                 auto_download_min_score=arguments.get('auto_download_min_score', 0.7),
@@ -194,6 +207,8 @@ class CreateResearchQuestionMCPTool(MCPTool):
 
             if question_id:
                 sources_str = ', '.join(arguments['selected_sources'])
+                description_text = f"\n**Description:** {arguments['description']}" if arguments.get('description') else ""
+                schedule_days = f" on days {arguments['schedule_days_of_week']}" if arguments.get('schedule_days_of_week') else ""
                 return MCPToolCallResult(
                     content=[
                         {
@@ -201,12 +216,14 @@ class CreateResearchQuestionMCPTool(MCPTool):
                             'text': f"""✓ Research question created successfully!
 
 **Question ID:** {question_id}
-**Name:** {arguments['name']}
+**Name:** {arguments['name']}{description_text}
 **Keywords:** {', '.join(arguments['keywords'])}
 **Topics:** {', '.join(arguments.get('topics', []))}
 **Sources:** {sources_str}
-**Schedule:** {arguments.get('schedule_frequency', 'daily')} at {arguments.get('schedule_time', '03:00')}
+**Schedule:** {arguments.get('schedule_frequency', 'daily')} at {arguments.get('schedule_time', '03:00')}{schedule_days}
 **Min Relevance:** {arguments.get('min_relevance_score', 0.7)}
+**Auto Download:** {arguments.get('auto_download_enabled', False)} (min score: {arguments.get('auto_download_min_score', 0.7)})
+**Max Articles/Run:** {arguments.get('max_articles_per_run', 50)}
 
 The scheduler will automatically run discovery based on the schedule. You can also manually trigger discovery using `run_discovery_for_question`.
 """,
@@ -290,11 +307,18 @@ class ListResearchQuestionsMCPTool(MCPTool):
 
             for question in questions:
                 question_text = f"**{question['name']}**\n"
+                if question.get('description'):
+                    question_text += f"  - Description: {question['description']}\n"
                 question_text += f"  - ID: {question['id']}\n"
                 question_text += f"  - Keywords: {', '.join(question['keywords'])}\n"
                 question_text += f"  - Topics: {', '.join(question.get('topics', []))}\n"
                 question_text += f"  - Sources: {', '.join(question['selected_sources'])}\n"
-                question_text += f"  - Schedule: {question['schedule_frequency']}\n"
+                question_text += f"  - Schedule: {question['schedule_frequency']}"
+                if question.get('schedule_time'):
+                    question_text += f" at {question['schedule_time']}"
+                if question.get('schedule_days_of_week'):
+                    question_text += f" (days: {question['schedule_days_of_week']})"
+                question_text += "\n"
                 question_text += f"  - Created: {question['created_at']}\n\n"
 
                 content_parts.append({'type': 'text', 'text': question_text})
@@ -374,8 +398,11 @@ class GetResearchQuestionMCPTool(MCPTool):
                 )
 
             # Format detailed information
+            description_text = f"\n**Description:** {question['description']}\n" if question.get('description') else ""
+            schedule_days = f"\n  - Days of Week: {question['schedule_days_of_week']}" if question.get('schedule_days_of_week') else ""
+            
             details = f"""**Research Question: {question['name']}**
-
+{description_text}
 **ID:** {question['id']}
 **User:** {question['user_id']}
 **Status:** {'Active' if question.get('is_active', True) else 'Inactive'}
@@ -391,16 +418,17 @@ class GetResearchQuestionMCPTool(MCPTool):
 
 **Schedule:**
   - Frequency: {question['schedule_frequency']}
-  - Time: {question.get('schedule_time', 'Not set')}
+  - Time: {question.get('schedule_time', 'Not set')}{schedule_days}
   - Next Run: {question.get('next_run_at', 'Not scheduled')}
 
 **Options:**
-  - Auto Download PDFs: {question.get('auto_download_enabled', True)}
+  - Auto Download PDFs: {question.get('auto_download_enabled', False)} (min score: {question.get('auto_download_min_score', 0.7)})
   - Max Articles per Run: {question.get('max_articles_per_run', 50)}
 
 **Timestamps:**
   - Created: {question['created_at']}
   - Updated: {question.get('updated_at', 'N/A')}
+  - Last Run: {question.get('last_run_at', 'Never')}
 """
 
             return MCPToolCallResult(content=[{'type': 'text', 'text': details}])
@@ -439,6 +467,14 @@ class UpdateResearchQuestionMCPTool(MCPTool):
                     'description': 'User identifier',
                     'default': 'default_user',
                 },
+                'name': {
+                    'type': 'string',
+                    'description': 'Updated name for the research question',
+                },
+                'description': {
+                    'type': 'string',
+                    'description': 'Updated detailed description',
+                },
                 'keywords': {
                     'type': 'array',
                     'items': {'type': 'string'},
@@ -449,6 +485,11 @@ class UpdateResearchQuestionMCPTool(MCPTool):
                     'items': {'type': 'string'},
                     'description': 'Updated topics',
                 },
+                'authors': {
+                    'type': 'array',
+                    'items': {'type': 'string'},
+                    'description': 'Updated preferred authors',
+                },
                 'selected_sources': {
                     'type': 'array',
                     'items': {'type': 'string'},
@@ -456,14 +497,39 @@ class UpdateResearchQuestionMCPTool(MCPTool):
                 },
                 'schedule_frequency': {
                     'type': 'string',
-                    'enum': ['daily', 'weekly', 'monthly'],
+                    'enum': ['daily', 'weekly', 'monthly', 'on-demand'],
                     'description': 'Updated schedule frequency',
+                },
+                'schedule_time': {
+                    'type': 'string',
+                    'description': 'Updated time to run discovery (HH:MM format, 24-hour)',
+                },
+                'schedule_days_of_week': {
+                    'type': 'array',
+                    'items': {'type': 'integer', 'minimum': 1, 'maximum': 7},
+                    'description': 'Updated days of week for weekly schedule (ISO 8601: 1=Monday, 7=Sunday)',
                 },
                 'min_relevance_score': {
                     'type': 'number',
                     'description': 'Updated relevance threshold',
                     'minimum': 0.0,
                     'maximum': 1.0,
+                },
+                'auto_download_enabled': {
+                    'type': 'boolean',
+                    'description': 'Enable/disable automatic PDF downloads',
+                },
+                'auto_download_min_score': {
+                    'type': 'number',
+                    'description': 'Updated minimum score for auto-download',
+                    'minimum': 0.0,
+                    'maximum': 1.0,
+                },
+                'max_articles_per_run': {
+                    'type': 'integer',
+                    'description': 'Updated maximum articles per run',
+                    'minimum': 1,
+                    'maximum': 500,
                 },
                 'is_active': {
                     'type': 'boolean',
@@ -482,7 +548,22 @@ class UpdateResearchQuestionMCPTool(MCPTool):
 
             # Build updates dict (only include fields that were provided)
             updates = {}
-            for field in ['keywords', 'topics', 'selected_sources', 'schedule_frequency', 'min_relevance_score', 'is_active']:
+            for field in [
+                'name',
+                'description',
+                'keywords',
+                'topics',
+                'authors',
+                'selected_sources',
+                'schedule_frequency',
+                'schedule_time',
+                'schedule_days_of_week',
+                'min_relevance_score',
+                'auto_download_enabled',
+                'auto_download_min_score',
+                'max_articles_per_run',
+                'is_active',
+            ]:
                 if field in arguments:
                     updates[field] = arguments[field]
 

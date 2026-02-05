@@ -2,63 +2,77 @@
 MCP Tools Package
 
 This package contains all MCP-compliant tools for the Thoth research assistant.
+
+DEPRECATED TOOLS (code kept for backwards compatibility, not registered):
+- process_pdf, batch_process_pdfs, extract_pdf_metadata: Use PDF monitor service
+- analyze_topic, search_by_topic, generate_research_summary: Redundant with answer_research_question
+- extract_article_insights, get_article_full_content: Merged into get_article_details
+- find_articles_by_authors: Use search_articles with author filter
+- extract_citations: Merged into explore_citation_network
+- suggest_tags: Low value, rarely used
+- backup_collection, restore_collection_backup, export_article_data, delete_article: Admin tasks
+- thoth_web_search: Use Letta's built-in web search
+- All browser workflow tools: Complex, rarely used
+- Legacy query tools: Replaced by research_question tools
 """
 
 # Import the base classes from the parent base_tools module
 from ..base_tools import MCPTool, MCPToolCallResult, MCPToolRegistry  # noqa: I001
+
+# Active tools
 from .advanced_rag_tools import (
     CreateCustomIndexMCPTool,
     OptimizeSearchMCPTool,
     ReindexCollectionMCPTool,
 )
 from .analysis_tools import (
-    AnalyzeTopicMCPTool,
     EvaluateArticleMCPTool,
     FindRelatedPapersMCPTool,
-    GenerateResearchSummaryMCPTool,
+    # DEPRECATED: AnalyzeTopicMCPTool - redundant with answer_research_question
+    # DEPRECATED: GenerateResearchSummaryMCPTool - redundant with answer_research_question
+    AnalyzeTopicMCPTool,  # Keep import for backwards compatibility
+    GenerateResearchSummaryMCPTool,  # Keep import for backwards compatibility
 )
 from .article_tools import (
-    DeleteArticleMCPTool,
     SearchArticlesMCPTool,
     UpdateArticleMetadataMCPTool,
+    # DEPRECATED: DeleteArticleMCPTool - too risky for agent use
+    DeleteArticleMCPTool,  # Keep import for backwards compatibility
 )
 from .citation_tools import (
     ExportBibliographyMCPTool,
-    ExtractCitationsMCPTool,
     FormatCitationsMCPTool,
+    # DEPRECATED: ExtractCitationsMCPTool - merged into explore_citation_network
+    ExtractCitationsMCPTool,  # Keep import for backwards compatibility
+)
+from .custom_index_tools import (
+    ListCustomIndexesMCPTool,
+    SearchCustomIndexMCPTool,
 )
 from .data_management_tools import (
-    BackupCollectionMCPTool,
-    ExportArticleDataMCPTool,
     GenerateReadingListMCPTool,
     SyncWithObsidianMCPTool,
+    # DEPRECATED: Admin tasks, not agent-facing
+    BackupCollectionMCPTool,  # Keep import for backwards compatibility
+    ExportArticleDataMCPTool,  # Keep import for backwards compatibility
+    RestoreCollectionBackupMCPTool,  # Keep import for backwards compatibility
 )
-# REMOVED: discovery_tools.py - deprecated in favor of research_question_tools.py
-# Old tools incorrectly treated ArXiv/PubMed as user-created "sources"
-# New research question tools properly separate concerns:
-#   - Built-in APIs (arxiv, pubmed) are sources you SELECT from
-#   - Research questions define WHAT to search for and WHICH sources to use
 from .download_pdf_tool import (
     DownloadPdfMCPTool,
 )
 from .pdf_content_tools import (
-    ExtractPdfMetadataMCPTool,
     LocatePdfMCPTool,
-    ValidatePdfSourcesMCPTool,
+    # DEPRECATED: Use PDF monitor service
+    ExtractPdfMetadataMCPTool,  # Keep import for backwards compatibility
+    ValidatePdfSourcesMCPTool,  # Keep import for backwards compatibility
 )
 from .processing_tools import (
-    BatchProcessPdfsMCPTool,
     CollectionStatsMCPTool,
     GetArticleDetailsMCPTool,
     ListArticlesMCPTool,
-    ProcessPdfMCPTool,
-)
-from .query_tools import (
-    CreateQueryMCPTool,
-    DeleteQueryMCPTool,
-    GetQueryMCPTool,
-    ListQueriesMCPTool,
-    UpdateQueryMCPTool,
+    # DEPRECATED: Use PDF monitor service
+    ProcessPdfMCPTool,  # Keep import for backwards compatibility
+    BatchProcessPdfsMCPTool,  # Keep import for backwards compatibility
 )
 from .research_question_tools import (
     CreateResearchQuestionMCPTool,
@@ -71,56 +85,68 @@ from .research_question_tools import (
 )
 from .research_qa_tools import (
     AnswerResearchQuestionMCPTool,
-    ExploreCitationNetworkMCPTool,
     CompareArticlesMCPTool,
-    ExtractArticleInsightsMCPTool,
-    SearchByTopicMCPTool,
-    GetArticleFullContentMCPTool,
-    FindArticlesByAuthorsMCPTool,
+    ExploreCitationNetworkMCPTool,
     GetCitationContextMCPTool,
-)
-from .tag_tools import (
-    ConsolidateAndRetagMCPTool,
-    ConsolidateTagsMCPTool,
-    GetTaskStatusMCPTool,
-    ManageTagVocabularyMCPTool,
-    SuggestTagsMCPTool,
-)
-from .web_search_tool import (
-    WebSearchMCPTool,
-)
-from .browser_workflow_tools import (
-    CreateBrowserWorkflowMCPTool,
-    AddWorkflowActionMCPTool,
-    ConfigureSearchMCPTool,
-    ExecuteWorkflowMCPTool,
-    ListWorkflowsMCPTool,
-    GetWorkflowDetailsMCPTool,
-    UpdateWorkflowStatusMCPTool,
-    DeleteWorkflowMCPTool,
+    # DEPRECATED: Redundant tools
+    ExtractArticleInsightsMCPTool,  # Keep import for backwards compatibility
+    FindArticlesByAuthorsMCPTool,  # Keep import for backwards compatibility
+    GetArticleFullContentMCPTool,  # Keep import for backwards compatibility
+    SearchByTopicMCPTool,  # Keep import for backwards compatibility
 )
 from .schema_tools import (
+    GetPresetDetailsTool,
     GetSchemaInfoTool,
     ListSchemaPresetsTool,
     SetSchemaPresetTool,
-    GetPresetDetailsTool,
     ValidateSchemaFileTool,
+)
+from .settings_tools import (
+    MigrateSettingsMCPTool,
+    ResetSettingsMCPTool,
+    UpdateSettingsMCPTool,
+    ValidateSettingsMCPTool,
+    ViewSettingsMCPTool,
 )
 from .skill_tools import (
     ListSkillsMCPTool,
     LoadSkillMCPTool,
     UnloadSkillMCPTool,
 )
+from .tag_tools import (
+    ConsolidateAndRetagMCPTool,
+    ConsolidateTagsMCPTool,
+    GetTaskStatusMCPTool,
+    ManageTagVocabularyMCPTool,
+    # DEPRECATED: SuggestTagsMCPTool - low value
+    SuggestTagsMCPTool,  # Keep import for backwards compatibility
+)
 
-# List of all available MCP tool classes
-MCP_TOOL_CLASSES = [
-    # Query management tools
-    ListQueriesMCPTool,
+# DEPRECATED: Keep imports for backwards compatibility only
+from .browser_workflow_tools import (
+    AddWorkflowActionMCPTool,
+    ConfigureSearchMCPTool,
+    CreateBrowserWorkflowMCPTool,
+    DeleteWorkflowMCPTool,
+    ExecuteWorkflowMCPTool,
+    GetWorkflowDetailsMCPTool,
+    ListWorkflowsMCPTool,
+    UpdateWorkflowStatusMCPTool,
+)
+from .query_tools import (
     CreateQueryMCPTool,
-    GetQueryMCPTool,
-    UpdateQueryMCPTool,
     DeleteQueryMCPTool,
-    # Research question tools (NEW - replaces old discovery source tools)
+    GetQueryMCPTool,
+    ListQueriesMCPTool,
+    UpdateQueryMCPTool,
+)
+from .web_search_tool import (
+    WebSearchMCPTool,
+)
+
+# List of ACTIVE MCP tool classes (deprecated tools excluded)
+MCP_TOOL_CLASSES = [
+    # Discovery and research questions
     ListAvailableSourcesMCPTool,
     CreateResearchQuestionMCPTool,
     ListResearchQuestionsMCPTool,
@@ -128,48 +154,89 @@ MCP_TOOL_CLASSES = [
     UpdateResearchQuestionMCPTool,
     DeleteResearchQuestionMCPTool,
     RunDiscoveryForQuestionMCPTool,
-    # Processing tools
-    ProcessPdfMCPTool,
-    BatchProcessPdfsMCPTool,
+    # Collection management
     GetArticleDetailsMCPTool,
     ListArticlesMCPTool,
     CollectionStatsMCPTool,
-    # Article search and management tools
     SearchArticlesMCPTool,
     UpdateArticleMetadataMCPTool,
-    DeleteArticleMCPTool,
-    # Tag management tools
+    # Analysis tools
+    AnswerResearchQuestionMCPTool,
+    ExploreCitationNetworkMCPTool,
+    CompareArticlesMCPTool,
+    EvaluateArticleMCPTool,
+    FindRelatedPapersMCPTool,
+    GetCitationContextMCPTool,
+    # PDF tools
+    DownloadPdfMCPTool,
+    LocatePdfMCPTool,
+    # Citation and bibliography
+    FormatCitationsMCPTool,
+    ExportBibliographyMCPTool,
+    # Tag management
     ConsolidateTagsMCPTool,
-    SuggestTagsMCPTool,
     ManageTagVocabularyMCPTool,
     ConsolidateAndRetagMCPTool,
     GetTaskStatusMCPTool,
-    # Citation and bibliography tools
-    FormatCitationsMCPTool,
-    ExportBibliographyMCPTool,
-    ExtractCitationsMCPTool,
-    # Analysis and intelligence tools
-    EvaluateArticleMCPTool,
-    AnalyzeTopicMCPTool,
-    FindRelatedPapersMCPTool,
-    GenerateResearchSummaryMCPTool,
-    # Data management and export tools
-    BackupCollectionMCPTool,
-    ExportArticleDataMCPTool,
+    # Data management
     GenerateReadingListMCPTool,
     SyncWithObsidianMCPTool,
-    # PDF and content tools
-    LocatePdfMCPTool,
-    ValidatePdfSourcesMCPTool,
-    ExtractPdfMetadataMCPTool,
-    DownloadPdfMCPTool,
-    # Web search tools
-    WebSearchMCPTool,
-    # Advanced RAG tools
+    # Advanced RAG tools (loaded via skill)
     ReindexCollectionMCPTool,
     OptimizeSearchMCPTool,
     CreateCustomIndexMCPTool,
-    # Browser workflow tools
+    SearchCustomIndexMCPTool,
+    ListCustomIndexesMCPTool,
+    # Schema management
+    GetSchemaInfoTool,
+    ListSchemaPresetsTool,
+    SetSchemaPresetTool,
+    GetPresetDetailsTool,
+    ValidateSchemaFileTool,
+    # Settings management (loaded via skill)
+    ViewSettingsMCPTool,
+    UpdateSettingsMCPTool,
+    ValidateSettingsMCPTool,
+    MigrateSettingsMCPTool,
+    ResetSettingsMCPTool,
+    # Skill management
+    ListSkillsMCPTool,
+    LoadSkillMCPTool,
+    UnloadSkillMCPTool,
+]
+
+# Deprecated tools - kept for backwards compatibility, not registered
+DEPRECATED_TOOL_CLASSES = [
+    # Query tools - replaced by research_question_tools
+    ListQueriesMCPTool,
+    CreateQueryMCPTool,
+    GetQueryMCPTool,
+    UpdateQueryMCPTool,
+    DeleteQueryMCPTool,
+    # PDF processing - use PDF monitor service
+    ProcessPdfMCPTool,
+    BatchProcessPdfsMCPTool,
+    ExtractPdfMetadataMCPTool,
+    ValidatePdfSourcesMCPTool,
+    # Analysis - redundant with answer_research_question
+    AnalyzeTopicMCPTool,
+    GenerateResearchSummaryMCPTool,
+    ExtractArticleInsightsMCPTool,
+    SearchByTopicMCPTool,
+    GetArticleFullContentMCPTool,
+    FindArticlesByAuthorsMCPTool,
+    # Citation - merged into explore_citation_network
+    ExtractCitationsMCPTool,
+    # Tags - low value
+    SuggestTagsMCPTool,
+    # Data management - admin tasks
+    BackupCollectionMCPTool,
+    ExportArticleDataMCPTool,
+    RestoreCollectionBackupMCPTool,
+    DeleteArticleMCPTool,
+    # Web search - use Letta's built-in
+    WebSearchMCPTool,
+    # Browser workflow - complex, rarely used
     CreateBrowserWorkflowMCPTool,
     AddWorkflowActionMCPTool,
     ConfigureSearchMCPTool,
@@ -178,25 +245,6 @@ MCP_TOOL_CLASSES = [
     GetWorkflowDetailsMCPTool,
     UpdateWorkflowStatusMCPTool,
     DeleteWorkflowMCPTool,
-    # Schema management tools
-    GetSchemaInfoTool,
-    ListSchemaPresetsTool,
-    SetSchemaPresetTool,
-    GetPresetDetailsTool,
-    ValidateSchemaFileTool,
-    # Research Q&A tools (NEW - comprehensive research and analysis)
-    AnswerResearchQuestionMCPTool,
-    ExploreCitationNetworkMCPTool,
-    CompareArticlesMCPTool,
-    ExtractArticleInsightsMCPTool,
-    SearchByTopicMCPTool,
-    GetArticleFullContentMCPTool,
-    FindArticlesByAuthorsMCPTool,
-    GetCitationContextMCPTool,
-    # Skill management tools
-    ListSkillsMCPTool,
-    LoadSkillMCPTool,
-    UnloadSkillMCPTool,
 ]
 
 
@@ -212,73 +260,91 @@ def register_all_mcp_tools(registry: MCPToolRegistry) -> None:
 
 
 __all__ = [  # noqa: RUF022
+    # Lists
+    'DEPRECATED_TOOL_CLASSES',
     'MCP_TOOL_CLASSES',
-    'AddWorkflowActionMCPTool',
-    'AnalyzeTopicMCPTool',
+    # Base classes
+    'MCPTool',
+    'MCPToolCallResult',
+    'MCPToolRegistry',
+    # Active tools (alphabetical)
     'AnswerResearchQuestionMCPTool',
-    'BackupCollectionMCPTool',
-    'BatchProcessPdfsMCPTool',
     'CollectionStatsMCPTool',
     'CompareArticlesMCPTool',
-    'ConfigureSearchMCPTool',
     'ConsolidateAndRetagMCPTool',
     'ConsolidateTagsMCPTool',
-    'CreateBrowserWorkflowMCPTool',
     'CreateCustomIndexMCPTool',
-    'CreateQueryMCPTool',
     'CreateResearchQuestionMCPTool',
-    'DeleteArticleMCPTool',
-    'DeleteQueryMCPTool',
     'DeleteResearchQuestionMCPTool',
-    'DeleteWorkflowMCPTool',
     'DownloadPdfMCPTool',
     'EvaluateArticleMCPTool',
-    'ExecuteWorkflowMCPTool',
-    'ExportArticleDataMCPTool',
     'ExploreCitationNetworkMCPTool',
     'ExportBibliographyMCPTool',
+    'FindRelatedPapersMCPTool',
+    'FormatCitationsMCPTool',
+    'GenerateReadingListMCPTool',
+    'GetArticleDetailsMCPTool',
+    'GetCitationContextMCPTool',
+    'GetPresetDetailsTool',
+    'GetResearchQuestionMCPTool',
+    'GetSchemaInfoTool',
+    'GetTaskStatusMCPTool',
+    'ListArticlesMCPTool',
+    'ListAvailableSourcesMCPTool',
+    'ListCustomIndexesMCPTool',
+    'ListResearchQuestionsMCPTool',
+    'ListSchemaPresetsTool',
+    'ListSkillsMCPTool',
+    'LoadSkillMCPTool',
+    'LocatePdfMCPTool',
+    'ManageTagVocabularyMCPTool',
+    'MigrateSettingsMCPTool',
+    'OptimizeSearchMCPTool',
+    'ReindexCollectionMCPTool',
+    'ResetSettingsMCPTool',
+    'RunDiscoveryForQuestionMCPTool',
+    'SearchArticlesMCPTool',
+    'SearchCustomIndexMCPTool',
+    'SetSchemaPresetTool',
+    'SyncWithObsidianMCPTool',
+    'UnloadSkillMCPTool',
+    'UpdateArticleMetadataMCPTool',
+    'UpdateResearchQuestionMCPTool',
+    'UpdateSettingsMCPTool',
+    'ValidateSchemaFileTool',
+    'ValidateSettingsMCPTool',
+    'ViewSettingsMCPTool',
+    # Deprecated tools (kept for backwards compatibility)
+    'AddWorkflowActionMCPTool',
+    'AnalyzeTopicMCPTool',
+    'BackupCollectionMCPTool',
+    'BatchProcessPdfsMCPTool',
+    'ConfigureSearchMCPTool',
+    'CreateBrowserWorkflowMCPTool',
+    'CreateQueryMCPTool',
+    'DeleteArticleMCPTool',
+    'DeleteQueryMCPTool',
+    'DeleteWorkflowMCPTool',
+    'ExecuteWorkflowMCPTool',
+    'ExportArticleDataMCPTool',
     'ExtractArticleInsightsMCPTool',
     'ExtractCitationsMCPTool',
     'ExtractPdfMetadataMCPTool',
     'FindArticlesByAuthorsMCPTool',
-    'FindRelatedPapersMCPTool',
-    'FormatCitationsMCPTool',
-    'GenerateReadingListMCPTool',
     'GenerateResearchSummaryMCPTool',
-    'GetArticleDetailsMCPTool',
-    'GetArticleDetailsMCPTool',
     'GetArticleFullContentMCPTool',
-    'GetCitationContextMCPTool',
     'GetQueryMCPTool',
-    'GetResearchQuestionMCPTool',
-    'GetTaskStatusMCPTool',
     'GetWorkflowDetailsMCPTool',
-    'ListArticlesMCPTool',
-    'ListAvailableSourcesMCPTool',
-    'ListResearchQuestionsMCPTool',
     'ListQueriesMCPTool',
-    'ListSkillsMCPTool',
     'ListWorkflowsMCPTool',
-    'LoadSkillMCPTool',
-    'LocatePdfMCPTool',
-    'MCPTool',
-    'MCPToolCallResult',
-    'MCPToolRegistry',
-    'ManageTagVocabularyMCPTool',
-    'OptimizeSearchMCPTool',
     'ProcessPdfMCPTool',
-    'ReindexCollectionMCPTool',
-    'RunDiscoveryForQuestionMCPTool',
-    'SearchArticlesMCPTool',
+    'RestoreCollectionBackupMCPTool',
     'SearchByTopicMCPTool',
     'SuggestTagsMCPTool',
-    'SyncWithObsidianMCPTool',
-    'UnloadSkillMCPTool',
-    'UpdateArticleMetadataMCPTool',
     'UpdateQueryMCPTool',
-    'UpdateResearchQuestionMCPTool',
     'UpdateWorkflowStatusMCPTool',
     'ValidatePdfSourcesMCPTool',
     'WebSearchMCPTool',
+    # Functions
     'register_all_mcp_tools',
 ]

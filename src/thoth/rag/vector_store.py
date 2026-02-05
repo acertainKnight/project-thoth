@@ -168,7 +168,7 @@ class VectorStoreManager:
         logger.debug(f'Added {len(ids)} document chunks for paper {paper_id}')
         return ids
 
-    def similarity_search(
+    async def similarity_search_async(
         self,
         query: str,
         k: int = 4,
@@ -176,7 +176,8 @@ class VectorStoreManager:
         **kwargs: Any,
     ) -> list[Document]:
         """
-        Perform similarity search.
+        Perform similarity search (async version).
+        Use this from async contexts to avoid event loop conflicts.
 
         Args:
             query: Search query text
@@ -187,7 +188,43 @@ class VectorStoreManager:
         Returns:
             List of similar documents
         """
-        return asyncio.run(self._similarity_search_async(query, k, filter, **kwargs))
+        return await self._similarity_search_async(query, k, filter, **kwargs)
+
+    def similarity_search(
+        self,
+        query: str,
+        k: int = 4,
+        filter: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> list[Document]:
+        """
+        Perform similarity search (sync wrapper).
+        Detects if running in async context and provides helpful error.
+
+        Args:
+            query: Search query text
+            k: Number of results to return
+            filter: Metadata filter (not yet implemented)
+            **kwargs: Additional search parameters
+
+        Returns:
+            List of similar documents
+        """
+        try:
+            loop = asyncio.get_running_loop()  # noqa: F841
+            raise RuntimeError(
+                'similarity_search() called from async context. '
+                "Use 'await similarity_search_async()' instead to avoid event loop conflicts."
+            )
+        except RuntimeError as e:
+            if 'no running event loop' in str(e).lower():
+                # Safe to use asyncio.run() - no loop running
+                return asyncio.run(
+                    self._similarity_search_async(query, k, filter, **kwargs)
+                )
+            else:
+                # Already in async context - raise helpful error
+                raise
 
     async def _similarity_search_async(
         self,
@@ -246,7 +283,7 @@ class VectorStoreManager:
             logger.debug(f'Found {len(documents)} similar documents for query')
             return documents
 
-    def similarity_search_with_score(
+    async def similarity_search_with_score_async(
         self,
         query: str,
         k: int = 4,
@@ -254,7 +291,8 @@ class VectorStoreManager:
         **kwargs: Any,
     ) -> list[tuple[Document, float]]:
         """
-        Perform similarity search with scores.
+        Perform similarity search with scores (async version).
+        Use this from async contexts to avoid event loop conflicts.
 
         Args:
             query: Search query text
@@ -265,17 +303,77 @@ class VectorStoreManager:
         Returns:
             List of (Document, score) tuples
         """
-        documents = self.similarity_search(query, k, filter, **kwargs)
+        documents = await self.similarity_search_async(query, k, filter, **kwargs)
         return [(doc, doc.metadata.get('similarity', 0.0)) for doc in documents]
 
-    def delete_documents(self, paper_id: UUID) -> None:
+    def similarity_search_with_score(
+        self,
+        query: str,
+        k: int = 4,
+        filter: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> list[tuple[Document, float]]:
         """
-        Delete all document chunks for a paper.
+        Perform similarity search with scores (sync wrapper).
+        Detects if running in async context and provides helpful error.
+
+        Args:
+            query: Search query text
+            k: Number of results to return
+            filter: Metadata filter
+            **kwargs: Additional parameters
+
+        Returns:
+            List of (Document, score) tuples
+        """
+        try:
+            loop = asyncio.get_running_loop()  # noqa: F841
+            raise RuntimeError(
+                'similarity_search_with_score() called from async context. '
+                "Use 'await similarity_search_with_score_async()' instead to avoid event loop conflicts."
+            )
+        except RuntimeError as e:
+            if 'no running event loop' in str(e).lower():
+                # Safe to use asyncio.run() - no loop running
+                documents = asyncio.run(
+                    self._similarity_search_async(query, k, filter, **kwargs)
+                )
+                return [(doc, doc.metadata.get('similarity', 0.0)) for doc in documents]
+            else:
+                # Already in async context - raise helpful error
+                raise
+
+    async def delete_documents_async(self, paper_id: UUID) -> None:
+        """
+        Delete all document chunks for a paper (async version).
+        Use this from async contexts to avoid event loop conflicts.
 
         Args:
             paper_id: UUID of the paper to delete chunks for
         """
-        asyncio.run(self._delete_documents_async(paper_id))
+        await self._delete_documents_async(paper_id)
+
+    def delete_documents(self, paper_id: UUID) -> None:
+        """
+        Delete all document chunks for a paper (sync wrapper).
+        Detects if running in async context and provides helpful error.
+
+        Args:
+            paper_id: UUID of the paper to delete chunks for
+        """
+        try:
+            loop = asyncio.get_running_loop()  # noqa: F841
+            raise RuntimeError(
+                'delete_documents() called from async context. '
+                "Use 'await delete_documents_async()' instead to avoid event loop conflicts."
+            )
+        except RuntimeError as e:
+            if 'no running event loop' in str(e).lower():
+                # Safe to use asyncio.run() - no loop running
+                asyncio.run(self._delete_documents_async(paper_id))
+            else:
+                # Already in async context - raise helpful error
+                raise
 
     async def _delete_documents_async(self, paper_id: UUID) -> None:
         """Delete documents asynchronously."""
@@ -286,14 +384,37 @@ class VectorStoreManager:
             )
             logger.debug(f'Deleted chunks for paper {paper_id}: {result}')
 
-    def get_stats(self) -> dict[str, Any]:
+    async def get_stats_async(self) -> dict[str, Any]:
         """
-        Get statistics about the vector store.
+        Get statistics about the vector store (async version).
+        Use this from async contexts to avoid event loop conflicts.
 
         Returns:
             Dictionary with collection statistics
         """
-        return asyncio.run(self._get_stats_async())
+        return await self._get_stats_async()
+
+    def get_stats(self) -> dict[str, Any]:
+        """
+        Get statistics about the vector store (sync wrapper).
+        Detects if running in async context and provides helpful error.
+
+        Returns:
+            Dictionary with collection statistics
+        """
+        try:
+            loop = asyncio.get_running_loop()  # noqa: F841
+            raise RuntimeError(
+                'get_stats() called from async context. '
+                "Use 'await get_stats_async()' instead to avoid event loop conflicts."
+            )
+        except RuntimeError as e:
+            if 'no running event loop' in str(e).lower():
+                # Safe to use asyncio.run() - no loop running
+                return asyncio.run(self._get_stats_async())
+            else:
+                # Already in async context - raise helpful error
+                raise
 
     async def _get_stats_async(self) -> dict[str, Any]:
         """Get statistics asynchronously."""

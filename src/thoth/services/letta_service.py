@@ -31,7 +31,8 @@ class LettaService(BaseService):
             config: Configuration object
         """
         super().__init__(config)
-        self.letta_url = os.environ.get("LETTA_URL", "http://localhost:8283")
+        # Check both THOTH_LETTA_URL (Docker) and LETTA_URL (fallback)
+        self.letta_url = os.environ.get("THOTH_LETTA_URL") or os.environ.get("LETTA_URL", "http://localhost:8283")
         self._tool_cache: dict[str, str] = {}  # tool_name -> tool_id
         
     def initialize(self) -> None:
@@ -48,15 +49,16 @@ class LettaService(BaseService):
             return
             
         try:
+            # Use high limit to get all tools including MCP tools (default is 50)
             resp = requests.get(
-                f"{self.letta_url}/v1/tools/",
+                f"{self.letta_url}/v1/tools/?limit=500",
                 headers=self._get_headers(),
                 timeout=30
             )
             if resp.status_code == 200:
                 tools = resp.json()
                 self._tool_cache = {t["name"]: t["id"] for t in tools}
-                self.logger.info(f"Cached {len(self._tool_cache)} tools from Letta")
+                self.logger.info(f"Cached {len(self._tool_cache)} tools from Letta (including {sum(1 for t in tools if 'mcp:' in str(t.get('tags', [])))} MCP tools)")
         except Exception as e:
             self.logger.error(f"Failed to fetch tools from Letta: {e}")
     
@@ -112,6 +114,8 @@ class LettaService(BaseService):
         Returns:
             dict with 'attached', 'already_attached', 'not_found' lists
         """
+        # Force refresh tool cache to ensure we have latest tools (including MCP tools)
+        self._tool_cache = {}
         self._ensure_tool_cache()
         
         # Get current agent tools
@@ -124,10 +128,12 @@ class LettaService(BaseService):
         for tool_name in tool_names:
             if tool_name in current_tools:
                 already_attached.append(tool_name)
+                self.logger.debug(f"Tool '{tool_name}' already attached to agent {agent_id[:8]}...")
                 continue
                 
             tool_id = self._tool_cache.get(tool_name)
             if not tool_id:
+                self.logger.warning(f"Tool '{tool_name}' not found in Letta registry (cache has {len(self._tool_cache)} tools)")
                 not_found.append(tool_name)
                 continue
             
@@ -143,12 +149,19 @@ class LettaService(BaseService):
                     self.logger.info(f"Attached tool '{tool_name}' to agent {agent_id[:8]}...")
                 else:
                     self.logger.warning(
-                        f"Failed to attach '{tool_name}': {resp.status_code}"
+                        f"Failed to attach '{tool_name}': HTTP {resp.status_code} - {resp.text[:200]}"
                     )
                     not_found.append(tool_name)
             except Exception as e:
                 self.logger.error(f"Error attaching tool '{tool_name}': {e}")
                 not_found.append(tool_name)
+        
+        # Log summary
+        if attached or not_found:
+            self.logger.info(
+                f"Tool attachment summary for agent {agent_id[:8]}: "
+                f"attached={len(attached)}, already_had={len(already_attached)}, not_found={len(not_found)}"
+            )
         
         return {
             "attached": attached,

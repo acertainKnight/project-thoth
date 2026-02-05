@@ -7,6 +7,8 @@ article management functions.
 
 from typing import Any
 
+from loguru import logger
+
 from ..base_tools import MCPTool, MCPToolCallResult
 
 
@@ -99,7 +101,7 @@ class SearchArticlesMCPTool(MCPTool):
 
             # Perform search with increased k to allow for filtering
             search_k = min(limit * 3, 100)  # Get more results for post-filtering
-            results = self.service_manager.rag.search(
+            results = await self.service_manager.rag.search_async(
                 query=query, k=search_k, filter=search_filter if search_filter else None
             )
 
@@ -284,7 +286,23 @@ class UpdateArticleMetadataMCPTool(MCPTool):
                 },
                 'update_metadata': {
                     'type': 'object',
-                    'description': 'Metadata fields to update (e.g., authors, journal, date)',
+                    'description': 'Metadata fields to update (e.g., authors, journal, abstract)',
+                    'properties': {
+                        'title': {'type': 'string', 'description': 'Updated title'},
+                        'authors': {
+                            'type': 'array',
+                            'items': {'type': 'string'},
+                            'description': 'List of author names',
+                        },
+                        'abstract': {'type': 'string', 'description': 'Updated abstract'},
+                        'journal': {'type': 'string', 'description': 'Journal or venue name'},
+                        'publication_date': {
+                            'type': 'string',
+                            'description': 'Publication date (YYYY-MM-DD)',
+                        },
+                        'doi': {'type': 'string', 'description': 'Digital Object Identifier'},
+                        'arxiv_id': {'type': 'string', 'description': 'arXiv identifier'},
+                    },
                     'additionalProperties': True,
                 },
             },
@@ -299,79 +317,178 @@ class UpdateArticleMetadataMCPTool(MCPTool):
             remove_tags = arguments.get('remove_tags', [])
             update_metadata = arguments.get('update_metadata', {})
 
-            # Find the article first
-            search_results = self.service_manager.rag.search(query=identifier, k=1)
-
-            if not search_results:
-                return MCPToolCallResult(
-                    content=[
-                        {'type': 'text', 'text': f'Article not found: {identifier}'}
-                    ],
-                    isError=True,
-                )
-
-            article = search_results[0]
-            article_title = article.get('title', 'Unknown')
-
-            # Try to update through article service
-            try:
-                # This is a placeholder - the actual implementation would depend on
-                # the article service's update capabilities
-                updates_made = []
-
-                if add_tags:
-                    # Add tags (implementation depends on article service)
-                    updates_made.append(f'Added tags: {", ".join(add_tags)}')
-
-                if remove_tags:
-                    # Remove tags (implementation depends on article service)
-                    updates_made.append(f'Removed tags: {", ".join(remove_tags)}')
-
-                if update_metadata:
-                    # Update metadata fields
-                    for field, value in update_metadata.items():
-                        updates_made.append(f'Updated {field}: {value}')
-
-                if not updates_made:
-                    return MCPToolCallResult(
-                        content=[
-                            {
-                                'type': 'text',
-                                'text': 'No updates specified. Provide add_tags, remove_tags, or update_metadata.',
-                            }
-                        ],
-                        isError=True,
-                    )
-
-                # Format success response
-                response_text = f'**Updated Article:** {article_title}\n\n'
-                response_text += '**Changes Made:**\n'
-                for update in updates_made:
-                    response_text += f'  - {update}\n'
-
-                response_text += '\n**Note:** Changes will be reflected in future searches and may require re-indexing.'
-
-                return MCPToolCallResult(
-                    content=[{'type': 'text', 'text': response_text}]
-                )
-
-            except Exception as e:
+            # Check if any updates are specified
+            if not add_tags and not remove_tags and not update_metadata:
                 return MCPToolCallResult(
                     content=[
                         {
                             'type': 'text',
-                            'text': f'Failed to update article metadata: {e!s}\n\nThis feature may not be fully implemented in the current version.',
+                            'text': 'No updates specified. Provide add_tags, remove_tags, or update_metadata.',
                         }
                     ],
                     isError=True,
                 )
 
+            # Import PaperRepository for direct database access
+            from thoth.repositories.paper_repository import PaperRepository
+
+            postgres_service = self.service_manager.postgres
+            paper_repo = PaperRepository(postgres_service)
+
+            # Try to find the paper by different identifiers
+            paper = None
+            paper_id = None
+
+            # Check if identifier looks like a DOI
+            if identifier.startswith('10.') or 'doi.org' in identifier:
+                doi = identifier.replace('https://doi.org/', '').replace('http://doi.org/', '')
+                paper = await paper_repo.get_by_doi(doi)
+                if paper:
+                    paper_id = paper.get('id')
+                    logger.info(f'Found paper by DOI: {doi}')
+
+            # Check if identifier looks like an arXiv ID
+            elif any(c.isdigit() for c in identifier) and (
+                'arxiv' in identifier.lower() or '.' in identifier
+            ):
+                arxiv_id = identifier.replace('arXiv:', '').replace('arxiv:', '').strip()
+                paper = await paper_repo.get_by_arxiv_id(arxiv_id)
+                if paper:
+                    paper_id = paper.get('id')
+                    logger.info(f'Found paper by arXiv ID: {arxiv_id}')
+
+            # Try title search if not found by ID
+            if not paper:
+                title_results = await paper_repo.search_by_title(identifier, limit=1)
+                if title_results:
+                    paper = title_results[0]
+                    paper_id = paper.get('id')
+                    logger.info(f'Found paper by title search: {identifier}')
+
+            # Also try RAG search as fallback
+            if not paper:
+                rag_results = await self.service_manager.rag.search_async(
+                    query=identifier, k=1
+                )
+                if rag_results:
+                    # Try to extract paper ID from RAG result metadata
+                    rag_result = rag_results[0]
+                    metadata = rag_result.get('metadata', {})
+                    if metadata.get('paper_id'):
+                        paper = await paper_repo.get(metadata['paper_id'])
+                        if paper:
+                            paper_id = paper.get('id')
+                            logger.info(f'Found paper via RAG search: {identifier}')
+
+            if not paper or not paper_id:
+                return MCPToolCallResult(
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': f'Article not found: {identifier}\n\n'
+                            'Try using the exact DOI, arXiv ID, or full title.',
+                        }
+                    ],
+                    isError=True,
+                )
+
+            article_title = paper.get('title', 'Unknown')
+            current_tags = paper.get('tags', []) or []
+            updates_made = []
+
+            # Process tag updates
+            new_tags = list(current_tags)  # Copy current tags
+
+            if add_tags:
+                for tag in add_tags:
+                    tag_clean = tag.strip().lower()
+                    if tag_clean and tag_clean not in new_tags:
+                        new_tags.append(tag_clean)
+                updates_made.append(f'Added tags: {", ".join(add_tags)}')
+
+            if remove_tags:
+                removed = []
+                for tag in remove_tags:
+                    tag_clean = tag.strip().lower()
+                    if tag_clean in new_tags:
+                        new_tags.remove(tag_clean)
+                        removed.append(tag_clean)
+                if removed:
+                    updates_made.append(f'Removed tags: {", ".join(removed)}')
+
+            # Update tags if changed
+            if new_tags != current_tags:
+                success = await paper_repo.update_tags(paper_id, new_tags)
+                if not success:
+                    logger.warning(f'Failed to update tags for paper {paper_id}')
+
+            # Process metadata updates
+            if update_metadata:
+                # Filter to only allowed fields that exist in the papers table
+                allowed_fields = {
+                    'title', 'authors', 'abstract', 'journal', 'publication_date',
+                    'doi', 'arxiv_id', 'url', 'citation_count',
+                }
+                filtered_metadata = {
+                    k: v for k, v in update_metadata.items() if k in allowed_fields
+                }
+
+                if filtered_metadata:
+                    # Update via repository
+                    success = await paper_repo.update(paper_id, filtered_metadata)
+                    if success:
+                        for field, value in filtered_metadata.items():
+                            # Truncate long values for display
+                            display_value = str(value)
+                            if len(display_value) > 50:
+                                display_value = display_value[:50] + '...'
+                            updates_made.append(f'Updated {field}: {display_value}')
+                    else:
+                        logger.warning(f'Failed to update metadata for paper {paper_id}')
+
+                # Note any ignored fields
+                ignored_fields = set(update_metadata.keys()) - allowed_fields
+                if ignored_fields:
+                    updates_made.append(
+                        f'Ignored unsupported fields: {", ".join(ignored_fields)}'
+                    )
+
+            if not updates_made:
+                return MCPToolCallResult(
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': f'No changes were made to: {article_title}',
+                        }
+                    ]
+                )
+
+            # Format success response
+            response_text = f'**Updated Article:** {article_title}\n\n'
+            response_text += '**Changes Made:**\n'
+            for update in updates_made:
+                response_text += f'  - {update}\n'
+
+            response_text += '\n**Note:** Metadata changes are saved to the database. '
+            response_text += 'RAG index may need reindexing to reflect content changes in search.'
+
+            return MCPToolCallResult(
+                content=[{'type': 'text', 'text': response_text}]
+            )
+
         except Exception as e:
+            logger.error(f'Error updating article metadata: {e}')
             return self.handle_error(e)
 
 
 class DeleteArticleMCPTool(MCPTool):
-    """MCP tool for removing an article from the knowledge base."""
+    """
+    MCP tool for removing an article from the knowledge base.
+    
+    **DEPRECATED**: This tool is deprecated. Article deletion is too risky for 
+    agent use and should be handled manually by the user. This tool is no 
+    longer registered in the MCP tool registry.
+    """
 
     @property
     def name(self) -> str:
@@ -417,7 +534,7 @@ class DeleteArticleMCPTool(MCPTool):
                 )
 
             # Find the article first
-            search_results = self.service_manager.rag.search(query=identifier, k=1)
+            search_results = await self.service_manager.rag.search_async(query=identifier, k=1)
 
             if not search_results:
                 return MCPToolCallResult(
@@ -456,15 +573,7 @@ class DeleteArticleMCPTool(MCPTool):
                 )
 
             except Exception as e:
-                return MCPToolCallResult(
-                    content=[
-                        {
-                            'type': 'text',
-                            'text': f'Failed to delete article: {e!s}',
-                        }
-                    ],
-                    isError=True,
-                )
+                return self.handle_error(e)
 
         except Exception as e:
             return self.handle_error(e)

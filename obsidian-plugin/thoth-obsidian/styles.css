@@ -1855,6 +1855,24 @@
   animation: thoth-fade-in 0.3s ease-in;
 }
 
+/* Dynamic Status Indicator */
+.status-indicator-dynamic {
+  transition: all 0.3s ease;
+}
+
+.status-indicator-dynamic .status-text {
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 0.25rem;
+  transition: color 0.3s ease;
+}
+
+.status-indicator-dynamic .message-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 /* Toast Notifications - Enhanced */
 .thoth-toast {
   position: fixed;
@@ -2527,4 +2545,330 @@
 
 .theme-dark .message-content table thead {
   background: var(--background-primary-alt);
+}
+
+/* ===== REASONING BLOCKS ===== */
+
+.reasoning-block {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid var(--color-purple);
+  border-radius: 8px;
+  margin: 0.75rem 0;
+  padding: 0;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.reasoning-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--background-secondary-alt);
+  cursor: pointer;
+  user-select: none;
+}
+
+.reasoning-header:hover {
+  background: var(--background-modifier-hover);
+}
+
+.reasoning-icon {
+  font-size: 1.2rem;
+}
+
+.reasoning-title {
+  flex: 1;
+  font-weight: 600;
+  color: var(--text-normal);
+  font-size: 0.95rem;
+}
+
+.reasoning-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  transition: transform 0.2s ease;
+}
+
+.reasoning-toggle:hover {
+  color: var(--text-normal);
+}
+
+.reasoning-content {
+  padding: 1rem;
+  border-top: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  font-style: italic;
+  max-height: 500px;
+  overflow-y: auto;
+  transition: max-height 0.3s ease, padding 0.3s ease;
+}
+
+.reasoning-content.collapsed {
+  max-height: 0;
+  padding: 0 1rem;
+  border-top: none;
+  overflow: hidden;
+}
+
+/* ===== TOOL CALL CARDS ===== */
+
+.tool-call-card {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid var(--color-blue);
+  border-radius: 8px;
+  margin: 0.75rem 0;
+  padding: 0;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.tool-call-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--background-secondary-alt);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tool-call-header:hover {
+  background: var(--background-modifier-hover);
+}
+
+.tool-call-icon {
+  font-size: 1.2rem;
+}
+
+.tool-call-name {
+  flex: 1;
+  font-weight: 600;
+  color: var(--text-normal);
+  font-size: 0.95rem;
+}
+
+.tool-call-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  transition: transform 0.2s ease;
+}
+
+.tool-call-toggle:hover {
+  color: var(--text-normal);
+}
+
+.tool-call-content {
+  padding: 1rem;
+  border-top: 1px solid var(--background-modifier-border);
+  max-height: 400px;
+  overflow-y: auto;
+  transition: max-height 0.3s ease, padding 0.3s ease;
+}
+
+.tool-call-content.collapsed {
+  max-height: 0;
+  padding: 0 1rem;
+  border-top: none;
+  overflow: hidden;
+}
+
+.tool-call-label {
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tool-call-args {
+  background: var(--code-background);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin: 0;
+  overflow-x: auto;
+}
+
+.tool-call-args code {
+  font-family: var(--font-monospace);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--code-normal);
+}
+
+/* ===== TOOL RETURN CARDS ===== */
+
+.tool-return-card {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid var(--color-green);
+  border-radius: 8px;
+  margin: 0.75rem 0;
+  padding: 0;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.tool-return-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--background-secondary-alt);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tool-return-header:hover {
+  background: var(--background-modifier-hover);
+}
+
+.tool-return-icon {
+  font-size: 1.2rem;
+}
+
+.tool-return-title {
+  flex: 1;
+  font-weight: 600;
+  color: var(--text-normal);
+  font-size: 0.95rem;
+}
+
+.tool-return-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  transition: transform 0.2s ease;
+}
+
+.tool-return-toggle:hover {
+  color: var(--text-normal);
+}
+
+.tool-return-content {
+  padding: 1rem;
+  border-top: 1px solid var(--background-modifier-border);
+  max-height: 400px;
+  overflow-y: auto;
+  transition: max-height 0.3s ease, padding 0.3s ease;
+}
+
+.tool-return-content.collapsed {
+  max-height: 0;
+  padding: 0 1rem;
+  border-top: none;
+  overflow: hidden;
+}
+
+.tool-return-result {
+  background: var(--code-background);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin: 0;
+  overflow-x: auto;
+}
+
+.tool-return-result code {
+  font-family: var(--font-monospace);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--code-normal);
+}
+
+/* Mobile adjustments for tool/reasoning cards */
+@media (max-width: 768px) {
+  .reasoning-content,
+  .tool-call-content,
+  .tool-return-content {
+    max-height: 300px;
+  }
+
+  .tool-call-args,
+  .tool-return-result {
+    font-size: 0.8rem;
+  }
+}
+
+/* Dark theme adjustments */
+.theme-dark .reasoning-block,
+.theme-dark .tool-call-card,
+.theme-dark .tool-return-card {
+  background: var(--background-secondary-alt);
+}
+
+.theme-dark .tool-call-args,
+.theme-dark .tool-return-result {
+  background: var(--background-primary-alt);
+}
+
+/* ===== LOAD MORE BUTTON ===== */
+
+.load-more-btn {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text-normal);
+  transition: all 0.2s ease;
+  margin-bottom: 0.5rem;
+}
+
+.load-more-btn:hover:not(:disabled) {
+  background: var(--background-modifier-hover);
+  border-color: var(--color-accent);
+  transform: translateY(-1px);
+}
+
+.load-more-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.load-more-divider {
+  width: 100%;
+  height: 1px;
+  background: var(--background-modifier-border);
+  margin: 1rem 0;
+  position: relative;
+}
+
+.load-more-divider::after {
+  content: '••••';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--background-primary);
+  padding: 0 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.25rem;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .load-more-btn {
+    padding: 0.6rem 0.8rem;
+    font-size: 0.9rem;
+  }
 }

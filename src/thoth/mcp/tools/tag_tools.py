@@ -8,7 +8,7 @@ and suggesting new tags for articles.
 from typing import Any  # noqa: I001
 
 from ..base_tools import MCPTool, MCPToolCallResult, NoInputTool
-from ...services.background_tasks import BackgroundTaskManager, TaskStatus
+from ...services.background_tasks import BackgroundTask, BackgroundTaskManager, TaskStatus
 
 
 class ConsolidateTagsMCPTool(NoInputTool):
@@ -61,7 +61,13 @@ class ConsolidateTagsMCPTool(NoInputTool):
 
 
 class SuggestTagsMCPTool(MCPTool):
-    """MCP tool for suggesting additional tags for articles."""
+    """
+    MCP tool for suggesting additional tags for articles.
+    
+    **DEPRECATED**: This tool is deprecated. Tag suggestion provides low value 
+    and is rarely used. Use manual tagging or consolidation tools instead. This 
+    tool is no longer registered in the MCP tool registry.
+    """
 
     @property
     def name(self) -> str:
@@ -97,7 +103,7 @@ class SuggestTagsMCPTool(MCPTool):
             if article_identifier and not force_all:
                 # Suggest tags for a specific article
                 # First find the article
-                search_results = self.service_manager.rag.search(
+                search_results = await self.service_manager.rag.search_async(
                     query=article_identifier, k=1
                 )
 
@@ -216,7 +222,7 @@ class ManageTagVocabularyMCPTool(NoInputTool):
 
             # Get tag usage statistics by sampling articles
             tag_usage = {}
-            sample_results = self.service_manager.rag.search(query='', k=100)
+            sample_results = await self.service_manager.rag.search_async(query='', k=100)
 
             for result in sample_results:
                 metadata = result.get('metadata', {})
@@ -345,7 +351,11 @@ class GetTaskStatusMCPTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return 'Check the status of a background task using its task ID. Returns current status, progress, and results if completed.'
+        return (
+            'Check the status of background tasks (tagging, reindexing, PDF processing, discovery). '
+            'Provide a task_id for specific task, or use task_type to see recent tasks of that type. '
+            'If neither provided, shows all recent tasks.'
+        )
 
     @property
     def input_schema(self) -> dict[str, Any]:
@@ -354,119 +364,238 @@ class GetTaskStatusMCPTool(MCPTool):
             'properties': {
                 'task_id': {
                     'type': 'string',
-                    'description': 'The task ID returned when the background operation was triggered',
+                    'description': 'Specific task ID to check (optional)',
+                },
+                'task_type': {
+                    'type': 'string',
+                    'description': 'Filter by task type: tagging, reindex, processing, discovery, all',
+                    'enum': ['tagging', 'reindex', 'processing', 'discovery', 'all'],
+                    'default': 'all',
+                },
+                'status_filter': {
+                    'type': 'string',
+                    'description': 'Filter by status: running, completed, failed, pending, all',
+                    'enum': ['running', 'completed', 'failed', 'pending', 'all'],
+                    'default': 'all',
+                },
+                'limit': {
+                    'type': 'integer',
+                    'description': 'Maximum number of tasks to show',
+                    'default': 10,
+                    'minimum': 1,
+                    'maximum': 50,
                 },
             },
-            'required': ['task_id'],
+            'required': [],
         }
 
     async def execute(self, arguments: dict[str, Any]) -> MCPToolCallResult:
-        """Get the status of a background task."""
+        """Get the status of background tasks."""
         try:
             task_id = arguments.get('task_id')
-
-            if not task_id:
-                return MCPToolCallResult(
-                    content=[
-                        {
-                            'type': 'text',
-                            'text': 'Error: task_id parameter is required',
-                        }
-                    ],
-                    isError=True,
-                )
+            task_type = arguments.get('task_type', 'all')
+            status_filter = arguments.get('status_filter', 'all')
+            limit = arguments.get('limit', 10)
 
             # Get or create background task manager
             if not hasattr(self.service_manager, 'background_tasks'):
                 self.service_manager.background_tasks = BackgroundTaskManager()
 
-            # Get task status
-            task = self.service_manager.background_tasks.get_task_status(task_id)
+            task_manager = self.service_manager.background_tasks
 
-            if not task:
+            # If specific task_id provided, get that task
+            if task_id:
+                task = task_manager.get_task_status(task_id)
+
+                if not task:
+                    return MCPToolCallResult(
+                        content=[
+                            {
+                                'type': 'text',
+                                'text': f'Task not found: {task_id}\n\nThis task may have expired or the task ID is invalid.',
+                            }
+                        ],
+                        isError=True,
+                    )
+
+                return MCPToolCallResult(
+                    content=[{'type': 'text', 'text': self._format_task_detail(task)}]
+                )
+
+            # List tasks with filters
+            status_enum = None
+            if status_filter and status_filter != 'all':
+                status_enum = TaskStatus(status_filter)
+
+            all_tasks = task_manager.list_tasks(status=status_enum, limit=50)
+
+            # Filter by task type if specified
+            if task_type and task_type != 'all':
+                type_keywords = {
+                    'tagging': ['tag', 'consolidat', 'retag'],
+                    'reindex': ['reindex', 'index', 'rag'],
+                    'processing': ['process', 'pdf', 'extract'],
+                    'discovery': ['discover', 'search', 'fetch'],
+                }
+                keywords = type_keywords.get(task_type, [])
+                filtered_tasks = [
+                    t for t in all_tasks
+                    if any(kw in t.name.lower() for kw in keywords)
+                ]
+                all_tasks = filtered_tasks
+
+            # Apply limit
+            all_tasks = all_tasks[:limit]
+
+            if not all_tasks:
+                filter_desc = []
+                if task_type and task_type != 'all':
+                    filter_desc.append(f'type: {task_type}')
+                if status_filter and status_filter != 'all':
+                    filter_desc.append(f'status: {status_filter}')
+                filter_str = f' ({", ".join(filter_desc)})' if filter_desc else ''
+
                 return MCPToolCallResult(
                     content=[
                         {
                             'type': 'text',
-                            'text': f'❌ Task not found: {task_id}\n\nThis task may have expired or the task ID is invalid.',
+                            'text': f'No background tasks found{filter_str}.\n\n'
+                            'Tasks are created when you run operations like:\n'
+                            '- Tag consolidation and retagging\n'
+                            '- Collection reindexing\n'
+                            '- Bulk PDF processing\n'
+                            '- Discovery searches',
                         }
-                    ],
-                    isError=True,
+                    ]
                 )
 
-            # Build response based on status
-            response_text = f'**Task Status: {task.name}**\n\n'
-            response_text += f'**Task ID:** `{task_id}`\n'
-            response_text += f'**Status:** {task.status.value.upper()}\n'
-            response_text += (
-                f'**Created:** {task.created_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
-            )
+            # Build summary response
+            response_text = '**Background Tasks**\n\n'
 
-            if task.started_at:
-                response_text += f'**Started:** {task.started_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
+            # Group by status
+            running = [t for t in all_tasks if t.status == TaskStatus.RUNNING]
+            pending = [t for t in all_tasks if t.status == TaskStatus.PENDING]
+            completed = [t for t in all_tasks if t.status == TaskStatus.COMPLETED]
+            failed = [t for t in all_tasks if t.status == TaskStatus.FAILED]
 
-            if task.status == TaskStatus.RUNNING:
-                # Show running status
-                if task.started_at:
-                    elapsed = task.started_at.timestamp() - task.created_at.timestamp()
-                    response_text += f'**Running for:** {elapsed:.1f} seconds\n\n'
-                response_text += '⏳ **The task is currently running...**\n'
-                response_text += 'Check again in a few moments for completion status.'
+            if running:
+                response_text += '**Currently Running:**\n'
+                for task in running:
+                    elapsed = ''
+                    if task.started_at:
+                        from datetime import datetime, timezone
+                        now = datetime.now(timezone.utc)
+                        elapsed_sec = (now - task.started_at).total_seconds()
+                        elapsed = f' ({elapsed_sec:.0f}s)'
+                    response_text += f'  - {task.name}{elapsed}\n'
+                    response_text += f'    ID: `{task.task_id[:8]}...`\n'
+                response_text += '\n'
 
-            elif task.status == TaskStatus.COMPLETED:
-                # Show completion with results
-                if task.completed_at and task.started_at:
-                    duration = (
-                        task.completed_at.timestamp() - task.started_at.timestamp()
-                    )
-                    response_text += f'**Completed:** {task.completed_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
-                    response_text += f'**Duration:** {duration:.2f} seconds\n\n'
+            if pending:
+                response_text += '**Pending:**\n'
+                for task in pending:
+                    response_text += f'  - {task.name}\n'
+                    response_text += f'    ID: `{task.task_id[:8]}...`\n'
+                response_text += '\n'
 
-                response_text += '✅ **Task completed successfully!**\n\n'
+            if completed:
+                response_text += '**Recently Completed:**\n'
+                for task in completed[:5]:  # Show last 5 completed
+                    duration = ''
+                    if task.completed_at and task.started_at:
+                        dur_sec = (task.completed_at - task.started_at).total_seconds()
+                        duration = f' ({dur_sec:.1f}s)'
+                    response_text += f'  - {task.name}{duration}\n'
+                if len(completed) > 5:
+                    response_text += f'  ... and {len(completed) - 5} more\n'
+                response_text += '\n'
 
-                # Show results if available
-                if task.result:
-                    result = task.result
-                    response_text += '**Results:**\n'
-                    response_text += f'  - Articles processed: {result.get("articles_processed", 0)}\n'
-                    response_text += (
-                        f'  - Articles updated: {result.get("articles_updated", 0)}\n'
-                    )
-                    response_text += (
-                        f'  - Tags consolidated: {result.get("tags_consolidated", 0)}\n'
-                    )
-                    response_text += (
-                        f'  - Additional tags added: {result.get("tags_added", 0)}\n'
-                    )
-                    response_text += f'  - Original tag count: {result.get("original_tag_count", 0)}\n'
-                    response_text += (
-                        f'  - Final tag count: {result.get("final_tag_count", 0)}\n\n'
-                    )
+            if failed:
+                response_text += '**Failed:**\n'
+                for task in failed[:3]:  # Show last 3 failed
+                    response_text += f'  - {task.name}\n'
+                    if task.error:
+                        error_preview = task.error[:50] + '...' if len(task.error) > 50 else task.error
+                        response_text += f'    Error: {error_preview}\n'
+                response_text += '\n'
 
-                    # Show consolidation mappings
-                    if result.get('consolidation_mappings'):
-                        mappings = result['consolidation_mappings']
-                        if mappings:
-                            response_text += '🔄 **Sample Tag Consolidations:**\n'
-                            for old_tag, new_tag in list(mappings.items())[:5]:
-                                response_text += f"  - '{old_tag}' → '{new_tag}'\n"
-
-                            if len(mappings) > 5:
-                                response_text += f'  ... and {len(mappings) - 5} more consolidations\n'
-
-            elif task.status == TaskStatus.FAILED:
-                # Show failure with error
-                if task.completed_at:
-                    response_text += f'**Failed at:** {task.completed_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
-
-                response_text += (
-                    f'\n❌ **Task failed with error:**\n```\n{task.error}\n```\n'
-                )
-
-            elif task.status == TaskStatus.PENDING:
-                response_text += '\n⏸️ **Task is pending and has not started yet.**'
+            response_text += f'Showing {len(all_tasks)} tasks. '
+            response_text += 'Use `task_id` parameter to get detailed info on a specific task.'
 
             return MCPToolCallResult(content=[{'type': 'text', 'text': response_text}])
 
         except Exception as e:
             return self.handle_error(e)
+
+    def _format_task_detail(self, task: BackgroundTask) -> str:
+        """Format detailed view for a single task."""
+        response_text = f'**Task Status: {task.name}**\n\n'
+        response_text += f'**Task ID:** `{task.task_id}`\n'
+        response_text += f'**Status:** {task.status.value.upper()}\n'
+        response_text += (
+            f'**Created:** {task.created_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
+        )
+
+        if task.started_at:
+            response_text += f'**Started:** {task.started_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
+
+        if task.status == TaskStatus.RUNNING:
+            # Show running status
+            if task.started_at:
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                elapsed = (now - task.started_at).total_seconds()
+                response_text += f'**Running for:** {elapsed:.1f} seconds\n\n'
+            response_text += 'The task is currently running...\n'
+            response_text += 'Check again in a few moments for completion status.'
+
+        elif task.status == TaskStatus.COMPLETED:
+            # Show completion with results
+            if task.completed_at and task.started_at:
+                duration = (
+                    task.completed_at.timestamp() - task.started_at.timestamp()
+                )
+                response_text += f'**Completed:** {task.completed_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
+                response_text += f'**Duration:** {duration:.2f} seconds\n\n'
+
+            response_text += 'Task completed successfully!\n\n'
+
+            # Show results if available
+            if task.result:
+                result = task.result
+                response_text += '**Results:**\n'
+
+                # Generic result display
+                for key, value in result.items():
+                    if key == 'consolidation_mappings' and isinstance(value, dict):
+                        if value:
+                            response_text += f'  - {key}: {len(value)} mappings\n'
+                    elif isinstance(value, (int, float, str, bool)):
+                        response_text += f'  - {key}: {value}\n'
+                    elif isinstance(value, list):
+                        response_text += f'  - {key}: {len(value)} items\n'
+
+                # Show consolidation mappings sample
+                if result.get('consolidation_mappings'):
+                    mappings = result['consolidation_mappings']
+                    if mappings:
+                        response_text += '\n**Sample Tag Consolidations:**\n'
+                        for old_tag, new_tag in list(mappings.items())[:5]:
+                            response_text += f"  - '{old_tag}' -> '{new_tag}'\n"
+
+                        if len(mappings) > 5:
+                            response_text += f'  ... and {len(mappings) - 5} more consolidations\n'
+
+        elif task.status == TaskStatus.FAILED:
+            # Show failure with error
+            if task.completed_at:
+                response_text += f'**Failed at:** {task.completed_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
+
+            response_text += (
+                f'\n**Task failed with error:**\n```\n{task.error}\n```\n'
+            )
+
+        elif task.status == TaskStatus.PENDING:
+            response_text += '\n**Task is pending and has not started yet.**'
+
+        return response_text

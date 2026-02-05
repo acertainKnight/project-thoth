@@ -53,7 +53,7 @@ class EvaluateArticleMCPTool(MCPTool):
                 )
 
             # Find the article
-            search_results = self.service_manager.rag.search(
+            search_results = await self.service_manager.rag.search_async(
                 query=article_identifier, k=1
             )
 
@@ -141,7 +141,13 @@ class EvaluateArticleMCPTool(MCPTool):
 
 
 class AnalyzeTopicMCPTool(MCPTool):
-    """MCP tool for analyzing a research topic across the knowledge base."""
+    """
+    MCP tool for analyzing a research topic across the knowledge base.
+    
+    **DEPRECATED**: This tool is deprecated. Use `answer_research_question` 
+    instead, which provides comprehensive synthesis with citations. This tool 
+    is no longer registered in the MCP tool registry.
+    """
 
     @property
     def name(self) -> str:
@@ -190,7 +196,7 @@ class AnalyzeTopicMCPTool(MCPTool):
             k = k_values.get(depth, max_papers)
 
             # Search for papers on this topic
-            search_results = self.service_manager.rag.search(query=topic, k=k)
+            search_results = await self.service_manager.rag.search_async(query=topic, k=k)
 
             if not search_results:
                 return MCPToolCallResult(
@@ -355,7 +361,7 @@ class FindRelatedPapersMCPTool(MCPTool):
             similarity_threshold = arguments.get('similarity_threshold', 0.1)
 
             # Find the target paper
-            target_results = self.service_manager.rag.search(
+            target_results = await self.service_manager.rag.search_async(
                 query=paper_identifier, k=1
             )
 
@@ -378,7 +384,7 @@ class FindRelatedPapersMCPTool(MCPTool):
             search_query = f'{target_title} {target_content[:500]}'
 
             # Search for related papers (get extra to filter out the target)
-            related_results = self.service_manager.rag.search(
+            related_results = await self.service_manager.rag.search_async(
                 query=search_query,
                 k=max_results + 5,  # Get extra results
             )
@@ -483,7 +489,13 @@ class FindRelatedPapersMCPTool(MCPTool):
 
 
 class GenerateResearchSummaryMCPTool(MCPTool):
-    """MCP tool for generating comprehensive research summaries."""
+    """
+    MCP tool for generating comprehensive research summaries.
+    
+    **DEPRECATED**: This tool is deprecated. Use `answer_research_question` 
+    instead, which provides better synthesis with citations. This tool is no 
+    longer registered in the MCP tool registry.
+    """
 
     @property
     def name(self) -> str:
@@ -539,7 +551,7 @@ class GenerateResearchSummaryMCPTool(MCPTool):
             include_citations = arguments.get('include_citations', True)
 
             # Search for relevant papers
-            search_results = self.service_manager.rag.search(
+            search_results = await self.service_manager.rag.search_async(
                 query=topic_or_query, k=max_papers
             )
 

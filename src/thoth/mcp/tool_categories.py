@@ -3,6 +3,26 @@ Tool categories for role-based filtering.
 
 This module defines which tools are available to each agent role,
 enabling the MCP server to expose only relevant tools per agent.
+
+DEPRECATED TOOLS (code kept but removed from registration):
+- process_pdf: Use PDF monitor service instead (download to monitored folder)
+- batch_process_pdfs: Use PDF monitor service instead
+- extract_pdf_metadata: Use PDF monitor service instead
+- analyze_topic: Redundant with answer_research_question
+- search_by_topic: Use search_articles instead
+- extract_article_insights: Redundant with get_article_details
+- get_article_full_content: Merged into get_article_details
+- find_articles_by_authors: Use search_articles with author filter
+- extract_citations: Merged into explore_citation_network
+- suggest_tags: Low value, rarely used
+- generate_research_summary: Redundant with answer_research_question
+- backup_collection: Admin task, not agent-facing
+- restore_collection_backup: Admin task, not agent-facing
+- export_article_data: Admin task, not agent-facing
+- delete_article: Too risky for agent use
+- thoth_web_search: Use Letta's built-in web search
+- All browser workflow tools: Complex, rarely used
+- Legacy query tools: Replaced by research_question tools
 """
 
 # Tool categories by function
@@ -24,8 +44,8 @@ TOOL_CATEGORIES = {
         "search_articles",
         "get_article_details",
         "collection_stats",
-        "delete_article",
         "update_article_metadata",
+        # DEPRECATED: "delete_article" - too risky for agent use
     ],
     
     # Deep analysis
@@ -33,77 +53,58 @@ TOOL_CATEGORIES = {
         "answer_research_question",
         "explore_citation_network",
         "compare_articles",
-        "extract_article_insights",
-        "get_article_full_content",
         "find_related_papers",
-        "analyze_topic",
-        "generate_research_summary",
         "evaluate_article",
         "get_citation_context",
-        "search_by_topic",
-        "find_articles_by_authors",
+        # DEPRECATED: "extract_article_insights" - redundant with get_article_details
+        # DEPRECATED: "get_article_full_content" - merged into get_article_details
+        # DEPRECATED: "analyze_topic" - redundant with answer_research_question
+        # DEPRECATED: "generate_research_summary" - redundant with answer_research_question
+        # DEPRECATED: "search_by_topic" - use search_articles instead
+        # DEPRECATED: "find_articles_by_authors" - use search_articles with author filter
     ],
     
     # Document processing
     "processing": [
-        "process_pdf",
-        "batch_process_pdfs",
         "download_pdf",
         "locate_pdf",
-        "validate_pdf_sources",
-        "extract_pdf_metadata",
+        # DEPRECATED: "process_pdf" - use PDF monitor service
+        # DEPRECATED: "batch_process_pdfs" - use PDF monitor service
+        # DEPRECATED: "validate_pdf_sources" - admin task
+        # DEPRECATED: "extract_pdf_metadata" - use PDF monitor service
     ],
     
     # Citation management
     "citation": [
         "format_citations",
         "export_bibliography",
-        "extract_citations",
+        # DEPRECATED: "extract_citations" - merged into explore_citation_network
     ],
     
     # Tag management
     "tagging": [
         "consolidate_tags",
-        "suggest_tags",
         "manage_tag_vocabulary",
         "consolidate_and_retag",
         "get_task_status",
+        # DEPRECATED: "suggest_tags" - low value
     ],
     
     # Data management
     "data": [
-        "backup_collection",
-        "export_article_data",
         "generate_reading_list",
         "sync_with_obsidian",
+        # DEPRECATED: "backup_collection" - admin task
+        # DEPRECATED: "export_article_data" - admin task
     ],
     
-    # Query management (legacy)
-    "query": [
-        "list_queries",
-        "create_query",
-        "get_query",
-        "update_query",
-        "delete_query",
-    ],
-    
-    # Browser workflows
-    "workflow": [
-        "create_browser_workflow",
-        "add_workflow_action",
-        "configure_search",
-        "execute_workflow",
-        "list_workflows",
-        "get_workflow_details",
-        "update_workflow_status",
-        "delete_workflow",
-    ],
-    
-    # Advanced RAG
+    # Advanced RAG (loaded via skill only)
     "rag": [
         "reindex_collection",
         "optimize_search",
         "create_custom_index",
+        "search_custom_index",
+        "list_custom_indexes",
     ],
     
     # Schema management
@@ -115,9 +116,11 @@ TOOL_CATEGORIES = {
         "validate_schema_file",
     ],
     
-    # Web search
-    "web": [
-        "web_search",
+    # Settings management (loaded via skill only)
+    "settings": [
+        "view_settings",
+        "update_settings",
+        "reset_settings",
     ],
     
     # Skills
@@ -126,6 +129,11 @@ TOOL_CATEGORIES = {
         "load_skill",
         "unload_skill",
     ],
+    
+    # DEPRECATED CATEGORIES (code kept but not registered):
+    # "query": Legacy query management - replaced by research_question tools
+    # "workflow": Browser workflow tools - complex, rarely used
+    # "web": thoth_web_search - use Letta's built-in web search
 }
 
 # Role-to-categories mapping
@@ -135,14 +143,16 @@ ROLE_TOOL_CATEGORIES = {
         "skills",        # Core: load skills for guidance
         "discovery",     # Find papers
         "collection",    # Browse collection
-        "query",         # Legacy query management
+        "processing",    # Download PDFs
+        "tagging",       # Tag management
+        "data",          # Reading lists, obsidian sync
     ],
     
     # Research Analyst: Deep analysis, synthesis, quality assessment
     "analyst": [
         "analysis",      # All deep analysis tools
         "collection",    # Need to access papers
-        "citation",      # Citation network
+        "citation",      # Citation formatting
     ],
     
     # Full access (for backward compatibility or admin)

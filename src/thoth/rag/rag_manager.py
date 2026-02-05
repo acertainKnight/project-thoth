@@ -282,6 +282,43 @@ class RAGManager:
             logger.error(f'Error indexing directory {directory}: {e}')
             raise
 
+    async def search_async(
+        self,
+        query: str,
+        k: int = 4,
+        filter: dict[str, Any] | None = None,
+        return_scores: bool = False,
+    ) -> list[Document] | list[tuple[Document, float]]:
+        """
+        Search for relevant documents (async version).
+        Use this from async contexts to avoid event loop conflicts.
+
+        Args:
+            query: Search query.
+            k: Number of results to return.
+            filter: Optional metadata filter.
+            return_scores: Whether to return relevance scores.
+
+        Returns:
+            List of documents or tuples of (document, score).
+        """
+        try:
+            if return_scores:
+                return await self.vector_store_manager.similarity_search_with_score_async(
+                    query=query,
+                    k=k,
+                    filter=filter,
+                )
+            else:
+                return await self.vector_store_manager.similarity_search_async(
+                    query=query,
+                    k=k,
+                    filter=filter,
+                )
+        except Exception as e:
+            logger.error(f'Error searching documents: {e}')
+            raise
+
     def search(
         self,
         query: str,
@@ -290,7 +327,7 @@ class RAGManager:
         return_scores: bool = False,
     ) -> list[Document] | list[tuple[Document, float]]:
         """
-        Search for relevant documents.
+        Search for relevant documents (sync wrapper).
 
         Args:
             query: Search query.

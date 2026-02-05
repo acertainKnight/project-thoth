@@ -6,7 +6,6 @@ tools:
   - search_articles
   - get_article_details
   - collection_stats
-  - search_by_topic
 ---
 
 # Knowledge Base Q&A
@@ -20,10 +19,9 @@ For knowledge base queries, use these tools:
 | Tool | Purpose |
 |------|---------|
 | `answer_research_question` | Primary Q&A with synthesis |
-| `search_articles` | Find specific papers |
+| `search_articles` | Find specific papers (supports topic filtering) |
 | `get_article_details` | Get paper metadata |
 | `collection_stats` | Check what's in the collection |
-| `search_by_topic` | Topic-based filtering |
 
 ## Quick Answer Workflow
 

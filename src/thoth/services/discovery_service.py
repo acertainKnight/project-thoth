@@ -496,14 +496,16 @@ class DiscoveryService(BaseService):
                 pdf_path = self.config.pdf_dir / f'{name_part}_{counter}.pdf'
                 counter += 1
 
-            # Download the PDF
+            # Download the PDF using httpx streaming
             self.logger.info(f'Downloading PDF from: {pdf_url}')
-            response = httpx.get(pdf_url, timeout=30, stream=True)
-            response.raise_for_status()
+            with httpx.stream(
+                'GET', pdf_url, timeout=30, follow_redirects=True
+            ) as response:
+                response.raise_for_status()
 
-            with open(pdf_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
+                with open(pdf_path, 'wb') as f:
+                    for chunk in response.iter_bytes(chunk_size=8192):
+                        f.write(chunk)
 
             self.logger.info(f'PDF downloaded successfully: {pdf_path}')
             return str(pdf_path)

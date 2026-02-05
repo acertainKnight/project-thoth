@@ -14,11 +14,18 @@ from ..base_tools import MCPTool, MCPToolCallResult
 
 
 class WebSearchMCPTool(MCPTool):
-    """MCP tool for searching the web using multiple search backends."""
+    """
+    MCP tool for searching the web using multiple search backends.
+    
+    **DEPRECATED**: This tool is deprecated. Use Letta's built-in `web_search` 
+    tool instead, which provides better integration with the agent framework. 
+    This tool is no longer registered in the MCP tool registry.
+    """
 
     @property
     def name(self) -> str:
-        return 'web_search'
+        # Renamed to avoid conflict with Letta's built-in web_search
+        return 'thoth_web_search'
 
     @property
     def description(self) -> str:

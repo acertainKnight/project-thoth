@@ -22,9 +22,14 @@ class AgentInitializationService:
 
     def __init__(self):
         """Initialize the agent initialization service."""
-        self.letta_base_url = os.getenv('LETTA_BASE_URL', 'http://localhost:8283')
+        # Check THOTH_LETTA_URL first (Docker), then LETTA_BASE_URL, then localhost
+        self.letta_base_url = (
+            os.getenv('THOTH_LETTA_URL') or 
+            os.getenv('LETTA_BASE_URL') or 
+            'http://localhost:8283'
+        )
         self.letta_api_key = os.getenv('LETTA_API_KEY', '')
-        self.embedding_model = config.rag.embedding_model  # openai/text-embedding-3-small
+        self.embedding_model = config.settings.rag.embedding_model  # openai/text-embedding-3-small
         
         self.headers = {'Content-Type': 'application/json'}
         if self.letta_api_key:
@@ -71,8 +76,7 @@ Always check `list_skills` if unsure which skill to use for a task.
                 'list_skills',
                 'load_skill',
                 'unload_skill',
-                'search_articles',
-            ],
+                'search_articles',            ],
             'memory_blocks': [
                 {
                     'label': 'persona',
@@ -224,7 +228,7 @@ Comparison Aspects:
         
         agent_ids = {}
         
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
             # Get all available tools
             available_tools = await self._get_all_tools(client)
             logger.info(f'   Found {len(available_tools)} available tools')
@@ -254,7 +258,7 @@ Comparison Aspects:
         """Get all available tool names from Letta."""
         try:
             response = await client.get(
-                f'{self.letta_base_url}/v1/tools',
+                f'{self.letta_base_url}/v1/tools/',
                 headers=self.headers
             )
             response.raise_for_status()
@@ -292,7 +296,7 @@ Comparison Aspects:
         """Find agent by name."""
         try:
             response = await client.get(
-                f'{self.letta_base_url}/v1/agents',
+                f'{self.letta_base_url}/v1/agents/',
                 headers=self.headers
             )
             response.raise_for_status()
@@ -373,22 +377,46 @@ Comparison Aspects:
         """Update agent's tools, persona, and memory blocks (preserves existing memory content)."""
         
         # Filter to only tools that exist
-        tool_names = [t for t in agent_config['tools'] if t in available_tools]
+        desired_tools = set(t for t in agent_config['tools'] if t in available_tools)
         
         # Update system prompt with actual agent_id
         updated_system = agent_config['description'].replace('{{AGENT_ID}}', agent_id)
         
         try:
-            # Update agent tools and system prompt
+            # Update agent system prompt (tools field not supported via PATCH)
             await client.patch(
                 f'{self.letta_base_url}/v1/agents/{agent_id}',
                 headers=self.headers,
-                json={
-                    'system': updated_system,
-                    'tools': tool_names
-                }
+                json={'system': updated_system}
             )
-            logger.debug(f'   Updated {agent_config["name"]} with {len(tool_names)} tools')
+            
+            # Get current agent tools
+            response = await client.get(
+                f'{self.letta_base_url}/v1/agents/{agent_id}',
+                headers=self.headers
+            )
+            agent_data = response.json()
+            current_tools = {t['name']: t['id'] for t in agent_data.get('tools', [])}
+            
+            # Get tool name to ID mapping for tools we want to attach
+            response = await client.get(
+                f'{self.letta_base_url}/v1/tools/',
+                headers=self.headers
+            )
+            all_tools = {t['name']: t['id'] for t in response.json()}
+            
+            # Attach missing tools
+            tools_to_attach = desired_tools - set(current_tools.keys())
+            for tool_name in tools_to_attach:
+                tool_id = all_tools.get(tool_name)
+                if tool_id:
+                    await client.patch(
+                        f'{self.letta_base_url}/v1/agents/{agent_id}/tools/attach/{tool_id}',
+                        headers=self.headers
+                    )
+            
+            if tools_to_attach:
+                logger.debug(f'   Attached {len(tools_to_attach)} tools to {agent_config["name"]}')
             
             # Check for missing memory blocks and add them
             await self._ensure_memory_blocks(client, agent_id, agent_config)

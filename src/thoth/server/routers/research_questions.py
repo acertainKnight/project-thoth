@@ -175,24 +175,40 @@ class ArticleMatchResponse(BaseModel):
     paper_id: UUID  # Changed from article_id after schema migration
     question_id: UUID
     relevance_score: float
-    matched_keywords: list[str]
-    matched_topics: list[str]
-    matched_authors: list[str]
+    matched_keywords: list[str] = Field(default_factory=list)
+    matched_topics: list[str] = Field(default_factory=list)
+    matched_authors: list[str] = Field(default_factory=list)
     discovered_via_source: Optional[str] = None  # noqa: UP007
-    is_viewed: bool
-    is_bookmarked: bool
+    is_viewed: bool = False
+    is_bookmarked: bool = False
     user_sentiment: Optional[str] = None  # noqa: UP007
     sentiment_recorded_at: Optional[datetime] = None  # noqa: UP007
-    matched_at: datetime
+    matched_at: Optional[datetime] = None  # noqa: UP007
     # Paper details (from paper_metadata)
     doi: Optional[str] = None  # noqa: UP007
-    title: str
-    authors: list[str]
+    title: str = Field(default='Untitled')
+    authors: list[str] = Field(default_factory=list)
     abstract: Optional[str] = None  # noqa: UP007
     publication_date: Optional[datetime] = None  # noqa: UP007
     journal: Optional[str] = None  # noqa: UP007
     url: Optional[str] = None  # noqa: UP007
     pdf_url: Optional[str] = None  # noqa: UP007
+
+    @field_validator('matched_keywords', 'matched_topics', 'matched_authors', 'authors', mode='before')
+    @classmethod
+    def coerce_to_list(cls, v):
+        """Ensure list fields are never None."""
+        if v is None:
+            return []
+        return v
+
+    @field_validator('title', mode='before')
+    @classmethod
+    def coerce_title(cls, v):
+        """Ensure title is never None."""
+        if v is None:
+            return 'Untitled'
+        return v
 
     class Config:
         from_attributes = True
@@ -349,6 +365,7 @@ async def create_research_question(
         question_id = await service.create_research_question(
             user_id=user_id,
             name=question.name,
+            description=question.description,
             keywords=question.keywords,
             topics=question.topics,
             authors=question.authors,

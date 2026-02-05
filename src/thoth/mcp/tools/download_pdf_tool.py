@@ -36,7 +36,7 @@ class DownloadPdfMCPTool(MCPTool):
                 },
                 'output_directory': {
                     'type': 'string',
-                    'description': 'Directory to save the PDF file (defaults to ./downloaded_pdfs)',
+                    'description': 'Directory to save the PDF file (defaults to configured vault PDF directory from settings)',
                 },
                 'filename': {
                     'type': 'string',
@@ -90,8 +90,10 @@ class DownloadPdfMCPTool(MCPTool):
                 response_text += '**Type:** Article identifier\n'
 
                 try:
-                    # Search for the article in our knowledge base
-                    search_results = self.service_manager.rag.search(query=source, k=1)
+                    # Search for the article in our knowledge base (use async version)
+                    search_results = await self.service_manager.rag.search_async(
+                        query=source, k=1
+                    )
 
                     if search_results:
                         article = search_results[0]
@@ -159,7 +161,9 @@ class DownloadPdfMCPTool(MCPTool):
             if output_directory:
                 output_path = Path(output_directory)
             else:
-                output_path = Path.cwd() / 'downloaded_pdfs'
+                # Use configured vault PDF directory from settings
+                from thoth.config import config
+                output_path = Path(config.pdf_dir)
 
             output_path.mkdir(parents=True, exist_ok=True)
             response_text += f'**Output Directory:** {output_path}\n'
@@ -217,40 +221,52 @@ class DownloadPdfMCPTool(MCPTool):
                     'Accept': 'application/pdf,application/octet-stream,*/*',
                 }
 
-                # Make the request
-                response = httpx.get(
-                    download_url, headers=headers, timeout=timeout, stream=True
-                )
-                response.raise_for_status()
-
-                # Check if response is actually a PDF
-                content_type = response.headers.get('content-type', '').lower()
-                if 'pdf' not in content_type and 'octet-stream' not in content_type:
-                    # Try to detect PDF from content
-                    first_chunk = next(response.iter_content(chunk_size=1024), b'')
-                    if not first_chunk.startswith(b'%PDF'):
-                        return MCPToolCallResult(
-                            content=[
-                                {
-                                    'type': 'text',
-                                    'text': f'{response_text}**Error:** URL does not appear to serve a PDF file.\n\n'
-                                    f'**Content-Type:** {content_type}\n'
-                                    f'**URL:** {download_url}\n\n'
-                                    f'**Tip:** The URL might redirect to a landing page. Try finding the direct PDF link.',
-                                }
-                            ],
-                            isError=True,
-                        )
-
-                # Download with progress tracking
-                total_size = int(response.headers.get('content-length', 0))
+                # Download with streaming using httpx.stream() context manager
+                total_size = 0
                 downloaded = 0
 
-                with open(full_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                            downloaded += len(chunk)
+                with httpx.stream(
+                    'GET',
+                    download_url,
+                    headers=headers,
+                    timeout=timeout,
+                    follow_redirects=True,
+                ) as response:
+                    response.raise_for_status()
+
+                    # Check if response is actually a PDF
+                    content_type = response.headers.get('content-type', '').lower()
+                    total_size = int(response.headers.get('content-length', 0))
+
+                    # Read first chunk to verify PDF content
+                    first_chunk = b''
+                    with open(full_path, 'wb') as f:
+                        for chunk in response.iter_bytes(chunk_size=8192):
+                            if chunk:
+                                if not first_chunk:
+                                    first_chunk = chunk
+                                    # Verify PDF magic bytes if content-type is ambiguous
+                                    if (
+                                        'pdf' not in content_type
+                                        and 'octet-stream' not in content_type
+                                        and not first_chunk.startswith(b'%PDF')
+                                    ):
+                                        f.close()
+                                        full_path.unlink()  # Remove partial file
+                                        return MCPToolCallResult(
+                                            content=[
+                                                {
+                                                    'type': 'text',
+                                                    'text': f'{response_text}**Error:** URL does not appear to serve a PDF file.\n\n'
+                                                    f'**Content-Type:** {content_type}\n'
+                                                    f'**URL:** {download_url}\n\n'
+                                                    f'**Tip:** The URL might redirect to a landing page. Try finding the direct PDF link.',
+                                                }
+                                            ],
+                                            isError=True,
+                                        )
+                                f.write(chunk)
+                                downloaded += len(chunk)
 
                 # Verify download
                 final_size = full_path.stat().st_size

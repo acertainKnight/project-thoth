@@ -145,10 +145,7 @@ class ListSkillsMCPTool(MCPTool):
             return MCPToolCallResult(content=[{'type': 'text', 'text': '\n'.join(lines)}])
 
         except Exception as e:
-            return MCPToolCallResult(
-                content=[{'type': 'text', 'text': f'Error listing skills: {e!s}'}],
-                isError=True,
-            )
+            return self.handle_error(e)
 
 
 class LoadSkillMCPTool(MCPTool):
@@ -252,6 +249,7 @@ class LoadSkillMCPTool(MCPTool):
                     results.append(f"✓ Already had: {', '.join(tool_attachment_result['already_attached'])}")
                 if tool_attachment_result["not_found"]:
                     results.append(f"⚠ Not found: {', '.join(tool_attachment_result['not_found'])}")
+                    logger.warning(f"Tools not found in Letta: {tool_attachment_result['not_found']}")
                 results.append("--- END TOOL ATTACHMENT ---\n")
             elif all_tools_to_attach and not agent_id:
                 results.append("\n⚠ Note: agent_id not provided. Tools could not be auto-attached.")
@@ -281,10 +279,7 @@ class LoadSkillMCPTool(MCPTool):
 
         except Exception as e:
             logger.error(f"Error loading skills: {e}")
-            return MCPToolCallResult(
-                content=[{'type': 'text', 'text': f'Error loading skills: {e!s}'}],
-                isError=True,
-            )
+            return self.handle_error(e)
 
 
 class UnloadSkillMCPTool(MCPTool):
@@ -382,7 +377,4 @@ class UnloadSkillMCPTool(MCPTool):
 
         except Exception as e:
             logger.error(f"Error unloading skills: {e}")
-            return MCPToolCallResult(
-                content=[{'type': 'text', 'text': f'Error unloading skills: {e!s}'}],
-                isError=True,
-            )
+            return self.handle_error(e)

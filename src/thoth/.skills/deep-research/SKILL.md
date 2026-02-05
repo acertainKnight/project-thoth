@@ -5,15 +5,11 @@ tools:
   - answer_research_question
   - explore_citation_network
   - compare_articles
-  - extract_article_insights
-  - get_article_full_content
   - find_related_papers
-  - analyze_topic
-  - generate_research_summary
   - evaluate_article
   - get_citation_context
   - search_articles
-  - find_articles_by_authors
+  - get_article_details
 ---
 
 # Deep Research & Literature Synthesis
@@ -26,15 +22,14 @@ For deep research, use these analysis tools:
 
 | Tool | Purpose |
 |------|---------|
-| `answer_research_question` | Multi-source synthesis |
+| `answer_research_question` | Multi-source synthesis with citations |
 | `explore_citation_network` | Citation graph analysis |
 | `compare_articles` | Side-by-side comparison |
-| `extract_article_insights` | Deep paper analysis |
-| `get_article_full_content` | Full text access |
 | `find_related_papers` | Semantic similarity |
-| `analyze_topic` | Topic-level analysis |
-| `generate_research_summary` | Literature review |
 | `evaluate_article` | Quality scoring |
+| `get_citation_context` | Citation relationship context |
+| `search_articles` | Find papers in knowledge base |
+| `get_article_details` | Get full article metadata and content |
 
 **Note**: These are analysis-heavy tools. For simpler queries, use the `knowledge-base-qa` skill instead.
 
@@ -53,23 +48,18 @@ Use deep research when user asks for:
 ### Single Paper Deep Dive
 
 ```
-1. Get full content
-   get_article_full_content(article_id="[paper ID]")
+1. Get full article details
+   get_article_details(article_id="[paper ID]")
+   → Returns full metadata, abstract, content, and analysis
 
-2. Extract structured insights
-   extract_article_insights(
-     article_id="[paper ID]",
-     aspects=["methodology", "findings", "limitations", "contributions"]
-   )
-
-3. Explore citation context
+2. Explore citation context
    explore_citation_network(
      article_id="[paper ID]",
      direction="both",  # cited_by and references
      depth=1
    )
 
-4. Assess quality
+3. Assess quality
    evaluate_article(
      article_id="[paper ID]",
      criteria=["novelty", "methodology", "impact"]
@@ -95,25 +85,19 @@ Use deep research when user asks for:
 ### Literature Synthesis
 
 ```
-1. Gather relevant papers
+1. Answer research question with synthesis
    answer_research_question(
      question="[topic question]",
      max_sources=20,
      min_relevance=0.7
    )
+   → Returns comprehensive answer with citations from knowledge base
 
-2. Analyze topic structure
-   analyze_topic(
-     topic="[research area]",
-     include_trends=true,
-     time_range="5 years"
-   )
-
-3. Generate comprehensive summary
-   generate_research_summary(
-     topic="[area]",
-     paper_ids=["list of relevant IDs"],
-     summary_type="literature_review"
+2. Explore citation relationships
+   explore_citation_network(
+     article_id="[key paper ID]",
+     direction="both",
+     depth=2
    )
 ```
 
@@ -177,17 +161,18 @@ send_message_to_agent(
 1. search_articles(query="Attention Is All You Need Transformer")
    → Find paper ID
 
-2. get_article_full_content(article_id="[paper ID]")
+2. get_article_details(article_id="[paper ID]")
+   → Get full metadata, abstract, and content
 
-3. extract_article_insights(
-     article_id="[paper ID]",
-     aspects=["architecture", "methodology", "results", "impact"]
-   )
-
-4. explore_citation_network(
+3. explore_citation_network(
      article_id="[paper ID]",
      direction="cited_by",
      depth=1
+   )
+
+4. evaluate_article(
+     article_id="[paper ID]",
+     criteria=["novelty", "methodology", "impact"]
    )
 
 5. Response:
@@ -208,11 +193,8 @@ send_message_to_agent(
    - [X] citations
    - Spawned: BERT, GPT, T5, etc.
    
-   **Limitations acknowledged**:
-   - [list from paper]
-   
    **Research lineage**:
-   - Builds on: [references]
+   - Builds on: [references from citation network]
    - Influenced: [top citing papers]"
 ```
 
@@ -265,23 +247,19 @@ send_message_to_agent(
      question="What are the main approaches to making transformers more efficient?",
      max_sources=25
    )
+   → Returns comprehensive synthesis with citations
 
-2. analyze_topic(
-     topic="efficient transformers",
-     include_trends=true,
-     time_range="3 years"
-   )
+2. search_articles(query="efficient transformers", limit=20)
+   → Find key papers in the knowledge base
 
-3. generate_research_summary(
-     topic="efficient transformer architectures",
-     summary_type="literature_review"
-   )
+3. For key papers, explore citations:
+   explore_citation_network(article_id="[key paper]", direction="both")
 
 4. Response:
    "## Literature Review: Efficient Transformers
    
    ### 1. Introduction
-   [Context and importance]
+   [Context and importance from answer_research_question]
    
    ### 2. Taxonomy of Approaches
    
@@ -298,18 +276,14 @@ send_message_to_agent(
    - FlashAttention [cite]
    - Memory-efficient attention [cite]
    
-   ### 3. Comparative Analysis
-   [Table comparing approaches]
+   ### 3. Citation Analysis
+   [Key papers and their relationships from explore_citation_network]
    
    ### 4. Research Gaps
-   - [Gap 1]
-   - [Gap 2]
-   
-   ### 5. Future Directions
-   [Emerging trends]
+   [Identified from synthesis]
    
    ### References
-   [Full citation list]"
+   [Citations from answer_research_question]"
 ```
 
 ## Quality Standards

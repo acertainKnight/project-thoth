@@ -7,7 +7,8 @@ generic CRUD methods, caching support, and error handling.
 
 import json  # noqa: I001
 from datetime import datetime, date  # noqa: F401
-from typing import Any, Dict, List, Optional, TypeVar, Generic  # noqa: UP035
+from typing import Any, Dict, List, Optional, TypeVar, Generic, Union  # noqa: UP035
+from uuid import UUID
 from loguru import logger
 from cachetools import TTLCache
 from dateutil import parser as dateparser
@@ -108,13 +109,19 @@ class BaseRepository(Generic[T]):
             columns = list(data.keys())
             placeholders = [f'${i + 1}' for i in range(len(columns))]
 
-            # Serialize lists and dicts to JSON for JSONB columns
-            # Parse ISO datetime strings to date objects for DATE columns
+            # Handle data types appropriately:
+            # - Lists: pass directly for PostgreSQL array columns (text[], integer[])
+            # - Dicts: serialize to JSON for JSONB columns
+            # - Date strings: parse to date objects for DATE columns
             values = []
             for col in columns:
                 val = data[col]
-                if isinstance(val, (list, dict)):  # noqa: UP038
+                if isinstance(val, dict):
+                    # Only dicts get JSON serialized (for JSONB columns)
                     values.append(json.dumps(val))
+                elif isinstance(val, list):
+                    # Lists pass through directly for PostgreSQL array columns
+                    values.append(val)
                 elif isinstance(val, str) and (
                     'publication_date' in col or 'date' in col.lower()
                 ):
@@ -145,12 +152,12 @@ class BaseRepository(Generic[T]):
             logger.error(f'Failed to create {self.table_name} record: {e}')
             return None
 
-    async def get_by_id(self, record_id: int) -> Optional[Dict[str, Any]]:  # noqa: UP006, UP007
+    async def get_by_id(self, record_id: Union[int, UUID]) -> Optional[Dict[str, Any]]:  # noqa: UP006, UP007
         """
         Get a record by ID.
 
         Args:
-            record_id: Record ID
+            record_id: Record ID (int or UUID)
 
         Returns:
             Optional[Dict[str, Any]]: Record data or None
@@ -175,7 +182,7 @@ class BaseRepository(Generic[T]):
             logger.error(f'Failed to get {self.table_name} by ID {record_id}: {e}')
             return None
 
-    async def update(self, record_id: int, data: Dict[str, Any]) -> bool:  # noqa: UP006
+    async def update(self, record_id: Union[int, UUID], data: Dict[str, Any]) -> bool:  # noqa: UP006
         """
         Update a record.
 
@@ -193,12 +200,15 @@ class BaseRepository(Generic[T]):
             # Build SET clause
             set_clauses = [f'{col} = ${i + 2}' for i, col in enumerate(data.keys())]
 
-            # Serialize lists and dicts to JSON for JSONB columns
+            # Handle data types appropriately:
+            # - Dicts: serialize to JSON for JSONB columns
+            # - Lists: pass directly for PostgreSQL array columns
             serialized_values = []
             for val in data.values():
-                if isinstance(val, (list, dict)):  # noqa: UP038
+                if isinstance(val, dict):
                     serialized_values.append(json.dumps(val))
                 else:
+                    # Lists and other types pass through directly
                     serialized_values.append(val)
 
             values = [record_id] + serialized_values  # noqa: RUF005
@@ -221,12 +231,12 @@ class BaseRepository(Generic[T]):
             logger.error(f'Failed to update {self.table_name} record {record_id}: {e}')
             return False
 
-    async def delete(self, record_id: int) -> bool:
+    async def delete(self, record_id: Union[int, UUID]) -> bool:
         """
         Delete a record.
 
         Args:
-            record_id: Record ID
+            record_id: Record ID (int or UUID)
 
         Returns:
             bool: True if successful, False otherwise
@@ -294,12 +304,12 @@ class BaseRepository(Generic[T]):
             logger.error(f'Failed to count {self.table_name} records: {e}')
             return 0
 
-    async def exists(self, record_id: int) -> bool:
+    async def exists(self, record_id: Union[int, UUID]) -> bool:
         """
         Check if a record exists.
 
         Args:
-            record_id: Record ID
+            record_id: Record ID (int or UUID)
 
         Returns:
             bool: True if exists, False otherwise

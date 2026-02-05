@@ -473,28 +473,6 @@ services:
       disable: true  # Dashboard is a background monitoring service, doesn't expose HTTP endpoints
 
 
-  # ==============================================================================
-  # Development Tools
-  # ==============================================================================
-
-  # Development proxy for easy access (optional)
-  nginx-dev:
-    profiles: ["microservices"]
-    image: nginx:alpine
-    container_name: thoth-dev-nginx
-    volumes:
-      - ./docker/nginx/dev.conf:/etc/nginx/nginx.conf:ro
-    ports:
-      - "80:80"
-      - "443:443"
-    networks:
-      - thoth-dev-network
-    depends_on:
-      - thoth-api
-      - thoth-mcp
-      - thoth-discovery
-    restart: unless-stopped
-
 # ==============================================================================
 # Development Volumes
 # ==============================================================================

@@ -64,14 +64,14 @@ class FormatCitationsMCPTool(MCPTool):
 
             if search_query:
                 # Use search query to find articles
-                search_results = self.service_manager.rag.search(
+                search_results = await self.service_manager.rag.search_async(
                     query=search_query, k=max_results
                 )
                 articles_to_format = search_results
             elif articles:
                 # Find specific articles
                 for article_id in articles:
-                    search_results = self.service_manager.rag.search(
+                    search_results = await self.service_manager.rag.search_async(
                         query=article_id, k=1
                     )
                     if search_results:
@@ -285,12 +285,12 @@ class ExportBibliographyMCPTool(MCPTool):
 
             # Get articles to export
             if search_query:
-                articles = self.service_manager.rag.search(
+                articles = await self.service_manager.rag.search_async(
                     query=search_query, k=max_results
                 )
                 source_description = f"matching '{search_query}'"
             else:
-                articles = self.service_manager.rag.search(query='', k=max_results)
+                articles = await self.service_manager.rag.search_async(query='', k=max_results)
                 source_description = 'in collection'
 
             if not articles:
@@ -530,7 +530,13 @@ class ExportBibliographyMCPTool(MCPTool):
 
 
 class ExtractCitationsMCPTool(MCPTool):
-    """MCP tool for extracting and analyzing citation networks."""
+    """
+    MCP tool for extracting and analyzing citation networks.
+    
+    **DEPRECATED**: This tool is deprecated. Use `explore_citation_network` 
+    which provides more comprehensive citation analysis. This tool is no longer 
+    registered in the MCP tool registry.
+    """
 
     @property
     def name(self) -> str:
@@ -579,7 +585,7 @@ class ExtractCitationsMCPTool(MCPTool):
             # max_depth = arguments.get('max_depth', 2)  # TODO: implement depth
 
             # Find the target article
-            search_results = self.service_manager.rag.search(
+            search_results = await self.service_manager.rag.search_async(
                 query=article_identifier, k=1
             )
 
@@ -634,7 +640,7 @@ class ExtractCitationsMCPTool(MCPTool):
 
                 if include_inbound:
                     # Try to find articles that cite this one
-                    citing_articles = self.service_manager.rag.search(
+                    citing_articles = await self.service_manager.rag.search_async(
                         query=f'"{title}"', k=5
                     )
                     citing_articles = [

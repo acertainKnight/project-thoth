@@ -4,6 +4,10 @@ MCP-compliant browser workflow management tools.
 This module provides MCP-compliant tools for AI agents to create and manage
 browser-based discovery workflows, including action configuration, search setup,
 execution, and monitoring.
+
+**DEPRECATED MODULE**: All browser workflow tools are deprecated. Browser 
+workflows are complex and rarely used. These tools are no longer registered in 
+the MCP tool registry.
 """
 
 from typing import Any  # noqa: I001

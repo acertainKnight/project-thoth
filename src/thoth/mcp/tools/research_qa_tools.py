@@ -70,8 +70,9 @@ class AnswerResearchQuestionMCPTool(MCPTool):
             # Perform semantic search
             rag_service = self.service_manager.rag
             if not rag_service:
-                return self.handle_error(
-                    'RAG service not available (requires embeddings extras)'
+                return MCPToolCallResult(
+                    content=[{"type": "text", "text": "RAG service not available (requires embeddings extras)"}],
+                    isError=True
                 )
 
             search_results = await rag_service.search(
@@ -82,8 +83,7 @@ class AnswerResearchQuestionMCPTool(MCPTool):
 
             if not search_results:
                 return MCPToolCallResult(
-                    success=True,
-                    content=f'No relevant articles found for question: "{question}"'
+                    content=[{"type": "text", "text": f'No relevant articles found for question: "{question}"'}]
                 )
 
             # Build comprehensive response
@@ -136,12 +136,11 @@ class AnswerResearchQuestionMCPTool(MCPTool):
                         response_parts.append(f'   DOI: {doi}')
 
             return MCPToolCallResult(
-                success=True,
-                content='\n'.join(response_parts)
+                content=[{"type": "text", "text": '\n'.join(response_parts)}]
             )
 
         except Exception as e:
-            return self.handle_error(str(e))
+            return self.handle_error(e)
 
 
 class ExploreCitationNetworkMCPTool(MCPTool):
@@ -194,7 +193,10 @@ class ExploreCitationNetworkMCPTool(MCPTool):
 
             citation_service = self.service_manager.citation
             if not citation_service:
-                return self.handle_error('Citation service not available')
+                return MCPToolCallResult(
+                    content=[{"type": "text", "text": "Citation service not available"}],
+                    isError=True
+                )
 
             # Get citation network
             network = await citation_service.get_citation_network(
@@ -204,8 +206,7 @@ class ExploreCitationNetworkMCPTool(MCPTool):
 
             if not network:
                 return MCPToolCallResult(
-                    success=True,
-                    content=f'No citation network found for article: {article_id}'
+                    content=[{"type": "text", "text": f'No citation network found for article: {article_id}'}]
                 )
 
             # Build response
@@ -254,12 +255,11 @@ class ExploreCitationNetworkMCPTool(MCPTool):
                     response_parts.append(f'- Citation velocity: {metrics.get("citation_velocity", 0):.2f} citations/year')
 
             return MCPToolCallResult(
-                success=True,
-                content='\n'.join(response_parts)
+                content=[{"type": "text", "text": '\n'.join(response_parts)}]
             )
 
         except Exception as e:
-            return self.handle_error(str(e))
+            return self.handle_error(e)
 
 
 class CompareArticlesMCPTool(MCPTool):
@@ -309,11 +309,17 @@ class CompareArticlesMCPTool(MCPTool):
             dimensions = arguments.get('compare_dimensions', ['methodology', 'findings', 'citations', 'metrics'])
 
             if len(article_ids) < 2 or len(article_ids) > 5:
-                return self.handle_error('Must provide 2-5 articles to compare')
+                return MCPToolCallResult(
+                    content=[{"type": "text", "text": "Must provide 2-5 articles to compare"}],
+                    isError=True
+                )
 
             article_service = self.service_manager.article
             if not article_service:
-                return self.handle_error('Article service not available')
+                return MCPToolCallResult(
+                    content=[{"type": "text", "text": "Article service not available"}],
+                    isError=True
+                )
 
             # Fetch all articles
             articles = []
@@ -323,7 +329,10 @@ class CompareArticlesMCPTool(MCPTool):
                     articles.append(article)
 
             if len(articles) < 2:
-                return self.handle_error(f'Could only retrieve {len(articles)} articles for comparison')
+                return MCPToolCallResult(
+                    content=[{"type": "text", "text": f'Could only retrieve {len(articles)} articles for comparison'}],
+                    isError=True
+                )
 
             # Build comparison table
             response_parts = []
@@ -363,16 +372,21 @@ class CompareArticlesMCPTool(MCPTool):
                     response_parts.append(abstract + '...\n')
 
             return MCPToolCallResult(
-                success=True,
-                content='\n'.join(response_parts)
+                content=[{"type": "text", "text": '\n'.join(response_parts)}]
             )
 
         except Exception as e:
-            return self.handle_error(str(e))
+            return self.handle_error(e)
 
 
 class ExtractArticleInsightsMCPTool(MCPTool):
-    """Extract deep insights from a specific article."""
+    """
+    Extract deep insights from a specific article.
+    
+    **DEPRECATED**: This tool is deprecated. Use `get_article_details` to 
+    retrieve full article content and metadata. This tool is no longer 
+    registered in the MCP tool registry.
+    """
 
     @property
     def name(self) -> str:
@@ -418,12 +432,18 @@ class ExtractArticleInsightsMCPTool(MCPTool):
 
             article_service = self.service_manager.article
             if not article_service:
-                return self.handle_error('Article service not available')
+                return MCPToolCallResult(
+                    content=[{"type": "text", "text": "Article service not available"}],
+                    isError=True
+                )
 
             # Get article with full content
             article = await article_service.get_article_with_content(article_id)
             if not article:
-                return self.handle_error(f'Article not found: {article_id}')
+                return MCPToolCallResult(
+                    content=[{"type": "text", "text": f'Article not found: {article_id}'}],
+                    isError=True
+                )
 
             # Build insights response
             response_parts = []
@@ -480,16 +500,21 @@ class ExtractArticleInsightsMCPTool(MCPTool):
                 response_parts.append(f'- Cited by {citation_count} papers')
 
             return MCPToolCallResult(
-                success=True,
-                content='\n'.join(response_parts)
+                content=[{"type": "text", "text": '\n'.join(response_parts)}]
             )
 
         except Exception as e:
-            return self.handle_error(str(e))
+            return self.handle_error(e)
 
 
 class SearchByTopicMCPTool(MCPTool):
-    """Search articles by research topic with semantic understanding."""
+    """
+    Search articles by research topic with semantic understanding.
+    
+    **DEPRECATED**: This tool is deprecated. Use `search_articles` which 
+    supports topic filtering via tags and queries. This tool is no longer 
+    registered in the MCP tool registry.
+    """
 
     @property
     def name(self) -> str:
@@ -548,7 +573,10 @@ class SearchByTopicMCPTool(MCPTool):
 
             rag_service = self.service_manager.rag
             if not rag_service:
-                return self.handle_error('RAG service not available (requires embeddings extras)')
+                return MCPToolCallResult(
+                    content=[{"type": "text", "text": "RAG service not available (requires embeddings extras)"}],
+                    isError=True
+                )
 
             # Build filter
             search_filter = {}
@@ -568,8 +596,7 @@ class SearchByTopicMCPTool(MCPTool):
 
             if not results:
                 return MCPToolCallResult(
-                    success=True,
-                    content=f'No articles found for topic: "{topic}"'
+                    content=[{"type": "text", "text": f'No articles found for topic: "{topic}"'}]
                 )
 
             # Build response
@@ -598,16 +625,21 @@ class SearchByTopicMCPTool(MCPTool):
                     response_parts.append(f'\n{snippet}...\n')
 
             return MCPToolCallResult(
-                success=True,
-                content='\n'.join(response_parts)
+                content=[{"type": "text", "text": '\n'.join(response_parts)}]
             )
 
         except Exception as e:
-            return self.handle_error(str(e))
+            return self.handle_error(e)
 
 
 class GetArticleFullContentMCPTool(MCPTool):
-    """Retrieve complete article content including full text."""
+    """
+    Retrieve complete article content including full text.
+    
+    **DEPRECATED**: This tool is deprecated. Use `get_article_details` which 
+    provides the same functionality with better metadata support. This tool is 
+    no longer registered in the MCP tool registry.
+    """
 
     @property
     def name(self) -> str:
@@ -650,12 +682,18 @@ class GetArticleFullContentMCPTool(MCPTool):
 
             article_service = self.service_manager.article
             if not article_service:
-                return self.handle_error('Article service not available')
+                return MCPToolCallResult(
+                    content=[{"type": "text", "text": "Article service not available"}],
+                    isError=True
+                )
 
             # Get article with full content
             article = await article_service.get_article_with_content(article_id)
             if not article:
-                return self.handle_error(f'Article not found: {article_id}')
+                return MCPToolCallResult(
+                    content=[{"type": "text", "text": f'Article not found: {article_id}'}],
+                    isError=True
+                )
 
             # Build full content response
             response_parts = []
@@ -696,16 +734,21 @@ class GetArticleFullContentMCPTool(MCPTool):
                     response_parts.append(full_text)
 
             return MCPToolCallResult(
-                success=True,
-                content='\n'.join(response_parts)
+                content=[{"type": "text", "text": '\n'.join(response_parts)}]
             )
 
         except Exception as e:
-            return self.handle_error(str(e))
+            return self.handle_error(e)
 
 
 class FindArticlesByAuthorsMCPTool(MCPTool):
-    """Find all articles by specific author(s)."""
+    """
+    Find all articles by specific author(s).
+    
+    **DEPRECATED**: This tool is deprecated. Use `search_articles` with the 
+    `author` parameter for author-based filtering. This tool is no longer 
+    registered in the MCP tool registry.
+    """
 
     @property
     def name(self) -> str:
@@ -765,7 +808,10 @@ class FindArticlesByAuthorsMCPTool(MCPTool):
 
             article_service = self.service_manager.article
             if not article_service:
-                return self.handle_error('Article service not available')
+                return MCPToolCallResult(
+                    content=[{"type": "text", "text": "Article service not available"}],
+                    isError=True
+                )
 
             # Search for articles by author
             articles = await article_service.find_by_authors(
@@ -779,8 +825,7 @@ class FindArticlesByAuthorsMCPTool(MCPTool):
             if not articles:
                 author_str = ' AND '.join(authors) if match_all else ' OR '.join(authors)
                 return MCPToolCallResult(
-                    success=True,
-                    content=f'No articles found for author(s): {author_str}'
+                    content=[{"type": "text", "text": f'No articles found for author(s): {author_str}'}]
                 )
 
             # Build response
@@ -811,12 +856,11 @@ class FindArticlesByAuthorsMCPTool(MCPTool):
                     response_parts.append(f'**Venue**: {venue} | **Citations**: {citations}\n')
 
             return MCPToolCallResult(
-                success=True,
-                content='\n'.join(response_parts)
+                content=[{"type": "text", "text": '\n'.join(response_parts)}]
             )
 
         except Exception as e:
-            return self.handle_error(str(e))
+            return self.handle_error(e)
 
 
 class GetCitationContextMCPTool(MCPTool):
@@ -867,7 +911,10 @@ class GetCitationContextMCPTool(MCPTool):
 
             citation_service = self.service_manager.citation
             if not citation_service:
-                return self.handle_error('Citation service not available')
+                return MCPToolCallResult(
+                    content=[{"type": "text", "text": "Citation service not available"}],
+                    isError=True
+                )
 
             # Get citation context
             contexts = await citation_service.get_citation_context(
@@ -878,8 +925,7 @@ class GetCitationContextMCPTool(MCPTool):
 
             if not contexts:
                 return MCPToolCallResult(
-                    success=True,
-                    content=f'No citation context found between papers: {citing_id} → {cited_id}'
+                    content=[{"type": "text", "text": f'No citation context found between papers: {citing_id} → {cited_id}'}]
                 )
 
             # Build response
@@ -896,9 +942,8 @@ class GetCitationContextMCPTool(MCPTool):
                 response_parts.append(f'{text}\n')
 
             return MCPToolCallResult(
-                success=True,
-                content='\n'.join(response_parts)
+                content=[{"type": "text", "text": '\n'.join(response_parts)}]
             )
 
         except Exception as e:
-            return self.handle_error(str(e))
+            return self.handle_error(e)
