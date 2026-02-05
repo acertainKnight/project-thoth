@@ -3,6 +3,45 @@ import { ChatSession, ChatMessage } from '../types';
 import type ThothPlugin from '../../main';
 import { ResearchTabComponent } from '../components/research-tab';
 import { SettingsTabComponent } from '../components/settings-tab';
+import * as smd from 'streaming-markdown';
+import { getRandomThinkingPhrase, getToolStatusMessage } from '../utils/thinking-messages';
+
+/**
+ * Wrapper for streaming-markdown library to work with Obsidian's DOM
+ */
+class StreamingMarkdownRenderer {
+  private parser: any;
+  private container: HTMLElement;
+  
+  constructor(container: HTMLElement) {
+    this.container = container;
+    const renderer = smd.default_renderer(container);
+    this.parser = smd.parser(renderer);
+  }
+  
+  /**
+   * Write a chunk of markdown to the stream
+   */
+  write(chunk: string): void {
+    smd.parser_write(this.parser, chunk);
+  }
+  
+  /**
+   * End the stream and flush remaining content
+   */
+  end(): void {
+    smd.parser_end(this.parser);
+  }
+  
+  /**
+   * Reset for a new message
+   */
+  reset(): void {
+    this.container.empty();
+    const renderer = smd.default_renderer(this.container);
+    this.parser = smd.parser(renderer);
+  }
+}
 
 export class MultiChatModal extends Modal {
   plugin: ThothPlugin;
@@ -2090,7 +2129,8 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       const endpoint = this.plugin.getLettaEndpointUrl();
       
       // Build URL with pagination support
-      let url = `${endpoint}/v1/conversations/${sessionId}/messages?limit=50&order=asc`;
+      // Use desc order to get NEWEST messages first (most recent 50)
+      let url = `${endpoint}/v1/conversations/${sessionId}/messages?limit=50&order=desc`;
       
       // If loading earlier messages, use cursor-based pagination
       if (loadEarlier && this.oldestMessageId.has(sessionId)) {
@@ -2107,10 +2147,10 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         let allMessages = this.messageCache.get(sessionId) || [];
         
         if (loadEarlier) {
-          // Prepend earlier messages
+          // Prepend earlier messages (which come in desc order from API)
           allMessages = [...newMessages, ...allMessages];
         } else {
-          // Fresh load
+          // Fresh load - messages come in desc order (newest first)
           allMessages = newMessages;
         }
         
@@ -2121,8 +2161,14 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         this.hasMoreMessages.set(sessionId, newMessages.length >= 50);
         
         // Track oldest message ID for pagination
-        if (allMessages.length > 0) {
-          this.oldestMessageId.set(sessionId, allMessages[0].id);
+        // Since messages are in desc order initially, sort by date to find oldest
+        const sortedMessages = [...allMessages].sort((a, b) => {
+          const dateA = new Date(a.date || a.created_at).getTime();
+          const dateB = new Date(b.date || b.created_at).getTime();
+          return dateA - dateB;
+        });
+        if (sortedMessages.length > 0) {
+          this.oldestMessageId.set(sessionId, sortedMessages[0].id);
         }
         
         await this.renderChatInterface(sessionId, allMessages);
@@ -2203,16 +2249,13 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       return content || '';
     };
 
-    // Filter messages to show user, assistant, reasoning, and tool messages
-    // Exclude only system messages
+    // Filter messages to show only user and assistant messages
+    // Exclude system, reasoning, tool_call, and tool_return messages
     const chatMessages = messages.filter(msg => {
       // Check message_type field (Letta's primary message type)
       const messageType = msg.message_type || msg.type;
       if (messageType === 'user_message' || 
-          messageType === 'assistant_message' ||
-          messageType === 'reasoning_message' ||
-          messageType === 'tool_call_message' ||
-          messageType === 'tool_return_message') {
+          messageType === 'assistant_message') {
         return true;
       }
 
@@ -2242,26 +2285,17 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         'Try: "Find recent papers on transformers"'
       );
     } else {
-      // Render all messages with markdown support
+      // Render all messages with markdown support (only user and assistant)
       await Promise.all(
         chatMessages.map(async (msg) => {
           const messageType = msg.message_type || msg.type;
-
-          // Handle different message types
-          if (messageType === 'reasoning_message') {
-            await this.addReasoningMessage(messagesContainer, msg);
-          } else if (messageType === 'tool_call_message') {
-            await this.addToolCallMessage(messagesContainer, msg);
-          } else if (messageType === 'tool_return_message') {
-            await this.addToolReturnMessage(messagesContainer, msg);
-          } else {
-            // Handle user and assistant messages
-            const role = messageType === 'user_message' ? 'user'
-                       : messageType === 'assistant_message' ? 'assistant'
-                       : msg.role;
-            const content = extractContent(msg);
-            await this.addMessageToChat(messagesContainer, role, content);
-          }
+          
+          // Only render user and assistant messages
+          const role = messageType === 'user_message' ? 'user'
+                     : messageType === 'assistant_message' ? 'assistant'
+                     : msg.role;
+          const content = extractContent(msg);
+          await this.addMessageToChat(messagesContainer, role, content);
         })
       );
     }
@@ -2335,26 +2369,10 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         if (response.ok && response.body) {
           // Don't remove thinking indicator yet - wait for first content token
 
-          // Track messages by ID for accumulation (stream_tokens sends deltas with same ID)
-          const messageAccumulator = new Map<string, string>();
           let assistantMessageEl: HTMLElement | null = null;
           let contentEl: HTMLElement | null = null;
+          let streamingRenderer: StreamingMarkdownRenderer | null = null;
           let thinkingRemoved = false; // Track if we've removed the thinking indicator
-          
-          // Track elements for different message types during streaming
-          const streamingElements = new Map<string, {
-            element: HTMLElement;
-            type: string;
-            contentEl?: HTMLElement;
-          }>();
-
-          // Create debounced render function for smooth streaming updates
-          const debouncedRender = this.debounce(async (content: string) => {
-            if (contentEl) {
-              await this.renderMessageContent(content, contentEl);
-              this.scrollToBottom(messagesContainer, true);
-            }
-          }, 200);
 
           // Read SSE stream
           const reader = response.body.getReader();
@@ -2385,73 +2403,29 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
                 // Handle reasoning_message
                 if (messageType === 'reasoning_message') {
-                  // Update status indicator
+                  // Update status indicator - don't create reasoning block during streaming
                   if (!thinkingRemoved) {
-                    this.updateStatusIndicator(thinkingMsg, 'Thinking...', '💭');
-                  }
-                  
-                  const reasoning = msg.reasoning || '';
-                  if (reasoning && messageId) {
-                    // Remove thinking indicator when displaying reasoning
-                    if (!thinkingRemoved) {
-                      thinkingMsg.remove();
-                      thinkingRemoved = true;
-                    }
-                    
-                    // Get or create reasoning element
-                    let streamEl = streamingElements.get(messageId);
-                    if (!streamEl) {
-                      await this.addReasoningMessage(messagesContainer, msg);
-                      // Find the element we just created
-                      const elements = messagesContainer.querySelectorAll('.reasoning-block');
-                      const element = elements[elements.length - 1] as HTMLElement;
-                      streamEl = { element, type: 'reasoning' };
-                      streamingElements.set(messageId, streamEl);
-                    }
+                    const phrase = getRandomThinkingPhrase('thinking');
+                    this.updateStatusIndicator(thinkingMsg, `${phrase}...`, '💭');
                   }
                 }
                 
                 // Handle tool_call_message
                 else if (messageType === 'tool_call_message') {
-                  const toolName = msg.tool_call?.name || 'a tool';
-                  
-                  // Update status indicator
+                  // Update status indicator - don't create tool call card during streaming
                   if (!thinkingRemoved) {
-                    this.updateStatusIndicator(thinkingMsg, `Calling ${toolName}...`, '🔧');
-                  }
-                  
-                  if (messageId && !streamingElements.has(messageId)) {
-                    // Remove thinking indicator when displaying tool call
-                    if (!thinkingRemoved) {
-                      thinkingMsg.remove();
-                      thinkingRemoved = true;
-                    }
-                    
-                    await this.addToolCallMessage(messagesContainer, msg);
-                    const elements = messagesContainer.querySelectorAll('.tool-call-card');
-                    const element = elements[elements.length - 1] as HTMLElement;
-                    streamingElements.set(messageId, { element, type: 'tool_call' });
+                    const toolName = msg.tool_call?.name || 'tool';
+                    const statusMsg = getToolStatusMessage(toolName);
+                    this.updateStatusIndicator(thinkingMsg, `${statusMsg}...`, '🔧');
                   }
                 }
                 
                 // Handle tool_return_message
                 else if (messageType === 'tool_return_message') {
-                  // Update status indicator
+                  // Update status indicator - don't create tool return card during streaming
                   if (!thinkingRemoved) {
-                    this.updateStatusIndicator(thinkingMsg, 'Processing results...', '⚙️');
-                  }
-                  
-                  if (messageId && !streamingElements.has(messageId)) {
-                    // Remove thinking indicator when displaying tool return
-                    if (!thinkingRemoved) {
-                      thinkingMsg.remove();
-                      thinkingRemoved = true;
-                    }
-                    
-                    await this.addToolReturnMessage(messagesContainer, msg);
-                    const elements = messagesContainer.querySelectorAll('.tool-return-card');
-                    const element = elements[elements.length - 1] as HTMLElement;
-                    streamingElements.set(messageId, { element, type: 'tool_return' });
+                    const phrase = getRandomThinkingPhrase('processing');
+                    this.updateStatusIndicator(thinkingMsg, `${phrase} results...`, '⚙️');
                   }
                 }
                 
@@ -2466,13 +2440,6 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                       thinkingRemoved = true;
                     }
                     
-                    // Accumulate deltas by message ID
-                    const existing = messageAccumulator.get(messageId) || '';
-                    messageAccumulator.set(messageId, existing + delta);
-
-                    // Get full accumulated content for this message
-                    const fullContent = messageAccumulator.get(messageId) || '';
-
                     // Create assistant message element on first chunk
                     if (!assistantMessageEl) {
                       assistantMessageEl = messagesContainer.createEl('div', {
@@ -2485,10 +2452,16 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                       contentEl = assistantMessageEl.createEl('div', {
                         cls: 'message-content'
                       });
+                      
+                      // Initialize streaming markdown renderer
+                      streamingRenderer = new StreamingMarkdownRenderer(contentEl);
                     }
 
-                    // Use debounced render for streaming updates
-                    debouncedRender(fullContent);
+                    // Write delta directly to streaming renderer (no accumulation needed)
+                    if (streamingRenderer) {
+                      streamingRenderer.write(delta);
+                      this.scrollToBottom(messagesContainer, true);
+                    }
                   }
                 }
               } catch (e) {
@@ -2503,10 +2476,15 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
             thinkingRemoved = true;
           }
 
-          // Final render with copy buttons after stream completes
-          if (contentEl && messageAccumulator.size > 0) {
-            const finalContent = Array.from(messageAccumulator.values()).join('');
-            await this.renderMessageContent(finalContent, contentEl);
+          // End streaming and flush remaining markdown
+          if (streamingRenderer) {
+            streamingRenderer.end();
+            
+            // Add copy buttons to code blocks
+            if (contentEl) {
+              this.addCopyButtonsToCodeBlocks(contentEl);
+            }
+            
             this.scrollToBottom(messagesContainer, true);
           }
 
@@ -4007,24 +3985,4 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     });
   }
 
-  /**
-   * Debounce function to limit how often a function is called
-   */
-  debounce<T extends (...args: any[]) => any>(
-    func: T,
-    wait: number
-  ): (...args: Parameters<T>) => void {
-    let timeout: NodeJS.Timeout | null = null;
-    
-    return (...args: Parameters<T>) => {
-      if (timeout) {
-        clearTimeout(timeout);
-      }
-      
-      timeout = setTimeout(() => {
-        func(...args);
-        timeout = null;
-      }, wait);
-    };
-  }
 }
