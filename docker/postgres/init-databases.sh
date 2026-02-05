@@ -45,6 +45,13 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname=thoth <<-EOSQL
     \echo '==> Initialized thoth database with extensions'
 EOSQL
 
+# Run Thoth schema initialization (creates extensions - tables handled by MigrationManager)
+if [ -f /docker-init/init-thoth-schema.sql ]; then
+    echo "==> Running Thoth schema initialization..."
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" -f /docker-init/init-thoth-schema.sql
+    echo "==> Thoth schema initialized"
+fi
+
 # Connect to letta database and create extensions
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname=letta <<-EOSQL
     -- Create extensions for Letta
