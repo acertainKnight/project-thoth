@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/repositories/workflow_search_config_repository.py
-# hypothesis_version: 6.148.9
-
-['is_valid', 'result_selector', 'snippet_selector', 'title_selector', 'url_selector', 'workflow', 'workflow_id']

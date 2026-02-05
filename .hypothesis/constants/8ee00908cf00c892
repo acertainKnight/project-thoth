@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/discovery/sources/pubmed.py
-# hypothesis_version: 6.148.9
-
-[0.0, 0.34, 200, 10000, ' AND ', ',', './/Article', './/ArticleTitle', './/Author', './/AuthorList', './/Day', './/DescriptorName', './/ForeName', './/Journal/Title', './/LastName', './/MedlineCitation', './/MeshHeading', './/MeshHeadingList', './/Month', './/PMID', './/PubmedArticle', './/Year', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', 'Apr', 'Aug', 'Dec', 'Feb', 'Jan', 'Jul', 'Jun', 'Mar', 'May', 'No title', 'Nov', 'Oct', 'Sep', 'authors', 'db', 'email', 'end_date', 'esearchresult', 'id', 'idlist', 'journal', 'json', 'keywords', 'mesh_terms', 'pmid', 'pub_date', 'publication_types', 'pubmed', 'research@example.com', 'retmax', 'retmode', 'sort', 'start_date', 'term', 'thoth', 'tool', 'xml']

@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/server/routers/operations.py
-# hypothesis_version: 6.148.9
-
-[0.0, 10.0, 80.0, 90.0, 100.0, 100, 404, 500, 503, 2024, '/articles', '/batch/process', '/collection/stats', '/stream/operation', 'Author A', 'Author B', 'No items to process', 'Operation not found', '_graph', '_processed_files', 'articles', 'articles_found', 'authors', 'batch_process', 'batch_size', 'citation_graph', 'citation_service', 'completed', 'discovery', 'discovery_run', 'error', 'failed', 'id', 'items', 'latest_result', 'limit', 'max_articles', 'max_results', 'message', 'offset', 'operation_id', 'operational', 'path', 'pdf', 'pdf_paths', 'pdf_process', 'pdf_tracker', 'process_type', 'processed', 'processed_documents', 'processed_items', 'processed_pdfs', 'query', 'result', 'results', 'running', 'source_name', 'started', 'status', 'success', 'title', 'total', 'total_citations', 'total_documents', 'total_processed', 'year']

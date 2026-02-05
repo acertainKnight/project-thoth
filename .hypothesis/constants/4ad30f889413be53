@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/services/discovery_orchestrator.py
-# hypothesis_version: 6.148.9
-
-[0.0, 0.1, 0.5, 1.0, 500, '*', '```', 'articles_found', 'articles_matched', 'articles_processed', 'authors', 'content', 'error', 'id', 'individual_results', 'keywords', 'matched_keywords', 'max_articles_per_run', 'min_relevance_score', 'name', 'question_id', 'question_name', 'questions_failed', 'questions_processed', 'questions_successful', 'reasoning', 'score', 'selected_sources', 'sources_queried', 'success', 'timestamp', 'topics', 'total_articles_found']

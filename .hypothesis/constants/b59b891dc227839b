@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/services/llm_router.py
-# hypothesis_version: 6.148.9
-
-['`', 'agent', 'architecture', 'auto', 'html', 'id', 'json_grammar', 'select_model.j2', 'structured_output', 'tool_calling', 'tool_use', 'xml']

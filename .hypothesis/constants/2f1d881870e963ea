@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/services/postgres_service.py
-# hypothesis_version: 6.148.9
-
-[60.0, 300.0, 1000, 50000, 'SELECT 1', 'SELECT version()', 'error', 'executing query', 'fetching query row', 'fetching query value', 'healthy', 'latency_ms', 'message', 'pool_free', 'pool_size', 'pool_used', 'query_executed', 'query_executemany', 'query_fetch', 'query_fetchrow', 'query_fetchval', 'status']

@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/mcp/server.py
-# hypothesis_version: 6.148.9
-
-[8001, 8002, '1.0.0', 'MCP server stopped', 'active', 'contents', 'count', 'health', 'healthy', 'http', 'id', 'info', 'initialize', 'initialized', 'level', 'listChanged', 'localhost', 'logging/setLevel', 'name', 'prompts', 'prompts/get', 'prompts/list', 'protocol', 'registered', 'resourceTemplates', 'resources', 'resources/list', 'resources/read', 'resources/templates', 'server', 'sse', 'status', 'stdio', 'subscribe', 'tools', 'tools/call', 'tools/list', 'transports', 'uri', 'version']

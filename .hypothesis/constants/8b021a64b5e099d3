@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/server/routers/tools.py
-# hypothesis_version: 6.148.9
-
-[404, 500, 503, '/execute', '/execute/command', 'action', 'analysis_type', 'args', 'bypassed_agent', 'command', 'count', 'discovery', 'document_id', 'error', 'found', 'full', 'generate', 'identifier', 'kwargs', 'list', 'locations', 'max_results', 'metadata', 'name', 'not_implemented', 'note', 'notes', 'parameters', 'parameters_used', 'pdf_locate', 'pdf_path', 'query', 'rag', 'response', 'result', 'results', 'run', 'search', 'source', 'sources', 'status', 'streaming', 'success', 'thoth_download_pdf', 'thoth_rag_search', 'thoth_search_papers', 'timestamp', 'tool', 'tool_calls', 'tool_executed', 'top_k', 'url']

@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/discovery/browser/__init__.py
-# hypothesis_version: 6.148.9
-
-['BrowserManager', 'BrowserManagerError', 'ExtractionService']

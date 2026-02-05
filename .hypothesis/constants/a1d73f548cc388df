@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/utilities/anthropic_client.py
-# hypothesis_version: 6.148.9
-
-[0.7, 10.0, 'ANTHROPIC_API_KEY', 'API_ANTHROPIC_KEY', 'rate_limiter', 'use_rate_limiter']

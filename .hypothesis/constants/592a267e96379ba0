@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/citations/evaluation/ground_truth.py
-# hypothesis_version: 6.148.9
-
-[500, ' AND ', ',', '.', '. ', '...', '1=1', 'abstract', 'arxiv_id', 'author_variation', 'authors', 'backup_id', 'citation_text', 'clean', 'delete', 'difficulty', 'doi', 'duplicate', 'easy', 'full', 'ground_truth_authors', 'ground_truth_doi', 'ground_truth_title', 'ground_truth_year', 'hard', 'has_abstract', 'id', 'initials', 'journal', 'journal_missing', 'medium', 'metadata', 'missing_authors', 'missing_year', 'original', 'r', 'swap', 'title', 'title_truncation', 'typos', 'year']

@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/pipelines/document_pipeline.py
-# hypothesis_version: 6.148.9
-
-['.md', 'new_markdown_path', 'new_pdf_path', 'note_path', 'performance_config']

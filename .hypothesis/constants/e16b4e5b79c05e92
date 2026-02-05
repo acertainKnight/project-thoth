@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/citations/citations.py
-# hypothesis_version: 6.148.9
-
-['/', 'auto', 'citations', 'content', 'document_text', 'extract_citations.j2', 'final_citations', 'google', 'is_document_citation', 'jinja2', 'json_object', 'json_schema', 'llm_config', 'load_content', 'markdown_path', 'model_name', 'openai', 'performance_config', 'processed_citations', 'prompts', 'properties', 'provider', 'raw_citation', 'references_section', 'required', 'templates', 'type', 'utf-8', 'workers']

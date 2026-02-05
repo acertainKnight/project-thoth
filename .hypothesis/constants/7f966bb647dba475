@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/repositories/discovery_source_repository.py
-# hypothesis_version: 6.148.9
-
-['active', 'active_sources', 'by_type', 'discovery_sources', 'enabled', 'name', 'next_run_at', 'total_papers', 'total_runs', 'total_sources']

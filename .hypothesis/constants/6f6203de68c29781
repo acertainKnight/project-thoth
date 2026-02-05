@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/repositories/article_repository.py
-# hypothesis_version: 6.148.9
-
-['[^\\w\\s]', '\\s+', 'arxiv', 'arxiv_id', 'completed', 'discovered_articles', 'doi', 'paper_id', 'processed_at', 'processing_status', 'title', 'title_normalized']

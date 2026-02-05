@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/mcp/tools/analysis_tools.py
-# hypothesis_version: 6.148.9
-
-[0.0, 0.1, 1.0, 150, 500, ' et al.', ', ', '-', 'Analysis depth level', 'Unknown', 'Untitled', 'analyze_topic', 'article_identifier', 'authors', 'boolean', 'citation_count', 'comprehensive', 'content', 'deep', 'default', 'depth', 'description', 'enum', 'evaluate_article', 'explain_connections', 'find_related_papers', 'findings', 'gaps', 'include_citations', 'integer', 'journal', 'max_papers', 'max_results', 'maximum', 'medium', 'metadata', 'methodology', 'minimum', 'number', 'object', 'overview', 'paper_identifier', 'properties', 'publication_date', 'query_name', 'quick', 'required', 'score', 'similarity_threshold', 'string', 'summary_type', 'text', 'title', 'topic', 'topic_or_query', 'type']

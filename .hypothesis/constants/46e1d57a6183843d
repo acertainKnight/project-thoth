@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/citations/evaluation/metrics.py
-# hypothesis_version: 6.148.9
-
-[0.0, 0.5, 0.6, 0.7, 0.8, 0.9, 100.0, '[^\\w\\s]', 'any', 'authors', 'doi', 'doi:', 'easy', 'hard', 'http://doi.org/', 'https://doi.org/', 'medium', 'openalex_id', 's2_id', 'title', 'title_author']

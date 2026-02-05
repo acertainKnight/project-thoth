@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/repositories/workflow_credentials_repository.py
-# hypothesis_version: 6.148.9
-
-[300, 'created_at', 'credential_type', 'credentials', 'encrypted_data', 'id', 'workflow', 'workflow_credentials', 'workflow_id']

@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/mcp/tools/article_tools.py
-# hypothesis_version: 6.148.9
-
-[100, 150, '**Changes Made:**\n', ', ', 'Unknown', 'Untitled', 'add_tags', 'additionalProperties', 'array', 'article_identifier', 'author', 'authors', 'boolean', 'citation_count', 'citations', 'confirm_deletion', 'content', 'date', 'date_from', 'date_to', 'default', 'delete_article', 'description', 'document_type', 'enum', 'integer', 'items', 'journal', 'limit', 'maximum', 'metadata', 'min_citations', 'minimum', 'object', 'properties', 'publication_date', 'query', 'relevance', 'remove_tags', 'required', 'score', 'search_articles', 'sort_by', 'string', 'tags', 'text', 'title', 'type', 'update_metadata']

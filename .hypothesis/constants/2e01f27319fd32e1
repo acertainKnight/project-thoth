@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/repositories/paper_discovery_repository.py
-# hypothesis_version: 6.148.9
-
-[100, 'active_sources', 'any', 'by_source', 'days', 'discovered', 'paper_discoveries', 'since', 'total_discoveries', 'unique_papers']

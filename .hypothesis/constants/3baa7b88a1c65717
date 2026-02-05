@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/services/pdf_locator_service.py
-# hypothesis_version: 6.148.9
-
-[200, 404, 'Accept', 'Thoth/0.3', 'URL', 'User-Agent', 'application/json', 'application/pdf', 'arXiv', 'arxiv', 'best_oa_location', 'cc-by', 'cc-by-nc', 'cc-by-nd', 'cc-by-sa', 'content-type', 'crossref', 'doi-head', 'id', 'is_oa', 'license', 'link', 'message', 'openAccessPdf', 'pdf_found', 's2', 'unpaywall', 'unpaywall_email', 'url', 'url_for_pdf', 'x-api-key']

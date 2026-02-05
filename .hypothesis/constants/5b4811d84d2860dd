@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/services/llm_service.py
-# hypothesis_version: 6.148.9
-
-[1.0, '/', 'Config', 'Knowledge synthesis', 'Literature analysis', 'Research assistance', '\\{.*\\}', 'academic research', 'agent', 'analysis', 'anthropic', 'api_key', 'cache_cleared', 'capabilities', 'chunk_overlap', 'chunk_size', 'citation', 'claude', 'client_created', 'consolidate_model', 'content', 'custom-agent', 'doc_processing', 'domain', 'f-string', 'filter', 'focus', 'gemini', 'gpt', 'json_extracted', 'json_schema', 'llm_config', 'llm_invoked', 'llm_service', 'map_model', 'max_context_length', 'max_output_tokens', 'max_tokens', 'mistral', 'mixtral', 'model', 'name', 'openai', 'openrouter', 'provider', 'research', 'settings', 'suggest_model', 'tag', 'temperature', 'type', 'use_rate_limiter']

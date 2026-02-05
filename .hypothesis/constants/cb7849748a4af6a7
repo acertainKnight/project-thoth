@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/discovery/plugins/arxiv_plugin.py
-# hypothesis_version: 6.148.9
-
-[3.0, 1000, ' AND ', ' OR ', '(', ')', 'arXiv', 'arxiv', 'cat:cs.*', 'categories', 'citation_count', 'comment', 'descending', 'journal_ref', 'lastUpdatedDate', 'rate_limit_delay', 'sort_by', 'sort_order', 'updated']

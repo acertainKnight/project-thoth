@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/citations/enhancer.py
-# hypothesis_version: 6.148.9
-
-['abstract', 'authors', 'auto', 'backoff_multiplier', 'citation_count', 'crossref_api_key', 'doi', 'issue', 'journal', 'max_backoff_seconds', 'max_retries', 'openalex_email', 'pages', 'performance_config', 'title', 'url', 'use_resolution_chain', 'volume', 'workers', 'year']

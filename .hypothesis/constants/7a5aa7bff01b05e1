@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/citations/formatter.py
-# hypothesis_version: 6.148.9
-
-[' ,', ' .', ' and ', ',', ', ', ',.', '.', '..', 'abstract', 'apa', 'authors', 'backup_id', 'chicago', 'citation_count', 'doi', 'doi:', 'harvard', 'https://doi.org/', 'ieee', 'issue', 'journal', 'mla', 'pages', 'title', 'url', 'venue', 'volume', 'year']

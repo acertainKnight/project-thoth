@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/citations/scholarly.py
-# hypothesis_version: 6.148.9
-
-[2.0, 400, 429, 500, '.pdf', '/pdf/', 'N/A', 'R', '[^0-9X]', 'arxiv', 'arxiv.org', 'bib', 'doi', 'doi.org/', 'eprint', 'eprint_url', 'pdf', 'pub_id', 'pub_url', 'title', 'url']

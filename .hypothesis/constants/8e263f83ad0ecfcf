@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/server/routers/health.py
-# hypothesis_version: 6.148.9
-
-[200, 404, 500, 503, '/download-pdf', '/health', '/view-markdown', 'PDF URL to download', 'base_url', 'content', 'error', 'file_path', 'filename', 'healthy', 'message', 'path', 'services', 'size', 'status', 'success', 'timestamp', 'unhealthy', 'utf-8']

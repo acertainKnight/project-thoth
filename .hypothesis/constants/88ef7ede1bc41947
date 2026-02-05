@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/repositories/citation_repository.py
-# hypothesis_version: 6.148.9
-
-['citations', 'cited_paper_id', 'citing_paper_id', 'depth', 'edges', 'nodes', 'source', 'target']

@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/services/discovery_service.py
-# hypothesis_version: 6.148.9
-
-[0.0, 5.0, 100, 365, 3600, 8192, ' -_.', '%Y%m%d_%H%M%S', '*.json', '.', ':', '_', 'all', 'api', 'articles_downloaded', 'articles_filtered', 'articles_found', 'arxiv', 'biorxiv', 'crossref', 'discovery_*.json', 'discovery_completed', 'emulator', 'enabled', 'enabled_sources', 'errors', 'interval_minutes', 'is_oa', 'keywords', 'last_run', 'licence', 'max_articles_per_run', 'name', 'next_run', 'oa_source', 'openalex', 'pubmed', 'running', 'running discovery', 'runs', 'scraper', 'source', 'source_active', 'source_created', 'source_deleted', 'source_type', 'source_updated', 'sources', 'total_articles_found', 'total_errors', 'total_runs', 'total_sources', 'w', 'wb']

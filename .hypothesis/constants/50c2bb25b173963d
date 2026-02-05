@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/utilities/schemas/browser_workflow.py
-# hypothesis_version: 6.148.9
-
-[100, 30000, 'Type of filter input', 'Unique workflow name', '[^\\w\\-_.]', '_', 'advanced', 'api_key', 'attribute', 'boolean_and', 'boolean_or', 'cancelled', 'checkbox', 'class', 'click', 'comma_separated', 'css', 'date_input', 'date_range', 'degraded', 'domcontentloaded', 'dropdown', 'element_hidden', 'element_visible', 'extract', 'failed', 'failing', 'fernet', 'healthy', 'id', 'load', 'manual', 'name', 'navigate', 'networkidle', 'none', 'oauth', 'pending', 'priority', 'query', 'radio', 'running', 'schedule', 'screenshot', 'scroll', 'select', 'session_cookie', 'simple', 'space_separated', 'success', 'text', 'text_input', 'timeout', 'type', 'unknown', 'username_password', 'wait', 'xpath']

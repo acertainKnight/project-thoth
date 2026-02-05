@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/utilities/schemas/__init__.py
-# hypothesis_version: 6.148.9
-
-['ActionType', 'AnalysisResponse', 'AnalysisState', 'ArxivPaper', 'BrowserRecording', 'BrowserWorkflow', 'Citation', 'CitationExtraction', 'Citations', 'CredentialType', 'DiscoveryResult', 'DiscoverySource', 'ElementSelector', 'ExecutionParameters', 'ExecutionStatus', 'ExecutionTrigger', 'FilterLogEntry', 'FilterType', 'HealthStatus', 'KeywordsFormat', 'OpenCitation', 'Recommendation', 'ReferencesSection', 'ResearchAgentState', 'ResearchQuery', 'ScheduleConfig', 'ScrapeConfiguration', 'SearchFilter', 'SearchResponse', 'SearchResult', 'SearchType', 'SelectorStrategy', 'WaitCondition', 'WorkflowAction', 'WorkflowCredentials', 'WorkflowExecution', 'WorkflowSearchConfig']

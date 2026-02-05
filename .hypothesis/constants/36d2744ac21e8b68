@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/discovery/scheduler.py
-# hypothesis_version: 6.148.9
-
-[5.0, 365, 600, ':', 'Unknown', 'articles_found', 'articles_matched', 'daily', 'database_url', 'days_of_week', 'enabled', 'enabled_sources', 'error', 'id', 'interval_minutes', 'last_run', 'max_articles', 'max_articles_per_run', 'name', 'next_run', 'question_id', 'running', 'schedule_frequency', 'schedule_time', 'scheduled_time', 'secrets', 'source_active', 'source_name', 'source_type', 'sources', 'success', 'time_of_day', 'time_until_run', 'total_sources']

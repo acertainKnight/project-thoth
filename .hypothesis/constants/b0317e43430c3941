@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/citations/evaluation/runner.py
-# hypothesis_version: 6.148.9
-
-[0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 500, '%Y%m%d_%H%M%S', '--no-stratify', '--num-samples', '--output-dir', '--require-doi', './evaluation_results', '=', 'KEY FINDINGS', 'RESOLVED', '__main__', 'accuracy', 'any', 'by_difficulty', 'by_threshold', 'calibration_error', 'f1_score', 'mean_confidence', 'metrics', 'num_samples', 'precision', 'recall', 'resolved_count', 'store_true', 'summary.json', 'timestamp', 'w']

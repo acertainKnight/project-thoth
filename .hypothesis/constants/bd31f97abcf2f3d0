@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/discovery/plugins/browser_workflow_plugin.py
-# hypothesis_version: 6.148.9
-
-[30000, 'browser_workflow', 'custom', 'end', 'excluded_topics', 'max_retries', 'methodology', 'preferred_topics', 'research_question', 'start', 'timeout', 'workflow_id']

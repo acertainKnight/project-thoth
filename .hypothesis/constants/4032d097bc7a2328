@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/server/app.py
-# hypothesis_version: 6.148.9
-
-[2.0, 5.0, 10.0, 100, 8000, 8001, 30000, '*', '/agents', '/api/reload-config', '/api/workflows', '/chat', '/config', '/health/hot-reload', '/operations', '/research', '/tools', '0', '0.1.0', '1', '127.0.0.1', 'DELETE', 'DOCKER_ENV', 'GET', 'POST', 'PUT', 'THOTH_HOT_RELOAD', '_background_tasks', '_last_reload_time', '_thoth', 'active', 'agent', 'app', 'callback_count', 'chat', 'chat_sessions.db', 'config', 'create_app', 'disabled', 'docker_env', 'enabled', 'error', 'false', 'health', 'hot_reload_env', 'info', 'localhost', 'mcp-health', 'message', 'operations', 'postgres', 'research', 'research-questions', 'research_question', 'settings', 'settings.json', 'settings_file', 'start_server', 'status', 'success', 'timestamp', 'tools', 'true', 'websocket', 'workflows']

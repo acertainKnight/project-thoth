@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/monitoring/health.py
-# hypothesis_version: 6.148.9
-
-['ServiceManager', 'error', 'healthy', 'healthy_services', 'service', 'service_manager', 'services', 'status', 'summary', 'total_services', 'unhealthy', 'unhealthy_services', 'unknown']

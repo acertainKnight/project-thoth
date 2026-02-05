@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/server/pdf_monitor.py
-# hypothesis_version: 6.148.9
-
-[1.0, 2.0, '**/*.pdf', '*.pdf', '.json.bak', '.pdf', 'THOTH_SETTINGS_FILE', 'ThothPipeline', '__main__', 'bulk_process_size', 'database_url', 'files_processed', 'is_running', 'last_check', 'monitor', 'monitor_config', 'mtime', 'new_pdf_path', 'note_path', 'pdf_monitor', 'pdf_path', 'processed_pdfs.json', 'processed_time', 'secrets', 'servers_config', 'size', 'vault_root', 'watch_directories', 'watch_directory', 'watch_interval']

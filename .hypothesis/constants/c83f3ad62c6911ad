@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/server/chat_models.py
-# hypothesis_version: 6.148.9
-
-[100, '...', 'New Chat', 'chat_history.db', 'content', 'created_at', 'id', 'is_active', 'last_message_preview', 'message_count', 'metadata', 'metadata = ?', 'parent_message_id', 'role', 'session_id', 'timestamp', 'title', 'title = ?', 'tool_calls', 'updated_at', 'updated_at = ?']

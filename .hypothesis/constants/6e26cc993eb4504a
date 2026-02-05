@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/discovery/sources/biorxiv.py
-# hypothesis_version: 6.148.9
-
-[0.0, 1.0, '%Y-%m-%d', ';', 'abstract', 'authors', 'biorxiv', 'biorxiv_pdf', 'biorxiv_url', 'collection', 'cursor', 'date', 'doi', 'end_date', 'journal', 'start_date', 'title', 'version']

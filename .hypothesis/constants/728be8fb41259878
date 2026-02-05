@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/server/routers/agent.py
-# hypothesis_version: 6.148.9
-
-[5.0, 10.0, 30.0, 60.0, 200, 500, 503, '/chat', '/config', '/create', '/info', '/list', '/status', 'Authorization', 'Content-Type', 'LETTA_BASE_URL', 'LETTA_SERVER_PASS', 'No response', 'agent', 'agent_name', 'agents', 'api_docs', 'application/json', 'base_url', 'conversation_id', 'created_at', 'default', 'degraded', 'description', 'docs', 'endpoints', 'error', 'features', 'has_api_key', 'health', 'id', 'letta', 'message', 'messages', 'name', 'notes_dir', 'pdf_dir', 'platform', 'recommendations', 'research_assistant', 'response', 'running', 'status', 'system_prompt', 'thoth', 'thread_id', 'tools', 'total_count', 'unavailable', 'user_id', 'workspace_dir']

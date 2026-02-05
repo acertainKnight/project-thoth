@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/repositories/available_source_repository.py
-# hypothesis_version: 6.148.9
-
-['active', 'available_sources', 'error_count', 'health_status', 'last_health_check', 'name', 'names', 'total_articles_found', 'total_queries']

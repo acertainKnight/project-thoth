@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/server/routers/research_questions.py
-# hypothesis_version: 6.148.9
-
-[0.0, 0.5, 1.0, 255, 500, '/{question_id}', '/{question_id}/run', '5-10 minutes', 'Get matched articles', 'Preferred authors', 'Research topics', '^\\d{2}:\\d{2}$', 'avg_relevance', 'avg_relevance_score', 'daily', 'deactivated', 'default_user', 'deleted', 'initiated', 'keywords', 'last_match_at', 'monthly', 'on-demand', 'postgres', 'question_id', 'research-questions', 'research_question', 'schedule_frequency', 'source_count', 'successful_runs', 'topics', 'total_matches', 'total_runs', 'unviewed_matches', 'user_id', 'weekly']

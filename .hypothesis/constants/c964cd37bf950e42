@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/discovery/browser/extraction_service.py
-# hypothesis_version: 6.148.9
-
-[100, 5000, 10000, '/', '[^\\w\\s]', '\\1', '\\s+', '^(doi:|DOI:)\\s*', "a[rel='next']", 'abstract', 'article', 'article_container', 'arxiv_id', 'authors', 'body', 'browser_extraction', 'button', 'button.next, a.next', 'doi', 'errors', 'extracted', 'href', 'http', 'journal', 'keywords', 'link', 'pagination', 'pdf_url', 'publication_date', 'selector', 'selectors', 'skipped', 'title', 'type', 'url', 'wait_for']

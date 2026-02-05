@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/discovery/auto_discovery_hook.py
-# hypothesis_version: 6.148.9
-
-[0.7, 0.85, 100, 'Analysis failed', 'actions', 'algorithm', 'analyses_performed', 'analysis', 'analysis_not_needed', 'analysis_result', 'approach', 'auto_create_enabled', 'auto_created_sources', 'candidates', 'completed', 'confidence', 'count', 'created', 'data', 'disabled', 'dissertation', 'enabled', 'error', 'experiment', 'failed', 'filtered_suggestions', 'findings', 'framework', 'interested in', 'last_analysis', 'learn about', 'message', 'message_count', 'method', 'model', 'notifications', 'paper', 'project', 'reason', 'reasoning', 'research', 'results', 'session_id', 'skipped', 'source_name', 'source_type', 'sources', 'status', 'study', 'success', 'suggestion_threshold', 'suggestions', 'system', 'technique', 'thesis', 'timestamp', 'topics', 'topics_identified', 'type', 'user_id', 'working on']

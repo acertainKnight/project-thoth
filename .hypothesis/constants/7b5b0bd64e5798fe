@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/knowledge/graph.py
-# hypothesis_version: 6.148.9
-
-[1900, 2100, '-', '0', ':', 'Markdown path stub', 'PDF path stub', 'SELECT * FROM papers', 'abstract', 'analysis', 'arxiv', 'arxiv_id', 'authors', 'backup_id', 'category', 'citation_context', 'citation_order', 'citation_text', 'citations', 'context', 'data', 'database_url', 'doi', 'extracted_authors', 'extracted_title', 'extracted_venue', 'extracted_year', 'id', 'is_document_citation', 'is_influential', 'links', 'llm_model', 'markdown_path', 'metadata', 'note_path', 'obsidian_path', 'obsidian_uri', 'pdf_path', 's2_fields_of_study', 'secrets', 'section', 'source_doi', 'tags', 'target_doi', 'title', 'utf-8', 'v\\d+$', 'venue', 'w', 'year']

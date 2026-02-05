@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/server/routers/research.py
-# hypothesis_version: 6.148.9
-
-[500, 503, '...', '/chat', '/query', 'No summary available', 'args', 'arguments', 'assistant', 'message_id', 'model', 'obsidian', 'response', 'result', 'source', 'thoth_knowledge_base', 'thoth_search_papers', 'tool', 'tool_calls', 'user']

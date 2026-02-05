@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/citations/fuzzy_matcher.py
-# hypothesis_version: 6.148.9
-
-[0.0, 0.15, 0.25, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.95, 1.0, 100.0, '.', '[^\\w\\s]', '\\s+', 'authors', 'journal', 'overall', 'title', 'year']

@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/discovery/browser/action_executor.py
-# hypothesis_version: 6.148.9
-
-[1000.0, 1000, 30000, 'Backspace', '\\{([^}]+)\\}', 'attribute', 'domcontentloaded', 'extracted_data', 'html', 'load', 'networkidle', 'selected_value', 'text', 'typed_value', 'url', 'visible']

@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/rag/embeddings.py
-# hypothesis_version: 6.148.9
-
-['0', '1', '100', 'FALSE', 'KMP_DUPLICATE_LIB_OK', 'KMP_INIT_AT_FORK', 'MKL_NUM_THREADS', 'NUMEXPR_NUM_THREADS', 'OMP_NUM_THREADS', 'OpenAI API', 'SQLITE_ENABLE_FTS5', 'TORCH_NUM_THREADS', 'TRUE', 'all-MiniLM-L6-v2', 'batch_size', 'convert_to_numpy', 'cpu', 'device', 'false', 'local', 'normalize_embeddings', 'openai/', 'text-embedding', 'trust_remote_code']

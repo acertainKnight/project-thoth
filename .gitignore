@@ -158,6 +158,7 @@ implementation-plan.md
 docs/LETTA_MCP_*.md
 docs/*SUMMARY*.md
 docs/*TROUBLESHOOTING*.md
+docs/archived/
 
 # plugin files
 obsidian-plugin/thoth-obsidian/node_modules/

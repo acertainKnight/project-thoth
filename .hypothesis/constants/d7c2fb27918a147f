@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/citations/semanticscholar.py
-# hypothesis_version: 6.148.9
-
-[0.0, 0.1, 1.0, 1.5, 30.0, 300.0, 100, 429, 500, 1000, 86400, ',', ':', 'Accept', 'ArXiv', 'Content-Type', 'DOI', 'DOI:', 'GET', 'POST', 'Retry-After', 'abstract', 'api_cache.db', 'api_calls', 'application/json', 'arXiv:', 'arxiv:', 'author/search', 'authors', 'cache_hit_rate', 'cache_hits', 'cache_misses', 'category', 'circuit_breaker_open', 'citationCount', 'consecutive_failures', 'data', 'externalIds', 'fields', 'fieldsOfStudy', 'ids', 'isOpenAccess', 'is_open_access', 'journal', 'limit', 'memory_cache_size', 'name', 'offset', 'openAccessPdf', 'paper/batch', 'paper/search', 'query', 'referenceCount', 'reference_count', 's2FieldsOfStudy', 's2_fields_of_study', 'title', 'url', 'venue', 'x-api-key', 'year', '|']

@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/citations/resolution_chain.py
-# hypothesis_version: 6.148.9
-
-[0.0, 0.15, 0.25, 0.3, 0.4, 0.45, 0.5, 0.7, 0.8, 0.85, 0.9, 1.0, 100.0, 1000, ':', 'DOI', 'Unknown', 'Unknown citation', 'abstract', 'already_has_doi', 'arxiv:', 'arxiv_id', 'authors', 'categories', 'citationCount', 'citation_count', 'client', 'crossref_score', 'doi', 'externalIds', 'has_doi', 'high_confidence', 'is_open_access', 'issue', 'journal', 'low_confidence', 'medium_confidence', 'name', 'openalex_confidence', 'openalex_id', 'pages', 'pdf_url', 'published', 'resolved_arxiv', 'resolved_crossref', 'resolved_openalex', 'title', 'title_match', 'total_processed', 'unresolved', 'updated', 'url', 'venue', 'volume', 'year']

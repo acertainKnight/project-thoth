@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/citations/resolution_types.py
-# hypothesis_version: 6.148.9
-
-[0.0, 0.6, 0.85, 0.87, 0.92, 1.0, 180.5, 245.3, 2024, '10.1038/nature12345', '10.1234/example', '123', '2025-12-29T10:30:00Z', '456-789', 'Doe, A.', 'Example Paper', 'Johnson, B.', 'Nature', 'Smith, J.', 'additional_info', 'api_sources_tried', 'arxiv', 'attempt_count', 'author', 'authors', 'before', 'cache_hit', 'candidate_data', 'candidates', 'citation', 'component_scores', 'confidence_level', 'confidence_score', 'crossref', 'doi', 'error_message', 'example', 'failed', 'high', 'journal', 'last_attempt_time', 'low', 'manual_review', 'matched_at', 'matched_data', 'medium', 'metadata', 'openalex', 'pages', 'partial', 'pending', 'processing_time_ms', 'rate_limited', 'raw_score', 'resolved', 'resolved_at', 'semantic_scholar', 'source', 'status', 'title', 'unresolved', 'volume', 'year']

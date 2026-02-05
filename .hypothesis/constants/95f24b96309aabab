@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/rag/vector_store.py
-# hypothesis_version: 6.148.9
-
-[0.0, 'authors', 'backend', 'chunk_id', 'chunk_type', 'collection_name', 'content', 'database_url', 'doi', 'id', 'indexed_chunks', 'metadata', 'paper_title', 'similarity', 'title', 'total_chunks', 'total_papers']

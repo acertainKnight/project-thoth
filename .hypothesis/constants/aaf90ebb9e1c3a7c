@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/mcp/client.py
-# hypothesis_version: 6.148.9
-
-[b'\n', 200, '/', '1.0.0', '2025-06-18', 'Not initialized', 'Thoth MCP Client', 'capabilities', 'contents', 'initialize', 'initialized', 'resources', 'resources/list', 'resources/read', 'serverInfo', 'session', 'tools', 'tools/call', 'tools/list', 'uri']

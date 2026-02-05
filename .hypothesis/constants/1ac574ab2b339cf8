@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/citations/openalex_resolver.py
-# hypothesis_version: 6.148.9
-
-[0.0, 0.1, 0.2, 0.3, 0.5, 1.0, 2.0, 10.0, 60.0, 100, 429, 500, ',', '/', '/works', 'Academic fields', 'List of author names', 'Number of citations', 'Open access PDF URL', 'Open access status', 'OpenAlex URL', 'Paper abstract', 'Publication year', 'Retry-After', 'a', 'an', 'and', 'at', 'author', 'authorships', 'cited_by_count', 'display_name', 'doi', 'filter', 'id', 'in', 'is_oa', 'mailto', 'matches_found', 'oa_url', 'of', 'on', 'open_access', 'per-page', 'primary_location', 'publication_year', 'rate_limit_hits', 'requests_made', 'requests_per_second', 'results', 'select', 'source', 'the', 'title', 'to', 'topics']

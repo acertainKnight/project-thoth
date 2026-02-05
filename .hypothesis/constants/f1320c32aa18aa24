@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/services/processing_service.py
-# hypothesis_version: 6.148.9
-
-['[,;]|\\sand\\s', '^#\\s+(.+)$', 'abstract', 'analysis_validated', 'analyzing content', 'authors', 'auto', 'basic', 'chunk_size', 'content', 'content_analyzed', 'database_url', 'date', 'file_name', 'full', 'key_points', 'llm_model', 'max_context_length', 'metadata_extracted', 'mistral-ocr-latest', 'ocr', 'ocr_available', 'ocr_completed', 'secrets', 'summary', 'title', 'utf-8', 'validating analysis', 'validation_error']

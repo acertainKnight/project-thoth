@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/discovery/web_scraper.py
-# hypothesis_version: 6.148.9
-
-[1.0, '.article', '.item', '.paper', '.publication', '.result', '1', 'Accept', 'Accept-Encoding', 'Accept-Language', 'Connection', 'User-Agent', '[,;]|\\sand\\s', '[class*="article"]', '[class*="paper"]', 'a[rel="next"]', 'abstract', 'article', 'article_container', 'articles_found', 'attribute', 'authors', 'chars', 'delay', 'doi', 'en-US,en;q=0.5', 'enabled', 'errors', 'extraction_fields', 'gzip, deflate', 'href', 'html.parser', 'journal', 'keep-alive', 'keywords', 'link', 'lower', 'max_pages', 'multiple', 'new', 'next_selector', 'old', 'page', 'page_parameter', 'parameter', 'pattern', 'pdf_url', 'publication_date', 'regex', 'replace', 'replacement', 'sample_articles', 'scraped_from', 'selector', 'strip', 'success', 'text', 'title', 'transform', 'type', 'upper', 'url']

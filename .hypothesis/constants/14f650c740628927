@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/discovery/discovery_manager.py
-# hypothesis_version: 6.148.9
-
-[0.0, 1440, 3600, ' AND ', '%Y%m%d_%H%M%S', '*.json', 'all', 'api', 'articles_downloaded', 'articles_filtered', 'articles_found', 'arxiv', 'authors', 'biorxiv', 'categories', 'config', 'crossref', 'date_filter_end', 'date_filter_start', 'decision', 'description', 'discovery_*.json', 'download', 'emulator', 'enabled', 'end_date', 'error_message', 'errors', 'interval_minutes', 'is_active', 'keywords', 'max_articles_per_run', 'name', 'openalex', 'pdf_downloaded', 'preferred_authors', 'pubmed', 'question', 'runs', 'schedule_config', 'scraper', 'search_query', 'source', 'sources', 'start_date', 'topics', 'total_articles_found', 'total_errors', 'total_runs', 'w']

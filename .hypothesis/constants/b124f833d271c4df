@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/citations/extractor.py
-# hypothesis_version: 6.148.9
-
-['\\n(BIBLIOGRAPHY)\\n', '\\n(Bibliography)\\n', '\\n(REFERENCES)\\n', '\\n(References)\\n', 'atx_text', 'bibliography', 'citations', 'headings', 'json_schema', 'references', 'setext_text']

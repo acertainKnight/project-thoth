@@ -1,4 +1,0 @@
-# file: /home/nick-hallmark/Documents/python/project-thoth/src/thoth/analyze/citations/crossref_resolver.py
-# hypothesis_version: 6.148.9
-
-[0.0, 1.0, 300, 429, 500, 86400, './cache/crossref', '60', 'DOI', 'Retry-After', 'URL', 'User-Agent', 'abstract', 'api_cache.db', 'api_calls', 'application/pdf', 'author', 'cache_hits', 'cache_misses', 'container-title', 'content-type', 'date-parts', 'errors', 'family', 'filter', 'given', 'issue', 'items', 'link', 'message', 'page', 'published-online', 'published-print', 'publisher', 'query', 'retries', 'rows', 'score', 'title', 'volume']
