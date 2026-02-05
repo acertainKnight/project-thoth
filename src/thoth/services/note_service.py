@@ -120,7 +120,11 @@ class NoteService(BaseService):
     def _save_markdown_to_postgres(
         self, title: str, markdown_content: str, pdf_path: str, note_path: str, markdown_path: str = None
     ) -> None:
-        """Update markdown content and file paths in PostgreSQL papers table."""
+        """Update markdown content and file paths in PostgreSQL.
+
+        Updates processed_papers table (via paper_metadata lookup),
+        since 'papers' is a VIEW and cannot be directly updated.
+        """
         import asyncpg  # noqa: I001
         import asyncio
 
@@ -135,21 +139,37 @@ class NoteService(BaseService):
         async def save():
             conn = await asyncpg.connect(db_url)
             try:
-                result = await conn.execute(
-                    """
-                    UPDATE papers
-                    SET markdown_content = $1, pdf_path = $2, note_path = $3, markdown_path = $4, updated_at = NOW()
-                    WHERE title = $5
-                """,
-                    markdown_content,
-                    pdf_path,
-                    note_path,
-                    markdown_path,
+                # First get the paper_id from paper_metadata
+                paper_id = await conn.fetchval(
+                    "SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1)",
                     title,
                 )
-                rows_affected = int(result.split()[-1]) if result else 0
-                if rows_affected > 0:
-                    self.logger.info(f'Updated paths in PostgreSQL for: {title}')
+
+                if paper_id:
+                    # Update or insert processed_papers
+                    result = await conn.execute(
+                        """
+                        INSERT INTO processed_papers 
+                            (paper_id, markdown_content, pdf_path, note_path, markdown_path, created_at, updated_at)
+                        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+                        ON CONFLICT (paper_id) DO UPDATE SET
+                            markdown_content = EXCLUDED.markdown_content,
+                            pdf_path = EXCLUDED.pdf_path,
+                            note_path = EXCLUDED.note_path,
+                            markdown_path = EXCLUDED.markdown_path,
+                            updated_at = NOW()
+                        """,
+                        paper_id,
+                        markdown_content,
+                        pdf_path,
+                        note_path,
+                        markdown_path,
+                    )
+                    rows_affected = int(result.split()[-1]) if result else 0
+                    if rows_affected > 0:
+                        self.logger.info(f'Updated paths in PostgreSQL for: {title}')
+                    else:
+                        self.logger.warning(f'No rows affected for: {title}')
                 else:
                     self.logger.warning(f'Paper not found in database: {title}')
             finally:

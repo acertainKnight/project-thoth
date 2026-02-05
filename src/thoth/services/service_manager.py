@@ -41,10 +41,12 @@ except ImportError:
 # Optional: RAG service (requires embeddings extras)
 try:
     from thoth.services.rag_service import RAGService
+    from thoth.services.rag_watcher_service import RAGWatcherService
 
     RAG_AVAILABLE = True
 except ImportError:
     RAGService = None  # type: ignore
+    RAGWatcherService = None  # type: ignore
     RAG_AVAILABLE = False
 
 from thoth.services.note_service import NoteService  # noqa: I001
@@ -114,6 +116,7 @@ class ServiceManager:
         letta_filesystem_watcher: LettaFilesystemWatcherService | None  # Requires 'memory' extras
         processing: ProcessingService | None  # Requires 'pdf' extras
         rag: RAGService | None  # Requires 'embeddings' extras
+        rag_watcher: RAGWatcherService | None  # Requires 'embeddings' extras
         cache: CacheService | None  # Requires optimization extras
         async_processing: AsyncProcessingService | None  # Requires optimization extras
 
@@ -173,8 +176,17 @@ class ServiceManager:
         if RAG_AVAILABLE:
             self._services['rag'] = RAGService(config=self.config)
             self.logger.debug('RAG service initialized')
+
+            # Initialize RAG watcher service (requires RAG service)
+            self._services['rag_watcher'] = RAGWatcherService(
+                config=self.config,
+                processing_service=self._services['processing'],
+                rag_service=self._services['rag'],
+            )
+            self.logger.debug('RAG watcher service initialized')
         else:
             self._services['rag'] = None
+            self._services['rag_watcher'] = None
             self.logger.debug('RAG service not available (requires embeddings extras)')
 
         self._services['web_search'] = WebSearchService(config=self.config)

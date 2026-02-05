@@ -95,35 +95,37 @@ class ReindexCollectionMCPTool(MCPTool):
                         isError=True,
                     )
 
-            # Rebuild the index
+            # Rebuild the index from database using RAGService
             try:
-                response_text += '\n**Starting Reindexing Process...**\n'
+                response_text += '\n**Starting Database Reindexing Process...**\n'
                 response_text += f'- Batch size: {batch_size}\n'
                 response_text += (
                     f'- Include notes: {include_notes if include_notes else ""}\n'
                 )
                 response_text += f'- Include articles: {include_articles if include_articles else ""}\n\n'
 
-                # Perform the reindexing
-                reindex_stats = self.service_manager.rag.index_knowledge_base()
+                # Use RAGService's index_from_database method
+                reindex_stats = self.service_manager.rag.index_from_database(force=True)
+
+                response_text += f'**Found {reindex_stats.get("total_papers", 0)} papers with markdown content**\n\n'
 
                 if reindex_stats:
                     response_text += '**Reindexing Complete!**\n\n'
                     response_text += '**New Index Statistics:**\n'
-                    response_text += f'- Total files indexed: {reindex_stats.get("total_files", 0)}\n'
+                    response_text += f'- Total papers indexed: {reindex_stats.get("papers_indexed", 0)}\n'
                     response_text += f'- Total chunks created: {reindex_stats.get("total_chunks", 0)}\n'
-                    response_text += (
-                        f'- Notes indexed: {reindex_stats.get("notes_indexed", 0)}\n'
-                    )
-                    response_text += f'- Articles indexed: {reindex_stats.get("articles_indexed", 0)}\n'
 
                     if reindex_stats.get('errors'):
                         response_text += (
-                            f'\n**Errors encountered:** {reindex_stats["errors"]}\n'
+                            f'\n**Errors encountered:** {len(reindex_stats["errors"])}\n'
                         )
+                        for err in reindex_stats['errors'][:5]:
+                            response_text += f'  - {err}\n'
+                        if len(reindex_stats['errors']) > 5:
+                            response_text += f'  ... and {len(reindex_stats["errors"]) - 5} more\n'
 
                     # Calculate improvement
-                    new_docs = reindex_stats.get('total_files', 0)
+                    new_docs = reindex_stats.get('papers_indexed', 0)
                     new_chunks = reindex_stats.get('total_chunks', 0)
 
                     if current_docs > 0:

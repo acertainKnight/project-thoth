@@ -55,7 +55,11 @@ class ProcessingService(BaseService):
     def _save_markdown_to_postgres(
         self, paper_title: str, markdown_content: str
     ) -> None:
-        """Save markdown content directly to PostgreSQL."""
+        """Save markdown content directly to PostgreSQL.
+
+        This inserts/updates paper_metadata first, then processed_papers,
+        since 'papers' is a VIEW and cannot be directly inserted into.
+        """
         import asyncpg  # noqa: I001
         import asyncio
 
@@ -70,17 +74,42 @@ class ProcessingService(BaseService):
         async def save():
             conn = await asyncpg.connect(db_url)
             try:
-                await conn.execute(
-                    """
-                    INSERT INTO papers (title, markdown_content, created_at, updated_at)
-                    VALUES ($1, $2, NOW(), NOW())
-                    ON CONFLICT (title) DO UPDATE SET
-                        markdown_content = EXCLUDED.markdown_content,
-                        updated_at = NOW()
-                """,
+                # First, check if paper exists in paper_metadata by title
+                paper_id = await conn.fetchval(
+                    "SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1)",
                     paper_title,
-                    markdown_content,
                 )
+
+                if paper_id is None:
+                    # Insert new paper_metadata record
+                    paper_id = await conn.fetchval(
+                        """
+                        INSERT INTO paper_metadata (title, title_normalized, source_of_truth, created_at, updated_at)
+                        VALUES ($1, LOWER($1), 'processed', NOW(), NOW())
+                        RETURNING id
+                        """,
+                        paper_title,
+                    )
+                else:
+                    # Update existing paper_metadata timestamp
+                    await conn.execute(
+                        "UPDATE paper_metadata SET updated_at = NOW() WHERE id = $1",
+                        paper_id,
+                    )
+
+                if paper_id:
+                    # Then insert/update processed_papers with markdown_content
+                    await conn.execute(
+                        """
+                        INSERT INTO processed_papers (paper_id, markdown_content, created_at, updated_at)
+                        VALUES ($1, $2, NOW(), NOW())
+                        ON CONFLICT (paper_id) DO UPDATE SET
+                            markdown_content = EXCLUDED.markdown_content,
+                            updated_at = NOW()
+                        """,
+                        paper_id,
+                        markdown_content,
+                    )
             finally:
                 await conn.close()
 
@@ -340,8 +369,19 @@ class ProcessingService(BaseService):
         return response
 
     def _join_markdown_pages(self, ocr_response: OCRResponse) -> str:
-        """Join the markdown pages into a single markdown document."""
-        return '\n\n'.join(page.markdown for page in ocr_response.pages)
+        """Join the markdown pages into a single markdown document without image references."""
+        import re
+        
+        combined = '\n\n'.join(page.markdown for page in ocr_response.pages)
+        
+        # Strip image references: ![alt](url) or ![alt][ref]
+        image_pattern = r'!\[[^\]]*\]\([^)]+\)|!\[[^\]]*\]\[[^\]]*\]'
+        combined = re.sub(image_pattern, '', combined)
+        
+        # Clean up multiple consecutive newlines left by removed images
+        combined = re.sub(r'\n{3,}', '\n\n', combined)
+        
+        return combined.strip()
 
     def _get_combined_markdown(self, ocr_response: OCRResponse) -> str:
         """Combine OCR text and images into a single markdown document."""

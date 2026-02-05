@@ -39,6 +39,7 @@ from . import (  # noqa: E402
     pdf,
     performance,
     rag,
+    rag_watcher,
     research,
     schema,
     server,
@@ -71,6 +72,7 @@ def main() -> None:
     pdf.configure_subparser(subparsers)
     performance.configure_subparser(subparsers)
     rag.configure_subparser(subparsers)
+    rag_watcher.configure_subparser(subparsers)
     research.configure_subparser(subparsers)
     schema.configure_subparser(subparsers)
     server.configure_subparser(subparsers)

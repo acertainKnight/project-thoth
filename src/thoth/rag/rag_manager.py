@@ -8,9 +8,11 @@ system, coordinating embeddings, vector storage, and question answering.
 from pathlib import Path  # noqa: I001
 from typing import Any
 
-from langchain.chains import RetrievalQA
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
 from loguru import logger
 
 from thoth.rag.embeddings import EmbeddingManager
@@ -182,12 +184,193 @@ class RAGManager:
         image_pattern = r'!\[[^\]]*\]\([^)]+\)|!\[[^\]]*\]\[[^\]]*\]'
         return bool(re.search(image_pattern, content))
 
-    def index_markdown_file(self, file_path: Path) -> list[str]:
+    def _strip_images(self, content: str) -> str:
+        """
+        Strip image references from markdown content.
+
+        This removes markdown image syntax like ![alt](url) and ![alt][ref]
+        while preserving the rest of the content.
+
+        Args:
+            content: Markdown content with potential image references.
+
+        Returns:
+            str: Content with image references removed.
+        """
+        import re
+
+        # Remove markdown image syntax: ![alt text](url) or ![alt text][ref]
+        # Also remove any surrounding whitespace/newlines left behind
+        image_pattern = r'!\[[^\]]*\]\([^)]+\)|!\[[^\]]*\]\[[^\]]*\]'
+        content = re.sub(image_pattern, '', content)
+
+        # Clean up multiple consecutive newlines left by removed images
+        content = re.sub(r'\n{3,}', '\n\n', content)
+
+        return content.strip()
+
+    def _lookup_paper_id_by_title(self, title: str) -> str | None:
+        """
+        Look up a paper ID from the database by title.
+
+        Args:
+            title: Paper title to search for.
+
+        Returns:
+            Paper ID (UUID string) if found, None otherwise.
+        """
+        import asyncio
+        import asyncpg
+
+        db_url = getattr(self.config.secrets, 'database_url', None)
+        if not db_url:
+            logger.warning('DATABASE_URL not configured - cannot lookup paper_id')
+            return None
+
+        async def lookup():
+            conn = await asyncpg.connect(db_url)
+            try:
+                # Try exact match first, then normalized match
+                paper_id = await conn.fetchval(
+                    "SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1)",
+                    title,
+                )
+                if paper_id:
+                    return str(paper_id)
+
+                # Try fuzzy match with title normalization
+                normalized_title = title.replace('_', ' ').replace('-', ' ')
+                paper_id = await conn.fetchval(
+                    "SELECT id FROM paper_metadata WHERE LOWER(title_normalized) = LOWER($1)",
+                    normalized_title,
+                )
+                return str(paper_id) if paper_id else None
+            finally:
+                await conn.close()
+
+        try:
+            loop = asyncio.get_running_loop()
+            # Already in async context - shouldn't happen in normal use
+            return None
+        except RuntimeError:
+            # No event loop running - safe to use asyncio.run()
+            return asyncio.run(lookup())
+
+    def index_paper_by_id(self, paper_id: str, markdown_content: str | None = None) -> list[str]:
+        """
+        Index a paper directly from the database by its ID.
+
+        Args:
+            paper_id: UUID of the paper to index.
+            markdown_content: Optional markdown content (if not provided, fetched from DB).
+
+        Returns:
+            List of document IDs that were indexed.
+        """
+        import asyncio
+        import asyncpg
+        from uuid import UUID
+
+        try:
+            logger.info(f'Indexing paper by ID: {paper_id}')
+            paper_uuid = UUID(paper_id)
+
+            db_url = getattr(self.config.secrets, 'database_url', None)
+            if not db_url:
+                raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
+
+            async def fetch_and_index():
+                conn = await asyncpg.connect(db_url)
+                try:
+                    # Fetch paper details and markdown content
+                    row = await conn.fetchrow(
+                        """
+                        SELECT pm.id, pm.title, pm.doi, pm.authors, pp.markdown_content
+                        FROM paper_metadata pm
+                        LEFT JOIN processed_papers pp ON pp.paper_id = pm.id
+                        WHERE pm.id = $1
+                        """,
+                        paper_uuid,
+                    )
+
+                    if not row:
+                        raise ValueError(f'Paper not found: {paper_id}')
+
+                    content = markdown_content or row['markdown_content']
+                    if not content:
+                        logger.warning(f'No markdown content for paper {paper_id}')
+                        return []
+
+                    # Strip image references from content if configured
+                    if self.config.rag_config.skip_files_with_images and self._has_images(content):
+                        logger.debug(f'Stripping image references from paper {paper_id}')
+                        content = self._strip_images(content)
+                        
+                        # Check if there's still meaningful content after stripping images
+                        if len(content.strip()) < 100:
+                            logger.warning(f'Paper {paper_id} has insufficient content after image removal')
+                            return []
+
+                    # Prepare metadata
+                    metadata = {
+                        'paper_id': str(row['id']),
+                        'title': row['title'] or 'Unknown',
+                        'doi': row['doi'],
+                        'authors': row['authors'],
+                        'document_type': 'article',
+                        'source': f"database:paper:{paper_id}",
+                    }
+
+                    # Split into chunks
+                    chunks = self.text_splitter.split_text(content)
+                    logger.debug(f'Split paper into {len(chunks)} token-based chunks')
+
+                    # Create documents with metadata
+                    documents = []
+                    for i, chunk in enumerate(chunks):
+                        doc_metadata = {
+                            **metadata,
+                            'chunk_index': i,
+                            'total_chunks': len(chunks),
+                        }
+                        doc = Document(
+                            page_content=chunk,
+                            metadata=doc_metadata,
+                        )
+                        documents.append(doc)
+
+                    # Index documents using async method
+                    doc_ids = await self.vector_store_manager.add_documents_async(
+                        documents, paper_id=paper_uuid
+                    )
+                    logger.info(f'Successfully indexed {len(doc_ids)} chunks for paper {paper_id}')
+                    return doc_ids
+                finally:
+                    await conn.close()
+
+            try:
+                loop = asyncio.get_running_loop()
+                raise RuntimeError(
+                    'index_paper_by_id() called from async context. '
+                    "Use 'await index_paper_by_id_async()' instead."
+                )
+            except RuntimeError as e:
+                if 'no running event loop' in str(e).lower():
+                    return asyncio.run(fetch_and_index())
+                else:
+                    raise
+
+        except Exception as e:
+            logger.error(f'Error indexing paper {paper_id}: {e}')
+            raise
+
+    def index_markdown_file(self, file_path: Path, paper_id: str | None = None) -> list[str]:
         """
         Index a markdown file into the vector store.
 
         Args:
             file_path: Path to the markdown file.
+            paper_id: Optional paper ID (UUID string). If not provided, attempts lookup by title.
 
         Returns:
             List of document IDs that were indexed.
@@ -209,29 +392,22 @@ class RAGManager:
             # Extract metadata from file
             metadata = self._extract_metadata_from_path(file_path)
 
-            # Split into chunks
-            chunks = self.text_splitter.split_text(content)
-            logger.debug(f'Split document into {len(chunks)} token-based chunks')
+            # Try to find paper_id if not provided
+            if paper_id is None:
+                title = metadata.get('title', file_path.stem)
+                paper_id = self._lookup_paper_id_by_title(title)
+                if paper_id:
+                    logger.debug(f'Found paper_id {paper_id} for title: {title}')
+                else:
+                    logger.warning(f'Could not find paper_id for: {title}. Using index_paper_by_id with database content is recommended.')
+                    # For now, we'll create a fallback - but this requires paper_id in DB
+                    raise ValueError(
+                        f"Cannot index {file_path}: paper_id not found in database. "
+                        "Ensure the paper exists in paper_metadata first, or use index_paper_by_id()."
+                    )
 
-            # Create documents with metadata
-            documents = []
-            for i, chunk in enumerate(chunks):
-                doc_metadata = {
-                    **metadata,
-                    'chunk_index': i,
-                    'total_chunks': len(chunks),
-                }
-                doc = Document(
-                    page_content=chunk,
-                    metadata=doc_metadata,
-                )
-                documents.append(doc)
-
-            # Index documents
-            doc_ids = self.vector_store_manager.add_documents(documents)
-            logger.info(f'Successfully indexed {len(doc_ids)} chunks from {file_path}')
-
-            return doc_ids
+            # If we have paper_id, use the database-backed method for consistency
+            return self.index_paper_by_id(paper_id, markdown_content=content)
 
         except Exception as e:
             logger.error(f'Error indexing markdown file {file_path}: {e}')
@@ -377,34 +553,47 @@ class RAGManager:
         try:
             logger.info(f'Answering question: {question}')
 
-            # Get retriever
-            retriever = self.vector_store_manager.get_retriever(
-                search_kwargs={
-                    'k': k,
-                    'filter': filter,
-                }
+            # Retrieve relevant documents
+            docs = self.vector_store_manager.similarity_search(
+                query=question,
+                k=k,
+                filter=filter,
             )
 
-            # Create QA chain
-            qa_chain = RetrievalQA.from_chain_type(
-                llm=self.llm,
-                chain_type='stuff',
-                retriever=retriever,
-                return_source_documents=return_sources,
+            # Format context from retrieved documents
+            def format_docs(documents: list[Document]) -> str:
+                return "\n\n".join(doc.page_content for doc in documents)
+
+            context = format_docs(docs)
+
+            # Create RAG prompt
+            prompt = ChatPromptTemplate.from_template(
+                """Answer the question based only on the following context. 
+If you cannot answer the question based on the context, say so.
+
+Context:
+{context}
+
+Question: {question}
+
+Answer:"""
             )
+
+            # Create simple chain using LCEL
+            chain = prompt | self.llm | StrOutputParser()
 
             # Get answer
-            result = qa_chain({'query': question})
+            answer = chain.invoke({"context": context, "question": question})
 
             # Format response
             response = {
                 'question': question,
-                'answer': result['result'],
+                'answer': answer,
             }
 
-            if return_sources and 'source_documents' in result:
+            if return_sources:
                 response['sources'] = []
-                for doc in result['source_documents']:
+                for doc in docs:
                     source_info = {
                         'content': doc.page_content[:200] + '...',  # Preview
                         'metadata': doc.metadata,

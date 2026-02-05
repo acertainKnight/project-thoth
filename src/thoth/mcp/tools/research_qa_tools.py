@@ -75,11 +75,14 @@ class AnswerResearchQuestionMCPTool(MCPTool):
                     isError=True
                 )
 
-            search_results = await rag_service.search(
+            search_results = await rag_service.search_async(
                 query=question,
-                top_k=max_sources,
-                similarity_threshold=min_relevance
+                k=max_sources,
             )
+            
+            # Filter by minimum relevance score
+            if min_relevance > 0:
+                search_results = [r for r in search_results if r.get('score', 0) >= min_relevance]
 
             if not search_results:
                 return MCPToolCallResult(
@@ -588,10 +591,10 @@ class SearchByTopicMCPTool(MCPTool):
                     search_filter['year_range']['to'] = year_to
 
             # Perform semantic search
-            results = await rag_service.search(
+            results = await rag_service.search_async(
                 query=topic,
-                top_k=limit,
-                filter=search_filter
+                k=limit,
+                filter=search_filter if search_filter else None
             )
 
             if not results:

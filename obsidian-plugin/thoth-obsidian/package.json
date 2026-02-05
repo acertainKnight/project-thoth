@@ -18,6 +18,9 @@
   ],
   "author": "Thoth Project",
   "license": "MIT",
+  "dependencies": {
+    "streaming-markdown": "^0.0.17"
+  },
   "devDependencies": {
     "@types/node": "^16.11.6",
     "@typescript-eslint/eslint-plugin": "5.29.0",

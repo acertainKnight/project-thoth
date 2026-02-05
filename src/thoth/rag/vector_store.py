@@ -61,11 +61,30 @@ class VectorStoreManager:
         logger.info('VectorStoreManager initialized (PostgreSQL + pgvector)')
 
     async def _get_pool(self) -> asyncpg.Pool:
-        """Get or create connection pool."""
-        if self._pool is None:
-            self._pool = await asyncpg.create_pool(
-                self.db_url, min_size=2, max_size=10, command_timeout=60
-            )
+        """Get or create connection pool.
+        
+        Handles the case where the pool was created in a previous event loop
+        that has since been closed.
+        """
+        # Check if we have a pool and if it's still valid
+        if self._pool is not None:
+            try:
+                # Test if the pool is still usable
+                async with self._pool.acquire() as conn:
+                    await conn.execute('SELECT 1')
+                return self._pool
+            except Exception:
+                # Pool is invalid (likely from a closed event loop), close and recreate
+                try:
+                    await self._pool.close()
+                except Exception:
+                    pass
+                self._pool = None
+        
+        # Create new pool
+        self._pool = await asyncpg.create_pool(
+            self.db_url, min_size=1, max_size=5, command_timeout=60
+        )
         return self._pool
 
     async def _ensure_extension(self) -> None:
@@ -127,6 +146,8 @@ class VectorStoreManager:
         self, documents: list[Document], paper_id: UUID | None = None, **kwargs: Any
     ) -> list[str]:
         """Add documents asynchronously."""
+        import json
+
         if not paper_id:
             raise ValueError('paper_id is required for document chunks')
 
@@ -138,14 +159,38 @@ class VectorStoreManager:
         ids = []
 
         async with pool.acquire() as conn:
+            # Set up JSON codec for the connection
+            await conn.set_type_codec(
+                'jsonb',
+                encoder=json.dumps,
+                decoder=json.loads,
+                schema='pg_catalog'
+            )
+
             for idx, (doc, embedding) in enumerate(zip(documents, embeddings)):  # noqa: B905
                 metadata = {**doc.metadata, **kwargs}
+
+                # Ensure metadata values are JSON-serializable
+                clean_metadata = {}
+                for k, v in metadata.items():
+                    if v is None:
+                        clean_metadata[k] = None
+                    elif isinstance(v, (str, int, float, bool)):
+                        clean_metadata[k] = v
+                    elif isinstance(v, (list, dict)):
+                        clean_metadata[k] = v
+                    else:
+                        clean_metadata[k] = str(v)
+
+                # Convert embedding list to PostgreSQL vector format string
+                # pgvector expects format like '[0.1, 0.2, 0.3]'
+                embedding_str = '[' + ','.join(str(x) for x in embedding) + ']'
 
                 result = await conn.fetchrow(
                     """
                     INSERT INTO document_chunks
                     (paper_id, content, chunk_index, chunk_type, metadata, embedding, token_count)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    VALUES ($1, $2, $3, $4, $5::jsonb, $6::vector, $7)
                     ON CONFLICT (paper_id, chunk_index)
                     DO UPDATE SET
                         content = EXCLUDED.content,
@@ -157,9 +202,9 @@ class VectorStoreManager:
                     paper_id,
                     doc.page_content,
                     idx,
-                    metadata.get('chunk_type', 'content'),
-                    metadata,
-                    embedding,
+                    clean_metadata.get('chunk_type', 'content'),
+                    clean_metadata,
+                    embedding_str,
                     len(doc.page_content.split()),  # Rough token count
                 )
 
@@ -432,9 +477,105 @@ class VectorStoreManager:
                 'total_chunks': row['total_chunks'],
                 'total_papers': row['total_papers'],
                 'indexed_chunks': row['indexed_chunks'],
+                'document_count': row['total_chunks'],  # Alias for compatibility
                 'collection_name': 'document_chunks (pgvector)',
                 'backend': 'PostgreSQL + pgvector',
             }
+
+    def get_collection_stats(self) -> dict[str, Any]:
+        """
+        Get collection statistics (alias for get_stats for compatibility).
+
+        Returns:
+            Dictionary with collection statistics
+        """
+        return self.get_stats()
+
+    async def clear_collection_async(self) -> None:
+        """
+        Clear all documents from the collection (async version).
+
+        WARNING: This permanently deletes all indexed documents.
+        """
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            result = await conn.execute('TRUNCATE TABLE document_chunks RESTART IDENTITY CASCADE')
+            logger.warning(f'Cleared document_chunks table: {result}')
+
+    def clear_collection(self) -> None:
+        """
+        Clear all documents from the collection (sync wrapper).
+
+        WARNING: This permanently deletes all indexed documents.
+        """
+        try:
+            loop = asyncio.get_running_loop()  # noqa: F841
+            raise RuntimeError(
+                'clear_collection() called from async context. '
+                "Use 'await clear_collection_async()' instead."
+            )
+        except RuntimeError as e:
+            if 'no running event loop' in str(e).lower():
+                asyncio.run(self.clear_collection_async())
+            else:
+                raise
+
+    def get_retriever(self, search_kwargs: dict[str, Any] | None = None):
+        """
+        Get a retriever interface for the vector store.
+
+        Args:
+            search_kwargs: Search parameters (k, filter, etc.)
+
+        Returns:
+            A retriever object compatible with LangChain
+        """
+        from langchain_core.retrievers import BaseRetriever
+        from langchain_core.callbacks import CallbackManagerForRetrieverRun
+
+        search_kwargs = search_kwargs or {}
+
+        class PgVectorRetriever(BaseRetriever):
+            """Custom retriever for pgvector store."""
+
+            vector_store: 'VectorStoreManager'
+            k: int = 4
+            filter: dict[str, Any] | None = None
+
+            class Config:
+                arbitrary_types_allowed = True
+
+            def _get_relevant_documents(
+                self,
+                query: str,
+                *,
+                run_manager: CallbackManagerForRetrieverRun | None = None,
+            ) -> list[Document]:
+                """Get relevant documents synchronously."""
+                return self.vector_store.similarity_search(
+                    query=query,
+                    k=self.k,
+                    filter=self.filter,
+                )
+
+            async def _aget_relevant_documents(
+                self,
+                query: str,
+                *,
+                run_manager: CallbackManagerForRetrieverRun | None = None,
+            ) -> list[Document]:
+                """Get relevant documents asynchronously."""
+                return await self.vector_store.similarity_search_async(
+                    query=query,
+                    k=self.k,
+                    filter=self.filter,
+                )
+
+        return PgVectorRetriever(
+            vector_store=self,
+            k=search_kwargs.get('k', 4),
+            filter=search_kwargs.get('filter'),
+        )
 
     async def close(self) -> None:
         """Close connection pool."""

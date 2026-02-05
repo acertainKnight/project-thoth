@@ -411,6 +411,123 @@ class RAGService(BaseService):
         except Exception as e:
             raise ServiceError(self.handle_error(e, 'indexing knowledge base')) from e
 
+    def index_paper_by_id(self, paper_id: str, markdown_content: str | None = None) -> list[str]:
+        """
+        Index a paper by its UUID from the database.
+
+        Args:
+            paper_id: UUID of the paper in paper_metadata table
+            markdown_content: Optional markdown content (fetched from DB if not provided)
+
+        Returns:
+            list[str]: List of document chunk IDs created
+
+        Raises:
+            ServiceError: If indexing fails
+        """
+        try:
+            self.validate_input(paper_id=paper_id)
+            doc_ids = self.rag_manager.index_paper_by_id(paper_id, markdown_content=markdown_content)
+            self.log_operation(
+                'paper_indexed_by_id',
+                paper_id=paper_id,
+                chunks=len(doc_ids),
+            )
+            return doc_ids
+        except Exception as e:
+            raise ServiceError(
+                self.handle_error(e, f'indexing paper {paper_id}')
+            ) from e
+
+    def index_from_database(
+        self,
+        limit: int | None = None,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Index all papers from the database that have markdown content.
+
+        Args:
+            limit: Maximum number of papers to index (None for all)
+            force: If True, re-index papers that are already indexed
+
+        Returns:
+            dict[str, Any]: Indexing statistics
+
+        Raises:
+            ServiceError: If indexing fails
+        """
+        import asyncio
+
+        import asyncpg
+
+        try:
+            db_url = getattr(self.config.secrets, 'database_url', None)
+            if not db_url:
+                raise ServiceError('DATABASE_URL not configured - PostgreSQL is required')
+
+            async def fetch_papers():
+                conn = await asyncpg.connect(db_url)
+                try:
+                    query = """
+                        SELECT pm.id, pm.title, pp.markdown_content
+                        FROM paper_metadata pm
+                        JOIN processed_papers pp ON pp.paper_id = pm.id
+                        WHERE pp.markdown_content IS NOT NULL 
+                          AND pp.markdown_content != ''
+                    """
+                    if not force:
+                        query += """
+                          AND pm.id NOT IN (
+                            SELECT DISTINCT (metadata->>'paper_id')::uuid 
+                            FROM document_chunks 
+                            WHERE metadata->>'paper_id' IS NOT NULL
+                          )
+                        """
+                    query += ' ORDER BY pm.created_at DESC'
+                    if limit:
+                        query += f' LIMIT {limit}'
+                    rows = await conn.fetch(query)
+                    return rows
+                finally:
+                    await conn.close()
+
+            papers = asyncio.run(fetch_papers())
+
+            stats = {
+                'total_papers': len(papers),
+                'papers_indexed': 0,
+                'total_chunks': 0,
+                'errors': [],
+            }
+
+            for row in papers:
+                paper_id = str(row['id'])
+                title = row['title'] or 'Unknown'
+                content = row['markdown_content']
+
+                try:
+                    doc_ids = self.rag_manager.index_paper_by_id(paper_id, markdown_content=content)
+                    stats['total_chunks'] += len(doc_ids)
+                    stats['papers_indexed'] += 1
+                    self.logger.info(f'Indexed {len(doc_ids)} chunks for: {title[:50]}')
+                except Exception as e:
+                    error_msg = f'{title}: {e}'
+                    stats['errors'].append(error_msg)
+                    self.logger.error(f'Failed to index {paper_id}: {e}')
+
+            self.log_operation(
+                'database_indexed',
+                papers_indexed=stats['papers_indexed'],
+                total_chunks=stats['total_chunks'],
+                errors=len(stats['errors']),
+            )
+
+            return stats
+
+        except Exception as e:
+            raise ServiceError(self.handle_error(e, 'indexing from database')) from e
+
     def health_check(self) -> dict[str, str]:
         """Basic health status for the RAGService."""
         return super().health_check()

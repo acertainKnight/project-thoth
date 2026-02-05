@@ -546,7 +546,10 @@ class CitationGraph:
 
     def _save_markdown_content_to_postgres(self, article_id: str, markdown_content: str, markdown_path: str) -> None:
         """
-        Save markdown_content to papers table for embeddings generation.
+        Save markdown_content to processed_papers table for embeddings generation.
+
+        The 'papers' is a VIEW, so we update the underlying processed_papers table
+        by looking up the paper_id from paper_metadata first.
 
         Args:
             article_id: The article ID (doi:xxx, arxiv:xxx, or title:xxx)
@@ -570,33 +573,35 @@ class CitationGraph:
                 # Extract identifier from article_id (format: "doi:10.1234" or "arxiv:1234.5678" or "title:xxx")
                 id_type, id_value = article_id.split(':', 1) if ':' in article_id else ('title', article_id)
 
-                # Find paper by identifier
+                # First, find paper_id from paper_metadata
                 if id_type == 'doi':
-                    result = await conn.execute("""
-                        UPDATE papers
-                        SET markdown_content = $1,
-                            markdown_path = $2
-                        WHERE doi = $3
-                    """, markdown_content, markdown_path, id_value)
+                    paper_id = await conn.fetchval(
+                        "SELECT id FROM paper_metadata WHERE doi = $1", id_value
+                    )
                 elif id_type == 'arxiv':
-                    result = await conn.execute("""
-                        UPDATE papers
-                        SET markdown_content = $1,
-                            markdown_path = $2
-                        WHERE arxiv_id = $3
-                    """, markdown_content, markdown_path, id_value)
+                    paper_id = await conn.fetchval(
+                        "SELECT id FROM paper_metadata WHERE arxiv_id = $1", id_value
+                    )
                 else:  # title-based
-                    result = await conn.execute("""
-                        UPDATE papers
-                        SET markdown_content = $1,
-                            markdown_path = $2
-                        WHERE title = $3
-                    """, markdown_content, markdown_path, id_value)
+                    paper_id = await conn.fetchval(
+                        "SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1)", id_value
+                    )
 
-                if result.split()[-1] == '0':
+                if paper_id is None:
                     logger.warning(f"No paper found with {id_type}={id_value}, markdown_content not saved")
-                else:
-                    logger.info(f"Saved markdown_content for {article_id} ({len(markdown_content)} chars)")
+                    return
+
+                # Update or insert into processed_papers
+                result = await conn.execute("""
+                    INSERT INTO processed_papers (paper_id, markdown_content, markdown_path, created_at, updated_at)
+                    VALUES ($1, $2, $3, NOW(), NOW())
+                    ON CONFLICT (paper_id) DO UPDATE SET
+                        markdown_content = EXCLUDED.markdown_content,
+                        markdown_path = EXCLUDED.markdown_path,
+                        updated_at = NOW()
+                """, paper_id, markdown_content, markdown_path)
+
+                logger.info(f"Saved markdown_content for {article_id} ({len(markdown_content)} chars)")
 
             except Exception as e:
                 logger.error(f'Error saving markdown_content to PostgreSQL: {e}')

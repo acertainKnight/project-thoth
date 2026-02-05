@@ -219,17 +219,21 @@ class NoteRegenerationService:
             )
 
             # Update database with new paths
+            # Note: 'papers' is a VIEW, so we update the underlying processed_papers table
             conn = await asyncpg.connect(self.db_url)
             try:
                 await conn.execute(
                     """
-                    UPDATE papers
-                    SET note_path = $1, pdf_path = $2, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = $3
-                """,
+                    INSERT INTO processed_papers (paper_id, note_path, pdf_path, created_at, updated_at)
+                    VALUES ($1, $2, $3, NOW(), NOW())
+                    ON CONFLICT (paper_id) DO UPDATE SET
+                        note_path = EXCLUDED.note_path,
+                        pdf_path = EXCLUDED.pdf_path,
+                        updated_at = NOW()
+                    """,
+                    paper_id,
                     str(note_path),
                     str(new_pdf_path),
-                    paper_id,
                 )
             finally:
                 await conn.close()
