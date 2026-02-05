@@ -1,0 +1,12 @@
+{
+  "backup_timestamp": "20260203_223412",
+  "thoth_version": "2.0",
+  "components": [
+    {
+      "name": "queries_and_sources",
+      "queries_count": 0,
+      "sources_count": 0,
+      "path": "/home/nick-hallmark/Documents/python/project-thoth/thoth_backups/thoth_backup_20260203_223412/queries_sources.json"
+    }
+  ],
+  "statistics": 

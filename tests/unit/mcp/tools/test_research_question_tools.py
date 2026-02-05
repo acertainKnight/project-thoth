@@ -25,10 +25,6 @@ def mock_service_manager():
     return manager
 
 
-@pytest.fixture
-def mock_logger():
-    """Create a mock logger."""
-    return MagicMock()
 
 
 # ==================== ListAvailableSourcesMCPTool Tests ====================
@@ -38,15 +34,14 @@ class TestListAvailableSourcesMCPTool:
     """Tests for ListAvailableSourcesMCPTool."""
 
     @pytest.mark.asyncio
-    async def test_list_sources_with_builtin_only(self, mock_service_manager, mock_logger):
+    async def test_list_sources_with_builtin_only(self, mock_service_manager):
         """Test listing sources when only built-in sources available."""
         tool = ListAvailableSourcesMCPTool(mock_service_manager)
-        tool.logger = mock_logger
 
         # Mock repository to return empty workflows
         with patch('thoth.repositories.browser_workflow_repository.BrowserWorkflowRepository') as mock_repo_class:
             mock_repo = AsyncMock()
-            mock_repo.list_active.return_value = []
+            mock_repo.get_active_workflows.return_value = []
             mock_repo_class.return_value = mock_repo
 
             result = await tool.execute({})
@@ -60,15 +55,14 @@ class TestListAvailableSourcesMCPTool:
         assert 'Built-in API Sources' in content_text
 
     @pytest.mark.asyncio
-    async def test_list_sources_with_custom_workflows(self, mock_service_manager, mock_logger):
+    async def test_list_sources_with_custom_workflows(self, mock_service_manager):
         """Test listing sources with custom browser workflows."""
         tool = ListAvailableSourcesMCPTool(mock_service_manager)
-        tool.logger = mock_logger
 
         # Mock repository to return workflows
         with patch('thoth.repositories.browser_workflow_repository.BrowserWorkflowRepository') as mock_repo_class:
             mock_repo = AsyncMock()
-            mock_repo.list_active.return_value = [
+            mock_repo.get_active_workflows.return_value = [
                 {'name': 'custom_scraper', 'description': 'Custom workflow'},
             ]
             mock_repo_class.return_value = mock_repo
@@ -88,10 +82,9 @@ class TestCreateResearchQuestionMCPTool:
     """Tests for CreateResearchQuestionMCPTool."""
 
     @pytest.mark.asyncio
-    async def test_create_question_success(self, mock_service_manager, mock_logger):
+    async def test_create_question_success(self, mock_service_manager):
         """Test successful research question creation."""
         tool = CreateResearchQuestionMCPTool(mock_service_manager)
-        tool.logger = mock_logger
 
         question_id = uuid4()
         mock_service_manager.research_question.create_research_question = AsyncMock(
@@ -113,10 +106,9 @@ class TestCreateResearchQuestionMCPTool:
         assert 'Test Question' in content_text
 
     @pytest.mark.asyncio
-    async def test_create_question_missing_required_field(self, mock_service_manager, mock_logger):
+    async def test_create_question_missing_required_field(self, mock_service_manager):
         """Test creation with missing required field."""
         tool = CreateResearchQuestionMCPTool(mock_service_manager)
-        tool.logger = mock_logger
 
         # Missing 'keywords'
         arguments = {
@@ -136,10 +128,9 @@ class TestCreateResearchQuestionMCPTool:
         assert 'Error' in result.content[0]['text'] or 'error' in result.content[0]['text'].lower()
 
     @pytest.mark.asyncio
-    async def test_create_question_with_all_optional_fields(self, mock_service_manager, mock_logger):
+    async def test_create_question_with_all_optional_fields(self, mock_service_manager):
         """Test creation with all optional fields."""
         tool = CreateResearchQuestionMCPTool(mock_service_manager)
-        tool.logger = mock_logger
 
         question_id = uuid4()
         mock_service_manager.research_question.create_research_question = AsyncMock(
@@ -173,10 +164,9 @@ class TestListResearchQuestionsMCPTool:
     """Tests for ListResearchQuestionsMCPTool."""
 
     @pytest.mark.asyncio
-    async def test_list_questions_empty(self, mock_service_manager, mock_logger):
+    async def test_list_questions_empty(self, mock_service_manager):
         """Test listing when no questions exist."""
         tool = ListResearchQuestionsMCPTool(mock_service_manager)
-        tool.logger = mock_logger
 
         mock_service_manager.research_question.get_user_questions = AsyncMock(
             return_value=[]
@@ -189,10 +179,9 @@ class TestListResearchQuestionsMCPTool:
         assert 'No research questions found' in content_text
 
     @pytest.mark.asyncio
-    async def test_list_questions_with_data(self, mock_service_manager, mock_logger):
+    async def test_list_questions_with_data(self, mock_service_manager):
         """Test listing with multiple questions."""
         tool = ListResearchQuestionsMCPTool(mock_service_manager)
-        tool.logger = mock_logger
 
         questions = [
             {
@@ -235,10 +224,9 @@ class TestGetResearchQuestionMCPTool:
     """Tests for GetResearchQuestionMCPTool."""
 
     @pytest.mark.asyncio
-    async def test_get_question_success(self, mock_service_manager, mock_logger):
+    async def test_get_question_success(self, mock_service_manager):
         """Test getting a specific question."""
         tool = GetResearchQuestionMCPTool(mock_service_manager)
-        tool.logger = mock_logger
 
         question_id = uuid4()
         question = {
@@ -270,10 +258,9 @@ class TestGetResearchQuestionMCPTool:
         assert str(question_id) in content_text
 
     @pytest.mark.asyncio
-    async def test_get_question_not_found(self, mock_service_manager, mock_logger):
+    async def test_get_question_not_found(self, mock_service_manager):
         """Test getting non-existent question."""
         tool = GetResearchQuestionMCPTool(mock_service_manager)
-        tool.logger = mock_logger
 
         question_id = uuid4()
 
@@ -291,10 +278,9 @@ class TestGetResearchQuestionMCPTool:
         assert 'not found' in result.content[0]['text']
 
     @pytest.mark.asyncio
-    async def test_get_question_wrong_user(self, mock_service_manager, mock_logger):
+    async def test_get_question_wrong_user(self, mock_service_manager):
         """Test getting question with wrong user ID."""
         tool = GetResearchQuestionMCPTool(mock_service_manager)
-        tool.logger = mock_logger
 
         question_id = uuid4()
         question = {
@@ -324,10 +310,9 @@ class TestUpdateResearchQuestionMCPTool:
     """Tests for UpdateResearchQuestionMCPTool."""
 
     @pytest.mark.asyncio
-    async def test_update_question_success(self, mock_service_manager, mock_logger):
+    async def test_update_question_success(self, mock_service_manager):
         """Test successful update."""
         tool = UpdateResearchQuestionMCPTool(mock_service_manager)
-        tool.logger = mock_logger
 
         question_id = uuid4()
         mock_service_manager.research_question.update_research_question = AsyncMock(
@@ -344,10 +329,9 @@ class TestUpdateResearchQuestionMCPTool:
         assert 'Successfully updated' in result.content[0]['text']
 
     @pytest.mark.asyncio
-    async def test_update_question_no_fields(self, mock_service_manager, mock_logger):
+    async def test_update_question_no_fields(self, mock_service_manager):
         """Test update with no fields provided."""
         tool = UpdateResearchQuestionMCPTool(mock_service_manager)
-        tool.logger = mock_logger
 
         question_id = uuid4()
 
@@ -366,10 +350,9 @@ class TestDeleteResearchQuestionMCPTool:
     """Tests for DeleteResearchQuestionMCPTool."""
 
     @pytest.mark.asyncio
-    async def test_delete_question_soft(self, mock_service_manager, mock_logger):
+    async def test_delete_question_soft(self, mock_service_manager):
         """Test soft delete (default)."""
         tool = DeleteResearchQuestionMCPTool(mock_service_manager)
-        tool.logger = mock_logger
 
         question_id = uuid4()
         mock_service_manager.research_question.delete_research_question = AsyncMock(
@@ -384,10 +367,9 @@ class TestDeleteResearchQuestionMCPTool:
         assert 'deactivated' in result.content[0]['text']
 
     @pytest.mark.asyncio
-    async def test_delete_question_hard(self, mock_service_manager, mock_logger):
+    async def test_delete_question_hard(self, mock_service_manager):
         """Test hard delete."""
         tool = DeleteResearchQuestionMCPTool(mock_service_manager)
-        tool.logger = mock_logger
 
         question_id = uuid4()
         mock_service_manager.research_question.delete_research_question = AsyncMock(
@@ -410,10 +392,9 @@ class TestRunDiscoveryForQuestionMCPTool:
     """Tests for RunDiscoveryForQuestionMCPTool."""
 
     @pytest.mark.asyncio
-    async def test_run_discovery_success(self, mock_service_manager, mock_logger):
+    async def test_run_discovery_success(self, mock_service_manager):
         """Test successful discovery execution."""
         tool = RunDiscoveryForQuestionMCPTool(mock_service_manager)
-        tool.logger = mock_logger
 
         question_id = uuid4()
         mock_service_manager.discovery_orchestrator.run_discovery_for_question = AsyncMock(
@@ -436,10 +417,9 @@ class TestRunDiscoveryForQuestionMCPTool:
         assert '20' in content_text
 
     @pytest.mark.asyncio
-    async def test_run_discovery_orchestrator_unavailable(self, mock_service_manager, mock_logger):
+    async def test_run_discovery_orchestrator_unavailable(self, mock_service_manager):
         """Test when discovery orchestrator is not available."""
         tool = RunDiscoveryForQuestionMCPTool(mock_service_manager)
-        tool.logger = mock_logger
 
         mock_service_manager.discovery_orchestrator = None
         question_id = uuid4()
@@ -452,10 +432,9 @@ class TestRunDiscoveryForQuestionMCPTool:
         assert 'not available' in result.content[0]['text']
 
     @pytest.mark.asyncio
-    async def test_run_discovery_failure(self, mock_service_manager, mock_logger):
+    async def test_run_discovery_failure(self, mock_service_manager):
         """Test discovery execution failure."""
         tool = RunDiscoveryForQuestionMCPTool(mock_service_manager)
-        tool.logger = mock_logger
 
         question_id = uuid4()
         mock_service_manager.discovery_orchestrator.run_discovery_for_question = AsyncMock(
