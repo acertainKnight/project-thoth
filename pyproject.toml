@@ -35,7 +35,6 @@ api = [
     "fastapi>=0.115.12",
     "uvicorn>=0.32.0",
     "sqlalchemy>=2.0.39",
-    "alembic>=1.13.0",
     "asyncpg", # PostgreSQL async driver
     "psycopg2-binary>=2.9.10", # PostgreSQL synchronous driver for pdf_monitor
     "aiofiles>=24.1.0",

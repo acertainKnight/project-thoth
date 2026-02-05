@@ -77,6 +77,7 @@ htmlcov/
 
 # Backups (NEVER commit backup files!)
 backups/
+thoth_backups/
 *.dump
 *.sql.gz
 *.backup
@@ -104,6 +105,7 @@ claude-flow
 .hypothesis/
 .letta/
 .claude/
+.cursor/
 .benchmarks/
 
 # Test results and coverage
@@ -160,3 +162,14 @@ docs/*TROUBLESHOOTING*.md
 # plugin files
 obsidian-plugin/thoth-obsidian/node_modules/
 migrations/
+
+# Generated OpenAPI specs
+openapi_letta.json
+openapi_*.json
+
+# Generated script output files
+scripts/*_tool_ids.json
+scripts/shared_memory_blocks.json
+
+# User-specific settings
+thoth.settings.json
