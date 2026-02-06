@@ -127,7 +127,8 @@ class UpdateSettingsMCPTool(MCPTool):
                     'description': "Setting path using dot notation (e.g., 'llm.default.model', 'rag.chunkSize')",
                 },
                 'value': {
-                    'description': 'New value for the setting (can be string, number, boolean, array, or object)'
+                    'type': ['string', 'number', 'boolean', 'array', 'object', 'null'],
+                    'description': 'New value for the setting (can be string, number, boolean, array, or object)',
                 },
                 'action': {
                     'type': 'string',

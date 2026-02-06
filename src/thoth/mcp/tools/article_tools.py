@@ -302,11 +302,14 @@ class UpdateArticleMetadataMCPTool(MCPTool):
                         },
                         'doi': {'type': 'string', 'description': 'Digital Object Identifier'},
                         'arxiv_id': {'type': 'string', 'description': 'arXiv identifier'},
+                        'url': {'type': 'string', 'description': 'URL to the article'},
+                        'citation_count': {'type': 'integer', 'description': 'Number of citations'},
                     },
-                    'additionalProperties': True,
+                    'additionalProperties': False,
                 },
             },
             'required': ['article_identifier'],
+            'additionalProperties': False,
         }
 
     async def execute(self, arguments: dict[str, Any]) -> MCPToolCallResult:

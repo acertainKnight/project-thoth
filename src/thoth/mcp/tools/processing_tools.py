@@ -510,9 +510,9 @@ class CollectionStatsMCPTool(NoInputTool):
     async def execute(self, _arguments: dict[str, Any]) -> MCPToolCallResult:
         """Get collection statistics."""
         try:
-            # Get RAG statistics with error handling
+            # Get RAG statistics with error handling (use async version in MCP context)
             try:
-                rag_stats = self.service_manager.rag.get_stats()
+                rag_stats = await self.service_manager.rag.get_statistics_async()
             except Exception as e:
                 logger.warning(f'Failed to get RAG stats: {e}')
                 rag_stats = {}

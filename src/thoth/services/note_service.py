@@ -140,10 +140,26 @@ class NoteService(BaseService):
             conn = await asyncpg.connect(db_url)
             try:
                 # First get the paper_id from paper_metadata
+                # Try exact match first, then normalized match (hyphens -> spaces)
                 paper_id = await conn.fetchval(
                     "SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1)",
                     title,
                 )
+
+                # If not found, try with normalized title (replace hyphens with spaces)
+                if paper_id is None:
+                    normalized_title = title.replace('-', ' ').replace(',', '')
+                    paper_id = await conn.fetchval(
+                        "SELECT id FROM paper_metadata WHERE LOWER(REPLACE(title, '-', ' ')) = LOWER($1)",
+                        normalized_title,
+                    )
+
+                # Also try matching against title_normalized column
+                if paper_id is None:
+                    paper_id = await conn.fetchval(
+                        "SELECT id FROM paper_metadata WHERE title_normalized = LOWER($1)",
+                        title.replace('-', ' ').replace(',', '').lower(),
+                    )
 
                 if paper_id:
                     # Update or insert processed_papers

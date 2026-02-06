@@ -639,7 +639,19 @@ class CitationGraph:
             return citation.backup_id
 
         # Priority 4: Title (fallback, least reliable due to variations)
-        return f'title:{self._sanitize_title(citation.title or citation.text)}'
+        title = citation.title or citation.text
+        if title:
+            return f'title:{self._sanitize_title(title)}'
+
+        # Priority 5: Generate from authors if available
+        if citation.authors and len(citation.authors) > 0:
+            author_part = citation.authors[0].split()[0] if citation.authors[0] else 'unknown'
+            import uuid
+            return f'unknown:{author_part}-{uuid.uuid4().hex[:8]}'
+
+        # Last resort: generate unique ID
+        import uuid
+        return f'unknown:{uuid.uuid4().hex}'
 
     def add_article_from_citation(self, citation: Citation, batch_mode: bool = False) -> str:
         """
@@ -1310,12 +1322,15 @@ class CitationGraph:
         Returns:
             str: Sanitized ID
         """
+        if not title:
+            return 'untitled'
+
         # Replace spaces with hyphens and remove special characters
         sanitized = ''.join(
             c.lower() if c.isalnum() or c.isspace() else '-' for c in title
         )
         sanitized = '-'.join(filter(None, sanitized.split()))
-        return sanitized
+        return sanitized or 'untitled'
 
     def get_article_data_for_regeneration(
         self, article_id: str

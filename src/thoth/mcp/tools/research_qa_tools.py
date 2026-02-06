@@ -46,7 +46,7 @@ class AnswerResearchQuestionMCPTool(MCPTool):
                 'min_relevance': {
                     'type': 'number',
                     'description': 'Minimum relevance score (0.0-1.0) for including sources',
-                    'default': 0.7,
+                    'default': 0.4,
                     'minimum': 0.0,
                     'maximum': 1.0,
                 },
@@ -64,7 +64,7 @@ class AnswerResearchQuestionMCPTool(MCPTool):
         try:
             question = arguments['question']
             max_sources = arguments.get('max_sources', 10)
-            min_relevance = arguments.get('min_relevance', 0.7)
+            min_relevance = arguments.get('min_relevance', 0.4)
             include_citations = arguments.get('include_citations', True)
 
             # Perform semantic search
@@ -94,9 +94,9 @@ class AnswerResearchQuestionMCPTool(MCPTool):
             response_parts.append(f'# Answer to: {question}\n')
             response_parts.append(f'Based on {len(search_results)} relevant source(s):\n')
 
-            # Group findings by relevance
-            high_relevance = [r for r in search_results if r.get('score', 0) >= 0.85]
-            medium_relevance = [r for r in search_results if 0.70 <= r.get('score', 0) < 0.85]
+            # Group findings by relevance (adjusted thresholds for typical embedding similarity scores)
+            high_relevance = [r for r in search_results if r.get('score', 0) >= 0.6]
+            medium_relevance = [r for r in search_results if 0.5 <= r.get('score', 0) < 0.6]
 
             if high_relevance:
                 response_parts.append('\n## Primary Findings (High Relevance)\n')

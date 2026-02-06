@@ -272,9 +272,9 @@ class ResearchQuestionService(BaseService):
         Returns:
             List of research question records
         """
-        questions = await self.repository.get_by_user_id(
+        questions = await self.repository.get_by_user(
             user_id=user_id,
-            active_only=active_only,
+            is_active=active_only if active_only else None,
         )
 
         self.logger.debug(

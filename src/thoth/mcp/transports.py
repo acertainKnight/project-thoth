@@ -216,7 +216,7 @@ class HTTPTransport(MCPTransport):
                     )
 
             except Exception as e:
-                logger.error(f'Error handling HTTP request: {e}')
+                logger.exception('Error handling HTTP request: %s', e)
                 error_response = self.protocol_handler.create_error_response(
                     None, -32603, f'Internal error: {e}'
                 )

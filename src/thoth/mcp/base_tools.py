@@ -94,7 +94,11 @@ class MCPTool(ABC):
             return False
 
     def _validate_type(self, value: Any, expected_type: str) -> bool:
-        """Validate a value matches the expected JSON Schema type."""
+        """Validate a value matches the expected JSON Schema type.
+        
+        Note: Also accepts string representations of numbers/integers/booleans
+        since LLM agents often serialize these as strings.
+        """
         type_mapping = {
             'string': str,
             'integer': int,
@@ -108,7 +112,25 @@ class MCPTool(ABC):
             return value is None
 
         if expected_type in type_mapping:
-            return isinstance(value, type_mapping[expected_type])
+            if isinstance(value, type_mapping[expected_type]):
+                return True
+            # Be lenient: accept string representations of numbers/integers/booleans
+            if isinstance(value, str):
+                if expected_type == 'number':
+                    try:
+                        float(value)
+                        return True
+                    except ValueError:
+                        return False
+                elif expected_type == 'integer':
+                    try:
+                        int(value)
+                        return True
+                    except ValueError:
+                        return False
+                elif expected_type == 'boolean':
+                    return value.lower() in ('true', 'false', '1', '0')
+            return False
 
         return True  # Unknown type, allow it
 
@@ -116,10 +138,10 @@ class MCPTool(ABC):
         """Standard error handling for tools - includes full traceback for debugging."""
         import traceback
 
-        # Get full traceback for debugging
+        # Get full traceback for debugging (log at ERROR so it appears in mcp.log)
         tb_str = traceback.format_exc()
         logger.error(f'Tool error in {self.name}: {error}')
-        logger.debug(f'Full traceback for {self.name}:\n{tb_str}')
+        logger.error(f'Full traceback for {self.name}:\n{tb_str}')
 
         # Include full traceback in response so downstream agents can see it
         error_response = (
@@ -268,14 +290,46 @@ class MCPToolRegistry:
                 isError=True,
             )
 
+        # Coerce arguments to match schema types (LLM agents often send strings)
+        coerced_arguments = self._coerce_arguments(tool.input_schema, arguments)
+
         try:
-            logger.debug(f"Executing tool '{name}' with arguments: {arguments}")
-            result = await tool.execute(arguments)
+            logger.debug(f"Executing tool '{name}' with arguments: {coerced_arguments}")
+            result = await tool.execute(coerced_arguments)
             logger.debug(f"Tool '{name}' completed successfully")
             return result
         except Exception as e:
-            logger.error(f"Tool execution failed for '{name}': {e}")
+            logger.exception("Tool execution failed for '%s': %s", name, e)
             return tool.handle_error(e)
+
+    def _coerce_arguments(
+        self, schema: dict[str, Any], arguments: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Coerce argument values to match schema types.
+        
+        LLM agents often serialize numbers/booleans as strings. This method
+        converts them to the appropriate Python types based on the schema.
+        """
+        if 'properties' not in schema:
+            return arguments
+
+        coerced = dict(arguments)
+        for field, value in arguments.items():
+            if field not in schema['properties']:
+                continue
+            field_schema = schema['properties'][field]
+            expected_type = field_schema.get('type')
+            if expected_type and isinstance(value, str):
+                try:
+                    if expected_type == 'number':
+                        coerced[field] = float(value)
+                    elif expected_type == 'integer':
+                        coerced[field] = int(value)
+                    elif expected_type == 'boolean':
+                        coerced[field] = value.lower() in ('true', '1')
+                except (ValueError, AttributeError):
+                    pass  # Keep original value if coercion fails
+        return coerced
 
 
 # Decorator for automatic tool registration

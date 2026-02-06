@@ -386,7 +386,7 @@ class GetResearchQuestionMCPTool(MCPTool):
 
             # Verify user ownership
             user_id = arguments.get('user_id', 'default_user')
-            if question['user_id'] != user_id:
+            if question.get('user_id') != user_id:
                 return MCPToolCallResult(
                     content=[
                         {
@@ -397,38 +397,56 @@ class GetResearchQuestionMCPTool(MCPTool):
                     isError=True,
                 )
 
-            # Format detailed information
-            description_text = f"\n**Description:** {question['description']}\n" if question.get('description') else ""
-            schedule_days = f"\n  - Days of Week: {question['schedule_days_of_week']}" if question.get('schedule_days_of_week') else ""
-            
-            details = f"""**Research Question: {question['name']}**
+            # Normalize list fields (asyncpg can return None for empty arrays)
+            keywords = question.get('keywords') or []
+            topics = question.get('topics') or []
+            authors = question.get('authors') or []
+            selected_sources = question.get('selected_sources') or []
+            schedule_days_of_week = question.get('schedule_days_of_week')
+
+            # Format scalars for display (datetime/time from DB may be non-string)
+            def _str_val(v: Any, default: str = 'N/A') -> str:
+                if v is None:
+                    return default
+                return str(v)
+
+            schedule_time_str = _str_val(question.get('schedule_time'), 'Not set')
+            next_run_str = _str_val(question.get('next_run_at'), 'Not scheduled')
+            created_str = _str_val(question.get('created_at'), 'N/A')
+            updated_str = _str_val(question.get('updated_at'), 'N/A')
+            last_run_str = _str_val(question.get('last_run_at'), 'Never')
+
+            description_text = f"\n**Description:** {question.get('description')}\n" if question.get('description') else ""
+            schedule_days = f"\n  - Days of Week: {schedule_days_of_week}" if schedule_days_of_week else ""
+
+            details = f"""**Research Question: {question.get('name', '')}**
 {description_text}
-**ID:** {question['id']}
-**User:** {question['user_id']}
+**ID:** {question.get('id')}
+**User:** {question.get('user_id', '')}
 **Status:** {'Active' if question.get('is_active', True) else 'Inactive'}
 
 **Search Criteria:**
-  - Keywords: {', '.join(question['keywords'])}
-  - Topics: {', '.join(question.get('topics', []))}
-  - Authors: {', '.join(question.get('authors', []))}
+  - Keywords: {', '.join(str(k) for k in keywords)}
+  - Topics: {', '.join(str(t) for t in topics)}
+  - Authors: {', '.join(str(a) for a in authors)}
   - Min Relevance: {question.get('min_relevance_score', 0.7)}
 
 **Sources:**
-  {', '.join(question['selected_sources'])}
+  {', '.join(str(s) for s in selected_sources)}
 
 **Schedule:**
-  - Frequency: {question['schedule_frequency']}
-  - Time: {question.get('schedule_time', 'Not set')}{schedule_days}
-  - Next Run: {question.get('next_run_at', 'Not scheduled')}
+  - Frequency: {question.get('schedule_frequency', '')}
+  - Time: {schedule_time_str}{schedule_days}
+  - Next Run: {next_run_str}
 
 **Options:**
   - Auto Download PDFs: {question.get('auto_download_enabled', False)} (min score: {question.get('auto_download_min_score', 0.7)})
   - Max Articles per Run: {question.get('max_articles_per_run', 50)}
 
 **Timestamps:**
-  - Created: {question['created_at']}
-  - Updated: {question.get('updated_at', 'N/A')}
-  - Last Run: {question.get('last_run_at', 'Never')}
+  - Created: {created_str}
+  - Updated: {updated_str}
+  - Last Run: {last_run_str}
 """
 
             return MCPToolCallResult(content=[{'type': 'text', 'text': details}])

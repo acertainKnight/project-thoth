@@ -300,7 +300,7 @@ class RAGService(BaseService):
 
     def get_statistics(self) -> dict[str, Any]:
         """
-        Get statistics about the RAG system.
+        Get statistics about the RAG system (sync version).
 
         Returns:
             dict[str, Any]: RAG system statistics
@@ -310,6 +310,34 @@ class RAGService(BaseService):
         """
         try:
             stats = self.rag_manager.get_stats()
+            return stats
+
+        except Exception as e:
+            raise ServiceError(self.handle_error(e, 'getting RAG statistics')) from e
+
+    async def get_statistics_async(self) -> dict[str, Any]:
+        """
+        Get statistics about the RAG system (async version).
+
+        Use this from async contexts like MCP tools.
+
+        Returns:
+            dict[str, Any]: RAG system statistics
+
+        Raises:
+            ServiceError: If getting stats fails
+        """
+        try:
+            vector_stats = await self.rag_manager.vector_store_manager.get_stats_async()
+
+            stats = {
+                'embedding_model': self.rag_manager.embedding_model,
+                'qa_model': self.rag_manager.llm_model,
+                'chunk_size': self.rag_manager.chunk_size,
+                'chunk_overlap': self.rag_manager.chunk_overlap,
+                'chunk_encoding': self.rag_manager.chunk_encoding,
+                **vector_stats,
+            }
             return stats
 
         except Exception as e:

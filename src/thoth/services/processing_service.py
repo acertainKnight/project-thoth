@@ -82,13 +82,16 @@ class ProcessingService(BaseService):
 
                 if paper_id is None:
                     # Insert new paper_metadata record
+                    # Normalize title by replacing hyphens with spaces
+                    title_normalized = paper_title.lower().replace('-', ' ')
                     paper_id = await conn.fetchval(
                         """
                         INSERT INTO paper_metadata (title, title_normalized, source_of_truth, created_at, updated_at)
-                        VALUES ($1, LOWER($1), 'processed', NOW(), NOW())
+                        VALUES ($1, $2, 'processed', NOW(), NOW())
                         RETURNING id
                         """,
                         paper_title,
+                        title_normalized,
                     )
                 else:
                     # Update existing paper_metadata timestamp

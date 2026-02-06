@@ -282,10 +282,14 @@ class VectorStoreManager:
         # Generate query embedding
         query_embedding = self.embedding_function.embed_query(query)
 
+        # Convert embedding list to pgvector string format for asyncpg
+        embedding_str = '[' + ','.join(str(x) for x in query_embedding) + ']'
+
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             # Use pgvector cosine similarity search with HNSW index
             # The <=> operator uses the HNSW index automatically
+            # Cast the embedding string to vector type for pgvector
             rows = await conn.fetch(
                 """
                 SELECT
@@ -296,20 +300,31 @@ class VectorStoreManager:
                     p.title,
                     p.doi,
                     p.authors,
-                    1 - (dc.embedding <=> $1) as similarity
+                    1 - (dc.embedding <=> $1::vector) as similarity
                 FROM document_chunks dc
                 JOIN papers p ON dc.paper_id = p.id
                 WHERE dc.embedding IS NOT NULL
-                ORDER BY dc.embedding <=> $1
+                ORDER BY dc.embedding <=> $1::vector
                 LIMIT $2
             """,
-                query_embedding,
+                embedding_str,
                 k,
             )
 
             documents = []
             for row in rows:
-                metadata = dict(row['metadata']) if row['metadata'] else {}
+                # Handle metadata - could be dict, JSON string, or other format
+                raw_metadata = row['metadata']
+                if isinstance(raw_metadata, dict):
+                    metadata = dict(raw_metadata)
+                elif isinstance(raw_metadata, str):
+                    import json
+                    try:
+                        metadata = json.loads(raw_metadata)
+                    except (json.JSONDecodeError, TypeError):
+                        metadata = {}
+                else:
+                    metadata = {}
                 metadata.update(
                     {
                         'chunk_id': str(row['id']),

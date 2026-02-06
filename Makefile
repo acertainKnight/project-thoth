@@ -79,6 +79,7 @@ help: ## Show available commands
 	@echo "$(YELLOW)💻 Local Mode (No Docker):$(NC)"
 	@echo "  $(GREEN)local-start$(NC)          Start services locally"
 	@echo "  $(GREEN)local-stop$(NC)           Stop local services"
+	@echo "  $(GREEN)dev-thoth-restart$(NC)    Restart only Thoth dev containers (not Letta)"
 	@echo ""
 	@echo "$(YELLOW)🔌 Plugin Development:$(NC)"
 	@echo "  $(GREEN)deploy-plugin$(NC)        Deploy plugin with vault integration"
@@ -621,6 +622,14 @@ watch: ## Start PDF directory watcher (hot-reloads from settings.json)
 	@echo "$(GREEN)✅ PDF watcher started with hot reload$(NC)"
 	@echo "$(YELLOW)Logs: ./workspace/logs/monitor.log$(NC)"
 	@echo "$(YELLOW)To stop: pkill -f 'thoth monitor'$(NC)"
+
+.PHONY: dev-thoth-restart
+dev-thoth-restart: ## Restart only Thoth dev containers (docker-compose.dev.yml; does not restart Letta)
+	@echo "$(YELLOW)Restarting Thoth dev containers...$(NC)"
+	@for c in thoth-dev-all-in-one thoth-dev-api thoth-dev-mcp thoth-dev-discovery thoth-dev-pdf-monitor thoth-dev-dashboard; do \
+		docker restart $$c 2>/dev/null || true; \
+	done
+	@echo "$(GREEN)✅ Thoth dev containers restart requested$(NC)"
 
 .PHONY: local-stop
 local-stop: ## Stop local services and Letta Docker containers

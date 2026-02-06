@@ -70,7 +70,7 @@ class KnowledgePipeline(BasePipeline):
     def get_rag_stats(self) -> dict[str, Any]:
         """Get statistics about the RAG system."""
         try:
-            return self.services.rag.get_stats()
+            return self.services.rag.get_statistics()
         except Exception as e:
             logger.error(f'Failed to get RAG stats: {e}')
             raise
