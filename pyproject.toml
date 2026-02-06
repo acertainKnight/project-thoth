@@ -60,6 +60,9 @@ discovery = [
     "duckduckgo-search>=5.2",
     "roman-numerals-py>=3.1.0",
     "aiohttp>=3.8.5",
+    # New plugins for top-tier AI/ML venues
+    "openreview-py>=1.43.0", # For ICLR and OpenReview conferences
+    "acl-anthology>=0.2.12", # For ACL, EMNLP, NAACL, and NLP venues
 ]
 
 # PDF processing (file watching, extraction, OCR)
