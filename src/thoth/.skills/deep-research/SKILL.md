@@ -2,6 +2,7 @@
 name: Deep Research & Literature Synthesis
 description: Conduct deep analysis of research papers, synthesize literature, and generate comprehensive reviews. Use when user needs thorough paper analysis, literature reviews, or cross-paper synthesis.
 tools:
+  - read_full_article
   - answer_research_question
   - explore_citation_network
   - compare_articles
@@ -22,6 +23,7 @@ For deep research, use these analysis tools:
 
 | Tool | Purpose |
 |------|---------|
+| `read_full_article` | **Read complete article content for deep learning** |
 | `answer_research_question` | Multi-source synthesis with citations |
 | `explore_citation_network` | Citation graph analysis |
 | `compare_articles` | Side-by-side comparison |
@@ -29,9 +31,60 @@ For deep research, use these analysis tools:
 | `evaluate_article` | Quality scoring |
 | `get_citation_context` | Citation relationship context |
 | `search_articles` | Find papers in knowledge base |
-| `get_article_details` | Get full article metadata and content |
+| `get_article_details` | Get article metadata and preview |
 
 **Note**: These are analysis-heavy tools. For simpler queries, use the `knowledge-base-qa` skill instead.
+
+## Iterative Learning Pattern
+
+**Key Principle**: You can read, learn from an article, and keep reading to build deep understanding.
+
+### The Learning Loop
+
+```
+1. DISCOVER: Search for relevant papers
+   search_articles(query="topic")
+
+2. READ DEEPLY: Load full article content
+   read_full_article(article_identifier="paper title or DOI")
+   → Read the entire article, not just previews
+
+3. ANALYZE: Extract key insights
+   - What are the main contributions?
+   - What methods were used?
+   - What are the limitations?
+
+4. IDENTIFY GAPS: What questions remain?
+   - What concepts need clarification?
+   - What related work should you read?
+
+5. REPEAT: Read more articles to fill gaps
+   find_related_papers(article_id="...")
+   read_full_article(article_identifier="next paper")
+
+6. SYNTHESIZE: Combine insights across papers
+   answer_research_question(question="synthesis query")
+```
+
+### When to Read Full Articles
+
+Use `read_full_article` when:
+- You need to understand methodology details
+- The preview (from `get_article_details`) isn't enough
+- You're comparing specific techniques across papers
+- You're writing a literature review
+- You want to learn a topic deeply
+
+Use `get_article_details` when:
+- You just need metadata (authors, date, journal)
+- You're doing initial screening of papers
+- A quick preview is sufficient
+
+### External Content
+
+For web articles, blog posts, and documentation **outside** your knowledge base:
+- Use Letta's built-in `fetch_webpage` tool to read external URLs
+- This complements `read_full_article` which is for your indexed papers
 
 ## When to Use This Skill
 
@@ -48,9 +101,9 @@ Use deep research when user asks for:
 ### Single Paper Deep Dive
 
 ```
-1. Get full article details
-   get_article_details(article_id="[paper ID]")
-   → Returns full metadata, abstract, content, and analysis
+1. Read the full article content
+   read_full_article(article_identifier="[paper title or DOI]")
+   → Returns complete markdown content for deep reading
 
 2. Explore citation context
    explore_citation_network(
@@ -64,6 +117,11 @@ Use deep research when user asks for:
      article_id="[paper ID]",
      criteria=["novelty", "methodology", "impact"]
    )
+
+4. If you have questions, read related papers
+   find_related_papers(article_id="[paper ID]")
+   read_full_article(article_identifier="[related paper]")
+   → Keep reading until you understand the topic
 ```
 
 ### Multi-Paper Comparison
@@ -158,11 +216,11 @@ send_message_to_agent(
 **User**: "Analyze the 'Attention Is All You Need' paper in depth"
 
 ```
-1. search_articles(query="Attention Is All You Need Transformer")
-   → Find paper ID
+1. read_full_article(article_identifier="Attention Is All You Need")
+   → Read the complete paper content
 
-2. get_article_details(article_id="[paper ID]")
-   → Get full metadata, abstract, and content
+2. [Read and understand the paper thoroughly]
+   - Note key contributions, methodology, results
 
 3. explore_citation_network(
      article_id="[paper ID]",
@@ -170,12 +228,16 @@ send_message_to_agent(
      depth=1
    )
 
-4. evaluate_article(
+4. If concepts are unclear, read related papers:
+   read_full_article(article_identifier="[related paper on attention]")
+   → Keep learning until you understand
+
+5. evaluate_article(
      article_id="[paper ID]",
      criteria=["novelty", "methodology", "impact"]
    )
 
-5. Response:
+6. Response:
    "## Deep Analysis: Attention Is All You Need
    
    **Core Contribution**: [transformer architecture description]

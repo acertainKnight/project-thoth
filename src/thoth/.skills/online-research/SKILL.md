@@ -18,6 +18,23 @@ This skill enables you to:
 
 **Note**: For web search, use Letta's built-in `web_search` tool instead of Thoth's deprecated web search. Downloaded PDFs are automatically processed by the PDF monitor service - no manual processing needed.
 
+## Reading External Content
+
+For reading web articles, blog posts, and documentation **outside** your knowledge base:
+
+| Tool | Use For |
+|------|---------|
+| Letta's `fetch_webpage` | Read external web content (blogs, docs, articles) |
+| `read_full_article` | Read papers in your knowledge base |
+| `download_pdf` | Save papers for later processing |
+
+**Iterative Learning with External Sources**:
+1. Use `web_search` to find relevant web content
+2. Use `fetch_webpage` to read articles fully
+3. Learn from the content, identify knowledge gaps
+4. Keep reading more sources until you understand the topic
+5. For academic papers, use `download_pdf` to add them to your knowledge base
+
 ## Tools Overview
 
 | Tool | Purpose | When to Use |
@@ -281,7 +298,9 @@ When locating PDFs, the system tries sources in this order:
 1. Use Letta web_search to find papers
 2. Use download_pdf to save them
 3. Wait for auto-processing
-4. Use deep-research to analyze
+4. Use read_full_article to deeply read the papers
+5. Keep reading related papers to fill knowledge gaps
+6. Use deep-research tools to analyze and synthesize
 ```
 
 ### Online Research → Knowledge Base
@@ -289,7 +308,17 @@ When locating PDFs, the system tries sources in this order:
 1. web_search (Letta) → find papers
 2. download_pdf → save to vault
 3. (auto-processing by monitor service)
-4. Now accessible via all knowledge base tools
+4. read_full_article → deeply read the processed papers
+5. Now accessible via all knowledge base tools
+```
+
+### Learning from External Web Content
+```
+1. web_search (Letta) → find web articles, blogs, documentation
+2. fetch_webpage (Letta) → read the full content
+3. Learn from the article, take notes
+4. Identify gaps in understanding
+5. Keep reading more sources until you understand
 ```
 
 ## Quick Reference

@@ -3,6 +3,7 @@ name: Knowledge Base Q&A
 description: Answer questions using your existing research collection. Use when user asks questions about papers they have, wants summaries, or seeks insights from their knowledge base.
 tools:
   - answer_research_question
+  - read_full_article
   - search_articles
   - get_article_details
   - collection_stats
@@ -19,9 +20,26 @@ For knowledge base queries, use these tools:
 | Tool | Purpose |
 |------|---------|
 | `answer_research_question` | Primary Q&A with synthesis |
+| `read_full_article` | Read complete article content for deep understanding |
 | `search_articles` | Find specific papers (supports topic filtering) |
-| `get_article_details` | Get paper metadata |
+| `get_article_details` | Get paper metadata and preview |
 | `collection_stats` | Check what's in the collection |
+
+### Reading Full Articles
+
+When you need more than a quick answer, **read the full article**:
+
+```
+read_full_article(article_identifier="paper title or DOI")
+```
+
+This returns the complete markdown content, allowing you to:
+- Understand methodology details
+- Find specific information not in summaries
+- Learn deeply about a topic
+- Read multiple papers to build comprehensive knowledge
+
+**Iterative Learning**: You can read one article, identify questions, then read more articles to fill knowledge gaps. Keep reading until you fully understand the topic.
 
 ## Quick Answer Workflow
 

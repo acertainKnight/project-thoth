@@ -33,6 +33,9 @@ from .analysis_tools import (
     AnalyzeTopicMCPTool,  # Keep import for backwards compatibility
     GenerateResearchSummaryMCPTool,  # Keep import for backwards compatibility
 )
+from .article_loading_tools import (
+    ReadFullArticleMCPTool,
+)
 from .article_tools import (
     SearchArticlesMCPTool,
     UpdateArticleMetadataMCPTool,
@@ -146,6 +149,8 @@ from .web_search_tool import (
 
 # List of ACTIVE MCP tool classes (deprecated tools excluded)
 MCP_TOOL_CLASSES = [
+    # Article reading and loading
+    ReadFullArticleMCPTool,
     # Discovery and research questions
     ListAvailableSourcesMCPTool,
     CreateResearchQuestionMCPTool,
@@ -269,6 +274,7 @@ __all__ = [  # noqa: RUF022
     'MCPToolRegistry',
     # Active tools (alphabetical)
     'AnswerResearchQuestionMCPTool',
+    'ReadFullArticleMCPTool',
     'CollectionStatsMCPTool',
     'CompareArticlesMCPTool',
     'ConsolidateAndRetagMCPTool',
