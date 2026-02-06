@@ -1,13 +1,23 @@
 """
-Chrome extension integration for point-and-click scraper configuration.
+DEPRECATED: Chrome extension integration for point-and-click scraper configuration.
 
-This module provides WebSocket communication with a Chrome extension
-that allows users to configure web scrapers through a point-and-click
-interface directly in their browser.
+.. deprecated::
+    This module is superseded by the LLM-powered WorkflowBuilder in
+    ``thoth.discovery.browser.workflow_builder``. The WorkflowBuilder provides
+    automatic article detection without requiring a Chrome extension client.
+    Use ``POST /api/workflows/analyze`` instead.
+
+This module provided WebSocket communication with a Chrome extension
+that allowed users to configure web scrapers through a point-and-click
+interface directly in their browser. The Chrome extension client was
+never implemented, making this server-side code unused.
+
+Kept for reference only. Will be removed in a future release.
 """
 
 import asyncio  # noqa: I001
 import json
+import secrets
 from pathlib import Path
 from typing import Any
 
@@ -25,55 +35,133 @@ class ChromeExtensionServer:
 
     This class provides a WebSocket server that communicates with a Chrome
     extension to enable point-and-click scraper configuration.
+
+    Supports both local and remote connections. When the host is set to
+    anything other than 'localhost' or '127.0.0.1', token-based authentication
+    is required for all connections.
     """
 
-    def __init__(self, port: int = 8765):
+    def __init__(
+        self,
+        host: str | None = None,
+        port: int | None = None,
+        auth_token: str | None = None,
+    ):
         """
         Initialize the Chrome extension server.
 
         Args:
-            port: Port to run the WebSocket server on.
+            host: Host to bind to. Defaults to config value or 'localhost'.
+                  Use '0.0.0.0' for remote access.
+            port: Port to run the WebSocket server on. Defaults to config value or 8765.
+            auth_token: Authentication token for remote connections. If None and
+                        remote access is enabled, a token is auto-generated.
         """
-        self.port = port
         self.config = config
+
+        # Read from Thoth config, with parameter overrides
+        chrome_config = getattr(
+            getattr(self.config.settings, 'discovery', None),
+            'chrome_extension',
+            None,
+        )
+        self.host = host or (chrome_config.host if chrome_config else 'localhost')
+        self.port = port or (chrome_config.port if chrome_config else 8765)
+
         self.web_scraper = WebScraper()
 
         # Configuration storage
-        self.configs_dir = Path(self.config.chrome_extension_configs_dir)
+        self.configs_dir = Path(self.config.discovery_chrome_configs_dir)
         self.configs_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f'Chrome extension server initialized on port {port}')
+        # Authentication for remote access
+        self._is_remote = self.host not in ('localhost', '127.0.0.1')
+        if self._is_remote:
+            self.auth_token = auth_token or secrets.token_urlsafe(32)
+        else:
+            self.auth_token = auth_token  # Optional for local
+
+        self._authenticated_clients: set[int] = set()
+
+        logger.info(
+            f'Chrome extension server initialized on {self.host}:{self.port} '
+            f'(remote_access={"enabled" if self._is_remote else "disabled"})'
+        )
 
     async def start_server(self) -> None:
         """
         Start the WebSocket server.
 
+        When remote access is enabled, logs the auth token so the user
+        can configure their Chrome extension with it.
+
         Example:
-            >>> server = ChromeExtensionServer()
+            >>> server = ChromeExtensionServer(host='0.0.0.0')
             >>> await server.start_server()
         """
-        logger.info(f'Starting Chrome extension WebSocket server on port {self.port}')
+        logger.info(
+            f'Starting Chrome extension WebSocket server on '
+            f'ws://{self.host}:{self.port}'
+        )
 
-        async with websockets.serve(self.handle_client, 'localhost', self.port):
+        if self._is_remote and self.auth_token:
             logger.info(
-                f'Chrome extension server running on ws://localhost:{self.port}'
+                f'Remote access enabled. Auth token: {self.auth_token}\n'
+                f'Configure your Chrome extension with this token to connect.'
+            )
+
+        async with websockets.serve(self.handle_client, self.host, self.port):
+            logger.info(
+                f'Chrome extension server running on ws://{self.host}:{self.port}'
             )
             await asyncio.Future()  # Run forever
 
-    async def handle_client(self, websocket, path: str) -> None:
+    async def handle_client(self, websocket, path: str | None = None) -> None:
         """
         Handle WebSocket client connections.
 
+        For remote connections, the first message must be an authentication
+        message with the correct token before any other operations are allowed.
+
         Args:
             websocket: WebSocket connection.
-            path: WebSocket path.
+            path: WebSocket path (optional, not present in newer websockets versions).
         """
-        logger.info(f'Chrome extension client connected: {path}')
+        client_id = id(websocket)
+        remote_addr = getattr(websocket, 'remote_address', 'unknown')
+        logger.info(f'Chrome extension client connected from {remote_addr}')
 
         try:
             async for message in websocket:
                 try:
                     data = json.loads(message)
+
+                    # Check authentication for remote connections
+                    if self._is_remote and client_id not in self._authenticated_clients:
+                        if data.get('type') == 'authenticate':
+                            if data.get('token') == self.auth_token:
+                                self._authenticated_clients.add(client_id)
+                                await websocket.send(json.dumps({
+                                    'type': 'auth_result',
+                                    'success': True,
+                                    'message': 'Authenticated successfully',
+                                }))
+                                logger.info(f'Client {remote_addr} authenticated')
+                                continue
+                            else:
+                                await websocket.send(json.dumps({
+                                    'type': 'auth_result',
+                                    'success': False,
+                                    'error': 'Invalid authentication token',
+                                }))
+                                logger.warning(f'Failed auth attempt from {remote_addr}')
+                                continue
+                        else:
+                            await websocket.send(json.dumps({
+                                'error': 'Authentication required. Send {"type": "authenticate", "token": "..."}',
+                            }))
+                            continue
+
                     response = await self.process_message(data)
                     await websocket.send(json.dumps(response))
 
@@ -84,9 +172,11 @@ class ChromeExtensionServer:
                     await websocket.send(json.dumps({'error': str(e)}))
 
         except websockets.exceptions.ConnectionClosed:
-            logger.info('Chrome extension client disconnected')
+            logger.info(f'Chrome extension client disconnected: {remote_addr}')
         except Exception as e:
             logger.error(f'Error handling client: {e}')
+        finally:
+            self._authenticated_clients.discard(client_id)
 
     async def process_message(self, data: dict[str, Any]) -> dict[str, Any]:
         """
@@ -384,17 +474,28 @@ class ChromeExtensionServer:
         )
 
 
-def run_chrome_extension_server(port: int = 8765) -> None:
+def run_chrome_extension_server(
+    host: str | None = None,
+    port: int | None = None,
+    auth_token: str | None = None,
+) -> None:
     """
     Run the Chrome extension WebSocket server.
 
     Args:
-        port: Port to run the server on.
+        host: Host to bind to. None uses config default.
+              Use '0.0.0.0' for remote access.
+        port: Port to run the server on. None uses config default.
+        auth_token: Auth token for remote access. Auto-generated if None.
 
     Example:
-        >>> run_chrome_extension_server(8765)
+        >>> # Local access (default)
+        >>> run_chrome_extension_server()
+
+        >>> # Remote access
+        >>> run_chrome_extension_server(host='0.0.0.0', port=8765)
     """
-    server = ChromeExtensionServer(port)
+    server = ChromeExtensionServer(host=host, port=port, auth_token=auth_token)
 
     try:
         asyncio.run(server.start_server())
@@ -405,4 +506,21 @@ def run_chrome_extension_server(port: int = 8765) -> None:
 
 
 if __name__ == '__main__':
-    run_chrome_extension_server()
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Thoth Chrome Extension Server')
+    parser.add_argument(
+        '--host', default=None,
+        help='Host to bind to (use 0.0.0.0 for remote access)',
+    )
+    parser.add_argument(
+        '--port', type=int, default=None,
+        help='Port to listen on (default: 8765)',
+    )
+    parser.add_argument(
+        '--token', default=None,
+        help='Auth token for remote connections (auto-generated if not provided)',
+    )
+    args = parser.parse_args()
+
+    run_chrome_extension_server(host=args.host, port=args.port, auth_token=args.token)

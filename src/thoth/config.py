@@ -659,11 +659,16 @@ class ServersConfig(BaseModel):
 
 
 class ChromeExtensionConfig(BaseModel):
-    """Chrome extension configuration."""
+    """Chrome extension configuration.
+
+    For remote access, set host to '0.0.0.0' and optionally provide an auth_token.
+    If no auth_token is provided and host is not localhost, one is auto-generated.
+    """
 
     enabled: bool = True
     host: str = 'localhost'
     port: int = 8765
+    auth_token: str | None = None
 
     class Config:
         populate_by_name = True

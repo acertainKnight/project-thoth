@@ -1,17 +1,20 @@
 """Browser workflow management API endpoints.
 
 This module provides RESTful API endpoints for managing browser-based discovery workflows,
-including CRUD operations, workflow execution, and execution history tracking.
+including CRUD operations, workflow execution, execution history tracking, and
+LLM-powered auto-detection of article sources via the WorkflowBuilder.
 """  # noqa: W505
 
 from datetime import datetime
 from typing import Any, Optional
+from urllib.parse import urlparse
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from thoth.discovery.browser.workflow_builder import WorkflowBuilder
 from thoth.discovery.browser.workflow_execution_service import (
     WorkflowExecutionService,
     WorkflowExecutionServiceError,  # noqa: F401
@@ -36,6 +39,7 @@ from thoth.utilities.schemas.browser_workflow import (
 
 from thoth.server.dependencies import (
     get_postgres_service,
+    get_workflow_builder,
     get_workflow_execution_service,
 )
 
@@ -728,4 +732,371 @@ async def add_workflow_action(
         raise HTTPException(  # noqa: B904
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f'Failed to create workflow action: {str(e)}',  # noqa: RUF010
+        )
+
+
+# ---------------------------------------------------------------------------
+# LLM-powered Workflow Builder endpoints
+# ---------------------------------------------------------------------------
+
+
+class AnalyzeUrlRequest(BaseModel):
+    """Request model for URL analysis via the LLM workflow builder."""
+
+    url: str = Field(..., description='URL to analyze for article extraction')
+    include_screenshot: bool = Field(
+        default=True, description='Include a base64 screenshot in the response'
+    )
+
+
+class SelectorInfo(BaseModel):
+    """Information about a proposed CSS selector."""
+
+    css_selector: str
+    attribute: str = 'text'
+    is_multiple: bool = False
+    confidence: float = 0.0
+
+
+class SampleArticleResponse(BaseModel):
+    """A sample article extracted during analysis."""
+
+    title: str = ''
+    authors: list[str] = Field(default_factory=list)
+    abstract: str = ''
+    url: str = ''
+    pdf_url: str = ''
+    doi: str = ''
+    publication_date: str = ''
+    keywords: list[str] = Field(default_factory=list)
+    journal: str = ''
+
+
+class SearchFilterResponse(BaseModel):
+    """A detected search or filter UI element."""
+
+    element_type: str = ''
+    css_selector: str = ''
+    submit_selector: str | None = None
+    filter_type: str = 'text_input'
+    description: str = ''
+
+
+class AnalyzeUrlResponse(BaseModel):
+    """Response from URL analysis with proposed selectors and sample articles."""
+
+    url: str
+    page_title: str
+    page_type: str
+    article_container_selector: str
+    selectors: dict[str, SelectorInfo]
+    pagination_selector: str | None = None
+    search_filters: list[SearchFilterResponse] = Field(default_factory=list)
+    sample_articles: list[SampleArticleResponse]
+    total_articles_found: int
+    screenshot_base64: str | None = None
+    notes: str = ''
+    confidence: float = 0.0
+
+
+class RefineSelectorsRequest(BaseModel):
+    """Request to refine selectors based on user feedback."""
+
+    url: str = Field(..., description='The URL being analyzed')
+    current_selectors: dict[str, Any] = Field(
+        ..., description='Current selector configuration to refine'
+    )
+    user_feedback: str = Field(
+        ..., description="User's description of what's wrong with current results"
+    )
+    include_screenshot: bool = Field(default=True)
+
+
+class ConfirmWorkflowRequest(BaseModel):
+    """Request to confirm and save an analyzed URL as a workflow."""
+
+    url: str = Field(..., description='The analyzed URL')
+    name: str = Field(..., description='Name for the workflow')
+    description: str | None = Field(None, description='Optional description')
+    article_container_selector: str = Field(..., description='Confirmed container selector')
+    selectors: dict[str, SelectorInfo] = Field(..., description='Confirmed field selectors')
+    pagination_selector: str | None = Field(None, description='Pagination selector')
+    search_filters: list[SearchFilterResponse] = Field(
+        default_factory=list, description='Detected search/filter UI elements',
+    )
+    max_articles_per_run: int = Field(default=100, ge=1)
+    requires_authentication: bool = Field(default=False)
+
+
+@router.post('/analyze', response_model=AnalyzeUrlResponse)
+async def analyze_url(
+    request: AnalyzeUrlRequest,
+    builder: WorkflowBuilder = Depends(get_workflow_builder),  # noqa: B008
+):
+    """Analyze a URL to auto-detect article listing structure using LLM.
+
+    This endpoint loads the page, extracts DOM structure, sends it to the LLM
+    for analysis, tests the proposed selectors, and returns sample results
+    for user confirmation.
+
+    Args:
+        request: URL and analysis options.
+        builder: WorkflowBuilder instance.
+
+    Returns:
+        AnalyzeUrlResponse: Proposed selectors and sample articles.
+    """
+    try:
+        result = await builder.analyze_url(
+            url=request.url,
+            include_screenshot=request.include_screenshot,
+        )
+
+        # Convert to response model
+        selectors = {
+            k: SelectorInfo(**v) for k, v in result.selectors.items()
+        }
+
+        sample_articles = []
+        for article in result.sample_articles:
+            sample_articles.append(SampleArticleResponse(
+                title=article.title,
+                authors=article.authors if isinstance(article.authors, list) else [],
+                abstract=article.abstract,
+                url=article.url,
+                pdf_url=article.pdf_url,
+                doi=article.doi,
+                publication_date=article.publication_date,
+                keywords=article.keywords if isinstance(article.keywords, list) else [],
+                journal=article.journal,
+            ))
+
+        search_filters = [
+            SearchFilterResponse(**sf) for sf in result.search_filters
+        ]
+
+        return AnalyzeUrlResponse(
+            url=result.url,
+            page_title=result.page_title,
+            page_type=result.page_type,
+            article_container_selector=result.article_container_selector,
+            selectors=selectors,
+            pagination_selector=result.pagination_selector,
+            search_filters=search_filters,
+            sample_articles=sample_articles,
+            total_articles_found=result.total_articles_found,
+            screenshot_base64=result.screenshot_base64,
+            notes=result.notes,
+            confidence=result.confidence,
+        )
+
+    except Exception as e:
+        logger.error(f'Error analyzing URL {request.url}: {e}', exc_info=True)
+        raise HTTPException(  # noqa: B904
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f'Failed to analyze URL: {str(e)}',  # noqa: RUF010
+        )
+
+
+@router.post('/refine', response_model=AnalyzeUrlResponse)
+async def refine_selectors(
+    request: RefineSelectorsRequest,
+    builder: WorkflowBuilder = Depends(get_workflow_builder),  # noqa: B008
+):
+    """Refine selectors based on user feedback.
+
+    When auto-detection results are wrong, the user can describe what's incorrect
+    and this endpoint uses the LLM to propose corrected selectors.
+
+    Args:
+        request: Current selectors and user feedback.
+        builder: WorkflowBuilder instance.
+
+    Returns:
+        AnalyzeUrlResponse: Refined selectors and updated sample articles.
+    """
+    try:
+        result = await builder.refine_selectors(
+            url=request.url,
+            current_selectors=request.current_selectors,
+            user_feedback=request.user_feedback,
+            include_screenshot=request.include_screenshot,
+        )
+
+        selectors = {
+            k: SelectorInfo(**v) for k, v in result.selectors.items()
+        }
+
+        sample_articles = []
+        for article in result.sample_articles:
+            sample_articles.append(SampleArticleResponse(
+                title=article.title,
+                authors=article.authors if isinstance(article.authors, list) else [],
+                abstract=article.abstract,
+                url=article.url,
+                pdf_url=article.pdf_url,
+                doi=article.doi,
+                publication_date=article.publication_date,
+                keywords=article.keywords if isinstance(article.keywords, list) else [],
+                journal=article.journal,
+            ))
+
+        search_filters = [
+            SearchFilterResponse(**sf) for sf in result.search_filters
+        ]
+
+        return AnalyzeUrlResponse(
+            url=result.url,
+            page_title=result.page_title,
+            page_type=result.page_type,
+            article_container_selector=result.article_container_selector,
+            selectors=selectors,
+            pagination_selector=result.pagination_selector,
+            search_filters=search_filters,
+            sample_articles=sample_articles,
+            total_articles_found=result.total_articles_found,
+            screenshot_base64=result.screenshot_base64,
+            notes=result.notes,
+            confidence=result.confidence,
+        )
+
+    except Exception as e:
+        logger.error(f'Error refining selectors for {request.url}: {e}', exc_info=True)
+        raise HTTPException(  # noqa: B904
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f'Failed to refine selectors: {str(e)}',  # noqa: RUF010
+        )
+
+
+@router.post('/confirm', response_model=CreateWorkflowResponse, status_code=status.HTTP_201_CREATED)
+async def confirm_workflow(
+    request: ConfirmWorkflowRequest,
+    repo: BrowserWorkflowRepository = Depends(get_workflow_repo),  # noqa: B008
+):
+    """Confirm and save an analyzed URL as a workflow.
+
+    After the user reviews the auto-detected (or refined) selectors and sample
+    articles, this endpoint saves the configuration as a persistent workflow
+    that can be executed on-demand or on a schedule.
+
+    Args:
+        request: Confirmed workflow configuration.
+        repo: Browser workflow repository.
+
+    Returns:
+        CreateWorkflowResponse: The created workflow ID.
+    """
+    try:
+        parsed = urlparse(request.url)
+        domain = parsed.netloc or parsed.hostname or request.url
+
+        # Build extraction rules from confirmed selectors
+        extraction_rules = {
+            'article_container': request.article_container_selector,
+            'fields': {
+                name: sel.model_dump() for name, sel in request.selectors.items()
+            },
+        }
+
+        # Build pagination config
+        pagination_config = None
+        if request.pagination_selector:
+            pagination_config = {
+                'type': 'button',
+                'selector': request.pagination_selector,
+                'next_page_selector': request.pagination_selector,
+            }
+        extraction_rules['pagination'] = pagination_config
+
+        # Build search_config from detected filters
+        search_config: dict[str, Any] | None = None
+        if request.search_filters:
+            filters = []
+            search_input_selector = None
+            search_button_selector = None
+
+            for sf in request.search_filters:
+                if sf.element_type in ('search_input', 'keyword_input'):
+                    search_input_selector = sf.css_selector
+                    search_button_selector = sf.submit_selector
+                else:
+                    # Map element_type to parameter_name
+                    param_name = {
+                        'date_filter': 'date_range',
+                        'subject_filter': 'subject',
+                        'sort_dropdown': 'sort_order',
+                    }.get(sf.element_type, sf.element_type)
+
+                    filters.append({
+                        'name': sf.description or sf.element_type,
+                        'parameter_name': param_name,
+                        'selector': {'css': sf.css_selector},
+                        'filter_type': sf.filter_type,
+                        'optional': True,
+                    })
+
+            search_config = {
+                'search_input_selector': (
+                    {'css': search_input_selector} if search_input_selector else None
+                ),
+                'search_button_selector': (
+                    {'css': search_button_selector} if search_button_selector else None
+                ),
+                'keywords_format': 'space_separated',
+                'filters': filters,
+            }
+
+        workflow_data = {
+            'name': request.name,
+            'description': request.description or f'Auto-detected workflow for {domain}',
+            'website_domain': domain,
+            'start_url': request.url,
+            'extraction_rules': extraction_rules,
+            'requires_authentication': request.requires_authentication,
+            'authentication_type': None,
+            'pagination_config': pagination_config,
+            'max_articles_per_run': request.max_articles_per_run,
+            'timeout_seconds': 60,
+            'is_active': True,
+            'health_status': 'healthy',
+            'total_executions': 0,
+            'successful_executions': 0,
+            'failed_executions': 0,
+            'total_articles_extracted': 0,
+        }
+
+        workflow_id = await repo.create(workflow_data)
+
+        if workflow_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail='Failed to save workflow',
+            )
+
+        # Save search_config if filters were detected
+        if search_config:
+            logger.info(
+                f'Saving search config for workflow {workflow_id}: '
+                f'{len(search_config.get("filters", []))} filters, '
+                f'search_input={search_config.get("search_input_selector") is not None}'
+            )
+            # Store search_config in the workflow's extraction_rules for now
+            # (search_config_repo requires workflow to already exist)
+            await repo.update(workflow_id, {
+                'extraction_rules': {
+                    **extraction_rules,
+                    'search_config': search_config,
+                },
+            })
+
+        logger.info(f'Created workflow from builder: {workflow_id} ({request.name}) for {domain}')
+        return CreateWorkflowResponse(workflow_id=workflow_id)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f'Error confirming workflow: {e}', exc_info=True)
+        raise HTTPException(  # noqa: B904
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f'Failed to save workflow: {str(e)}',  # noqa: RUF010
         )

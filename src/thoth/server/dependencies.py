@@ -97,3 +97,25 @@ def get_postgres_service(request: Request):
     """
     service_manager = get_service_manager(request)
     return service_manager.postgres if hasattr(service_manager, 'postgres') else None
+
+
+def get_workflow_builder(request: Request):
+    """
+    Get or create WorkflowBuilder instance from application state.
+
+    The builder is lazily created on first use and cached in app.state
+    for the lifetime of the application (since it manages Playwright).
+
+    Args:
+        request: FastAPI request object.
+
+    Returns:
+        WorkflowBuilder instance.
+    """
+    from thoth.discovery.browser.workflow_builder import WorkflowBuilder
+
+    builder = getattr(request.app.state, 'workflow_builder', None)
+    if builder is None:
+        builder = WorkflowBuilder()
+        request.app.state.workflow_builder = builder
+    return builder

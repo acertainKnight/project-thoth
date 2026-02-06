@@ -784,12 +784,43 @@ class WorkflowEngine:
                 'max_articles', workflow.get('max_articles_per_run', 100)
             )
 
-            # Initialize extraction service
+            # Load existing DOIs and titles for incremental discovery
+            existing_dois: set[str] = set()
+            existing_titles: set[str] = set()
+            try:
+                # Query previously discovered articles for this workflow
+                query = """
+                    SELECT DISTINCT doi, title
+                    FROM discovered_articles
+                    WHERE source = $1 AND (doi IS NOT NULL OR title IS NOT NULL)
+                    ORDER BY discovered_at DESC
+                    LIMIT 5000
+                """
+                rows = await self.executions_repo.postgres.fetch(
+                    query, workflow.get('name', 'browser_workflow'),
+                )
+                for row in rows:
+                    if row.get('doi'):
+                        existing_dois.add(row['doi'])
+                    if row.get('title'):
+                        normalized = ExtractionService._normalize_title(row['title'])
+                        existing_titles.add(normalized)
+                logger.info(
+                    f'Loaded {len(existing_dois)} DOIs and {len(existing_titles)} '
+                    f'titles for incremental discovery'
+                )
+            except Exception as e:
+                logger.debug(
+                    f'Could not load existing articles for dedup (table may not exist): {e}'
+                )
+
+            # Initialize extraction service with incremental stop-on-known
             extraction_service = ExtractionService(
                 page=page,
                 source_name=workflow.get('name', 'browser_workflow'),
-                existing_dois=set(),  # Could load from database for deduplication
-                existing_titles=set(),
+                existing_dois=existing_dois,
+                existing_titles=existing_titles,
+                stop_on_known=True,
             )
 
             execution_log.append(
