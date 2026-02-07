@@ -130,11 +130,12 @@ export class ConfigurationWizard extends Modal {
           'paths.notes': './research/notes',
           'llm.default.model': 'mistral/mistral-large-latest',
           'llm.default.temperature': 0.3,
+          'memory.letta.agentModel': 'anthropic/claude-sonnet-4-20250514',
           'features.discovery.enabled': true,
           'features.api_server.enabled': false
         },
         required_fields: ['api_keys.mistral_key', 'paths.workspace'],
-        optional_fields: ['features.discovery.enabled', 'paths.pdf', 'paths.notes'],
+        optional_fields: ['memory.letta.agentModel', 'features.discovery.enabled', 'paths.pdf', 'paths.notes'],
         performance_impact: 'low',
         complexity_level: 'beginner',
         estimated_setup_time: '3-5 minutes',
@@ -149,13 +150,14 @@ export class ConfigurationWizard extends Modal {
           'features.mcp.enabled': true,
           'features.rag.enabled': true,
           'features.discovery.enabled': true,
+          'memory.letta.agentModel': 'anthropic/claude-sonnet-4-20250514',
           'performance_config.cache_enabled': true,
           'monitoring.health_checks': true,
           'servers.api.port': 8000,
           'servers.mcp.port': 8001
         },
         required_fields: ['api_keys.mistral_key', 'paths.workspace', 'servers.api.port'],
-        optional_fields: ['api_keys.openrouter_key', 'monitoring.health_checks', 'performance_config.cache_enabled'],
+        optional_fields: ['memory.letta.agentModel', 'api_keys.openrouter_key', 'monitoring.health_checks', 'performance_config.cache_enabled'],
         performance_impact: 'high',
         complexity_level: 'advanced',
         estimated_setup_time: '10-15 minutes',
@@ -171,12 +173,13 @@ export class ConfigurationWizard extends Modal {
           'servers.api.port': 8000,
           'servers.api.cors_enabled': true,
           'features.rag.enabled': true,
+          'memory.letta.agentModel': 'anthropic/claude-sonnet-4-20250514',
           'monitoring.health_checks': true,
           'performance_config.cache_enabled': true,
           'logging.level': 'INFO'
         },
         required_fields: ['servers.api.port', 'api_keys.mistral_key', 'paths.workspace'],
-        optional_fields: ['servers.api.cors_enabled', 'monitoring.health_checks', 'logging.level'],
+        optional_fields: ['memory.letta.agentModel', 'servers.api.cors_enabled', 'monitoring.health_checks', 'logging.level'],
         performance_impact: 'high',
         complexity_level: 'intermediate',
         estimated_setup_time: '8-12 minutes',
@@ -188,7 +191,7 @@ export class ConfigurationWizard extends Modal {
         description: 'Manual configuration for specific requirements',
         recommended_settings: {},
         required_fields: ['api_keys.mistral_key'],
-        optional_fields: [],
+        optional_fields: ['memory.letta.agentModel'],
         performance_impact: 'medium',
         complexity_level: 'intermediate',
         estimated_setup_time: '5-20 minutes',
@@ -750,10 +753,28 @@ export class ConfigurationWizard extends Modal {
     if (fieldName.startsWith('paths')) return 'Directories';
     if (fieldName.startsWith('servers')) return 'Server Settings';
     if (fieldName.startsWith('features')) return 'Features';
+    if (fieldName.startsWith('memory.letta')) return 'Agent Configuration';
     return 'General';
   }
 
   private getFieldMetadata(fieldName: string): any {
+    // Custom metadata for known fields
+    const customFields: Record<string, any> = {
+      'memory.letta.agentModel': {
+        title: 'Letta Agent Model',
+        description: 'LLM model for research agents (litellm format, e.g. "anthropic/claude-sonnet-4-20250514"). Leave empty for Letta server default.',
+        type: 'text',
+        placeholder: 'anthropic/claude-sonnet-4-20250514',
+      },
+    };
+
+    if (customFields[fieldName]) {
+      return {
+        ...customFields[fieldName],
+        required: this.wizardState.selectedUseCase?.required_fields.includes(fieldName),
+      };
+    }
+
     return {
       title: this.formatFieldTitle(fieldName),
       description: `Configure ${fieldName}`,

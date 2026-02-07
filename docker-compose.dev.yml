@@ -200,6 +200,12 @@ services:
       #          and other path-related variables that are now managed by config.py
       # =============================================================================
 
+      # Prioritize mounted source over installed package for hot-reload
+      - PYTHONPATH=/app/src
+
+      # Playwright browsers path (writable by thoth user)
+      - PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
+
       # Vault configuration (REQUIRED - tells config.py where to find settings)
       - OBSIDIAN_VAULT_PATH=/vault
       - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
@@ -230,6 +236,7 @@ services:
       - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
       - ./src:/app/src:ro  # Mount source for development
       - ./data/prompts:/app/prompts:ro  # System prompts
+      - thoth-dev-playwright:/app/.cache/ms-playwright  # Persist Playwright browsers
     ports:
       - "8000:8000"
     networks:
@@ -484,6 +491,10 @@ volumes:
   thoth-dev-letta-postgres:
     driver: local
     name: thoth-dev-letta-postgres
+
+  thoth-dev-playwright:
+    driver: local
+    name: thoth-dev-playwright
 
   # NOTE: workspace is now local bind mount (./workspace)
   # See bind mount volumes in services above

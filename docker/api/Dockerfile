@@ -99,11 +99,16 @@ USER thoth
 # Set working directory
 WORKDIR /app
 
-# Install Playwright browsers
-RUN /app/.venv/bin/playwright install --with-deps chromium || echo "Playwright install skipped"
+# Create Playwright cache directory with correct permissions
+RUN mkdir -p /app/.cache/ms-playwright
 
-# Switch back to root for remaining setup
+# Switch back to root for Playwright browser installation (needs system deps)
 USER root
+
+# Install Playwright browsers as root (required for system dependencies)
+RUN /app/.venv/bin/playwright install chromium && \
+    /app/.venv/bin/playwright install-deps chromium && \
+    chown -R thoth:thoth /root/.cache/ms-playwright 2>/dev/null || true
 
 # Create default workspace structure with Letta directories
 RUN mkdir -p /workspace/{pdfs,notes,data,queries,discovery,knowledge,logs,cache} \

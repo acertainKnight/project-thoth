@@ -31,6 +31,9 @@ class AgentInitializationService:
         self.letta_api_key = os.getenv('LETTA_API_KEY', '')
         self.embedding_model = config.settings.rag.embedding_model  # openai/text-embedding-3-small
         
+        # Agent LLM model from settings (empty = use Letta server default)
+        self.agent_model = config.settings.memory.letta.agent_model
+        
         self.headers = {'Content-Type': 'application/json'}
         if self.letta_api_key:
             self.headers['Authorization'] = f'Bearer {self.letta_api_key}'
@@ -329,7 +332,7 @@ Comparison Aspects:
         system_prompt = agent_config['description'].replace('{{AGENT_ID}}', 'PENDING')
         
         # Agent payload - Letta accepts tool names directly
-        payload = {
+        payload: dict = {
             'name': agent_config['name'],
             'system': system_prompt,
             'embedding_config': {
@@ -337,6 +340,11 @@ Comparison Aspects:
             },
             'tools': tool_names  # Letta expects tool names, not IDs
         }
+        
+        # Set LLM model if configured in settings
+        if self.agent_model:
+            payload['llm_config'] = {'model': self.agent_model}
+            logger.info(f'   Using configured model: {self.agent_model}')
         
         # Add memory blocks if defined
         if agent_config.get('memory_blocks'):
@@ -383,11 +391,16 @@ Comparison Aspects:
         updated_system = agent_config['description'].replace('{{AGENT_ID}}', agent_id)
         
         try:
-            # Update agent system prompt (tools field not supported via PATCH)
+            # Build PATCH payload: system prompt + optional model override
+            patch_payload: dict = {'system': updated_system}
+            if self.agent_model:
+                patch_payload['llm_config'] = {'model': self.agent_model}
+            
+            # Update agent system prompt and model (tools field not supported via PATCH)
             await client.patch(
                 f'{self.letta_base_url}/v1/agents/{agent_id}',
                 headers=self.headers,
-                json={'system': updated_system}
+                json=patch_payload
             )
             
             # Get current agent tools

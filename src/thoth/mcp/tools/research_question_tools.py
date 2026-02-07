@@ -28,28 +28,31 @@ class ListAvailableSourcesMCPTool(NoInputTool):
     async def execute(self, _arguments: dict[str, Any]) -> MCPToolCallResult:
         """List available sources."""
         try:
+            from thoth.discovery.plugins import plugin_registry
+            
             content_parts = []
 
-            # Built-in API sources
-            builtin_sources = {
-                'arxiv': 'ArXiv preprint server (all academic fields)',
-                'pubmed': 'PubMed biomedical database',
-                'crossref': 'CrossRef DOI metadata',
-                'openalex': 'OpenAlex comprehensive academic database',
-                'biorxiv': 'BioRxiv biological sciences preprints',
-                'semantic_scholar': 'Semantic Scholar AI-powered search',
-            }
-
-            content_parts.append({
-                'type': 'text',
-                'text': '**Built-in API Sources:**\n',
-            })
-
-            for source_id, description in builtin_sources.items():
+            # Get all registered plugins dynamically
+            registered_plugins = plugin_registry.list_plugins()
+            
+            if registered_plugins:
                 content_parts.append({
                     'type': 'text',
-                    'text': f'  - `{source_id}`: {description}\n',
+                    'text': '**Built-in API Sources:**\n',
                 })
+
+                for source_id in sorted(registered_plugins):
+                    # Get plugin description if available
+                    plugin_cls = plugin_registry.get(source_id)
+                    if plugin_cls and hasattr(plugin_cls, '__doc__') and plugin_cls.__doc__:
+                        description = plugin_cls.__doc__.strip().split('\n')[0]
+                    else:
+                        description = f'{source_id.replace("_", " ").title()} source'
+                    
+                    content_parts.append({
+                        'type': 'text',
+                        'text': f'  - `{source_id}`: {description}\n',
+                    })
 
             # Query custom sources (browser workflows)
             try:

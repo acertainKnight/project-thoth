@@ -468,6 +468,17 @@ class LettaMemoryConfig(BaseModel):
         description='Path to OAuth credentials file'
     )
     
+    # Agent LLM model (litellm format, e.g. "anthropic/claude-sonnet-4-20250514")
+    agent_model: str = Field(
+        default='',
+        alias='agentModel',
+        description=(
+            'LLM model for Letta agents in litellm format (e.g. '
+            '"anthropic/claude-sonnet-4-20250514"). '
+            'Empty string means use Letta server default.'
+        ),
+    )
+    
     # Agent configuration
     agent_name: str = Field(default='thoth_research_agent', alias='agentName')
     core_memory_limit: int = Field(default=10000, alias='coreMemoryLimit')

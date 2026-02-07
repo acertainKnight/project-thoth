@@ -40,13 +40,30 @@ ENV PYTHONUNBUFFERED=1 \
     THOTH_SERVICE=discovery \
     THOTH_LOG_LEVEL=INFO
 
-# Install runtime system dependencies including web scraping tools
+# Install runtime system dependencies including Playwright dependencies
 RUN apt-get update && apt-get install -y \
     curl \
     wget \
     ca-certificates \
-    chromium \
-    chromium-driver \
+    # Playwright browser dependencies
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    libatspi2.0-0 \
+    libxshmfence1 \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -62,6 +79,11 @@ COPY --from=builder --chown=thoth:thoth /app /app
 
 # Make sure we can run uv in the runtime
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Install Playwright browsers as root (before switching users)
+RUN /app/.venv/bin/playwright install chromium && \
+    /app/.venv/bin/playwright install-deps chromium && \
+    chown -R thoth:thoth /root/.cache/ms-playwright 2>/dev/null || true
 
 # Switch to non-root user
 USER thoth
@@ -90,9 +112,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     THOTH_DATA_DIR=/workspace/data \
     THOTH_LOGS_DIR=/workspace/logs \
     THOTH_DISCOVERY_HOST=0.0.0.0 \
-    THOTH_DISCOVERY_PORT=8004 \
-    CHROMIUM_PATH=/usr/bin/chromium \
-    CHROMEDRIVER_PATH=/usr/bin/chromedriver
+    THOTH_DISCOVERY_PORT=8004
 
 # Production command - start the discovery service
 CMD ["python", "-m", "thoth", "discovery", "server"]

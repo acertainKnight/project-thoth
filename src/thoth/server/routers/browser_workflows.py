@@ -332,11 +332,15 @@ async def list_workflows(
                 # Get all and filter inactive
                 query = 'SELECT * FROM browser_workflows'
                 all_workflows = await repo.postgres.fetch(query)
-                workflows = [dict(w) for w in all_workflows if not w.get('is_active', True)]
+                workflows = [
+                    BrowserWorkflowRepository._deserialize_row(dict(w))
+                    for w in all_workflows
+                    if not w.get('is_active', True)
+                ]
         else:
             query = 'SELECT * FROM browser_workflows'
             result = await repo.postgres.fetch(query)
-            workflows = [dict(w) for w in result]
+            workflows = [BrowserWorkflowRepository._deserialize_row(dict(w)) for w in result]
 
         return [WorkflowResponse(**w) for w in workflows]
 

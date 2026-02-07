@@ -5,6 +5,7 @@ This module provides methods for managing browser-based discovery workflows,
 including CRUD operations, execution statistics, and health monitoring.
 """
 
+import json
 from typing import Any, Optional  # noqa: I001
 from uuid import UUID
 from datetime import datetime
@@ -16,9 +17,34 @@ from thoth.repositories.base import BaseRepository
 class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
     """Repository for managing browser workflow records."""
 
+    # Columns stored as JSONB that need deserialization on read
+    _jsonb_columns = frozenset({'extraction_rules', 'pagination_config'})
+
     def __init__(self, postgres_service, **kwargs):
         """Initialize browser workflow repository."""
         super().__init__(postgres_service, table_name='browser_workflows', **kwargs)
+
+    @classmethod
+    def _deserialize_row(cls, row: dict[str, Any]) -> dict[str, Any]:
+        """Deserialize JSONB string fields back to Python dicts.
+
+        asyncpg returns JSONB columns as strings by default. This converts
+        known JSONB columns back to dicts for use with Pydantic models.
+
+        Args:
+            row: Row dict from database.
+
+        Returns:
+            dict[str, Any]: Row with JSONB fields deserialized.
+        """
+        for col in cls._jsonb_columns:
+            val = row.get(col)
+            if isinstance(val, str):
+                try:
+                    row[col] = json.loads(val)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        return row
 
     async def create(self, workflow_data: dict[str, Any]) -> Optional[UUID]:  # noqa: UP007
         """
@@ -43,10 +69,18 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
                     logger.error(f'Missing required field: {field}')
                     return None
 
-            # Build column and value lists
+            # Build column and value lists, serializing dicts to JSON for JSONB columns
             columns = list(workflow_data.keys())
             placeholders = [f'${i + 1}' for i in range(len(columns))]
-            values = [workflow_data[col] for col in columns]
+            values = []
+            for col in columns:
+                val = workflow_data[col]
+                if isinstance(val, dict):
+                    values.append(json.dumps(val))
+                elif isinstance(val, list) and val and isinstance(val[0], dict):
+                    values.append(json.dumps(val))
+                else:
+                    values.append(val)
 
             query = f"""
                 INSERT INTO browser_workflows ({', '.join(columns)})
@@ -86,7 +120,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             result = await self.postgres.fetchrow(query, workflow_id)
 
             if result:
-                data = dict(result)
+                data = self._deserialize_row(dict(result))
                 self._set_in_cache(cache_key, data)
                 return data
 
@@ -116,7 +150,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             result = await self.postgres.fetchrow(query, name)
 
             if result:
-                data = dict(result)
+                data = self._deserialize_row(dict(result))
                 self._set_in_cache(cache_key, data)
                 return data
 
@@ -146,7 +180,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             """
 
             results = await self.postgres.fetch(query)
-            data = [dict(row) for row in results]
+            data = [self._deserialize_row(dict(row)) for row in results]
 
             self._set_in_cache(cache_key, data)
             return data
@@ -170,9 +204,17 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             if not updates:
                 return True
 
-            # Build SET clause
+            # Build SET clause, serializing dicts to JSON for JSONB columns
             set_clauses = [f'{col} = ${i + 2}' for i, col in enumerate(updates.keys())]
-            values = [workflow_id] + list(updates.values())  # noqa: RUF005
+            serialized_values = []
+            for val in updates.values():
+                if isinstance(val, dict):
+                    serialized_values.append(json.dumps(val))
+                elif isinstance(val, list) and val and isinstance(val[0], dict):
+                    serialized_values.append(json.dumps(val))
+                else:
+                    serialized_values.append(val)
+            values = [workflow_id] + serialized_values  # noqa: RUF005
 
             # Always update updated_at timestamp
             set_clauses.append(f'updated_at = ${len(values) + 1}')
@@ -349,7 +391,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             """
 
             results = await self.postgres.fetch(query, domain)
-            data = [dict(row) for row in results]
+            data = [self._deserialize_row(dict(row)) for row in results]
 
             self._set_in_cache(cache_key, data)
             return data
@@ -447,7 +489,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             """
 
             results = await self.postgres.fetch(query, hours_since_last_run)
-            data = [dict(row) for row in results]
+            data = [self._deserialize_row(dict(row)) for row in results]
 
             # Cache for shorter time since this is time-sensitive
             self._set_in_cache(cache_key, data, ttl=300)  # 5 minutes

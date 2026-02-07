@@ -116,6 +116,80 @@ def _on_settings_reload():
         logger.error(f'Failed to reload configuration: {e}')
 
 
+# Track previous model to detect changes
+_previous_letta_model: str | None = None
+
+
+def _on_letta_model_reload(reloaded_config) -> None:
+    """Callback to sync Letta agent model when settings change.
+
+    Compares the new model with the previous one and patches all
+    Letta agents via the API if it changed.
+
+    Args:
+        reloaded_config: The reloaded Config instance.
+    """
+    global _previous_letta_model
+
+    new_model = reloaded_config.settings.memory.letta.agent_model
+    if not new_model or new_model == _previous_letta_model:
+        return
+
+    logger.info(f'Letta agent model changed: {_previous_letta_model!r} -> {new_model!r}')
+    _previous_letta_model = new_model
+
+    # Patch agents in a background thread to avoid blocking the watcher
+    import threading
+
+    def _patch_agents():
+        import requests as sync_requests
+
+        letta_url = (
+            os.environ.get('THOTH_LETTA_URL')
+            or os.environ.get('LETTA_BASE_URL')
+            or 'http://localhost:8283'
+        )
+        headers = {'Content-Type': 'application/json'}
+        api_key = os.environ.get('LETTA_API_KEY', '')
+        if api_key:
+            headers['Authorization'] = f'Bearer {api_key}'
+
+        try:
+            resp = sync_requests.get(
+                f'{letta_url}/v1/agents/', headers=headers, timeout=15
+            )
+            resp.raise_for_status()
+            agents = resp.json()
+
+            patched = 0
+            for agent in agents:
+                name = agent.get('name', '')
+                if not name.startswith('thoth_'):
+                    continue
+                agent_id = agent['id']
+                patch_resp = sync_requests.patch(
+                    f'{letta_url}/v1/agents/{agent_id}',
+                    headers=headers,
+                    json={'llm_config': {'model': new_model}},
+                    timeout=15,
+                )
+                if patch_resp.status_code in (200, 201):
+                    patched += 1
+                    logger.info(
+                        f'Updated model for {name} ({agent_id[:16]}...) -> {new_model}'
+                    )
+                else:
+                    logger.warning(
+                        f'Failed to update model for {name}: {patch_resp.status_code}'
+                    )
+
+            logger.success(f'Letta agent model hot-reload complete: {patched} agent(s) updated')
+        except Exception as e:
+            logger.error(f'Failed to hot-reload Letta agent model: {e}')
+
+    threading.Thread(target=_patch_agents, daemon=True).start()
+
+
 def _on_schema_reload():
     """Callback when analysis schema file is reloaded."""
     logger.info('Analysis schema file changed, reloading schema...')
@@ -330,9 +404,39 @@ async def lifespan(app: FastAPI):
     else:
         logger.info('Hot-reload disabled (not in Docker environment)')
 
+    # Register Letta model hot-reload callback (fires on any settings reload)
+    try:
+        global _previous_letta_model
+        _previous_letta_model = config.settings.memory.letta.agent_model or None
+        from thoth.config import Config
+        Config.register_reload_callback('letta_model_sync', _on_letta_model_reload)
+        logger.info(
+            f'Letta model reload callback registered '
+            f'(current model: {_previous_letta_model or "server default"})'
+        )
+    except Exception as e:
+        logger.warning(f'Could not register Letta model reload callback: {e}')
+
     # Get service_manager from app.state (set by start_obsidian_server)
+    # If running via direct uvicorn (e.g. Docker CMD), initialize it here
     service_manager = getattr(app.state, 'service_manager', None)
-    
+
+    if service_manager is None:
+        logger.info(
+            'ServiceManager not set on app.state (direct uvicorn mode), '
+            'initializing now...'
+        )
+        try:
+            from thoth.services.service_manager import ServiceManager
+
+            service_manager = ServiceManager()
+            service_manager.initialize()
+            app.state.service_manager = service_manager
+            logger.success('ServiceManager initialized in lifespan')
+        except Exception as e:
+            logger.error(f'Failed to initialize ServiceManager in lifespan: {e}')
+            logger.warning('Continuing without ServiceManager (most features will not work)')
+
     # Initialize PostgreSQL connection pool if postgres service exists
     if service_manager and hasattr(service_manager, 'postgres'):
         try:

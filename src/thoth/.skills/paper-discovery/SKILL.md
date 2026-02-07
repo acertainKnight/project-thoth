@@ -59,6 +59,21 @@ list_articles(limit=20, sort_by="relevance")
 
 **Default**: Use `semantic_scholar` + `openalex` for broad coverage.
 
+### Need a Source Not Listed?
+
+If the user wants papers from a website/journal not in the built-in sources list:
+
+**Load the `custom-source-setup` skill** to set up auto-detected scrapers for any website. This allows adding sources like:
+- Specific journal websites (Nature, Science, PLOS ONE, etc.)
+- Conference proceedings pages (ACL Anthology, NeurIPS, etc.)
+- Institutional repositories (NBER, SSRN, arXiv mirrors, etc.)
+- Any website with article listings
+
+Example trigger phrases:
+- "Can you get papers from NBER?"
+- "Add Nature Neuroscience as a source"
+- "Scrape articles from this URL: https://..."
+
 ## Keyword Extraction
 
 Extract keywords from user's request:

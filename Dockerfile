@@ -36,10 +36,30 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ==============================================================================
 FROM python:3.12-slim AS production
 
-# Install runtime dependencies only
-RUN apt-get update && apt-get install -y \
+# Install runtime dependencies + Playwright browser system libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
+    # Playwright Chromium system dependencies
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2t64 \
+    libatspi2.0-0 \
+    libxshmfence1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -53,6 +73,12 @@ WORKDIR /app
 # Copy only the virtual environment from builder (includes installed project)
 COPY --from=builder --chown=thoth:thoth /app/.venv /app/.venv
 
+# Install Playwright Chromium browsers (as root, then chown to thoth)
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
+RUN mkdir -p /app/.cache/ms-playwright && \
+    /app/.venv/bin/playwright install chromium && \
+    chown -R thoth:thoth /app/.cache
+
 # Switch to non-root user
 USER thoth
 
@@ -63,7 +89,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     THOTH_DATA_DIR=/data
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Expose port

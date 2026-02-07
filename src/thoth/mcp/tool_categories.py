@@ -38,6 +38,13 @@ TOOL_CATEGORIES = {
         "run_discovery_for_question",
     ],
     
+    # Workflow builder (custom source auto-detection)
+    "workflow_builder": [
+        "analyze_source_url",
+        "refine_source_selectors",
+        "confirm_source_workflow",
+    ],
+    
     # Collection management
     "collection": [
         "list_articles",

@@ -1851,22 +1851,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     
     console.log('[MultiChatModal] Getting or creating default conversation...');
     
-    // Try to get the "default" conversation (special Letta endpoint)
-    try {
-      const defaultResponse = await this.fetchWithTimeout(
-        `${endpoint}/v1/conversations/default?agent_id=${agentId}`
-      );
-      if (defaultResponse.ok) {
-        const defaultConv = await defaultResponse.json();
-        console.log('[MultiChatModal] Found default conversation via special endpoint:', defaultConv.id);
-        return defaultConv.id;
-      }
-    } catch (error) {
-      console.log('[MultiChatModal] Special "default" endpoint not available, using fallback approach');
-      // Fall through to list-based approach
-    }
-    
-    // Fallback: Find or create a default conversation
+    // Find or create a default conversation via list endpoint
     try {
       const listResponse = await this.fetchWithTimeout(
         `${endpoint}/v1/conversations/?agent_id=${agentId}&limit=50`
@@ -2361,7 +2346,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             input: message,
-            stream: true,  // Enable streaming for real-time token display
+            streaming: true,  // Enable SSE streaming for real-time token display
             stream_tokens: true  // Stream individual tokens
           })
         });
@@ -2390,16 +2375,31 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
             const lines = buffer.split('\n\n');
             buffer = lines.pop() || ''; // Keep incomplete message in buffer
 
-            for (const line of lines) {
-              if (!line.trim().startsWith('data:')) continue;
+            for (const block of lines) {
+              // Extract the data line from SSE blocks (may have event: prefix)
+              const dataLine = block.split('\n').find(l => l.trim().startsWith('data:'));
+              if (!dataLine) continue;
 
-              const jsonStr = line.replace(/^data:\s*/, '').trim();
+              const jsonStr = dataLine.replace(/^data:\s*/, '').trim();
               if (!jsonStr || jsonStr === '[DONE]') continue;
 
               try {
                 const msg = JSON.parse(jsonStr);
                 const messageType = msg.message_type;
                 const messageId = msg.id;
+
+                // Handle error_message from Letta (e.g. LLM errors)
+                if (messageType === 'error_message') {
+                  const errorDetail = msg.detail || msg.message || 'Unknown agent error';
+                  console.error('[MultiChatModal] Agent error:', errorDetail);
+                  throw new Error(errorDetail);
+                }
+
+                // Handle stop_reason (may indicate errors)
+                if (messageType === 'stop_reason' && msg.stop_reason === 'llm_api_error') {
+                  console.error('[MultiChatModal] LLM API error reported');
+                  // Don't throw yet - wait for the error_message with details
+                }
 
                 // Handle reasoning_message
                 if (messageType === 'reasoning_message') {
@@ -2465,6 +2465,10 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                   }
                 }
               } catch (e) {
+                // Re-throw agent errors so they display to the user
+                if (e.message && !e.message.includes('Failed to parse')) {
+                  throw e;
+                }
                 console.warn('[MultiChatModal] Failed to parse SSE message:', jsonStr.substring(0, 100));
               }
             }

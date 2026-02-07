@@ -265,59 +265,56 @@ def _get_user_id_from_request(request: Request) -> str:
     return user_id or 'default_user'
 
 
-async def _get_research_question_service():
-    """Get the research question service from service manager."""
-    from thoth.server.app import service_manager
+def _get_research_question_service(request: Request):
+    """
+    Get the research question service from service manager via DI.
 
-    if service_manager is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Service manager not initialized',
-        )
+    Args:
+        request: FastAPI request object (carries app state).
 
-    if not hasattr(service_manager, 'research_question'):
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Research question service not available',
-        )
+    Returns:
+        ResearchQuestionService instance.
+    """
+    from thoth.server.dependencies import get_service_manager
 
-    return service_manager.research_question
+    sm = get_service_manager(request)
+    return sm.research_question
 
 
-async def _get_discovery_orchestrator():
-    """Get the discovery orchestrator from service manager or return None for proxy mode."""
-    from thoth.server.app import service_manager
+def _get_discovery_orchestrator(request: Request):
+    """
+    Get the discovery orchestrator from service manager, or None if unavailable.
 
-    if service_manager is None:
-        return None
+    Args:
+        request: FastAPI request object.
 
-    # Return orchestrator if available (all-in-one mode)
-    # Return None if not available (microservices mode - will use proxy)
-    return getattr(service_manager, 'discovery_orchestrator', None)
+    Returns:
+        DiscoveryOrchestrator instance or None.
+    """
+    from thoth.server.dependencies import get_service_manager
+
+    sm = get_service_manager(request)
+    # Access via _services dict to avoid ServiceUnavailableError when None
+    return sm._services.get('discovery_orchestrator')
 
 
-async def _get_article_match_repository():
-    """Get the article match repository from service manager."""
-    from thoth.server.app import service_manager
+def _get_match_repository(request: Request):
+    """
+    Get a ResearchQuestionMatchRepository from service manager via DI.
 
-    if service_manager is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Service manager not initialized',
-        )
+    Args:
+        request: FastAPI request object.
 
-    # Get postgres service and create repository
-    if not hasattr(service_manager, 'postgres'):
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='PostgreSQL service not available',
-        )
-
-    from thoth.repositories.article_research_match_repository import (
-        ArticleResearchMatchRepository,
+    Returns:
+        ResearchQuestionMatchRepository instance.
+    """
+    from thoth.repositories.research_question_match_repository import (
+        ResearchQuestionMatchRepository,
     )
+    from thoth.server.dependencies import get_service_manager
 
-    return ArticleResearchMatchRepository(service_manager.postgres)
+    sm = get_service_manager(request)
+    return ResearchQuestionMatchRepository(sm.postgres)
 
 
 # ==================== API Endpoints ====================
@@ -351,7 +348,7 @@ async def create_research_question(
         HTTPException: 400 if validation fails, 503 if service unavailable
     """
     try:
-        service = await _get_research_question_service()
+        service = _get_research_question_service(request)
         user_id = _get_user_id_from_request(request)
 
         # Validate at least one keyword or topic
@@ -443,7 +440,7 @@ async def list_research_questions(
         HTTPException: 503 if service unavailable
     """
     try:
-        service = await _get_research_question_service()
+        service = _get_research_question_service(request)
         user_id = _get_user_id_from_request(request)
 
         # Get questions from repository with pagination
@@ -510,7 +507,7 @@ async def get_research_question(
         HTTPException: 404 if not found, 403 if unauthorized, 503 if service unavailable
     """
     try:
-        service = await _get_research_question_service()
+        service = _get_research_question_service(request)
         user_id = _get_user_id_from_request(request)
 
         # Get the question
@@ -571,7 +568,7 @@ async def update_research_question(
         HTTPException: 404 if not found, 403 if unauthorized, 400 if validation fails
     """
     try:
-        service = await _get_research_question_service()
+        service = _get_research_question_service(request)
         user_id = _get_user_id_from_request(request)
 
         # Convert to dict and filter out None values
@@ -658,7 +655,7 @@ async def delete_research_question(
         HTTPException: 404 if not found, 403 if unauthorized
     """
     try:
-        service = await _get_research_question_service()
+        service = _get_research_question_service(request)
         user_id = _get_user_id_from_request(request)
 
         # Delete the question (service handles ownership check)
@@ -720,8 +717,8 @@ async def trigger_discovery_run(
         HTTPException: 404 if not found, 403 if unauthorized, 503 if service unavailable
     """
     try:
-        service = await _get_research_question_service()
-        orchestrator = await _get_discovery_orchestrator()
+        service = _get_research_question_service(request)
+        orchestrator = _get_discovery_orchestrator(request)
         user_id = _get_user_id_from_request(request)
 
         # Verify ownership
@@ -819,8 +816,8 @@ async def get_matched_articles(
         HTTPException: 404 if question not found, 403 if unauthorized
     """
     try:
-        service = await _get_research_question_service()
-        match_repo = await _get_article_match_repository()
+        service = _get_research_question_service(request)
+        match_repo = _get_match_repository(request)
         user_id = _get_user_id_from_request(request)
 
         # Verify ownership
@@ -838,15 +835,58 @@ async def get_matched_articles(
                 detail='You do not have permission to view matches for this question',
             )
 
-        # Get matches with pagination
-        matches = await match_repo.get_matches_by_question(
-            question_id=question_id,
-            min_relevance=min_relevance,
-            is_viewed=is_viewed,
-            is_bookmarked=is_bookmarked,
-            limit=limit + 1,  # Get one extra to check if there are more
-            offset=offset,
-        )
+        # Build filtered query with optional filters
+        query = """
+            SELECT
+                rqm.id as match_id,
+                rqm.paper_id,
+                rqm.question_id,
+                rqm.relevance_score,
+                rqm.matched_keywords,
+                rqm.matched_topics,
+                rqm.matched_authors,
+                rqm.discovered_via_source,
+                rqm.is_viewed,
+                rqm.is_bookmarked,
+                rqm.user_sentiment,
+                rqm.sentiment_recorded_at,
+                rqm.matched_at,
+                pm.doi,
+                pm.title,
+                pm.authors,
+                pm.abstract,
+                pm.publication_date,
+                pm.journal,
+                pm.url,
+                pm.pdf_url
+            FROM research_question_matches rqm
+            JOIN paper_metadata pm ON pm.id = rqm.paper_id
+            WHERE rqm.question_id = $1
+        """
+        params: list = [question_id]
+        param_idx = 2
+
+        if min_relevance is not None:
+            query += f' AND rqm.relevance_score >= ${param_idx}'
+            params.append(min_relevance)
+            param_idx += 1
+
+        if is_viewed is not None:
+            query += f' AND rqm.is_viewed = ${param_idx}'
+            params.append(is_viewed)
+            param_idx += 1
+
+        if is_bookmarked is not None:
+            query += f' AND rqm.is_bookmarked = ${param_idx}'
+            params.append(is_bookmarked)
+            param_idx += 1
+
+        query += f' ORDER BY rqm.relevance_score DESC, rqm.matched_at DESC'
+        query += f' LIMIT ${param_idx} OFFSET ${param_idx + 1}'
+        params.extend([limit + 1, offset])  # Get one extra to check if there are more
+
+        rows = await match_repo.postgres.fetch(query, *params)
+        matches = [dict(row) for row in rows]
 
         # Check if there are more results
         has_more = len(matches) > limit
@@ -906,7 +946,7 @@ async def get_question_statistics(
         HTTPException: 404 if question not found, 403 if unauthorized
     """
     try:
-        service = await _get_research_question_service()
+        service = _get_research_question_service(request)
         user_id = _get_user_id_from_request(request)
 
         # Get statistics (service handles ownership check)
@@ -983,8 +1023,8 @@ async def update_article_sentiment(
         HTTPException: 400 if validation fails, 403 if unauthorized, 404 if not found
     """
     try:
-        service = await _get_research_question_service()
-        match_repo = await _get_article_match_repository()
+        service = _get_research_question_service(request)
+        match_repo = _get_match_repository(request)
         user_id = _get_user_id_from_request(request)
 
         # Verify question ownership first
@@ -1019,7 +1059,9 @@ async def update_article_sentiment(
             )
 
         # Update sentiment
-        success = await match_repo.set_user_sentiment(match_id, sentiment)
+        success = await match_repo.update_user_interaction(
+            match_id, user_sentiment=sentiment
+        )
 
         if not success:
             raise HTTPException(
@@ -1114,8 +1156,8 @@ async def update_article_status(
         HTTPException: 400 if validation fails, 403 if unauthorized, 404 if not found
     """
     try:
-        service = await _get_research_question_service()
-        match_repo = await _get_article_match_repository()
+        service = _get_research_question_service(request)
+        match_repo = _get_match_repository(request)
         user_id = _get_user_id_from_request(request)
 
         # Verify question ownership
@@ -1259,8 +1301,8 @@ async def download_article_pdf(
         HTTPException: 400 if validation fails, 403 if unauthorized, 404 if not found
     """
     try:
-        service = await _get_research_question_service()
-        match_repo = await _get_article_match_repository()
+        service = _get_research_question_service(request)
+        match_repo = _get_match_repository(request)
         user_id = _get_user_id_from_request(request)
 
         # Verify question ownership
@@ -1344,7 +1386,7 @@ async def download_article_pdf(
 
             # Mark as viewed too
             if not match.get('is_viewed'):
-                await match_repo.mark_as_viewed(match_id)
+                await match_repo.update_user_interaction(match_id, is_viewed=True)
 
             logger.info(f'Downloaded PDF for article {paper_id} to {downloaded_path}')
 

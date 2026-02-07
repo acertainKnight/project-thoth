@@ -7,6 +7,7 @@
 
 import { Notice } from 'obsidian';
 import { InputModal } from '../modals/input-modal';
+import { WorkflowBuilderModal } from '../modals/workflow-builder-modal';
 
 export interface ResearchQuestion {
   id: string;
@@ -126,11 +127,24 @@ export class ResearchTabComponent {
     const sectionHeader = section.createDiv({ cls: 'thoth-section-header' });
     sectionHeader.createEl('h3', { text: 'Research Questions' });
 
-    const newQuestionBtn = sectionHeader.createEl('button', {
+    const buttonGroup = sectionHeader.createDiv({ cls: 'thoth-button-group' });
+    buttonGroup.style.cssText = 'display: flex; gap: 8px;';
+
+    const newQuestionBtn = buttonGroup.createEl('button', {
       text: '+ New Question',
       cls: 'thoth-new-question-btn'
     });
     newQuestionBtn.onclick = () => this.createNewQuestion();
+
+    const addSourceLink = buttonGroup.createEl('button', {
+      text: '+ Add Custom Source',
+      cls: 'thoth-add-source-link'
+    });
+    addSourceLink.style.cssText = 'padding: 6px 12px; font-size: 12px; border: 1px solid var(--background-modifier-border); background: transparent; border-radius: 4px; cursor: pointer; opacity: 0.8;';
+    addSourceLink.onclick = () => {
+      const modal = new WorkflowBuilderModal((this.plugin as any).app, this.plugin);
+      modal.open();
+    };
 
     // Questions list
     if (this.questions.length === 0) {
@@ -676,7 +690,8 @@ export class ResearchTabComponent {
     });
     
     createBtn.onclick = () => {
-      new Notice('Browser workflow creation coming soon! Use backend API for now.');
+      const modal = new WorkflowBuilderModal((this.plugin as any).app, this.plugin);
+      modal.open();
     };
     
     // Workflows list

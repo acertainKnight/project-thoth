@@ -146,6 +146,11 @@ from .query_tools import (
 from .web_search_tool import (
     WebSearchMCPTool,
 )
+from .workflow_builder_tools import (
+    AnalyzeSourceUrlMCPTool,
+    ConfirmSourceWorkflowMCPTool,
+    RefineSourceSelectorsMCPTool,
+)
 
 # List of ACTIVE MCP tool classes (deprecated tools excluded)
 MCP_TOOL_CLASSES = [
@@ -208,6 +213,10 @@ MCP_TOOL_CLASSES = [
     ListSkillsMCPTool,
     LoadSkillMCPTool,
     UnloadSkillMCPTool,
+    # Workflow builder (auto-detect article sources)
+    AnalyzeSourceUrlMCPTool,
+    RefineSourceSelectorsMCPTool,
+    ConfirmSourceWorkflowMCPTool,
 ]
 
 # Deprecated tools - kept for backwards compatibility, not registered
@@ -273,10 +282,12 @@ __all__ = [  # noqa: RUF022
     'MCPToolCallResult',
     'MCPToolRegistry',
     # Active tools (alphabetical)
+    'AnalyzeSourceUrlMCPTool',
     'AnswerResearchQuestionMCPTool',
     'ReadFullArticleMCPTool',
     'CollectionStatsMCPTool',
     'CompareArticlesMCPTool',
+    'ConfirmSourceWorkflowMCPTool',
     'ConsolidateAndRetagMCPTool',
     'ConsolidateTagsMCPTool',
     'CreateCustomIndexMCPTool',
@@ -307,6 +318,7 @@ __all__ = [  # noqa: RUF022
     'MigrateSettingsMCPTool',
     'OptimizeSearchMCPTool',
     'ReindexCollectionMCPTool',
+    'RefineSourceSelectorsMCPTool',
     'ResetSettingsMCPTool',
     'RunDiscoveryForQuestionMCPTool',
     'SearchArticlesMCPTool',
