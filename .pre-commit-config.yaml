@@ -17,7 +17,7 @@ repos:
 
   # Python code formatting with ruff
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.9
+    rev: v0.14.14
     hooks:
       # Run the linter
       - id: ruff
@@ -30,7 +30,6 @@ repos:
     rev: v1.8.0
     hooks:
       - id: mypy
-        additional_dependencies: [types-all]
         args: [--ignore-missing-imports, --show-error-codes]
         exclude: ^tests/
 
@@ -50,9 +49,15 @@ repos:
         args: [--convention=google]
         exclude: ^tests/
 
-  # Import sorting
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
+  # Import sorting handled by ruff (select includes "I" rules)
+
+  # Run unit tests before push (catches failures before CI)
+  - repo: local
     hooks:
-      - id: isort
-        args: [--profile, black]
+      - id: unit-tests
+        name: unit tests
+        entry: uv run python -m pytest tests/unit/ -x -q --tb=short --no-header
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

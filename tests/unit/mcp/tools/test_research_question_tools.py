@@ -1,8 +1,9 @@
 """Unit tests for research question MCP tools."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
+import pytest
 
 from thoth.mcp.tools.research_question_tools import (
     CreateResearchQuestionMCPTool,
@@ -25,8 +26,6 @@ def mock_service_manager():
     return manager
 
 
-
-
 # ==================== ListAvailableSourcesMCPTool Tests ====================
 
 
@@ -39,7 +38,9 @@ class TestListAvailableSourcesMCPTool:
         tool = ListAvailableSourcesMCPTool(mock_service_manager)
 
         # Mock repository to return empty workflows
-        with patch('thoth.repositories.browser_workflow_repository.BrowserWorkflowRepository') as mock_repo_class:
+        with patch(
+            'thoth.repositories.browser_workflow_repository.BrowserWorkflowRepository'
+        ) as mock_repo_class:
             mock_repo = AsyncMock()
             mock_repo.get_active_workflows.return_value = []
             mock_repo_class.return_value = mock_repo
@@ -51,7 +52,7 @@ class TestListAvailableSourcesMCPTool:
         # Check that built-in sources are listed
         content_text = ''.join([c['text'] for c in result.content])
         assert 'arxiv' in content_text
-        assert 'pubmed' in content_text
+        assert 'semantic_scholar' in content_text
         assert 'Built-in API Sources' in content_text
 
     @pytest.mark.asyncio
@@ -60,7 +61,9 @@ class TestListAvailableSourcesMCPTool:
         tool = ListAvailableSourcesMCPTool(mock_service_manager)
 
         # Mock repository to return workflows
-        with patch('thoth.repositories.browser_workflow_repository.BrowserWorkflowRepository') as mock_repo_class:
+        with patch(
+            'thoth.repositories.browser_workflow_repository.BrowserWorkflowRepository'
+        ) as mock_repo_class:
             mock_repo = AsyncMock()
             mock_repo.get_active_workflows.return_value = [
                 {'name': 'custom_scraper', 'description': 'Custom workflow'},
@@ -118,14 +121,17 @@ class TestCreateResearchQuestionMCPTool:
 
         # Should fail due to missing required field
         mock_service_manager.research_question.create_research_question = AsyncMock(
-            side_effect=ValueError("Missing required field: keywords")
+            side_effect=ValueError('Missing required field: keywords')
         )
 
         result = await tool.execute(arguments)
 
         assert result.isError is True
         # Check for error (KeyError in this case)
-        assert 'Error' in result.content[0]['text'] or 'error' in result.content[0]['text'].lower()
+        assert (
+            'Error' in result.content[0]['text']
+            or 'error' in result.content[0]['text'].lower()
+        )
 
     @pytest.mark.asyncio
     async def test_create_question_with_all_optional_fields(self, mock_service_manager):
@@ -242,15 +248,19 @@ class TestGetResearchQuestionMCPTool:
             'created_at': '2026-01-10',
         }
 
-        with patch('thoth.repositories.research_question_repository.ResearchQuestionRepository') as mock_repo_class:
+        with patch(
+            'thoth.repositories.research_question_repository.ResearchQuestionRepository'
+        ) as mock_repo_class:
             mock_repo = AsyncMock()
             mock_repo.get_by_id.return_value = question
             mock_repo_class.return_value = mock_repo
 
-            result = await tool.execute({
-                'question_id': str(question_id),
-                'user_id': 'test_user',
-            })
+            result = await tool.execute(
+                {
+                    'question_id': str(question_id),
+                    'user_id': 'test_user',
+                }
+            )
 
         assert result.isError is False
         content_text = result.content[0]['text']
@@ -264,15 +274,19 @@ class TestGetResearchQuestionMCPTool:
 
         question_id = uuid4()
 
-        with patch('thoth.repositories.research_question_repository.ResearchQuestionRepository') as mock_repo_class:
+        with patch(
+            'thoth.repositories.research_question_repository.ResearchQuestionRepository'
+        ) as mock_repo_class:
             mock_repo = AsyncMock()
             mock_repo.get_by_id.return_value = None
             mock_repo_class.return_value = mock_repo
 
-            result = await tool.execute({
-                'question_id': str(question_id),
-                'user_id': 'test_user',
-            })
+            result = await tool.execute(
+                {
+                    'question_id': str(question_id),
+                    'user_id': 'test_user',
+                }
+            )
 
         assert result.isError is True
         assert 'not found' in result.content[0]['text']
@@ -289,15 +303,19 @@ class TestGetResearchQuestionMCPTool:
             'name': 'Test Question',
         }
 
-        with patch('thoth.repositories.research_question_repository.ResearchQuestionRepository') as mock_repo_class:
+        with patch(
+            'thoth.repositories.research_question_repository.ResearchQuestionRepository'
+        ) as mock_repo_class:
             mock_repo = AsyncMock()
             mock_repo.get_by_id.return_value = question
             mock_repo_class.return_value = mock_repo
 
-            result = await tool.execute({
-                'question_id': str(question_id),
-                'user_id': 'test_user',
-            })
+            result = await tool.execute(
+                {
+                    'question_id': str(question_id),
+                    'user_id': 'test_user',
+                }
+            )
 
         assert result.isError is True
         assert 'does not have access' in result.content[0]['text']
@@ -319,11 +337,13 @@ class TestUpdateResearchQuestionMCPTool:
             return_value=True
         )
 
-        result = await tool.execute({
-            'question_id': str(question_id),
-            'keywords': ['new', 'keywords'],
-            'min_relevance_score': 0.8,
-        })
+        result = await tool.execute(
+            {
+                'question_id': str(question_id),
+                'keywords': ['new', 'keywords'],
+                'min_relevance_score': 0.8,
+            }
+        )
 
         assert result.isError is False
         assert 'Successfully updated' in result.content[0]['text']
@@ -335,9 +355,11 @@ class TestUpdateResearchQuestionMCPTool:
 
         question_id = uuid4()
 
-        result = await tool.execute({
-            'question_id': str(question_id),
-        })
+        result = await tool.execute(
+            {
+                'question_id': str(question_id),
+            }
+        )
 
         assert result.isError is True
         assert 'No updates provided' in result.content[0]['text']
@@ -359,9 +381,11 @@ class TestDeleteResearchQuestionMCPTool:
             return_value=True
         )
 
-        result = await tool.execute({
-            'question_id': str(question_id),
-        })
+        result = await tool.execute(
+            {
+                'question_id': str(question_id),
+            }
+        )
 
         assert result.isError is False
         assert 'deactivated' in result.content[0]['text']
@@ -376,10 +400,12 @@ class TestDeleteResearchQuestionMCPTool:
             return_value=True
         )
 
-        result = await tool.execute({
-            'question_id': str(question_id),
-            'hard_delete': True,
-        })
+        result = await tool.execute(
+            {
+                'question_id': str(question_id),
+                'hard_delete': True,
+            }
+        )
 
         assert result.isError is False
         assert 'deleted' in result.content[0]['text']
@@ -397,18 +423,22 @@ class TestRunDiscoveryForQuestionMCPTool:
         tool = RunDiscoveryForQuestionMCPTool(mock_service_manager)
 
         question_id = uuid4()
-        mock_service_manager.discovery_orchestrator.run_discovery_for_question = AsyncMock(
-            return_value={
-                'success': True,
-                'articles_found': 25,
-                'articles_downloaded': 20,
-                'sources_used': ['arxiv', 'pubmed'],
-            }
+        mock_service_manager.discovery_orchestrator.run_discovery_for_question = (
+            AsyncMock(
+                return_value={
+                    'success': True,
+                    'articles_found': 25,
+                    'articles_downloaded': 20,
+                    'sources_used': ['arxiv', 'pubmed'],
+                }
+            )
         )
 
-        result = await tool.execute({
-            'question_id': str(question_id),
-        })
+        result = await tool.execute(
+            {
+                'question_id': str(question_id),
+            }
+        )
 
         assert result.isError is False
         content_text = result.content[0]['text']
@@ -424,9 +454,11 @@ class TestRunDiscoveryForQuestionMCPTool:
         mock_service_manager.discovery_orchestrator = None
         question_id = uuid4()
 
-        result = await tool.execute({
-            'question_id': str(question_id),
-        })
+        result = await tool.execute(
+            {
+                'question_id': str(question_id),
+            }
+        )
 
         assert result.isError is True
         assert 'not available' in result.content[0]['text']
@@ -437,16 +469,20 @@ class TestRunDiscoveryForQuestionMCPTool:
         tool = RunDiscoveryForQuestionMCPTool(mock_service_manager)
 
         question_id = uuid4()
-        mock_service_manager.discovery_orchestrator.run_discovery_for_question = AsyncMock(
-            return_value={
-                'success': False,
-                'error': 'Database connection failed',
-            }
+        mock_service_manager.discovery_orchestrator.run_discovery_for_question = (
+            AsyncMock(
+                return_value={
+                    'success': False,
+                    'error': 'Database connection failed',
+                }
+            )
         )
 
-        result = await tool.execute({
-            'question_id': str(question_id),
-        })
+        result = await tool.execute(
+            {
+                'question_id': str(question_id),
+            }
+        )
 
         assert result.isError is True
         assert 'failed' in result.content[0]['text'].lower()

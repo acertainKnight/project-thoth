@@ -14,9 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.fixtures.config_fixtures import (
-    get_full_settings_json,
-)
+from tests.fixtures.config_fixtures import get_full_settings_json
 from thoth.config import Config
 
 
@@ -386,7 +384,7 @@ class TestReloadEdgeCases:
     """Test edge cases in reload functionality."""
 
     def test_reload_with_missing_file(self, temp_vault: Path, monkeypatch):
-        """Test reload_settings() with missing settings file."""
+        """Test reload_settings() with missing settings file auto-creates defaults."""
         monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
@@ -396,9 +394,11 @@ class TestReloadEdgeCases:
         settings_file = temp_vault / '_thoth' / 'settings.json'
         settings_file.unlink()
 
-        # Reload should fail
-        with pytest.raises(FileNotFoundError):
-            config.reload_settings()
+        # Reload should auto-create default settings (not raise)
+        config.reload_settings()
+
+        # Default settings should be applied
+        assert config.llm_config.default.model == 'google/gemini-2.5-flash'
 
     def test_reload_with_empty_file(self, temp_vault: Path, monkeypatch):
         """Test reload_settings() with empty file."""

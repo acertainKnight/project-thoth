@@ -2,12 +2,7 @@
 Unit tests for setup wizard validators.
 """
 
-import socket
-from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
-
-import psutil
-import pytest
 
 from thoth.cli.setup.validators import (
     APIKeyValidator,
@@ -15,7 +10,6 @@ from thoth.cli.setup.validators import (
     PathValidator,
     PortValidator,
     URLValidator,
-    ValidationError,
 )
 
 
@@ -114,7 +108,7 @@ class TestPathValidator:
     def test_validate_nonexistent_directory_optional(self, tmp_path):
         """Test validation when directory doesn't need to exist."""
         nonexistent = tmp_path / 'does_not_exist'
-        valid, error = PathValidator.validate_directory(
+        valid, _error = PathValidator.validate_directory(
             str(nonexistent), must_exist=False
         )
         assert valid is True
@@ -141,7 +135,8 @@ class TestPathValidator:
 
     def test_validate_low_disk_space(self, tmp_path):
         """Test warning when disk space is low."""
-        with patch.object(PathValidator, 'get_free_space_gb', return_value=5.0):
+        # Use 4.9 (< 5) to trigger the low disk space warning branch
+        with patch.object(PathValidator, 'get_free_space_gb', return_value=4.9):
             valid, error = PathValidator.validate_directory(str(tmp_path))
             assert valid is True
             assert error is not None
@@ -171,9 +166,7 @@ class TestPathValidator:
     def test_validate_expands_tilde(self, tmp_path):
         """Test that tilde is expanded in path."""
         with patch('pathlib.Path.home', return_value=tmp_path):
-            valid, error = PathValidator.validate_directory(
-                '~/test', must_exist=False
-            )
+            valid, _error = PathValidator.validate_directory('~/test', must_exist=False)
             assert valid is True
 
 
@@ -344,7 +337,9 @@ class TestPortValidator:
         """Test checking if port is available (free)."""
         with patch('socket.socket') as mock_socket:
             mock_sock_instance = MagicMock()
-            mock_sock_instance.connect_ex.return_value = 1  # Connection fails = port free
+            mock_sock_instance.connect_ex.return_value = (
+                1  # Connection fails = port free
+            )
             mock_socket.return_value.__enter__.return_value = mock_sock_instance
 
             result = PortValidator.is_port_available(9999)
@@ -354,7 +349,9 @@ class TestPortValidator:
         """Test checking if port is in use."""
         with patch('socket.socket') as mock_socket:
             mock_sock_instance = MagicMock()
-            mock_sock_instance.connect_ex.return_value = 0  # Connection succeeds = port in use
+            mock_sock_instance.connect_ex.return_value = (
+                0  # Connection succeeds = port in use
+            )
             mock_socket.return_value.__enter__.return_value = mock_sock_instance
 
             result = PortValidator.is_port_available(9999)

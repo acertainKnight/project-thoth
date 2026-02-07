@@ -57,16 +57,16 @@ class TestSettingsFromJsonFile:
         assert settings.llm.default.temperature == 0.9
         assert settings.rag.embedding_model == 'openai/text-embedding-3-small'
 
-    def test_load_missing_file(self, temp_vault: Path):
-        """Test loading nonexistent settings file raises FileNotFoundError."""
+    def test_load_missing_file_creates_defaults(self, temp_vault: Path):
+        """Test loading nonexistent settings file auto-creates defaults."""
         nonexistent_file = temp_vault / '_thoth' / 'nonexistent.json'
 
-        with pytest.raises(FileNotFoundError) as exc_info:
-            Settings.from_json_file(nonexistent_file)
+        # Should auto-create default settings (not raise)
+        settings = Settings.from_json_file(nonexistent_file)
 
-        error_msg = str(exc_info.value)
-        assert 'Settings file not found' in error_msg
-        assert str(nonexistent_file) in error_msg
+        # File should now exist with defaults
+        assert nonexistent_file.exists()
+        assert settings.llm.default.model == 'google/gemini-2.5-flash'
 
     def test_load_malformed_json(self, malformed_json_file: Path):
         """Test loading malformed JSON raises exception."""
@@ -340,17 +340,17 @@ class TestNestedStructures:
 class TestErrorHandling:
     """Test error handling in settings loading."""
 
-    def test_file_not_found_error_message(self, temp_vault: Path):
-        """Test FileNotFoundError has helpful message."""
+    def test_missing_file_creates_with_defaults(self, temp_vault: Path):
+        """Test missing settings file is auto-created with sensible defaults."""
         missing_file = temp_vault / '_thoth' / 'missing.json'
 
-        with pytest.raises(FileNotFoundError) as exc_info:
-            Settings.from_json_file(missing_file)
+        settings = Settings.from_json_file(missing_file)
 
-        error_msg = str(exc_info.value)
-        assert 'Settings file not found' in error_msg
-        assert str(missing_file) in error_msg
-        assert '_thoth' in error_msg
+        # File should now exist
+        assert missing_file.exists()
+        # Should have default model, servers, etc.
+        assert settings.llm.default.model == 'google/gemini-2.5-flash'
+        assert settings.servers.api.port == 8000
 
     def test_json_decode_error(self, temp_vault: Path):
         """Test JSON decode error is raised with invalid syntax."""

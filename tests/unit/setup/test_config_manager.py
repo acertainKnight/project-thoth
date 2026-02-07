@@ -3,9 +3,8 @@ Unit tests for setup wizard configuration manager.
 """
 
 import json
-from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
@@ -58,8 +57,12 @@ class TestConfigManagerInit:
         """Test that initialization sets correct paths."""
         manager = ConfigManager(temp_vault)
         assert manager.vault_path == temp_vault
-        assert manager.settings_path == temp_vault / '_thoth' / 'settings.json'
-        assert manager.backup_dir == temp_vault / '_thoth' / 'backups'
+        # When legacy path (_thoth/) doesn't have settings.json,
+        # defaults to new path (thoth/_thoth/settings.json)
+        assert (
+            manager.settings_path == temp_vault / 'thoth' / '_thoth' / 'settings.json'
+        )
+        assert manager.backup_dir == temp_vault / 'thoth' / '_thoth' / 'backups'
 
 
 class TestLoadExisting:
@@ -210,7 +213,7 @@ class TestBackup:
         assert backup_path.suffix == '.json'
 
         # Verify backup content
-        with open(backup_path, 'r', encoding='utf-8') as f:
+        with open(backup_path, encoding='utf-8') as f:
             backup_content = json.load(f)
         assert backup_content == sample_settings
 
@@ -239,7 +242,7 @@ class TestAtomicSave:
 
         # Verify file exists and contains correct data
         assert config_manager.settings_path.exists()
-        with open(config_manager.settings_path, 'r', encoding='utf-8') as f:
+        with open(config_manager.settings_path, encoding='utf-8') as f:
             saved_content = json.load(f)
         assert saved_content == sample_settings
 
@@ -279,7 +282,6 @@ class TestAtomicSave:
 
         # Read raw JSON to check key order
         content = config_manager.settings_path.read_text()
-        lines = content.split('\n')
 
         # Keys should appear in alphabetical order
         assert '"a_field"' in content
@@ -306,20 +308,18 @@ class TestSaveWithBackup:
         assert backup_path.exists()
 
         # Verify backup contains old data
-        with open(backup_path, 'r', encoding='utf-8') as f:
+        with open(backup_path, encoding='utf-8') as f:
             backup_content = json.load(f)
         assert backup_content == {'old': 'data'}
 
         # Verify new settings saved
-        with open(config_manager.settings_path, 'r', encoding='utf-8') as f:
+        with open(config_manager.settings_path, encoding='utf-8') as f:
             saved_content = json.load(f)
         assert saved_content == sample_settings
 
     def test_save_with_backup_no_existing_file(self, config_manager, sample_settings):
         """Test saving when no existing file to backup."""
-        with patch.object(
-            ConfigManager, 'validate_schema', return_value=True
-        ) as mock_validate:
+        with patch.object(ConfigManager, 'validate_schema', return_value=True):
             backup_path = config_manager.save_with_backup(sample_settings)
 
         # No backup should be created
@@ -345,7 +345,7 @@ class TestSaveWithBackup:
                 config_manager.save_with_backup(sample_settings)
 
         # Original settings should be unchanged
-        with open(config_manager.settings_path, 'r', encoding='utf-8') as f:
+        with open(config_manager.settings_path, encoding='utf-8') as f:
             current_content = json.load(f)
         assert current_content == {'old': 'data'}
 
@@ -364,7 +364,7 @@ class TestRestoreBackup:
         config_manager.restore_backup(backup_path)
 
         # Verify settings restored
-        with open(config_manager.settings_path, 'r', encoding='utf-8') as f:
+        with open(config_manager.settings_path, encoding='utf-8') as f:
             restored_content = json.load(f)
         assert restored_content == sample_settings
 
@@ -400,9 +400,7 @@ class TestListBackups:
         # Create multiple backup files
         backup_files = []
         for i in range(3):
-            backup_path = (
-                config_manager.backup_dir / f'settings_2024010{i}_120000.json'
-            )
+            backup_path = config_manager.backup_dir / f'settings_2024010{i}_120000.json'
             backup_path.write_text('{}')
             backup_files.append(backup_path)
 

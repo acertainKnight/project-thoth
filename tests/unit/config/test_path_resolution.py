@@ -13,9 +13,7 @@ from unittest.mock import patch  # noqa: F401
 
 import pytest  # noqa: F401
 
-from tests.fixtures.config_fixtures import (
-    get_minimal_settings_json,
-)
+from tests.fixtures.config_fixtures import get_minimal_settings_json
 from thoth.config import Config
 
 
@@ -56,51 +54,52 @@ class TestVaultRelativePaths:
         Config._instance = None
         config = Config()
 
-        # data/pdf should resolve to vault_root/data/pdf
-        expected_pdf = temp_vault / 'data' / 'pdf'
+        # Default pdf path 'thoth/papers/pdfs' resolves to vault_root/thoth/papers/pdfs
+        expected_pdf = temp_vault / 'thoth' / 'papers' / 'pdfs'
         assert config.pdf_dir == expected_pdf.resolve()
 
 
 class TestDockerAbsolutePaths:
     """Test special handling of Docker absolute paths."""
 
-    def test_workspace_maps_to_vault_root(self, temp_vault: Path, monkeypatch):
-        """Test /workspace maps to vault root."""
+    def test_workspace_maps_to_thoth_internal(self, temp_vault: Path, monkeypatch):
+        """Test default workspace resolves to vault/thoth/_thoth."""
         monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
-        # /workspace should map to vault_root
-        assert config.workspace_dir == temp_vault.resolve()
+        # Default workspace 'thoth/_thoth' resolves to vault/thoth/_thoth
+        expected = temp_vault / 'thoth' / '_thoth'
+        assert config.workspace_dir == expected.resolve()
 
-    def test_thoth_notes_maps_to_vault_notes(self, temp_vault: Path, monkeypatch):
-        """Test /thoth/notes maps to vault_root/notes."""
+    def test_notes_maps_to_vault_thoth_notes(self, temp_vault: Path, monkeypatch):
+        """Test default notes resolves to vault/thoth/notes."""
         monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
-        # /thoth/notes should map to vault_root/notes
-        expected_notes = temp_vault / 'notes'
+        # Default notes 'thoth/notes' resolves to vault/thoth/notes
+        expected_notes = temp_vault / 'thoth' / 'notes'
         assert config.notes_dir == expected_notes.resolve()
 
-    def test_workspace_logs_maps_to_vault_logs(self, temp_vault: Path, monkeypatch):
-        """Test /workspace/logs maps to vault_root/logs."""
+    def test_logs_maps_to_vault_thoth_logs(self, temp_vault: Path, monkeypatch):
+        """Test default logs resolves to vault/thoth/_thoth/logs."""
         monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
-        # logs path should be under vault
-        expected_logs = temp_vault / 'logs'
+        # Default logs 'thoth/_thoth/logs' resolves to vault/thoth/_thoth/logs
+        expected_logs = temp_vault / 'thoth' / '_thoth' / 'logs'
         assert config.logs_dir == expected_logs.resolve()
 
-    def test_thoth_prefix_stripped(self, temp_vault: Path, monkeypatch):
-        """Test /thoth/ prefix is properly stripped."""
+    def test_thoth_prefix_migrated(self, temp_vault: Path, monkeypatch):
+        """Test /thoth/ prefix is migrated to vault/thoth/ layout."""
         import json
 
-        # Create custom settings with /thoth/ paths
+        # Create custom settings with /thoth/ paths (Docker-era legacy)
         settings_data = get_minimal_settings_json()
         settings_data['paths'] = {
             'workspace': '/workspace',
@@ -117,9 +116,9 @@ class TestDockerAbsolutePaths:
         Config._instance = None
         config = Config()
 
-        # Should strip /thoth/ and resolve to vault
-        assert config.notes_dir == (temp_vault / 'notes').resolve()
-        assert config.pdf_dir == (temp_vault / 'data' / 'pdf').resolve()
+        # /thoth/notes migrates to vault/thoth/notes
+        assert config.notes_dir == (temp_vault / 'thoth' / 'notes').resolve()
+        assert config.pdf_dir == (temp_vault / 'thoth' / 'data' / 'pdf').resolve()
 
 
 class TestAbsolutePathsOutsideVault:
@@ -410,17 +409,18 @@ class TestPathResolutionCaseSensitivity:
     """Test case sensitivity in path resolution."""
 
     def test_workspace_lowercase(self, temp_vault: Path, monkeypatch):
-        """Test /workspace in lowercase."""
+        """Test default workspace path resolution."""
         monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
-        # Default /workspace should map to vault
-        assert config.workspace_dir == temp_vault.resolve()
+        # Default 'thoth/_thoth' resolves to vault/thoth/_thoth
+        expected = temp_vault / 'thoth' / '_thoth'
+        assert config.workspace_dir == expected.resolve()
 
     def test_thoth_lowercase(self, temp_vault: Path, monkeypatch):
-        """Test /thoth/ prefix in lowercase."""
+        """Test /thoth/ prefix migration in lowercase."""
         import json
 
         settings_data = get_minimal_settings_json()
@@ -434,7 +434,8 @@ class TestPathResolutionCaseSensitivity:
         Config._instance = None
         config = Config()
 
-        assert config.notes_dir == (temp_vault / 'notes').resolve()
+        # /thoth/notes migrates to vault/thoth/notes
+        assert config.notes_dir == (temp_vault / 'thoth' / 'notes').resolve()
 
 
 class TestPathResolutionLogging:
