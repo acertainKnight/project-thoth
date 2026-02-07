@@ -50,8 +50,8 @@ class PerformanceMetrics:
     memory_operation_times: list[float] = field(default_factory=list)
 
     # Database performance
-    chroma_db_query_times: list[float] = field(default_factory=list)
-    chroma_db_insert_times: list[float] = field(default_factory=list)
+    pgvector_query_times: list[float] = field(default_factory=list)
+    pgvector_insert_times: list[float] = field(default_factory=list)
 
     # Error rates
     error_rates: dict[str, int] = field(default_factory=dict)
@@ -95,8 +95,8 @@ class PerformanceMetrics:
                 'memory_operation_times': self.memory_operation_times,
             },
             'database_performance': {
-                'chroma_query_times': self.chroma_db_query_times,
-                'chroma_insert_times': self.chroma_db_insert_times,
+                'pgvector_query_times': self.pgvector_query_times,
+                'pgvector_insert_times': self.pgvector_insert_times,
             },
             'reliability': {
                 'error_rates': self.error_rates,
@@ -244,7 +244,7 @@ class MetricsCollector:
 
             # RAG service metrics
             if hasattr(self.service_manager, 'rag'):
-                # Could collect ChromaDB query performance here
+                # Could collect pgvector query performance here
                 pass
 
             # LLM service metrics
@@ -339,10 +339,10 @@ class MetricsCollector:
                     self.current_metrics.rag_query_times.append(duration)
 
             elif category == 'database':
-                if operation_name == 'chroma_query':
-                    self.current_metrics.chroma_db_query_times.append(duration)
-                elif operation_name == 'chroma_insert':
-                    self.current_metrics.chroma_db_insert_times.append(duration)
+                if operation_name == 'pgvector_query':
+                    self.current_metrics.pgvector_query_times.append(duration)
+                elif operation_name == 'pgvector_insert':
+                    self.current_metrics.pgvector_insert_times.append(duration)
 
             elif category == 'api':
                 if operation_name not in self.current_metrics.api_response_times:

@@ -87,9 +87,7 @@ class EmbeddingManager:
         # Set PyTorch to use single thread to avoid conflicts
         os.environ['TORCH_NUM_THREADS'] = '1'
 
-        # Additional ChromaDB and SQLite safety settings
-        os.environ['CHROMA_MAX_BATCH_SIZE'] = '100'
-        os.environ['CHROMA_SUBMIT_BATCH_SIZE'] = '100'
+        # Additional SQLite safety settings
         os.environ['SQLITE_ENABLE_PREUPDATE_HOOK'] = '0'
         os.environ['SQLITE_ENABLE_FTS5'] = '0'
 

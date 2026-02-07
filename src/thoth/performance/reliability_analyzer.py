@@ -313,7 +313,7 @@ class ReliabilityAnalyzer:
         # Database/storage errors
         if any(
             term in message_lower
-            for term in ['database', 'chroma', 'index', 'vector', 'connection']
+            for term in ['database', 'pgvector', 'index', 'vector', 'connection']
         ):
             return FailureCategory.DATABASE_FAILURE
 

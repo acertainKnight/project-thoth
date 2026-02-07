@@ -5,7 +5,7 @@ import os
 
 
 # Configure environment variables early to prevent segmentation faults
-# with sentence-transformers and ChromaDB
+# with sentence-transformers
 def _configure_safe_environment() -> None:
     """Configure environment variables to prevent segmentation faults."""
     # Prevent threading issues that can cause segfaults
@@ -14,12 +14,6 @@ def _configure_safe_environment() -> None:
     os.environ['MKL_NUM_THREADS'] = '1'
     os.environ['NUMEXPR_NUM_THREADS'] = '1'
     os.environ['TORCH_NUM_THREADS'] = '1'
-
-    # Configure ChromaDB to be safer
-    os.environ['CHROMA_MAX_BATCH_SIZE'] = '100'
-    os.environ['CHROMA_SUBMIT_BATCH_SIZE'] = '100'
-    os.environ['SQLITE_ENABLE_PREUPDATE_HOOK'] = '0'
-    os.environ['SQLITE_ENABLE_FTS5'] = '0'
 
 
 # Configure environment variables before importing any ML libraries

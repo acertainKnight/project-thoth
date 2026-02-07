@@ -152,7 +152,7 @@ def get_full_settings_json() -> Dict[str, Any]:  # noqa: UP006
                 'fallbackEnabled': True,
             },
             'thoth': {
-                'vectorBackend': 'chromadb',
+                'vectorBackend': 'pgvector',
                 'namespace': 'thoth',
                 'pipeline': {
                     'enabled': True,

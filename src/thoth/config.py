@@ -532,7 +532,7 @@ class ThothMemoryRetrievalConfig(BaseModel):
 class ThothMemoryConfig(BaseModel):
     """Thoth memory configuration."""
 
-    vector_backend: str = Field(default='chromadb', alias='vectorBackend')
+    vector_backend: str = Field(default='pgvector', alias='vectorBackend')
     namespace: str = 'thoth'
     pipeline: ThothMemoryPipelineConfig = Field(
         default_factory=ThothMemoryPipelineConfig

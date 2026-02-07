@@ -246,9 +246,9 @@ class BackupCollectionMCPTool(MCPTool):
             else:
                 # Implement embeddings backup
                 try:
-                    # Export ChromaDB collection
-                    chroma_path = full_backup_path / 'vector_embeddings'
-                    chroma_path.mkdir(exist_ok=True)
+                    # Export vector embeddings from pgvector
+                    vector_path = full_backup_path / 'vector_embeddings'
+                    vector_path.mkdir(exist_ok=True)
                     # Get all documents and their embeddings
                     all_docs = await self.service_manager.rag.search_async('', k=10000)
                     embeddings_data = {
@@ -256,7 +256,7 @@ class BackupCollectionMCPTool(MCPTool):
                         'backup_date': timestamp,
                         'embedding_model': 'sentence-transformers/all-MiniLM-L6-v2',  # Default
                     }
-                    embeddings_file = chroma_path / 'embeddings.json'
+                    embeddings_file = vector_path / 'embeddings.json'
                     with open(embeddings_file, 'w') as f:
                         json.dump(embeddings_data, f, indent=2)
                     response_text += f'**Vector Embeddings:** {len(all_docs)} document embeddings backed up\n'

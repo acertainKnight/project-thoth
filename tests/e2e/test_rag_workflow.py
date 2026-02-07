@@ -22,7 +22,7 @@ def temp_dirs():
     with tempfile.TemporaryDirectory() as tmpdir:
         base = Path(tmpdir)
         dirs = {
-            'chroma_dir': base / 'chroma_db',
+            'vector_dir': base / 'vector_db',
             'documents_dir': base / 'documents',
         }
         for dir_path in dirs.values():
@@ -94,14 +94,6 @@ class TestRAGWorkflowIntegration:
             assert langchain is not None
         except ImportError:
             pytest.skip("LangChain not installed")
-
-    def test_chromadb_available(self):
-        """Test ChromaDB is available (optional dependency)."""
-        try:
-            import chromadb
-            assert chromadb is not None
-        except ImportError:
-            pytest.skip("ChromaDB requires 'embeddings' extras")
 
     def test_sentence_transformers_available(self):
         """Test sentence-transformers is available (optional dependency)."""
@@ -206,5 +198,5 @@ class TestRAGConfiguration:
 
     def test_workflow_can_access_directories(self, temp_dirs):
         """Test workflow has access to required directories."""
-        assert temp_dirs['chroma_dir'].exists()
+        assert temp_dirs['vector_dir'].exists()
         assert temp_dirs['documents_dir'].exists()
