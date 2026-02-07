@@ -197,9 +197,25 @@ class ArticleMatchResponse(BaseModel):
     @field_validator('matched_keywords', 'matched_topics', 'matched_authors', 'authors', mode='before')
     @classmethod
     def coerce_to_list(cls, v):
-        """Ensure list fields are never None."""
+        """Ensure list fields are never None and parse JSON strings.
+
+        PostgreSQL jsonb columns (e.g. paper_metadata.authors) may be
+        returned by asyncpg as JSON-encoded strings rather than native
+        Python lists.  This validator handles that transparently.
+        """
         if v is None:
             return []
+        if isinstance(v, str):
+            import json
+
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+            except (json.JSONDecodeError, TypeError):
+                pass
+            # Non-JSON string → wrap in a single-element list
+            return [v]
         return v
 
     @field_validator('title', mode='before')
@@ -1251,18 +1267,7 @@ async def update_article_status(
 
         logger.debug(f'Updated article status for match {match_id}: {updates}')
 
-        # Convert asyncpg.Record to dict and parse JSON fields
-        import json
-        match_data = dict(updated_match)
-
-        # Parse JSON string fields that Pydantic expects as lists
-        if isinstance(match_data.get('authors'), str):
-            try:
-                match_data['authors'] = json.loads(match_data['authors'])
-            except (json.JSONDecodeError, TypeError):
-                match_data['authors'] = []
-
-        return ArticleMatchResponse(**match_data)
+        return ArticleMatchResponse(**dict(updated_match))
 
     except HTTPException:
         raise
