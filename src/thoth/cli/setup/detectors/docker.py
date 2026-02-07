@@ -25,6 +25,11 @@ class DockerStatus:
     platform: str
     error_message: str | None = None
 
+    @property
+    def available(self) -> bool:
+        """Docker is available when installed and daemon is running."""
+        return self.installed and self.daemon_running
+
 
 class DockerDetector:
     """Detects Docker installation and status."""

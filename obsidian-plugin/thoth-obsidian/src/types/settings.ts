@@ -2,7 +2,7 @@
  * Thoth Plugin Settings (Plugin-only)
  * 
  * This file is ONLY for the Obsidian plugin.
- * Backend settings are in vault/_thoth/settings.json (separate file).
+ * Backend settings are in vault/thoth/_thoth/settings.json (separate file).
  */
 
 import { ChatMessage, ChatWindowState } from './index';
@@ -52,7 +52,7 @@ export const DEFAULT_SETTINGS: ThothSettings = {
   remoteEndpointUrl: 'http://localhost:8000',  // Thoth API
   lettaEndpointUrl: 'http://localhost:8284',   // Letta API (via nginx proxy)
   
-  // API Keys (empty by default - backend reads from vault/_thoth/settings.json)
+  // API Keys (empty by default - backend reads from vault/thoth/_thoth/settings.json)
   apiKeys: {},
   
   // Plugin Behavior

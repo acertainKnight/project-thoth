@@ -13,7 +13,7 @@ from loguru import logger
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Header, Static
+from textual.widgets import Button, Static
 
 
 class BaseScreen(Screen):
@@ -22,14 +22,13 @@ class BaseScreen(Screen):
     # CSS for consistent styling across all screens
     CSS = """
     BaseScreen {
-        align: center middle;
+        layout: vertical;
     }
 
     .screen-container {
-        width: 80;
-        height: auto;
-        border: solid $primary;
-        padding: 1 2;
+        width: 100%;
+        height: 1fr;
+        padding: 0 2;
         background: $surface;
     }
 
@@ -39,20 +38,23 @@ class BaseScreen(Screen):
         text-style: bold;
         color: $accent;
         margin-bottom: 1;
+        height: auto;
     }
 
     .screen-content {
         width: 100%;
-        height: auto;
-        margin: 1 0;
+        height: 1fr;
+        overflow-y: auto;
+        margin: 0;
     }
 
     .button-bar {
         width: 100%;
-        height: auto;
+        height: 3;
         layout: horizontal;
         align: right middle;
-        margin-top: 1;
+        dock: bottom;
+        background: $surface;
     }
 
     .button-bar Button {
@@ -88,6 +90,10 @@ class BaseScreen(Screen):
         margin: 0 0 1 0;
     }
 
+    .hidden {
+        display: none;
+    }
+
     .no-vaults {
         color: $warning;
     }
@@ -113,15 +119,21 @@ class BaseScreen(Screen):
     """
 
     BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
-        ("escape", "cancel", "Cancel"),
+        ("escape", "cancel", "Cancel & Exit"),
         ("ctrl+c", "quit", "Quit"),
         ("f1", "help", "Help"),
+        ("enter", "submit", "Next"),
+        ("ctrl+n", "next", "Next"),
+        ("ctrl+b", "back", "Back"),
+        ("right", "arrow_next", "Next"),
+        ("left", "arrow_back", "Back"),
     ]
 
     def __init__(
         self,
         title: str,
         subtitle: str | None = None,
+        show_back: bool = True,
         name: str | None = None,
         id: str | None = None,
         classes: str | None = None,
@@ -132,6 +144,7 @@ class BaseScreen(Screen):
         Args:
             title: Screen title
             subtitle: Optional subtitle
+            show_back: Whether to show the Back button
             name: Screen name
             id: Screen ID
             classes: CSS classes
@@ -139,8 +152,10 @@ class BaseScreen(Screen):
         super().__init__(name=name, id=id, classes=classes)
         self.screen_title = title
         self.screen_subtitle = subtitle
+        self.show_back = show_back
         self.error_msg: str | None = None
         self.info_msg: str | None = None
+        self._message_widget: Static | None = None  # Cache for message widget
 
     def compose(self) -> ComposeResult:
         """
@@ -149,8 +164,6 @@ class BaseScreen(Screen):
         Returns:
             Screen widgets
         """
-        yield Header(show_clock=True)
-
         with Container(classes="screen-container"):
             # Title
             title_text = f"[bold]{self.screen_title}[/bold]"
@@ -158,11 +171,8 @@ class BaseScreen(Screen):
                 title_text += f"\n[dim]{self.screen_subtitle}[/dim]"
             yield Static(title_text, classes="screen-title")
 
-            # Error/Info messages
-            if self.error_msg:
-                yield Static(f"⚠ {self.error_msg}", classes="error-message")
-            if self.info_msg:
-                yield Static(f"i {self.info_msg}", classes="info-message")
+            # Message area (always present but hidden when empty)
+            yield Static("", id="message-area", classes="hidden")
 
             # Content area (to be overridden by subclasses)
             with Vertical(classes="screen-content"):
@@ -171,8 +181,6 @@ class BaseScreen(Screen):
             # Navigation buttons
             with Container(classes="button-bar"):
                 yield from self.compose_buttons()
-
-        yield Footer()
 
     def compose_content(self) -> ComposeResult:
         """
@@ -194,8 +202,10 @@ class BaseScreen(Screen):
         Returns:
             Button widgets
         """
-        yield Button("Cancel", id="cancel", variant="error")
-        yield Button("Next", id="next", variant="primary")
+        yield Button("Cancel & Exit", id="cancel", variant="error")
+        if self.show_back:
+            yield Button("← Back", id="back", variant="default")
+        yield Button("Next →", id="next", variant="primary")
 
     def show_error(self, message: str) -> None:
         """
@@ -206,7 +216,18 @@ class BaseScreen(Screen):
         """
         self.error_msg = message
         logger.error(f"Screen error: {message}")
-        self.refresh()
+        
+        # Update message widget directly
+        try:
+            msg_widget = self.query_one("#message-area", Static)
+            msg_widget.update(f"[bold red]⚠ {message}[/bold red]")
+            msg_widget.remove_class("hidden")
+            msg_widget.add_class("error-message")
+            msg_widget.remove_class("info-message")
+            msg_widget.remove_class("success-message")
+        except Exception:
+            # Widget not mounted yet, will show on next compose
+            self.refresh()
 
     def show_info(self, message: str) -> None:
         """
@@ -217,17 +238,81 @@ class BaseScreen(Screen):
         """
         self.info_msg = message
         logger.info(f"Screen info: {message}")
-        self.refresh()
+        
+        # Update message widget directly
+        try:
+            msg_widget = self.query_one("#message-area", Static)
+            msg_widget.update(f"[cyan]ℹ[/cyan] {message}")
+            msg_widget.remove_class("hidden")
+            msg_widget.add_class("info-message")
+            msg_widget.remove_class("error-message")
+            msg_widget.remove_class("success-message")
+        except Exception:
+            self.refresh()
+
+    def show_warning(self, message: str) -> None:
+        """
+        Display a warning message (uses info styling with warning prefix).
+
+        Args:
+            message: Warning message to display
+        """
+        self.info_msg = f"[yellow]⚠[/yellow] {message}"
+        logger.warning(f"Screen warning: {message}")
+        
+        # Update message widget directly
+        try:
+            msg_widget = self.query_one("#message-area", Static)
+            msg_widget.update(f"[yellow]⚠ {message}[/yellow]")
+            msg_widget.remove_class("hidden")
+            msg_widget.add_class("info-message")
+            msg_widget.remove_class("error-message")
+            msg_widget.remove_class("success-message")
+        except Exception:
+            self.refresh()
+
+    def show_success(self, message: str) -> None:
+        """
+        Display a success message (uses info styling with success prefix).
+
+        Args:
+            message: Success message to display
+        """
+        self.info_msg = f"[green]✓[/green] {message}"
+        logger.info(f"Screen success: {message}")
+        
+        # Update message widget directly
+        try:
+            msg_widget = self.query_one("#message-area", Static)
+            msg_widget.update(f"[green]✓ {message}[/green]")
+            msg_widget.remove_class("hidden")
+            msg_widget.add_class("success-message")
+            msg_widget.remove_class("error-message")
+            msg_widget.remove_class("info-message")
+        except Exception:
+            self.refresh()
 
     def clear_messages(self) -> None:
         """Clear error and info messages."""
         self.error_msg = None
         self.info_msg = None
-        self.refresh()
+        
+        # Hide message widget
+        try:
+            msg_widget = self.query_one("#message-area", Static)
+            msg_widget.update("")
+            msg_widget.add_class("hidden")
+        except Exception:
+            self.refresh()
 
     def action_cancel(self) -> None:
-        """Handle cancel action."""
-        logger.info(f"Canceling from screen: {self.screen_title}")
+        """Handle cancel action - exits the wizard completely."""
+        logger.info(f"Canceling wizard from screen: {self.screen_title}")
+        self.app.exit(message="Setup wizard cancelled by user")
+
+    def action_back(self) -> None:
+        """Handle back action - return to previous screen."""
+        logger.info(f"Going back from screen: {self.screen_title}")
         self.app.pop_screen()
 
     def action_quit(self) -> None:
@@ -235,10 +320,72 @@ class BaseScreen(Screen):
         logger.info("Quitting setup wizard")
         self.app.exit()
 
+    def _focus_uses_arrows(self) -> bool:
+        """
+        Check if the currently focused widget uses arrow keys internally.
+
+        Returns:
+            True if arrows should be passed through to the widget.
+        """
+        from textual.widgets import Input, RadioSet, Select
+
+        focused = self.app.focused
+        if focused is None:
+            return False
+        # Input uses left/right for cursor movement
+        # RadioSet uses up/down/left/right for selection
+        # Select uses arrows for dropdown navigation
+        # Also check parent chain for RadioSet (RadioButtons are children)
+        if isinstance(focused, (Input, RadioSet, Select)):
+            return True
+        # RadioButton's parent is a RadioSet
+        node = focused
+        while node is not None:
+            if isinstance(node, RadioSet):
+                return True
+            node = getattr(node, "parent", None)
+        return False
+
+    def action_submit(self) -> None:
+        """Handle Enter key - same as clicking Next button, but only if not in an input field."""
+        from textual.widgets import Input
+
+        if isinstance(self.app.focused, Input):
+            return
+
+        try:
+            next_button = self.query_one("#next", Button)
+            next_button.press()
+        except Exception:
+            pass  # Next button might not exist on some screens
+
+    def action_next(self) -> None:
+        """Handle Ctrl+N - trigger next action."""
+        self.action_submit()
+
+    def action_arrow_next(self) -> None:
+        """Handle right arrow - go to next screen if focus isn't in a text/selection widget."""
+        if not self._focus_uses_arrows():
+            self.action_submit()
+
+    def action_arrow_back(self) -> None:
+        """Handle left arrow - go back if focus isn't in a text/selection widget."""
+        if not self._focus_uses_arrows():
+            self.action_back()
+
     def action_help(self) -> None:
         """Show help overlay."""
         # TODO: Implement help overlay in Phase 2
-        self.show_info("Help: ESC=Cancel, Ctrl+C=Quit, F1=Help")
+        self.show_info(
+            "Keyboard shortcuts:\n"
+            "  ← / →: Previous / Next screen\n"
+            "  Tab/Shift+Tab: Navigate between fields\n"
+            "  ↑ / ↓: Select options in lists\n"
+            "  Space: Toggle checkboxes/radio buttons\n"
+            "  Enter: Next screen\n"
+            "  ESC: Cancel & exit wizard\n"
+            "  F1: Show this help"
+        )
 
     async def validate_and_proceed(self) -> dict[str, Any] | None:
         """
@@ -262,6 +409,8 @@ class BaseScreen(Screen):
 
         if button_id == "cancel":
             self.action_cancel()
+        elif button_id == "back":
+            self.action_back()
         elif button_id == "next":
             # Validate and proceed to next screen
             data = await self.validate_and_proceed()

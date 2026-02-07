@@ -22,26 +22,35 @@ class SetupWizardApp(App):
         background: $surface;
     }
 
-    .provider-section {
-        margin: 1 0;
-        padding: 1;
-        border: solid $primary;
+    /* Enhanced focus styling for better keyboard navigation visibility */
+    Input:focus {
+        border: tall $accent;
     }
 
-    .provider-header {
-        height: auto;
-        margin-bottom: 1;
+    Button:focus {
+        background: $accent;
+    }
+
+    RadioButton:focus {
+        background: $primary-darken-1;
+    }
+
+    Checkbox:focus {
+        background: $primary-darken-1;
     }
 
     .provider-config {
         margin-left: 2;
+        height: auto;
         display: none;
     }
 
-    .advanced-settings {
-        margin: 1 0;
-        padding: 1;
-        border: solid $primary-darken-2;
+    .provider-config Input {
+        margin: 0 0 0 0;
+    }
+
+    .provider-config Select {
+        margin: 0 0 0 0;
     }
 
     .dependency-item {
@@ -77,6 +86,51 @@ class SetupWizardApp(App):
     }
 
     Checkbox {
+        margin: 0 0 1 0;
+    }
+
+    /* Collapsible widget styling for advanced section */
+    Collapsible {
+        margin: 1 0;
+        border: solid $primary-lighten-1;
+        background: $surface-darken-1;
+    }
+
+    Collapsible > CollapsibleTitle {
+        background: $primary-darken-2;
+        color: $text;
+        text-style: bold;
+    }
+
+    Collapsible > CollapsibleTitle:hover {
+        background: $primary-darken-1;
+    }
+
+    Collapsible > Contents {
+        padding: 1 2;
+    }
+
+    #advanced {
+        border: solid $primary-lighten-1;
+    }
+
+    /* Context length warning labels */
+    .context-warning {
+        margin: 0 0 1 0;
+        color: $warning;
+        text-style: italic;
+    }
+
+    .hidden {
+        display: none;
+    }
+
+    /* Section titles */
+    .section-title {
+        margin: 1 0 1 0;
+    }
+
+    .help-text {
         margin: 0 0 1 0;
     }
     """

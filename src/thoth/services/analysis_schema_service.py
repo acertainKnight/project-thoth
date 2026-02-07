@@ -44,7 +44,7 @@ class AnalysisSchemaService(BaseService):
         elif hasattr(self.config, 'analysis_schema_path'):
             self.schema_path = Path(self.config.analysis_schema_path)
         else:
-            # Default: vault/_thoth/data/analysis_schema.json
+            # Default: vault/thoth/_thoth/data/analysis_schema.json
             self.schema_path = self.config.workspace_dir / 'data' / 'analysis_schema.json'
         
         # Cache for generated models

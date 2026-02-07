@@ -261,7 +261,7 @@ async def create_skill(skill_data: SkillCreate) -> SkillMetadata:
     - `content`: Markdown content (frontmatter added automatically)
     - `bundle`: Optional bundle name (orchestrator, discovery, analysis, etc.)
 
-    Creates skill in `vault/_thoth/skills/` or `vault/_thoth/skills/bundles/{bundle}/`.
+    Creates skill in `vault/thoth/_thoth/skills/` or `vault/thoth/_thoth/skills/bundles/{bundle}/`.
     """
     try:
         skill_service = SkillService()

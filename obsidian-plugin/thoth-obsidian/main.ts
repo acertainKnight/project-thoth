@@ -248,7 +248,7 @@ export default class ThothPlugin extends Plugin {
         '8000'
       ];
 
-      // Backend reads settings from vault/_thoth/settings.json
+      // Backend reads settings from vault/thoth/_thoth/settings.json
       const env = {
         ...process.env,
         OBSIDIAN_VAULT_PATH: vaultPath,

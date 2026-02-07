@@ -181,6 +181,114 @@ class LettaDetector:
             return False
 
     @staticmethod
+    async def fetch_models(
+        url: str, api_key: str | None = None, timeout: int = 10
+    ) -> list[dict]:
+        """
+        Fetch available models from a running Letta server.
+
+        Calls GET /v1/models/ and returns models that pass Letta's basic support test.
+
+        Args:
+            url: Letta server URL (e.g. http://localhost:8283)
+            api_key: Optional API key (required for Letta Cloud)
+            timeout: Request timeout in seconds
+
+        Returns:
+            List of model dicts with keys: id, provider, context_window.
+            Empty list if the server is unreachable or the endpoint fails.
+        """
+        headers: dict[str, str] = {}
+        if api_key:
+            headers['Authorization'] = f'Bearer {api_key}'
+
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f'{url}/v1/models/',
+                    headers=headers,
+                    timeout=timeout,
+                    follow_redirects=True,
+                )
+
+                if resp.status_code != 200:
+                    logger.warning(
+                        f'Letta /v1/models/ returned {resp.status_code}'
+                    )
+                    return []
+
+                raw_models = resp.json()
+                if not isinstance(raw_models, list):
+                    logger.warning('Letta /v1/models/ did not return a list')
+                    return []
+
+                models = []
+                for m in raw_models:
+                    model_id = m.get('name') or m.get('model') or m.get('id', '')
+                    provider = m.get('provider_type') or m.get('provider_name', '')
+                    context_window = m.get('max_context_window') or m.get('context_window', 0)
+
+                    if model_id:
+                        models.append({
+                            'id': model_id,
+                            'provider': provider,
+                            'context_window': int(context_window) if context_window else 0,
+                        })
+
+                logger.info(f'Fetched {len(models)} models from Letta at {url}')
+                return models
+
+        except httpx.ConnectError:
+            logger.debug(f'Cannot connect to Letta at {url} for model list')
+            return []
+        except httpx.TimeoutException:
+            logger.debug(f'Timeout fetching models from Letta at {url}')
+            return []
+        except Exception as e:
+            logger.debug(f'Error fetching Letta models: {e}')
+            return []
+
+    @staticmethod
+    async def find_running_instance() -> tuple[str | None, str | None]:
+        """
+        Auto-detect a running Letta instance.
+
+        Checks the default self-hosted URL first, then scans Docker containers
+        for a Letta image and tries common ports.
+
+        Returns:
+            Tuple of (url, version) if found, (None, None) otherwise.
+        """
+        # Check default URL first
+        default_url = LettaDetector.DEFAULT_SELF_HOSTED_URL
+        available, version, healthy = await LettaDetector.check_server(
+            default_url, timeout=3
+        )
+        if available and healthy:
+            logger.info(f'Found running Letta at {default_url}')
+            return default_url, version
+
+        # Check if there's a Letta Docker container running on another port
+        try:
+            from .docker import DockerDetector
+
+            containers = DockerDetector.list_running_containers()
+            for container in containers:
+                if 'letta' in container.get('image', '').lower():
+                    # Try to extract port from status/ports info
+                    # Default to 8283 if we can't determine
+                    logger.info(
+                        f"Found Letta container: {container.get('name')}"
+                    )
+                    # Container found but might be on a different port -
+                    # the default URL check above already covers 8283
+                    return default_url, None
+        except Exception as e:
+            logger.debug(f'Error scanning Docker for Letta: {e}')
+
+        return None, None
+
+    @staticmethod
     def detect_mode() -> str:
         """
         Auto-detect Letta mode based on available servers.

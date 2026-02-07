@@ -28,8 +28,16 @@ class ConfigManager:
             vault_path: Path to Obsidian vault root
         """
         self.vault_path = vault_path
-        self.settings_path = vault_path / '_thoth' / 'settings.json'
-        self.backup_dir = vault_path / '_thoth' / 'backups'
+        # New layout: vault/thoth/_thoth/settings.json
+        # Falls back to legacy vault/_thoth/settings.json if it exists
+        new_path = vault_path / 'thoth' / '_thoth' / 'settings.json'
+        legacy_path = vault_path / '_thoth' / 'settings.json'
+        if not new_path.exists() and legacy_path.exists():
+            self.settings_path = legacy_path
+            self.backup_dir = vault_path / '_thoth' / 'backups'
+        else:
+            self.settings_path = new_path
+            self.backup_dir = vault_path / 'thoth' / '_thoth' / 'backups'
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
     def load_existing(self) -> dict[str, Any] | None:

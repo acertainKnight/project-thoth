@@ -195,7 +195,7 @@ export class FileWatcher implements IFileWatcher {
 
       // If not found, try to create it
       // Note: This creates a backend settings file (not plugin settings)
-      // Backend manages its own settings in vault/_thoth/settings.json
+      // Backend manages its own settings in vault/thoth/_thoth/settings.json
       const defaultSettings = {
         api_keys: {
           mistral: '',

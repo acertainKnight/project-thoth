@@ -1,7 +1,7 @@
 """
 Settings file watcher for hot-reload functionality.
 
-Monitors vault/_thoth/settings.json and triggers config reloads
+Monitors vault/thoth/_thoth/settings.json and triggers config reloads
 without requiring container restarts.
 """
 

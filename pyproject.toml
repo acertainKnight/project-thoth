@@ -127,9 +127,10 @@ memory = [
 # ==============================================================================
 
 # thoth-api: REST API server (~1.5GB)
-# Needs langchain for AnthropicClient + vectordb for cachetools (BaseRepository) + pdf for watchdog + memory for Letta
+# Core API server - does NOT need vectordb/embeddings by default
+# Add them if you want RAG features with local embeddings
 service-api = [
-    "thoth[api,discovery,pdf,langchain,vectordb,memory]",
+    "thoth[api,discovery,pdf,langchain]",
 ]
 
 # thoth-dashboard: Dashboard sync (~1.5GB)
@@ -144,22 +145,27 @@ service-discovery = [
     "thoth[api,discovery,pdf,langchain,vectordb]",
 ]
 
-# thoth-mcp: MCP server with 60+ research tools (~10GB)
+# thoth-mcp: MCP server with 60+ research tools (~2GB)
 # Provides MCP protocol interface to Thoth research tools
-# Includes RAG, discovery, and document processing capabilities
-# Agent management handled separately by Letta platform (port 8283)
-# Requires api (asyncpg), pdf (pypdf), and full langchain stack
+# Includes discovery and document processing capabilities
+# embeddings, vectordb (chroma), and memory (letta) are OPTIONAL - users can add if needed
 service-mcp = [
-    "thoth[api,pdf,mcp,discovery,langchain,vectordb,embeddings,memory]",
+    "thoth[api,pdf,mcp,discovery,langchain]",
 ]
 
-# thoth-monitor: PDF processing with embeddings (~13GB with OCR tools)
-# Needs api for asyncpg (PostgresService) + mcp for langchain_mcp_adapters
+# thoth-monitor: PDF processing (~2GB)
+# Watches for PDFs and processes them
+# embeddings and vectordb are OPTIONAL - add if you want local embeddings
 service-monitor = [
-    "thoth[api,pdf,discovery,mcp,langchain,vectordb,embeddings]",
+    "thoth[api,pdf,discovery,mcp,langchain]",
 ]
 
 service-all = [
+    "thoth[api,pdf,mcp,discovery,langchain]",
+]
+
+# Optional heavy dependencies (only install if you need local models)
+service-heavy = [
     "thoth[api,pdf,mcp,discovery,langchain,vectordb,embeddings,memory]",
 ]
 
@@ -199,6 +205,11 @@ setup = [
     "textual>=0.80.0",  # TUI framework for setup wizard
     "rich>=13.0.0",     # Rich text and formatting
     "psutil>=7.0.0",    # System information and process management
+    "httpx>=0.27.0",    # HTTP client for checking service availability
+    "requests>=2.32.3", # Alternative HTTP client (used by some detectors)
+    # Minimal langchain deps for model fetching (ModelRegistry in openrouter.py)
+    "langchain-core>=0.3.45",  # Required by OpenRouterClient base class
+    "langchain-openai>=0.3.9", # OpenRouterClient extends ChatOpenAI
 ]
 
 jupyter = [

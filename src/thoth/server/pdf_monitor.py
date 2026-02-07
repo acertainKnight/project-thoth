@@ -764,6 +764,7 @@ class PDFMonitor:
             for path in [
                 './thoth.settings.json',
                 './workspace/settings.json',
+                './thoth/_thoth/settings.json',
                 './_thoth/settings.json',
                 Path.home() / '.config/thoth/settings.json',
             ]:

@@ -23,8 +23,8 @@ class SkillService(BaseService):
     
     Implements a three-tier system:
     - Bundled skills (shipped with Thoth): src/thoth/.skills/
-    - User skills (vault-specific): vault/_thoth/skills/
-    - Role-based bundles: vault/_thoth/skills/bundles/{role}/
+    - User skills (vault-specific): vault/thoth/_thoth/skills/
+    - Role-based bundles: vault/thoth/_thoth/skills/bundles/{role}/
     
     User skills override bundled skills with the same name.
     Role-based bundles enable automatic skill loading per agent type.
@@ -67,7 +67,8 @@ class SkillService(BaseService):
         self.bundled_skills_dir = Path(__file__).parent.parent / '.skills'
         
         # Vault skills directory (user-specific, hot-reloadable)
-        self.vault_skills_dir = self.config.vault_root / '_thoth' / 'skills'
+        # Use resolved workspace dir for vault skills (thoth/_thoth/skills/)
+        self.vault_skills_dir = self.config.workspace_dir / 'skills'
         self.vault_skills_dir.mkdir(parents=True, exist_ok=True)
         
         # Role-based bundles directories (bundled first, vault can override)

@@ -1,0 +1,84 @@
+# Test Docker Compose Configuration
+# Uses different ports to avoid conflicts with production
+
+version: '3.8'
+
+services:
+  # PostgreSQL - Port 5433 instead of 5432
+  postgres:
+    image: postgres:15-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-thoth-test}-postgres
+    environment:
+      POSTGRES_USER: thoth
+      POSTGRES_PASSWORD: thoth_password
+      POSTGRES_DB: thoth
+    ports:
+      - "${TEST_POSTGRES_PORT:-15432}:5432"  # External: 15432, Internal: 5432
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thoth"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Letta Server - Port 8284 instead of 8283
+  letta:
+    image: letta/letta:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-thoth-test}-letta
+    environment:
+      LETTA_PG_URI: postgresql://thoth:thoth_password@postgres:5432/letta
+      LETTA_SERVER_PORT: 8283
+    ports:
+      - "${TEST_LETTA_PORT:-18283}:8283"  # External: 18283, Internal: 8283
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - letta_test_data:/root/.letta
+
+  # Thoth API Server - Port 8002 instead of 8000
+  thoth-api:
+    image: thoth:test
+    container_name: ${COMPOSE_PROJECT_NAME:-thoth-test}-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://thoth:thoth_password@postgres:5432/thoth
+      LETTA_SERVER_URL: http://letta:8283
+      OBSIDIAN_VAULT_PATH: /vault
+    ports:
+      - "${TEST_API_PORT:-18000}:8000"  # External: 18000, Internal: 8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ${TEST_VAULT_PATH:-/tmp/test-vault}:/vault
+
+  # Thoth MCP Server - Port 8003 instead of 8001
+  thoth-mcp:
+    image: thoth:test
+    container_name: ${COMPOSE_PROJECT_NAME:-thoth-test}-mcp
+    command: python -m thoth.mcp.server
+    environment:
+      DATABASE_URL: postgresql://thoth:thoth_password@postgres:5432/thoth
+      LETTA_SERVER_URL: http://letta:8283
+      OBSIDIAN_VAULT_PATH: /vault
+    ports:
+      - "${TEST_MCP_PORT:-18001}:8001"  # External: 18001, Internal: 8001
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ${TEST_VAULT_PATH:-/tmp/test-vault}:/vault
+
+volumes:
+  postgres_test_data:
+    name: ${COMPOSE_PROJECT_NAME:-thoth-test}-postgres-data
+  letta_test_data:
+    name: ${COMPOSE_PROJECT_NAME:-thoth-test}-letta-data
+
+networks:
+  default:
+    name: ${COMPOSE_PROJECT_NAME:-thoth-test}-network

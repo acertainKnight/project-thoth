@@ -3,7 +3,7 @@ Single unified configuration system for Thoth.
 
 This module provides ONE configuration object that:
 1. Detects Obsidian vault location from OBSIDIAN_VAULT_PATH
-2. Loads ALL user settings from vault_root/_thoth/settings.json (UNCHANGED)
+2. Loads ALL user settings from vault_root/thoth/_thoth/settings.json (UNCHANGED)
 3. Loads secrets from .env file (for keys not in settings.json)
 4. Resolves all paths to absolute at startup (only change: vault-relative)
 5. Exports a single global 'config' object
@@ -99,12 +99,17 @@ def get_vault_root() -> Path:
             'Please set OBSIDIAN_VAULT_PATH or THOTH_VAULT_PATH to a valid path.'
         )
 
-    # 3. Auto-detect by walking up looking for _thoth/ directory
+    # 3. Auto-detect by walking up looking for thoth/_thoth/ directory
     current = Path.cwd()
     for _ in range(6):  # Check up to 5 parent levels
-        thoth_dir = current / '_thoth'
+        thoth_dir = current / 'thoth' / '_thoth'
+        # Also check legacy _thoth/ location for backward compat
+        legacy_dir = current / '_thoth'
         if thoth_dir.exists() and thoth_dir.is_dir():
             logger.info(f'Vault auto-detected at: {current}')
+            return current
+        if legacy_dir.exists() and legacy_dir.is_dir():
+            logger.info(f'Vault auto-detected at: {current} (legacy _thoth/ layout)')
             return current
 
         parent = current.parent
@@ -114,14 +119,18 @@ def get_vault_root() -> Path:
 
     # 4. Check specific known location based on your setup
     known_location = Path.home() / 'Documents' / 'thoth'
-    if (known_location / '_thoth').exists():
+    if (known_location / 'thoth' / '_thoth').exists():
         logger.info(f'Vault found at known location: {known_location}')
+        return known_location
+    # Legacy fallback
+    if (known_location / '_thoth').exists():
+        logger.info(f'Vault found at known location: {known_location} (legacy layout)')
         return known_location
 
     raise ValueError(
         'Could not detect vault. Please set OBSIDIAN_VAULT_PATH:\n'
         '  export OBSIDIAN_VAULT_PATH=/path/to/your/vault\n\n'
-        'Or run from within vault directory (contains _thoth/)'
+        'Or run from within vault directory (contains thoth/_thoth/)'
     )
 
 
@@ -585,10 +594,10 @@ class MemoryConfig(BaseModel):
 class DiscoveryPaths(BaseModel):
     """Discovery-specific paths."""
 
-    sources: str = 'data/discovery/sources'
-    results: str = 'data/discovery/results'
+    sources: str = 'thoth/_thoth/data/discovery/sources'
+    results: str = 'thoth/_thoth/data/discovery/results'
     chrome_configs: str = Field(
-        default='data/discovery/chrome_configs', alias='chromeConfigs'
+        default='thoth/_thoth/data/discovery/chrome_configs', alias='chromeConfigs'
     )
 
     class Config:
@@ -596,23 +605,28 @@ class DiscoveryPaths(BaseModel):
 
 
 class PathsConfig(BaseModel):
-    """Path configuration."""
+    """Path configuration.
 
-    workspace: str = '/workspace'
-    pdf: str = 'data/pdf'
-    markdown: str = 'data/markdown'
-    notes: str = '/thoth/notes'
-    prompts: str = 'data/prompts'
-    templates: str = 'data/templates'
-    output: str = 'data/output'
-    knowledge_base: str = Field(default='data/knowledge', alias='knowledgeBase')
+    All paths are relative to the vault root unless absolute.
+    User-facing directories live under ``thoth/`` in the vault.
+    Internal data lives under ``thoth/_thoth/``.
+    """
+
+    workspace: str = 'thoth/_thoth'
+    pdf: str = 'thoth/papers/pdfs'
+    markdown: str = 'thoth/papers/markdown'
+    notes: str = 'thoth/notes'
+    prompts: str = 'thoth/_thoth/data/prompts'
+    templates: str = 'thoth/_thoth/data/templates'
+    output: str = 'thoth/_thoth/data/output'
+    knowledge_base: str = Field(default='thoth/_thoth/data/knowledge', alias='knowledgeBase')
     graph_storage: str = Field(
-        default='data/graph/citations.graphml', alias='graphStorage'
+        default='thoth/_thoth/data/graph/citations.graphml', alias='graphStorage'
     )
-    queries: str = 'data/queries'
-    agent_storage: str = Field(default='data/agent', alias='agentStorage')
+    queries: str = 'thoth/_thoth/data/queries'
+    agent_storage: str = Field(default='thoth/_thoth/data/agent', alias='agentStorage')
     discovery: DiscoveryPaths = Field(default_factory=DiscoveryPaths)
-    logs: str = 'logs'
+    logs: str = 'thoth/_thoth/logs'
 
     class Config:
         populate_by_name = True
@@ -983,10 +997,54 @@ class Settings(BaseModel):
             Settings instance with all your configurations
         """
         if not settings_file.exists():
-            raise FileNotFoundError(
-                f'Settings file not found: {settings_file}\n'
-                f'Please ensure your settings.json exists in the vault/_thoth/ directory'
-            )
+            # Create minimal default settings for fresh installation
+            logger.warning(f'Settings file not found: {settings_file}')
+            logger.info('Creating default settings.json for fresh installation...')
+            
+            # Ensure parent directory exists
+            settings_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Create minimal default settings
+            default_settings = {
+                "$schema": "./thoth.settings.schema.json",
+                "version": "1.0.0",
+                "lastModified": None,
+                "_comment": "Thoth configuration - edit with setup wizard or manually",
+                "apiKeys": {},
+                "llm": {
+                    "default": {
+                        "model": "google/gemini-2.5-flash",
+                        "temperature": 0.9,
+                        "maxTokens": 500000,
+                    }
+                },
+                "paths": {
+                    "workspace": "/workspace",
+                    "pdf": "data/pdf",
+                    "markdown": "data/markdown",
+                    "notes": "/thoth/notes",
+                    "prompts": "data/prompts",
+                    "templates": "data/templates",
+                    "output": "data/output",
+                    "knowledgeBase": "data/knowledge",
+                    "queries": "data/queries",
+                    "agentStorage": "data/agent",
+                    "logs": "logs"
+                },
+                "servers": {
+                    "api": {"host": "0.0.0.0", "port": 8000, "autoStart": False},
+                    "mcp": {"host": "localhost", "port": 8001, "autoStart": True, "enabled": True}
+                },
+                "logging": {
+                    "level": "WARNING",
+                    "file": {"enabled": True, "path": "/workspace/logs/thoth.log"}
+                }
+            }
+            
+            # Write default settings
+            settings_file.write_text(json.dumps(default_settings, indent=2))
+            logger.success(f'Created default settings at {settings_file}')
+            logger.info('You can customize these settings using the setup wizard or by editing the file')
 
         try:
             data = json.loads(settings_file.read_text())
@@ -1082,7 +1140,17 @@ class Config:
         self._reload_lock = threading.Lock()
 
         # 3. Load ALL settings from your existing JSON file
-        settings_file = self.vault_root / '_thoth' / 'settings.json'
+        # New location: vault/thoth/_thoth/settings.json
+        # Falls back to legacy vault/_thoth/settings.json for migration
+        settings_file = self.vault_root / 'thoth' / '_thoth' / 'settings.json'
+        if not settings_file.exists():
+            legacy_file = self.vault_root / '_thoth' / 'settings.json'
+            if legacy_file.exists():
+                logger.warning(
+                    f'Found settings at legacy location {legacy_file}. '
+                    f'Consider moving to {settings_file}'
+                )
+                settings_file = legacy_file
         self.settings = Settings.from_json_file(settings_file)
 
         # 4. Load secrets from .env (supplement/override API keys)
@@ -1100,40 +1168,37 @@ class Config:
     def _resolve_paths(self) -> None:
         """Convert relative paths to absolute (vault-relative).
 
-        This is the ONLY modification - path resolution.
-        All other settings preserved exactly as-is.
+        All paths in settings are relative to the vault root.
+        Absolute paths are used as-is (with a warning if outside the vault).
+        Legacy Docker paths (/workspace, /thoth/) are migrated automatically.
         """
         paths = self.settings.paths
 
         def resolve_path(path_str: str) -> Path:
             """Resolve a path relative to vault root.
 
-            Special handling:
-            - /workspace -> vault_root (Docker default)
-            - /thoth/notes -> vault_root/notes (Docker absolute paths)
-            - Relative paths -> vault_root/path
+            Args:
+                path_str: Path string from settings (relative or absolute).
+
+            Returns:
+                Resolved absolute Path.
             """
             path = Path(path_str)
 
-            # Special case: /workspace is Docker default, map to vault root
+            # --- Legacy migration: old Docker-era absolute paths ---
             if path == Path('/workspace'):
-                return self.vault_root.resolve()
-
-            # If absolute path starts with /thoth or /workspace, make it vault-relative
+                return (self.vault_root / 'thoth' / '_thoth').resolve()
             if path.is_absolute():
-                path_str_lower = str(path).lower()
-                if path_str_lower.startswith('/thoth/'):
-                    # /thoth/notes -> vault_root/notes
-                    relative_part = str(path)[7:]  # Remove /thoth/
+                path_lower = str(path).lower()
+                if path_lower.startswith('/thoth/'):
+                    relative_part = str(path)[7:]
+                    return (self.vault_root / 'thoth' / relative_part).resolve()
+                if path_lower.startswith('/workspace/'):
+                    relative_part = str(path)[11:]
                     return (self.vault_root / relative_part).resolve()
-                elif path_str_lower.startswith('/workspace/'):
-                    # /workspace/logs -> vault_root/logs
-                    relative_part = str(path)[11:]  # Remove /workspace/
-                    return (self.vault_root / relative_part).resolve()
-                else:
-                    # Other absolute paths: use as-is but warn
-                    logger.warning(f'Absolute path outside vault: {path} - using as-is')
-                    return path.resolve()
+                # Other absolute paths: use as-is
+                logger.warning(f'Absolute path outside vault: {path} - using as-is')
+                return path.resolve()
 
             # Relative path: resolve relative to vault root
             return (self.vault_root / path).resolve()
@@ -1266,7 +1331,7 @@ class Config:
         Reload settings from JSON file (hot-reload support).
 
         This method:
-        1. Reloads settings from vault/_thoth/settings.json
+        1. Reloads settings from vault/thoth/_thoth/settings.json
         2. Resolves all paths
         3. Reconfigures logging
         4. Notifies all registered callbacks
@@ -1285,8 +1350,12 @@ class Config:
                 'notes': self.notes_dir,
             }
 
-            # Load new settings
-            settings_file = self.vault_root / '_thoth' / 'settings.json'
+            # Load new settings (check new location first, then legacy)
+            settings_file = self.vault_root / 'thoth' / '_thoth' / 'settings.json'
+            if not settings_file.exists():
+                legacy = self.vault_root / '_thoth' / 'settings.json'
+                if legacy.exists():
+                    settings_file = legacy
             self.settings = Settings.from_json_file(settings_file)
 
             # Resolve paths

@@ -9,12 +9,19 @@ set -e
 echo "🚀 Starting Thoth All-in-One Container..."
 echo "========================================="
 
-# Create log directory if it doesn't exist
-mkdir -p /vault/_thoth/logs
-chmod 755 /vault/_thoth/logs
+# Create log directory if it doesn't exist (new and legacy paths)
+if [ -d /vault/thoth/_thoth ]; then
+  LOG_DIR=/vault/thoth/_thoth/logs
+elif [ -d /vault/_thoth ]; then
+  LOG_DIR=/vault/_thoth/logs
+else
+  LOG_DIR=/vault/thoth/_thoth/logs
+fi
+mkdir -p "$LOG_DIR"
+chmod 755 "$LOG_DIR"
 
 # Ensure proper permissions
-chown -R thoth:thoth /vault/_thoth/logs 2>/dev/null || true
+chown -R thoth:thoth "$LOG_DIR" 2>/dev/null || true
 
 # Check database connection
 echo "📊 Checking PostgreSQL connection..."
@@ -46,7 +53,7 @@ echo "  • MCP Server:      http://0.0.0.0:8000 (HTTP transport with /mcp and /
 echo "  • Discovery:       (scheduler)"
 echo "  • PDF Monitor:     (file watcher)"
 echo ""
-echo "Logs: /vault/_thoth/logs/"
+echo "Logs: $LOG_DIR"
 echo "========================================="
 echo ""
 

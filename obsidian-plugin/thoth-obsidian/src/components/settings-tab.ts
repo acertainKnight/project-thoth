@@ -1,7 +1,7 @@
 /**
  * Settings Tab Component
  * 
- * Plugin-only settings UI. Backend settings are in vault/_thoth/settings.json.
+ * Plugin-only settings UI. Backend settings are in vault/thoth/_thoth/settings.json.
  */
 
 import { Notice, Platform } from 'obsidian';
@@ -27,7 +27,7 @@ export class SettingsTabComponent {
     const header = settingsContainer.createDiv({ cls: 'thoth-settings-header' });
     header.createEl('h2', { text: 'Thoth Plugin Settings', cls: 'thoth-settings-title' });
     header.createEl('p', {
-      text: 'Plugin configuration only. Backend settings (API keys, LLM models, paths, etc.) are in vault/_thoth/settings.json',
+      text: 'Plugin configuration only. Backend settings (API keys, LLM models, paths, etc.) are in vault/thoth/_thoth/settings.json',
       cls: 'thoth-settings-description'
     });
 
@@ -106,7 +106,7 @@ export class SettingsTabComponent {
     }
   }
 
-  private async renderLettaModelSection(container: HTMLElement) {
+  private renderLettaModelSection(container: HTMLElement) {
     const section = container.createDiv({ cls: 'thoth-settings-section' });
     section.createEl('h3', { text: '🤖 Letta Agent Model' });
 
@@ -115,81 +115,39 @@ export class SettingsTabComponent {
       text: 'Configure the LLM model used by your Letta research agents. Changes are applied automatically via hot-reload.',
     });
 
-    // Read current model from backend settings.json
-    let currentModel = '';
-    let backendSettings: any = null;
-    const settingsPath = '_thoth/settings.json';
+    const settingsPath = 'thoth/_thoth/settings.json';
 
-    try {
-      const adapter = this.plugin.app.vault.adapter;
-      if (await adapter.exists(settingsPath)) {
-        const raw = await adapter.read(settingsPath);
-        backendSettings = JSON.parse(raw);
-        currentModel = backendSettings?.memory?.letta?.agentModel || '';
-      }
-    } catch (error) {
-      console.warn('[Settings] Could not read backend settings:', error);
-    }
-
-    // Model input
+    // Model dropdown (rendered immediately, populated async)
     const modelRow = section.createDiv({ cls: 'thoth-setting-row' });
     modelRow.createEl('label', { text: 'Agent LLM Model' });
-    const modelInput = modelRow.createEl('input', { type: 'text' });
-    modelInput.value = currentModel;
-    modelInput.placeholder = 'e.g. anthropic/claude-sonnet-4-20250514';
-    modelInput.style.width = '100%';
-    modelInput.style.maxWidth = '400px';
+    const modelSelect = modelRow.createEl('select', { cls: 'dropdown' });
+    modelSelect.disabled = true;
+    modelSelect.style.width = '100%';
+    modelSelect.style.maxWidth = '500px';
+    modelSelect.createEl('option', { text: 'Loading models from Letta API...', value: '' });
     modelRow.createEl('span', {
-      text: 'LiteLLM format (provider/model). Leave empty to use Letta server default.',
+      text: 'Select from available models. Leave empty to use Letta server default.',
       cls: 'thoth-setting-description'
     });
 
-    // Common model presets
-    const presetsRow = section.createDiv({ cls: 'thoth-setting-row' });
-    presetsRow.createEl('label', { text: 'Quick presets' });
-    const presetsContainer = presetsRow.createDiv({ cls: 'thoth-model-presets' });
-    presetsContainer.style.display = 'flex';
-    presetsContainer.style.gap = '6px';
-    presetsContainer.style.flexWrap = 'wrap';
-
-    const presets = [
-      { label: 'Claude Sonnet 4', value: 'anthropic/claude-sonnet-4-20250514' },
-      { label: 'Claude Opus 4', value: 'anthropic/claude-opus-4-20250514' },
-      { label: 'GPT-4o', value: 'openai/gpt-4o' },
-      { label: 'Gemini 2.5 Pro', value: 'google/gemini-2.5-pro-preview' },
-      { label: 'Gemini 2.5 Flash', value: 'google/gemini-2.5-flash' },
-    ];
-
-    for (const preset of presets) {
-      const btn = presetsContainer.createEl('button', {
-        text: preset.label,
-        cls: 'thoth-model-preset-btn'
-      });
-      btn.style.fontSize = '11px';
-      btn.style.padding = '3px 8px';
-      btn.style.borderRadius = '4px';
-      btn.style.cursor = 'pointer';
-      if (currentModel === preset.value) {
-        btn.style.fontWeight = 'bold';
-        btn.style.borderWidth = '2px';
-      }
-      btn.onclick = () => {
-        modelInput.value = preset.value;
-      };
-    }
+    // Filter input for search
+    const filterRow = section.createDiv({ cls: 'thoth-setting-row' });
+    filterRow.createEl('label', { text: 'Filter models' });
+    const filterInput = filterRow.createEl('input', {
+      type: 'text',
+      placeholder: 'Type to filter models by name or provider...',
+      cls: 'thoth-model-filter'
+    });
+    filterInput.style.width = '100%';
+    filterInput.style.maxWidth = '500px';
+    filterInput.disabled = true;
 
     // Status indicator
     const statusEl = section.createDiv({ cls: 'thoth-model-status' });
     statusEl.style.marginTop = '8px';
     statusEl.style.fontSize = '12px';
-
-    if (currentModel) {
-      statusEl.setText(`Current model: ${currentModel}`);
-      statusEl.style.color = 'var(--text-success)';
-    } else {
-      statusEl.setText('Using Letta server default model');
-      statusEl.style.color = 'var(--text-muted)';
-    }
+    statusEl.setText('Loading...');
+    statusEl.style.color = 'var(--text-muted)';
 
     // Save model button
     const saveModelBtn = section.createEl('button', {
@@ -197,19 +155,144 @@ export class SettingsTabComponent {
       cls: 'thoth-save-model-btn'
     });
     saveModelBtn.style.marginTop = '8px';
+    saveModelBtn.disabled = true;
+
+    // Store models data for filtering
+    let allModels: Array<{ handle: string; display_name: string; provider_name: string; context_window: number }> = [];
+    let currentConfigModel = '';
+
+    const populateDropdown = (filterText: string = '') => {
+      modelSelect.empty();
+      
+      // Add default option
+      modelSelect.createEl('option', {
+        text: 'Server Default (configured in Letta)',
+        value: ''
+      });
+      
+      // Filter models
+      const filtered = allModels.filter((m) => {
+        if (!filterText) return true;
+        const searchStr = `${m.handle} ${m.display_name} ${m.provider_name}`.toLowerCase();
+        return searchStr.includes(filterText.toLowerCase());
+      });
+
+      // Group by provider
+      const byProvider: Record<string, typeof allModels> = {};
+      filtered.forEach((m) => {
+        if (!byProvider[m.provider_name]) byProvider[m.provider_name] = [];
+        byProvider[m.provider_name].push(m);
+      });
+
+      // Add optgroups
+      for (const [provider, models] of Object.entries(byProvider).sort()) {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = provider.toUpperCase();
+        models
+          .sort((a, b) => a.display_name.localeCompare(b.display_name))
+          .forEach((m) => {
+            const option = document.createElement('option');
+            option.value = m.handle;
+            option.text = `${m.display_name} (${m.context_window.toLocaleString()} ctx)`;
+            optgroup.appendChild(option);
+          });
+        modelSelect.appendChild(optgroup);
+      }
+
+      // Select current model
+      modelSelect.value = currentConfigModel;
+      
+      // Update status
+      if (filtered.length === allModels.length) {
+        if (currentConfigModel) {
+          statusEl.setText(`Current: ${currentConfigModel} | ${allModels.length} models available`);
+          statusEl.style.color = 'var(--text-success)';
+        } else {
+          statusEl.setText(`Using server default | ${allModels.length} models available`);
+          statusEl.style.color = 'var(--text-muted)';
+        }
+      } else {
+        statusEl.setText(`Showing ${filtered.length} of ${allModels.length} models`);
+        statusEl.style.color = 'var(--text-muted)';
+      }
+    };
+
+    // Filter handler
+    filterInput.oninput = () => {
+      populateDropdown(filterInput.value.trim());
+    };
+
+    // Async: Fetch models from Letta API and load current config
+    const adapter = this.plugin.app.vault.adapter;
+    
+    Promise.all([
+      // Fetch models from Letta
+      fetch(`${this.settings.lettaEndpointUrl}/v1/models/`)
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
+        .catch((err) => {
+          console.error('[Settings] Failed to fetch Letta models:', err);
+          return [];
+        }),
+      // Read current configured model
+      adapter.exists(settingsPath)
+        .then((exists: boolean) => {
+          if (!exists) return '';
+          return adapter.read(settingsPath).then((raw: string) => {
+            const backendSettings = JSON.parse(raw);
+            return backendSettings?.memory?.letta?.agentModel || '';
+          });
+        })
+        .catch((err: Error) => {
+          console.warn('[Settings] Could not read backend settings:', err);
+          return '';
+        })
+    ]).then(([models, configModel]) => {
+      allModels = models;
+      currentConfigModel = configModel;
+
+      if (allModels.length === 0) {
+        statusEl.setText('⚠️ Could not fetch models from Letta API — check connection');
+        statusEl.style.color = 'var(--text-warning)';
+        modelSelect.empty();
+        modelSelect.createEl('option', { text: 'Failed to load models', value: '' });
+        modelSelect.disabled = false;
+        filterInput.disabled = true;
+        saveModelBtn.disabled = false;
+        return;
+      }
+
+      populateDropdown();
+      modelSelect.disabled = false;
+      filterInput.disabled = false;
+      saveModelBtn.disabled = false;
+    }).catch((error: Error) => {
+      console.error('[Settings] Unexpected error in model loading:', error);
+      statusEl.setText(`Error: ${error.message}`);
+      statusEl.style.color = 'var(--text-error)';
+      modelSelect.disabled = false;
+      saveModelBtn.disabled = false;
+    });
+
+    // Save handler
     saveModelBtn.onclick = async () => {
-      const newModel = modelInput.value.trim();
+      const newModel = modelSelect.value.trim();
 
       try {
         saveModelBtn.disabled = true;
         saveModelBtn.textContent = 'Saving...';
 
         // Read the latest settings from vault
-        const adapter = this.plugin.app.vault.adapter;
         let settings: any = {};
-        if (await adapter.exists(settingsPath)) {
-          const raw = await adapter.read(settingsPath);
-          settings = JSON.parse(raw);
+        try {
+          if (await adapter.exists(settingsPath)) {
+            const raw = await adapter.read(settingsPath);
+            settings = JSON.parse(raw);
+          }
+        } catch (readError) {
+          console.warn('[Settings] Could not read settings, starting fresh:', readError);
         }
 
         // Ensure nested structure exists
@@ -223,6 +306,7 @@ export class SettingsTabComponent {
         await adapter.write(settingsPath, JSON.stringify(settings, null, 2));
 
         // Update status
+        currentConfigModel = newModel;
         if (newModel) {
           statusEl.setText(`Model updated to: ${newModel}`);
           statusEl.style.color = 'var(--text-success)';
@@ -254,7 +338,7 @@ export class SettingsTabComponent {
     });
     
     const pathCode = info.createEl('code', {
-      text: 'vault/_thoth/settings.json',
+      text: 'vault/thoth/_thoth/settings.json',
       cls: 'thoth-settings-path'
     });
     
@@ -271,13 +355,13 @@ export class SettingsTabComponent {
       openBtn.onclick = () => {
         // Get vault path
         const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
-        const settingsPath = `${vaultPath}/_thoth/settings.json`;
+        const settingsPath = `${vaultPath}/thoth/_thoth/settings.json`;
         
         // Try to open in system editor
         const { exec } = require('child_process');
         exec(`xdg-open "${settingsPath}" || open "${settingsPath}" || start "" "${settingsPath}"`, (error: any) => {
           if (error) {
-            new Notice('Could not open settings file. Open manually at: _thoth/settings.json');
+            new Notice('Could not open settings file. Open manually at: thoth/_thoth/settings.json');
           } else {
             new Notice('Opening backend settings file...');
           }

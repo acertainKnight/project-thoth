@@ -23,7 +23,8 @@ RUN apt-get update && apt-get install -y \
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
 
-# Install Thoth with setup dependencies
+# Install Thoth with setup dependencies only
+# Setup wizard should not need runtime dependencies
 RUN pip install --no-cache-dir -e ".[setup]"
 
 # Set environment to avoid buffering

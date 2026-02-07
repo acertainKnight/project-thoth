@@ -84,7 +84,7 @@ services:
     environment:
       # Vault configuration
       - OBSIDIAN_VAULT_PATH=/vault
-      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
+      - THOTH_SETTINGS_FILE=/vault/thoth/_thoth/settings.json
 
       # Service discovery - Use EXTERNAL Letta (standalone)
       - THOTH_LETTA_URL=http://letta-server:8283
@@ -208,7 +208,7 @@ services:
 
       # Vault configuration (REQUIRED - tells config.py where to find settings)
       - OBSIDIAN_VAULT_PATH=/vault
-      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
+      - THOTH_SETTINGS_FILE=/vault/thoth/_thoth/settings.json
 
       # Service discovery (REQUIRED - inter-service communication URLs)
       - THOTH_LETTA_URL=http://letta-server:8283
@@ -221,7 +221,7 @@ services:
       - THOTH_DEV_MODE=1
 
       # Hot-reload configuration
-      # Automatically reload when vault/_thoth/settings.json changes
+      # Automatically reload when vault/thoth/_thoth/settings.json changes
       # No container restart needed!
       - THOTH_HOT_RELOAD=1
       - DOCKER_ENV=true
@@ -274,7 +274,7 @@ services:
 
       # Vault configuration (REQUIRED - tells config.py where to find settings)
       - OBSIDIAN_VAULT_PATH=/vault
-      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
+      - THOTH_SETTINGS_FILE=/vault/thoth/_thoth/settings.json
 
       # Service discovery (REQUIRED - inter-service communication URLs)
       - THOTH_LETTA_URL=http://letta-server:8283
@@ -285,7 +285,7 @@ services:
       - THOTH_LOG_LEVEL=DEBUG
 
       # Hot-reload configuration
-      # Automatically reload when vault/_thoth/settings.json changes
+      # Automatically reload when vault/thoth/_thoth/settings.json changes
       # No container restart needed!
       - THOTH_HOT_RELOAD=1
       - DOCKER_ENV=true
@@ -338,7 +338,7 @@ services:
 
       # Vault configuration (REQUIRED - tells config.py where to find settings)
       - OBSIDIAN_VAULT_PATH=/vault
-      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
+      - THOTH_SETTINGS_FILE=/vault/thoth/_thoth/settings.json
 
       # Service discovery (REQUIRED - inter-service communication URLs)
       - THOTH_API_URL=http://thoth-api:8000
@@ -348,7 +348,7 @@ services:
       - THOTH_LOG_LEVEL=DEBUG
 
       # Hot-reload configuration
-      # Automatically reload when vault/_thoth/settings.json changes
+      # Automatically reload when vault/thoth/_thoth/settings.json changes
       # No container restart needed!
       - THOTH_HOT_RELOAD=1
       - DOCKER_ENV=true
@@ -392,7 +392,7 @@ services:
     environment:
       # Vault configuration (REQUIRED - tells config.py where to find settings)
       - OBSIDIAN_VAULT_PATH=/vault
-      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
+      - THOTH_SETTINGS_FILE=/vault/thoth/_thoth/settings.json
 
       # Service discovery (REQUIRED - inter-service communication URLs)
       - THOTH_API_URL=http://thoth-api:8000
@@ -424,7 +424,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "from pathlib import Path; import sys; sys.exit(0 if Path('/vault/_thoth/data/output/processed_pdfs.json').exists() else 1)"]
+      test: ["CMD", "python", "-c", "from pathlib import Path; import sys; sys.exit(0 if Path('/vault/thoth/_thoth/data/output/processed_pdfs.json').exists() else 1)"]
       interval: 60s
       timeout: 10s
       retries: 3
@@ -449,7 +449,7 @@ services:
     environment:
       # Vault configuration (REQUIRED - tells config.py where to find settings)
       - OBSIDIAN_VAULT_PATH=/vault
-      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
+      - THOTH_SETTINGS_FILE=/vault/thoth/_thoth/settings.json
 
       # Service discovery (REQUIRED - inter-service communication URLs)
       - THOTH_API_URL=http://thoth-api:8000

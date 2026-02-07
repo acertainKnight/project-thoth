@@ -2,6 +2,8 @@
 Vault selection screen for setup wizard.
 
 Detects and displays available Obsidian vaults for user selection.
+Includes an advanced expandable section for customising Thoth's
+directory paths (PDFs, notes, markdown, workspace).
 """
 
 from __future__ import annotations
@@ -13,10 +15,18 @@ from typing import Any
 from loguru import logger
 from textual.app import ComposeResult
 from textual.containers import Vertical
-from textual.widgets import Input, Label, RadioButton, RadioSet, Static
+from textual.widgets import Collapsible, Input, Label, RadioButton, RadioSet, Static
 
 from ..detectors.obsidian import ObsidianDetector, ObsidianStatus, ObsidianVault
 from .base import BaseScreen
+
+# Default paths relative to vault root
+DEFAULT_PATHS = {
+    "pdf": "thoth/papers/pdfs",
+    "notes": "thoth/notes",
+    "markdown": "thoth/papers/markdown",
+    "workspace": "thoth/_thoth",
+}
 
 
 class VaultSelectionScreen(BaseScreen):
@@ -52,10 +62,14 @@ class VaultSelectionScreen(BaseScreen):
                     ObsidianVault(
                         path=env_vault,
                         name=env_vault.name,
-                        has_thoth_workspace=(env_vault / "_thoth").exists(),
+                        has_thoth_workspace=(
+                            (env_vault / "thoth" / "_thoth").exists()
+                            or (env_vault / "_thoth").exists()
+                        ),
                         config_exists=(
-                            env_vault / "_thoth" / "settings.json"
-                        ).exists(),
+                            (env_vault / "thoth" / "_thoth" / "settings.json").exists()
+                            or (env_vault / "_thoth" / "settings.json").exists()
+                        ),
                     )
                 ]
                 self.clear_messages()
@@ -147,16 +161,67 @@ class VaultSelectionScreen(BaseScreen):
         # Help text
         if not self.vaults:
             yield Static(
-                "\n[dim]Tip: You can also set OBSIDIAN_VAULT_PATH environment variable[/dim]",
+                "\n[cyan]For Docker/test environments:[/cyan]\n"
+                "[dim]If running in Docker, the vault is typically at: [bold]/vault[/bold][/dim]\n"
+                "[dim]You can also set OBSIDIAN_VAULT_PATH environment variable[/dim]",
                 classes="help-text",
+            )
+
+        # Advanced: directory path configuration
+        with Collapsible(title="Advanced: Customize Directory Paths", collapsed=True):
+            yield Static(
+                "[dim]Paths are relative to your vault. For example, if your vault\n"
+                "is at [bold]~/Documents/MyVault[/bold], the default PDF path becomes\n"
+                "[bold]~/Documents/MyVault/thoth/papers/pdfs[/bold].\n"
+                "Defaults are fine for most users.[/dim]\n",
+            )
+
+            yield Label("[cyan]PDF Directory[/cyan]")
+            yield Static(
+                "[dim]Where Thoth stores and reads research PDFs.  vault/[bold]...[/bold][/dim]",
+            )
+            yield Input(
+                placeholder=DEFAULT_PATHS["pdf"],
+                value=DEFAULT_PATHS["pdf"],
+                id="path-pdf",
+            )
+
+            yield Label("[cyan]Notes Directory[/cyan]")
+            yield Static(
+                "[dim]Where Thoth creates analysis notes and summaries.  vault/[bold]...[/bold][/dim]",
+            )
+            yield Input(
+                placeholder=DEFAULT_PATHS["notes"],
+                value=DEFAULT_PATHS["notes"],
+                id="path-notes",
+            )
+
+            yield Label("[cyan]Markdown Directory[/cyan]")
+            yield Static(
+                "[dim]Parsed markdown from PDFs (used for RAG indexing).  vault/[bold]...[/bold][/dim]",
+            )
+            yield Input(
+                placeholder=DEFAULT_PATHS["markdown"],
+                value=DEFAULT_PATHS["markdown"],
+                id="path-markdown",
+            )
+
+            yield Label("[cyan]Workspace Directory[/cyan]")
+            yield Static(
+                "[dim]Internal data (settings, cache, logs). Usually no need to change.  vault/[bold]...[/bold][/dim]",
+            )
+            yield Input(
+                placeholder=DEFAULT_PATHS["workspace"],
+                value=DEFAULT_PATHS["workspace"],
+                id="path-workspace",
             )
 
     async def validate_and_proceed(self) -> dict[str, Any] | None:
         """
-        Validate vault selection.
+        Validate vault selection and collect directory path settings.
 
         Returns:
-            Dict with selected vault path, or None if invalid
+            Dict with selected vault path and custom paths, or None if invalid.
         """
         # Get selected vault from radio buttons (if any vaults were found)
         selected_value = None
@@ -199,12 +264,35 @@ class VaultSelectionScreen(BaseScreen):
             )
             return None
 
+        # Collect directory path settings from advanced section
+        paths_config: dict[str, str] = {}
+        for key in ("pdf", "notes", "markdown", "workspace"):
+            try:
+                path_input = self.query_one(f"#path-{key}", Input)
+                value = path_input.value.strip()
+                paths_config[key] = value if value else DEFAULT_PATHS[key]
+            except Exception:
+                paths_config[key] = DEFAULT_PATHS[key]
+
+        # Validate paths don't contain suspicious characters
+        for key, path_val in paths_config.items():
+            if ".." in path_val:
+                self.show_error(f"Path for {key} must not contain '..'")
+                return None
+            if path_val.startswith("/") or path_val.startswith("~"):
+                self.show_error(
+                    f"Path for {key} must be relative to the vault root "
+                    f"(got '{path_val}')"
+                )
+                return None
+
         logger.info(f"Selected vault: {self.selected_vault}")
-        return {"vault_path": self.selected_vault}
+        logger.info(f"Paths config: {paths_config}")
+        return {"vault_path": self.selected_vault, "paths_config": paths_config}
 
     async def on_next_screen(self) -> None:
-        """Navigate to Letta mode selection screen."""
-        from .letta_mode_selection import LettaModeSelectionScreen
+        """Navigate to deployment mode selection screen."""
+        from .deployment_mode import DeploymentModeScreen
 
-        logger.info("Proceeding to Letta mode selection")
-        await self.app.push_screen(LettaModeSelectionScreen())
+        logger.info("Proceeding to deployment mode selection")
+        await self.app.push_screen(DeploymentModeScreen())

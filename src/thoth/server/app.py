@@ -43,6 +43,7 @@ from thoth.server.routers import (  # noqa: I001
     chat,
     config as config_router,
     health,
+    models,
     operations,
     research,
     research_questions,
@@ -326,7 +327,9 @@ async def lifespan(app: FastAPI):
     if _should_enable_hot_reload():
         # Settings file watcher
         try:
-            settings_file = config.vault_root / '_thoth' / 'settings.json'
+            settings_file = config.vault_root / 'thoth' / '_thoth' / 'settings.json'
+            if not settings_file.exists():
+                settings_file = config.vault_root / '_thoth' / 'settings.json'
 
             if settings_file.exists():
                 logger.info(f'Enabling hot-reload for {settings_file}')
@@ -642,6 +645,7 @@ def create_app() -> FastAPI:
         )  # Browser workflow management (router already has /api/workflows prefix)
     
     app.include_router(config_router.router, prefix='/config', tags=['config'])
+    app.include_router(models.router, prefix='/models', tags=['models'])
     app.include_router(operations.router, prefix='/operations', tags=['operations'])
     app.include_router(schema.router, tags=['schema'])
     app.include_router(skills.router, tags=['skills'])
@@ -651,7 +655,9 @@ def create_app() -> FastAPI:
     @app.get('/health/hot-reload')
     async def health_hot_reload():
         """Check hot-reload status."""
-        settings_file = config.vault_root / '_thoth' / 'settings.json'
+        settings_file = config.vault_root / 'thoth' / '_thoth' / 'settings.json'
+        if not settings_file.exists():
+            settings_file = config.vault_root / '_thoth' / 'settings.json'
         reload_count = getattr(config, 'reload_callback_count', 0)
 
         return {

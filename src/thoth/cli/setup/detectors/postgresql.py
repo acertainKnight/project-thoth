@@ -25,6 +25,11 @@ class PostgreSQLStatus:
     database: str | None
     error_message: str | None = None
 
+    @property
+    def available(self) -> bool:
+        """PostgreSQL is available when connected."""
+        return self.connected
+
 
 class PostgreSQLDetector:
     """Detects and validates PostgreSQL connections."""

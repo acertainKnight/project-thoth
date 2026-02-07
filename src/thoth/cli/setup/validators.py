@@ -27,7 +27,7 @@ class APIKeyValidator:
 
     # API key patterns for different providers
     PATTERNS: ClassVar[dict[str, str]] = {
-        'openai': r'^sk-[A-Za-z0-9]{20,}$',
+        'openai': r'^sk-[A-Za-z0-9_-]{20,}$',  # Updated to allow underscores and hyphens
         'anthropic': r'^sk-ant-[A-Za-z0-9\-_]{95,}$',
         'google': r'^[A-Za-z0-9\-_]{39}$',
         'mistral': r'^[A-Za-z0-9]{32}$',
@@ -105,13 +105,18 @@ class PathValidator:
             if must_be_writable and not PathValidator.is_writable(path_obj):
                 return False, f'Directory is not writable: {path}'
 
-        # Check disk space (warn if <10GB)
+        # Check disk space (warn if <3GB, recommend 5GB+)
         if path_obj.exists() or path_obj.parent.exists():
             free_gb = PathValidator.get_free_space_gb(path_obj)
-            if free_gb < 10:
+            if free_gb < 3:
+                return (
+                    False,
+                    f'Insufficient disk space ({free_gb:.1f}GB available). Minimum 3GB required.',
+                )
+            elif free_gb < 5:
                 return (
                     True,
-                    f'Warning: Low disk space ({free_gb:.1f}GB available). Recommend 10GB+',
+                    f'Warning: Low disk space ({free_gb:.1f}GB available). Recommend 5GB+ for comfortable usage.',
                 )
 
         return True, None

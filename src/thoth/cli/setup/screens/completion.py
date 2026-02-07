@@ -12,9 +12,10 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+# Note: CompletionScreen uses custom button handler, not base on_button_pressed
+
 from loguru import logger
 from textual.app import ComposeResult
-from textual.containers import Horizontal
 from textual.widgets import Button, Static
 
 from .base import BaseScreen
@@ -50,73 +51,80 @@ class CompletionScreen(BaseScreen):
         vault_path = ""
         providers_configured = 0
         letta_mode = "self-hosted"
+        deployment_mode = "local"
 
         if hasattr(self.app, "wizard_data"):
             vault_path = str(self.app.wizard_data.get("vault_path", ""))
             letta_mode = self.app.wizard_data.get("letta_mode", "self-hosted")
+            deployment_mode = self.app.wizard_data.get("deployment_mode", "local")
             llm_settings = self.app.wizard_data.get("llm_settings", {})
             providers = llm_settings.get("providers", {})
             providers_configured = sum(
                 1 for p in providers.values() if p.get("enabled", False)
             )
 
-        if not self.auto_start_asked:
-            # Initial completion message with auto-start prompt
-            completion_text = f"""
-[bold green]✓ Thoth has been successfully installed![/bold green]
+        # Get workspace path from paths config
+        paths_config = {}
+        if hasattr(self.app, "wizard_data"):
+            paths_config = self.app.wizard_data.get("paths_config", {})
+        workspace_rel = paths_config.get("workspace", "thoth/_thoth")
 
-[bold]Installation Summary:[/bold]
+        # Different messages for local vs remote deployment
+        if deployment_mode == "remote":
+            thoth_api_url = self.app.wizard_data.get("thoth_api_url", "http://localhost:8000")
+            letta_url = self.app.wizard_data.get("letta_url", "http://localhost:8283")
+            
+            yield Static(
+                f"[bold green]✓ Thoth has been successfully configured![/bold green]\n\n"
+                f"[bold]Configuration Summary:[/bold]\n"
+                f"  • [cyan]Deployment Mode:[/cyan] Remote\n"
+                f"  • [cyan]Vault:[/cyan] {vault_path}\n"
+                f"  • [cyan]Thoth Server:[/cyan] {thoth_api_url}\n"
+                f"  • [cyan]Letta Server:[/cyan] {letta_url}\n"
+                f"  • [cyan]LLM Providers:[/cyan] {providers_configured} configured\n"
+                f"  • [cyan]Workspace:[/cyan] {vault_path}/{workspace_rel}",
+                id="summary-text",
+            )
 
-  • [cyan]Vault:[/cyan] {vault_path}
-  • [cyan]Letta Mode:[/cyan] {letta_mode.title()}
-  • [cyan]LLM Providers:[/cyan] {providers_configured} configured
-  • [cyan]Workspace:[/cyan] {vault_path}/_thoth
-
-[bold]Start Thoth services now?[/bold]
-
-Services will use approximately [yellow]1-1.5GB RAM[/yellow] depending on Letta mode:
-  • Cloud mode: ~1GB (Thoth services only)
-  • Self-hosted: ~1.5GB (Thoth + Letta containers)
-
-You can stop services anytime with: [cyan]thoth stop[/cyan]
-
-[dim]Choose an option below:[/dim]
-            """
+            # Remote mode - no service start needed
+            yield Static(
+                "\n[bold green]✓ Configuration complete![/bold green]\n\n"
+                "Your Obsidian plugin is configured to connect to:\n"
+                f"  • Thoth API: [cyan]{thoth_api_url}[/cyan]\n"
+                f"  • Letta: [cyan]{letta_url}[/cyan]\n\n"
+                "[yellow]Important:[/yellow] Ensure your remote servers are running before using Thoth.\n\n"
+                "[bold]Recommended: Obsidian Sync[/bold]\n"
+                "Thoth does not sync your vault between devices. We strongly\n"
+                "recommend [cyan]Obsidian Sync[/cyan] for remote deployments:\n"
+                "  • Keeps your vault in sync with the remote server\n"
+                "  • Enable [bold]Sync community plugins[/bold] and [bold]Settings[/bold]\n"
+                "    so local config changes hot-reload into Thoth\n"
+                "  • Enables mobile access to your Thoth-powered vault",
+                id="start-prompt",
+            )
         else:
-            # After start choice - show next steps
-            plugin_status = "✓ Installed" if self.plugin_installed else "⚠ Install manually"
-            completion_text = f"""
-[bold green]✓ Setup complete!{'  Services running!' if self.services_started else ''}[/bold green]
+            # Local mode - show service start prompt
+            yield Static(
+                f"[bold green]✓ Thoth has been successfully installed![/bold green]\n\n"
+                f"[bold]Installation Summary:[/bold]\n"
+                f"  • [cyan]Deployment Mode:[/cyan] Local\n"
+                f"  • [cyan]Vault:[/cyan] {vault_path}\n"
+                f"  • [cyan]Letta Mode:[/cyan] {letta_mode.title()}\n"
+                f"  • [cyan]LLM Providers:[/cyan] {providers_configured} configured\n"
+                f"  • [cyan]Workspace:[/cyan] {vault_path}/{workspace_rel}",
+                id="summary-text",
+            )
 
-[bold]Installation Summary:[/bold]
+            # Service start prompt
+            yield Static(
+                "\n[bold]Start Thoth services now?[/bold]\n"
+                f"RAM usage: [yellow]~1GB[/yellow] (Cloud) or [yellow]~1.5GB[/yellow] (Self-hosted)\n"
+                "Stop anytime with: [cyan]thoth stop[/cyan]",
+                id="start-prompt",
+            )
 
-  • [cyan]Obsidian Plugin:[/cyan] {plugin_status}
-  • [cyan]Services:[/cyan] {'Running' if self.services_started else 'Stopped'}
-
-[bold]Next Steps:[/bold]
-
-  1. [bold]Restart Obsidian[/bold] to load the Thoth plugin
-  2. [bold]Enable the plugin[/bold] in Settings → Community Plugins → Thoth
-  3. [bold]Upload vault files[/bold] with: [cyan]thoth letta sync[/cyan]
-  4. [bold]Open Thoth[/bold] from the Obsidian ribbon icon
-
-[bold]Useful Commands:[/bold]
-
-  • [cyan]thoth start[/cyan]   - Start services
-  • [cyan]thoth stop[/cyan]    - Stop services (free RAM)
-  • [cyan]thoth status[/cyan]  - Check what's running
-  • [cyan]thoth logs[/cyan]    - View service logs
-  • [cyan]thoth letta sync[/cyan] - Upload notes to Letta
-
-[bold]Documentation:[/bold]
-
-  • README: https://github.com/acertainKnight/project-thoth
-  • Issues: https://github.com/acertainKnight/project-thoth/issues
-
-[dim]Press Finish to exit the setup wizard.[/dim]
-            """
-
-        yield Static(completion_text, classes="completion-content")
+        # Status area for service start / next steps (updated dynamically)
+        yield Static("", id="status-area")
 
     def compose_buttons(self) -> ComposeResult:
         """
@@ -125,14 +133,18 @@ You can stop services anytime with: [cyan]thoth stop[/cyan]
         Returns:
             Button widgets
         """
-        if not self.auto_start_asked:
-            # First show: Start now or Finish
-            yield Button("Start Thoth Now", id="start-now", variant="success")
-            yield Button("I'll Start Manually", id="manual-start", variant="default")
-        else:
-            # After auto-start choice: show docs and finish
-            yield Button("Open Documentation", id="docs", variant="default")
+        # Check deployment mode to decide button visibility
+        deployment_mode = "local"
+        if hasattr(self.app, "wizard_data"):
+            deployment_mode = self.app.wizard_data.get("deployment_mode", "local")
+
+        if deployment_mode == "remote":
+            # Remote mode - only show Finish button
             yield Button("Finish", id="finish", variant="success")
+        else:
+            # Local mode - show Start and Skip buttons
+            yield Button("Start Thoth Now", id="start-now", variant="success")
+            yield Button("Skip → Finish", id="finish", variant="default")
 
     async def install_obsidian_plugin(self) -> bool:
         """
@@ -186,60 +198,130 @@ You can stop services anytime with: [cyan]thoth stop[/cyan]
                 logger.debug(f"Could not download plugin from release: {e}")
                 self.show_info("Release version not available, building locally...")
             
-            # Fallback: Build plugin locally
-            project_root = vault_root
-            while project_root.name != "project-thoth" and project_root != project_root.parent:
-                project_root = project_root.parent
+            # Fallback: Try to find and build plugin from project source
+            plugin_src = self._find_plugin_source(vault_root)
             
-            plugin_src = project_root / "obsidian-plugin" / "thoth-obsidian"
+            if plugin_src and plugin_src.exists():
+                self.show_info("Building plugin from source...")
+                try:
+                    result = subprocess.run(
+                        ["npm", "install"],
+                        cwd=plugin_src,
+                        capture_output=True,
+                        text=True,
+                        timeout=120
+                    )
+                    
+                    if result.returncode == 0:
+                        result = subprocess.run(
+                            ["npm", "run", "build"],
+                            cwd=plugin_src,
+                            capture_output=True,
+                            text=True,
+                            timeout=60
+                        )
+                    
+                    if result.returncode == 0:
+                        import shutil
+                        for file in ["main.js", "manifest.json", "styles.css"]:
+                            src = plugin_src / file
+                            if src.exists():
+                                shutil.copy(src, plugin_dir / file)
+                        self.show_success("✓ Plugin built and installed")
+                        return True
+                except Exception as e:
+                    logger.debug(f"Local build failed: {e}")
             
-            if not plugin_src.exists():
-                self.show_warning("Plugin source not found, skipping plugin install")
-                return False
-            
-            # Build plugin
-            self.show_info("Building plugin from source...")
-            result = subprocess.run(
-                ["npm", "install"],
-                cwd=plugin_src,
-                capture_output=True,
-                text=True,
-                timeout=120
+            # Final fallback: Create plugin directory with data.json
+            # so the user can manually install plugin files later
+            self._write_plugin_data_json(plugin_dir)
+            self.show_warning(
+                "Could not download or build plugin automatically.\n"
+                "Plugin directory created with endpoint config.\n"
+                "Install plugin files manually from the GitHub releases page."
             )
-            
-            if result.returncode != 0:
-                self.show_warning("npm install failed, skipping plugin")
-                return False
-            
-            result = subprocess.run(
-                ["npm", "run", "build"],
-                cwd=plugin_src,
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-            
-            if result.returncode != 0:
-                self.show_warning("npm build failed, skipping plugin")
-                return False
-            
-            # Copy built files
-            import shutil
-            for file in ["main.js", "manifest.json", "styles.css"]:
-                src = plugin_src / file
-                if src.exists():
-                    shutil.copy(src, plugin_dir / file)
-            
-            self.show_success("✓ Plugin built and installed")
-            return True
+            return False
         
         except Exception as e:
             logger.error(f"Plugin installation failed: {e}")
             self.show_warning(f"Could not install plugin: {e}")
             return False
 
+    def _find_plugin_source(self, vault_root: Path) -> Path | None:
+        """
+        Find plugin source directory by searching common locations.
+
+        Args:
+            vault_root: Path to the Obsidian vault
+
+        Returns:
+            Path to plugin source or None
+        """
+        # Try walking up from vault to find project root
+        candidate = vault_root
+        for _ in range(10):
+            plugin_src = candidate / "obsidian-plugin" / "thoth-obsidian"
+            if plugin_src.exists():
+                return plugin_src
+            if candidate == candidate.parent:
+                break
+            candidate = candidate.parent
+
+        # Try common locations
+        for path in [
+            Path("/app/obsidian-plugin/thoth-obsidian"),  # Docker container
+            Path.home() / "project-thoth" / "obsidian-plugin" / "thoth-obsidian",
+            Path.cwd() / "obsidian-plugin" / "thoth-obsidian",
+        ]:
+            if path.exists():
+                return path
+
+        return None
+
+    def _write_plugin_data_json(self, plugin_dir: Path) -> None:
+        """
+        Write data.json to plugin directory with endpoint configuration.
+
+        This ensures the plugin knows where to connect even if the full
+        plugin files need to be installed manually.
+
+        Args:
+            plugin_dir: Path to plugin directory
+        """
+        import json
+
+        wizard_data = self.app.wizard_data if hasattr(self.app, "wizard_data") else {}
+        deployment_mode = wizard_data.get("deployment_mode", "local")
+        thoth_api_url = wizard_data.get("thoth_api_url", "http://localhost:8000")
+        letta_url = wizard_data.get("letta_url", "http://localhost:8283")
+        is_remote = deployment_mode == "remote"
+
+        data = {
+            "remoteMode": is_remote,
+            "remoteEndpointUrl": thoth_api_url if is_remote else "http://localhost:8000",
+            "lettaEndpointUrl": letta_url,
+        }
+
+        try:
+            plugin_dir.mkdir(parents=True, exist_ok=True)
+            data_path = plugin_dir / "data.json"
+            with open(data_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            logger.info(f"Wrote plugin data.json to {data_path}")
+        except Exception as e:
+            logger.error(f"Failed to write plugin data.json: {e}")
+
     async def start_services(self) -> None:
-        """Start Docker Compose services."""
+        """Start Docker Compose services (local deployment only)."""
+        # Check deployment mode - skip if remote
+        deployment_mode = self.app.wizard_data.get("deployment_mode", "local")
+        if deployment_mode == "remote":
+            self.show_info(
+                "[yellow]Remote deployment detected - Docker services not needed.[/yellow]\n"
+                "Your remote Thoth and Letta servers should already be running."
+            )
+            return
+
         self.show_info("[bold]Starting Thoth services...[/bold]")
         
         try:
@@ -312,16 +394,6 @@ You can stop services anytime with: [cyan]thoth stop[/cyan]
             logger.error(f"Error starting services: {e}")
             self.show_error(f"Error: {e}\n\nStart manually with: [cyan]thoth start[/cyan]")
     
-    def show_manual_start_instructions(self) -> None:
-        """Show instructions for manual service start."""
-        self.show_info(
-            "\n[bold]Services not started[/bold]\n\n"
-            "When ready to use Thoth, run:\n"
-            "  [cyan]thoth start[/cyan]\n\n"
-            "This will start all services (~1-1.5GB RAM).\n"
-            "You can stop anytime with: [cyan]thoth stop[/cyan]\n"
-        )
-
     async def validate_and_proceed(self) -> dict[str, Any] | None:
         """
         Validate completion screen (always passes).
@@ -343,24 +415,70 @@ You can stop services anytime with: [cyan]thoth stop[/cyan]
 
         if button_id == "start-now":
             logger.info("User chose to start services now")
-            self.auto_start_asked = True
             await self.start_services()
-            # Refresh screen to show new buttons
-            await self.refresh_content()
-        elif button_id == "manual-start":
-            logger.info("User chose to start services manually")
-            self.auto_start_asked = True
-            self.show_manual_start_instructions()
-            # Refresh screen to show new buttons
-            await self.refresh_content()
-        elif button_id == "docs":
-            import webbrowser
-
-            webbrowser.open("https://docs.thoth.ai/quickstart")
-            logger.info("Opened documentation in browser")
+            self._show_next_steps()
         elif button_id == "finish":
             logger.info("User finished setup wizard")
             self.app.exit()
+        elif button_id == "cancel":
+            self.action_cancel()
+
+    def _show_next_steps(self) -> None:
+        """Update status area with next steps after service start attempt."""
+        # Check deployment mode for different next steps
+        deployment_mode = "local"
+        if hasattr(self.app, "wizard_data"):
+            deployment_mode = self.app.wizard_data.get("deployment_mode", "local")
+
+        if deployment_mode == "remote":
+            next_steps = (
+                "\n[bold]Next Steps:[/bold]\n"
+                "  1. Restart Obsidian to load the Thoth plugin\n"
+                "  2. Enable plugin in Settings → Community Plugins → Thoth\n"
+                "  3. Verify your remote servers are running\n"
+                "  4. Open Thoth from the Obsidian ribbon icon\n\n"
+                "[bold]Remote Endpoints:[/bold]\n"
+                f"  Thoth: [cyan]{self.app.wizard_data.get('thoth_api_url', 'N/A')}[/cyan]\n"
+                f"  Letta: [cyan]{self.app.wizard_data.get('letta_url', 'N/A')}[/cyan]\n\n"
+                "[dim]Press Finish to exit the wizard.[/dim]"
+            )
+        else:
+            next_steps = (
+                "\n[bold]Next Steps:[/bold]\n"
+                "  1. Restart Obsidian to load the Thoth plugin\n"
+                "  2. Enable plugin in Settings → Community Plugins → Thoth\n"
+                "  3. Upload notes with: [cyan]thoth letta sync[/cyan]\n"
+                "  4. Open Thoth from the Obsidian ribbon icon\n\n"
+                "[bold]Useful Commands:[/bold]\n"
+                "  [cyan]thoth start[/cyan]   Start services\n"
+                "  [cyan]thoth stop[/cyan]    Stop services\n"
+                "  [cyan]thoth status[/cyan]  Check what's running\n"
+                "  [cyan]thoth logs[/cyan]    View service logs\n\n"
+                "[dim]Press Skip → Finish to exit the wizard.[/dim]"
+            )
+        
+        try:
+            status_area = self.query_one("#status-area", Static)
+            status_area.update(next_steps)
+
+            # Hide the start prompt
+            start_prompt = self.query_one("#start-prompt", Static)
+            start_prompt.update("")
+
+            # Update buttons based on deployment mode
+            if deployment_mode != "remote":
+                # Local mode: hide Start button, rename Finish
+                try:
+                    start_btn = self.query_one("#start-now", Button)
+                    start_btn.styles.display = "none"
+                except Exception:
+                    pass
+
+            finish_btn = self.query_one("#finish", Button)
+            finish_btn.label = "Finish"
+            finish_btn.variant = "success"
+        except Exception:
+            pass
 
     async def on_next_screen(self) -> None:
         """No next screen - this is the final screen."""

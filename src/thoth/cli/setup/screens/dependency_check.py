@@ -1,7 +1,13 @@
 """
 Dependency check screen for setup wizard.
 
-Checks and installs required dependencies: Docker Compose, PostgreSQL, Letta.
+.. deprecated::
+    This screen is no longer used in the wizard flow. The install.sh script
+    verifies Docker before launching the wizard, and PostgreSQL/Letta are
+    started after the wizard via 'thoth start'. The wizard's job is
+    configuration only, not infrastructure management.
+
+    Kept for potential future use as a standalone health-check utility.
 """
 
 from __future__ import annotations
@@ -44,6 +50,13 @@ class DependencyCheckScreen(BaseScreen):
             self.letta_api_key = self.app.wizard_data.get("letta_api_key", "")
             logger.info(f"Letta mode from wizard: {self.letta_mode}")
 
+        # Hide progress bar initially
+        try:
+            progress_bar = self.query_one("#install-progress", ProgressBar)
+            progress_bar.styles.display = "none"
+        except Exception:
+            pass  # Widget might not be ready yet
+
         self._check_task = asyncio.create_task(self.check_dependencies())
 
     async def check_dependencies(self) -> None:
@@ -85,6 +98,7 @@ class DependencyCheckScreen(BaseScreen):
                         "Some dependencies need to be installed. Click Install to proceed."
                     )
 
+            self._update_button_visibility()
             self.refresh()
 
         except Exception as e:
@@ -94,7 +108,13 @@ class DependencyCheckScreen(BaseScreen):
     async def check_docker(self) -> None:
         """Check Docker installation."""
         logger.info("Checking Docker...")
+        self._update_status("docker", "Checking...")
+        
+        # Add small delay to show the checking state
+        await asyncio.sleep(0.2)
+        
         self.docker_status = DockerDetector.get_status()
+        self._update_status("docker", self._format_docker_status())
 
         if self.docker_status.available:
             logger.info(
@@ -110,6 +130,10 @@ class DependencyCheckScreen(BaseScreen):
     async def check_postgresql(self) -> None:
         """Check PostgreSQL installation."""
         logger.info("Checking PostgreSQL...")
+        self._update_status("postgres", "Checking...")
+        
+        # Add small delay to show the checking state
+        await asyncio.sleep(0.2)
 
         # Check if PostgreSQL is running in Docker
         if self.docker_status and self.docker_status.compose_available:
@@ -117,8 +141,9 @@ class DependencyCheckScreen(BaseScreen):
             postgres_running = any("postgres" in c["image"].lower() for c in containers)
 
             if postgres_running:
-                # Try to connect
-                self.postgres_status = await PostgreSQLDetector.get_status()
+                # Try to connect using the default local Docker URL
+                db_url = "postgresql://thoth:thoth@localhost:5432/thoth"
+                self.postgres_status = await PostgreSQLDetector.test_connection(db_url)
                 if self.postgres_status.available:
                     logger.info("PostgreSQL is running and available")
                 else:
@@ -126,21 +151,28 @@ class DependencyCheckScreen(BaseScreen):
             else:
                 logger.info("PostgreSQL not running in Docker")
                 self.postgres_status = PostgreSQLStatus(
-                    available=False,
+                    connected=False,
+                    version=None,
+                    pgvector_available=False,
                     host="localhost",
                     port=5432,
-                    version=None,
-                    databases=[],
+                    database=None,
                     error_message="PostgreSQL not running",
                 )
         else:
             # Check system PostgreSQL
-            self.postgres_status = await PostgreSQLDetector.get_status()
+            db_url = "postgresql://thoth:thoth@localhost:5432/thoth"
+            self.postgres_status = await PostgreSQLDetector.test_connection(db_url)
+        
+        self._update_status("postgres", self._format_postgres_status())
 
     async def check_letta(self) -> None:
         """Check Letta server (cloud or self-hosted based on mode)."""
         if self.letta_mode == "cloud":
             logger.info("Checking Letta Cloud...")
+            self._update_status("letta", "Checking Letta Cloud...")
+            await asyncio.sleep(0.2)
+            
             self.letta_status = LettaDetector.get_status(
                 url="https://api.letta.com",
                 api_key=self.letta_api_key,
@@ -148,9 +180,14 @@ class DependencyCheckScreen(BaseScreen):
             )
         else:
             logger.info("Checking Letta (self-hosted)...")
+            self._update_status("letta", "Checking Letta (self-hosted)...")
+            await asyncio.sleep(0.2)
+            
             self.letta_status = LettaDetector.get_status(
                 mode="self-hosted",
             )
+
+        self._update_status("letta", self._format_letta_status())
 
         if self.letta_status.available:
             logger.info(
@@ -190,6 +227,21 @@ class DependencyCheckScreen(BaseScreen):
             postgres_ready = self.postgres_status and self.postgres_status.available
             return bool(docker_ready and postgres_ready and letta_ready)
 
+    def _update_status(self, service: str, text: str) -> None:
+        """
+        Update status text for a service dynamically.
+
+        Args:
+            service: Service name ('docker', 'postgres', 'letta')
+            text: New status text to display
+        """
+        try:
+            status_widget = self.query_one(f"#{service}-status", Static)
+            status_widget.update(text)
+        except Exception:
+            # Widget might not be mounted yet
+            pass
+
     def compose_content(self) -> ComposeResult:
         """
         Compose dependency check content.
@@ -197,24 +249,31 @@ class DependencyCheckScreen(BaseScreen):
         Returns:
             Content widgets
         """
-        yield Static("[bold]Dependency Status:[/bold]", classes="section-title")
+        yield Static("[bold]Dependency Status:[/bold]\n", classes="section-title")
 
-        # Docker status
-        with Vertical(classes="dependency-item"):
-            docker_status_text = self._format_docker_status()
-            yield Static(docker_status_text)
+        # Docker status - with ID for dynamic updates
+        yield Static(
+            self._format_docker_status(),
+            id="docker-status",
+            classes="dependency-item"
+        )
 
-        # PostgreSQL status
-        with Vertical(classes="dependency-item"):
-            postgres_status_text = self._format_postgres_status()
-            yield Static(postgres_status_text)
+        # PostgreSQL status - with ID for dynamic updates
+        yield Static(
+            self._format_postgres_status(),
+            id="postgres-status",
+            classes="dependency-item"
+        )
 
-        # Letta status
-        with Vertical(classes="dependency-item"):
-            letta_status_text = self._format_letta_status()
-            yield Static(letta_status_text)
+        # Letta status - with ID for dynamic updates
+        yield Static(
+            self._format_letta_status(),
+            id="letta-status",
+            classes="dependency-item"
+        )
 
         # Progress bar (shown during installation)
+        yield Static("")  # Spacer
         yield ProgressBar(id="install-progress", total=100, show_eta=False)
 
     def _format_docker_status(self) -> str:
@@ -270,15 +329,19 @@ class DependencyCheckScreen(BaseScreen):
 
     def compose_buttons(self) -> ComposeResult:
         """
-        Compose navigation buttons.
+        Compose navigation buttons with Install and Skip options.
+
+        Next is hidden until all dependencies are satisfied.
+        Install is hidden once everything passes.
 
         Returns:
             Button widgets
         """
-        yield Button("Back", id="back", variant="default")
+        yield Button("Cancel & Exit", id="cancel", variant="error")
+        yield Button("← Back", id="back", variant="default")
         yield Button("Skip", id="skip", variant="warning")
         yield Button("Install", id="install", variant="primary")
-        yield Button("Next", id="next", variant="success")
+        yield Button("Next →", id="next", variant="success", classes="hidden")
 
     async def validate_and_proceed(self) -> dict[str, Any] | None:
         """
@@ -316,9 +379,10 @@ class DependencyCheckScreen(BaseScreen):
         """
         button_id = event.button.id
 
-        if button_id == "back":
-            logger.info("Going back to configuration")
-            self.app.pop_screen()
+        if button_id == "cancel":
+            self.action_cancel()
+        elif button_id == "back":
+            self.action_back()
         elif button_id == "skip":
             logger.warning("User chose to skip dependency installation")
             self.all_ready = True
@@ -336,20 +400,40 @@ class DependencyCheckScreen(BaseScreen):
                 # Proceed to next screen
                 await self.on_next_screen()
 
+    def _update_button_visibility(self) -> None:
+        """Show/hide Next and Install buttons based on dependency status."""
+        try:
+            next_btn = self.query_one("#next", Button)
+            install_btn = self.query_one("#install", Button)
+            skip_btn = self.query_one("#skip", Button)
+
+            if self.all_ready:
+                next_btn.remove_class("hidden")
+                install_btn.add_class("hidden")
+                skip_btn.add_class("hidden")
+            else:
+                next_btn.add_class("hidden")
+                install_btn.remove_class("hidden")
+                skip_btn.remove_class("hidden")
+        except Exception:
+            pass  # Widgets might not be mounted yet
+
     async def install_dependencies(self) -> None:
         """Install missing dependencies."""
         self.show_info("Installing dependencies...")
 
         try:
+            # Show progress bar
             progress_bar = self.query_one("#install-progress", ProgressBar)
+            progress_bar.styles.display = "block"
             progress_bar.update(progress=10)
 
             # Install Docker (if not available)
             if not self.docker_status or not self.docker_status.available:
-                self.show_info("Docker installation required. Please install manually.")
-                install_url = DockerDetector.get_install_url()
                 self.show_error(
-                    f"Please install Docker from: {install_url} and restart the wizard"
+                    "Docker is required but not available. "
+                    "Please install Docker from https://docs.docker.com/get-docker/ "
+                    "and restart the wizard."
                 )
                 return
 
@@ -434,6 +518,8 @@ class DependencyCheckScreen(BaseScreen):
                 self.show_info("All dependencies installed successfully!")
             else:
                 self.show_error("Some dependencies could not be installed")
+
+            self._update_button_visibility()
 
         except Exception as e:
             logger.error(f"Error installing dependencies: {e}")

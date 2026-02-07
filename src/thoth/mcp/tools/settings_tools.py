@@ -9,6 +9,7 @@ from typing import Any
 
 from thoth.mcp.base_tools import MCPTool, MCPToolCallResult, NoInputTool
 from thoth.services.settings_service import SettingsService
+from thoth.utilities.openrouter import ModelRegistry
 
 
 class ViewSettingsMCPTool(MCPTool):
@@ -105,6 +106,20 @@ class ViewSettingsMCPTool(MCPTool):
 class UpdateSettingsMCPTool(MCPTool):
     """Update Thoth configuration settings."""
 
+    # Model setting paths that should be validated against OpenRouter
+    MODEL_SETTING_PATHS = {
+        'llm.default.model',
+        'llm.citation.model',
+        'llm.tagConsolidator.consolidateModel',
+        'llm.tagConsolidator.suggestModel',
+        'llm.tagConsolidator.mapModel',
+        'llm.researchAgent.model',
+        'llm.scrapeFilter.model',
+        'llm.queryBasedRouting.routingModel',
+        'rag.qa.model',
+        'memory.letta.agentModel',
+    }
+
     @property
     def name(self) -> str:
         return 'update_settings'
@@ -139,6 +154,35 @@ class UpdateSettingsMCPTool(MCPTool):
             },
             'required': ['path', 'value'],
         }
+
+    async def _check_model_availability(self, model_id: str) -> str | None:
+        """
+        Check if a model exists in OpenRouter registry (advisory only).
+
+        Args:
+            model_id: Model identifier to check
+
+        Returns:
+            Warning message if model not found, None if found or check fails
+        """
+        try:
+            # Fetch models from registry (uses cache)
+            models = await ModelRegistry.get_openrouter_models()
+            model_ids = {m.id for m in models}
+
+            if model_id not in model_ids:
+                # Check context length as extra info
+                context_len = ModelRegistry.get_context_length(model_id)
+                if context_len is None:
+                    return (
+                        f"Advisory: Model '{model_id}' not found in OpenRouter registry. "
+                        "This may be a newly added model or a typo. "
+                        "The setting was still updated successfully."
+                    )
+            return None
+        except Exception:
+            # If we can't check (offline, API error), don't block the update
+            return None
 
     async def execute(self, arguments: dict[str, Any]) -> MCPToolCallResult:
         """Update a setting."""
@@ -184,6 +228,12 @@ class UpdateSettingsMCPTool(MCPTool):
                     )
                 elif action == 'remove':
                     result_text += f'\nRemoved: {value!r}\nCurrent value: {new_value!r}'
+
+                # Advisory check for model settings (never blocks)
+                if path in self.MODEL_SETTING_PATHS and isinstance(value, str):
+                    warning = await self._check_model_availability(value)
+                    if warning:
+                        result_text += f'\n\n⚠️  {warning}'
 
                 return MCPToolCallResult(
                     content=[{'type': 'text', 'text': result_text}]

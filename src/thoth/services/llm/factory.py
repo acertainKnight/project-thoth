@@ -4,9 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from thoth.utilities import AnthropicClient, OpenAIClient, OpenRouterClient
+from thoth.utilities import OpenAIClient, OpenRouterClient
 
 from .protocols import UnifiedLLMClient
+
+# Optional import: AnthropicClient requires langchain-anthropic
+try:
+    from thoth.utilities import AnthropicClient
+
+    _ANTHROPIC_AVAILABLE = True
+except ImportError:
+    _ANTHROPIC_AVAILABLE = False
 
 
 class LLMFactory:
@@ -16,8 +24,11 @@ class LLMFactory:
         self._registry: dict[str, Callable[[dict], UnifiedLLMClient]] = {
             'openrouter': lambda cfg: OpenRouterClient(**cfg),
             'openai': lambda cfg: OpenAIClient(**cfg),
-            'anthropic': lambda cfg: AnthropicClient(**cfg),
         }
+
+        # Register Anthropic only if available
+        if _ANTHROPIC_AVAILABLE:
+            self._registry['anthropic'] = lambda cfg: AnthropicClient(**cfg)
 
     def register_provider(
         self, provider: str, constructor: Callable[[dict], UnifiedLLMClient]

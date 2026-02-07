@@ -251,13 +251,18 @@ class ObsidianDetector:
 
                         # Validate vault
                         if ObsidianDetector.is_valid_vault(vault_path):
-                            # Check for Thoth workspace
-                            thoth_dir = vault_path / '_thoth'
-                            has_thoth = thoth_dir.exists() and thoth_dir.is_dir()
+                            # Check for Thoth workspace (new and legacy locations)
+                            thoth_dir = vault_path / 'thoth' / '_thoth'
+                            legacy_dir = vault_path / '_thoth'
+                            has_thoth = (
+                                (thoth_dir.exists() and thoth_dir.is_dir())
+                                or (legacy_dir.exists() and legacy_dir.is_dir())
+                            )
 
-                            # Check for settings.json
+                            # Check for settings.json (new and legacy locations)
                             settings_file = thoth_dir / 'settings.json'
-                            config_exists = settings_file.exists()
+                            legacy_settings = legacy_dir / 'settings.json'
+                            config_exists = settings_file.exists() or legacy_settings.exists()
 
                             vault = ObsidianVault(
                                 path=vault_path,

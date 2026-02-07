@@ -50,10 +50,19 @@ to help you discover, analyze, and manage academic papers and research.
 
   • Obsidian installed (we'll help you download it if needed)
   • API keys for at least one LLM provider (OpenAI, Anthropic, or Google)
-  • ~10 GB free disk space
+  • ~3 GB free disk space (lightweight) or ~10 GB with local ML models
   • Internet connection
 
-[dim]Press Next to begin setup, or ESC to cancel.[/dim]
+[bold cyan]Navigation:[/bold cyan]
+  • [dim]← / → arrow keys to go Back / Next[/dim]
+  • [dim]Tab/Shift+Tab to move between fields[/dim]
+  • [dim]↑ / ↓ to select options in lists[/dim]
+  • [dim]Space to toggle checkboxes[/dim]
+  • [dim]Enter for Next[/dim]
+  • [dim]ESC to exit wizard[/dim]
+  • [dim]F1 for help anytime[/dim]
+
+[dim]Press Enter or → to start.[/dim]
         """
 
         yield Static(welcome_text, classes="welcome-content")

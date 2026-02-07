@@ -26,27 +26,13 @@ def _configure_safe_environment() -> None:
 _configure_safe_environment()
 
 from loguru import logger  # noqa: E402
-from thoth.initialization import initialize_thoth  # noqa: E402
-# ThothPipeline imported lazily when needed (line 81)
+# initialize_thoth imported lazily when needed (see line ~98)
+# ThothPipeline imported lazily when needed (line ~108)
 
 logger.info('===== main.py: About to import CLI submodules =====')
-from . import (  # noqa: E402
-    database,
-    discovery,
-    letta,
-    mcp,
-    notes,
-    pdf,
-    performance,
-    rag,
-    rag_watcher,
-    research,
-    schema,
-    server,
-    service,
-    setup_cli,
-    system,
-)
+# Import only setup_cli for argument parsing
+# Other modules imported lazily when their commands are used
+from . import setup_cli  # noqa: E402
 
 logger.info('===== main.py: CLI submodules imported successfully =====')
 
@@ -59,6 +45,46 @@ def main() -> None:
     )
     subparsers = parser.add_subparsers(
         dest='command', help='Command to run', required=True
+    )
+
+    # Always register setup command
+    setup_cli.configure_subparser(subparsers)
+
+    # Parse args early to check if we need other modules
+    args = parser.parse_args()
+
+    # Skip heavy imports for setup and db commands
+    if args.command in ['setup', 'db']:
+        # For db command, only import database module
+        if args.command == 'db':
+            from . import database  # noqa: E402
+            database.configure_subparser(subparsers)
+            # Re-parse after adding db subparser
+            args = parser.parse_args()
+        
+        if hasattr(args, 'func'):
+            if inspect.iscoroutinefunction(args.func):
+                asyncio.run(args.func(args))
+            else:
+                args.func(args)
+        return
+
+    # Import all other CLI modules (only when not running setup/db)
+    from . import (  # noqa: E402
+        database,
+        discovery,
+        letta,
+        mcp,
+        notes,
+        pdf,
+        performance,
+        rag,
+        rag_watcher,
+        research,
+        schema,
+        server,
+        service,
+        system,
     )
 
     # Register sub-commands from modules
@@ -77,25 +103,16 @@ def main() -> None:
     schema.configure_subparser(subparsers)
     server.configure_subparser(subparsers)
     service.configure_subparser(subparsers)
-    setup_cli.configure_subparser(subparsers)
     system.configure_subparser(subparsers)
 
+    # Re-parse now that all subparsers are registered
     args = parser.parse_args()
-
-    # Skip initialization for setup and db commands (they don't need full Thoth initialization)
-    if args.command in ['setup', 'db']:
-        if hasattr(args, 'func'):
-            if inspect.iscoroutinefunction(args.func):
-                asyncio.run(args.func(args))
-            else:
-                args.func(args)
-        return
 
     # Initialize Thoth using the new factory function
     # Lazy import to avoid premature config loading
     # Replaces ThothPipeline() and provides cleaner access to components
     logger.info('===== main(): About to import initialize_thoth =====')
-    from thoth.initialization import initialize_thoth
+    from thoth.initialization import initialize_thoth  # Lazy import here!
     logger.info('===== main(): initialize_thoth imported successfully =====')
 
     _services, _document_pipeline, _citation_tracker = initialize_thoth()

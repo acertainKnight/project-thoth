@@ -793,7 +793,7 @@ export class ResearchTabComponent {
       'Process PDF',
       'Upload and process a new research paper',
       () => {
-        new Notice('PDF processing UI coming soon! Drop PDFs in your vault/_thoth/data/pdfs folder.');
+        new Notice('PDF processing UI coming soon! Drop PDFs in your vault/thoth/papers/pdfs folder.');
       }
     );
     

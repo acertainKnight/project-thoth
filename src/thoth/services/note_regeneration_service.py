@@ -196,7 +196,7 @@ class NoteRegenerationService:
 
         # For markdown, we have the content stored, so create a temp file or use stored path  # noqa: W505
         markdown_path = (
-            vault_root / '_thoth' / 'data' / 'markdown' / f'{paper_data["title"]}.md'
+            self.config.markdown_dir / f'{paper_data["title"]}.md'
         )
         if paper_data.get('markdown_content'):
             markdown_path.parent.mkdir(parents=True, exist_ok=True)

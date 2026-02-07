@@ -2,8 +2,10 @@
 Client for the OpenRouter API leveraging the OpenAI API.
 """
 
+import asyncio
 import os
 import time
+from dataclasses import asdict, dataclass
 from typing import Any
 
 import httpx
@@ -13,28 +15,232 @@ from loguru import logger
 
 from thoth.services.llm.base_client import BaseLLMClient
 
-_model_cache = None
-_cache_expiry = 3600  # 1 hour
-_last_cache_time = 0
+
+@dataclass
+class ModelInfo:
+    """
+    Information about an LLM model from a provider API.
+
+    Attributes:
+        id: Model identifier (e.g., "openai/gpt-4o", "google/gemini-2.5-flash")
+        name: Human-readable model name
+        context_length: Maximum context window size in tokens
+        supported_parameters: List of supported features (e.g., "structured_outputs")
+        pricing_prompt: Cost per token for prompts (optional)
+        pricing_completion: Cost per token for completions (optional)
+    """
+
+    id: str
+    name: str
+    context_length: int
+    supported_parameters: list[str]
+    pricing_prompt: str | None = None
+    pricing_completion: str | None = None
+
+
+# Fallback models if API is unreachable
+FALLBACK_OPENROUTER_MODELS = [
+    ModelInfo(
+        id="google/gemini-2.0-flash-exp:free",
+        name="Google Gemini 2.0 Flash (Free)",
+        context_length=100000,
+        supported_parameters=["structured_outputs"],
+    ),
+    ModelInfo(
+        id="anthropic/claude-3.5-sonnet",
+        name="Claude 3.5 Sonnet",
+        context_length=200000,
+        supported_parameters=["structured_outputs"],
+    ),
+    ModelInfo(
+        id="openai/gpt-4o",
+        name="GPT-4o",
+        context_length=128000,
+        supported_parameters=["structured_outputs"],
+    ),
+    ModelInfo(
+        id="openai/gpt-4o-mini",
+        name="GPT-4o Mini",
+        context_length=128000,
+        supported_parameters=["structured_outputs"],
+    ),
+]
+
+
+class ModelRegistry:
+    """
+    Cached registry of available models from providers.
+
+    Provides both async and sync access with 1-hour caching.
+    """
+
+    _cache: list[ModelInfo] = []
+    _cache_time: float = 0
+    _cache_ttl: int = 3600  # 1 hour
+
+    @classmethod
+    async def get_openrouter_models(
+        cls, force_refresh: bool = False
+    ) -> list[ModelInfo]:
+        """
+        Fetch OpenRouter models with caching (async).
+
+        Args:
+            force_refresh: Bypass cache and fetch fresh data
+
+        Returns:
+            List of ModelInfo objects, sorted with free models first
+
+        Example:
+            >>> models = await ModelRegistry.get_openrouter_models()
+            >>> for model in models:
+            ...     print(f"{model.id}: {model.context_length} tokens")
+        """
+        current_time = time.time()
+
+        # Return cached data if valid
+        if (
+            not force_refresh
+            and cls._cache
+            and (current_time - cls._cache_time < cls._cache_ttl)
+        ):
+            return cls._cache
+
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get("https://openrouter.ai/api/v1/models")
+                if resp.status_code == 200:
+                    data = resp.json().get("data", [])
+                    models = []
+                    for m in data:
+                        supported = m.get("supported_parameters", [])
+                        model_id = m.get("id", "")
+
+                        # Skip beta/auto models
+                        if ":beta" in model_id or model_id == "auto":
+                            continue
+
+                        pricing = m.get("pricing", {})
+                        models.append(
+                            ModelInfo(
+                                id=model_id,
+                                name=m.get("name", model_id),
+                                context_length=m.get("context_length", 0),
+                                supported_parameters=supported,
+                                pricing_prompt=pricing.get("prompt"),
+                                pricing_completion=pricing.get("completion"),
+                            )
+                        )
+
+                    if models:
+                        # Sort: free models first, then by name
+                        def sort_key(model: ModelInfo) -> tuple[int, str]:
+                            return (0 if ":free" in model.id else 1, model.id)
+
+                        cls._cache = sorted(models, key=sort_key)
+                        cls._cache_time = current_time
+                        logger.info(
+                            f"Fetched and cached {len(cls._cache)} models from OpenRouter."
+                        )
+                        return cls._cache
+        except Exception as e:
+            logger.error(f"Failed to fetch models from OpenRouter: {e}")
+
+        # Return stale cache if available, otherwise fallback
+        if cls._cache:
+            logger.warning("Returning stale cache due to API error")
+            return cls._cache
+
+        logger.warning("Using fallback model list")
+        return FALLBACK_OPENROUTER_MODELS
+
+    @classmethod
+    def get_openrouter_models_sync(cls) -> list[ModelInfo]:
+        """
+        Sync wrapper for get_openrouter_models.
+
+        Uses asyncio.run() for non-async contexts (e.g., llm_router).
+
+        Returns:
+            List of ModelInfo objects
+
+        Example:
+            >>> models = ModelRegistry.get_openrouter_models_sync()
+            >>> print(len(models))
+        """
+        try:
+            # Try to get existing event loop
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If loop is running, we can't use asyncio.run()
+                # Return cached data or fallback
+                if cls._cache:
+                    return cls._cache
+                return FALLBACK_OPENROUTER_MODELS
+            else:
+                return loop.run_until_complete(cls.get_openrouter_models())
+        except RuntimeError:
+            # No event loop exists, create one
+            return asyncio.run(cls.get_openrouter_models())
+
+    @classmethod
+    def filter_structured_output(cls, models: list[ModelInfo]) -> list[ModelInfo]:
+        """
+        Filter to models supporting structured outputs.
+
+        Args:
+            models: List of ModelInfo objects to filter
+
+        Returns:
+            Filtered list containing only models with structured_outputs support
+
+        Example:
+            >>> all_models = ModelRegistry.get_openrouter_models_sync()
+            >>> structured = ModelRegistry.filter_structured_output(all_models)
+            >>> print(f"{len(structured)} of {len(all_models)} support structured outputs")
+        """
+        return [
+            m
+            for m in models
+            if "structured_outputs" in m.supported_parameters
+        ]
+
+    @classmethod
+    def get_context_length(cls, model_id: str) -> int | None:
+        """
+        Look up context length from cache for a specific model.
+
+        Args:
+            model_id: Model identifier to look up
+
+        Returns:
+            Context length in tokens, or None if model not found
+
+        Example:
+            >>> length = ModelRegistry.get_context_length("openai/gpt-4o")
+            >>> print(f"Context length: {length}")
+        """
+        for model in cls._cache:
+            if model.id == model_id:
+                return model.context_length
+        return None
 
 
 def get_openrouter_models() -> list[dict[str, Any]]:
-    """Fetch and cache the list of models from OpenRouter."""
-    global _model_cache, _last_cache_time
-    current_time = time.time()
-    if _model_cache and (current_time - _last_cache_time < _cache_expiry):
-        return _model_cache
+    """
+    Legacy sync wrapper for backward compatibility.
 
-    try:
-        response = httpx.get('https://openrouter.ai/api/v1/models')
-        response.raise_for_status()
-        _model_cache = response.json().get('data', [])
-        _last_cache_time = current_time
-        logger.info(f'Fetched and cached {len(_model_cache)} models from OpenRouter.')
-        return _model_cache
-    except httpx.HTTPError as e:
-        logger.error(f'Failed to fetch models from OpenRouter: {e}')
-        return _model_cache or []  # Return stale cache if available
+    Returns raw dicts instead of ModelInfo objects.
+
+    Returns:
+        List of model dicts matching the old OpenRouter API response format
+
+    Example:
+        >>> models = get_openrouter_models()
+        >>> print(models[0]['id'])
+    """
+    models = ModelRegistry.get_openrouter_models_sync()
+    return [asdict(m) for m in models]
 
 
 class OpenRouterError(Exception):

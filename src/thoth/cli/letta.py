@@ -452,8 +452,10 @@ def handle_setup(args, pipeline: ThothPipeline) -> int:
                 "serverUrl": "http://localhost:8283"
             }
 
-        # Step 3: Update settings.json
-        settings_path = config.vault_root / "_thoth" / "settings.json"
+        # Step 3: Update settings.json (new path, then legacy fallback)
+        settings_path = config.vault_root / "thoth" / "_thoth" / "settings.json"
+        if not settings_path.exists():
+            settings_path = config.vault_root / "_thoth" / "settings.json"
 
         with open(settings_path) as f:
             settings = json.load(f)
@@ -614,8 +616,10 @@ def handle_switch_mode(args, pipeline: ThothPipeline) -> int:
                     pass
                 time.sleep(1)
 
-        # Update settings.json
-        settings_path = config.vault_root / "_thoth" / "settings.json"
+        # Update settings.json (new path, then legacy fallback)
+        settings_path = config.vault_root / "thoth" / "_thoth" / "settings.json"
+        if not settings_path.exists():
+            settings_path = config.vault_root / "_thoth" / "settings.json"
         with open(settings_path) as f:
             settings = json.load(f)
 

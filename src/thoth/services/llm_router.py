@@ -11,7 +11,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from thoth.services.base import BaseService
 from thoth.services.llm_service import LLMService
 from thoth.config import config, Config  # noqa: F401
-from thoth.utilities.openrouter import OpenRouterClient, get_openrouter_models
+from thoth.utilities.openrouter import ModelRegistry, OpenRouterClient
 
 if TYPE_CHECKING:
     pass
@@ -74,9 +74,17 @@ class LLMRouter(BaseService):
         self.logger.info('LLM Router initialized')
 
     def _filter_models_by_capability(self) -> list[dict]:
-        """Filter candidate models based on their capabilities."""
-        all_models_details = get_openrouter_models()
-        model_details_map = {m['id']: m for m in all_models_details}
+        """
+        Filter candidate models based on their capabilities.
+
+        Uses ModelRegistry to fetch models and checks supported_parameters
+        for structured_outputs (not the non-existent architecture.json_grammar field).
+
+        Returns:
+            List of model dicts matching requirements, or fallback to first candidate
+        """
+        all_models = ModelRegistry.get_openrouter_models_sync()
+        model_details_map = {m.id: m for m in all_models}
 
         filtered_models = []
         for model_id in self.candidate_models:
@@ -86,27 +94,44 @@ class LLMRouter(BaseService):
                 )
                 continue
 
-            details = model_details_map[model_id]
-            architecture = details.get('architecture', {})
+            model_info = model_details_map[model_id]
 
-            if self.requirements['tool_calling'] and not architecture.get('tool_use'):
-                continue
-            if self.requirements['structured_output'] and not architecture.get(
-                'json_grammar'
+            # Check structured output support via supported_parameters
+            if self.requirements['structured_output'] and (
+                'structured_outputs' not in model_info.supported_parameters
             ):
                 continue
 
-            filtered_models.append(details)
+            # Note: tool_calling check removed as ModelInfo doesn't have tool_use
+            # OpenRouter's tool calling is now part of supported_parameters
+            if self.requirements['tool_calling'] and (
+                'tools' not in model_info.supported_parameters
+            ):
+                continue
+
+            # Convert ModelInfo to dict for compatibility with existing code
+            filtered_models.append({
+                'id': model_info.id,
+                'name': model_info.name,
+                'context_length': model_info.context_length,
+                'supported_parameters': model_info.supported_parameters,
+                'description': model_info.name,  # Use name as description
+            })
 
         if not filtered_models:
             self.logger.error('No candidate models meet the required capabilities.')
             if self.candidate_models:
                 first_candidate = self.candidate_models[0]
-                return (
-                    [model_details_map[first_candidate]]
-                    if first_candidate in model_details_map
-                    else []
-                )
+                if first_candidate in model_details_map:
+                    model_info = model_details_map[first_candidate]
+                    return [{
+                        'id': model_info.id,
+                        'name': model_info.name,
+                        'context_length': model_info.context_length,
+                        'supported_parameters': model_info.supported_parameters,
+                        'description': model_info.name,
+                    }]
+                return []
         return filtered_models
 
     def select_model(self, query: str) -> str:
@@ -173,8 +198,19 @@ class LLMRouter(BaseService):
             return candidate_details[0]['id']
 
     def get_models(self) -> list[dict]:
-        """Gets the list of available models from OpenRouter."""
-        return get_openrouter_models()
+        """
+        Gets the list of available models from OpenRouter.
+
+        Returns:
+            List of model dicts with id, name, context_length, etc.
+        """
+        models = ModelRegistry.get_openrouter_models_sync()
+        return [{
+            'id': m.id,
+            'name': m.name,
+            'context_length': m.context_length,
+            'supported_parameters': m.supported_parameters,
+        } for m in models]
 
     def health_check(self) -> dict[str, str]:
         """Basic health status for the LLMRouter."""

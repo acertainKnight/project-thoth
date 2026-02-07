@@ -177,9 +177,9 @@ services:
 
       # Vault-relative path configuration
       # CRITICAL: Vault mount provides settings.json which controls all paths
-      # All paths are resolved at runtime from /vault/_thoth/settings.json
+      # All paths are resolved at runtime from /vault/thoth/_thoth/settings.json
       - OBSIDIAN_VAULT_PATH=/vault
-      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
+      - THOTH_SETTINGS_FILE=/vault/thoth/_thoth/settings.json
 
       # DO NOT set individual path variables - settings.json controls all paths!
     volumes:
@@ -251,7 +251,7 @@ services:
 
       # Vault-relative path configuration
       - OBSIDIAN_VAULT_PATH=/vault
-      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
+      - THOTH_SETTINGS_FILE=/vault/thoth/_thoth/settings.json
     volumes:
       - ${OBSIDIAN_VAULT_PATH:?Please set OBSIDIAN_VAULT_PATH to your Obsidian vault root directory}:/vault:rw
     secrets:
@@ -307,7 +307,7 @@ services:
 
       # Vault-relative path configuration
       - OBSIDIAN_VAULT_PATH=/vault
-      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
+      - THOTH_SETTINGS_FILE=/vault/thoth/_thoth/settings.json
     volumes:
       - ${OBSIDIAN_VAULT_PATH:?Please set OBSIDIAN_VAULT_PATH to your Obsidian vault root directory}:/vault:rw
     secrets:
@@ -357,7 +357,7 @@ services:
 
       # Vault-relative path configuration
       - OBSIDIAN_VAULT_PATH=/vault
-      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
+      - THOTH_SETTINGS_FILE=/vault/thoth/_thoth/settings.json
     volumes:
       - ${OBSIDIAN_VAULT_PATH:?Please set OBSIDIAN_VAULT_PATH to your Obsidian vault root directory}:/vault:rw
     secrets:
@@ -408,7 +408,7 @@ services:
 
       # Vault-relative path configuration
       - OBSIDIAN_VAULT_PATH=/vault
-      - THOTH_SETTINGS_FILE=/vault/_thoth/settings.json
+      - THOTH_SETTINGS_FILE=/vault/thoth/_thoth/settings.json
     volumes:
       - ${OBSIDIAN_VAULT_PATH:?Please set OBSIDIAN_VAULT_PATH to your Obsidian vault root directory}:/vault:rw
     secrets:
@@ -601,8 +601,8 @@ volumes:
 
   # NOTE: Thoth workspace data is now vault-mounted at runtime
   # Set OBSIDIAN_VAULT_PATH environment variable to your vault root
-  # All application data (PDFs, notes, etc.) lives in vault/_thoth/
-  # Configuration comes from vault/_thoth/settings.json
+  # All application data (PDFs, notes, etc.) lives in vault/thoth/
+  # Configuration comes from vault/thoth/_thoth/settings.json
 
 # ==============================================================================
 # Production Networks
