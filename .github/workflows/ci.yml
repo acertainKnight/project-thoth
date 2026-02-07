@@ -46,8 +46,7 @@ jobs:
 
       - name: Install dependencies
         # Use --extra all (curated set) instead of --all-extras to avoid
-        # incompatible combo: acl-anthology (discovery) + letta (memory)
-        # conflict on anyio version for Python 3.11
+        # resolving incompatible extras together (e.g. discovery + memory)
         run: |
           uv pip install --system ruff mypy pyright
           uv sync --extra all
@@ -64,14 +63,14 @@ jobs:
   # Test matrix across Python versions
   # Production runs in Docker (Ubuntu), so we only test on Linux
   # Note: Windows not supported - Windows users must use WSL
-  # Minimum Python version: 3.11
+  # Minimum Python version: 3.12
   test:
     name: Test Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.12"]
 
     steps:
       - uses: actions/checkout@v4
