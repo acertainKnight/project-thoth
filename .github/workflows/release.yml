@@ -114,46 +114,6 @@ jobs:
           draft: false
           prerelease: ${{ steps.release-type.outputs.is_prerelease }}
 
-  build-and-publish:
-    name: Build and Publish
-    needs: create-release
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install build tools
-        run: pip install build twine
-
-      - name: Update version in pyproject.toml
-        run: |
-          sed -i "s/version = '.*'/version = '${{ needs.create-release.outputs.version }}'/" pyproject.toml
-
-      - name: Build package
-        run: python -m build
-
-      - name: Publish to PyPI
-        if: github.event_name == 'push'
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload dist/* --skip-existing
-
-      - name: Upload release assets
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./dist/*
-          asset_name: thoth-${{ needs.create-release.outputs.version }}.tar.gz
-          asset_content_type: application/gzip
-
   build-setup-image:
     name: Build Setup Image
     needs: create-release

@@ -70,13 +70,13 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Function to check Python version
+# Function to check Python version (3.12 required)
 check_python_version() {
     if command_exists python3; then
         version=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
         major=$(echo "$version" | cut -d. -f1)
         minor=$(echo "$version" | cut -d. -f2)
-        if [ "$major" -eq 3 ] && [ "$minor" -ge 10 ] && [ "$minor" -le 12 ]; then
+        if [ "$major" -eq 3 ] && [ "$minor" -eq 12 ]; then
             echo "$version"
             return 0
         fi
@@ -413,44 +413,61 @@ if command_exists docker; then
 
     exit 0
 
-# Check for pipx (best for Python users)
-elif command_exists pipx; then
-    echo -e "${GREEN}✓ pipx detected${NC}"
-    echo -e "${YELLOW}Installing via pipx...${NC}\n"
-
-    pipx install project-thoth
-    thoth setup
-
-    echo -e "\n${GREEN}✓ Installation complete!${NC}"
-    exit 0
-
-# Check for Python 3.10+
+# No Docker — fall back to git clone + local Python setup
 elif python_version=$(check_python_version); then
-    echo -e "${GREEN}✓ Python $python_version detected${NC}"
-    echo -e "${YELLOW}Installing via pip in virtual environment...${NC}\n"
+    echo -e "${GREEN}✓ Python $python_version detected (no Docker)${NC}"
+    echo -e "${YELLOW}Installing via git clone + local Python environment...${NC}\n"
 
-    # Create venv
-    python3 -m venv ~/.thoth-venv
-    source ~/.thoth-venv/bin/activate
+    # Clone repo at the resolved ref
+    CLONE_DIR="${HOME}/thoth"
+    if [ -d "$CLONE_DIR" ]; then
+        echo -e "${YELLOW}Directory $CLONE_DIR already exists. Updating...${NC}"
+        cd "$CLONE_DIR"
+        git fetch --all --tags 2>/dev/null || true
+        if [ -n "$RESOLVED_REF" ] && [ "$RESOLVED_REF" != "main" ]; then
+            git checkout "$RESOLVED_REF" 2>/dev/null || echo -e "${YELLOW}Could not checkout ${RESOLVED_REF}${NC}"
+        else
+            git pull origin main 2>/dev/null || true
+        fi
+    else
+        if [ -n "$RESOLVED_REF" ] && [ "$RESOLVED_REF" != "main" ]; then
+            git clone --branch "$RESOLVED_REF" "https://github.com/${GITHUB_REPO}.git" "$CLONE_DIR" 2>/dev/null \
+                || git clone "https://github.com/${GITHUB_REPO}.git" "$CLONE_DIR"
+        else
+            git clone "https://github.com/${GITHUB_REPO}.git" "$CLONE_DIR"
+        fi
+        cd "$CLONE_DIR"
+    fi
+    PROJECT_ROOT="$CLONE_DIR"
 
-    # Install Thoth
-    pip install --upgrade pip
-    pip install project-thoth
+    echo -e "${CYAN}Channel: ${INSTALL_CHANNEL}${NC}"
+    [ -n "$RESOLVED_TAG" ] && echo -e "${CYAN}Version: ${RESOLVED_TAG}${NC}"
 
-    # Run setup
-    thoth setup
+    # Set up Python environment with uv (preferred) or pip
+    if command_exists uv; then
+        echo -e "${GREEN}✓ uv detected — using uv for dependency management${NC}"
+        uv venv
+        uv sync
+    else
+        echo -e "${YELLOW}uv not found — using pip (slower)${NC}"
+        python3 -m venv .venv
+        source .venv/bin/activate
+        pip install --upgrade pip
+        pip install -e .
+    fi
 
-    # Create wrapper script
-    mkdir -p ~/.local/bin
-    cat > ~/.local/bin/thoth << 'WRAPPER'
-#!/bin/bash
-source ~/.thoth-venv/bin/activate
-exec python -m thoth "$@"
-WRAPPER
-    chmod +x ~/.local/bin/thoth
+    # Install CLI wrapper
+    install_cli_to_path "$PROJECT_ROOT"
 
-    echo -e "\n${GREEN}✓ Installation complete!${NC}"
-    echo -e "\nThoth command available: ${BLUE}thoth${NC}"
+    echo -e "\n${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}✓ Thoth installation complete!${NC}"
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+    echo -e "${YELLOW}Note: Docker is recommended for the full experience.${NC}"
+    echo -e "${YELLOW}Install Docker: https://docs.docker.com/engine/install/${NC}\n"
+    echo -e "Quick start:"
+    echo -e "  ${BLUE}thoth start${NC}   - Start services (requires Docker)"
+    echo -e "  ${BLUE}thoth status${NC}  - Check what's running"
+    echo -e "  ${BLUE}thoth --help${NC}  - See all commands\n"
     exit 0
 
 else
@@ -463,11 +480,7 @@ else
     echo "   Mac: https://docs.docker.com/desktop/install/mac-install/"
     echo "   Windows: https://docs.docker.com/desktop/install/windows-install/"
     echo ""
-    echo "2. pipx (Easy Python package manager):"
-    echo "   Ubuntu/Debian: sudo apt install pipx"
-    echo "   macOS: brew install pipx"
-    echo ""
-    echo "3. Python 3.10, 3.11, or 3.12:"
+    echo "2. Python 3.12 + Git (for local development):"
     echo "   https://www.python.org/downloads/"
     echo ""
     exit 1

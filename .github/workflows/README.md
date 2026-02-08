@@ -34,8 +34,10 @@ Automated release process for publishing new versions:
 
 **Jobs:**
 - **Create Release** - GitHub release with changelog
-- **Build & Publish** - PyPI package publication
-- **Docker Build** - Multi-arch container images
+- **Build Setup Image** - Docker setup/installer image (GHCR)
+- **Build All-in-One Image** - Full Docker image with `:latest` (stable only), `:alpha`, or version tags
+- **Build Service Images** - Individual service images (api, mcp, pdf-monitor, discovery)
+- **Build Obsidian Plugin** - Plugin zip attached to the release
 
 **Manual Release:**
 ```bash
@@ -49,8 +51,21 @@ git push origin v1.0.0
 ```
 
 **Requirements:**
-- `PYPI_API_TOKEN` secret for PyPI publishing
-- Version must follow semver (e.g., 1.2.3)
+- Version must follow semver (e.g., 1.2.3, 0.3.0-alpha.2)
+- Docker images published to GHCR automatically via `GITHUB_TOKEN`
+
+### 🌙 Nightly Workflow (`nightly.yml`)
+
+**Triggers:** Automatically after CI succeeds on `main`
+
+Builds a rolling `nightly` pre-release from the latest main branch:
+
+**Jobs:**
+- **Nightly Release** - Creates/replaces the `nightly` GitHub release
+- **Build Nightly Docker Images** - All images tagged with `:nightly`
+
+**Image Tags:**
+- `nightly` → latest successful main build
 
 ### 🐳 Docker Workflow (`docker.yml`)
 
@@ -97,8 +112,8 @@ All workflows report status via GitHub checks:
 Required secrets (configure in Settings → Secrets):
 
 ```yaml
-PYPI_API_TOKEN: # For PyPI package publishing
 CODECOV_TOKEN:  # For coverage reporting (optional)
+# Note: Docker images publish to GHCR using the built-in GITHUB_TOKEN — no extra secrets needed
 ```
 
 ## Local Testing

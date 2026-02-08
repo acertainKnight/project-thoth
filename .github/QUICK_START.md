@@ -203,10 +203,9 @@ git tag v1.0.0
 git push origin main v1.0.0
 
 # CI will automatically:
-# - Build package
-# - Publish to PyPI
-# - Build Docker image
+# - Build Docker images (GHCR)
 # - Create GitHub release
+# - Build Obsidian plugin
 ```
 
 ---
