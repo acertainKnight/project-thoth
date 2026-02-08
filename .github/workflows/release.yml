@@ -295,7 +295,7 @@ jobs:
         run: |
           cd obsidian-plugin/thoth-obsidian
           mkdir -p release
-          cp main.js manifest.json styles.css release/
+          cp dist/main.js manifest.json styles.css release/
           cd release
           zip -r ../thoth-obsidian-${{ needs.create-release.outputs.version }}.zip .
 
