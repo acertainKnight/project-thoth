@@ -2365,6 +2365,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           let contentEl: HTMLElement | null = null;
           let streamingRenderer: StreamingMarkdownRenderer | null = null;
           let thinkingRemoved = false; // Track if we've removed the thinking indicator
+          let accumulatedContent = ''; // Accumulate raw markdown for copy button
 
           // Read SSE stream
           const reader = response.body.getReader();
@@ -2464,7 +2465,10 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                       streamingRenderer = new StreamingMarkdownRenderer(contentEl);
                     }
 
-                    // Write delta directly to streaming renderer (no accumulation needed)
+                    // Accumulate raw content for copy button
+                    accumulatedContent += delta;
+
+                    // Write delta directly to streaming renderer
                     if (streamingRenderer) {
                       streamingRenderer.write(delta);
                       this.scrollToBottom(messagesContainer, true);
@@ -2494,6 +2498,11 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
             // Add copy buttons to code blocks
             if (contentEl) {
               this.addCopyButtonsToCodeBlocks(contentEl);
+            }
+
+            // Add message actions (copy button) with accumulated content
+            if (assistantMessageEl && accumulatedContent) {
+              this.addMessageActions(assistantMessageEl, accumulatedContent);
             }
 
             this.scrollToBottom(messagesContainer, true);
@@ -2582,6 +2591,9 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
     // Render markdown content
     await this.renderMessageContent(content, contentEl);
+
+    // Add message actions (copy button) for assistant messages
+    this.addMessageActions(messageEl, content);
 
     // Auto-scroll to new message with smooth behavior
     setTimeout(() => {
@@ -3946,6 +3958,52 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
     // Add copy buttons to code blocks
     this.addCopyButtonsToCodeBlocks(container);
+  }
+
+  /**
+   * Add action buttons (like copy) to a message element
+   */
+  addMessageActions(messageEl: HTMLElement, rawContent: string) {
+    // Only add to assistant messages
+    if (!messageEl.classList.contains('assistant')) return;
+
+    // Check if actions already exist
+    if (messageEl.querySelector('.message-actions')) return;
+
+    // Create actions container
+    const actionsEl = messageEl.createEl('div', {
+      cls: 'message-actions'
+    });
+
+    // Create copy button
+    const copyBtn = actionsEl.createEl('button', {
+      cls: 'message-copy-button',
+      text: 'Copy response',
+      attr: {
+        'aria-label': 'Copy response to clipboard'
+      }
+    });
+
+    // Add click handler
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(rawContent);
+        copyBtn.textContent = 'Copied!';
+        copyBtn.classList.add('copied');
+
+        // Reset button after 2 seconds
+        setTimeout(() => {
+          copyBtn.textContent = 'Copy response';
+          copyBtn.classList.remove('copied');
+        }, 2000);
+      } catch (error) {
+        console.error('Failed to copy response:', error);
+        copyBtn.textContent = 'Failed';
+        setTimeout(() => {
+          copyBtn.textContent = 'Copy response';
+        }, 2000);
+      }
+    });
   }
 
   /**

@@ -2406,6 +2406,46 @@
   background: var(--color-green);
 }
 
+/* Message actions (copy response button) */
+.message-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--background-modifier-border);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.chat-message:hover .message-actions {
+  opacity: 1;
+}
+
+.message-copy-button {
+  padding: 0.25rem 0.5rem;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.message-copy-button:hover {
+  background: var(--interactive-accent-hover);
+}
+
+.message-copy-button:active {
+  transform: scale(0.95);
+}
+
+.message-copy-button.copied {
+  background: var(--color-green);
+}
+
 /* Tables */
 .message-content table {
   border-collapse: collapse;
@@ -2529,6 +2569,15 @@
 
   .code-copy-button {
     opacity: 1; /* Always visible on mobile */
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+  }
+
+  .message-actions {
+    opacity: 1; /* Always visible on mobile */
+  }
+
+  .message-copy-button {
     font-size: 0.7rem;
     padding: 0.2rem 0.4rem;
   }
