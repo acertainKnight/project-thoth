@@ -9,6 +9,7 @@ This service ensures all required Thoth agents exist with proper configuration:
 """
 
 import os
+from typing import ClassVar
 
 import httpx
 from loguru import logger
@@ -41,7 +42,7 @@ class AgentInitializationService:
 
     # Agent definitions - Optimized 2-agent architecture
     # See docs/OPTIMIZED_RESEARCH_ARCHITECTURE.md for details
-    AGENT_CONFIGS = {
+    AGENT_CONFIGS: ClassVar[dict] = {
         'thoth_main_orchestrator': {
             'name': 'thoth_main_orchestrator',  # Keep this name for Obsidian plugin compatibility
             'description': """You are the Thoth Research Orchestrator - the user's primary research assistant.
@@ -78,8 +79,7 @@ Always check `list_skills` if unsure which skill to use for a task.
             'tools': [
                 # Minimal core tools - skills add more dynamically
                 'list_skills',
-                'load_skill',
-                'unload_skill',
+                'load_skill',  # Swapped to unload_skill when a skill is loaded
                 'search_articles',
             ],
             'memory_blocks': [
@@ -381,7 +381,11 @@ Comparison Aspects:
         agent_config: dict,
         available_tools: set[str],
     ):
-        """Update agent's tools, persona, and memory blocks (preserves existing memory content)."""
+        """
+        Update agent's tools, persona, and memory blocks.
+
+        Preserves existing memory content.
+        """
 
         # Filter to only tools that exist
         desired_tools = set(t for t in agent_config['tools'] if t in available_tools)
