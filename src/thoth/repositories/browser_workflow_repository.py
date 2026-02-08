@@ -6,9 +6,10 @@ including CRUD operations, execution statistics, and health monitoring.
 """
 
 import json
-from typing import Any, Optional  # noqa: I001
-from uuid import UUID
 from datetime import datetime
+from typing import Any
+from uuid import UUID
+
 from loguru import logger
 
 from thoth.repositories.base import BaseRepository
@@ -46,7 +47,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
                     pass
         return row
 
-    async def create(self, workflow_data: dict[str, Any]) -> Optional[UUID]:  # noqa: UP007
+    async def create(self, workflow_data: dict[str, Any]) -> UUID | None:
         """
         Create a new browser workflow.
 
@@ -100,7 +101,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to create browser workflow: {e}')
             return None
 
-    async def get_by_id(self, workflow_id: UUID) -> Optional[dict[str, Any]]:  # noqa: UP007
+    async def get_by_id(self, workflow_id: UUID) -> dict[str, Any] | None:
         """
         Get a workflow by ID.
 
@@ -130,7 +131,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to get workflow by ID {workflow_id}: {e}')
             return None
 
-    async def get_by_name(self, name: str) -> Optional[dict[str, Any]]:  # noqa: UP007
+    async def get_by_name(self, name: str) -> dict[str, Any] | None:
         """
         Get a workflow by name.
 

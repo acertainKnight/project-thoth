@@ -6,7 +6,7 @@ redundant API calls and improve performance.
 """
 
 from datetime import datetime, timedelta  # noqa: I001
-from typing import Any, Dict, Optional  # noqa: UP035
+from typing import Any, Dict  # noqa: UP035
 from loguru import logger
 import json
 
@@ -20,7 +20,7 @@ class CacheRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
         """Initialize cache repository."""
         super().__init__(postgres_service, table_name='api_cache', **kwargs)
 
-    async def get_cached_response(self, cache_key: str) -> Optional[Dict[str, Any]]:  # noqa: UP006, UP007
+    async def get_cached_response(self, cache_key: str) -> Dict[str, Any] | None:  # noqa: UP006
         """
         Get a cached API response if not expired.
 
@@ -59,7 +59,7 @@ class CacheRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
         self,
         cache_key: str,
         response_data: Dict[str, Any],  # noqa: UP006
-        ttl_seconds: Optional[int] = 3600,  # noqa: UP007
+        ttl_seconds: int | None = 3600,
     ) -> bool:
         """
         Store an API response in the cache.

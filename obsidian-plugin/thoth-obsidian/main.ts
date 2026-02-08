@@ -60,7 +60,7 @@ export default class ThothPlugin extends Plugin {
       console.log('Thoth: Mobile device detected, enabling remote mode');
       this.settings.remoteMode = true;
       await this.saveSettings();
-      
+
       // Show helpful notice if no remote URL configured
       if (!this.settings.remoteEndpointUrl) {
         new Notice('📱 Thoth: Mobile requires remote mode. Please configure your remote server URL in settings.', 8000);
@@ -231,7 +231,7 @@ export default class ThothPlugin extends Plugin {
 
     // Get vault path (where backend settings file is located)
     const vaultPath = (this.app.vault.adapter as any).basePath;
-    
+
     new Notice('Starting Thoth agent...');
 
     try {
@@ -2029,13 +2029,13 @@ class ThothSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    
+
     // Header
     containerEl.createEl('h2', { text: 'Thoth Research Assistant' });
-    containerEl.createEl('p', { 
-      text: 'Most settings are now in the Thoth Chat modal. Open the chat to access full settings.' 
+    containerEl.createEl('p', {
+      text: 'Most settings are now in the Thoth Chat modal. Open the chat to access full settings.'
     });
-    
+
     // Connection Settings
     new Setting(containerEl)
       .setName('Remote Mode')
@@ -2047,7 +2047,7 @@ class ThothSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
           this.display();
         }));
-    
+
     if (this.plugin.settings.remoteMode) {
       new Setting(containerEl)
         .setName('Thoth API URL')
@@ -2071,7 +2071,7 @@ class ThothSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }));
     }
-    
+
     // Plugin Behavior
     new Setting(containerEl)
       .setName('Auto-start Agent')
@@ -2082,7 +2082,7 @@ class ThothSettingTab extends PluginSettingTab {
           this.plugin.settings.autoStartAgent = value;
           await this.plugin.saveSettings();
         }));
-    
+
     new Setting(containerEl)
       .setName('Show Status Bar')
       .setDesc('Show Thoth status in the status bar')
@@ -2092,7 +2092,7 @@ class ThothSettingTab extends PluginSettingTab {
           this.plugin.settings.showStatusBar = value;
           await this.plugin.saveSettings();
         }));
-    
+
     new Setting(containerEl)
       .setName('Show Ribbon Icon')
       .setDesc('Show Thoth icon in the left ribbon')
@@ -2102,12 +2102,12 @@ class ThothSettingTab extends PluginSettingTab {
           this.plugin.settings.showRibbonIcon = value;
           await this.plugin.saveSettings();
         }));
-    
+
     // Link to modal settings
     const linkSetting = new Setting(containerEl)
       .setName('Full Settings')
       .setDesc('Open Thoth Chat to access all settings including backend configuration');
-    
+
     linkSetting.controlEl.createEl('button', {
       text: 'Open Thoth Chat',
       cls: 'mod-cta'

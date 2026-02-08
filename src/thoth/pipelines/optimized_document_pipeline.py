@@ -163,19 +163,23 @@ class OptimizedDocumentPipeline(BasePipeline):
             note_path = self.pdf_tracker.get_note_path(pdf_path)
             if note_path:
                 # Get the processed metadata to return all paths
-                from thoth.server.pdf_monitor import PDFTracker
                 vault_relative = None
                 if self.pdf_tracker.vault_resolver:
                     try:
                         resolved = pdf_path.resolve()
                         if self.pdf_tracker.vault_resolver.is_vault_relative(resolved):
-                            vault_relative = self.pdf_tracker.vault_resolver.make_relative(resolved)
+                            vault_relative = (
+                                self.pdf_tracker.vault_resolver.make_relative(resolved)
+                            )
                     except ValueError:
                         pass
 
                 # Look up the processed metadata
                 metadata = None
-                if vault_relative and vault_relative in self.pdf_tracker.processed_files:
+                if (
+                    vault_relative
+                    and vault_relative in self.pdf_tracker.processed_files
+                ):
                     metadata = self.pdf_tracker.processed_files[vault_relative]
                 else:
                     abs_path = str(pdf_path.resolve())
@@ -185,11 +189,19 @@ class OptimizedDocumentPipeline(BasePipeline):
                 if metadata:
                     # Return the tuple of (note_path, new_pdf_path, new_markdown_path)
                     new_pdf_path = Path(metadata.get('new_pdf_path', str(pdf_path)))
-                    new_markdown_path = Path(metadata.get('new_markdown_path', str(pdf_path).replace('.pdf', '.md')))
+                    new_markdown_path = Path(
+                        metadata.get(
+                            'new_markdown_path', str(pdf_path).replace('.pdf', '.md')
+                        )
+                    )
                     return (note_path, new_pdf_path, new_markdown_path)
                 else:
                     # If metadata not found, return best guess tuple
-                    return (note_path, pdf_path, Path(str(pdf_path).replace('.pdf', '.md')))
+                    return (
+                        note_path,
+                        pdf_path,
+                        Path(str(pdf_path).replace('.pdf', '.md')),
+                    )
 
             self.logger.warning(
                 f'File {pdf_path} was processed, but note path not found in tracker. Reprocessing.'
@@ -220,7 +232,7 @@ class OptimizedDocumentPipeline(BasePipeline):
             citations=citations,
             no_images_markdown=no_images_markdown_content,
         )
-        self.logger.info(f'Waiting for note generation to complete...')
+        self.logger.info('Waiting for note generation to complete...')
         note_path, new_pdf_path, new_markdown_path = note_future.result()
         self.logger.info(f'Note generation completed: {note_path}')
 
@@ -296,7 +308,6 @@ class OptimizedDocumentPipeline(BasePipeline):
         Run content analysis and citation extraction in parallel (sync version with
         optimized workers).
         """
-        import time
         self.logger.info(
             'Starting optimized parallel content analysis and citation extraction'
         )
@@ -306,9 +317,13 @@ class OptimizedDocumentPipeline(BasePipeline):
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit both tasks to run in parallel
-            self.logger.info(f'DEBUG: Submitting analysis task for {markdown_path.name}...')
+            self.logger.info(
+                f'DEBUG: Submitting analysis task for {markdown_path.name}...'
+            )
             analysis_future = executor.submit(self._analyze_content, markdown_path)
-            self.logger.info(f'DEBUG: Submitting citation extraction task for {markdown_path.name}...')
+            self.logger.info(
+                f'DEBUG: Submitting citation extraction task for {markdown_path.name}...'
+            )
             citations_future = executor.submit(self._extract_citations, markdown_path)
             self.logger.info('DEBUG: Both tasks submitted, waiting for completion...')
 
@@ -318,7 +333,7 @@ class OptimizedDocumentPipeline(BasePipeline):
 
             for future in as_completed([analysis_future, citations_future]):
                 try:
-                    self.logger.info(f'DEBUG: Task completed, getting result...')
+                    self.logger.info('DEBUG: Task completed, getting result...')
                     if future == analysis_future:
                         analysis = future.result()
                         self.logger.info('Content analysis completed')
@@ -437,7 +452,9 @@ class OptimizedDocumentPipeline(BasePipeline):
         """Extract citations using the citation service."""
         self.logger.info(f'DEBUG: _extract_citations started for {markdown_path.name}')
         result = self.services.citation.extract_citations(markdown_path)
-        self.logger.info(f'DEBUG: _extract_citations completed for {markdown_path.name}, found {len(result)} citations')
+        self.logger.info(
+            f'DEBUG: _extract_citations completed for {markdown_path.name}, found {len(result)} citations'
+        )
         return result
 
     def _extract_citations_batch(self, markdown_path: Path) -> list[Citation]:
@@ -479,9 +496,11 @@ class OptimizedDocumentPipeline(BasePipeline):
 
         # Get LLM model and schema info from config for tracking
         llm_model = getattr(self.services.config.llm_config, 'model', None)
-        
+
         # Attach schema metadata to analysis if processing service has schema service
-        if hasattr(self.services, 'processing') and hasattr(self.services.processing, 'analysis_schema_service'):
+        if hasattr(self.services, 'processing') and hasattr(
+            self.services.processing, 'analysis_schema_service'
+        ):
             schema_service = self.services.processing.analysis_schema_service
             # Add schema metadata to analysis dict representation
             if isinstance(analysis, dict):

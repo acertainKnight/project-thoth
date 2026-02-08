@@ -11,9 +11,7 @@ from loguru import logger
 from thoth.server.dependencies import (
     get_chat_manager,
     get_research_agent,
-    get_service_manager,
 )
-from thoth.services.service_manager import ServiceManager
 
 router = APIRouter()
 
@@ -150,7 +148,7 @@ def get_operation_status(operation_id: str) -> dict[str, Any] | None:
 async def websocket_chat(
     websocket: WebSocket,
     research_agent=Depends(get_research_agent),
-    chat_manager=Depends(get_chat_manager)
+    chat_manager=Depends(get_chat_manager),
 ) -> None:
     """
     WebSocket endpoint for real-time chat with the research agent.

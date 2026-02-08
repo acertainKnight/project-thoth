@@ -116,13 +116,13 @@ class ReindexCollectionMCPTool(MCPTool):
                     response_text += f'- Total chunks created: {reindex_stats.get("total_chunks", 0)}\n'
 
                     if reindex_stats.get('errors'):
-                        response_text += (
-                            f'\n**Errors encountered:** {len(reindex_stats["errors"])}\n'
-                        )
+                        response_text += f'\n**Errors encountered:** {len(reindex_stats["errors"])}\n'
                         for err in reindex_stats['errors'][:5]:
                             response_text += f'  - {err}\n'
                         if len(reindex_stats['errors']) > 5:
-                            response_text += f'  ... and {len(reindex_stats["errors"]) - 5} more\n'
+                            response_text += (
+                                f'  ... and {len(reindex_stats["errors"]) - 5} more\n'
+                            )
 
                     # Calculate improvement
                     new_docs = reindex_stats.get('papers_indexed', 0)
@@ -258,7 +258,9 @@ class OptimizeSearchMCPTool(MCPTool):
                         start_time = time.time()
 
                         # Test search performance
-                        results = await self.service_manager.rag.search_async(query=query, k=5)
+                        results = await self.service_manager.rag.search_async(
+                            query=query, k=5
+                        )
 
                         end_time = time.time()
                         query_time = end_time - start_time

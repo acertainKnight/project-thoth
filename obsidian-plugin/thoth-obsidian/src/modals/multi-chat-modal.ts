@@ -12,27 +12,27 @@ import { getRandomThinkingPhrase, getToolStatusMessage } from '../utils/thinking
 class StreamingMarkdownRenderer {
   private parser: any;
   private container: HTMLElement;
-  
+
   constructor(container: HTMLElement) {
     this.container = container;
     const renderer = smd.default_renderer(container);
     this.parser = smd.parser(renderer);
   }
-  
+
   /**
    * Write a chunk of markdown to the stream
    */
   write(chunk: string): void {
     smd.parser_write(this.parser, chunk);
   }
-  
+
   /**
    * End the stream and flush remaining content
    */
   end(): void {
     smd.parser_end(this.parser);
   }
-  
+
   /**
    * Reset for a new message
    */
@@ -154,7 +154,7 @@ export class MultiChatModal extends Modal {
     if ((this.app as any).isMobile) {
       // Mobile: Full-screen modal with safe area insets for iOS
       modalEl.addClass('thoth-mobile-modal');
-      
+
       // CRITICAL: Also get the modal container (Obsidian's wrapper)
       const modalContainer = modalEl.parentElement;
       if (modalContainer && modalContainer.classList.contains('modal-container')) {
@@ -169,7 +169,7 @@ export class MultiChatModal extends Modal {
         modalContainer.style.maxHeight = '100vh';
         modalContainer.style.overflow = 'hidden';
       }
-      
+
       modalEl.style.position = 'fixed';
       modalEl.style.top = '0';
       modalEl.style.left = '0';
@@ -363,7 +363,7 @@ export class MultiChatModal extends Modal {
     console.log('[MultiChatModal] 🚀 Setting up mobile keyboard handling...');
 
     const modalContent = this.modalEl;
-    
+
     // Get Obsidian's modal container
     const modalContainer = modalContent.parentElement;
     const hasContainer = modalContainer && modalContainer.classList.contains('modal-container');
@@ -375,13 +375,13 @@ export class MultiChatModal extends Modal {
     const capacitorKeyboard = (window as any).Capacitor?.Plugins?.Keyboard;
     if (capacitorKeyboard) {
       console.log('[MultiChatModal] ✅ Capacitor Keyboard plugin detected!');
-      
+
       // Listen to native keyboard events
       capacitorKeyboard.addListener('keyboardWillShow', (info: any) => {
         nativeKeyboardHeight = info.keyboardHeight;
         console.log('[MultiChatModal] 🎹 Native keyboard height:', nativeKeyboardHeight);
       });
-      
+
       capacitorKeyboard.addListener('keyboardWillHide', () => {
         nativeKeyboardHeight = null;
         console.log('[MultiChatModal] 🎹 Native keyboard hidden');
@@ -403,16 +403,16 @@ export class MultiChatModal extends Modal {
 
     const handleInputFocus = () => {
       if (isKeyboardVisible) return; // Already handled
-      
+
       // Delay to let keyboard animation start
       setTimeout(() => {
         isKeyboardVisible = true;
-        
+
         // Try multiple detection methods in order of reliability:
         const windowHeight = window.innerHeight;
         let modalHeight: number;
         let detectionMethod = 'unknown';
-        
+
         // Method 1: Native Capacitor keyboard height (most accurate)
         if (nativeKeyboardHeight !== null) {
           modalHeight = Math.round(windowHeight - nativeKeyboardHeight);
@@ -441,7 +441,7 @@ export class MultiChatModal extends Modal {
             const vpHeight = visualViewport ? visualViewport.height : windowHeight;
             const inputRect = inputEl.getBoundingClientRect();
             const inputBottom = inputRect.bottom;
-            
+
             if (inputBottom > vpHeight - 50) {
               // Input is obscured - use viewport height
               modalHeight = Math.max(300, vpHeight);
@@ -466,34 +466,34 @@ export class MultiChatModal extends Modal {
             }
           }
         }
-        
+
         // Add class for CSS styling
         modalContent.addClass('keyboard-visible');
-        
+
         // Adjust Obsidian's container
         if (hasContainer && modalContainer) {
           modalContainer.style.height = `${modalHeight}px`;
           modalContainer.style.maxHeight = `${modalHeight}px`;
         }
-        
+
         // Adjust modal
         modalContent.style.height = `${modalHeight}px`;
         modalContent.style.maxHeight = `${modalHeight}px`;
-        
+
         // Adjust messages container to fit within available space
         const inputAreaHeight = inputArea.offsetHeight || 80;
         const messagesMaxHeight = modalHeight - inputAreaHeight - 120;
         messagesContainer.style.maxHeight = `${messagesMaxHeight}px`;
         messagesContainer.style.flexShrink = '1';
         messagesContainer.style.overflowY = 'auto';
-        
+
         // Force browser to recalculate layout
         if (hasContainer && modalContainer) {
           modalContainer.offsetHeight;
         }
         modalContent.offsetHeight;
         messagesContainer.offsetHeight;
-        
+
         // Scroll to bottom and ensure input is visible
         this.scrollToBottom(messagesContainer, true);
         setTimeout(() => {
@@ -504,27 +504,27 @@ export class MultiChatModal extends Modal {
 
     const handleInputBlur = () => {
       if (!isKeyboardVisible) return; // Already handled
-      
+
       // Small delay to handle case where user taps between inputs
       setTimeout(() => {
         // Check if another input got focus
         if (document.activeElement === inputEl) return;
-        
+
         isKeyboardVisible = false;
         console.log('[MultiChatModal] ✅ Keyboard hidden - restoring modal size');
-        
+
         // Remove class
         modalContent.removeClass('keyboard-visible');
-        
+
         // Restore full height
         if (hasContainer && modalContainer) {
           modalContainer.style.height = '100vh';
           modalContainer.style.maxHeight = '100vh';
         }
-        
+
         modalContent.style.height = '100vh';
         modalContent.style.maxHeight = '100vh';
-        
+
         // Reset messages container
         messagesContainer.style.maxHeight = '';
         messagesContainer.style.flexShrink = '';
@@ -539,7 +539,7 @@ export class MultiChatModal extends Modal {
     // Store cleanup function
     this.keyboardCleanup = () => {
       console.log('[MultiChatModal] 🧹 Cleaning up keyboard handlers');
-      
+
       inputEl.removeEventListener('focus', handleInputFocus);
       inputEl.removeEventListener('blur', handleInputBlur);
 
@@ -548,10 +548,10 @@ export class MultiChatModal extends Modal {
         modalContainer.style.height = '';
         modalContainer.style.maxHeight = '';
       }
-      
+
       modalContent.style.height = '';
       modalContent.style.maxHeight = '';
-      
+
       messagesContainer.style.maxHeight = '';
       messagesContainer.style.flexShrink = '';
       messagesContainer.style.overflowY = '';
@@ -584,26 +584,26 @@ export class MultiChatModal extends Modal {
       const screenHeight = window.innerHeight;
       const keyboardHeight = screenHeight * 0.4; // Assume keyboard takes 40% of screen
       const availableHeight = screenHeight - keyboardHeight;
-      
+
       // CRITICAL FIX: Adjust BOTH modal container and modal height
       if (modalContainer) {
         modalContainer.style.height = `${availableHeight}px`;
         modalContainer.style.maxHeight = `${availableHeight}px`;
         addDebugLine(`Container: ${availableHeight}px`);
       }
-      
+
       modalContent.style.height = `${availableHeight}px`;
       modalContent.style.maxHeight = `${availableHeight}px`;
-      
+
       addDebugLine(`Modal height: ${availableHeight}px`);
-      
+
       const messagesHeight = availableHeight * 0.7; // Use 70% of available height for messages
       messagesContainer.style.maxHeight = `${messagesHeight}px`;
       messagesContainer.style.flexShrink = '1';
       messagesContainer.style.overflowY = 'auto';
 
       addDebugLine(`Messages: ${messagesHeight}px`);
-      
+
       // Force layout recalculation
       modalContent.offsetHeight;
 
@@ -619,7 +619,7 @@ export class MultiChatModal extends Modal {
       addDebugLine('👋 FALLBACK: Keyboard hidden (blur)');
       setTimeout(() => {
         modalContent.removeClass('keyboard-visible');
-        
+
         // Restore modal AND container height
         if (modalContainer) {
           modalContainer.style.height = '100vh';
@@ -627,7 +627,7 @@ export class MultiChatModal extends Modal {
         }
         modalContent.style.height = '100vh';
         modalContent.style.maxHeight = '100vh';
-        
+
         messagesContainer.style.maxHeight = '';
         messagesContainer.style.flexShrink = '';
         messagesContainer.style.overflowY = '';
@@ -643,11 +643,11 @@ export class MultiChatModal extends Modal {
       console.log('[MultiChatModal] 🧹 Cleaning up fallback handlers');
       inputEl.removeEventListener('focus', handleFocus);
       inputEl.removeEventListener('blur', handleBlur);
-      
+
       // Restore modal height
       modalContent.style.height = '';
       modalContent.style.maxHeight = '';
-      
+
       messagesContainer.style.maxHeight = '';
       messagesContainer.style.flexShrink = '';
       messagesContainer.style.overflowY = '';
@@ -794,14 +794,14 @@ export class MultiChatModal extends Modal {
 
     // Left section: Conversation title (clickable to rename)
     const titleSection = topBar.createEl('div', { cls: 'chat-title-section' });
-    
+
     const activeSession = this.chatSessions.find(s => s.id === this.activeSessionId);
-    const titleEl = titleSection.createEl('div', { 
+    const titleEl = titleSection.createEl('div', {
       text: activeSession?.title || 'New Conversation',
       cls: 'conversation-title-display',
       title: 'Click to rename'
     });
-    
+
     titleEl.onclick = async () => {
       if (activeSession) {
         await this.renameConversation(activeSession);
@@ -833,13 +833,13 @@ export class MultiChatModal extends Modal {
 
   updateConnectionStatus(container: HTMLElement) {
     container.empty();
-    
+
     // Check connection status
     const isConnected = this.plugin.isAgentRunning || this.plugin.settings.remoteMode;
-    
+
     const statusDot = container.createEl('span', { cls: 'status-dot' });
     const statusText = container.createEl('span', { cls: 'status-text' });
-    
+
     if (isConnected) {
       statusDot.addClass('connected');
       statusText.setText('Connected');
@@ -849,7 +849,7 @@ export class MultiChatModal extends Modal {
       statusText.setText('Disconnected');
       container.title = 'Not connected to server';
     }
-    
+
     // Make clickable to show details
     container.addClass('clickable');
     container.onclick = () => {
@@ -1047,14 +1047,14 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         if (response.ok) {
           // Remove from local list
           this.chatSessions = this.chatSessions.filter(s => s.id !== sessionId);
-          
+
           // Clear active session if it was deleted
           if (this.activeSessionId === sessionId) {
             this.activeSessionId = null;
             this.plugin.settings.activeChatSessionId = null;
             await this.plugin.saveSettings();
           }
-          
+
           await this.loadChatSessions(); // Refresh list
           new Notice('Conversation deleted');
         } else {
@@ -1304,29 +1304,29 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         overflow: hidden;
         text-overflow: ellipsis;
       }
-      
+
       .session-title-container {
         display: flex;
         align-items: center;
         gap: 4px;
       }
-      
+
       .default-badge {
         display: inline-block;
         font-size: 10px;
         opacity: 0.8;
         flex-shrink: 0;
       }
-      
+
       .session-item.default {
         border-left: 3px solid var(--interactive-accent);
         padding-left: 5px;
       }
-      
+
       .thoth-conversation-card.default {
         border-left: 3px solid var(--interactive-accent);
       }
-      
+
       .thoth-card-title .default-badge {
         color: var(--interactive-accent);
         font-size: 14px;
@@ -1767,10 +1767,10 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
       if (response.ok) {
         const conversations = await response.json();
-        
+
         // Get default conversation ID to mark it in metadata
         const defaultConvId = await this.getOrCreateDefaultConversation();
-        
+
         // Map Letta conversations to session format with all required ChatSession properties
         this.chatSessions = conversations.map((conv: any): ChatSession => ({
           id: conv.id,
@@ -1780,12 +1780,12 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           is_active: conv.id === this.activeSessionId,
           message_count: conv.message_count || 0,
           last_message_preview: conv.last_message || '',
-          metadata: { 
+          metadata: {
             agent_id: conv.agent_id,
             is_default: conv.id === defaultConvId
           }
         }));
-        
+
         // Sort to ensure default conversation is first in the list
         this.chatSessions.sort((a, b) => {
           if (a.metadata?.is_default) return -1;
@@ -1848,43 +1848,43 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
   async getOrCreateDefaultConversation(): Promise<string> {
     const endpoint = this.plugin.getLettaEndpointUrl();
     const agentId = await this.getOrCreateDefaultAgent();
-    
+
     console.log('[MultiChatModal] Getting or creating default conversation...');
-    
+
     // Find or create a default conversation via list endpoint
     try {
       const listResponse = await this.fetchWithTimeout(
         `${endpoint}/v1/conversations/?agent_id=${agentId}&limit=50`
       );
-      
+
       if (!listResponse.ok) {
         throw new Error('Failed to fetch conversations');
       }
-      
+
       const conversations = await listResponse.json();
       console.log('[MultiChatModal] Found conversations:', conversations.length);
-      
+
       // Look for existing default (by title or oldest)
-      let defaultConv = conversations.find((c: any) => 
-        c.summary?.toLowerCase().includes('default') || 
+      let defaultConv = conversations.find((c: any) =>
+        c.summary?.toLowerCase().includes('default') ||
         c.summary === 'Main Conversation'
       );
-      
+
       if (defaultConv) {
         console.log('[MultiChatModal] Found existing default conversation by title:', defaultConv.id);
         return defaultConv.id;
       }
-      
+
       if (conversations.length > 0) {
         // Use oldest conversation as default
-        const sorted = [...conversations].sort((a: any, b: any) => 
+        const sorted = [...conversations].sort((a: any, b: any) =>
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         );
         defaultConv = sorted[0];
         console.log('[MultiChatModal] Using oldest conversation as default:', defaultConv.id);
         return defaultConv.id;
       }
-      
+
       // No conversations exist, create new default conversation
       console.log('[MultiChatModal] No conversations exist, creating default...');
       const createResponse = await this.fetchWithTimeout(
@@ -1895,15 +1895,15 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           body: JSON.stringify({ summary: 'Default Conversation' })
         }
       );
-      
+
       if (!createResponse.ok) {
         throw new Error('Failed to create default conversation');
       }
-      
+
       defaultConv = await createResponse.json();
       console.log('[MultiChatModal] Created new default conversation:', defaultConv.id);
       return defaultConv.id;
-      
+
     } catch (error) {
       console.error('[MultiChatModal] Error in getOrCreateDefaultConversation:', error);
       throw error;
@@ -1935,7 +1935,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         if (session.metadata?.is_default) {
           classes.push('default');
         }
-        
+
         const sessionEl = this.sessionListContainer.createEl('div', {
           cls: classes.join(' ')
         });
@@ -1976,7 +1976,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           text: session.title,
           cls: 'session-title'
         });
-        
+
         // Add default badge if this is the default conversation
         if (session.metadata?.is_default) {
           titleContainer.createEl('span', {
@@ -2112,25 +2112,25 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
     try {
       const endpoint = this.plugin.getLettaEndpointUrl();
-      
+
       // Build URL with pagination support
       // Use desc order to get NEWEST messages first (most recent 50)
       let url = `${endpoint}/v1/conversations/${sessionId}/messages?limit=50&order=desc`;
-      
+
       // If loading earlier messages, use cursor-based pagination
       if (loadEarlier && this.oldestMessageId.has(sessionId)) {
         const oldestId = this.oldestMessageId.get(sessionId);
         url += `&before=${oldestId}`;
       }
-      
+
       const response = await fetch(url);
 
       if (response.ok) {
         const newMessages = await response.json();
-        
+
         // Get or initialize cached messages
         let allMessages = this.messageCache.get(sessionId) || [];
-        
+
         if (loadEarlier) {
           // Prepend earlier messages (which come in desc order from API)
           allMessages = [...newMessages, ...allMessages];
@@ -2138,13 +2138,13 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           // Fresh load - messages come in desc order (newest first)
           allMessages = newMessages;
         }
-        
+
         // Update cache
         this.messageCache.set(sessionId, allMessages);
-        
+
         // Track if there are more messages to load
         this.hasMoreMessages.set(sessionId, newMessages.length >= 50);
-        
+
         // Track oldest message ID for pagination
         // Since messages are in desc order initially, sort by date to find oldest
         const sortedMessages = [...allMessages].sort((a, b) => {
@@ -2155,7 +2155,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         if (sortedMessages.length > 0) {
           this.oldestMessageId.set(sessionId, sortedMessages[0].id);
         }
-        
+
         await this.renderChatInterface(sessionId, allMessages);
       } else {
         throw new Error('Failed to load messages');
@@ -2182,18 +2182,18 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         cls: 'load-more-btn',
         text: 'Load earlier messages'
       });
-      
+
       loadMoreBtn.addEventListener('click', async () => {
         loadMoreBtn.disabled = true;
         loadMoreBtn.textContent = 'Loading...';
-        
+
         // Save scroll position
         const scrollHeight = messagesContainer.scrollHeight;
         const scrollTop = messagesContainer.scrollTop;
-        
+
         try {
           await this.loadChatMessages(sessionId, true);
-          
+
           // Restore relative scroll position after loading
           // This keeps the user viewing the same messages
           setTimeout(() => {
@@ -2208,7 +2208,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           new Notice('Failed to load earlier messages');
         }
       });
-      
+
       // Divider
       messagesContainer.createEl('div', {
         cls: 'load-more-divider'
@@ -2218,7 +2218,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     /**
      * Helper function to extract content from message.
      * Handles both string content and array of content parts (per Letta API).
-     * 
+     *
      * @param msg - The message object
      * @returns The extracted text content
      */
@@ -2239,7 +2239,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     const chatMessages = messages.filter(msg => {
       // Check message_type field (Letta's primary message type)
       const messageType = msg.message_type || msg.type;
-      if (messageType === 'user_message' || 
+      if (messageType === 'user_message' ||
           messageType === 'assistant_message') {
         return true;
       }
@@ -2274,7 +2274,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       await Promise.all(
         chatMessages.map(async (msg) => {
           const messageType = msg.message_type || msg.type;
-          
+
           // Only render user and assistant messages
           const role = messageType === 'user_message' ? 'user'
                      : messageType === 'assistant_message' ? 'assistant'
@@ -2308,7 +2308,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       cls: 'chat-attach-btn',
       attr: { 'aria-label': 'Attach file', 'title': 'Attach file for context' }
     });
-    
+
     attachBtn.onclick = (e: MouseEvent) => {
       e.preventDefault();
       this.showAttachmentMenu(inputEl, e);
@@ -2409,7 +2409,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                     this.updateStatusIndicator(thinkingMsg, `${phrase}...`, '💭');
                   }
                 }
-                
+
                 // Handle tool_call_message
                 else if (messageType === 'tool_call_message') {
                   // Update status indicator - don't create tool call card during streaming
@@ -2419,7 +2419,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                     this.updateStatusIndicator(thinkingMsg, `${statusMsg}...`, '🔧');
                   }
                 }
-                
+
                 // Handle tool_return_message
                 else if (messageType === 'tool_return_message') {
                   // Update status indicator - don't create tool return card during streaming
@@ -2428,7 +2428,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                     this.updateStatusIndicator(thinkingMsg, `${phrase} results...`, '⚙️');
                   }
                 }
-                
+
                 // Handle assistant_message (with streaming)
                 else if (messageType === 'assistant_message') {
                   const delta = msg.content || msg.text || '';
@@ -2439,7 +2439,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                       thinkingMsg.remove();
                       thinkingRemoved = true;
                     }
-                    
+
                     // Create assistant message element on first chunk
                     if (!assistantMessageEl) {
                       assistantMessageEl = messagesContainer.createEl('div', {
@@ -2452,7 +2452,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                       contentEl = assistantMessageEl.createEl('div', {
                         cls: 'message-content'
                       });
-                      
+
                       // Initialize streaming markdown renderer
                       streamingRenderer = new StreamingMarkdownRenderer(contentEl);
                     }
@@ -2483,12 +2483,12 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           // End streaming and flush remaining markdown
           if (streamingRenderer) {
             streamingRenderer.end();
-            
+
             // Add copy buttons to code blocks
             if (contentEl) {
               this.addCopyButtonsToCodeBlocks(contentEl);
             }
-            
+
             this.scrollToBottom(messagesContainer, true);
           }
 
@@ -2643,7 +2643,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
     const toolCall = msg.tool_call || {};
     const toolName = toolCall.name || 'Unknown Tool';
-    
+
     header.createEl('span', {
       cls: 'tool-call-name',
       text: `Calling: ${toolName}`
@@ -2717,12 +2717,12 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     });
 
     const toolReturn = msg.tool_return || msg.content || '';
-    
+
     // Try to parse and format JSON results
     try {
       const parsed = typeof toolReturn === 'string' ? JSON.parse(toolReturn) : toolReturn;
       const formatted = JSON.stringify(parsed, null, 2);
-      
+
       const resultEl = contentEl.createEl('pre', {
         cls: 'tool-return-result'
       });
@@ -3531,7 +3531,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     if (session.id === this.activeSessionId) {
       card.addClass('active');
     }
-    
+
     // Mark as default if applicable
     if (session.metadata?.is_default) {
       card.addClass('default');
@@ -3542,7 +3542,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       text: session.title || 'Untitled Conversation',
       cls: 'thoth-card-title'
     });
-    
+
     // Add default badge if this is the default conversation
     if (session.metadata?.is_default) {
       titleEl.createEl('span', {
@@ -3602,16 +3602,16 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    
+
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins} min ago`;
-    
+
     const diffHours = Math.floor(diffMins / 60);
     if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
-    
+
     const diffDays = Math.floor(diffHours / 24);
     if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
-    
+
     return date.toLocaleDateString();
   }
 
@@ -3631,13 +3631,13 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       if (response.ok) {
         // Update local state after successful API sync
         session.title = newTitle;
-        
+
         // Also update in chatSessions array if present
         const sessionInList = this.chatSessions.find(s => s.id === session.id);
         if (sessionInList) {
           sessionInList.title = newTitle;
         }
-        
+
         await this.plugin.saveSettings();
         await this.renderTabContent(); // Refresh UI
         new Notice('Conversation renamed');
@@ -3671,36 +3671,36 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       const endpoint = this.plugin.getLettaEndpointUrl();
       // Note: NO trailing slash for DELETE - Letta API returns 405 with trailing slash
       const deleteUrl = `${endpoint}/v1/conversations/${session.id}`;
-      
+
       const response = await this.fetchWithTimeout(deleteUrl, {
         method: 'DELETE'
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to delete conversation from server');
       }
 
         // Remove from local list
         this.chatSessions = this.chatSessions.filter(s => s.id !== session.id);
-        
+
         // If deleted conversation was active, switch to default
         if (this.activeSessionId === session.id) {
           const defaultConvId = await this.getOrCreateDefaultConversation();
           this.activeSessionId = null;
           await this.switchToSession(defaultConvId);
         }
-        
+
         // Reload conversations from server to ensure sync
         await this.loadChatSessions();
-        
+
         // Re-render current tab to update UI
         await this.renderTabContent();
-        
+
         // Also update sidebar if on chat tab
         if (this.currentTab === 'chat') {
           this.renderSessionList();
         }
-        
+
         await this.plugin.saveSettings();
         new Notice('Conversation deleted');
       } catch (error) {
@@ -3730,38 +3730,38 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     return new Promise((resolve) => {
       const modal = new Modal(this.app);
       modal.titleEl.setText(title);
-      
-      const input = modal.contentEl.createEl('input', { 
+
+      const input = modal.contentEl.createEl('input', {
         type: 'text',
         value: defaultValue
       });
       input.style.width = '100%';
       input.style.marginBottom = '10px';
-      
+
       const buttonsEl = modal.contentEl.createEl('div');
       buttonsEl.style.display = 'flex';
       buttonsEl.style.justifyContent = 'flex-end';
       buttonsEl.style.gap = '10px';
-      
+
       const cancelBtn = buttonsEl.createEl('button', { text: 'Cancel' });
       cancelBtn.onclick = () => {
         modal.close();
         resolve(null);
       };
-      
+
       const okBtn = buttonsEl.createEl('button', { text: 'OK', cls: 'mod-cta' });
       okBtn.onclick = () => {
         modal.close();
         resolve(input.value);
       };
-      
+
       input.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
           modal.close();
           resolve(input.value);
         }
       });
-      
+
       modal.open();
       input.focus();
     });
@@ -3793,17 +3793,17 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     indicator.createEl('span', { cls: 'dot' });
     indicator.createEl('span', { cls: 'dot' });
     indicator.createEl('span', { cls: 'dot' });
-    const statusText = content.createEl('span', { 
+    const statusText = content.createEl('span', {
       text: 'Starting...',
       cls: 'status-text'
     });
-    
+
     // Store reference to status text for updates
     (msg as any).__statusText = statusText;
-    
+
     // Scroll to bottom
     container.scrollTop = container.scrollHeight;
-    
+
     return msg;
   }
 
@@ -3821,11 +3821,11 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
   // Helper: Show toast notification
   showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
-    const toast = document.body.createEl('div', { 
+    const toast = document.body.createEl('div', {
       cls: `thoth-toast thoth-toast-${type}`,
-      text: message 
+      text: message
     });
-    
+
     // Auto-remove after 3 seconds
     setTimeout(() => {
       toast.addClass('thoth-toast-fade-out');
@@ -3837,22 +3837,22 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
   // Helper: Create empty state
   createEmptyState(container: HTMLElement, icon: string, title: string, description: string, actionText?: string, actionCallback?: () => void) {
     const emptyState = container.createEl('div', { cls: 'thoth-empty-state' });
-    
-    emptyState.createEl('div', { 
+
+    emptyState.createEl('div', {
       cls: 'empty-state-icon',
-      text: icon 
+      text: icon
     });
-    
-    emptyState.createEl('h3', { 
+
+    emptyState.createEl('h3', {
       cls: 'empty-state-title',
-      text: title 
+      text: title
     });
-    
-    emptyState.createEl('p', { 
+
+    emptyState.createEl('p', {
       cls: 'empty-state-description',
-      text: description 
+      text: description
     });
-    
+
     if (actionText && actionCallback) {
       const actionBtn = emptyState.createEl('button', {
         cls: 'empty-state-action',
@@ -3860,14 +3860,14 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       });
       actionBtn.onclick = actionCallback;
     }
-    
+
     return emptyState;
   }
 
   // Helper: Show attachment menu
   showAttachmentMenu(inputEl: HTMLTextAreaElement, event: MouseEvent) {
     const menu = new Menu();
-    
+
     menu.addItem((item) => {
       item
         .setTitle('📄 Attach note from vault')
@@ -3876,7 +3876,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           this.attachVaultFile(inputEl);
         });
     });
-    
+
     menu.addItem((item) => {
       item
         .setTitle('🔗 Attach current note')
@@ -3892,7 +3892,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           }
         });
     });
-    
+
     menu.addItem((item) => {
       item
         .setTitle('📋 Paste clipboard')
@@ -3907,7 +3907,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           }
         });
     });
-    
+
     menu.showAtMouseEvent(event);
   }
 
@@ -3926,7 +3926,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
   async renderMessageContent(content: string, container: HTMLElement) {
     // Clear existing content
     container.empty();
-    
+
     // Render markdown using Obsidian's native renderer
     // Pass the plugin as the Component to avoid memory leaks
     await MarkdownRenderer.render(
@@ -3946,7 +3946,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
    */
   addCopyButtonsToCodeBlocks(container: HTMLElement) {
     const codeBlocks = container.querySelectorAll('pre > code');
-    
+
     codeBlocks.forEach((codeEl) => {
       const pre = codeEl.parentElement;
       if (!pre) return;
@@ -3963,12 +3963,12 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       // Add click handler
       copyBtn.addEventListener('click', async () => {
         const code = codeEl.textContent || '';
-        
+
         try {
           await navigator.clipboard.writeText(code);
           copyBtn.textContent = 'Copied!';
           copyBtn.classList.add('copied');
-          
+
           // Reset button after 2 seconds
           setTimeout(() => {
             copyBtn.textContent = 'Copy';

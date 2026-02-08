@@ -4,15 +4,14 @@ Update orchestrator system prompt to use synchronous agent communication.
 """
 
 import requests
-import json
 
-BASE_URL = "http://localhost:8283"
+BASE_URL = 'http://localhost:8283'
 HEADERS = {
-    "Authorization": "Bearer letta_dev_password",
-    "Content-Type": "application/json"
+    'Authorization': 'Bearer letta_dev_password',
+    'Content-Type': 'application/json',
 }
 
-ORCHESTRATOR_ID = "agent-10418b8d-37a5-4923-8f70-69ccc58d66ff"
+ORCHESTRATOR_ID = 'agent-10418b8d-37a5-4923-8f70-69ccc58d66ff'
 
 SYSTEM_PROMPT = """You are the Thoth Main Orchestrator, the primary interface for users conducting academic research. You coordinate a team of specialized AI agents to help users discover, analyze, and organize research papers.
 
@@ -28,7 +27,7 @@ Check your agent_registry memory block for the complete list of specialist agent
 
 1. **Identify the right specialist** by checking agent_registry memory
 2. **Call the synchronous tool** to get immediate response:
-   
+
    send_message_to_agent_and_wait_for_reply(
        agent_id="agent-<full-uuid-from-registry>",
        message="<clear task description>"
@@ -93,55 +92,60 @@ User: "Find recent papers on quantum computing"
 
 **Remember**: You are the single point of contact for users. Specialists are invisible to them - they just see you providing comprehensive research assistance."""
 
+
 def main():
-    print("=" * 80)
-    print("UPDATING ORCHESTRATOR FOR SYNCHRONOUS DELEGATION")
-    print("=" * 80)
+    print('=' * 80)
+    print('UPDATING ORCHESTRATOR FOR SYNCHRONOUS DELEGATION')
+    print('=' * 80)
     print()
 
     # Get current agent
-    resp = requests.get(f"{BASE_URL}/v1/agents/{ORCHESTRATOR_ID}", headers=HEADERS)
+    resp = requests.get(f'{BASE_URL}/v1/agents/{ORCHESTRATOR_ID}', headers=HEADERS)
     resp.raise_for_status()
     agent = resp.json()
 
-    print("Current system prompt length:", len(agent.get('system', '')))
+    print('Current system prompt length:', len(agent.get('system', '')))
     print()
 
     # Update system prompt
     resp = requests.patch(
-        f"{BASE_URL}/v1/agents/{ORCHESTRATOR_ID}",
+        f'{BASE_URL}/v1/agents/{ORCHESTRATOR_ID}',
         headers=HEADERS,
-        json={"system": SYSTEM_PROMPT}
+        json={'system': SYSTEM_PROMPT},
     )
 
     if resp.status_code in [200, 201]:
-        print("✓ Orchestrator system prompt updated successfully")
-        print(f"  New prompt length: {len(SYSTEM_PROMPT)} characters")
+        print('✓ Orchestrator system prompt updated successfully')
+        print(f'  New prompt length: {len(SYSTEM_PROMPT)} characters')
         print()
-        print("Key features:")
-        print("  - Synchronous delegation with send_message_to_agent_and_wait_for_reply")
-        print("  - Clear workflow examples")
-        print("  - Specialist registry integration")
-        print("  - Response synthesis guidelines")
+        print('Key features:')
+        print(
+            '  - Synchronous delegation with send_message_to_agent_and_wait_for_reply'
+        )
+        print('  - Clear workflow examples')
+        print('  - Specialist registry integration')
+        print('  - Response synthesis guidelines')
         print()
     else:
-        print(f"✗ Failed to update: {resp.status_code}")
+        print(f'✗ Failed to update: {resp.status_code}')
         print(resp.text)
 
-    print("=" * 80)
-    print("UPDATE COMPLETE")
-    print("=" * 80)
+    print('=' * 80)
+    print('UPDATE COMPLETE')
+    print('=' * 80)
     print()
-    print("The orchestrator is now configured for:")
-    print("  • Synchronous agent communication")
-    print("  • Immediate response handling")
-    print("  • Seamless user experience")
+    print('The orchestrator is now configured for:')
+    print('  • Synchronous agent communication')
+    print('  • Immediate response handling')
+    print('  • Seamless user experience')
     print()
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     try:
         main()
     except Exception as e:
-        print(f"\nError: {str(e)}")
+        print(f'\nError: {e!s}')
         import traceback
+
         traceback.print_exc()

@@ -4,15 +4,14 @@ Setup orchestrator with agent registry memory block and proper system prompt.
 """
 
 import requests
-import json
 
-BASE_URL = "http://localhost:8283"
+BASE_URL = 'http://localhost:8283'
 HEADERS = {
-    "Authorization": "Bearer letta_dev_password",
-    "Content-Type": "application/json"
+    'Authorization': 'Bearer letta_dev_password',
+    'Content-Type': 'application/json',
 }
 
-ORCHESTRATOR_ID = "agent-10418b8d-37a5-4923-8f70-69ccc58d66ff"
+ORCHESTRATOR_ID = 'agent-10418b8d-37a5-4923-8f70-69ccc58d66ff'
 
 # Agent registry content
 AGENT_REGISTRY = """=== SPECIALIZED AGENT REGISTRY ===
@@ -137,14 +136,14 @@ You are a coordinator, not a worker. Always delegate to specialists.
 
 def get_agent(agent_id):
     """Get agent details."""
-    resp = requests.get(f"{BASE_URL}/v1/agents/{agent_id}", headers=HEADERS)
+    resp = requests.get(f'{BASE_URL}/v1/agents/{agent_id}', headers=HEADERS)
     resp.raise_for_status()
     return resp.json()
 
 
 def update_agent_system_and_memory(agent_id, system_prompt, agent_registry_content):
     """Update orchestrator system prompt and add agent registry memory block."""
-    print(f"Updating orchestrator (agent-{agent_id[-12:]})...")
+    print(f'Updating orchestrator (agent-{agent_id[-12:]})...')
 
     # Get current agent state
     agent = get_agent(agent_id)
@@ -160,103 +159,98 @@ def update_agent_system_and_memory(agent_id, system_prompt, agent_registry_conte
 
     # Update or create agent_registry block
     if registry_block:
-        print("  Updating existing agent_registry block...")
+        print('  Updating existing agent_registry block...')
         block_id = registry_block['id']
 
         # Update block content
         resp = requests.post(
-            f"{BASE_URL}/v1/blocks/{block_id}",
+            f'{BASE_URL}/v1/blocks/{block_id}',
             headers=HEADERS,
-            json={"value": agent_registry_content}
+            json={'value': agent_registry_content},
         )
 
         if resp.status_code in [200, 201]:
-            print("    ✓ Updated agent_registry block")
+            print('    ✓ Updated agent_registry block')
         else:
-            print(f"    ✗ Failed to update block: {resp.status_code}")
+            print(f'    ✗ Failed to update block: {resp.status_code}')
     else:
-        print("  Creating new agent_registry block...")
+        print('  Creating new agent_registry block...')
 
         # Create new block
         block_data = {
-            "label": "agent_registry",
-            "value": agent_registry_content,
-            "limit": 3000,
-            "description": "Registry of all specialized agents with IDs and capabilities"
+            'label': 'agent_registry',
+            'value': agent_registry_content,
+            'limit': 3000,
+            'description': 'Registry of all specialized agents with IDs and capabilities',
         }
 
-        resp = requests.post(
-            f"{BASE_URL}/v1/blocks",
-            headers=HEADERS,
-            json=block_data
-        )
+        resp = requests.post(f'{BASE_URL}/v1/blocks', headers=HEADERS, json=block_data)
 
         if resp.status_code in [200, 201]:
             new_block = resp.json()
             block_id = new_block['id']
-            print(f"    ✓ Created agent_registry block: {block_id}")
+            print(f'    ✓ Created agent_registry block: {block_id}')
 
             # Attach block to agent
             agent['memory']['blocks'].append(new_block)
         else:
-            print(f"    ✗ Failed to create block: {resp.status_code}")
+            print(f'    ✗ Failed to create block: {resp.status_code}')
             return False
 
     # Update system prompt
-    print("  Updating system prompt...")
+    print('  Updating system prompt...')
 
     resp = requests.patch(
-        f"{BASE_URL}/v1/agents/{agent_id}",
+        f'{BASE_URL}/v1/agents/{agent_id}',
         headers=HEADERS,
-        json={"system": system_prompt}
+        json={'system': system_prompt},
     )
 
     if resp.status_code in [200, 201]:
-        print("    ✓ Updated system prompt")
+        print('    ✓ Updated system prompt')
         return True
     else:
-        print(f"    ✗ Failed to update system: {resp.status_code}")
+        print(f'    ✗ Failed to update system: {resp.status_code}')
         return False
 
 
 def main():
-    print("=" * 80)
-    print("CONFIGURING ORCHESTRATOR FOR MULTI-AGENT DELEGATION")
-    print("=" * 80)
+    print('=' * 80)
+    print('CONFIGURING ORCHESTRATOR FOR MULTI-AGENT DELEGATION')
+    print('=' * 80)
     print()
 
     success = update_agent_system_and_memory(
-        ORCHESTRATOR_ID,
-        SYSTEM_PROMPT,
-        AGENT_REGISTRY
+        ORCHESTRATOR_ID, SYSTEM_PROMPT, AGENT_REGISTRY
     )
 
     print()
-    print("=" * 80)
+    print('=' * 80)
 
     if success:
-        print("✓ CONFIGURATION COMPLETE")
+        print('✓ CONFIGURATION COMPLETE')
         print()
-        print("Orchestrator now has:")
-        print("  ✓ Agent registry memory block with all specialist IDs")
-        print("  ✓ Updated system prompt with delegation instructions")
-        print("  ✓ Clear guidance on using send_message_to_agent_async")
+        print('Orchestrator now has:')
+        print('  ✓ Agent registry memory block with all specialist IDs')
+        print('  ✓ Updated system prompt with delegation instructions')
+        print('  ✓ Clear guidance on using send_message_to_agent_async')
         print()
-        print("The orchestrator will now:")
-        print("  1. Check agent_registry for the correct agent ID")
-        print("  2. Use full UUIDs when delegating (e.g., agent-02e9a5db...)")
-        print("  3. Never use shortened names that cause errors")
+        print('The orchestrator will now:')
+        print('  1. Check agent_registry for the correct agent ID')
+        print('  2. Use full UUIDs when delegating (e.g., agent-02e9a5db...)')
+        print('  3. Never use shortened names that cause errors')
     else:
-        print("✗ CONFIGURATION FAILED")
-        print("  Check the errors above and try again")
+        print('✗ CONFIGURATION FAILED')
+        print('  Check the errors above and try again')
 
-    print("=" * 80)
+    print('=' * 80)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     try:
         main()
     except Exception as e:
-        print(f"\nError: {str(e)}")
+        print(f'\nError: {e!s}')
         import traceback
+
         traceback.print_exc()

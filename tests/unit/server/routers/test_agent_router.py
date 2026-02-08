@@ -1,7 +1,7 @@
 """Tests for agent router endpoints (Letta proxy)."""
 
 import sys
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock
 
 import pytest
 from fastapi import FastAPI
@@ -39,9 +39,9 @@ class TestAgentStatusEndpoint:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_httpx.get.return_value = mock_response
-        
+
         response = test_client.get('/status')
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data['status'] == 'running'
@@ -54,9 +54,9 @@ class TestAgentStatusEndpoint:
         mock_response = Mock()
         mock_response.status_code = 503
         mock_httpx.get.return_value = mock_response
-        
+
         response = test_client.get('/status')
-        
+
         assert response.status_code == 503
         data = response.json()
         assert data['status'] == 'degraded'
@@ -65,10 +65,10 @@ class TestAgentStatusEndpoint:
     def test_agent_status_unavailable(self, test_client, mock_httpx):
         """Test agent status returns unavailable on connection error."""
         # Setup mock to raise exception
-        mock_httpx.get.side_effect = Exception("Connection refused")
-        
+        mock_httpx.get.side_effect = Exception('Connection refused')
+
         response = test_client.get('/status')
-        
+
         assert response.status_code == 503
         data = response.json()
         assert data['status'] == 'unavailable'
@@ -83,7 +83,7 @@ class TestListAgentsEndpoint:
         # This endpoint makes real httpx calls which will fail in test environment
         # Just verify it exists and handles errors gracefully
         response = test_client.get('/list')
-        
+
         # Will get 500 since httpx call fails, but endpoint exists
         assert response.status_code in [200, 500]
         # If it returns JSON, check format
@@ -98,13 +98,10 @@ class TestAgentChatEndpoint:
     def test_agent_chat_endpoint_exists(self, test_client):
         """Test /chat endpoint exists (actual httpx call will fail in test)."""
         # This endpoint makes real httpx calls which will fail in test environment
-        request_data = {
-            'message': 'Hello agent',
-            'user_id': 'test_user'
-        }
-        
+        request_data = {'message': 'Hello agent', 'user_id': 'test_user'}
+
         response = test_client.post('/chat', json=request_data)
-        
+
         # Will get 500 since httpx call fails, but endpoint exists
         assert response.status_code in [200, 500]
 
@@ -115,13 +112,10 @@ class TestCreateAgentEndpoint:
     def test_create_agent_endpoint_exists(self, test_client):
         """Test /create endpoint exists (actual httpx call will fail in test)."""
         # This endpoint makes real httpx calls which will fail in test environment
-        request_data = {
-            'name': 'new_agent',
-            'description': 'Test agent'
-        }
-        
+        request_data = {'name': 'new_agent', 'description': 'Test agent'}
+
         response = test_client.post('/create', json=request_data)
-        
+
         # Will get 500 since httpx call fails, but endpoint exists
         assert response.status_code in [200, 500]
 
@@ -132,7 +126,7 @@ class TestAgentConfigEndpoint:
     def test_get_agent_config_success(self, test_client):
         """Test getting agent config returns sanitized config."""
         response = test_client.get('/config')
-        
+
         assert response.status_code == 200
         data = response.json()
         assert 'letta' in data
@@ -147,7 +141,7 @@ class TestAgentInfoEndpoint:
     def test_agent_info_returns_documentation(self, test_client):
         """Test agent info returns Letta platform information."""
         response = test_client.get('/info')
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data['platform'] == 'letta'

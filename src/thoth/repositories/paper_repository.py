@@ -11,7 +11,7 @@ NOTE: After 2026-01 schema migration:
 - For paper metadata only, query paper_metadata table directly if needed
 """
 
-from typing import Any, Dict, List, Optional  # noqa: I001, UP035
+from typing import Any, Dict, List  # noqa: I001, UP035
 from loguru import logger
 
 from thoth.repositories.base import BaseRepository
@@ -29,7 +29,7 @@ class PaperRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
         """Initialize paper repository."""
         super().__init__(postgres_service, table_name='papers', **kwargs)
 
-    async def get_by_doi(self, doi: str) -> Optional[Dict[str, Any]]:  # noqa: UP006, UP007
+    async def get_by_doi(self, doi: str) -> Dict[str, Any] | None:  # noqa: UP006
         """
         Get a paper by DOI.
 
@@ -59,7 +59,7 @@ class PaperRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
             logger.error(f'Failed to get paper by DOI {doi}: {e}')
             return None
 
-    async def get_by_arxiv_id(self, arxiv_id: str) -> Optional[Dict[str, Any]]:  # noqa: UP006, UP007
+    async def get_by_arxiv_id(self, arxiv_id: str) -> Dict[str, Any] | None:  # noqa: UP006
         """
         Get a paper by arXiv ID.
 

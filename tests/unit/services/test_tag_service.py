@@ -1,13 +1,11 @@
 """Test suite for TagService."""
 
 import pytest
-from unittest.mock import Mock
-
-from thoth.services.tag_service import TagService
-from thoth.config import Config
 
 
-@pytest.mark.skip(reason="TagService has complex config dependencies - better suited for integration tests")
+@pytest.mark.skip(
+    reason='TagService has complex config dependencies - better suited for integration tests'
+)
 class TestTagServiceInitialization:
     """Test TagService initialization."""
 
@@ -20,7 +18,9 @@ class TestTagServiceInitialization:
         pass
 
 
-@pytest.mark.skip(reason="TagService has complex config dependencies - better suited for integration tests")
+@pytest.mark.skip(
+    reason='TagService has complex config dependencies - better suited for integration tests'
+)
 class TestTagServiceMethods:
     """Test TagService key methods."""
 

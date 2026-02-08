@@ -14,12 +14,11 @@ from thoth.server.routers import research
 def mock_research_agent():
     """Create mock research agent with async chat method."""
     agent = Mock()
+
     # Set up async mock that returns a proper response
     async def default_chat_response(*args, **kwargs):
-        return {
-            'response': 'Here is the answer',
-            'tool_calls': []
-        }
+        return {'response': 'Here is the answer', 'tool_calls': []}
+
     agent.chat = AsyncMock(side_effect=default_chat_response)
     return agent
 
@@ -47,14 +46,14 @@ def test_client(mock_research_agent, mock_chat_manager):
     """Create FastAPI test client with research router and dependency overrides."""
     app = FastAPI()
     app.include_router(research.router)
-    
+
     # Override dependencies to return mocks
     app.dependency_overrides[get_research_agent] = lambda: mock_research_agent
     app.dependency_overrides[get_chat_manager] = lambda: mock_chat_manager
-    
+
     client = TestClient(app)
     yield client
-    
+
     # Clean up
     app.dependency_overrides.clear()
 
@@ -69,51 +68,63 @@ class TestResearchChatEndpoint:
         app.include_router(research.router)
         app.dependency_overrides[get_research_agent] = lambda: None
         app.dependency_overrides[get_chat_manager] = lambda: mock_chat_manager
-        
+
         with TestClient(app) as client:
             request_data = {'message': 'Hello'}
             response = client.post('/chat', json=request_data)
-            
+
             assert response.status_code == 503
             assert 'Research agent not initialized' in response.json()['detail']
 
-    def test_research_chat_success(self, test_client, mock_research_agent, mock_llm_router):
+    def test_research_chat_success(
+        self, test_client, mock_research_agent, mock_llm_router
+    ):
         """Test chat returns response from research agent."""
         # Mock already set up in fixture with default response
-        with patch('thoth.server.routers.research.LLMRouter', return_value=mock_llm_router):
+        with patch(
+            'thoth.server.routers.research.LLMRouter', return_value=mock_llm_router
+        ):
             request_data = {'message': 'What is machine learning?'}
             response = test_client.post('/chat', json=request_data)
-            
+
             assert response.status_code == 200
             data = response.json()
             assert 'response' in data
             assert data['response'] == 'Here is the answer'
             assert 'tool_calls' in data
 
-    def test_research_chat_with_chat_manager(self, test_client, mock_research_agent, mock_chat_manager, mock_llm_router):
+    def test_research_chat_with_chat_manager(
+        self, test_client, mock_research_agent, mock_chat_manager, mock_llm_router
+    ):
         """Test chat stores messages when chat manager available."""
         # Mock already set up in fixture with default response
-        with patch('thoth.server.routers.research.LLMRouter', return_value=mock_llm_router):
+        with patch(
+            'thoth.server.routers.research.LLMRouter', return_value=mock_llm_router
+        ):
             request_data = {
                 'message': 'What is machine learning?',
-                'conversation_id': 'conv-123'
+                'conversation_id': 'conv-123',
             }
             response = test_client.post('/chat', json=request_data)
-            
+
             assert response.status_code == 200
             # Verify chat manager was called
             assert mock_chat_manager.get_session.called
             assert mock_chat_manager.add_message.called
 
-    def test_research_chat_handles_errors_gracefully(self, test_client, mock_research_agent, mock_llm_router):
+    def test_research_chat_handles_errors_gracefully(
+        self, test_client, mock_research_agent, mock_llm_router
+    ):
         """Test chat handles errors and returns error response."""
         # Setup mock to raise exception
-        mock_research_agent.chat.side_effect = Exception("Agent error")
-        
-        with patch('thoth.server.routers.research.LLMRouter', return_value=mock_llm_router):
+        mock_research_agent.chat.side_effect = Exception('Agent error')
+
+        with patch(
+            'thoth.server.routers.research.LLMRouter', return_value=mock_llm_router
+        ):
             request_data = {'message': 'Test'}
             response = test_client.post('/chat', json=request_data)
-            
+
             assert response.status_code == 200  # Returns 200 with error in body
             data = response.json()
             assert 'error' in data
@@ -129,11 +140,11 @@ class TestResearchQueryEndpoint:
         app = FastAPI()
         app.include_router(research.router)
         app.dependency_overrides[get_research_agent] = lambda: None
-        
+
         with TestClient(app) as client:
             request_data = {'query': 'machine learning papers'}
             response = client.post('/query', json=request_data)
-            
+
             assert response.status_code == 503
             assert 'Research agent not initialized' in response.json()['detail']
 
@@ -146,18 +157,18 @@ class TestResearchQueryEndpoint:
                 {
                     'tool': 'thoth_search_papers',
                     'args': {'query': 'machine learning'},
-                    'result': 'Results here'
+                    'result': 'Results here',
                 }
-            ]
+            ],
         }
-        
+
         request_data = {
             'query': 'machine learning papers',
             'max_results': 10,
-            'sources': ['arxiv']
+            'sources': ['arxiv'],
         }
         response = test_client.post('/query', json=request_data)
-        
+
         assert response.status_code == 200
         data = response.json()
         assert 'results' in data
@@ -172,12 +183,12 @@ class TestResearchQueryEndpoint:
         # Setup mock
         mock_research_agent.chat.return_value = {
             'response': 'Research summary',
-            'tool_calls': []
+            'tool_calls': [],
         }
-        
+
         request_data = {'query': 'test query'}
         response = test_client.post('/query', json=request_data)
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data['query'] == 'test query'
@@ -187,10 +198,10 @@ class TestResearchQueryEndpoint:
     def test_research_query_error_handling(self, test_client, mock_research_agent):
         """Test query handles errors properly."""
         # Setup mock to raise exception
-        mock_research_agent.chat.side_effect = Exception("Query error")
-        
+        mock_research_agent.chat.side_effect = Exception('Query error')
+
         request_data = {'query': 'test'}
         response = test_client.post('/query', json=request_data)
-        
+
         assert response.status_code == 500
         assert 'Research query failed' in response.json()['detail']

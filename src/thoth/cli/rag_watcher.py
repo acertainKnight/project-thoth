@@ -94,7 +94,7 @@ def run_watcher_status(args, pipeline: ThothPipeline):  # noqa: ARG001
         status = watcher.get_status()
 
         logger.info('RAG Watcher Status:')
-        logger.info(f"  Running: {'Yes' if status['is_running'] else 'No'}")
+        logger.info(f'  Running: {"Yes" if status["is_running"] else "No"}')
 
         if status['watched_directories']:
             logger.info('  Watching directories:')
@@ -195,9 +195,9 @@ def run_watcher_backfill(args, pipeline: ThothPipeline):
         try:
             stats = rag_service.get_statistics()
             logger.info('\nVector Store Statistics:')
-            logger.info(f"  Total documents: {stats.get('document_count', 0)}")
-            logger.info(f"  Collection: {stats.get('collection_name', 'Unknown')}")
-            logger.info(f"  Embedding model: {stats.get('embedding_model', 'Unknown')}")
+            logger.info(f'  Total documents: {stats.get("document_count", 0)}')
+            logger.info(f'  Collection: {stats.get("collection_name", "Unknown")}')
+            logger.info(f'  Embedding model: {stats.get("embedding_model", "Unknown")}')
         except Exception as e:
             logger.warning(f'Could not retrieve vector store stats: {e}')
 
@@ -212,17 +212,16 @@ def run_watcher_backfill(args, pipeline: ThothPipeline):
 
 def run_watcher_backfill_db(args, pipeline: ThothPipeline):
     """Backfill RAG index from database markdown content."""
-    import asyncio
     import json
     import re
-    from uuid import UUID
 
     import asyncpg
-    from langchain_core.documents import Document
 
     try:
         logger.info('Starting RAG database backfill process...')
-        logger.info('This will index all papers with markdown_content from the database')
+        logger.info(
+            'This will index all papers with markdown_content from the database'
+        )
 
         # Get database URL
         db_url = getattr(pipeline.config.secrets, 'database_url', None)
@@ -253,7 +252,7 @@ def run_watcher_backfill_db(args, pipeline: ThothPipeline):
             """Run the entire backfill in a single async context."""
             # Create a single connection for the entire operation
             conn = await asyncpg.connect(db_url)
-            
+
             try:
                 # Get papers with markdown content
                 if hasattr(args, 'force') and args.force:
@@ -261,7 +260,7 @@ def run_watcher_backfill_db(args, pipeline: ThothPipeline):
                         SELECT pm.id, pm.title, pm.doi, pm.authors, pp.markdown_content
                         FROM paper_metadata pm
                         JOIN processed_papers pp ON pp.paper_id = pm.id
-                        WHERE pp.markdown_content IS NOT NULL 
+                        WHERE pp.markdown_content IS NOT NULL
                           AND pp.markdown_content != ''
                         ORDER BY pm.created_at DESC
                     """
@@ -271,7 +270,7 @@ def run_watcher_backfill_db(args, pipeline: ThothPipeline):
                         FROM paper_metadata pm
                         JOIN processed_papers pp ON pp.paper_id = pm.id
                         LEFT JOIN document_chunks dc ON dc.paper_id = pm.id
-                        WHERE pp.markdown_content IS NOT NULL 
+                        WHERE pp.markdown_content IS NOT NULL
                           AND pp.markdown_content != ''
                           AND dc.id IS NULL
                         ORDER BY pm.created_at DESC
@@ -292,10 +291,7 @@ def run_watcher_backfill_db(args, pipeline: ThothPipeline):
 
                 # Set up JSON codec for the connection
                 await conn.set_type_codec(
-                    'jsonb',
-                    encoder=json.dumps,
-                    decoder=json.loads,
-                    schema='pg_catalog'
+                    'jsonb', encoder=json.dumps, decoder=json.loads, schema='pg_catalog'
                 )
 
                 for i, row in enumerate(papers, 1):
@@ -307,10 +303,14 @@ def run_watcher_backfill_db(args, pipeline: ThothPipeline):
                         logger.info(f'  [{i}/{len(papers)}] Indexing: {title[:50]}...')
 
                         # Strip images if configured
-                        if config.rag_config.skip_files_with_images and has_images(content):
+                        if config.rag_config.skip_files_with_images and has_images(
+                            content
+                        ):
                             content = strip_images(content)
                             if len(content.strip()) < 100:
-                                logger.warning(f'    Skipped: insufficient content after image removal')
+                                logger.warning(
+                                    '    Skipped: insufficient content after image removal'
+                                )
                                 continue
 
                         # Prepare metadata
@@ -320,24 +320,28 @@ def run_watcher_backfill_db(args, pipeline: ThothPipeline):
                             'doi': row['doi'],
                             'authors': row['authors'],
                             'document_type': 'article',
-                            'source': f"database:paper:{paper_id}",
+                            'source': f'database:paper:{paper_id}',
                         }
 
                         # Split into chunks using RAG manager's splitter
                         chunks = rag_manager.text_splitter.split_text(content)
 
                         # Generate embeddings for all chunks at once
-                        embeddings = rag_manager.embedding_manager.get_embedding_model().embed_documents(chunks)
+                        embeddings = rag_manager.embedding_manager.get_embedding_model().embed_documents(
+                            chunks
+                        )
 
                         # Insert chunks into database
                         chunk_ids = []
-                        for idx, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
+                        for idx, (chunk_text, embedding) in enumerate(
+                            zip(chunks, embeddings)
+                        ):
                             chunk_metadata = {
                                 **metadata,
                                 'chunk_index': idx,
                                 'total_chunks': len(chunks),
                             }
-                            
+
                             # Clean metadata values
                             clean_metadata = {}
                             for k, v in chunk_metadata.items():
@@ -349,7 +353,9 @@ def run_watcher_backfill_db(args, pipeline: ThothPipeline):
                                     clean_metadata[k] = str(v)
 
                             # Convert embedding to PostgreSQL vector format
-                            embedding_str = '[' + ','.join(str(x) for x in embedding) + ']'
+                            embedding_str = (
+                                '[' + ','.join(str(x) for x in embedding) + ']'
+                            )
 
                             result = await conn.fetchrow(
                                 """
@@ -419,9 +425,9 @@ def run_watcher_backfill_db(args, pipeline: ThothPipeline):
         try:
             stats = rag_service.get_statistics()
             logger.info('\nVector Store Statistics:')
-            logger.info(f"  Total chunks: {stats.get('total_chunks', 0)}")
-            logger.info(f"  Total papers indexed: {stats.get('total_papers', 0)}")
-            logger.info(f"  Backend: {stats.get('backend', 'Unknown')}")
+            logger.info(f'  Total chunks: {stats.get("total_chunks", 0)}')
+            logger.info(f'  Total papers indexed: {stats.get("total_papers", 0)}')
+            logger.info(f'  Backend: {stats.get("backend", "Unknown")}')
         except Exception as e:
             logger.warning(f'Could not retrieve vector store stats: {e}')
 
@@ -432,6 +438,7 @@ def run_watcher_backfill_db(args, pipeline: ThothPipeline):
     except Exception as e:
         logger.error(f'Error during database backfill: {e}')
         import traceback
+
         traceback.print_exc()
         return 1
 
@@ -439,7 +446,8 @@ def run_watcher_backfill_db(args, pipeline: ThothPipeline):
 def configure_subparser(subparsers):
     """Configure the subparser for the RAG watcher commands."""
     parser = subparsers.add_parser(
-        'rag-watcher', help='Manage the RAG watcher service for automatic document processing'
+        'rag-watcher',
+        help='Manage the RAG watcher service for automatic document processing',
     )
 
     watcher_subparsers = parser.add_subparsers(

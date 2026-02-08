@@ -16,9 +16,9 @@ from ..base_tools import MCPTool, MCPToolCallResult, NoInputTool
 class BackupCollectionMCPTool(MCPTool):
     """
     MCP tool for creating backups of the research collection.
-    
-    **DEPRECATED**: This tool is deprecated. Collection backup is an admin task 
-    that should be handled outside of agent workflows. This tool is no longer 
+
+    **DEPRECATED**: This tool is deprecated. Collection backup is an admin task
+    that should be handled outside of agent workflows. This tool is no longer
     registered in the MCP tool registry.
     """
 
@@ -316,9 +316,9 @@ class BackupCollectionMCPTool(MCPTool):
 class ExportArticleDataMCPTool(MCPTool):
     """
     MCP tool for exporting article data in various formats.
-    
-    **DEPRECATED**: This tool is deprecated. Data export is an admin task that 
-    should be handled outside of agent workflows. This tool is no longer 
+
+    **DEPRECATED**: This tool is deprecated. Data export is an admin task that
+    should be handled outside of agent workflows. This tool is no longer
     registered in the MCP tool registry.
     """
 
@@ -382,7 +382,9 @@ class ExportArticleDataMCPTool(MCPTool):
                 )
                 source_description = f"matching '{search_query}'"
             else:
-                articles = await self.service_manager.rag.search_async(query='', k=max_articles)
+                articles = await self.service_manager.rag.search_async(
+                    query='', k=max_articles
+                )
                 source_description = 'in collection'
 
             if not articles:
@@ -936,9 +938,9 @@ thoth_score: {article.get('score', 0)}
 class RestoreCollectionBackupMCPTool(MCPTool):
     """
     MCP tool for restoring collection backups.
-    
-    **DEPRECATED**: This tool is deprecated. Collection restoration is a 
-    critical admin task that should be handled outside of agent workflows. This 
+
+    **DEPRECATED**: This tool is deprecated. Collection restoration is a
+    critical admin task that should be handled outside of agent workflows. This
     tool is no longer registered in the MCP tool registry.
     """
 

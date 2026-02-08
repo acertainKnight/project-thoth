@@ -75,7 +75,7 @@ Review results with user:
 ⏰ **Schedule**: [daily/weekly]
 📊 **Expected**: ~[X] papers per run
 
-The system will automatically search for new papers and add them 
+The system will automatically search for new papers and add them
 to your collection. You'll find new papers in your daily/weekly digest."
 ```
 
@@ -141,12 +141,12 @@ list_research_questions()
 
 For each query:
   get_research_question(question_id="...")
-  
+
   Check:
   - Last run date
   - Papers found per run
   - User engagement (if tracked)
-  
+
   Recommend adjustments if needed
 ```
 
@@ -176,7 +176,7 @@ For each query:
 
 5. "Found 28 papers in the initial test. Here are the top 5:
     [list]
-    
+
     Does this look like what you're looking for?"
 ```
 
@@ -204,7 +204,7 @@ For each query:
 
 6. run_discovery_for_question(question_id="attention-query-id")
 
-7. "Updated! Test run found 18 papers (down from 45). 
+7. "Updated! Test run found 18 papers (down from 45).
     Here are the top 5 - are these more relevant?"
 ```
 
@@ -214,11 +214,11 @@ For each query:
 
 ```
 1. "For comprehensive coverage, I recommend multiple focused queries:
-   
+
    Query 1: Model Architecture Efficiency
    Query 2: Training Efficiency
    Query 3: Inference Optimization
-   
+
    Each will capture different aspects. Shall I set these up?"
 
 2. [Create each query with specific keywords]
@@ -227,7 +227,7 @@ For each query:
     - Architecture: ~15 papers/week
     - Training: ~20 papers/week
     - Inference: ~25 papers/week
-    
+
     Total: ~60 papers/week. Manageable for your schedule?"
 ```
 

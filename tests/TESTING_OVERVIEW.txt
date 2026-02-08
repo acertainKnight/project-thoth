@@ -15,7 +15,7 @@ TEST ARCHITECTURE BREAKDOWN
    - Focus: Citation parsing, metric calculation, confidence scoring
    - Key: Property-based testing for edge case discovery
 
-2. INTEGRATION TESTS (40% of coverage)  
+2. INTEGRATION TESTS (40% of coverage)
    - 205 tests covering component interactions
    - Focus: Pipeline workflows, database operations, async safety
    - Key: Concurrent testing, transaction isolation

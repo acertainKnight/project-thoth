@@ -18,10 +18,10 @@ wait_for_postgres() {
     echo "  ✓ PostgreSQL is ready!"
 }
 
-# Function to ensure cache directories exist  
+# Function to ensure cache directories exist
 setup_cache_directories() {
     echo "==> Setting up cache directories..."
-    
+
     # Run as root to fix permissions (only if we're root or can sudo)
     if [ "$(id -u)" = "0" ]; then
         # We're root, do the setup
@@ -32,7 +32,7 @@ setup_cache_directories() {
         # We're not root, just ensure directories exist (permissions already set in Dockerfile)
         mkdir -p /app/cache/ocr /app/cache/analysis /app/cache/citations /app/cache/api_responses /app/cache/embeddings || true
     fi
-    
+
     echo "  ✓ Cache directories ready!"
 }
 
@@ -56,7 +56,7 @@ run_migrations() {
 main() {
     # Setup cache directories (always needed)
     setup_cache_directories
-    
+
     # Wait for dependencies
     wait_for_postgres
 

@@ -244,7 +244,9 @@ class RAGWatcherService(BaseService):
             self._watch_task = asyncio.create_task(self._process_queue_loop(handler))
 
             self.logger.success('✅ RAG watcher started successfully')
-            self.log_operation('watcher_started', directories=[str(d) for d in watch_dirs])
+            self.log_operation(
+                'watcher_started', directories=[str(d) for d in watch_dirs]
+            )
 
         except Exception as e:
             self.logger.error(f'Error starting RAG watcher: {e}')

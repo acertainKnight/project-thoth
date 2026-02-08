@@ -144,9 +144,7 @@ def test_citation_parsing_never_crashes(citation_text: str):
         assert citation.text == citation_text
 
     except Exception as e:
-        pytest.fail(
-            f'Parser crashed on input: {citation_text[:100]!r} with error: {e}'
-        )
+        pytest.fail(f'Parser crashed on input: {citation_text[:100]!r} with error: {e}')
 
 
 @pytest.mark.property
@@ -367,9 +365,7 @@ def test_citation_handles_malformed_input_gracefully(text: str):
         assert citation.text == text
 
     except Exception as e:
-        pytest.fail(
-            f'Parser failed on malformed input: {text[:100]!r} with error: {e}'
-        )
+        pytest.fail(f'Parser failed on malformed input: {text[:100]!r} with error: {e}')
 
 
 @pytest.mark.property
@@ -379,9 +375,9 @@ def test_citation_handles_malformed_input_gracefully(text: str):
     year=st.one_of(st.none(), st.just(0), st.integers(max_value=1000)),
 )
 def test_citation_handles_missing_fields(
-    title: Optional[str],  # noqa: UP007
-    authors: Optional[List[str]],  # noqa: UP006, UP007
-    year: Optional[int],  # noqa: UP007
+    title: str | None,
+    authors: List[str] | None,  # noqa: UP006
+    year: int | None,
 ):
     """
     Property: Parser should handle citations with missing/invalid fields.

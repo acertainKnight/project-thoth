@@ -1,10 +1,10 @@
-
 """
 Configuration manager for setup wizard.
 
 Handles loading, merging, validating, and saving configuration files
 with atomic writes and automatic backups.
 """
+
 from __future__ import annotations
 
 import json
@@ -20,14 +20,20 @@ from pydantic import ValidationError
 class ConfigManager:
     """Manages configuration loading, merging, and saving."""
 
-    def __init__(self, vault_path: Path):
-        """
-        Initialize configuration manager.
+    def __init__(self, vault_path: Path | None = None) -> None:
+        """Initialize configuration manager.
 
         Args:
-            vault_path: Path to Obsidian vault root
+            vault_path: Path to Obsidian vault root, or None when no vault
+                (e.g. new setup).
         """
         self.vault_path = vault_path
+        if vault_path is None:
+            # No vault: use sentinel paths; load_existing will return None,
+            # save will no-op or raise
+            self.settings_path = Path('.') / '_no_vault' / 'settings.json'
+            self.backup_dir = Path('.') / '_no_vault' / 'backups'
+            return
         # New layout: vault/thoth/_thoth/settings.json
         # Falls back to legacy vault/_thoth/settings.json if it exists
         new_path = vault_path / 'thoth' / '_thoth' / 'settings.json'
@@ -41,8 +47,7 @@ class ConfigManager:
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
     def load_existing(self) -> dict[str, Any] | None:
-        """
-        Load existing settings.json file.
+        """Load existing settings.json file.
 
         Returns:
             Dictionary of settings, or None if file doesn't exist or cannot be read
@@ -50,13 +55,19 @@ class ConfigManager:
         Raises:
             ValueError: If file contains invalid JSON
         """
-        if not self.settings_path.exists():
-            logger.info('No existing settings.json found')
+        if self.vault_path is None or not self.settings_path.exists():
+            if self.vault_path is None:
+                logger.info('No vault path; skipping load')
+            else:
+                logger.info('No existing settings.json found')
             return None
 
         try:
             with open(self.settings_path, encoding='utf-8') as f:
-                settings = json.load(f)
+                raw = json.load(f)
+            if not isinstance(raw, dict):
+                return None
+            settings: dict[str, Any] = raw
             logger.info(f'Loaded existing settings from {self.settings_path}')
             return settings
         except json.JSONDecodeError as e:
@@ -72,8 +83,7 @@ class ConfigManager:
     def deep_merge(
         self, existing: dict[str, Any], updates: dict[str, Any]
     ) -> dict[str, Any]:
-        """
-        Deep merge two dictionaries, preserving existing values.
+        """Deep merge two dictionaries, preserving existing values.
 
         Strategy: PREFER_EXISTING
         - Updates only override if explicitly provided in wizard
@@ -103,8 +113,7 @@ class ConfigManager:
         return result
 
     def validate_schema(self, settings: dict[str, Any]) -> bool:
-        """
-        Validate settings against Pydantic models.
+        """Validate settings against Pydantic models.
 
         Args:
             settings: Settings dictionary to validate
@@ -142,8 +151,7 @@ class ConfigManager:
             raise
 
     def backup(self) -> Path | None:
-        """
-        Create timestamped backup of existing settings.
+        """Create timestamped backup of existing settings.
 
         Returns:
             Path to backup file, or None if no settings exist
@@ -163,8 +171,7 @@ class ConfigManager:
             raise
 
     def atomic_save(self, settings: dict[str, Any]) -> None:
-        """
-        Save settings atomically using temp file + rename pattern.
+        """Save settings atomically using temp file + rename pattern.
 
         This ensures settings.json is never left in a corrupted state.
 
@@ -192,16 +199,17 @@ class ConfigManager:
             logger.error(f'Failed to save settings: {e}')
             raise
 
-    def save_with_backup(self, settings: dict[str, Any]) -> Path:
-        """
-        Save settings with automatic backup of existing file.
+    def save_with_backup(self, settings: dict[str, Any]) -> Path | None:
+        """Save settings with automatic backup of existing file.
 
         Args:
             settings: Settings dictionary to save
 
         Returns:
-            Path to backup file (if created)
+            Path to backup file if created, else None
         """
+        if self.vault_path is None:
+            raise ValueError('Cannot save: no vault path configured')
         # Create backup before making changes
         backup_path = self.backup()
 
@@ -217,13 +225,12 @@ class ConfigManager:
         except Exception as e:
             # If save fails and we have a backup, we can restore
             logger.error(f'Save failed: {e}')
-            if backup_path and backup_path.exists():
+            if backup_path is not None and backup_path.exists():
                 logger.info(f'Backup available at {backup_path} for manual recovery')
             raise
 
     def restore_backup(self, backup_path: Path) -> None:
-        """
-        Restore settings from a backup file.
+        """Restore settings from a backup file.
 
         Args:
             backup_path: Path to backup file
@@ -239,8 +246,7 @@ class ConfigManager:
             raise
 
     def list_backups(self) -> list[Path]:
-        """
-        List all available backup files, sorted by timestamp (newest first).
+        """List all available backup files, sorted newest first.
 
         Returns:
             List of backup file paths
@@ -249,13 +255,14 @@ class ConfigManager:
             return []
 
         backups = sorted(
-            self.backup_dir.glob('settings_*.json'), key=lambda p: p.stat().st_mtime, reverse=True
+            self.backup_dir.glob('settings_*.json'),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
         )
         return backups
 
     def save_letta_config(self, mode: str, api_key: str = '') -> None:
-        """
-        Save Letta configuration to settings.json.
+        """Save Letta configuration to settings.json.
 
         Args:
             mode: 'self-hosted' or 'cloud'
@@ -265,7 +272,9 @@ class ConfigManager:
             ValueError: If mode is invalid or settings cannot be saved
         """
         if mode not in ('self-hosted', 'cloud'):
-            raise ValueError(f"Invalid Letta mode: {mode}. Must be 'self-hosted' or 'cloud'")
+            raise ValueError(
+                f"Invalid Letta mode: {mode}. Must be 'self-hosted' or 'cloud'"
+            )
 
         # Load existing settings
         settings = self.load_existing() or {}
@@ -289,11 +298,10 @@ class ConfigManager:
 
         # Save atomically with backup
         self.save_with_backup(settings)
-        logger.info(f"Saved Letta configuration: mode={mode}")
+        logger.info(f'Saved Letta configuration: mode={mode}')
 
     def load_letta_config(self) -> dict[str, str]:
-        """
-        Load Letta configuration from settings.json.
+        """Load Letta configuration from settings.json.
 
         Returns:
             Dictionary with 'mode', 'url', and 'api_key' (if available)

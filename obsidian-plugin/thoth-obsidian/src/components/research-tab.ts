@@ -88,10 +88,10 @@ export class ResearchTabComponent {
       await this.loadArticles(this.selectedQuestion.id);
       this.renderArticlesSection(researchContainer);
     }
-    
+
     // Browser Workflows section
     await this.renderBrowserWorkflowsSection(researchContainer);
-    
+
     // Quick Actions section
     this.renderQuickActionsSection(researchContainer);
   }
@@ -100,7 +100,7 @@ export class ResearchTabComponent {
     try {
       const endpoint = this.plugin.getEndpointUrl();
       console.log('[ResearchTab] Loading research questions from:', `${endpoint}/api/research/questions`);
-      
+
       const response = await fetch(`${endpoint}/api/research/questions?limit=50&active_only=true`);
       console.log('[ResearchTab] Response status:', response.status);
 
@@ -179,7 +179,7 @@ export class ResearchTabComponent {
 
         // Question meta
         const meta = card.createDiv({ cls: 'thoth-card-meta' });
-        
+
         // Keywords
         const keywordsTags = meta.createDiv({ cls: 'thoth-tags' });
         question.keywords.slice(0, 3).forEach(keyword => {
@@ -231,7 +231,7 @@ export class ResearchTabComponent {
 
     // Filter tabs
     const filters = section.createDiv({ cls: 'thoth-filters' });
-    
+
     const filterButtons = [
       { label: 'All', filter: 'all' },
       { label: 'New', filter: 'new' },
@@ -371,7 +371,7 @@ export class ResearchTabComponent {
     try {
       const endpoint = this.plugin.getEndpointUrl();
       console.log('[ResearchTab] Loading articles for question:', questionId);
-      
+
       const response = await fetch(
         `${endpoint}/api/research/questions/${questionId}/articles?limit=50`
       );
@@ -410,14 +410,14 @@ export class ResearchTabComponent {
       const endpoint = this.plugin.getEndpointUrl();
       const questionId = this.selectedQuestion.id;
       const matchId = article.match_id;
-      
+
       console.log('[ResearchTab] Rating article:', {
         questionId,
         matchId,
         sentiment,
         articleTitle: article.title
       });
-      
+
       const response = await fetch(
         `${endpoint}/api/research/questions/${questionId}/articles/${matchId}/sentiment`,
         {
@@ -640,7 +640,7 @@ export class ResearchTabComponent {
 
   private async filterArticles(filter: string) {
     this.currentFilter = filter;
-    
+
     // Apply filter starting from all articles
     let filtered = [...this.allArticles];
 
@@ -668,47 +668,47 @@ export class ResearchTabComponent {
 
   private getTimeAgo(date: Date): string {
     const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-    
+
     if (seconds < 60) return 'just now';
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
     if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-    
+
     return date.toLocaleDateString();
   }
 
   // Browser Workflows Section
   private async renderBrowserWorkflowsSection(container: HTMLElement) {
     const section = container.createDiv({ cls: 'thoth-workflows-section' });
-    
+
     const sectionHeader = section.createDiv({ cls: 'thoth-section-header' });
     sectionHeader.createEl('h3', { text: '🌐 Browser Workflows' });
-    
+
     const createBtn = sectionHeader.createEl('button', {
       text: '+ Create Workflow',
       cls: 'thoth-create-btn'
     });
-    
+
     createBtn.onclick = () => {
       const modal = new WorkflowBuilderModal((this.plugin as any).app, this.plugin);
       modal.open();
     };
-    
+
     // Workflows list
     const workflowsList = section.createDiv({ cls: 'thoth-workflows-list' });
-    
+
     try {
       const endpoint = (this.plugin as any).getEndpointUrl();
       const response = await fetch(`${endpoint}/api/workflows`);
-      
+
       if (response.ok) {
         const workflows = await response.json();
-        
+
         if (workflows.length === 0) {
           const empty = workflowsList.createDiv({ cls: 'thoth-empty-state-small' });
-          empty.createEl('p', { 
+          empty.createEl('p', {
             text: 'No browser workflows yet. Create one to automate paper discovery from custom sources.',
-            cls: 'thoth-empty-text' 
+            cls: 'thoth-empty-text'
           });
         } else {
           workflows.forEach((workflow: any) => {
@@ -726,32 +726,32 @@ export class ResearchTabComponent {
 
   private renderWorkflowCard(container: HTMLElement, workflow: any) {
     const card = container.createDiv({ cls: 'thoth-workflow-card' });
-    
+
     const header = card.createDiv({ cls: 'thoth-workflow-header' });
-    header.createEl('span', { 
+    header.createEl('span', {
       text: workflow.name || 'Unnamed Workflow',
       cls: 'thoth-workflow-name'
     });
-    
+
     const status = header.createEl('span', {
       cls: `thoth-workflow-status ${workflow.is_active ? 'active' : 'inactive'}`
     });
     status.setText(workflow.is_active ? '● Active' : '○ Inactive');
-    
+
     if (workflow.schedule) {
-      card.createEl('p', { 
+      card.createEl('p', {
         text: `Schedule: ${workflow.schedule}`,
         cls: 'thoth-workflow-schedule'
       });
     }
-    
+
     const actions = card.createDiv({ cls: 'thoth-workflow-actions' });
-    
+
     const runBtn = actions.createEl('button', {
       text: '▶ Run',
       cls: 'thoth-workflow-run-btn'
     });
-    
+
     runBtn.onclick = async () => {
       try {
         const endpoint = (this.plugin as any).getEndpointUrl();
@@ -768,12 +768,12 @@ export class ResearchTabComponent {
   // Quick Actions Section
   private renderQuickActionsSection(container: HTMLElement) {
     const section = container.createDiv({ cls: 'thoth-quick-actions-section' });
-    
+
     const sectionHeader = section.createDiv({ cls: 'thoth-section-header' });
     sectionHeader.createEl('h3', { text: '⚡ Quick Actions' });
-    
+
     const actionsGrid = section.createDiv({ cls: 'thoth-quick-actions-grid' });
-    
+
     // Search Knowledge Base
     this.createQuickAction(
       actionsGrid,
@@ -785,7 +785,7 @@ export class ResearchTabComponent {
         // Could open a search modal or trigger RAG search
       }
     );
-    
+
     // Process PDF
     this.createQuickAction(
       actionsGrid,
@@ -796,7 +796,7 @@ export class ResearchTabComponent {
         new Notice('PDF processing UI coming soon! Drop PDFs in your vault/thoth/papers/pdfs folder.');
       }
     );
-    
+
     // View Statistics
     this.createQuickAction(
       actionsGrid,

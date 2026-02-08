@@ -7,7 +7,7 @@ database accordingly.
 """
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from loguru import logger
@@ -285,7 +285,7 @@ class ObsidianReviewService:
     def _parse_dashboard_markdown(
         self,
         markdown_body: str,
-        question_id: Optional[str] = None,  # noqa: ARG002, UP007
+        question_id: str | None = None,  # noqa: ARG002
     ) -> list[dict]:
         """
         Parse dashboard markdown format for article reviews.
@@ -356,8 +356,8 @@ class ObsidianReviewService:
     async def _lookup_match_id_by_title(
         self,
         title: str,
-        question_id: Optional[str] = None,  # noqa: UP007
-    ) -> Optional[UUID]:  # noqa: UP007
+        question_id: str | None = None,
+    ) -> UUID | None:
         """
         Look up article_research_matches.id by article title.
 
@@ -409,7 +409,7 @@ class ObsidianReviewService:
             logger.error(f"Error looking up match ID for title '{title}': {e}")
             return None
 
-    async def _get_article_info(self, match_id: UUID) -> Optional[dict]:  # noqa: UP007
+    async def _get_article_info(self, match_id: UUID) -> dict | None:
         """
         Get article information (title, pdf_url) from a match ID.
 

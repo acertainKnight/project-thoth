@@ -11,7 +11,7 @@ import signal
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import uvicorn
 from fastapi import FastAPI
@@ -31,8 +31,9 @@ from thoth.server.chat_models import ChatPersistenceManager
 
 # Optional hot reload for development (requires watchdog package)
 try:
-    from thoth.server.hot_reload import SettingsFileWatcher
     from watchdog.observers import Observer
+
+    from thoth.server.hot_reload import SettingsFileWatcher
 except ImportError:
     SettingsFileWatcher = None  # Not available in all service configurations
     Observer = None
@@ -56,18 +57,19 @@ from thoth.server.routers import (  # noqa: I001
 # Browser workflows router is optional (requires playwright)
 try:
     from thoth.server.routers import browser_workflows
+
     BROWSER_WORKFLOWS_AVAILABLE = True
 except ImportError as e:
     import warnings
+
     warnings.warn(
-        f"Browser workflows not available (missing playwright): {e}",
-        ImportWarning
+        f'Browser workflows not available (missing playwright): {e}', ImportWarning
     )
     browser_workflows = None
     BROWSER_WORKFLOWS_AVAILABLE = False
-from thoth.services.llm_router import LLMRouter
 from thoth.config import config
 from thoth.discovery.scheduler import DiscoveryScheduler
+from thoth.services.llm_router import LLMRouter
 
 # Module-level variables to store configuration
 pdf_dir: Path = None
@@ -77,16 +79,16 @@ current_config: dict[str, Any] = {}
 
 # Service manager initialized when the server starts
 # Global watcher instance for settings hot-reload (kept global for lifecycle management)
-_settings_watcher: Optional[SettingsFileWatcher] = None  # noqa: UP007
+_settings_watcher: SettingsFileWatcher | None = None
 
 # Global watcher instance for schema hot-reload (kept global for lifecycle management)
-_schema_watcher: Optional[SettingsFileWatcher] = None  # noqa: UP007
+_schema_watcher: SettingsFileWatcher | None = None
 
 # Global watcher instance for custom prompts hot-reload (kept global for lifecycle management)
-_prompts_watcher: Optional[SettingsFileWatcher] = None  # noqa: UP007
+_prompts_watcher: SettingsFileWatcher | None = None
 
 # Global discovery scheduler instance (kept global for lifecycle management)
-discovery_scheduler: Optional[DiscoveryScheduler] = None  # noqa: UP007
+discovery_scheduler: DiscoveryScheduler | None = None
 
 # Global workflow execution service (kept global for lifecycle management)
 workflow_execution_service = None
@@ -136,7 +138,9 @@ def _on_letta_model_reload(reloaded_config) -> None:
     if not new_model or new_model == _previous_letta_model:
         return
 
-    logger.info(f'Letta agent model changed: {_previous_letta_model!r} -> {new_model!r}')
+    logger.info(
+        f'Letta agent model changed: {_previous_letta_model!r} -> {new_model!r}'
+    )
     _previous_letta_model = new_model
 
     # Patch agents in a background thread to avoid blocking the watcher
@@ -184,7 +188,9 @@ def _on_letta_model_reload(reloaded_config) -> None:
                         f'Failed to update model for {name}: {patch_resp.status_code}'
                     )
 
-            logger.success(f'Letta agent model hot-reload complete: {patched} agent(s) updated')
+            logger.success(
+                f'Letta agent model hot-reload complete: {patched} agent(s) updated'
+            )
         except Exception as e:
             logger.error(f'Failed to hot-reload Letta agent model: {e}')
 
@@ -197,7 +203,7 @@ def _on_schema_reload():
     try:
         # Get schema service from processing service if available
         from thoth.services.service_manager import ServiceManager
-        
+
         manager = ServiceManager()
         if hasattr(manager, 'processing') and manager.processing:
             schema_service = manager.processing.analysis_schema_service
@@ -224,41 +230,41 @@ def _on_prompts_reload():
 
 class _PromptsChangeHandler:
     """Handler for file system events on custom prompt files."""
-    
+
     def __init__(self, watcher, prompts_dir: Path):
         self.watcher = watcher
         self.prompts_dir = prompts_dir.resolve()
-    
+
     def on_modified(self, event):
         """Called when a file is modified."""
         if event.is_directory:
             return
-        
+
         event_path = Path(event.src_path)
-        
+
         # Only watch .j2 files (Jinja2 templates)
         if event_path.suffix == '.j2':
             logger.debug(f'Prompt file modified: {event_path}')
             self.watcher._schedule_reload()
-    
+
     def on_created(self, event):
         """Called when a file is created."""
         if event.is_directory:
             return
-        
+
         event_path = Path(event.src_path)
-        
+
         if event_path.suffix == '.j2':
             logger.info(f'Prompt file created: {event_path}')
             self.watcher._schedule_reload()
-    
+
     def on_deleted(self, event):
         """Called when a file is deleted."""
         if event.is_directory:
             return
-        
+
         event_path = Path(event.src_path)
-        
+
         if event_path.suffix == '.j2':
             logger.info(f'Prompt file deleted: {event_path}')
             self.watcher._schedule_reload()
@@ -308,20 +314,30 @@ async def shutdown_mcp_server(timeout: float = 10.0) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle FastAPI application lifespan events."""
-    global _settings_watcher, _schema_watcher, _prompts_watcher, discovery_scheduler, workflow_execution_service
+    global \
+        _settings_watcher, \
+        _schema_watcher, \
+        _prompts_watcher, \
+        discovery_scheduler, \
+        workflow_execution_service
 
     # Startup
     logger.info('Starting Thoth server application...')
 
     # Initialize Letta agents
     try:
-        from thoth.services.agent_initialization_service import AgentInitializationService
+        from thoth.services.agent_initialization_service import (
+            AgentInitializationService,
+        )
+
         agent_init = AgentInitializationService()
         agent_ids = await agent_init.initialize_all_agents()
         logger.info(f'✅ Agents initialized: {", ".join(agent_ids.keys())}')
     except Exception as e:
         logger.warning(f'Could not initialize agents: {e}')
-        logger.warning('Continuing without agent initialization - agents may need manual setup')
+        logger.warning(
+            'Continuing without agent initialization - agents may need manual setup'
+        )
 
     # Initialize settings watcher if enabled
     if _should_enable_hot_reload():
@@ -346,11 +362,11 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f'Failed to start settings watcher: {e}')
             logger.warning('Continuing without settings hot-reload')
-        
+
         # Analysis schema file watcher
         try:
             schema_file = config.analysis_schema_path
-            
+
             if schema_file.exists():
                 logger.info(f'Enabling hot-reload for {schema_file}')
                 _schema_watcher = SettingsFileWatcher(
@@ -362,23 +378,28 @@ async def lifespan(app: FastAPI):
                 _schema_watcher.start()
                 logger.success('Analysis schema hot-reload enabled!')
             else:
-                logger.info(f'Schema file not found yet: {schema_file} (will be created on first use)')
+                logger.info(
+                    f'Schema file not found yet: {schema_file} (will be created on first use)'
+                )
         except Exception as e:
             logger.error(f'Failed to start schema watcher: {e}')
             logger.warning('Continuing without schema hot-reload')
-        
+
         # Custom prompts directory watcher (only if not using default prompts)
         try:
             prompts_dir = config.prompts_dir
             # Check if prompts_dir is in vault (custom) vs repo (default)
-            repo_prompts_dir = Path(__file__).parent.parent.parent / 'templates' / 'prompts'
+            repo_prompts_dir = (
+                Path(__file__).parent.parent.parent / 'templates' / 'prompts'
+            )
             is_custom_prompts = prompts_dir.resolve() != repo_prompts_dir.resolve()
-            
+
             if is_custom_prompts and prompts_dir.exists():
                 logger.info(f'Enabling hot-reload for custom prompts: {prompts_dir}')
                 # Watch the directory for any .j2 file changes
                 _prompts_watcher = SettingsFileWatcher(
-                    settings_file=prompts_dir / '.watch_trigger',  # Dummy file for directory watching
+                    settings_file=prompts_dir
+                    / '.watch_trigger',  # Dummy file for directory watching
                     debounce_seconds=2.0,
                     validate_before_reload=False,  # Don't validate since it's not JSON
                 )
@@ -386,17 +407,16 @@ async def lifespan(app: FastAPI):
                 # Start watching the directory
                 _prompts_watcher._observer = Observer()
                 _prompts_watcher._event_handler = _PromptsChangeHandler(
-                    watcher=_prompts_watcher,
-                    prompts_dir=prompts_dir
+                    watcher=_prompts_watcher, prompts_dir=prompts_dir
                 )
                 _prompts_watcher._observer.schedule(
-                    _prompts_watcher._event_handler,
-                    str(prompts_dir),
-                    recursive=True
+                    _prompts_watcher._event_handler, str(prompts_dir), recursive=True
                 )
                 _prompts_watcher._observer.start()
                 _prompts_watcher._is_running = True
-                logger.success(f'Custom prompts hot-reload enabled! Watching: {prompts_dir}')
+                logger.success(
+                    f'Custom prompts hot-reload enabled! Watching: {prompts_dir}'
+                )
             elif is_custom_prompts:
                 logger.info(f'Custom prompts directory not found yet: {prompts_dir}')
             else:
@@ -412,6 +432,7 @@ async def lifespan(app: FastAPI):
         global _previous_letta_model
         _previous_letta_model = config.settings.memory.letta.agent_model or None
         from thoth.config import Config
+
         Config.register_reload_callback('letta_model_sync', _on_letta_model_reload)
         logger.info(
             f'Letta model reload callback registered '
@@ -438,7 +459,9 @@ async def lifespan(app: FastAPI):
             logger.success('ServiceManager initialized in lifespan')
         except Exception as e:
             logger.error(f'Failed to initialize ServiceManager in lifespan: {e}')
-            logger.warning('Continuing without ServiceManager (most features will not work)')
+            logger.warning(
+                'Continuing without ServiceManager (most features will not work)'
+            )
 
     # Initialize PostgreSQL connection pool if postgres service exists
     if service_manager and hasattr(service_manager, 'postgres'):
@@ -473,7 +496,7 @@ async def lifespan(app: FastAPI):
                 'Continuing without workflow execution service (browser workflows will not work)'
             )
             workflow_execution_service = None
-    
+
     # Store workflow_execution_service in app.state for router access
     if workflow_execution_service is not None:
         app.state.workflow_execution_service = workflow_execution_service
@@ -574,7 +597,7 @@ async def lifespan(app: FastAPI):
                 logger.success('Settings watcher stopped')
             except Exception as e:
                 logger.error(f'Error stopping settings watcher: {e}')
-        
+
         if _schema_watcher is not None:
             try:
                 logger.info('Stopping schema watcher...')
@@ -582,7 +605,7 @@ async def lifespan(app: FastAPI):
                 logger.success('Schema watcher stopped')
             except Exception as e:
                 logger.error(f'Error stopping schema watcher: {e}')
-        
+
         if _prompts_watcher is not None:
             try:
                 logger.info('Stopping prompts watcher...')
@@ -614,7 +637,14 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=['*'],  # Allow requests from any origin (including Obsidian)
         allow_credentials=True,
-        allow_methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],  # Include OPTIONS and PATCH
+        allow_methods=[
+            'GET',
+            'POST',
+            'PUT',
+            'DELETE',
+            'OPTIONS',
+            'PATCH',
+        ],  # Include OPTIONS and PATCH
         allow_headers=['*'],
     )
 
@@ -637,13 +667,13 @@ def create_app() -> FastAPI:
     app.include_router(
         research_questions.router, tags=['research-questions']
     )  # Week 4: Research question management
-    
+
     # Browser workflows router (optional - only if playwright is available)
     if BROWSER_WORKFLOWS_AVAILABLE and browser_workflows:
         app.include_router(
             browser_workflows.router, tags=['workflows']
         )  # Browser workflow management (router already has /api/workflows prefix)
-    
+
     app.include_router(config_router.router, prefix='/config', tags=['config'])
     app.include_router(models.router, prefix='/models', tags=['models'])
     app.include_router(operations.router, prefix='/operations', tags=['operations'])
@@ -825,11 +855,13 @@ async def start_server(
 
         # Phase 5 COMPLETE: All routers now use FastAPI Depends() for dependency injection
         # set_dependencies() calls removed - dependencies injected from app.state
-        
+
         # Still need to set directories for health router (not migrated - not necessary)
         health.set_directories(pdf_dir, notes_dir, base_url)
-        
-        logger.info('✅ Phase 5: All router dependencies injected via FastAPI Depends()')
+
+        logger.info(
+            '✅ Phase 5: All router dependencies injected via FastAPI Depends()'
+        )
 
         logger.info('Thoth server initialization completed successfully')
 
@@ -869,7 +901,7 @@ def start_obsidian_server(
         app.state.research_agent = research_agent
         app.state.chat_manager = chat_manager
         app.state.workflow_execution_service = workflow_execution_service
-        
+
         logger.info('Dependencies stored in app.state for router access')
 
         # Configure uvicorn
@@ -916,7 +948,7 @@ app = create_app()
 
 # Initialize empty app.state for direct imports (will be populated by lifespan or explicit initialization)
 app.state.service_manager = None
-app.state.research_agent = None  
+app.state.research_agent = None
 app.state.chat_manager = None
 app.state.workflow_execution_service = None
 

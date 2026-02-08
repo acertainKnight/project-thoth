@@ -25,7 +25,7 @@ import hashlib
 import time
 from dataclasses import dataclass, field  # noqa: F401
 from datetime import datetime, timedelta  # noqa: F401
-from typing import Any, Dict, Optional  # noqa: UP035
+from typing import Any, Dict  # noqa: UP035
 
 from cachetools import LRUCache, TTLCache
 from loguru import logger
@@ -130,8 +130,8 @@ class RealtimeCitationProcessor:
 
     def __init__(
         self,
-        config: Optional[RealTimeConfig] = None,  # noqa: UP007
-        resolution_chain: Optional[CitationResolutionChain] = None,  # noqa: UP007
+        config: RealTimeConfig | None = None,
+        resolution_chain: CitationResolutionChain | None = None,
     ):
         """
         Initialize real-time citation processor.
@@ -156,7 +156,9 @@ class RealtimeCitationProcessor:
         self.statistics = CacheStatistics()
 
         # Lock for thread-safe cache access
-        self._cache_lock: Optional[asyncio.Lock] = None  # Lazy init to avoid event loop binding
+        self._cache_lock: asyncio.Lock | None = (
+            None  # Lazy init to avoid event loop binding
+        )
 
         logger.info(
             f'RealtimeCitationProcessor initialized with timeout={self.config.timeout_seconds}s, '
@@ -198,7 +200,7 @@ class RealtimeCitationProcessor:
 
         return key_hash
 
-    async def _check_positive_cache(self, cache_key: str) -> Optional[ResolutionResult]:  # noqa: UP007
+    async def _check_positive_cache(self, cache_key: str) -> ResolutionResult | None:
         """
         Check positive result cache.
 

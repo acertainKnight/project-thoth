@@ -5,7 +5,7 @@ This module tracks which papers were discovered by which sources,
 enabling deduplication and source attribution.
 """
 
-from typing import Any, Dict, List, Optional  # noqa: I001, UP035
+from typing import Any, Dict, List  # noqa: I001, UP035
 from datetime import datetime, timedelta
 from loguru import logger
 
@@ -23,9 +23,9 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
         self,
         paper_id: str,
         source_id: str,
-        source_metadata: Optional[Dict[str, Any]] = None,  # noqa: UP006, UP007
-        discovered_at: Optional[datetime] = None,  # noqa: UP007
-    ) -> Optional[str]:  # noqa: UP007
+        source_metadata: Dict[str, Any] | None = None,  # noqa: UP006
+        discovered_at: datetime | None = None,
+    ) -> str | None:
         """
         Record that a paper was discovered by a source.
 
@@ -144,7 +144,7 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
         source_id: str,
         limit: int = 100,
         offset: int = 0,
-        since: Optional[datetime] = None,  # noqa: UP007
+        since: datetime | None = None,
     ) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get papers discovered by a specific source.
@@ -223,7 +223,7 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
     async def count_discoveries_by_source(
         self,
         source_id: str,
-        since: Optional[datetime] = None,  # noqa: UP007
+        since: datetime | None = None,
     ) -> int:
         """
         Count discoveries for a specific source.
@@ -329,7 +329,7 @@ class PaperDiscoveryRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
 
     async def get_papers_not_in_vault(
         self,
-        source_id: Optional[str] = None,  # noqa: UP007
+        source_id: str | None = None,
         limit: int = 100,
     ) -> List[Dict[str, Any]]:  # noqa: UP006
         """

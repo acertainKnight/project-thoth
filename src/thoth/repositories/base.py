@@ -7,7 +7,7 @@ generic CRUD methods, caching support, and error handling.
 
 import json  # noqa: I001
 from datetime import datetime, date  # noqa: F401
-from typing import Any, Dict, List, Optional, TypeVar, Generic, Union  # noqa: UP035
+from typing import Any, Dict, List, TypeVar, Generic, Union  # noqa: UP035
 from uuid import UUID
 from loguru import logger
 from cachetools import TTLCache
@@ -48,7 +48,7 @@ class BaseRepository(Generic[T]):
         self.postgres = postgres_service
         self.table_name = table_name
         self.use_cache = use_cache
-        self._cache: Optional[TTLCache] = None  # noqa: UP007
+        self._cache: TTLCache | None = None
 
         if use_cache:
             self._cache = TTLCache(maxsize=cache_size, ttl=cache_ttl)
@@ -59,7 +59,7 @@ class BaseRepository(Generic[T]):
         parts.extend(f'{k}={v}' for k, v in sorted(kwargs.items()))
         return ':'.join([self.table_name] + parts)  # noqa: RUF005
 
-    def _get_from_cache(self, key: str) -> Optional[T]:  # noqa: UP007
+    def _get_from_cache(self, key: str) -> T | None:
         """Get value from cache if enabled."""
         if not self.use_cache or self._cache is None:
             return None
@@ -80,7 +80,7 @@ class BaseRepository(Generic[T]):
         except Exception as e:
             logger.warning(f'Cache set failed: {e}')
 
-    def _invalidate_cache(self, pattern: Optional[str] = None) -> None:  # noqa: UP007
+    def _invalidate_cache(self, pattern: str | None = None) -> None:
         """Invalidate cache entries matching pattern."""
         if not self.use_cache or self._cache is None:
             return
@@ -95,7 +95,7 @@ class BaseRepository(Generic[T]):
         except Exception as e:
             logger.warning(f'Cache invalidation failed: {e}')
 
-    async def create(self, data: Dict[str, Any]) -> Optional[int]:  # noqa: UP006, UP007
+    async def create(self, data: Dict[str, Any]) -> int | None:  # noqa: UP006
         """
         Create a new record.
 
@@ -152,7 +152,7 @@ class BaseRepository(Generic[T]):
             logger.error(f'Failed to create {self.table_name} record: {e}')
             return None
 
-    async def get_by_id(self, record_id: Union[int, UUID]) -> Optional[Dict[str, Any]]:  # noqa: UP006, UP007
+    async def get_by_id(self, record_id: Union[int, UUID]) -> Dict[str, Any] | None:  # noqa: UP006, UP007
         """
         Get a record by ID.
 
@@ -182,7 +182,7 @@ class BaseRepository(Generic[T]):
             logger.error(f'Failed to get {self.table_name} by ID {record_id}: {e}')
             return None
 
-    async def update(self, record_id: Union[int, UUID], data: Dict[str, Any]) -> bool:  # noqa: UP006
+    async def update(self, record_id: int | UUID, data: Dict[str, Any]) -> bool:  # noqa: UP006
         """
         Update a record.
 
@@ -231,7 +231,7 @@ class BaseRepository(Generic[T]):
             logger.error(f'Failed to update {self.table_name} record {record_id}: {e}')
             return False
 
-    async def delete(self, record_id: Union[int, UUID]) -> bool:
+    async def delete(self, record_id: int | UUID) -> bool:
         """
         Delete a record.
 
@@ -257,8 +257,8 @@ class BaseRepository(Generic[T]):
 
     async def list_all(
         self,
-        limit: Optional[int] = None,  # noqa: UP007
-        offset: Optional[int] = None,  # noqa: UP007
+        limit: int | None = None,
+        offset: int | None = None,
     ) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         List all records with pagination.
@@ -304,7 +304,7 @@ class BaseRepository(Generic[T]):
             logger.error(f'Failed to count {self.table_name} records: {e}')
             return 0
 
-    async def exists(self, record_id: Union[int, UUID]) -> bool:
+    async def exists(self, record_id: int | UUID) -> bool:
         """
         Check if a record exists.
 

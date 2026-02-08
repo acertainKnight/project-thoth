@@ -1,9 +1,9 @@
-
 """
 Docker detection and validation.
 
 Detects Docker installation, daemon status, and Docker Compose availability.
 """
+
 from __future__ import annotations
 
 import platform
@@ -249,12 +249,14 @@ class DockerDetector:
                     continue
                 parts = line.split('|')
                 if len(parts) == 4:
-                    containers.append({
-                        'id': parts[0],
-                        'name': parts[1],
-                        'image': parts[2],
-                        'status': parts[3],
-                    })
+                    containers.append(
+                        {
+                            'id': parts[0],
+                            'name': parts[1],
+                            'image': parts[2],
+                            'status': parts[3],
+                        }
+                    )
 
             return containers
 

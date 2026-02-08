@@ -42,7 +42,7 @@ Ask these questions conversationally (not all at once):
    - Staying current in your area?
    - Building expertise for a project?"
 
-4. **Information Preferences**: "How do you like to consume research? 
+4. **Information Preferences**: "How do you like to consume research?
    - Deep dives into individual papers?
    - Broad surveys of topics?
    - Following specific authors or labs?"

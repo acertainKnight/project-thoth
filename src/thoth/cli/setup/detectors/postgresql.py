@@ -1,9 +1,9 @@
-
 """
 PostgreSQL detection and connection testing.
 
 Tests PostgreSQL connectivity, validates pgvector extension, and checks health.
 """
+
 from __future__ import annotations
 
 import asyncio

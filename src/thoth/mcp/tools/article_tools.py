@@ -294,16 +294,31 @@ class UpdateArticleMetadataMCPTool(MCPTool):
                             'items': {'type': 'string'},
                             'description': 'List of author names',
                         },
-                        'abstract': {'type': 'string', 'description': 'Updated abstract'},
-                        'journal': {'type': 'string', 'description': 'Journal or venue name'},
+                        'abstract': {
+                            'type': 'string',
+                            'description': 'Updated abstract',
+                        },
+                        'journal': {
+                            'type': 'string',
+                            'description': 'Journal or venue name',
+                        },
                         'publication_date': {
                             'type': 'string',
                             'description': 'Publication date (YYYY-MM-DD)',
                         },
-                        'doi': {'type': 'string', 'description': 'Digital Object Identifier'},
-                        'arxiv_id': {'type': 'string', 'description': 'arXiv identifier'},
+                        'doi': {
+                            'type': 'string',
+                            'description': 'Digital Object Identifier',
+                        },
+                        'arxiv_id': {
+                            'type': 'string',
+                            'description': 'arXiv identifier',
+                        },
                         'url': {'type': 'string', 'description': 'URL to the article'},
-                        'citation_count': {'type': 'integer', 'description': 'Number of citations'},
+                        'citation_count': {
+                            'type': 'integer',
+                            'description': 'Number of citations',
+                        },
                     },
                     'additionalProperties': False,
                 },
@@ -344,7 +359,9 @@ class UpdateArticleMetadataMCPTool(MCPTool):
 
             # Check if identifier looks like a DOI
             if identifier.startswith('10.') or 'doi.org' in identifier:
-                doi = identifier.replace('https://doi.org/', '').replace('http://doi.org/', '')
+                doi = identifier.replace('https://doi.org/', '').replace(
+                    'http://doi.org/', ''
+                )
                 paper = await paper_repo.get_by_doi(doi)
                 if paper:
                     paper_id = paper.get('id')
@@ -354,7 +371,9 @@ class UpdateArticleMetadataMCPTool(MCPTool):
             elif any(c.isdigit() for c in identifier) and (
                 'arxiv' in identifier.lower() or '.' in identifier
             ):
-                arxiv_id = identifier.replace('arXiv:', '').replace('arxiv:', '').strip()
+                arxiv_id = (
+                    identifier.replace('arXiv:', '').replace('arxiv:', '').strip()
+                )
                 paper = await paper_repo.get_by_arxiv_id(arxiv_id)
                 if paper:
                     paper_id = paper.get('id')
@@ -429,8 +448,15 @@ class UpdateArticleMetadataMCPTool(MCPTool):
             if update_metadata:
                 # Filter to only allowed fields that exist in the papers table
                 allowed_fields = {
-                    'title', 'authors', 'abstract', 'journal', 'publication_date',
-                    'doi', 'arxiv_id', 'url', 'citation_count',
+                    'title',
+                    'authors',
+                    'abstract',
+                    'journal',
+                    'publication_date',
+                    'doi',
+                    'arxiv_id',
+                    'url',
+                    'citation_count',
                 }
                 filtered_metadata = {
                     k: v for k, v in update_metadata.items() if k in allowed_fields
@@ -447,7 +473,9 @@ class UpdateArticleMetadataMCPTool(MCPTool):
                                 display_value = display_value[:50] + '...'
                             updates_made.append(f'Updated {field}: {display_value}')
                     else:
-                        logger.warning(f'Failed to update metadata for paper {paper_id}')
+                        logger.warning(
+                            f'Failed to update metadata for paper {paper_id}'
+                        )
 
                 # Note any ignored fields
                 ignored_fields = set(update_metadata.keys()) - allowed_fields
@@ -473,11 +501,11 @@ class UpdateArticleMetadataMCPTool(MCPTool):
                 response_text += f'  - {update}\n'
 
             response_text += '\n**Note:** Metadata changes are saved to the database. '
-            response_text += 'RAG index may need reindexing to reflect content changes in search.'
-
-            return MCPToolCallResult(
-                content=[{'type': 'text', 'text': response_text}]
+            response_text += (
+                'RAG index may need reindexing to reflect content changes in search.'
             )
+
+            return MCPToolCallResult(content=[{'type': 'text', 'text': response_text}])
 
         except Exception as e:
             logger.error(f'Error updating article metadata: {e}')
@@ -487,9 +515,9 @@ class UpdateArticleMetadataMCPTool(MCPTool):
 class DeleteArticleMCPTool(MCPTool):
     """
     MCP tool for removing an article from the knowledge base.
-    
-    **DEPRECATED**: This tool is deprecated. Article deletion is too risky for 
-    agent use and should be handled manually by the user. This tool is no 
+
+    **DEPRECATED**: This tool is deprecated. Article deletion is too risky for
+    agent use and should be handled manually by the user. This tool is no
     longer registered in the MCP tool registry.
     """
 
@@ -537,7 +565,9 @@ class DeleteArticleMCPTool(MCPTool):
                 )
 
             # Find the article first
-            search_results = await self.service_manager.rag.search_async(query=identifier, k=1)
+            search_results = await self.service_manager.rag.search_async(
+                query=identifier, k=1
+            )
 
             if not search_results:
                 return MCPToolCallResult(

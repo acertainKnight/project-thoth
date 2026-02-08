@@ -238,7 +238,7 @@ reindex_collection(force=true)
    - Lowered relevance threshold (0.8 → 0.6) for more results
    - Enabled hybrid search for better keyword matching
    - Enabled reranking for higher quality top results
-   
+
    Try your search again and let me know if it's improved."
 ```
 
@@ -254,10 +254,10 @@ reindex_collection(force=true)
 2. Confirm reindex is needed
    "Yes, changing the embedding model requires a full reindex.
    This will regenerate embeddings for all articles.
-   
+
    Current collection: ~500 papers
    Estimated time: 15-20 minutes
-   
+
    Proceed with reindex?"
 
 3. Execute reindex
@@ -292,10 +292,10 @@ reindex_collection(force=true)
 
 2. Confirm
    "Created 'reinforcement_learning' index with 47 papers.
-   
+
    To search this focused index:
    - Use search_custom_index with index_name='reinforcement_learning'
-   
+
    This will give faster, more focused results for RL queries."
 ```
 

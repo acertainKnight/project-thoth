@@ -8,7 +8,7 @@ transaction context managers, and retry logic for all database operations.
 import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import asyncpg
 
@@ -27,7 +27,7 @@ class PostgresService(BaseService):
     - Health checks and monitoring
     """
 
-    def __init__(self, config=None, database_url: Optional[str] = None):  # noqa: UP007
+    def __init__(self, config=None, database_url: str | None = None):
         """
         Initialize the PostgresService.
 
@@ -37,7 +37,7 @@ class PostgresService(BaseService):
         """
         super().__init__(config)
         self.database_url = database_url or config.secrets.database_url
-        self._pool: Optional[asyncpg.Pool] = None  # noqa: UP007
+        self._pool: asyncpg.Pool | None = None
         self._connection_lock = asyncio.Lock()
 
     async def initialize(self) -> None:
@@ -117,7 +117,7 @@ class PostgresService(BaseService):
         self,
         query: str,
         *args,
-        timeout: Optional[float] = None,  # noqa: UP007
+        timeout: float | None = None,
         retry_count: int = 3,
     ) -> str:
         """
@@ -158,7 +158,7 @@ class PostgresService(BaseService):
         self,
         query: str,
         *args,
-        timeout: Optional[float] = None,  # noqa: UP007
+        timeout: float | None = None,
         retry_count: int = 3,
     ) -> list[asyncpg.Record]:
         """
@@ -200,9 +200,9 @@ class PostgresService(BaseService):
         self,
         query: str,
         *args,
-        timeout: Optional[float] = None,  # noqa: UP007
+        timeout: float | None = None,
         retry_count: int = 3,
-    ) -> Optional[asyncpg.Record]:  # noqa: UP007
+    ) -> asyncpg.Record | None:
         """
         Fetch a single row with retry logic.
 
@@ -243,7 +243,7 @@ class PostgresService(BaseService):
         query: str,
         *args,
         column: int = 0,
-        timeout: Optional[float] = None,  # noqa: UP007
+        timeout: float | None = None,
         retry_count: int = 3,
     ) -> Any:
         """
@@ -288,7 +288,7 @@ class PostgresService(BaseService):
         self,
         query: str,
         args: list[tuple],
-        timeout: Optional[float] = None,  # noqa: UP007
+        timeout: float | None = None,
         retry_count: int = 3,
     ) -> None:
         """

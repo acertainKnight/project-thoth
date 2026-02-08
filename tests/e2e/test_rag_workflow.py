@@ -49,6 +49,7 @@ class TestRAGWorkflowStructure:
         """Test RAGManager class exists."""
         try:
             from thoth.rag.rag_manager import RAGManager
+
             assert RAGManager is not None
         except ImportError:
             pytest.skip("RAG components require 'embeddings' extras")
@@ -57,6 +58,7 @@ class TestRAGWorkflowStructure:
         """Test VectorStore class exists."""
         try:
             from thoth.rag.vector_store import VectorStore
+
             assert VectorStore is not None
         except ImportError:
             pytest.skip("RAG components require 'embeddings' extras")
@@ -65,6 +67,7 @@ class TestRAGWorkflowStructure:
         """Test Embeddings class exists."""
         try:
             from thoth.rag.embeddings import Embeddings
+
             assert Embeddings is not None
         except ImportError:
             pytest.skip("RAG components require 'embeddings' extras")
@@ -82,6 +85,7 @@ class TestRAGWorkflowIntegration:
         """Test RAG evaluation framework exists."""
         try:
             from thoth.rag import evaluation
+
             assert evaluation is not None
         except ImportError:
             pytest.skip("RAG evaluation requires 'embeddings' extras")
@@ -91,14 +95,16 @@ class TestRAGWorkflowIntegration:
         try:
             # Check if LangChain components are available
             import langchain
+
             assert langchain is not None
         except ImportError:
-            pytest.skip("LangChain not installed")
+            pytest.skip('LangChain not installed')
 
     def test_sentence_transformers_available(self):
         """Test sentence-transformers is available (optional dependency)."""
         try:
             import sentence_transformers
+
             assert sentence_transformers is not None
         except ImportError:
             pytest.skip("sentence-transformers requires 'embeddings' extras")
@@ -110,13 +116,13 @@ class TestRAGAdvancedTools:
     def test_advanced_rag_tools_exist(self):
         """Test advanced RAG tools exist."""
         from thoth.mcp.tools import advanced_rag_tools
-        
+
         assert advanced_rag_tools is not None
 
     def test_rag_mcp_tools_registered(self):
         """Test RAG tools are registered in MCP."""
         from thoth.mcp.tools import advanced_rag_tools
-        
+
         # Check module has tool definitions
         assert hasattr(advanced_rag_tools, '__file__')
 
@@ -128,7 +134,10 @@ class TestRAGWorkflowMethods:
         """Test RAGManager has search method."""
         try:
             from thoth.rag.rag_manager import RAGManager
-            assert hasattr(RAGManager, 'search') or hasattr(RAGManager, 'semantic_search')
+
+            assert hasattr(RAGManager, 'search') or hasattr(
+                RAGManager, 'semantic_search'
+            )
         except ImportError:
             pytest.skip("RAG components require 'embeddings' extras")
 
@@ -136,7 +145,10 @@ class TestRAGWorkflowMethods:
         """Test RAGManager has indexing method."""
         try:
             from thoth.rag.rag_manager import RAGManager
-            assert hasattr(RAGManager, 'index_markdown_file') or hasattr(RAGManager, 'index_directory')
+
+            assert hasattr(RAGManager, 'index_markdown_file') or hasattr(
+                RAGManager, 'index_directory'
+            )
         except ImportError:
             pytest.skip("RAG components require 'embeddings' extras")
 
@@ -144,6 +156,7 @@ class TestRAGWorkflowMethods:
         """Test VectorStore has add method."""
         try:
             from thoth.rag.vector_store import VectorStore
+
             assert hasattr(VectorStore, 'add') or hasattr(VectorStore, 'add_texts')
         except ImportError:
             pytest.skip("RAG components require 'embeddings' extras")
@@ -152,7 +165,10 @@ class TestRAGWorkflowMethods:
         """Test VectorStore has search method."""
         try:
             from thoth.rag.vector_store import VectorStore
-            assert hasattr(VectorStore, 'search') or hasattr(VectorStore, 'similarity_search')
+
+            assert hasattr(VectorStore, 'search') or hasattr(
+                VectorStore, 'similarity_search'
+            )
         except ImportError:
             pytest.skip("RAG components require 'embeddings' extras")
 
@@ -160,7 +176,10 @@ class TestRAGWorkflowMethods:
         """Test Embeddings has embed method."""
         try:
             from thoth.rag.embeddings import Embeddings
-            assert hasattr(Embeddings, 'embed_documents') or hasattr(Embeddings, 'embed')
+
+            assert hasattr(Embeddings, 'embed_documents') or hasattr(
+                Embeddings, 'embed'
+            )
         except ImportError:
             pytest.skip("RAG components require 'embeddings' extras")
 
@@ -170,16 +189,21 @@ class TestRAGPipelineIntegration:
 
     def test_pipeline_has_rag_indexing(self):
         """Test document pipeline has RAG indexing capability."""
-        from thoth.pipelines.optimized_document_pipeline import OptimizedDocumentPipeline
-        
+        from thoth.pipelines.optimized_document_pipeline import (
+            OptimizedDocumentPipeline,
+        )
+
         # Check if pipeline has RAG-related methods
-        assert hasattr(OptimizedDocumentPipeline, '_index_to_rag') or \
-               hasattr(OptimizedDocumentPipeline, '_schedule_background_rag_indexing')
+        assert hasattr(OptimizedDocumentPipeline, '_index_to_rag') or hasattr(
+            OptimizedDocumentPipeline, '_schedule_background_rag_indexing'
+        )
 
     def test_pipeline_can_schedule_rag_indexing(self):
         """Test pipeline can schedule background RAG indexing."""
-        from thoth.pipelines.optimized_document_pipeline import OptimizedDocumentPipeline
-        
+        from thoth.pipelines.optimized_document_pipeline import (
+            OptimizedDocumentPipeline,
+        )
+
         # Verify background RAG indexing method exists
         assert hasattr(OptimizedDocumentPipeline, '_schedule_background_rag_indexing')
 
@@ -190,7 +214,7 @@ class TestRAGConfiguration:
     def test_rag_config_accessible(self):
         """Test RAG configuration is accessible."""
         from thoth.config import config
-        
+
         # Check if config has RAG-related settings
         assert config is not None
         # RAG settings may be optional

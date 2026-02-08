@@ -31,6 +31,7 @@ class UpdateSessionRequest(BaseModel):
 
 class SessionData(BaseModel):
     """Session data model."""
+
     id: str
     title: str
     created_at: str
@@ -43,12 +44,14 @@ class SessionData(BaseModel):
 
 class CreateSessionResponse(BaseModel):
     """Response for session creation."""
+
     status: str
     session: SessionData
 
 
 class UpdateSessionResponse(BaseModel):
     """Response for session update."""
+
     status: str
     message: str
     session: SessionData
@@ -56,18 +59,21 @@ class UpdateSessionResponse(BaseModel):
 
 class GetSessionResponse(BaseModel):
     """Response for getting a session."""
+
     status: str
     session: SessionData
 
 
 class DeleteSessionResponse(BaseModel):
     """Response for session deletion."""
+
     status: str
     message: str
 
 
 class ArchiveSessionResponse(BaseModel):
     """Response for session archiving."""
+
     status: str
     message: str
 

@@ -5,9 +5,8 @@ research questions that drive the discovery system.
 """
 
 from datetime import datetime, time, timedelta
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
-
 
 from thoth.config import Config
 from thoth.repositories.research_question_repository import ResearchQuestionRepository
@@ -46,15 +45,15 @@ class ResearchQuestionService(BaseService):
         topics: list[str],
         authors: list[str],
         selected_sources: list[str],
-        description: Optional[str] = None,  # noqa: UP007
+        description: str | None = None,
         schedule_frequency: str = 'daily',
-        schedule_time: Optional[str] = None,  # noqa: UP007
-        schedule_days_of_week: Optional[list[int]] = None,  # noqa: UP007
+        schedule_time: str | None = None,
+        schedule_days_of_week: list[int] | None = None,
         min_relevance_score: float = 0.5,
         auto_download_enabled: bool = False,
         auto_download_min_score: float = 0.7,
         max_articles_per_run: int = 50,  # noqa: ARG002
-    ) -> Optional[UUID]:  # noqa: UP007
+    ) -> UUID | None:
         """
         Create a new research question with validation.
 
@@ -234,7 +233,9 @@ class ResearchQuestionService(BaseService):
         # Verify ownership
         question = await self.repository.get_by_id(question_id)
         if not question:
-            self.logger.warning(f'Research question {question_id} not found for deletion')
+            self.logger.warning(
+                f'Research question {question_id} not found for deletion'
+            )
             return False
 
         if question['user_id'] != user_id:
@@ -286,7 +287,7 @@ class ResearchQuestionService(BaseService):
 
     async def get_questions_due_for_discovery(
         self,
-        as_of: Optional[datetime] = None,  # noqa: UP007
+        as_of: datetime | None = None,
     ) -> list[dict[str, Any]]:
         """
         Get all research questions that are due for discovery runs.
@@ -314,7 +315,7 @@ class ResearchQuestionService(BaseService):
         articles_found: int,
         articles_matched: int,
         execution_time: float,
-        errors: Optional[list[str]] = None,  # noqa: ARG002, UP007
+        errors: list[str] | None = None,  # noqa: ARG002
     ) -> bool:
         """
         Mark a discovery run as completed and update statistics.
@@ -371,7 +372,7 @@ class ResearchQuestionService(BaseService):
         self,
         question_id: UUID,
         user_id: str,
-    ) -> Optional[dict[str, Any]]:  # noqa: UP007
+    ) -> dict[str, Any] | None:
         """
         Get statistics for a research question.
 
@@ -463,8 +464,8 @@ class ResearchQuestionService(BaseService):
     def _calculate_next_run(
         self,
         frequency: str,
-        schedule_time: Optional[str] = None,  # noqa: UP007
-        schedule_days_of_week: Optional[list[int]] = None,  # noqa: UP007
+        schedule_time: str | None = None,
+        schedule_days_of_week: list[int] | None = None,
     ) -> datetime:
         """
         Calculate the next scheduled run time.

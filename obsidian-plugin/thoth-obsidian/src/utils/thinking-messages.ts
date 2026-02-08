@@ -16,7 +16,7 @@ const THINKING_VERBS = [
   'cogitating',
   'ruminating',
   'musing',
-  
+
   // Processing/Computing
   'processing',
   'computing',
@@ -25,27 +25,27 @@ const THINKING_VERBS = [
   'synthesizing',
   'evaluating',
   'assessing',
-  
+
   // Reasoning
   'reasoning',
   'inferring',
   'deducing',
   'interpreting',
   'formulating',
-  
+
   // Strategy/Planning
   'strategizing',
   'orchestrating',
   'optimizing',
   'calibrating',
-  
+
   // Technical
   'indexing',
   'compiling',
   'rendering',
   'executing',
   'initializing',
-  
+
   // Learning/Memory (Thoth-themed)
   'learning',
   'adapting',
@@ -54,7 +54,7 @@ const THINKING_VERBS = [
   'absorbing',
   'internalizing',
   'recalling',
-  
+
   // Academic/Research (Thoth-specific)
   'researching',
   'investigating',
@@ -69,14 +69,14 @@ const THINKING_VERBS = [
   'cross-referencing',
   'cataloguing',
   'archiving',
-  
+
   // Scholarly
   'consulting the scrolls',
   'perusing the archives',
   'reviewing the literature',
   'gathering knowledge',
   'seeking wisdom',
-  
+
   // Fun/Playful
   'spinning',
   'focusing',
@@ -138,7 +138,7 @@ export type ThinkingType = 'thinking' | 'tool' | 'processing';
  */
 export function getRandomThinkingPhrase(type: ThinkingType): string {
   let verbs: readonly string[];
-  
+
   switch (type) {
     case 'thinking':
       verbs = THINKING_VERBS;
@@ -150,7 +150,7 @@ export function getRandomThinkingPhrase(type: ThinkingType): string {
       verbs = PROCESSING_VERBS;
       break;
   }
-  
+
   const verb = verbs[Math.floor(Math.random() * verbs.length)];
   // Capitalize first letter
   return verb.charAt(0).toUpperCase() + verb.slice(1);
@@ -169,7 +169,7 @@ const TOOL_NAME_MAP: Record<string, string> = {
   'query_knowledge': 'the knowledge base',
   'rag_search': 'the research library',
   'vector_search': 'semantic matches',
-  
+
   // File operations
   'read_file': 'a file',
   'read': 'a file',
@@ -177,12 +177,12 @@ const TOOL_NAME_MAP: Record<string, string> = {
   'write': 'a file',
   'get_document_content': 'document content',
   'get_pdf_content': 'PDF content',
-  
+
   // Web/External
   'web_search': 'the web',
   'fetch_url': 'a webpage',
   'fetch_webpage': 'a webpage',
-  
+
   // Research-specific
   'search_openalex': 'OpenAlex',
   'search_semantic_scholar': 'Semantic Scholar',
@@ -191,18 +191,18 @@ const TOOL_NAME_MAP: Record<string, string> = {
   'get_references': 'references',
   'find_related_papers': 'related papers',
   'discover_articles': 'new articles',
-  
+
   // Analysis
   'analyze_document': 'a document',
   'extract_metadata': 'metadata',
   'generate_summary': 'a summary',
   'extract_key_findings': 'key findings',
-  
+
   // Tags/Organization
   'get_tags': 'tags',
   'add_tag': 'tags',
   'search_by_tag': 'tagged items',
-  
+
   // Memory/Context
   'memory': 'memory',
   'recall': 'memories',
@@ -217,13 +217,13 @@ export function getHumanReadableToolName(toolName: string): string {
   if (TOOL_NAME_MAP[toolName]) {
     return TOOL_NAME_MAP[toolName];
   }
-  
+
   // Check lowercase version
   const lowerName = toolName.toLowerCase();
   if (TOOL_NAME_MAP[lowerName]) {
     return TOOL_NAME_MAP[lowerName];
   }
-  
+
   // Fallback: convert snake_case/camelCase to readable format
   return toolName
     .replace(/_/g, ' ')

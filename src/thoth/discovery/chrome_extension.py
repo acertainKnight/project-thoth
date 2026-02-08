@@ -141,25 +141,39 @@ class ChromeExtensionServer:
                         if data.get('type') == 'authenticate':
                             if data.get('token') == self.auth_token:
                                 self._authenticated_clients.add(client_id)
-                                await websocket.send(json.dumps({
-                                    'type': 'auth_result',
-                                    'success': True,
-                                    'message': 'Authenticated successfully',
-                                }))
+                                await websocket.send(
+                                    json.dumps(
+                                        {
+                                            'type': 'auth_result',
+                                            'success': True,
+                                            'message': 'Authenticated successfully',
+                                        }
+                                    )
+                                )
                                 logger.info(f'Client {remote_addr} authenticated')
                                 continue
                             else:
-                                await websocket.send(json.dumps({
-                                    'type': 'auth_result',
-                                    'success': False,
-                                    'error': 'Invalid authentication token',
-                                }))
-                                logger.warning(f'Failed auth attempt from {remote_addr}')
+                                await websocket.send(
+                                    json.dumps(
+                                        {
+                                            'type': 'auth_result',
+                                            'success': False,
+                                            'error': 'Invalid authentication token',
+                                        }
+                                    )
+                                )
+                                logger.warning(
+                                    f'Failed auth attempt from {remote_addr}'
+                                )
                                 continue
                         else:
-                            await websocket.send(json.dumps({
-                                'error': 'Authentication required. Send {"type": "authenticate", "token": "..."}',
-                            }))
+                            await websocket.send(
+                                json.dumps(
+                                    {
+                                        'error': 'Authentication required. Send {"type": "authenticate", "token": "..."}',
+                                    }
+                                )
+                            )
                             continue
 
                     response = await self.process_message(data)
@@ -510,15 +524,19 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Thoth Chrome Extension Server')
     parser.add_argument(
-        '--host', default=None,
+        '--host',
+        default=None,
         help='Host to bind to (use 0.0.0.0 for remote access)',
     )
     parser.add_argument(
-        '--port', type=int, default=None,
+        '--port',
+        type=int,
+        default=None,
         help='Port to listen on (default: 8765)',
     )
     parser.add_argument(
-        '--token', default=None,
+        '--token',
+        default=None,
         help='Auth token for remote connections (auto-generated if not provided)',
     )
     args = parser.parse_args()

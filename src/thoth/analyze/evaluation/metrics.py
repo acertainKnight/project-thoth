@@ -1,7 +1,7 @@
 """Metrics calculation for Analysis pipeline evaluation."""
 
 from dataclasses import dataclass  # noqa: I001
-from typing import List, Dict, Optional  # noqa: UP035
+from typing import List, Dict  # noqa: UP035
 import numpy as np
 from loguru import logger  # noqa: F401
 
@@ -247,9 +247,9 @@ def calculate_summary_coherence(summary: str) -> float:
 
 
 def calculate_key_points_relevance(
-    key_points: Optional[str],  # noqa: UP007
+    key_points: str | None,
     paper_content: str,
-    abstract: Optional[str] = None,  # noqa: UP007
+    abstract: str | None = None,
 ) -> float:
     """
     Calculate relevance of key points to paper content.
@@ -296,7 +296,7 @@ def calculate_key_points_relevance(
 def calculate_analysis_metrics(
     ground_truth_list: List,  # noqa: UP006
     predicted_list: List,  # noqa: ARG001, UP006
-    timing_data: Optional[List[Dict[str, any]]] = None,  # noqa: ARG001, UP006, UP007
+    timing_data: List[Dict[str, any]] | None = None,  # noqa: ARG001, UP006
 ) -> AnalysisMetrics:
     """
     Calculate comprehensive Analysis pipeline metrics.

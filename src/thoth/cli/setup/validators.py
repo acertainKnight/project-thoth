@@ -1,9 +1,8 @@
-
-"""
-Input validators for setup wizard.
+"""Input validators for setup wizard.
 
 Provides validation functions for API keys, paths, URLs, ports, and other inputs.
 """
+
 from __future__ import annotations
 
 import re
@@ -37,8 +36,7 @@ class APIKeyValidator:
 
     @classmethod
     def validate(cls, provider: str, api_key: str) -> tuple[bool, str | None]:
-        """
-        Validate API key format for a provider.
+        """Validate API key format for a provider.
 
         Args:
             provider: Provider name (openai, anthropic, etc.)
@@ -73,8 +71,7 @@ class PathValidator:
     def validate_directory(
         path: str, must_exist: bool = False, must_be_writable: bool = True
     ) -> tuple[bool, str | None]:
-        """
-        Validate a directory path.
+        """Validate a directory path.
 
         Args:
             path: Directory path to validate
@@ -140,8 +137,10 @@ class PathValidator:
             # Get parent if path doesn't exist
             check_path = path if path.exists() else path.parent
             stat = psutil.disk_usage(str(check_path))
-            return stat.free / (1024**3)  # Convert to GB
-        except Exception:
+            gb: float = stat.free / (1024**3)  # Convert to GB
+            return gb
+        except Exception as e:
+            logger.debug(f'Could not determine disk space, assuming enough: {e}')
             return float('inf')  # Can't determine, assume enough
 
 
@@ -152,8 +151,7 @@ class URLValidator:
     def validate_url(
         url: str, check_reachable: bool = False
     ) -> tuple[bool, str | None]:
-        """
-        Validate a URL.
+        """Validate a URL.
 
         Args:
             url: URL to validate
@@ -200,8 +198,7 @@ class URLValidator:
 
     @staticmethod
     def validate_database_url(url: str) -> tuple[bool, str | None]:
-        """
-        Validate PostgreSQL database URL.
+        """Validate PostgreSQL database URL.
 
         Args:
             url: Database URL to validate
@@ -239,8 +236,7 @@ class PortValidator:
 
     @staticmethod
     def validate_port(port: int) -> tuple[bool, str | None]:
-        """
-        Validate port number.
+        """Validate port number.
 
         Args:
             port: Port number to validate
@@ -261,8 +257,7 @@ class PortValidator:
 
     @staticmethod
     def is_port_available(port: int, host: str = 'localhost') -> bool:
-        """
-        Check if port is available for binding.
+        """Check if port is available for binding.
 
         Args:
             port: Port number to check
@@ -276,15 +271,13 @@ class PortValidator:
                 sock.settimeout(1)
                 result = sock.connect_ex((host, port))
                 return result != 0  # Port available if connection fails
-        except Exception:
+        except Exception as e:
+            logger.debug(f'Error checking port availability: {e}')
             return False
 
     @staticmethod
-    def get_port_status(
-        port: int, host: str = 'localhost'
-    ) -> tuple[bool, str | None]:
-        """
-        Get port availability status with details.
+    def get_port_status(port: int, host: str = 'localhost') -> tuple[bool, str | None]:
+        """Get port availability status with details.
 
         Args:
             port: Port number to check
@@ -315,8 +308,8 @@ class PortValidator:
                                 )
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f'Error checking port status: {e}')
 
             return False, f'Port {port} is in use'
 
@@ -329,8 +322,7 @@ class EmailValidator:
 
     @classmethod
     def validate(cls, email: str) -> tuple[bool, str | None]:
-        """
-        Validate email address format.
+        """Validate email address format.
 
         Args:
             email: Email address to validate

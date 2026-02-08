@@ -46,21 +46,21 @@ class AnalyzeSourceUrlMCPTool(MCPTool):
         """Analyze a URL to detect article structure."""
         try:
             from thoth.discovery.browser.workflow_builder import WorkflowBuilder
-            
+
             url = arguments['url']
-            
+
             # Create WorkflowBuilder instance
             workflow_builder = WorkflowBuilder()
             await workflow_builder.initialize()
-            
+
             logger.info(f'Analyzing URL via MCP tool: {url}')
-            
+
             # Analyze the URL (no screenshot for agent context)
             result = await workflow_builder.analyze_url(
                 url=url,
                 include_screenshot=False,
             )
-            
+
             # Format sample articles for agent (limit to 3 for context efficiency)
             samples_text = []
             for i, article in enumerate(result.sample_articles[:3], 1):
@@ -68,21 +68,25 @@ class AnalyzeSourceUrlMCPTool(MCPTool):
                 if article.title:
                     sample.append(f'  Title: {article.title[:100]}')
                 if article.authors:
-                    authors = article.authors if isinstance(article.authors, list) else [article.authors]
+                    authors = (
+                        article.authors
+                        if isinstance(article.authors, list)
+                        else [article.authors]
+                    )
                     sample.append(f'  Authors: {", ".join(authors[:3])}')
                 if article.url:
                     sample.append(f'  URL: {article.url[:80]}')
                 if article.publication_date:
                     sample.append(f'  Date: {article.publication_date}')
                 samples_text.append('\n'.join(sample))
-            
+
             # Format search filters
             filters_text = []
             for sf in result.search_filters:
                 filters_text.append(
                     f'  - {sf["element_type"]}: {sf.get("description", "detected")}'
                 )
-            
+
             # Build confidence rating
             if result.confidence >= 0.8:
                 conf_rating = '🟢 HIGH'
@@ -90,7 +94,7 @@ class AnalyzeSourceUrlMCPTool(MCPTool):
                 conf_rating = '🟡 MEDIUM'
             else:
                 conf_rating = '🔴 LOW'
-            
+
             response_text = f"""✓ URL Analysis Complete
 
 **Page**: {result.page_title}
@@ -116,11 +120,9 @@ class AnalyzeSourceUrlMCPTool(MCPTool):
 - If this looks correct, confirm by calling `confirm_source_workflow` with a name
 - If something is wrong, call `refine_source_selectors` with feedback describing what's incorrect
 - Low confidence (<0.6) may indicate the page structure is unusual - consider trying a different page on the site"""
-            
-            return MCPToolCallResult(
-                content=[{'type': 'text', 'text': response_text}]
-            )
-            
+
+            return MCPToolCallResult(content=[{'type': 'text', 'text': response_text}])
+
         except Exception as e:
             logger.error(f'Error analyzing URL: {e}', exc_info=True)
             return self.handle_error(e)
@@ -166,31 +168,37 @@ class RefineSourceSelectorsMCPTool(MCPTool):
         """Refine selectors based on feedback."""
         try:
             import json
-            
+
             from thoth.discovery.browser.workflow_builder import WorkflowBuilder
-            
+
             url = arguments['url']
             current_selectors_str = arguments['current_selectors']
             user_feedback = arguments['user_feedback']
-            
+
             # Parse JSON string to dict
             try:
-                current_selectors = json.loads(current_selectors_str) if isinstance(current_selectors_str, str) else current_selectors_str
+                current_selectors = (
+                    json.loads(current_selectors_str)
+                    if isinstance(current_selectors_str, str)
+                    else current_selectors_str
+                )
             except json.JSONDecodeError as e:
                 return MCPToolCallResult(
-                    content=[{
-                        'type': 'text',
-                        'text': f'Error: Invalid JSON in current_selectors: {e}',
-                    }],
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': f'Error: Invalid JSON in current_selectors: {e}',
+                        }
+                    ],
                     isError=True,
                 )
-            
+
             # Create WorkflowBuilder instance
             workflow_builder = WorkflowBuilder()
             await workflow_builder.initialize()
-            
+
             logger.info(f'Refining selectors for {url}: {user_feedback[:100]}')
-            
+
             # Refine selectors
             result = await workflow_builder.refine_selectors(
                 url=url,
@@ -198,7 +206,7 @@ class RefineSourceSelectorsMCPTool(MCPTool):
                 user_feedback=user_feedback,
                 include_screenshot=False,
             )
-            
+
             # Format samples
             samples_text = []
             for i, article in enumerate(result.sample_articles[:3], 1):
@@ -206,12 +214,16 @@ class RefineSourceSelectorsMCPTool(MCPTool):
                 if article.title:
                     sample.append(f'  Title: {article.title[:100]}')
                 if article.authors:
-                    authors = article.authors if isinstance(article.authors, list) else [article.authors]
+                    authors = (
+                        article.authors
+                        if isinstance(article.authors, list)
+                        else [article.authors]
+                    )
                     sample.append(f'  Authors: {", ".join(authors[:3])}')
                 if article.url:
                     sample.append(f'  URL: {article.url[:80]}')
                 samples_text.append('\n'.join(sample))
-            
+
             # Confidence rating
             if result.confidence >= 0.8:
                 conf_rating = '🟢 HIGH'
@@ -219,7 +231,7 @@ class RefineSourceSelectorsMCPTool(MCPTool):
                 conf_rating = '🟡 MEDIUM'
             else:
                 conf_rating = '🔴 LOW'
-            
+
             response_text = f"""✓ Selectors Refined
 
 **Articles Found**: {result.total_articles_found}
@@ -236,11 +248,9 @@ class RefineSourceSelectorsMCPTool(MCPTool):
 
 ---
 If this looks better, call `confirm_source_workflow`. Otherwise provide more feedback to refine further."""
-            
-            return MCPToolCallResult(
-                content=[{'type': 'text', 'text': response_text}]
-            )
-            
+
+            return MCPToolCallResult(content=[{'type': 'text', 'text': response_text}])
+
         except Exception as e:
             logger.error(f'Error refining selectors: {e}', exc_info=True)
             return self.handle_error(e)
@@ -313,37 +323,47 @@ class ConfirmSourceWorkflowMCPTool(MCPTool):
         """Confirm and save workflow as a discovery source."""
         try:
             import json
-            
+
             from thoth.repositories.browser_workflow_repository import (
                 BrowserWorkflowRepository,
             )
-            
+
             postgres_service = self.service_manager.postgres
             workflow_repo = BrowserWorkflowRepository(postgres_service)
-            
+
             url = arguments['url']
             parsed = urlparse(url)
             domain = parsed.netloc or parsed.hostname or url
-            
+
             # Parse JSON strings to dicts/lists
             try:
-                selectors = json.loads(arguments['selectors']) if isinstance(arguments['selectors'], str) else arguments['selectors']
-                search_filters = json.loads(arguments.get('search_filters', '[]')) if isinstance(arguments.get('search_filters'), str) else arguments.get('search_filters', [])
+                selectors = (
+                    json.loads(arguments['selectors'])
+                    if isinstance(arguments['selectors'], str)
+                    else arguments['selectors']
+                )
+                search_filters = (
+                    json.loads(arguments.get('search_filters', '[]'))
+                    if isinstance(arguments.get('search_filters'), str)
+                    else arguments.get('search_filters', [])
+                )
             except json.JSONDecodeError as e:
                 return MCPToolCallResult(
-                    content=[{
-                        'type': 'text',
-                        'text': f'Error: Invalid JSON in parameters: {e}',
-                    }],
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': f'Error: Invalid JSON in parameters: {e}',
+                        }
+                    ],
                     isError=True,
                 )
-            
+
             # Build extraction rules
             extraction_rules = {
                 'article_container': arguments['article_container_selector'],
                 'fields': selectors,
             }
-            
+
             # Build pagination config
             pagination_config = None
             if arguments.get('pagination_selector'):
@@ -353,14 +373,14 @@ class ConfirmSourceWorkflowMCPTool(MCPTool):
                     'next_page_selector': arguments['pagination_selector'],
                 }
             extraction_rules['pagination'] = pagination_config
-            
+
             # Build search config from detected filters
             search_config: dict[str, Any] | None = None
             if search_filters:
                 filters = []
                 search_input_selector = None
                 search_button_selector = None
-                
+
                 for sf in search_filters:
                     if sf.get('element_type') in ('search_input', 'keyword_input'):
                         search_input_selector = sf.get('css_selector')
@@ -371,37 +391,48 @@ class ConfirmSourceWorkflowMCPTool(MCPTool):
                             'subject_filter': 'subject',
                             'sort_dropdown': 'sort_order',
                         }.get(sf.get('element_type', ''), sf.get('element_type', ''))
-                        
-                        filters.append({
-                            'name': sf.get('description', sf.get('element_type', '')),
-                            'parameter_name': param_name,
-                            'selector': {'css': sf.get('css_selector', '')},
-                            'filter_type': sf.get('filter_type', 'text_input'),
-                            'optional': True,
-                        })
-                
+
+                        filters.append(
+                            {
+                                'name': sf.get(
+                                    'description', sf.get('element_type', '')
+                                ),
+                                'parameter_name': param_name,
+                                'selector': {'css': sf.get('css_selector', '')},
+                                'filter_type': sf.get('filter_type', 'text_input'),
+                                'optional': True,
+                            }
+                        )
+
                 search_config = {
                     'search_input_selector': (
-                        {'css': search_input_selector} if search_input_selector else None
+                        {'css': search_input_selector}
+                        if search_input_selector
+                        else None
                     ),
                     'search_button_selector': (
-                        {'css': search_button_selector} if search_button_selector else None
+                        {'css': search_button_selector}
+                        if search_button_selector
+                        else None
                     ),
                     'keywords_format': 'space_separated',
                     'filters': filters,
                 }
-            
+
             if search_config:
                 extraction_rules['search_config'] = search_config
-            
+
             # Create workflow
             workflow_data = {
                 'name': arguments['name'],
-                'description': arguments.get('description') or f'Auto-detected workflow for {domain}',
+                'description': arguments.get('description')
+                or f'Auto-detected workflow for {domain}',
                 'website_domain': domain,
                 'start_url': url,
                 'extraction_rules': extraction_rules,
-                'requires_authentication': arguments.get('requires_authentication', False),
+                'requires_authentication': arguments.get(
+                    'requires_authentication', False
+                ),
                 'authentication_type': None,
                 'pagination_config': pagination_config,
                 'max_articles_per_run': arguments.get('max_articles_per_run', 100),
@@ -413,20 +444,24 @@ class ConfirmSourceWorkflowMCPTool(MCPTool):
                 'failed_executions': 0,
                 'total_articles_extracted': 0,
             }
-            
+
             workflow_id = await workflow_repo.create(workflow_data)
-            
+
             if not workflow_id:
                 return MCPToolCallResult(
-                    content=[{
-                        'type': 'text',
-                        'text': 'Error: Failed to save workflow to database.',
-                    }],
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': 'Error: Failed to save workflow to database.',
+                        }
+                    ],
                     isError=True,
                 )
-            
-            logger.info(f'Created workflow via MCP tool: {workflow_id} ({arguments["name"]})')
-            
+
+            logger.info(
+                f'Created workflow via MCP tool: {workflow_id} ({arguments["name"]})'
+            )
+
             response_text = f"""✓ Custom Source Created Successfully!
 
 **Workflow ID**: {workflow_id}
@@ -443,11 +478,9 @@ class ConfirmSourceWorkflowMCPTool(MCPTool):
 **To use this source in a research question**:
 - Add `"{arguments['name']}"` to the `selected_sources` list when creating/updating a research question
 - Or use `["*"]` to query all sources including this one"""
-            
-            return MCPToolCallResult(
-                content=[{'type': 'text', 'text': response_text}]
-            )
-            
+
+            return MCPToolCallResult(content=[{'type': 'text', 'text': response_text}])
+
         except Exception as e:
             logger.error(f'Error confirming workflow: {e}', exc_info=True)
             return self.handle_error(e)
@@ -455,6 +488,6 @@ class ConfirmSourceWorkflowMCPTool(MCPTool):
 
 __all__ = [
     'AnalyzeSourceUrlMCPTool',
-    'RefineSourceSelectorsMCPTool',
     'ConfirmSourceWorkflowMCPTool',
+    'RefineSourceSelectorsMCPTool',
 ]

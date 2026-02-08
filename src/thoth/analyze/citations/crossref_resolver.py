@@ -136,8 +136,8 @@ class CrossrefResolver:
 
             # ALWAYS enable WAL mode for concurrent read/write access
             # This is persistent and will convert existing databases to WAL
-            current_mode = cursor.execute("PRAGMA journal_mode=WAL").fetchone()[0]
-            cursor.execute("PRAGMA synchronous=NORMAL")  # Better performance with WAL
+            current_mode = cursor.execute('PRAGMA journal_mode=WAL').fetchone()[0]
+            cursor.execute('PRAGMA synchronous=NORMAL')  # Better performance with WAL
 
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS crossref_cache (

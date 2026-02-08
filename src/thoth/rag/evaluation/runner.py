@@ -26,7 +26,7 @@ from thoth.rag.evaluation.metrics import calculate_rag_metrics, RAGMetrics
 async def run_rag_evaluation(
     num_samples: int = 100,
     output_dir: Path = Path('./rag_evaluation_results'),
-    use_existing_ground_truth: Optional[Path] = None,  # noqa: UP007
+    use_existing_ground_truth: Path | None = None,
     k_values: list = [1, 3, 5, 10],  # noqa: B006
 ) -> RAGMetrics:
     """

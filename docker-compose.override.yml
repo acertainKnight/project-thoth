@@ -39,7 +39,7 @@ services:
       - "8080:8000"  # API server (remapped to avoid local dev conflicts)
       - "8082:8000"  # MCP server HTTP transport (includes /mcp and /sse endpoints)
       - "5678:5678"  # Debug port
-    
+
     develop:
       # UV best practice: use docker compose watch
       watch:
@@ -47,7 +47,7 @@ services:
         - action: sync
           path: ./src
           target: /app/src
-        
+
         # Rebuild on dependency changes only
         - action: rebuild
           path: ./pyproject.toml
@@ -64,7 +64,7 @@ services:
       # Mount source code for hot-reload development
       - ./src:/app/src
       - ./pyproject.toml:/app/pyproject.toml:ro
-    
+
     develop:
       # UV best practice: use docker compose watch
       watch:
@@ -72,7 +72,7 @@ services:
         - action: sync
           path: ./src
           target: /app/src
-        
+
         # Rebuild on dependency changes only
         - action: rebuild
           path: ./pyproject.toml
@@ -90,7 +90,7 @@ services:
       # Mount source code for hot-reload development (no rebuild needed!)
       - ./src:/app/src
       - ./pyproject.toml:/app/pyproject.toml:ro
-    
+
     develop:
       # UV best practice: use docker compose watch
       watch:
@@ -98,7 +98,7 @@ services:
         - action: sync
           path: ./src
           target: /app/src
-        
+
         # Rebuild on dependency changes only
         - action: rebuild
           path: ./pyproject.toml
@@ -114,7 +114,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./pyproject.toml:/app/pyproject.toml:ro
-    
+
     develop:
       watch:
         - action: sync
@@ -134,7 +134,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./pyproject.toml:/app/pyproject.toml:ro
-    
+
     develop:
       watch:
         - action: sync
@@ -154,7 +154,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./pyproject.toml:/app/pyproject.toml:ro
-    
+
     develop:
       watch:
         - action: sync
@@ -162,4 +162,3 @@ services:
           target: /app/src
         - action: rebuild
           path: ./pyproject.toml
-

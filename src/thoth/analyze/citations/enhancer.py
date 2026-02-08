@@ -127,18 +127,19 @@ class CitationEnhancer:
 
         # Check if we should use new resolution chain
         if self.use_resolution_chain:
-            logger.info('Using new resolution chain for parallel enhancement')  # noqa: F823
+            logger.info('Using new resolution chain for parallel enhancement')
             # enhance_with_resolution_chain is now async, so we need to run it
             # Use a thread-safe approach that works from ThreadPoolExecutor context
             import concurrent.futures
-            import threading
 
             def run_async_in_thread():
                 """Run async function in a new thread with its own event loop."""
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
-                    return loop.run_until_complete(self.enhance_with_resolution_chain(citations))
+                    return loop.run_until_complete(
+                        self.enhance_with_resolution_chain(citations)
+                    )
                 finally:
                     loop.close()
 

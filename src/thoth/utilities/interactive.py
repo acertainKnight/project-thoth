@@ -4,10 +4,8 @@ Interactive prompts for CLI commands.
 Provides helper functions for interactive user input in command-line tools.
 """
 
-from typing import List, Tuple
 
-
-def prompt_choice(question: str, options: List[Tuple[str, str]]) -> str:
+def prompt_choice(question: str, options: list[tuple[str, str]]) -> str:
     """
     Prompt user to choose from a list of options.
 
@@ -31,13 +29,13 @@ def prompt_choice(question: str, options: List[Tuple[str, str]]) -> str:
     print()
 
     for i, (value, description) in enumerate(options, 1):
-        print(f"  {i}. {description}")
+        print(f'  {i}. {description}')
 
     print()
 
     while True:
         try:
-            choice = input("Enter choice (1-{}): ".format(len(options))).strip()
+            choice = input(f'Enter choice (1-{len(options)}): ').strip()
             idx = int(choice) - 1
 
             if 0 <= idx < len(options):
@@ -45,10 +43,10 @@ def prompt_choice(question: str, options: List[Tuple[str, str]]) -> str:
                 print()
                 return selected
             else:
-                print(f"Please enter a number between 1 and {len(options)}")
+                print(f'Please enter a number between 1 and {len(options)}')
 
         except (ValueError, KeyboardInterrupt):
-            print("Please enter a valid number")
+            print('Please enter a valid number')
 
 
 def prompt_text(question: str, default: str = '') -> str:
@@ -66,9 +64,9 @@ def prompt_text(question: str, default: str = '') -> str:
         api_key = prompt_text("Enter your API key:")
     """
     if default:
-        prompt = f"{question} (default: {default}): "
+        prompt = f'{question} (default: {default}): '
     else:
-        prompt = f"{question}: "
+        prompt = f'{question}: '
 
     response = input(prompt).strip()
 
@@ -94,9 +92,9 @@ def confirm(question: str, default: bool = False) -> bool:
             # Do something
     """
     if default:
-        prompt = f"{question} (Y/n): "
+        prompt = f'{question} (Y/n): '
     else:
-        prompt = f"{question} (y/N): "
+        prompt = f'{question} (y/N): '
 
     while True:
         response = input(prompt).strip().lower()

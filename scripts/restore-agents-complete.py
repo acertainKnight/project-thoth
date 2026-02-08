@@ -25,21 +25,29 @@ Examples:
     # Restore specific agents
     python3 restore-agents-complete.py ~/letta-backup-20260117 http://localhost:8283 "Lead Engineer" thoth_main_orchestrator
 """
-import json
+
 import glob
+import json
 import os
 import sys
+
 import requests
 
 
 def clean_block_for_api(block):
     """Convert backup block to API-compatible memory_block format."""
     # Strip auto-generated fields
-    strip_fields = ['id', 'created_by_id', 'last_updated_by_id', 'created_at', 'updated_at']
+    strip_fields = [
+        'id',
+        'created_by_id',
+        'last_updated_by_id',
+        'created_at',
+        'updated_at',
+    ]
 
     cleaned = {
-        "label": block.get('label'),
-        "value": block.get('value'),
+        'label': block.get('label'),
+        'value': block.get('value'),
     }
 
     # Add optional fields if present
@@ -57,7 +65,7 @@ def filter_server_tools(tools, letta_url):
     """
     try:
         # Get available tools from server
-        resp = requests.get(f"{letta_url}/v1/tools/", timeout=10)
+        resp = requests.get(f'{letta_url}/v1/tools/', timeout=10)
         if resp.status_code != 200:
             return []
 
@@ -86,7 +94,7 @@ def get_thoth_mcp_server_id(letta_url):
     Returns None if not found.
     """
     try:
-        resp = requests.get(f"{letta_url}/v1/mcp-servers/", timeout=10)
+        resp = requests.get(f'{letta_url}/v1/mcp-servers/', timeout=10)
         if resp.status_code == 200:
             servers = resp.json()
             for server in servers:
@@ -104,9 +112,9 @@ def attach_mcp_server_to_agent(agent_id, mcp_server_id, letta_url):
     """
     try:
         resp = requests.patch(
-            f"{letta_url}/v1/agents/{agent_id}",
-            json={"mcp_server_ids": [mcp_server_id]},
-            timeout=10
+            f'{letta_url}/v1/agents/{agent_id}',
+            json={'mcp_server_ids': [mcp_server_id]},
+            timeout=10,
         )
         return resp.status_code in [200, 201]
     except Exception:
@@ -123,13 +131,13 @@ def restore_agent(backup_file, letta_url, delete_existing=True):
         with open(backup_file) as f:
             agent_data = json.load(f)
     except Exception as e:
-        return False, "unknown", None, {"error": f"Failed to read backup: {e}"}
+        return False, 'unknown', None, {'error': f'Failed to read backup: {e}'}
 
     agent_name = agent_data.get('name', 'Unknown')
 
     # Skip agents with invalid names
     if '/' in agent_name:
-        return False, agent_name, None, {"error": "Name contains invalid character '/'"}
+        return False, agent_name, None, {'error': "Name contains invalid character '/'"}
 
     # Prepare memory blocks
     original_blocks = agent_data.get('blocks', [])
@@ -149,32 +157,40 @@ def restore_agent(backup_file, letta_url, delete_existing=True):
     # Delete existing agent with same name if requested
     if delete_existing:
         try:
-            existing_agents = requests.get(f"{letta_url}/v1/agents/?limit=1000", timeout=10).json()
+            existing_agents = requests.get(
+                f'{letta_url}/v1/agents/?limit=1000', timeout=10
+            ).json()
             for existing in existing_agents:
                 if existing['name'] == agent_name:
-                    requests.delete(f"{letta_url}/v1/agents/{existing['id']}", timeout=10)
+                    requests.delete(
+                        f'{letta_url}/v1/agents/{existing["id"]}', timeout=10
+                    )
                     break
         except Exception:
             pass
 
     # Create comprehensive payload
     payload = {
-        "name": agent_data['name'],
-        "agent_type": agent_data.get('agent_type'),
-        "llm_config": agent_data.get('llm_config'),
-        "embedding_config": agent_data.get('embedding_config'),
-        "memory_blocks": memory_blocks,
-        "system": agent_data.get('system'),
-        "tools": tools,
-        "tool_rules": tool_rules,
-        "tags": tags,
+        'name': agent_data['name'],
+        'agent_type': agent_data.get('agent_type'),
+        'llm_config': agent_data.get('llm_config'),
+        'embedding_config': agent_data.get('embedding_config'),
+        'memory_blocks': memory_blocks,
+        'system': agent_data.get('system'),
+        'tools': tools,
+        'tool_rules': tool_rules,
+        'tags': tags,
     }
 
     # Add optional fields if present
     optional_fields = [
-        'description', 'model_settings', 'enable_sleeptime',
-        'message_buffer_autoclear', 'timezone', 'max_files_open',
-        'per_file_view_window_char_limit'
+        'description',
+        'model_settings',
+        'enable_sleeptime',
+        'message_buffer_autoclear',
+        'timezone',
+        'max_files_open',
+        'per_file_view_window_char_limit',
     ]
     for field in optional_fields:
         if field in agent_data and agent_data[field] is not None:
@@ -182,15 +198,15 @@ def restore_agent(backup_file, letta_url, delete_existing=True):
 
     # Create agent
     try:
-        resp = requests.post(
-            f"{letta_url}/v1/agents/",
-            json=payload,
-            timeout=120
-        )
+        resp = requests.post(f'{letta_url}/v1/agents/', json=payload, timeout=120)
 
         if resp.status_code not in [200, 201]:
-            error = resp.json().get('detail', resp.text)[:200] if resp.headers.get('content-type', '').startswith('application/json') else resp.text[:200]
-            return False, agent_name, None, {"error": error, "status": resp.status_code}
+            error = (
+                resp.json().get('detail', resp.text)[:200]
+                if resp.headers.get('content-type', '').startswith('application/json')
+                else resp.text[:200]
+            )
+            return False, agent_name, None, {'error': error, 'status': resp.status_code}
 
         new_agent = resp.json()
         new_id = new_agent['id']
@@ -203,18 +219,18 @@ def restore_agent(backup_file, letta_url, delete_existing=True):
 
         # Verify what was restored
         restored_data = {
-            "memory_blocks": f"{len(new_agent.get('memory', {}).get('blocks', []))}/{len(memory_blocks)}",
-            "tools": f"{len(new_agent.get('tools', []))}/{len(tools)}",
-            "tool_rules": f"{len(new_agent.get('tool_rules', []))}/{len(tool_rules)}",
-            "tags": f"{len(new_agent.get('tags', []))}/{len(tags)}",
-            "system_prompt": len(new_agent.get('system', '')),
-            "mcp_server": "✓" if mcp_attached else "✗",
+            'memory_blocks': f'{len(new_agent.get("memory", {}).get("blocks", []))}/{len(memory_blocks)}',
+            'tools': f'{len(new_agent.get("tools", []))}/{len(tools)}',
+            'tool_rules': f'{len(new_agent.get("tool_rules", []))}/{len(tool_rules)}',
+            'tags': f'{len(new_agent.get("tags", []))}/{len(tags)}',
+            'system_prompt': len(new_agent.get('system', '')),
+            'mcp_server': '✓' if mcp_attached else '✗',
         }
 
         return True, agent_name, new_id, restored_data
 
     except Exception as e:
-        return False, agent_name, None, {"error": str(e)[:200]}
+        return False, agent_name, None, {'error': str(e)[:200]}
 
 
 def restore_agents(backup_dir, letta_url, filter_names=None):
@@ -229,13 +245,13 @@ def restore_agents(backup_dir, letta_url, filter_names=None):
     Returns: (restored_count, failed_count, results)
     """
     if not os.path.isdir(backup_dir):
-        print(f"Error: Backup directory not found: {backup_dir}")
+        print(f'Error: Backup directory not found: {backup_dir}')
         return 0, 0, []
 
-    backup_files = glob.glob(f"{backup_dir}/agent-*.json")
+    backup_files = glob.glob(f'{backup_dir}/agent-*.json')
 
     if not backup_files:
-        print(f"Error: No agent backups found in {backup_dir}")
+        print(f'Error: No agent backups found in {backup_dir}')
         return 0, 0, []
 
     # Filter by names if specified
@@ -253,7 +269,7 @@ def restore_agents(backup_dir, letta_url, filter_names=None):
     else:
         files_to_restore = backup_files
 
-    print(f"Found {len(files_to_restore)} agent(s) to restore\n")
+    print(f'Found {len(files_to_restore)} agent(s) to restore\n')
 
     restored = []
     failed = []
@@ -262,18 +278,18 @@ def restore_agents(backup_dir, letta_url, filter_names=None):
         success, agent_name, new_id, data = restore_agent(backup_file, letta_url)
 
         if success:
-            print(f"✓ {agent_name}")
-            print(f"  ID: {new_id}")
-            print(f"  Memory blocks: {data['memory_blocks']}")
-            print(f"  Tools: {data['tools']}")
-            print(f"  Tool rules: {data['tool_rules']}")
-            print(f"  Tags: {data['tags']}")
-            print(f"  System prompt: {data['system_prompt']} chars")
-            print(f"  MCP server: {data['mcp_server']} Thoth Research Tools")
+            print(f'✓ {agent_name}')
+            print(f'  ID: {new_id}')
+            print(f'  Memory blocks: {data["memory_blocks"]}')
+            print(f'  Tools: {data["tools"]}')
+            print(f'  Tool rules: {data["tool_rules"]}')
+            print(f'  Tags: {data["tags"]}')
+            print(f'  System prompt: {data["system_prompt"]} chars')
+            print(f'  MCP server: {data["mcp_server"]} Thoth Research Tools')
             restored.append((agent_name, new_id, data))
         else:
-            print(f"✗ {agent_name}")
-            print(f"  Error: {data.get('error', 'Unknown error')}")
+            print(f'✗ {agent_name}')
+            print(f'  Error: {data.get("error", "Unknown error")}')
             failed.append((agent_name, data))
 
         print()
@@ -290,43 +306,45 @@ def main():
     letta_url = sys.argv[2]
     filter_names = sys.argv[3:] if len(sys.argv) > 3 else None
 
-    print("=" * 70)
-    print("Letta Agent Complete Restoration")
-    print("=" * 70)
-    print(f"Backup: {backup_dir}")
-    print(f"Server: {letta_url}")
+    print('=' * 70)
+    print('Letta Agent Complete Restoration')
+    print('=' * 70)
+    print(f'Backup: {backup_dir}')
+    print(f'Server: {letta_url}')
     if filter_names:
-        print(f"Agents: {', '.join(filter_names)}")
+        print(f'Agents: {", ".join(filter_names)}')
     else:
-        print("Agents: ALL")
-    print("=" * 70)
+        print('Agents: ALL')
+    print('=' * 70)
     print()
 
-    restored_count, failed_count, results = restore_agents(backup_dir, letta_url, filter_names)
+    restored_count, failed_count, results = restore_agents(
+        backup_dir, letta_url, filter_names
+    )
     restored_list, failed_list = results
 
     # Summary
-    print("=" * 70)
-    print("RESTORATION SUMMARY")
-    print("=" * 70)
+    print('=' * 70)
+    print('RESTORATION SUMMARY')
+    print('=' * 70)
 
     if restored_list:
-        print(f"\n✅ Successfully restored: {restored_count} agent(s)\n")
+        print(f'\n✅ Successfully restored: {restored_count} agent(s)\n')
         for name, agent_id, data in restored_list:
-            print(f"  • {name}")
-            print(f"    ID: {agent_id}")
-            print(f"    Data: {data['memory_blocks']} blocks, {data['tools']} tools")
+            print(f'  • {name}')
+            print(f'    ID: {agent_id}')
+            print(f'    Data: {data["memory_blocks"]} blocks, {data["tools"]} tools')
 
     if failed_list:
-        print(f"\n❌ Failed: {failed_count} agent(s)\n")
+        print(f'\n❌ Failed: {failed_count} agent(s)\n')
         for name, data in failed_list:
-            print(f"  • {name}: {data.get('error', 'Unknown')}")
+            print(f'  • {name}: {data.get("error", "Unknown")}')
 
-    print("\n" + "=" * 70)
+    print('\n' + '=' * 70)
 
     # Update settings reminder
     if restored_list:
-        print("\n📝 Remember to update ~/.letta/settings.json if needed:")
+        print('\n📝 Remember to update ~/.letta/settings.json if needed:')
         print('  "pinnedAgents": [')
         for name, agent_id, _ in restored_list[:4]:
             print(f'    "{agent_id}",  // {name}')
@@ -335,5 +353,5 @@ def main():
     return 0 if failed_count == 0 else 1
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     sys.exit(main())

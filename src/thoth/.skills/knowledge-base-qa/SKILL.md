@@ -155,7 +155,7 @@ Would you like me to search for papers on [topic]?"
 1. search_articles(query="Mamba architecture complexity", limit=5)
 2. get_article_details(article_id="[best match]")
 3. Extract complexity analysis from paper
-4. Report: "According to [Gu & Dao, 2023], Mamba achieves 
+4. Report: "According to [Gu & Dao, 2023], Mamba achieves
    O(N) complexity compared to O(N²) for standard attention..."
 ```
 
@@ -180,12 +180,12 @@ Would you like me to search for papers on [topic]?"
 1. search_articles(query="vision-language model", limit=20)
 2. collection_stats()
 3. Report: "You have X papers related to vision-language models:
-   
+
    Recent (2024): [list]
    Key papers: [list by citation count]
-   
+
    Topics covered: [clustering if available]
-   
+
    Would you like me to summarize findings across these papers?"
 ```
 

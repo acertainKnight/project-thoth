@@ -20,6 +20,7 @@ def _configure_safe_environment() -> None:
 _configure_safe_environment()
 
 from loguru import logger  # noqa: E402
+
 # initialize_thoth imported lazily when needed (see line ~98)
 # ThothPipeline imported lazily when needed (line ~108)
 
@@ -51,11 +52,12 @@ def main() -> None:
     if args.command in ['setup', 'db']:
         # For db command, only import database module
         if args.command == 'db':
-            from . import database  # noqa: E402
+            from . import database
+
             database.configure_subparser(subparsers)
             # Re-parse after adding db subparser
             args = parser.parse_args()
-        
+
         if hasattr(args, 'func'):
             if inspect.iscoroutinefunction(args.func):
                 asyncio.run(args.func(args))
@@ -64,7 +66,7 @@ def main() -> None:
         return
 
     # Import all other CLI modules (only when not running setup/db)
-    from . import (  # noqa: E402
+    from . import (
         database,
         discovery,
         letta,
@@ -107,6 +109,7 @@ def main() -> None:
     # Replaces ThothPipeline() and provides cleaner access to components
     logger.info('===== main(): About to import initialize_thoth =====')
     from thoth.initialization import initialize_thoth  # Lazy import here!
+
     logger.info('===== main(): initialize_thoth imported successfully =====')
 
     _services, _document_pipeline, _citation_tracker = initialize_thoth()
@@ -114,9 +117,11 @@ def main() -> None:
     # Create ThothPipeline wrapper for backward compatibility with CLI commands
     # that still expect it (will be removed once all commands are updated)
     import warnings
+
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
+        warnings.simplefilter('ignore', DeprecationWarning)
         from thoth.pipeline import ThothPipeline  # Lazy import
+
         pipeline = ThothPipeline()
 
     if hasattr(args, 'func'):

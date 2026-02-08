@@ -1,10 +1,10 @@
 """Test suite for ArticleService."""
 
+from unittest.mock import Mock
+
 import pytest
-from unittest.mock import Mock, patch
 
 from thoth.services.article_service import ArticleService
-from thoth.config import Config
 
 
 class TestArticleServiceInitialization:
@@ -14,11 +14,13 @@ class TestArticleServiceInitialization:
         """Test ArticleService initializes correctly."""
         mock_llm = Mock()
         service = ArticleService(llm_service=mock_llm)
-        
+
         assert service.llm_service is mock_llm
         assert service.config is not None
 
-    @pytest.mark.skip(reason="Complex service dependencies - better for integration tests")
+    @pytest.mark.skip(
+        reason='Complex service dependencies - better for integration tests'
+    )
     def test_initialization_with_custom_config(self):
         """Test ArticleService accepts custom config."""
         pass
@@ -31,7 +33,7 @@ class TestArticleServiceMethods:
         """Test ArticleService has all required methods."""
         mock_llm = Mock()
         service = ArticleService(llm_service=mock_llm)
-        
+
         # Check key methods exist (actual methods from implementation)
         assert hasattr(service, 'evaluate_against_query')
         assert hasattr(service, 'evaluate_for_download')
@@ -42,6 +44,6 @@ class TestArticleServiceMethods:
         """Test initialize() method."""
         mock_llm = Mock()
         service = ArticleService(llm_service=mock_llm)
-        
+
         # Should not raise
         service.initialize()

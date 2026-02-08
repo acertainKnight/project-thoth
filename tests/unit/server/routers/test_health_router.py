@@ -24,22 +24,22 @@ def test_client(mock_service_manager):
     """Create FastAPI test client with health router."""
     app = FastAPI()
     app.include_router(health.router)
-    
+
     # Override dependency to return mock
     app.dependency_overrides[get_service_manager] = lambda: mock_service_manager
-    
+
     # Set up directories for the router
     with TemporaryDirectory() as tmpdir:
-        pdf_dir = Path(tmpdir) / "pdfs"
-        notes_dir = Path(tmpdir) / "notes"
+        pdf_dir = Path(tmpdir) / 'pdfs'
+        notes_dir = Path(tmpdir) / 'notes'
         pdf_dir.mkdir()
         notes_dir.mkdir()
-        
-        health.set_directories(pdf_dir, notes_dir, "http://localhost:8000")
-        
+
+        health.set_directories(pdf_dir, notes_dir, 'http://localhost:8000')
+
         client = TestClient(app)
         yield client
-        
+
         # Clean up
         app.dependency_overrides.clear()
 
@@ -48,19 +48,21 @@ class TestHealthEndpoint:
     """Tests for /health endpoint."""
 
     @patch('thoth.server.routers.health.HealthMonitor')
-    def test_health_check_healthy(self, mock_monitor_class, test_client, mock_service_manager):
+    def test_health_check_healthy(
+        self, mock_monitor_class, test_client, mock_service_manager
+    ):
         """Test health check returns 200 when services are healthy."""
         # Setup mock
         mock_monitor = Mock()
         mock_monitor.overall_status.return_value = {
             'healthy': True,
-            'services': {'llm': 'healthy', 'article': 'healthy'}
+            'services': {'llm': 'healthy', 'article': 'healthy'},
         }
         mock_monitor_class.return_value = mock_monitor
-        
+
         # Make request
         response = test_client.get('/health')
-        
+
         # Assertions
         assert response.status_code == 200
         data = response.json()
@@ -70,19 +72,21 @@ class TestHealthEndpoint:
         assert 'timestamp' in data
 
     @patch('thoth.server.routers.health.HealthMonitor')
-    def test_health_check_unhealthy(self, mock_monitor_class, test_client, mock_service_manager):
+    def test_health_check_unhealthy(
+        self, mock_monitor_class, test_client, mock_service_manager
+    ):
         """Test health check returns 503 when services are unhealthy."""
         # Setup mock
         mock_monitor = Mock()
         mock_monitor.overall_status.return_value = {
             'healthy': False,
-            'services': {'llm': 'unhealthy', 'article': 'healthy'}
+            'services': {'llm': 'unhealthy', 'article': 'healthy'},
         }
         mock_monitor_class.return_value = mock_monitor
-        
+
         # Make request
         response = test_client.get('/health')
-        
+
         # Assertions
         assert response.status_code == 503
         data = response.json()
@@ -95,17 +99,17 @@ class TestHealthEndpoint:
         app = FastAPI()
         app.include_router(health.router)
         app.dependency_overrides[get_service_manager] = lambda: None
-        
+
         with TemporaryDirectory() as tmpdir:
-            pdf_dir = Path(tmpdir) / "pdfs"
-            notes_dir = Path(tmpdir) / "notes"
+            pdf_dir = Path(tmpdir) / 'pdfs'
+            notes_dir = Path(tmpdir) / 'notes'
             pdf_dir.mkdir()
             notes_dir.mkdir()
-            health.set_directories(pdf_dir, notes_dir, "http://localhost:8000")
-            
+            health.set_directories(pdf_dir, notes_dir, 'http://localhost:8000')
+
             with TestClient(app) as client:
                 response = client.get('/health')
-                
+
                 # Assertions
                 assert response.status_code == 503
                 data = response.json()
@@ -114,14 +118,16 @@ class TestHealthEndpoint:
                 assert 'Service manager not initialized' in data['error']
 
     @patch('thoth.server.routers.health.HealthMonitor')
-    def test_health_check_exception_handling(self, mock_monitor_class, test_client, mock_service_manager):
+    def test_health_check_exception_handling(
+        self, mock_monitor_class, test_client, mock_service_manager
+    ):
         """Test health check handles exceptions gracefully."""
         # Setup mock to raise exception
-        mock_monitor_class.side_effect = Exception("Test exception")
-        
+        mock_monitor_class.side_effect = Exception('Test exception')
+
         # Make request
         response = test_client.get('/health')
-        
+
         # Assertions
         assert response.status_code == 500
         data = response.json()
@@ -137,12 +143,12 @@ class TestDownloadPdfEndpoint:
     def test_download_pdf_success(self, mock_download, test_client):
         """Test PDF download succeeds."""
         # Setup mock
-        mock_pdf_path = Path("/tmp/test.pdf")
+        mock_pdf_path = Path('/tmp/test.pdf')
         mock_download.return_value = mock_pdf_path
-        
+
         # Make request
         response = test_client.get('/download-pdf?url=http://example.com/paper.pdf')
-        
+
         # Assertions
         assert response.status_code == 200
         data = response.json()
@@ -155,11 +161,11 @@ class TestDownloadPdfEndpoint:
     def test_download_pdf_error_handling(self, mock_download, test_client):
         """Test PDF download handles errors gracefully."""
         # Setup mock to raise exception
-        mock_download.side_effect = Exception("Download failed")
-        
+        mock_download.side_effect = Exception('Download failed')
+
         # Make request
         response = test_client.get('/download-pdf?url=http://example.com/paper.pdf')
-        
+
         # Assertions
         assert response.status_code == 500
         data = response.json()
@@ -175,16 +181,16 @@ class TestViewMarkdownEndpoint:
         # Create a test markdown file
         with TemporaryDirectory() as tmpdir:
             notes_dir = Path(tmpdir)
-            test_file = notes_dir / "test.md"
-            test_content = "# Test Markdown\n\nThis is a test."
+            test_file = notes_dir / 'test.md'
+            test_content = '# Test Markdown\n\nThis is a test.'
             test_file.write_text(test_content)
-            
+
             # Update router directories
-            health.set_directories(Path(tmpdir), notes_dir, "http://localhost:8000")
-            
+            health.set_directories(Path(tmpdir), notes_dir, 'http://localhost:8000')
+
             # Make request with relative path
-            response = test_client.get(f'/view-markdown?path=test.md')
-            
+            response = test_client.get('/view-markdown?path=test.md')
+
             # Assertions
             assert response.status_code == 200
             data = response.json()
@@ -197,7 +203,7 @@ class TestViewMarkdownEndpoint:
         """Test viewing markdown file that doesn't exist."""
         # Make request
         response = test_client.get('/view-markdown?path=nonexistent.md')
-        
+
         # Assertions
         assert response.status_code == 404
         data = response.json()
@@ -208,13 +214,13 @@ class TestViewMarkdownEndpoint:
         """Test viewing markdown file with absolute path."""
         # Create a test markdown file
         with TemporaryDirectory() as tmpdir:
-            test_file = Path(tmpdir) / "absolute.md"
-            test_content = "# Absolute Path Test"
+            test_file = Path(tmpdir) / 'absolute.md'
+            test_content = '# Absolute Path Test'
             test_file.write_text(test_content)
-            
+
             # Make request with absolute path
             response = test_client.get(f'/view-markdown?path={test_file}')
-            
+
             # Assertions
             assert response.status_code == 200
             data = response.json()

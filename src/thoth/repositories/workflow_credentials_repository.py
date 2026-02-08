@@ -6,7 +6,7 @@ credentials using Fernet symmetric encryption.
 """
 
 import os
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from cryptography.fernet import Fernet
@@ -18,9 +18,7 @@ from thoth.repositories.base import BaseRepository
 class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
     """Repository for managing encrypted workflow credentials."""
 
-    def __init__(
-        self, postgres_service, encryption_key: str | None = None, **kwargs
-    ):
+    def __init__(self, postgres_service, encryption_key: str | None = None, **kwargs):
         """
         Initialize workflow credentials repository.
 
@@ -55,7 +53,7 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
 
     async def create(
         self, workflow_id: UUID, credential_type: str, credentials: dict[str, str]
-    ) -> Optional[UUID]:  # noqa: UP007
+    ) -> UUID | None:
         """
         Create encrypted credentials for a workflow.
 
@@ -92,7 +90,7 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to create credentials: {e}')
             return None
 
-    async def get_by_workflow_id(self, workflow_id: UUID) -> Optional[dict[str, Any]]:  # noqa: UP007
+    async def get_by_workflow_id(self, workflow_id: UUID) -> dict[str, Any] | None:
         """
         Get decrypted credentials for a workflow.
 

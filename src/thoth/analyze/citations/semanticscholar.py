@@ -102,8 +102,8 @@ class SemanticScholarAPI:
 
             # ALWAYS enable WAL mode for concurrent read/write access
             # This is persistent and will convert existing databases to WAL
-            current_mode = cursor.execute("PRAGMA journal_mode=WAL").fetchone()[0]
-            cursor.execute("PRAGMA synchronous=NORMAL")  # Better performance with WAL
+            current_mode = cursor.execute('PRAGMA journal_mode=WAL').fetchone()[0]
+            cursor.execute('PRAGMA synchronous=NORMAL')  # Better performance with WAL
 
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS api_cache (
@@ -121,7 +121,9 @@ class SemanticScholarAPI:
             """)
             conn.commit()
             conn.close()
-            logger.info(f'Semantic Scholar cache at {self.db_path} using {current_mode} mode')
+            logger.info(
+                f'Semantic Scholar cache at {self.db_path} using {current_mode} mode'
+            )
         except Exception as e:
             logger.error(f'Failed to initialize persistent cache: {e}')
 

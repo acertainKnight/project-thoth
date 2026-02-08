@@ -290,7 +290,9 @@ class ExportBibliographyMCPTool(MCPTool):
                 )
                 source_description = f"matching '{search_query}'"
             else:
-                articles = await self.service_manager.rag.search_async(query='', k=max_results)
+                articles = await self.service_manager.rag.search_async(
+                    query='', k=max_results
+                )
                 source_description = 'in collection'
 
             if not articles:
@@ -532,9 +534,9 @@ class ExportBibliographyMCPTool(MCPTool):
 class ExtractCitationsMCPTool(MCPTool):
     """
     MCP tool for extracting and analyzing citation networks.
-    
-    **DEPRECATED**: This tool is deprecated. Use `explore_citation_network` 
-    which provides more comprehensive citation analysis. This tool is no longer 
+
+    **DEPRECATED**: This tool is deprecated. Use `explore_citation_network`
+    which provides more comprehensive citation analysis. This tool is no longer
     registered in the MCP tool registry.
     """
 

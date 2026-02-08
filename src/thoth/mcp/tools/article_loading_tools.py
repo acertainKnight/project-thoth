@@ -196,9 +196,7 @@ class ReadFullArticleMCPTool(MCPTool):
                     f'Use max_length parameter to read more.]*'
                 )
 
-            return MCPToolCallResult(
-                content=[{'type': 'text', 'text': response_text}]
-            )
+            return MCPToolCallResult(content=[{'type': 'text', 'text': response_text}])
 
         except Exception as e:
             logger.error(f'Error reading full article: {e}')

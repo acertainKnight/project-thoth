@@ -3,9 +3,9 @@
   "version": "1.0",
   "lastModified": "2026-01-09T00:00:00Z",
   "_comment": "Analysis schema configuration - customize what information is extracted from papers",
-  
+
   "active_preset": "standard",
-  
+
   "presets": {
     "standard": {
       "name": "Standard Analysis",
@@ -91,7 +91,7 @@
       },
       "instructions": "Provide comprehensive analysis focusing on objectives, methodology, results, and critical evaluation. Extract 10-15 key points and a detailed multi-paragraph summary."
     },
-    
+
     "detailed": {
       "name": "Detailed Analysis",
       "description": "Exhaustive analysis for important papers - captures every available detail",
@@ -206,7 +206,7 @@
       },
       "instructions": "Extract every available detail from the paper. Provide exhaustive descriptions of methodology, experimental setup, data characteristics, evaluation metrics, and results. Include comprehensive critical analysis covering strengths, weaknesses, limitations, and future directions."
     },
-    
+
     "minimal": {
       "name": "Minimal Analysis",
       "description": "Quick overview for rapid screening - extracts only essential information",
@@ -246,7 +246,7 @@
       },
       "instructions": "Provide a brief overview - focus on title, authors, abstract, and 3-5 key points. Keep it concise for rapid screening."
     },
-    
+
     "custom": {
       "name": "Custom Schema",
       "description": "User-defined analysis schema - modify fields and instructions as needed",

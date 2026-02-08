@@ -18,11 +18,7 @@ from typing import Any
 
 from loguru import logger
 
-from thoth.knowledge.graph import CitationGraph
 from thoth.pipelines.knowledge_pipeline import KnowledgePipeline
-from thoth.pipelines.optimized_document_pipeline import OptimizedDocumentPipeline
-from thoth.server.pdf_monitor import PDFTracker
-from thoth.services.service_manager import ServiceManager
 from thoth.config import config
 from thoth.utilities.schemas import SearchResult
 
@@ -38,7 +34,7 @@ class ThothPipeline:
     Main processing pipeline for Thoth.
 
     DEPRECATED: Use initialize_thoth() from thoth.initialization instead.
-    
+
     This class is maintained for backward compatibility but will be removed
     in a future version. New code should use the initialize_thoth() factory
     function directly.
@@ -76,14 +72,14 @@ class ThothPipeline:
         """  # noqa: W505
         # Issue deprecation warning
         warnings.warn(
-            "ThothPipeline is deprecated and will be removed in a future version. "
-            "Use initialize_thoth() from thoth.initialization instead:\n\n"
-            "    from thoth.initialization import initialize_thoth\n"
-            "    services, pipeline, graph = initialize_thoth()\n",
+            'ThothPipeline is deprecated and will be removed in a future version. '
+            'Use initialize_thoth() from thoth.initialization instead:\n\n'
+            '    from thoth.initialization import initialize_thoth\n'
+            '    services, pipeline, graph = initialize_thoth()\n',
             DeprecationWarning,
             stacklevel=2,
         )
-        
+
         # ThothPipeline now uses initialize_thoth() internally
         logger.info(
             'ThothPipeline initialized with optimized processing (50-65% faster) '
@@ -109,14 +105,14 @@ class ThothPipeline:
 
         # Use initialize_thoth() for the actual initialization
         from thoth.initialization import initialize_thoth
-        
+
         self.services, self.document_pipeline, self.citation_tracker = initialize_thoth(
             config=self.config
         )
-        
+
         # Extract additional components for backward compatibility
         self.pdf_tracker = self.document_pipeline.pdf_tracker
-        
+
         # Initialize knowledge pipeline for RAG operations (still needed)
         self.knowledge_pipeline = KnowledgePipeline(
             services=self.services,
@@ -132,12 +128,12 @@ class ThothPipeline:
     def process_pdf(self, pdf_path: str | Path) -> tuple[Path, Path, Path]:
         """
         Process a PDF using the internal :class:`DocumentPipeline`.
-        
+
         DEPRECATED: Use pipeline.document_pipeline.process_pdf() directly instead.
         """
         warnings.warn(
-            "ThothPipeline.process_pdf() is deprecated. "
-            "Use pipeline.document_pipeline.process_pdf() directly instead.",
+            'ThothPipeline.process_pdf() is deprecated. '
+            'Use pipeline.document_pipeline.process_pdf() directly instead.',
             DeprecationWarning,
             stacklevel=2,
         )
@@ -161,12 +157,12 @@ class ThothPipeline:
             list[tuple[Path, Path]]: A list of (PDF path, note path) tuples for successes.
         """  # noqa: W505
         warnings.warn(
-            "ThothPipeline.regenerate_all_notes() is deprecated. "
-            "Use services.citation.regenerate_all_notes() directly instead.",
+            'ThothPipeline.regenerate_all_notes() is deprecated. '
+            'Use services.citation.regenerate_all_notes() directly instead.',
             DeprecationWarning,
             stacklevel=2,
         )
-        
+
         if not self.services:
             logger.error(
                 'ServiceManager is not initialized. Cannot regenerate all notes.'
@@ -203,12 +199,12 @@ class ThothPipeline:
             >>> print(f'Consolidated {stats["tags_consolidated"]} tags')
         """
         warnings.warn(
-            "ThothPipeline.consolidate_tags_only() is deprecated. "
-            "Use services.tag.consolidate_only() directly instead.",
+            'ThothPipeline.consolidate_tags_only() is deprecated. '
+            'Use services.tag.consolidate_only() directly instead.',
             DeprecationWarning,
             stacklevel=2,
         )
-        
+
         if not self.citation_tracker:
             logger.error('CitationGraph is not initialized. Cannot consolidate tags.')
             return {
@@ -243,12 +239,12 @@ class ThothPipeline:
             >>> print(f'Added {stats["tags_added"]} new tags')
         """
         warnings.warn(
-            "ThothPipeline.suggest_additional_tags() is deprecated. "
-            "Use services.tag.suggest_additional() directly instead.",
+            'ThothPipeline.suggest_additional_tags() is deprecated. '
+            'Use services.tag.suggest_additional() directly instead.',
             DeprecationWarning,
             stacklevel=2,
         )
-        
+
         if not self.citation_tracker:
             logger.error(
                 'CitationGraph is not initialized. Cannot suggest additional tags.'
@@ -288,12 +284,12 @@ class ThothPipeline:
             >>> print(f'Added {stats["tags_added"]} new tags')
         """
         warnings.warn(
-            "ThothPipeline.consolidate_and_retag_all_articles() is deprecated. "
-            "Use services.tag.consolidate_and_retag() directly instead.",
+            'ThothPipeline.consolidate_and_retag_all_articles() is deprecated. '
+            'Use services.tag.consolidate_and_retag() directly instead.',
             DeprecationWarning,
             stacklevel=2,
         )
-        
+
         if not self.citation_tracker:
             logger.error(
                 'CitationGraph is not initialized. Cannot consolidate and retag articles.'
@@ -313,16 +309,16 @@ class ThothPipeline:
     ) -> list[SearchResult]:
         """
         Perform a general web search.
-        
+
         DEPRECATED: Use services.web_search.search() directly instead.
         """
         warnings.warn(
-            "ThothPipeline.web_search() is deprecated. "
-            "Use services.web_search.search() directly instead.",
+            'ThothPipeline.web_search() is deprecated. '
+            'Use services.web_search.search() directly instead.',
             DeprecationWarning,
             stacklevel=2,
         )
-        
+
         try:
             logger.info(f'Performing web search for: {query}')
             return self.services.web_search.search(

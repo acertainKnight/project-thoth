@@ -2,4 +2,4 @@
 
 from .docker_installer import DockerInstaller
 
-__all__ = ["DockerInstaller"]
+__all__ = ['DockerInstaller']

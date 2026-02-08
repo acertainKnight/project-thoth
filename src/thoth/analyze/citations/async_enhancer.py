@@ -290,9 +290,7 @@ class AsyncCitationEnhancer:
 
             except Exception as e:
                 title_preview = citation.title[:50] if citation.title else 'Unknown'
-                logger.warning(
-                    f'ArXiv enhancement failed for {title_preview}: {e}'
-                )
+                logger.warning(f'ArXiv enhancement failed for {title_preview}: {e}')
 
     async def _enhance_with_scholarly(self, citation: Citation):
         """Enhance citation using Scholarly API asynchronously."""
@@ -329,9 +327,7 @@ class AsyncCitationEnhancer:
                         'timestamp': time.time(),
                     }
                     title_preview = citation.title[:50] if citation.title else 'Unknown'
-                    logger.debug(
-                        f'Enhanced citation via Scholarly: {title_preview}'
-                    )
+                    logger.debug(f'Enhanced citation via Scholarly: {title_preview}')
                 else:
                     # Cache negative result
                     self._api_cache[cache_key] = {
@@ -341,9 +337,7 @@ class AsyncCitationEnhancer:
 
             except Exception as e:
                 title_preview = citation.title[:50] if citation.title else 'Unknown'
-                logger.warning(
-                    f'Scholarly enhancement failed for {title_preview}: {e}'
-                )
+                logger.warning(f'Scholarly enhancement failed for {title_preview}: {e}')
 
     def _update_citation_from_arxiv(self, citation: Citation, arxiv_data: dict):
         """Update citation with arXiv data."""

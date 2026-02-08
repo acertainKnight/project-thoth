@@ -140,28 +140,35 @@ class LocatePdfMCPTool(MCPTool):
                                     response.raise_for_status()
 
                                     # Check content type
-                                    content_type = response.headers.get('content-type', '')
+                                    content_type = response.headers.get(
+                                        'content-type', ''
+                                    )
 
                                     # Write file with streaming
                                     first_chunk = None
                                     with open(full_path, 'wb') as f:
-                                        for chunk in response.iter_bytes(chunk_size=8192):
+                                        for chunk in response.iter_bytes(
+                                            chunk_size=8192
+                                        ):
                                             if chunk:
                                                 if first_chunk is None:
                                                     first_chunk = chunk
                                                     # Check if content looks like PDF
                                                     if (
-                                                        'pdf' not in content_type.lower()
-                                                        and not pdf_url.lower().endswith('.pdf')
-                                                        and not first_chunk.startswith(b'%PDF')
+                                                        'pdf'
+                                                        not in content_type.lower()
+                                                        and not pdf_url.lower().endswith(
+                                                            '.pdf'
+                                                        )
+                                                        and not first_chunk.startswith(
+                                                            b'%PDF'
+                                                        )
                                                     ):
-                                                        response_text += '**Download Warning:**\n'
                                                         response_text += (
-                                                            f'- Content type: {content_type}\n'
+                                                            '**Download Warning:**\n'
                                                         )
-                                                        response_text += (
-                                                            '- May not be a valid PDF file\n\n'
-                                                        )
+                                                        response_text += f'- Content type: {content_type}\n'
+                                                        response_text += '- May not be a valid PDF file\n\n'
                                                 f.write(chunk)
 
                                 file_size = full_path.stat().st_size
@@ -183,9 +190,7 @@ class LocatePdfMCPTool(MCPTool):
                                 except Exception:
                                     response_text += '- PDF validation: Could not verify PDF structure\n'
 
-                            except (
-                                httpx.HTTPError
-                            ) as download_error:
+                            except httpx.HTTPError as download_error:
                                 response_text += '**Download Failed:**\n'
                                 response_text += f'- Error: {download_error}\n'
                                 response_text += f'- Manual download: {pdf_url}\n'
@@ -268,9 +273,9 @@ class LocatePdfMCPTool(MCPTool):
 class ValidatePdfSourcesMCPTool(MCPTool):
     """
     MCP tool for testing and validating PDF location sources.
-    
-    **DEPRECATED**: This tool is deprecated. PDF source validation is rarely 
-    needed for normal workflows. This tool is no longer registered in the MCP 
+
+    **DEPRECATED**: This tool is deprecated. PDF source validation is rarely
+    needed for normal workflows. This tool is no longer registered in the MCP
     tool registry.
     """
 
@@ -450,9 +455,9 @@ class ValidatePdfSourcesMCPTool(MCPTool):
 class ExtractPdfMetadataMCPTool(MCPTool):
     """
     MCP tool for extracting comprehensive metadata from PDF files.
-    
-    **DEPRECATED**: This tool is deprecated. Metadata extraction is handled 
-    automatically by the PDF monitor service. This tool is no longer registered 
+
+    **DEPRECATED**: This tool is deprecated. Metadata extraction is handled
+    automatically by the PDF monitor service. This tool is no longer registered
     in the MCP tool registry.
     """
 

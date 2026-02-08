@@ -6,7 +6,7 @@ their status, results, and performance metrics over time.
 """
 
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from loguru import logger
@@ -21,7 +21,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
         """Initialize workflow executions repository."""
         super().__init__(postgres_service, table_name='workflow_executions', **kwargs)
 
-    async def create(self, execution_data: dict[str, Any]) -> Optional[UUID]:  # noqa: UP007
+    async def create(self, execution_data: dict[str, Any]) -> UUID | None:
         """
         Create a new workflow execution record.
 
@@ -67,7 +67,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to create workflow execution: {e}')
             return None
 
-    async def get_by_id(self, execution_id: UUID) -> Optional[dict[str, Any]]:  # noqa: UP007
+    async def get_by_id(self, execution_id: UUID) -> dict[str, Any] | None:
         """
         Get a workflow execution by ID.
 
@@ -166,7 +166,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
         self,
         execution_id: UUID,
         status: str,
-        error_message: Optional[str] = None,  # noqa: UP007
+        error_message: str | None = None,
     ) -> bool:
         """
         Update the status of a workflow execution.
@@ -332,7 +332,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
 
     async def get_running_executions(
         self,
-        workflow_id: Optional[UUID] = None,  # noqa: UP007
+        workflow_id: UUID | None = None,
     ) -> list[dict[str, Any]]:
         """
         Get all currently running executions.
@@ -380,7 +380,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
 
     async def get_average_duration(
         self, workflow_id: UUID, days: int = 7
-    ) -> Optional[float]:  # noqa: UP007
+    ) -> float | None:
         """
         Get average execution duration in seconds.
 

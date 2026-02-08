@@ -33,7 +33,7 @@ class TestModelsExist:
             WorkflowCreateRequest,
             WorkflowResponse,
         )
-        
+
         assert WorkflowCreateRequest is not None
         assert WorkflowResponse is not None
 
@@ -44,26 +44,26 @@ class TestWorkflowCreateRequest:
     def test_create_workflow_requires_name(self):
         """Test workflow creation requires name."""
         from thoth.server.routers.browser_workflows import WorkflowCreateRequest
-        
+
         with pytest.raises(Exception):  # Pydantic validation error
             WorkflowCreateRequest()
 
     def test_create_workflow_with_minimal_data(self):
         """Test workflow creation with minimal valid data."""
         from thoth.server.routers.browser_workflows import WorkflowCreateRequest
-        
+
         # All required fields
         workflow = WorkflowCreateRequest(
-            name="Test Workflow",
-            website_domain="example.com",
-            start_url="https://example.com",
+            name='Test Workflow',
+            website_domain='example.com',
+            start_url='https://example.com',
             extraction_rules={},
-            actions=[]
+            actions=[],
         )
-        
-        assert workflow.name == "Test Workflow"
-        assert workflow.website_domain == "example.com"
-        assert workflow.start_url == "https://example.com"
+
+        assert workflow.name == 'Test Workflow'
+        assert workflow.website_domain == 'example.com'
+        assert workflow.start_url == 'https://example.com'
 
 
 class TestBrowserWorkflowEndpoints:

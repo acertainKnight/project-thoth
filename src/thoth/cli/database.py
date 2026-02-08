@@ -5,8 +5,6 @@ Provides commands for database migrations, status checks, and maintenance.
 """
 
 import argparse
-import asyncio
-from pathlib import Path
 
 from loguru import logger
 
@@ -21,7 +19,7 @@ def _get_database_url() -> str:
         return config.secrets.database_url
 
     # Fall back to default
-    return "postgresql://thoth:thoth_password@localhost:5432/thoth"
+    return 'postgresql://thoth:thoth_password@localhost:5432/thoth'
 
 
 async def migrate_command(args) -> None:
@@ -30,17 +28,17 @@ async def migrate_command(args) -> None:
     migration_manager = MigrationManager(database_url)
 
     try:
-        logger.info("Checking for pending migrations...")
+        logger.info('Checking for pending migrations...')
         success = await migration_manager.initialize_database()
 
         if success:
-            logger.success("✓ Database migrations completed successfully!")
+            logger.success('✓ Database migrations completed successfully!')
         else:
-            logger.error("✗ Database migrations failed")
+            logger.error('✗ Database migrations failed')
             exit(1)
 
     except Exception as e:
-        logger.error(f"Migration failed: {e}")
+        logger.error(f'Migration failed: {e}')
         exit(1)
 
 
@@ -52,45 +50,48 @@ async def status_command(args) -> None:
     try:
         status = await migration_manager.get_migration_status()
 
-        logger.info("=== Database Migration Status ===")
-        logger.info(f"Applied migrations: {status['applied_count']}")
-        logger.info(f"Pending migrations: {status['pending_count']}")
+        logger.info('=== Database Migration Status ===')
+        logger.info(f'Applied migrations: {status["applied_count"]}')
+        logger.info(f'Pending migrations: {status["pending_count"]}')
 
         if status['applied_versions']:
-            logger.info(f"Applied versions: {', '.join(map(str, status['applied_versions']))}")
+            logger.info(
+                f'Applied versions: {", ".join(map(str, status["applied_versions"]))}'
+            )
 
         if status['last_migration']:
             last = status['last_migration']
-            logger.info(f"Current version: {last['version']} ({last['name']})")
-            logger.info(f"Last applied: {last['applied_at']}")
+            logger.info(f'Current version: {last["version"]} ({last["name"]})')
+            logger.info(f'Last applied: {last["applied_at"]}')
 
         if status['pending_migrations']:
-            logger.warning("Pending migrations:")
+            logger.warning('Pending migrations:')
             for version, name in status['pending_migrations']:
-                logger.warning(f"  - {version:03d}: {name}")
+                logger.warning(f'  - {version:03d}: {name}')
             logger.warning("Run 'thoth db migrate' to apply pending migrations")
         else:
-            logger.success("✓ Database is up to date")
+            logger.success('✓ Database is up to date')
 
     except Exception as e:
-        logger.error(f"Failed to get status: {e}")
+        logger.error(f'Failed to get status: {e}')
         exit(1)
 
 
 async def reset_command(args) -> None:
     """Reset database (DANGEROUS - asks for confirmation)."""
     if not args.confirm:
-        logger.error("This will DROP ALL TABLES and re-run migrations!")
-        logger.error("Add --confirm flag if you really want to do this")
+        logger.error('This will DROP ALL TABLES and re-run migrations!')
+        logger.error('Add --confirm flag if you really want to do this')
         exit(1)
 
     database_url = _get_database_url()
 
     try:
         import asyncpg
+
         conn = await asyncpg.connect(database_url)
 
-        logger.warning("Dropping all tables...")
+        logger.warning('Dropping all tables...')
 
         # Get all tables
         tables = await conn.fetch("""
@@ -100,26 +101,26 @@ async def reset_command(args) -> None:
 
         for table in tables:
             table_name = table['tablename']
-            logger.info(f"Dropping table: {table_name}")
+            logger.info(f'Dropping table: {table_name}')
             await conn.execute(f'DROP TABLE IF EXISTS "{table_name}" CASCADE')
 
         await conn.close()
 
-        logger.success("All tables dropped")
+        logger.success('All tables dropped')
 
         # Re-run migrations
-        logger.info("Re-running migrations...")
+        logger.info('Re-running migrations...')
         migration_manager = MigrationManager(database_url)
         success = await migration_manager.initialize_database()
 
         if success:
-            logger.success("✓ Database reset complete!")
+            logger.success('✓ Database reset complete!')
         else:
-            logger.error("✗ Migration failed after reset")
+            logger.error('✗ Migration failed after reset')
             exit(1)
 
     except Exception as e:
-        logger.error(f"Reset failed: {e}")
+        logger.error(f'Reset failed: {e}')
         exit(1)
 
 
@@ -133,20 +134,18 @@ def configure_subparser(subparsers: argparse._SubParsersAction) -> None:
     db_parser = subparsers.add_parser(
         'db',
         help='Database management commands',
-        description='Manage database schema and migrations'
+        description='Manage database schema and migrations',
     )
 
     db_subparsers = db_parser.add_subparsers(
-        dest='db_command',
-        help='Database command to run',
-        required=True
+        dest='db_command', help='Database command to run', required=True
     )
 
     # Migrate command
     migrate_parser = db_subparsers.add_parser(
         'migrate',
         help='Run pending database migrations',
-        description='Apply all pending database schema migrations'
+        description='Apply all pending database schema migrations',
     )
     migrate_parser.set_defaults(func=migrate_command)
 
@@ -154,7 +153,7 @@ def configure_subparser(subparsers: argparse._SubParsersAction) -> None:
     status_parser = db_subparsers.add_parser(
         'status',
         help='Show migration status',
-        description='Display current database migration status'
+        description='Display current database migration status',
     )
     status_parser.set_defaults(func=status_command)
 
@@ -162,11 +161,9 @@ def configure_subparser(subparsers: argparse._SubParsersAction) -> None:
     reset_parser = db_subparsers.add_parser(
         'reset',
         help='Reset database (DANGEROUS)',
-        description='Drop all tables and re-run migrations. WARNING: ALL DATA WILL BE LOST!'
+        description='Drop all tables and re-run migrations. WARNING: ALL DATA WILL BE LOST!',
     )
     reset_parser.add_argument(
-        '--confirm',
-        action='store_true',
-        help='Confirm you want to reset the database'
+        '--confirm', action='store_true', help='Confirm you want to reset the database'
     )
     reset_parser.set_defaults(func=reset_command)

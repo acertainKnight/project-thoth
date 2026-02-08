@@ -6,7 +6,7 @@ health monitoring, and usage statistics.
 """
 
 from datetime import datetime
-from typing import Any, List, Optional  # noqa: UP035
+from typing import Any, List  # noqa: UP035
 
 from loguru import logger
 
@@ -20,7 +20,7 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
         """Initialize available source repository."""
         super().__init__(postgres_service, table_name='available_sources', **kwargs)
 
-    async def get_by_name(self, name: str) -> Optional[dict[str, Any]]:  # noqa: UP007
+    async def get_by_name(self, name: str) -> dict[str, Any] | None:
         """
         Get source by name.
 
@@ -112,7 +112,7 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
         self,
         name: str,
         health_status: str,
-        error_count: Optional[int] = None,  # noqa: UP007
+        error_count: int | None = None,
     ) -> bool:
         """
         Update health status for a source.
@@ -169,7 +169,7 @@ class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
         self,
         name: str,
         articles_found: int = 0,
-        response_time_ms: Optional[float] = None,  # noqa: UP007
+        response_time_ms: float | None = None,
     ) -> bool:
         """
         Increment query statistics for a source.

@@ -130,7 +130,7 @@ send_message_to_agent(
 
 3. list_articles(limit=15, sort_by="date")
 
-4. Report: "Found X papers on MoE in LLMs. Top 5: [list]. 
+4. Report: "Found X papers on MoE in LLMs. Top 5: [list].
    Would you like me to analyze any of these in depth?"
 ```
 

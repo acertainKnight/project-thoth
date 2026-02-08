@@ -1,5 +1,4 @@
-"""
-Model Selection screen for setup wizard.
+"""Model Selection screen for setup wizard.
 
 Configures all model choices with live dropdowns from provider APIs.
 Includes visible essentials and an advanced collapsible section.
@@ -13,7 +12,6 @@ from typing import Any
 
 from loguru import logger
 from textual.app import ComposeResult
-from textual.containers import Vertical
 from textual.widgets import Collapsible, Input, Label, Select, Static
 
 from ..config_manager import ConfigManager
@@ -32,8 +30,8 @@ class ModelSelectionScreen(BaseScreen):
     def __init__(self) -> None:
         """Initialize model selection screen."""
         super().__init__(
-            title="Configure Models",
-            subtitle="Select models for each Thoth component",
+            title='Configure Models',
+            subtitle='Select models for each Thoth component',
         )
         self.vault_path: Path | None = None
         self.config_manager: ConfigManager | None = None
@@ -51,10 +49,10 @@ class ModelSelectionScreen(BaseScreen):
     def on_mount(self) -> None:
         """Run when screen is mounted."""
         # Get vault path, API keys, and Letta live models from wizard data
-        self.vault_path = self.app.wizard_data.get("vault_path")
-        self.api_keys = self.app.wizard_data.get("api_keys", {})
-        self.letta_live_models: list[str] = self.app.wizard_data.get(
-            "letta_live_models", []
+        self.vault_path = getattr(self.app, 'wizard_data', {}).get('vault_path')
+        self.api_keys = getattr(self.app, 'wizard_data', {}).get('api_keys', {})
+        self.letta_live_models: list[str] = getattr(self.app, 'wizard_data', {}).get(
+            'letta_live_models', []
         )
 
         if self.vault_path:
@@ -71,18 +69,18 @@ class ModelSelectionScreen(BaseScreen):
                 existing = self.config_manager.load_existing()
                 if existing:
                     self.existing_config = existing
-                    logger.info("Loaded existing configuration for defaults")
+                    logger.info('Loaded existing configuration for defaults')
         except Exception as e:
-            logger.error(f"Error loading configuration: {e}")
+            logger.error(f'Error loading configuration: {e}')
 
         # Fetch models from APIs in parallel
-        self.show_info("Fetching available models from providers...")
+        self.show_info('Fetching available models from providers...')
 
         openrouter_task = asyncio.create_task(
-            fetch_openrouter_models(self.api_keys.get("openrouter"))
+            fetch_openrouter_models(self.api_keys.get('openrouter'))
         )
         embedding_task = asyncio.create_task(
-            fetch_openai_embedding_models(self.api_keys["openai"])
+            fetch_openai_embedding_models(self.api_keys['openai'])
         )
         letta_task = asyncio.create_task(
             fetch_letta_compatible_models(self.api_keys, self.letta_live_models)
@@ -106,7 +104,7 @@ class ModelSelectionScreen(BaseScreen):
             + len(self.openai_embedding_models)
             + len(self.letta_models)
         )
-        self.show_info(f"Loaded {fetched_count} models from providers.")
+        self.show_info(f'Loaded {fetched_count} models from providers.')
         await asyncio.sleep(1.5)
         self.clear_messages()
 
@@ -114,25 +112,25 @@ class ModelSelectionScreen(BaseScreen):
         """Update Select widgets in visible section with fetched models."""
         # Document Analysis Model
         self._update_select(
-            "model-doc-analysis",
+            'model-doc-analysis',
             [m.id for m in self.openrouter_models],
-            self._get_default("llm.default.model", "google/gemini-2.5-flash"),
+            self._get_default('llm.default.model', 'google/gemini-2.5-flash'),
         )
 
         # Letta Chat Model
         self._update_select(
-            "model-letta",
+            'model-letta',
             self.letta_models,
             self._get_default(
-                "memory.letta.agentModel", "anthropic/claude-sonnet-4-20250514"
+                'memory.letta.agentModel', 'anthropic/claude-sonnet-4-20250514'
             ),
         )
 
         # Embedding Model
         self._update_select(
-            "model-embedding",
+            'model-embedding',
             self.openai_embedding_models,
-            self._get_default("rag.embeddingModel", "text-embedding-3-small"),
+            self._get_default('rag.embeddingModel', 'text-embedding-3-small'),
         )
 
     def _update_advanced_selects(self) -> None:
@@ -140,59 +138,55 @@ class ModelSelectionScreen(BaseScreen):
         or_model_ids = [m.id for m in self.openrouter_models]
 
         self._update_select(
-            "model-citation",
+            'model-citation',
             or_model_ids,
-            self._get_default("llm.citation.model", "openai/gpt-4o-mini"),
+            self._get_default('llm.citation.model', 'openai/gpt-4o-mini'),
         )
         self._update_select(
-            "model-tag-consolidate",
+            'model-tag-consolidate',
             or_model_ids,
             self._get_default(
-                "llm.tagConsolidator.consolidateModel", "google/gemini-2.5-flash"
+                'llm.tagConsolidator.consolidateModel', 'google/gemini-2.5-flash'
             ),
         )
         self._update_select(
-            "model-tag-suggest",
+            'model-tag-suggest',
             or_model_ids,
             self._get_default(
-                "llm.tagConsolidator.suggestModel", "google/gemini-2.5-flash"
+                'llm.tagConsolidator.suggestModel', 'google/gemini-2.5-flash'
             ),
         )
         self._update_select(
-            "model-tag-map",
+            'model-tag-map',
             or_model_ids,
             self._get_default(
-                "llm.tagConsolidator.mapModel", "google/gemini-2.5-flash"
+                'llm.tagConsolidator.mapModel', 'google/gemini-2.5-flash'
             ),
         )
         self._update_select(
-            "model-research",
+            'model-research',
+            or_model_ids,
+            self._get_default('llm.researchAgent.model', 'google/gemini-3-pro-preview'),
+        )
+        self._update_select(
+            'model-scrape',
+            or_model_ids,
+            self._get_default('llm.scrapeFilter.model', 'google/gemini-2.5-flash'),
+        )
+        self._update_select(
+            'model-rag-qa',
+            or_model_ids,
+            self._get_default('rag.qa.model', 'google/gemini-2.5-flash'),
+        )
+        self._update_select(
+            'model-routing',
             or_model_ids,
             self._get_default(
-                "llm.researchAgent.model", "google/gemini-3-pro-preview"
-            ),
-        )
-        self._update_select(
-            "model-scrape",
-            or_model_ids,
-            self._get_default("llm.scrapeFilter.model", "google/gemini-2.5-flash"),
-        )
-        self._update_select(
-            "model-rag-qa",
-            or_model_ids,
-            self._get_default("rag.qa.model", "google/gemini-2.5-flash"),
-        )
-        self._update_select(
-            "model-routing",
-            or_model_ids,
-            self._get_default(
-                "llm.queryBasedRouting.routingModel", "google/gemini-2.5-flash"
+                'llm.queryBasedRouting.routingModel', 'google/gemini-2.5-flash'
             ),
         )
 
-    def _update_select(
-        self, select_id: str, models: list[str], default: str
-    ) -> None:
+    def _update_select(self, select_id: str, models: list[str], default: str) -> None:
         """
         Update a Select widget's options with a new model list.
 
@@ -202,11 +196,11 @@ class ModelSelectionScreen(BaseScreen):
             default: Default model to select
         """
         try:
-            select_widget = self.query_one(f"#{select_id}", Select)
+            select_widget = self.query_one(f'#{select_id}', Select)
             # Add "Recommended" prefix to the default option
             options = []
             for m in models:
-                label = f"Recommended: {m}" if m == default else m
+                label = f'Recommended: {m}' if m == default else m
                 options.append((label, m))
 
             select_widget.set_options(options)
@@ -217,7 +211,7 @@ class ModelSelectionScreen(BaseScreen):
             elif models:
                 select_widget.value = models[0]
         except Exception as e:
-            logger.debug(f"Could not update select {select_id}: {e}")
+            logger.debug(f'Could not update select {select_id}: {e}')
 
     def _get_default(self, config_path: str, fallback: str) -> str:
         """
@@ -233,8 +227,8 @@ class ModelSelectionScreen(BaseScreen):
         if not self.existing_config:
             return fallback
 
-        parts = config_path.split(".")
-        current = self.existing_config
+        parts = config_path.split('.')
+        current: Any = self.existing_config
         for part in parts:
             if isinstance(current, dict):
                 current = current.get(part)
@@ -245,178 +239,176 @@ class ModelSelectionScreen(BaseScreen):
         return str(current) if current else fallback
 
     def compose_content(self) -> ComposeResult:
-        """
-        Compose model selection content.
+        """Compose model selection content.
 
         Returns:
             Content widgets
         """
         # Visible section - primary models
         yield Static(
-            "[bold]Essential Models[/bold]\n"
+            '[bold]Essential Models[/bold]\n'
             "[dim]These are the main models you'll interact with.[/dim]\n",
-            classes="section-title",
+            classes='section-title',
         )
 
-        yield Label("[cyan]Document Analysis Model[/cyan]")
+        yield Label('[cyan]Document Analysis Model[/cyan]')
         yield Static(
-            "[dim]Processes and analyzes documents (PDF, markdown, etc.)\n"
-            "Uses OpenRouter models with structured output support.[/dim]"
+            '[dim]Processes and analyzes documents (PDF, markdown, etc.)\n'
+            'Uses OpenRouter models with structured output support.[/dim]'
         )
         yield Select(
-            options=[("Loading...", "")],
-            id="model-doc-analysis",
+            options=[('Loading...', '')],
+            id='model-doc-analysis',
         )
-        yield Static(id="warning-doc-analysis", classes="context-warning hidden")
+        yield Static(id='warning-doc-analysis', classes='context-warning hidden')
 
-        yield Label("\n[cyan]Letta Chat Model[/cyan]")
+        yield Label('\n[cyan]Letta Chat Model[/cyan]')
         yield Static(
-            "[dim]Powers your conversational research agent via Letta.\n"
+            '[dim]Powers your conversational research agent via Letta.\n'
             "Models are from your running Letta server, or Letta's tested model list.[/dim]"
         )
         yield Select(
-            options=[("Loading...", "")],
-            id="model-letta",
+            options=[('Loading...', '')],
+            id='model-letta',
         )
-        yield Static(id="warning-letta", classes="context-warning hidden")
+        yield Static(id='warning-letta', classes='context-warning hidden')
 
-        yield Label("\n[cyan]Embedding Model[/cyan]")
+        yield Label('\n[cyan]Embedding Model[/cyan]')
         yield Static(
-            "[dim]Creates vector embeddings for semantic search (Thoth + Letta).\n"
-            "Uses OpenAI embedding models.[/dim]"
+            '[dim]Creates vector embeddings for semantic search (Thoth + Letta).\n'
+            'Uses OpenAI embedding models.[/dim]'
         )
         yield Select(
-            options=[("Loading...", "")],
-            id="model-embedding",
+            options=[('Loading...', '')],
+            id='model-embedding',
         )
 
         # Advanced collapsible section
         yield Static(
-            "\n[bold]Advanced Settings[/bold] [dim](Optional)[/dim]",
-            classes="section-title",
+            '\n[bold]Advanced Settings[/bold] [dim](Optional)[/dim]',
+            classes='section-title',
         )
 
         with Collapsible(
-            title="Secondary Models & RAG Configuration", collapsed=True, id="advanced"
+            title='Secondary Models & RAG Configuration', collapsed=True, id='advanced'
         ):
             yield Static(
                 "[dim]These settings use sensible defaults. Most users don't need to change them.[/dim]\n"
             )
 
             # Secondary model selections
-            yield Static("[bold]Secondary Models[/bold]")
+            yield Static('[bold]Secondary Models[/bold]')
 
-            yield Label("Citation Model")
-            yield Static("[dim]Extracts and processes citations from documents[/dim]")
-            yield Select(options=[("Loading...", "")], id="model-citation")
-            yield Static(id="warning-citation", classes="context-warning hidden")
+            yield Label('Citation Model')
+            yield Static('[dim]Extracts and processes citations from documents[/dim]')
+            yield Select(options=[('Loading...', '')], id='model-citation')
+            yield Static(id='warning-citation', classes='context-warning hidden')
 
-            yield Label("\nTag Consolidation Model")
-            yield Static("[dim]Consolidates and merges similar tags[/dim]")
-            yield Select(options=[("Loading...", "")], id="model-tag-consolidate")
-            yield Static(id="warning-tag-consolidate", classes="context-warning hidden")
+            yield Label('\nTag Consolidation Model')
+            yield Static('[dim]Consolidates and merges similar tags[/dim]')
+            yield Select(options=[('Loading...', '')], id='model-tag-consolidate')
+            yield Static(id='warning-tag-consolidate', classes='context-warning hidden')
 
-            yield Label("\nTag Suggestion Model")
-            yield Static("[dim]Suggests tags for documents[/dim]")
-            yield Select(options=[("Loading...", "")], id="model-tag-suggest")
-            yield Static(id="warning-tag-suggest", classes="context-warning hidden")
+            yield Label('\nTag Suggestion Model')
+            yield Static('[dim]Suggests tags for documents[/dim]')
+            yield Select(options=[('Loading...', '')], id='model-tag-suggest')
+            yield Static(id='warning-tag-suggest', classes='context-warning hidden')
 
-            yield Label("\nTag Mapping Model")
-            yield Static("[dim]Maps tags across documents[/dim]")
-            yield Select(options=[("Loading...", "")], id="model-tag-map")
-            yield Static(id="warning-tag-map", classes="context-warning hidden")
+            yield Label('\nTag Mapping Model')
+            yield Static('[dim]Maps tags across documents[/dim]')
+            yield Select(options=[('Loading...', '')], id='model-tag-map')
+            yield Static(id='warning-tag-map', classes='context-warning hidden')
 
-            yield Label("\nResearch Agent Model")
-            yield Static("[dim]Powers autonomous research workflows[/dim]")
-            yield Select(options=[("Loading...", "")], id="model-research")
-            yield Static(id="warning-research", classes="context-warning hidden")
+            yield Label('\nResearch Agent Model')
+            yield Static('[dim]Powers autonomous research workflows[/dim]')
+            yield Select(options=[('Loading...', '')], id='model-research')
+            yield Static(id='warning-research', classes='context-warning hidden')
 
-            yield Label("\nScrape Filter Model")
-            yield Static("[dim]Filters and processes scraped web content[/dim]")
-            yield Select(options=[("Loading...", "")], id="model-scrape")
-            yield Static(id="warning-scrape", classes="context-warning hidden")
+            yield Label('\nScrape Filter Model')
+            yield Static('[dim]Filters and processes scraped web content[/dim]')
+            yield Select(options=[('Loading...', '')], id='model-scrape')
+            yield Static(id='warning-scrape', classes='context-warning hidden')
 
-            yield Label("\nRAG QA Model")
-            yield Static("[dim]Answers questions from retrieved documents[/dim]")
-            yield Select(options=[("Loading...", "")], id="model-rag-qa")
-            yield Static(id="warning-rag-qa", classes="context-warning hidden")
+            yield Label('\nRAG QA Model')
+            yield Static('[dim]Answers questions from retrieved documents[/dim]')
+            yield Select(options=[('Loading...', '')], id='model-rag-qa')
+            yield Static(id='warning-rag-qa', classes='context-warning hidden')
 
-            yield Label("\nQuery Routing Model")
-            yield Static("[dim]Routes queries to appropriate handlers[/dim]")
-            yield Select(options=[("Loading...", "")], id="model-routing")
-            yield Static(id="warning-routing", classes="context-warning hidden")
+            yield Label('\nQuery Routing Model')
+            yield Static('[dim]Routes queries to appropriate handlers[/dim]')
+            yield Select(options=[('Loading...', '')], id='model-routing')
+            yield Static(id='warning-routing', classes='context-warning hidden')
 
             # RAG and chunking settings
-            yield Static("\n[bold]RAG & Chunking Settings[/bold]")
+            yield Static('\n[bold]RAG & Chunking Settings[/bold]')
 
-            yield Label("RAG Chunk Size (tokens)")
+            yield Label('RAG Chunk Size (tokens)')
             yield Input(
-                placeholder="1000",
-                id="rag-chunk-size",
-                value=str(self._get_default("rag.chunkSize", "1000")),
+                placeholder='1000',
+                id='rag-chunk-size',
+                value=str(self._get_default('rag.chunkSize', '1000')),
             )
 
-            yield Label("RAG Chunk Overlap (tokens)")
+            yield Label('RAG Chunk Overlap (tokens)')
             yield Input(
-                placeholder="200",
-                id="rag-chunk-overlap",
-                value=str(self._get_default("rag.chunkOverlap", "200")),
+                placeholder='200',
+                id='rag-chunk-overlap',
+                value=str(self._get_default('rag.chunkOverlap', '200')),
             )
 
-            yield Label("Document Processing Chunk Size (tokens)")
+            yield Label('Document Processing Chunk Size (tokens)')
             yield Input(
-                placeholder="4000",
-                id="doc-chunk-size",
-                value=str(self._get_default("llm.default.chunkSize", "4000")),
+                placeholder='4000',
+                id='doc-chunk-size',
+                value=str(self._get_default('llm.default.chunkSize', '4000')),
             )
 
-            yield Label("Document Processing Chunk Overlap (tokens)")
+            yield Label('Document Processing Chunk Overlap (tokens)')
             yield Input(
-                placeholder="200",
-                id="doc-chunk-overlap",
-                value=str(self._get_default("llm.default.chunkOverlap", "200")),
+                placeholder='200',
+                id='doc-chunk-overlap',
+                value=str(self._get_default('llm.default.chunkOverlap', '200')),
             )
 
-            yield Label("Document Processing Strategy")
+            yield Label('Document Processing Strategy')
             yield Static(
-                "[dim]auto: Automatically choose based on document size\n"
-                "direct: Process entire document at once\n"
-                "map_reduce: Split, process, then combine\n"
-                "refine: Iteratively refine results[/dim]"
+                '[dim]auto: Automatically choose based on document size\n'
+                'direct: Process entire document at once\n'
+                'map_reduce: Split, process, then combine\n'
+                'refine: Iteratively refine results[/dim]'
             )
             yield Select(
                 options=[
-                    ("Auto (recommended)", "auto"),
-                    ("Direct", "direct"),
-                    ("Map-Reduce", "map_reduce"),
-                    ("Refine", "refine"),
+                    ('Auto (recommended)', 'auto'),
+                    ('Direct', 'direct'),
+                    ('Map-Reduce', 'map_reduce'),
+                    ('Refine', 'refine'),
                 ],
-                id="doc-processing-strategy",
-                value=self._get_default("llm.default.docProcessing", "auto"),
+                id='doc-processing-strategy',
+                value=self._get_default('llm.default.docProcessing', 'auto'),
             )
 
-            yield Label("\nTemperature (0.0 - 2.0)")
+            yield Label('\nTemperature (0.0 - 2.0)')
             yield Input(
-                placeholder="0.9",
-                id="temperature",
-                value=str(self._get_default("llm.default.temperature", "0.9")),
+                placeholder='0.9',
+                id='temperature',
+                value=str(self._get_default('llm.default.temperature', '0.9')),
             )
 
-            yield Label("Max Output Tokens")
+            yield Label('Max Output Tokens')
             yield Input(
-                placeholder="500000",
-                id="max-output-tokens",
-                value=str(self._get_default("llm.default.maxOutputTokens", "500000")),
+                placeholder='500000',
+                id='max-output-tokens',
+                value=str(self._get_default('llm.default.maxOutputTokens', '500000')),
             )
 
     async def on_select_changed(self, event: Select.Changed) -> None:
-        """
-        Handle model selection changes for context length validation.
+        """Handle model selection changes for context length validation.
 
         Args:
             event: Select changed event
         """
-        if not event.select.id or not event.select.id.startswith("model-"):
+        if not event.select.id or not event.select.id.startswith('model-'):
             return
 
         model_id = str(event.value)
@@ -425,16 +417,16 @@ class ModelSelectionScreen(BaseScreen):
 
         # Map select IDs to their max context length settings
         context_limits = {
-            "model-doc-analysis": 8000,  # llm.default.maxContextLength
-            "model-citation": 4000,  # llm.citation.maxContextLength
-            "model-research": 100000,  # llm.researchAgent.maxContextLength
-            "model-scrape": 50000,  # llm.scrapeFilter.maxContextLength
-            "model-tag-consolidate": 8000,
-            "model-tag-suggest": 8000,
-            "model-tag-map": 8000,
-            "model-rag-qa": 8000,
-            "model-routing": 8000,
-            "model-letta": 0,  # No fixed limit for Letta
+            'model-doc-analysis': 8000,  # llm.default.maxContextLength
+            'model-citation': 4000,  # llm.citation.maxContextLength
+            'model-research': 100000,  # llm.researchAgent.maxContextLength
+            'model-scrape': 50000,  # llm.scrapeFilter.maxContextLength
+            'model-tag-consolidate': 8000,
+            'model-tag-suggest': 8000,
+            'model-tag-map': 8000,
+            'model-rag-qa': 8000,
+            'model-routing': 8000,
+            'model-letta': 0,  # No fixed limit for Letta
         }
 
         max_context = context_limits.get(event.select.id, 0)
@@ -447,24 +439,23 @@ class ModelSelectionScreen(BaseScreen):
             return  # Unknown context length, can't validate
 
         # Show/hide warning
-        warning_id = event.select.id.replace("model-", "warning-")
+        warning_id = event.select.id.replace('model-', 'warning-')
         try:
-            warning_widget = self.query_one(f"#{warning_id}", Static)
+            warning_widget = self.query_one(f'#{warning_id}', Static)
             if max_context > model_context:
                 warning_widget.update(
-                    f"[yellow]⚠ Warning: {model_id} has a {model_context:,} token context window, "
-                    f"but this component is configured for {max_context:,} tokens. This may cause errors.[/yellow]"
+                    f'[yellow]⚠ Warning: {model_id} has a {model_context:,} token context window, '
+                    f'but this component is configured for {max_context:,} tokens. This may cause errors.[/yellow]'
                 )
-                warning_widget.remove_class("hidden")
+                warning_widget.remove_class('hidden')
             else:
-                warning_widget.update("")
-                warning_widget.add_class("hidden")
-        except Exception:
-            pass
+                warning_widget.update('')
+                warning_widget.add_class('hidden')
+        except Exception as e:
+            logger.debug(f'Could not update warning widget: {e}')
 
     async def validate_and_proceed(self) -> dict[str, Any] | None:
-        """
-        Validate model selections and settings.
+        """Validate model selections and settings.
 
         Returns:
             Dict with model_settings data, or None if invalid
@@ -473,86 +464,86 @@ class ModelSelectionScreen(BaseScreen):
 
         # Get visible model selections
         try:
-            model_settings["llm"] = {
-                "default": {
-                    "model": self.query_one("#model-doc-analysis", Select).value,
-                    "temperature": float(
-                        self.query_one("#temperature", Input).value or "0.9"
+            model_settings['llm'] = {
+                'default': {
+                    'model': self.query_one('#model-doc-analysis', Select).value,
+                    'temperature': float(
+                        self.query_one('#temperature', Input).value or '0.9'
                     ),
-                    "chunkSize": int(
-                        self.query_one("#doc-chunk-size", Input).value or "4000"
+                    'chunkSize': int(
+                        self.query_one('#doc-chunk-size', Input).value or '4000'
                     ),
-                    "chunkOverlap": int(
-                        self.query_one("#doc-chunk-overlap", Input).value or "200"
+                    'chunkOverlap': int(
+                        self.query_one('#doc-chunk-overlap', Input).value or '200'
                     ),
-                    "docProcessing": self.query_one(
-                        "#doc-processing-strategy", Select
+                    'docProcessing': self.query_one(
+                        '#doc-processing-strategy', Select
                     ).value,
-                    "maxOutputTokens": int(
-                        self.query_one("#max-output-tokens", Input).value or "500000"
+                    'maxOutputTokens': int(
+                        self.query_one('#max-output-tokens', Input).value or '500000'
                     ),
                 },
-                "citation": {
-                    "model": self.query_one("#model-citation", Select).value,
+                'citation': {
+                    'model': self.query_one('#model-citation', Select).value,
                 },
-                "tagConsolidator": {
-                    "consolidateModel": self.query_one(
-                        "#model-tag-consolidate", Select
+                'tagConsolidator': {
+                    'consolidateModel': self.query_one(
+                        '#model-tag-consolidate', Select
                     ).value,
-                    "suggestModel": self.query_one("#model-tag-suggest", Select).value,
-                    "mapModel": self.query_one("#model-tag-map", Select).value,
+                    'suggestModel': self.query_one('#model-tag-suggest', Select).value,
+                    'mapModel': self.query_one('#model-tag-map', Select).value,
                 },
-                "researchAgent": {
-                    "model": self.query_one("#model-research", Select).value,
+                'researchAgent': {
+                    'model': self.query_one('#model-research', Select).value,
                 },
-                "scrapeFilter": {
-                    "model": self.query_one("#model-scrape", Select).value,
+                'scrapeFilter': {
+                    'model': self.query_one('#model-scrape', Select).value,
                 },
-                "queryBasedRouting": {
-                    "routingModel": self.query_one("#model-routing", Select).value,
+                'queryBasedRouting': {
+                    'routingModel': self.query_one('#model-routing', Select).value,
                 },
             }
 
-            embedding_model = self.query_one("#model-embedding", Select).value
-            model_settings["rag"] = {
-                "embeddingModel": embedding_model,
-                "chunkSize": int(
-                    self.query_one("#rag-chunk-size", Input).value or "1000"
+            embedding_model = self.query_one('#model-embedding', Select).value
+            model_settings['rag'] = {
+                'embeddingModel': embedding_model,
+                'chunkSize': int(
+                    self.query_one('#rag-chunk-size', Input).value or '1000'
                 ),
-                "chunkOverlap": int(
-                    self.query_one("#rag-chunk-overlap", Input).value or "200"
+                'chunkOverlap': int(
+                    self.query_one('#rag-chunk-overlap', Input).value or '200'
                 ),
-                "qa": {
-                    "model": self.query_one("#model-rag-qa", Select).value,
+                'qa': {
+                    'model': self.query_one('#model-rag-qa', Select).value,
                 },
             }
 
-            model_settings["memory"] = {
-                "letta": {
-                    "agentModel": self.query_one("#model-letta", Select).value,
-                    "filesystem": {
-                        "embeddingModel": embedding_model,  # Same as RAG embedding
+            model_settings['memory'] = {
+                'letta': {
+                    'agentModel': self.query_one('#model-letta', Select).value,
+                    'filesystem': {
+                        'embeddingModel': embedding_model,  # Same as RAG embedding
                     },
                 }
             }
 
         except Exception as e:
-            self.show_error(f"Error reading model selections: {e}")
-            logger.error(f"Validation error: {e}")
+            self.show_error(f'Error reading model selections: {e}')
+            logger.error(f'Validation error: {e}')
             return None
 
         # Validate numeric inputs
         try:
-            temp = float(self.query_one("#temperature", Input).value or "0.9")
+            temp = float(self.query_one('#temperature', Input).value or '0.9')
             if not 0.0 <= temp <= 2.0:
-                self.show_error("Temperature must be between 0.0 and 2.0")
+                self.show_error('Temperature must be between 0.0 and 2.0')
                 return None
         except ValueError:
-            self.show_error("Invalid temperature value")
+            self.show_error('Invalid temperature value')
             return None
 
-        logger.info("Model selections validated successfully")
-        return {"model_settings": model_settings}
+        logger.info('Model selections validated successfully')
+        return {'model_settings': model_settings}
 
     async def on_next_screen(self) -> None:
         """Navigate to review screen.
@@ -563,13 +554,15 @@ class ModelSelectionScreen(BaseScreen):
         from .review import ReviewScreen
 
         # Set default feature flags so downstream screens have them
-        if hasattr(self.app, "wizard_data"):
-            self.app.wizard_data.update({
-                "rag_enabled": True,
-                "discovery_enabled": True,
-                "citations_enabled": True,
-                "local_embeddings": False,
-            })
+        if hasattr(self.app, 'wizard_data'):
+            getattr(self.app, 'wizard_data', {}).update(
+                {
+                    'rag_enabled': True,
+                    'discovery_enabled': True,
+                    'citations_enabled': True,
+                    'local_embeddings': False,
+                }
+            )
 
-        logger.info("Proceeding to review")
+        logger.info('Proceeding to review')
         await self.app.push_screen(ReviewScreen())

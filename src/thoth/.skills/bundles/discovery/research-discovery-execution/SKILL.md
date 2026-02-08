@@ -54,11 +54,11 @@ Check existing research questions:
 questions = list_research_questions()
 
 If question not found:
-"The research question hasn't been created yet. The orchestrator 
+"The research question hasn't been created yet. The orchestrator
 should create it first using the research-question-creation skill."
 
 If question exists but recently run:
-"This discovery was run 2 hours ago. Found 45 papers. 
+"This discovery was run 2 hours ago. Found 45 papers.
 Do you want to run again or use existing results?"
 ```
 
@@ -134,7 +134,7 @@ Overall:
 ```
 Problem: arXiv taking >60 seconds
 Solution: Continue with other sources
-Action: "arXiv timed out, but found 33 papers from Semantic Scholar 
+Action: "arXiv timed out, but found 33 papers from Semantic Scholar
          and PubMed. Do you want to retry arXiv or proceed with these?"
 ```
 
@@ -160,7 +160,7 @@ Action: "Hit rate limit on Semantic Scholar. Waiting 30 seconds...
 ```
 Problem: Research question malformed or missing
 Solution: Tell orchestrator to fix/create question
-Action: "Research question needs to be created or fixed. Delegating 
+Action: "Research question needs to be created or fixed. Delegating
          back to orchestrator..."
 ```
 

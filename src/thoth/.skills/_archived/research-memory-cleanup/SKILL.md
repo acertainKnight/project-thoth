@@ -77,7 +77,7 @@ Tell me what's sacred, I'll protect it."
 Agent: "Starting standard cleanup. This will:
 
 Step 1: Backup everything
-Step 2: Consolidate duplicate paper entries  
+Step 2: Consolidate duplicate paper entries
 Step 3: Organize research domains
 Step 4: Clean discovery configs
 Step 5: Restore cleaned version

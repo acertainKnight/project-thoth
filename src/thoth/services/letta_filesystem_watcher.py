@@ -8,7 +8,6 @@ Uses watchdog for file system monitoring with debouncing to avoid excessive sync
 import asyncio
 import time
 from pathlib import Path
-from typing import Optional
 
 from loguru import logger
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
@@ -20,7 +19,7 @@ from thoth.config import Config
 class LettaFilesystemWatcher(FileSystemEventHandler):
     """
     Watches vault notes directory and syncs changes to Letta filesystem.
-    
+
     Features:
     - Monitors markdown files in notes directory
     - Debounces rapid changes (avoids syncing on every keystroke)
@@ -46,17 +45,17 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
         self.config = config
         self.letta_service = letta_filesystem_service
         self.debounce_seconds = debounce_seconds
-        
+
         # Track pending changes
         self._pending_sync = False
-        self._last_change_time: Optional[float] = None
-        self._sync_task: Optional[asyncio.Task] = None
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
-        
+        self._last_change_time: float | None = None
+        self._sync_task: asyncio.Task | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+
         # Observer for file system events
-        self.observer: Optional[Observer] = None
+        self.observer: Observer | None = None
         self._running = False
-        
+
         self.logger = logger.bind(service='letta_filesystem_watcher')
         self.logger.info(
             f'LettaFilesystemWatcher initialized (debounce: {debounce_seconds}s)'
@@ -73,12 +72,14 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
             self._loop = asyncio.get_running_loop()
         except RuntimeError:
             # No running loop - shouldn't happen but handle gracefully
-            self.logger.warning('No running event loop found - async sync will not work')
+            self.logger.warning(
+                'No running event loop found - async sync will not work'
+            )
             self._loop = None
 
         # Watch PDF directory - where processed papers are stored
         pdf_dir = self.config.pdf_dir
-        
+
         # If pdf_dir is empty, try the actual Obsidian location
         if not pdf_dir.exists() or not list(pdf_dir.glob('*.pdf')):
             # Check for PDFs in /vault/thoth/papers/pdfs
@@ -86,7 +87,7 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
             if alt_pdf_dir.exists():
                 pdf_dir = alt_pdf_dir
                 self.logger.info(f'Using alternative PDF location: {pdf_dir}')
-        
+
         if not pdf_dir.exists():
             self.logger.warning(f'PDF directory does not exist: {pdf_dir}')
             pdf_dir.mkdir(parents=True, exist_ok=True)
@@ -96,7 +97,7 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
         self.observer.schedule(self, str(pdf_dir), recursive=True)
         self.observer.start()
         self._running = True
-        
+
         self.logger.info(f'Started watching: {pdf_dir}')
 
     def stop(self) -> None:
@@ -120,7 +121,7 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
         """Handle file creation events."""
         if event.is_directory:
             return
-        
+
         path = Path(event.src_path)
         if self._should_sync_file(path):
             self.logger.debug(f'File created: {path.name}')
@@ -130,7 +131,7 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
         """Handle file modification events."""
         if event.is_directory:
             return
-        
+
         path = Path(event.src_path)
         if self._should_sync_file(path):
             self.logger.debug(f'File modified: {path.name}')
@@ -140,7 +141,7 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
         """Handle file deletion events."""
         if event.is_directory:
             return
-        
+
         path = Path(event.src_path)
         if self._should_sync_file(path):
             self.logger.debug(f'File deleted: {path.name}')
@@ -173,7 +174,7 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
     def _schedule_sync(self) -> None:
         """
         Schedule a sync after debounce period.
-        
+
         Multiple rapid changes will be batched into a single sync.
         """
         self._pending_sync = True
@@ -183,7 +184,9 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
         if self._loop and (not self._sync_task or self._sync_task.done()):
             try:
                 # Run coroutine in the main event loop from this thread
-                future = asyncio.run_coroutine_threadsafe(self._debounced_sync(), self._loop)
+                future = asyncio.run_coroutine_threadsafe(
+                    self._debounced_sync(), self._loop
+                )
                 # Store the future as our sync task
                 self._sync_task = future  # type: ignore
             except Exception as e:
@@ -192,7 +195,7 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
     async def _debounced_sync(self) -> None:
         """
         Wait for debounce period, then sync if no new changes.
-        
+
         This prevents syncing on every keystroke in a text editor.
         """
         while self._pending_sync:
@@ -214,27 +217,40 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
         """
         try:
             self.logger.info('Auto-syncing vault files to Letta filesystem...')
-            
+
             # Get folder configuration
-            letta_config = self.config.memory_config.letta if hasattr(self.config.memory_config, 'letta') else None
-            filesystem_config = getattr(letta_config, 'filesystem', None) if letta_config else None
-            folder_name = getattr(filesystem_config, 'folder_name', 'thoth_processed_articles') if filesystem_config else 'thoth_processed_articles'
-            embedding_model = getattr(filesystem_config, 'embedding_model', 'text-embedding-3-small') if filesystem_config else 'text-embedding-3-small'
-            
+            letta_config = (
+                self.config.memory_config.letta
+                if hasattr(self.config.memory_config, 'letta')
+                else None
+            )
+            filesystem_config = (
+                getattr(letta_config, 'filesystem', None) if letta_config else None
+            )
+            folder_name = (
+                getattr(filesystem_config, 'folder_name', 'thoth_processed_articles')
+                if filesystem_config
+                else 'thoth_processed_articles'
+            )
+            embedding_model = (
+                getattr(filesystem_config, 'embedding_model', 'text-embedding-3-small')
+                if filesystem_config
+                else 'text-embedding-3-small'
+            )
+
             # Remove 'openai/' prefix if present (OpenAI API doesn't accept it)
             if embedding_model.startswith('openai/'):
                 embedding_model = embedding_model.replace('openai/', '')
-            
+
             # Get or create the folder
             folder_id = await self.letta_service.get_or_create_folder(
-                name=folder_name,
-                embedding_model=embedding_model
+                name=folder_name, embedding_model=embedding_model
             )
-            
+
             if not folder_id:
                 self.logger.error('Failed to get or create Letta folder')
                 return
-            
+
             # Determine which directory to sync (PDF directory with processed papers)
             pdf_dir = self.config.pdf_dir
             # If pdf_dir is empty, try the actual Obsidian location
@@ -242,18 +258,18 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
                 alt_pdf_dir = self.config.vault_root / 'thoth' / 'papers' / 'pdfs'
                 if alt_pdf_dir.exists():
                     pdf_dir = alt_pdf_dir
-            
+
             # Sync files to the folder
             result = await self.letta_service.sync_vault_to_folder(
                 folder_id=folder_id,
-                notes_dir=pdf_dir  # Sync PDFs from papers directory
+                notes_dir=pdf_dir,  # Sync PDFs from papers directory
             )
-            
+
             if result:
                 uploaded = result.get('uploaded', 0)
                 skipped = result.get('skipped', 0)
                 errors = result.get('errors', [])
-                
+
                 if errors:
                     self.logger.warning(
                         f'Auto-sync complete with errors: {uploaded} uploaded, '
@@ -265,7 +281,7 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
                     )
             else:
                 self.logger.warning('Auto-sync returned no result')
-                
+
         except Exception as e:
             self.logger.error(f'Auto-sync failed: {e}')
 
@@ -273,7 +289,7 @@ class LettaFilesystemWatcher(FileSystemEventHandler):
 class LettaFilesystemWatcherService:
     """
     Service wrapper for LettaFilesystemWatcher.
-    
+
     Provides lifecycle management and integration with ServiceManager.
     """
 
@@ -287,28 +303,46 @@ class LettaFilesystemWatcherService:
         """
         self.config = config
         self.letta_service = letta_filesystem_service
-        
+
         # Get debounce settings from config
-        letta_config = config.memory_config.letta if hasattr(config.memory_config, 'letta') else None
-        filesystem_config = getattr(letta_config, 'filesystem', None) if letta_config else None
-        debounce_seconds = getattr(filesystem_config, 'debounceSeconds', 5) if filesystem_config else 5
-        
+        letta_config = (
+            config.memory_config.letta
+            if hasattr(config.memory_config, 'letta')
+            else None
+        )
+        filesystem_config = (
+            getattr(letta_config, 'filesystem', None) if letta_config else None
+        )
+        debounce_seconds = (
+            getattr(filesystem_config, 'debounceSeconds', 5) if filesystem_config else 5
+        )
+
         # Create watcher
         self.watcher = LettaFilesystemWatcher(
             config=config,
             letta_filesystem_service=letta_filesystem_service,
             debounce_seconds=debounce_seconds,
         )
-        
+
         self.logger = logger.bind(service='letta_filesystem_watcher_service')
         self.logger.info('LettaFilesystemWatcherService initialized')
 
     def start(self) -> None:
         """Start the watcher."""
-        letta_config = self.config.memory_config.letta if hasattr(self.config.memory_config, 'letta') else None
-        filesystem_config = getattr(letta_config, 'filesystem', None) if letta_config else None
-        auto_sync = getattr(filesystem_config, 'auto_sync', False) if filesystem_config else False
-        
+        letta_config = (
+            self.config.memory_config.letta
+            if hasattr(self.config.memory_config, 'letta')
+            else None
+        )
+        filesystem_config = (
+            getattr(letta_config, 'filesystem', None) if letta_config else None
+        )
+        auto_sync = (
+            getattr(filesystem_config, 'auto_sync', False)
+            if filesystem_config
+            else False
+        )
+
         if auto_sync:
             self.watcher.start()
             self.logger.info('Auto-sync enabled - watching for file changes')

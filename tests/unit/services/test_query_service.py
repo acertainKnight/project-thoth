@@ -1,11 +1,10 @@
 """Test suite for QueryService."""
 
-import pytest
 from unittest.mock import Mock
-from pathlib import Path
+
+import pytest
 
 from thoth.services.query_service import QueryService
-from thoth.config import Config
 
 
 class TestQueryServiceInitialization:
@@ -14,15 +13,17 @@ class TestQueryServiceInitialization:
     def test_initialization(self):
         """Test QueryService initializes correctly."""
         service = QueryService()
-        
+
         assert service.config is not None
 
-    @pytest.mark.skip(reason="Complex service dependencies - better for integration tests")
+    @pytest.mark.skip(
+        reason='Complex service dependencies - better for integration tests'
+    )
     def test_initialization_with_custom_config(self):
         """Test QueryService accepts custom config."""
         mock_config = Mock()  # Don't use spec to allow any attributes
         service = QueryService(config=mock_config)
-        
+
         assert service.config is mock_config
 
 
@@ -32,7 +33,7 @@ class TestQueryServiceMethods:
     def test_service_has_required_methods(self):
         """Test QueryService has all required methods."""
         service = QueryService()
-        
+
         # Check key methods exist
         assert hasattr(service, 'create_query')
         assert hasattr(service, 'get_query')
@@ -43,6 +44,6 @@ class TestQueryServiceMethods:
     def test_initialize_method(self):
         """Test initialize() method."""
         service = QueryService()
-        
+
         # Should not raise
         service.initialize()

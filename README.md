@@ -384,9 +384,9 @@ These features are prioritized based on community feedback. If you have ideas or
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `OBSIDIAN_VAULT_PATH` | **Yes** | Path to your Obsidian vault root |
-| `API_MISTRAL_KEY` | **Yes** | Mistral AI API key |
-| `API_OPENROUTER_KEY` | **Yes** | OpenRouter API key |
-| `API_OPENAI_KEY` | No | OpenAI API key |
+| `API_OPENAI_KEY` | **Yes** | Embeddings for Thoth RAG + Letta memory |
+| `API_OPENROUTER_KEY` | **Yes** | Backend LLM for analysis, queries, and routing |
+| `API_MISTRAL_KEY` | **Yes** | PDF OCR extraction (uses mistral-ocr-latest) |
 | `API_SEMANTIC_SCHOLAR_KEY` | No | Semantic Scholar API key |
 
 ### Letta Setup

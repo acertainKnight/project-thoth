@@ -14,23 +14,23 @@ from thoth.utilities.openrouter import ModelInfo, ModelRegistry
 
 # Fallback model lists (used if API calls fail)
 FALLBACK_OPENAI_CHAT_MODELS = [
-    "gpt-4o",
-    "gpt-4o-mini",
-    "gpt-4-turbo",
-    "gpt-3.5-turbo",
+    'gpt-4o',
+    'gpt-4o-mini',
+    'gpt-4-turbo',
+    'gpt-3.5-turbo',
 ]
 
 FALLBACK_OPENAI_EMBEDDING_MODELS = [
-    "text-embedding-3-small",
-    "text-embedding-3-large",
-    "text-embedding-ada-002",
+    'text-embedding-3-small',
+    'text-embedding-3-large',
+    'text-embedding-ada-002',
 ]
 
 FALLBACK_ANTHROPIC_MODELS = [
-    "claude-sonnet-4-20250514",
-    "claude-3-5-sonnet-20241022",
-    "claude-3-5-haiku-20241022",
-    "claude-3-opus-20240229",
+    'claude-sonnet-4-20250514',
+    'claude-3-5-sonnet-20241022',
+    'claude-3-5-haiku-20241022',
+    'claude-3-opus-20240229',
 ]
 
 # Letta-tested models that pass the "Basic" support test.
@@ -39,60 +39,61 @@ FALLBACK_ANTHROPIC_MODELS = [
 # Format: (provider, model_id, context_window)
 LETTA_SUPPORTED_MODELS: list[tuple[str, str, int]] = [
     # Anthropic
-    ("anthropic", "claude-sonnet-4-20250514", 200_000),
-    ("anthropic", "claude-opus-4-20250514", 200_000),
-    ("anthropic", "claude-3-7-sonnet-20250219", 200_000),
-    ("anthropic", "claude-3-5-sonnet-20241022", 200_000),
-    ("anthropic", "claude-3-5-sonnet-20240620", 200_000),
-    ("anthropic", "claude-3-5-haiku-20241022", 200_000),
+    ('anthropic', 'claude-sonnet-4-20250514', 200_000),
+    ('anthropic', 'claude-opus-4-20250514', 200_000),
+    ('anthropic', 'claude-3-7-sonnet-20250219', 200_000),
+    ('anthropic', 'claude-3-5-sonnet-20241022', 200_000),
+    ('anthropic', 'claude-3-5-sonnet-20240620', 200_000),
+    ('anthropic', 'claude-3-5-haiku-20241022', 200_000),
     # OpenAI
-    ("openai", "gpt-4.1", 1_047_576),
-    ("openai", "gpt-4.1-mini", 1_047_576),
-    ("openai", "gpt-4.1-nano", 1_047_576),
-    ("openai", "gpt-4o", 128_000),
-    ("openai", "gpt-4o-2024-11-20", 128_000),
-    ("openai", "gpt-4o-2024-08-06", 128_000),
-    ("openai", "gpt-4o-mini", 128_000),
-    ("openai", "gpt-4-turbo", 128_000),
-    ("openai", "gpt-4-0613", 8_192),
-    ("openai", "gpt-4-1106-preview", 128_000),
-    ("openai", "gpt-4-turbo-preview", 128_000),
+    ('openai', 'gpt-4.1', 1_047_576),
+    ('openai', 'gpt-4.1-mini', 1_047_576),
+    ('openai', 'gpt-4.1-nano', 1_047_576),
+    ('openai', 'gpt-4o', 128_000),
+    ('openai', 'gpt-4o-2024-11-20', 128_000),
+    ('openai', 'gpt-4o-2024-08-06', 128_000),
+    ('openai', 'gpt-4o-mini', 128_000),
+    ('openai', 'gpt-4-turbo', 128_000),
+    ('openai', 'gpt-4-0613', 8_192),
+    ('openai', 'gpt-4-1106-preview', 128_000),
+    ('openai', 'gpt-4-turbo-preview', 128_000),
     # Google AI
-    ("google_ai", "gemini-2.5-pro", 1_048_576),
-    ("google_ai", "gemini-2.5-flash-preview-04-17", 1_048_576),
-    ("google_ai", "gemini-2.0-flash-thinking-exp", 1_048_576),
-    ("google_ai", "gemini-1.5-pro", 2_000_000),
-    ("google_ai", "gemini-1.5-pro-002", 2_000_000),
-    ("google_ai", "gemini-1.5-pro-latest", 2_000_000),
+    ('google_ai', 'gemini-2.5-pro', 1_048_576),
+    ('google_ai', 'gemini-2.5-flash-preview-04-17', 1_048_576),
+    ('google_ai', 'gemini-2.0-flash-thinking-exp', 1_048_576),
+    ('google_ai', 'gemini-1.5-pro', 2_000_000),
+    ('google_ai', 'gemini-1.5-pro-002', 2_000_000),
+    ('google_ai', 'gemini-1.5-pro-latest', 2_000_000),
     # Together
-    ("together", "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8", 1_048_576),
-    ("together", "meta-llama/Llama-3.3-70B-Instruct-Turbo", 131_072),
-    ("together", "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo", 130_815),
-    ("together", "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", 131_072),
-    ("together", "deepseek-ai/DeepSeek-V3", 131_072),
-    ("together", "Qwen/Qwen2.5-Coder-32B-Instruct", 32_768),
-    ("together", "arcee-ai/coder-large", 32_768),
+    ('together', 'meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8', 1_048_576),
+    ('together', 'meta-llama/Llama-3.3-70B-Instruct-Turbo', 131_072),
+    ('together', 'meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo', 130_815),
+    ('together', 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo', 131_072),
+    ('together', 'deepseek-ai/DeepSeek-V3', 131_072),
+    ('together', 'Qwen/Qwen2.5-Coder-32B-Instruct', 32_768),
+    ('together', 'arcee-ai/coder-large', 32_768),
 ]
 
 
 async def fetch_openrouter_models(
-    api_key: str | None = None,
+    api_key: str | None = None,  # noqa: ARG001
 ) -> list[ModelInfo]:
-    """
-    Fetch available models from OpenRouter API with structured output support.
+    """Fetch available models from OpenRouter with structured outputs.
 
-    Uses ModelRegistry for caching and filters for models that support structured outputs.
+    Uses ModelRegistry for caching and filters for models that support
+    structured outputs.
 
     Args:
-        api_key: OpenRouter API key (not currently required for model list endpoint)
+        api_key: OpenRouter API key (not currently required for list endpoint)
 
     Returns:
-        List of ModelInfo objects with structured output support, sorted with free models first
+        List of ModelInfo objects with structured output support,
+        sorted with free models first
 
     Example:
         >>> models = await fetch_openrouter_models()
         >>> for model in models:
-        ...     print(f"{model.id}: {model.context_length} tokens")
+        ...     print(f'{model.id}: {model.context_length} tokens')
     """
     all_models = await ModelRegistry.get_openrouter_models()
     return ModelRegistry.filter_structured_output(all_models)
@@ -111,31 +112,31 @@ async def fetch_openai_chat_models(api_key: str) -> list[str]:
         Sorted list of model IDs, or fallback list on failure.
 
     Example:
-        >>> models = await fetch_openai_chat_models("sk-...")
+        >>> models = await fetch_openai_chat_models('sk-...')
         >>> print(models)
         ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo']
     """
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(
-                "https://api.openai.com/v1/models",
-                headers={"Authorization": f"Bearer {api_key}"},
+                'https://api.openai.com/v1/models',
+                headers={'Authorization': f'Bearer {api_key}'},
             )
             if resp.status_code == 200:
-                data = resp.json().get("data", [])
+                data = resp.json().get('data', [])
                 # Filter to chat models (gpt-*), skip instruct/embedding/etc
                 chat_models = sorted(
-                    m["id"]
+                    m['id']
                     for m in data
-                    if m["id"].startswith("gpt-")
-                    and "instruct" not in m["id"]
-                    and "realtime" not in m["id"]
-                    and "audio" not in m["id"]
+                    if m['id'].startswith('gpt-')
+                    and 'instruct' not in m['id']
+                    and 'realtime' not in m['id']
+                    and 'audio' not in m['id']
                 )
                 if chat_models:
                     return chat_models
     except Exception as e:
-        logger.debug(f"Could not fetch OpenAI chat models: {e}")
+        logger.debug(f'Could not fetch OpenAI chat models: {e}')
     return FALLBACK_OPENAI_CHAT_MODELS
 
 
@@ -152,26 +153,26 @@ async def fetch_openai_embedding_models(api_key: str) -> list[str]:
         List of embedding model IDs, or fallback list on failure.
 
     Example:
-        >>> models = await fetch_openai_embedding_models("sk-...")
+        >>> models = await fetch_openai_embedding_models('sk-...')
         >>> print(models)
         ['text-embedding-3-small', 'text-embedding-3-large', 'text-embedding-ada-002']
     """
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(
-                "https://api.openai.com/v1/models",
-                headers={"Authorization": f"Bearer {api_key}"},
+                'https://api.openai.com/v1/models',
+                headers={'Authorization': f'Bearer {api_key}'},
             )
             if resp.status_code == 200:
-                data = resp.json().get("data", [])
+                data = resp.json().get('data', [])
                 # Filter to embedding models
                 embedding_models = sorted(
-                    m["id"] for m in data if "embedding" in m["id"]
+                    m['id'] for m in data if 'embedding' in m['id']
                 )
                 if embedding_models:
                     return embedding_models
     except Exception as e:
-        logger.debug(f"Could not fetch OpenAI embedding models: {e}")
+        logger.debug(f'Could not fetch OpenAI embedding models: {e}')
     return FALLBACK_OPENAI_EMBEDDING_MODELS
 
 
@@ -186,26 +187,26 @@ async def fetch_anthropic_models(api_key: str) -> list[str]:
         List of model IDs, or fallback list on failure.
 
     Example:
-        >>> models = await fetch_anthropic_models("sk-ant-...")
+        >>> models = await fetch_anthropic_models('sk-ant-...')
         >>> print(models)
         ['claude-sonnet-4-20250514', 'claude-3-5-sonnet-20241022', ...]
     """
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(
-                "https://api.anthropic.com/v1/models",
+                'https://api.anthropic.com/v1/models',
                 headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
+                    'x-api-key': api_key,
+                    'anthropic-version': '2023-06-01',
                 },
             )
             if resp.status_code == 200:
-                data = resp.json().get("data", [])
-                models = sorted(m["id"] for m in data if m.get("id"))
+                data = resp.json().get('data', [])
+                models = sorted(m['id'] for m in data if m.get('id'))
                 if models:
                     return models
     except Exception as e:
-        logger.debug(f"Could not fetch Anthropic models: {e}")
+        logger.debug(f'Could not fetch Anthropic models: {e}')
     return FALLBACK_ANTHROPIC_MODELS
 
 
@@ -234,34 +235,34 @@ async def fetch_letta_compatible_models(
         List of Letta-compatible model IDs in provider/model format.
 
     Example:
-        >>> models = await fetch_letta_compatible_models({"openai": "sk-..."})
+        >>> models = await fetch_letta_compatible_models({'openai': 'sk-...'})
         >>> print(models[:3])
         ['anthropic/claude-sonnet-4-20250514', 'openai/gpt-4.1', ...]
     """
     # If we got live models from a running Letta server, use those
     if live_models:
-        logger.info(f"Using {len(live_models)} live models from Letta server")
+        logger.info(f'Using {len(live_models)} live models from Letta server')
         return live_models
 
     # Fall back to static list, filtered by available API keys
-    logger.info("No live Letta models — using static supported model list")
+    logger.info('No live Letta models — using static supported model list')
 
     # Anthropic and OpenAI are always shown because:
     # - OpenAI key is required (for embeddings) so those models always work
     # - Anthropic keys can be configured in .env.letta separately
-    available_providers: set[str] = {"anthropic", "openai"}
+    available_providers: set[str] = {'anthropic', 'openai'}
 
     # Map Letta provider names to wizard API key names
     provider_key_map = {
-        "google_ai": "google",
-        "together": "together",
+        'google_ai': 'google',
+        'together': 'together',
     }
     for letta_provider, key_name in provider_key_map.items():
-        if key_name in api_keys and api_keys[key_name]:
+        if api_keys.get(key_name):
             available_providers.add(letta_provider)
 
     models: list[str] = [
-        f"{provider}/{model_id}"
+        f'{provider}/{model_id}'
         for provider, model_id, _ctx in LETTA_SUPPORTED_MODELS
         if provider in available_providers
     ]
@@ -269,7 +270,7 @@ async def fetch_letta_compatible_models(
     if not models:
         # Show all if filtering left nothing
         models = [
-            f"{provider}/{model_id}"
+            f'{provider}/{model_id}'
             for provider, model_id, _ctx in LETTA_SUPPORTED_MODELS
         ]
 

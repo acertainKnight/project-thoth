@@ -14,7 +14,6 @@ from textual.app import ComposeResult
 from textual.widgets import Button, Static
 
 # Note: ReviewScreen uses base on_button_pressed for cancel/back/next
-
 from .base import BaseScreen
 
 
@@ -24,8 +23,8 @@ class ReviewScreen(BaseScreen):
     def __init__(self) -> None:
         """Initialize review screen."""
         super().__init__(
-            title="Review Configuration",
-            subtitle="Verify your settings before installation",
+            title='Review Configuration',
+            subtitle='Verify your settings before installation',
         )
 
     def compose_content(self) -> ComposeResult:
@@ -37,144 +36,166 @@ class ReviewScreen(BaseScreen):
         """
         # Get wizard data
         wizard_data: dict[str, Any] = {}
-        if hasattr(self.app, "wizard_data"):
+        if hasattr(self.app, 'wizard_data'):
             wizard_data = self.app.wizard_data
 
-        yield Static("[bold]Configuration Summary:[/bold]\n", classes="section-title")
+        yield Static('[bold]Configuration Summary:[/bold]\n', classes='section-title')
 
         # Deployment Mode
-        deployment_mode = wizard_data.get("deployment_mode", "local")
+        deployment_mode = wizard_data.get('deployment_mode', 'local')
         mode_text = (
-            "[cyan]Local[/cyan] (Docker on this machine)" 
-            if deployment_mode == "local" 
-            else "[cyan]Remote[/cyan] (Connect to existing server)"
+            '[cyan]Local[/cyan] (Docker on this machine)'
+            if deployment_mode == 'local'
+            else '[cyan]Remote[/cyan] (Connect to existing server)'
         )
-        yield Static(f"  [cyan]Deployment:[/cyan]    {mode_text}")
+        yield Static(f'  [cyan]Deployment:[/cyan]    {mode_text}')
 
         # Server Endpoints (for remote mode)
-        if deployment_mode == "remote":
-            thoth_api_url = wizard_data.get("thoth_api_url", "http://localhost:8000")
-            yield Static(f"  [cyan]Thoth Server:[/cyan]   {thoth_api_url}")
+        if deployment_mode == 'remote':
+            thoth_api_url = wizard_data.get('thoth_api_url', 'http://localhost:8000')
+            yield Static(f'  [cyan]Thoth Server:[/cyan]   {thoth_api_url}')
 
         # Vault Configuration
-        vault_path = wizard_data.get("vault_path", "[dim]Not set[/dim]")
-        yield Static(f"  [cyan]Obsidian Vault:[/cyan] {vault_path}")
+        vault_path = wizard_data.get('vault_path', '[dim]Not set[/dim]')
+        yield Static(f'  [cyan]Obsidian Vault:[/cyan] {vault_path}')
 
         # API Keys Configuration
-        api_keys = wizard_data.get("api_keys", {})
+        api_keys = wizard_data.get('api_keys', {})
         provider_names = [pid.title() for pid in api_keys.keys()]
         providers_text = (
-            ", ".join(provider_names) if provider_names else "[dim]None configured[/dim]"
+            ', '.join(provider_names)
+            if provider_names
+            else '[dim]None configured[/dim]'
         )
-        yield Static(f"  [cyan]API Keys:[/cyan]        {providers_text}")
+        yield Static(f'  [cyan]API Keys:[/cyan]        {providers_text}')
 
         # Model Configuration
-        model_settings = wizard_data.get("model_settings", {})
+        model_settings = wizard_data.get('model_settings', {})
         if model_settings:
-            yield Static("\n  [bold]Model Configuration:[/bold]")
+            yield Static('\n  [bold]Model Configuration:[/bold]')
 
             # Essential models
-            llm_config = model_settings.get("llm", {})
+            llm_config = model_settings.get('llm', {})
             if llm_config:
-                default_cfg = llm_config.get("default", {})
-                doc_model = default_cfg.get("model", "Not set")
-                yield Static(f"    • Document Analysis: {doc_model}")
+                default_cfg = llm_config.get('default', {})
+                doc_model = default_cfg.get('model', 'Not set')
+                yield Static(f'    • Document Analysis: {doc_model}')
 
-            memory_config = model_settings.get("memory", {})
+            memory_config = model_settings.get('memory', {})
             if memory_config:
-                letta_cfg = memory_config.get("letta", {})
-                letta_model = letta_cfg.get("agentModel", "Not set")
-                yield Static(f"    • Letta Chat Agent: {letta_model}")
+                letta_cfg = memory_config.get('letta', {})
+                letta_model = letta_cfg.get('agentModel', 'Not set')
+                yield Static(f'    • Letta Chat Agent: {letta_model}')
 
-            rag_config = model_settings.get("rag", {})
+            rag_config = model_settings.get('rag', {})
             if rag_config:
-                embedding_model = rag_config.get("embeddingModel", "Not set")
-                yield Static(f"    • Embeddings: {embedding_model}")
+                embedding_model = rag_config.get('embeddingModel', 'Not set')
+                yield Static(f'    • Embeddings: {embedding_model}')
 
             # Advanced models (collapsed summary)
             if llm_config:
-                citation_model = llm_config.get("citation", {}).get("model", "Not set")
-                research_model = llm_config.get("researchAgent", {}).get("model", "Not set")
+                citation_model = llm_config.get('citation', {}).get('model', 'Not set')
+                research_model = llm_config.get('researchAgent', {}).get(
+                    'model', 'Not set'
+                )
                 yield Static(
-                    f"    [dim]• Citation: {citation_model}[/dim]\n"
-                    f"    [dim]• Research Agent: {research_model}[/dim]\n"
-                    f"    [dim]• + 6 more secondary models[/dim]"
+                    f'    [dim]• Citation: {citation_model}[/dim]\n'
+                    f'    [dim]• Research Agent: {research_model}[/dim]\n'
+                    f'    [dim]• + 6 more secondary models[/dim]'
                 )
 
         # Letta Configuration
-        letta_mode = wizard_data.get("letta_mode", "self-hosted")
-        letta_url = wizard_data.get("letta_url", "http://localhost:8283")
-        letta_available = wizard_data.get("letta_available", False)
+        letta_mode = wizard_data.get('letta_mode', 'self-hosted')
+        letta_url = wizard_data.get('letta_url', 'http://localhost:8283')
+        letta_available = wizard_data.get('letta_available', False)
 
-        if letta_mode == "cloud":
-            has_key = bool(wizard_data.get("letta_api_key"))
-            key_status = "[green]configured[/green]" if has_key else "[red]missing[/red]"
-            yield Static(f"  [cyan]Letta Memory:[/cyan]   Cloud (key: {key_status})")
-        elif letta_mode == "remote":
-            remote_status = "[green]Reachable[/green]" if letta_available else "[yellow]Not verified[/yellow]"
-            yield Static(f"  [cyan]Letta Memory:[/cyan]   Remote Server ({remote_status})")
-            yield Static(f"  [cyan]Letta URL:[/cyan]      {letta_url}")
+        if letta_mode == 'cloud':
+            has_key = bool(wizard_data.get('letta_api_key'))
+            key_status = (
+                '[green]configured[/green]' if has_key else '[red]missing[/red]'
+            )
+            yield Static(f'  [cyan]Letta Memory:[/cyan]   Cloud (key: {key_status})')
+        elif letta_mode == 'remote':
+            remote_status = (
+                '[green]Reachable[/green]'
+                if letta_available
+                else '[yellow]Not verified[/yellow]'
+            )
+            yield Static(
+                f'  [cyan]Letta Memory:[/cyan]   Remote Server ({remote_status})'
+            )
+            yield Static(f'  [cyan]Letta URL:[/cyan]      {letta_url}')
         else:
-            local_status = "[green]Running[/green]" if letta_available else "[yellow]Will start with 'thoth start'[/yellow]"
-            yield Static(f"  [cyan]Letta Memory:[/cyan]   Self-Hosted Docker ({local_status})")
+            local_status = (
+                '[green]Running[/green]'
+                if letta_available
+                else "[yellow]Will start with 'thoth start'[/yellow]"
+            )
+            yield Static(
+                f'  [cyan]Letta Memory:[/cyan]   Self-Hosted Docker ({local_status})'
+            )
 
         # Database Configuration (only for local deployment)
-        deployment_mode = wizard_data.get("deployment_mode", "local")
-        if deployment_mode == "local":
-            postgres_available = wizard_data.get("postgres_available", False)
-            db_status = "[green]Ready[/green]" if postgres_available else "[yellow]Will be started[/yellow]"
-            yield Static(f"  [cyan]PostgreSQL:[/cyan]     {db_status}")
+        deployment_mode = wizard_data.get('deployment_mode', 'local')
+        if deployment_mode == 'local':
+            postgres_available = wizard_data.get('postgres_available', False)
+            db_status = (
+                '[green]Ready[/green]'
+                if postgres_available
+                else '[yellow]Will be started[/yellow]'
+            )
+            yield Static(f'  [cyan]PostgreSQL:[/cyan]     {db_status}')
 
         # Optional Features
-        rag_enabled = wizard_data.get("rag_enabled", False)
-        discovery_enabled = wizard_data.get("discovery_enabled", False)
-        citations_enabled = wizard_data.get("citations_enabled", False)
-        local_ml = wizard_data.get("local_embeddings", False)
+        rag_enabled = wizard_data.get('rag_enabled', False)
+        discovery_enabled = wizard_data.get('discovery_enabled', False)
+        citations_enabled = wizard_data.get('citations_enabled', False)
+        local_ml = wizard_data.get('local_embeddings', False)
 
         features = []
         if rag_enabled:
-            features.append("Vector Search (RAG)")
+            features.append('Vector Search (RAG)')
         if discovery_enabled:
-            features.append("Paper Discovery")
+            features.append('Paper Discovery')
         if citations_enabled:
-            features.append("Citation Resolution")
+            features.append('Citation Resolution')
         if local_ml:
-            features.append("[yellow]Local ML Models[/yellow]")
+            features.append('[yellow]Local ML Models[/yellow]')
 
-        features_text = (
-            ", ".join(features) if features else "[dim]None enabled[/dim]"
-        )
-        yield Static(f"  [cyan]Features:[/cyan]       {features_text}")
+        features_text = ', '.join(features) if features else '[dim]None enabled[/dim]'
+        yield Static(f'  [cyan]Features:[/cyan]       {features_text}')
 
         # Directory Paths
-        if wizard_data.get("vault_path"):
-            vault = Path(str(wizard_data["vault_path"]))
-            paths_config = wizard_data.get("paths_config", {})
-            workspace_rel = paths_config.get("workspace", "thoth/_thoth")
-            pdf_rel = paths_config.get("pdf", "thoth/papers/pdfs")
-            notes_rel = paths_config.get("notes", "thoth/notes")
+        if wizard_data.get('vault_path'):
+            vault = Path(str(wizard_data['vault_path']))
+            paths_config = wizard_data.get('paths_config', {})
+            workspace_rel = paths_config.get('workspace', 'thoth/_thoth')
+            pdf_rel = paths_config.get('pdf', 'thoth/papers/pdfs')
+            notes_rel = paths_config.get('notes', 'thoth/notes')
             yield Static(
-                f"  [cyan]Workspace:[/cyan]     {vault / workspace_rel}\n"
-                f"  [cyan]PDF Dir:[/cyan]       {vault / pdf_rel}\n"
-                f"  [cyan]Notes Dir:[/cyan]     {vault / notes_rel}"
+                f'  [cyan]Workspace:[/cyan]     {vault / workspace_rel}\n'
+                f'  [cyan]PDF Dir:[/cyan]       {vault / pdf_rel}\n'
+                f'  [cyan]Notes Dir:[/cyan]     {vault / notes_rel}'
             )
 
         # Disk Usage Estimate (only for local deployment)
-        deployment_mode = wizard_data.get("deployment_mode", "local")
-        if deployment_mode == "local":
-            size_parts = ["~1.5GB base"]
+        deployment_mode = wizard_data.get('deployment_mode', 'local')
+        if deployment_mode == 'local':
+            size_parts = ['~1.5GB base']
             if rag_enabled:
-                size_parts.append("~500MB RAG")
+                size_parts.append('~500MB RAG')
             if local_ml:
-                size_parts.append("[red]~3GB local ML[/red]")
-            yield Static(f"\n  [yellow]Est. Disk:[/yellow]      {' + '.join(size_parts)}")
+                size_parts.append('[red]~3GB local ML[/red]')
+            yield Static(
+                f'\n  [yellow]Est. Disk:[/yellow]      {" + ".join(size_parts)}'
+            )
         else:
-            yield Static("\n  [green]No local Docker containers needed[/green]")
+            yield Static('\n  [green]No local Docker containers needed[/green]')
 
         # Edit instructions
         yield Static(
-            "\n[dim]Use ← Back or Ctrl+B to go back and change settings.[/dim]",
-            classes="help-text",
+            '\n[dim]Use ← Back or Ctrl+B to go back and change settings.[/dim]',
+            classes='help-text',
         )
 
     def compose_buttons(self) -> ComposeResult:
@@ -184,9 +205,9 @@ class ReviewScreen(BaseScreen):
         Returns:
             Button widgets
         """
-        yield Button("Cancel & Exit", id="cancel", variant="error")
-        yield Button("← Back", id="back", variant="default")
-        yield Button("Install →", id="next", variant="success")
+        yield Button('Cancel & Exit', id='cancel', variant='error')
+        yield Button('← Back', id='back', variant='default')
+        yield Button('Install →', id='next', variant='success')
 
     async def validate_and_proceed(self) -> dict[str, Any] | None:
         """
@@ -196,23 +217,23 @@ class ReviewScreen(BaseScreen):
             Dict confirming review, or None if validation fails
         """
         # Basic validation
-        if not hasattr(self.app, "wizard_data"):
-            self.show_error("No configuration data found")
+        if not hasattr(self.app, 'wizard_data'):
+            self.show_error('No configuration data found')
             return None
 
         wizard_data = self.app.wizard_data
 
         # Check required fields
-        if not wizard_data.get("vault_path"):
-            self.show_error("Vault path is required")
+        if not wizard_data.get('vault_path'):
+            self.show_error('Vault path is required')
             return None
 
-        logger.info("Configuration review validated successfully")
-        return {"review_confirmed": True}
+        logger.info('Configuration review validated successfully')
+        return {'review_confirmed': True}
 
     async def on_next_screen(self) -> None:
         """Navigate to installation screen."""
         from .installation import InstallationScreen
 
-        logger.info("Proceeding to installation")
+        logger.info('Proceeding to installation')
         await self.app.push_screen(InstallationScreen())

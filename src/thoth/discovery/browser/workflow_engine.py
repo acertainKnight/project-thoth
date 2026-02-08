@@ -5,7 +5,7 @@ This module executes parameterized browser workflows with search parameter injec
 authentication handling, and robust error recovery.
 """
 
-from __future__ import annotations  # noqa: I001
+from __future__ import annotations
 
 import asyncio  # noqa: F401
 from datetime import datetime
@@ -19,7 +19,8 @@ if TYPE_CHECKING:
     from playwright.async_api import BrowserContext, Page
 else:
     try:
-        from playwright.async_api import BrowserContext, Error as PlaywrightError, Page
+        from playwright.async_api import BrowserContext, Page
+        from playwright.async_api import Error as PlaywrightError
     except ImportError:
         # Playwright not installed - create placeholders
         BrowserContext = None  # type: ignore
@@ -27,7 +28,10 @@ else:
         PlaywrightError = Exception  # type: ignore
 
 from thoth.discovery.browser.action_executor import ActionExecutor
-from thoth.discovery.browser.browser_manager import BrowserManager, BrowserManagerError  # noqa: F401
+from thoth.discovery.browser.browser_manager import (  # noqa: F401
+    BrowserManager,
+    BrowserManagerError,
+)
 from thoth.discovery.browser.extraction_service import ExtractionService
 from thoth.repositories.browser_workflow_repository import BrowserWorkflowRepository
 from thoth.repositories.workflow_actions_repository import WorkflowActionsRepository
@@ -797,7 +801,8 @@ class WorkflowEngine:
                     LIMIT 5000
                 """
                 rows = await self.executions_repo.postgres.fetch(
-                    query, workflow.get('name', 'browser_workflow'),
+                    query,
+                    workflow.get('name', 'browser_workflow'),
                 )
                 for row in rows:
                     if row.get('doi'):

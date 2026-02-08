@@ -43,8 +43,8 @@ Research questions in Thoth define:
 ```
 User: I want to find papers about AI memory systems.
 
-Agent: Great! Let's set up automated discovery for AI memory systems. 
-To help create an effective research question, could you tell me more about what 
+Agent: Great! Let's set up automated discovery for AI memory systems.
+To help create an effective research question, could you tell me more about what
 specific aspects of AI memory systems you're interested in? For example:
 - Long-term memory in language models?
 - Memory architectures for agents?
@@ -126,7 +126,7 @@ Would you like to use these three, or would you prefer to query all sources?
 
 **Example**:
 ```
-Agent: For ArXiv searches, I can filter by specific categories. For your research, 
+Agent: For ArXiv searches, I can filter by specific categories. For your research,
 I'd suggest:
 - cs.AI (Artificial Intelligence)
 - cs.LG (Machine Learning)
@@ -255,8 +255,8 @@ Would you like to run it now to see initial results?
 ```
 User: I'm not sure which sources to use.
 
-Agent: No worries! For computer science and AI research, I'd typically recommend 
-starting with arxiv and semantic_scholar - they're the most comprehensive for 
+Agent: No worries! For computer science and AI research, I'd typically recommend
+starting with arxiv and semantic_scholar - they're the most comprehensive for
 this field. We can always adjust later if you're not getting what you need.
 
 Or if you'd like, we can use "*" to search all available sources. What sounds better?
@@ -274,10 +274,10 @@ Or if you'd like, we can use "*" to search all available sources. What sounds be
 ```
 User: I want daily ArXiv alerts for "transformer architectures" in cs.AI and cs.LG.
 
-Agent: Perfect! Let me set that up for you. 
+Agent: Perfect! Let me set that up for you.
 [calls list_available_sources to show options]
-I'll create a research question that searches ArXiv daily for transformer 
-architectures in cs.AI and cs.LG. Should I include any related terms like 
+I'll create a research question that searches ArXiv daily for transformer
+architectures in cs.AI and cs.LG. Should I include any related terms like
 "attention mechanism" or "self-attention" to catch more relevant papers?
 ```
 
@@ -285,7 +285,7 @@ architectures in cs.AI and cs.LG. Should I include any related terms like
 ```
 User: I want to learn about quantum computing.
 
-Agent: Great topic! Let's set up automated discovery. To help narrow it down, 
+Agent: Great topic! Let's set up automated discovery. To help narrow it down,
 what aspect of quantum computing interests you most? For example:
 - Quantum algorithms?
 - Quantum error correction?
@@ -298,8 +298,8 @@ what aspect of quantum computing interests you most? For example:
 ```
 User: I'm interested in both quantum computing and AI safety.
 
-Agent: Those are both fascinating areas! I'd recommend creating separate research 
-questions for each, since they'd use different keywords and potentially different 
+Agent: Those are both fascinating areas! I'd recommend creating separate research
+questions for each, since they'd use different keywords and potentially different
 sources. This gives you better-targeted results.
 
 Would you like to start with quantum computing or AI safety?
@@ -310,9 +310,9 @@ Would you like to start with quantum computing or AI safety?
 ### User Provides Too Few Keywords
 **Problem**: User says "just use AI"
 
-**Solution**: 
+**Solution**:
 ```
-Agent: "AI" is pretty broad - we'd get thousands of papers! Let's be more specific. 
+Agent: "AI" is pretty broad - we'd get thousands of papers! Let's be more specific.
 What area of AI? For example:
 - Machine learning?
 - Natural language processing?
@@ -325,7 +325,7 @@ What area of AI? For example:
 
 **Solution**:
 ```
-Agent: That covers a lot of ground! You might get overwhelmed with results. 
+Agent: That covers a lot of ground! You might get overwhelmed with results.
 I'd suggest either:
 1. Create focused research questions for each area (recommended)
 2. Or pick your top 2-3 priorities to start with
@@ -340,7 +340,7 @@ Which approach sounds better?
 ```
 Agent: Here's a rule of thumb:
 - Fast-moving fields (AI/ML, COVID research): Daily
-- Steady fields (most science): Weekly  
+- Steady fields (most science): Weekly
 - Niche or historical topics: Monthly
 
 For your topic, I'd suggest [recommendation]. You can always adjust this later!

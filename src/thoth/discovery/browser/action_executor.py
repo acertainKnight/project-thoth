@@ -5,7 +5,7 @@ This module provides the ActionExecutor class for executing individual browser
 actions with intelligent element selection, retry mechanisms, and dynamic content handling.
 """  # noqa: W505
 
-import asyncio  # noqa: I001
+import asyncio
 import logging
 import re
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union  # noqa: F401, UP035
@@ -13,10 +13,12 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union  # noqa: F401
 # Make playwright imports optional to avoid blocking if not installed
 if TYPE_CHECKING:
     from playwright.async_api import ElementHandle, Page
+
     PlaywrightTimeout = TimeoutError
 else:
     try:
-        from playwright.async_api import Page, ElementHandle, TimeoutError as PlaywrightTimeout
+        from playwright.async_api import ElementHandle, Page
+        from playwright.async_api import TimeoutError as PlaywrightTimeout
     except ImportError:
         # Playwright not installed - create placeholders
         Page = None  # type: ignore
@@ -24,9 +26,9 @@ else:
         PlaywrightTimeout = TimeoutError  # type: ignore
 
 from thoth.utilities.schemas.browser_workflow import (
-    WorkflowAction,
     ElementSelector,
     WaitCondition,
+    WorkflowAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -64,7 +66,7 @@ class ActionExecutor:
     async def execute_action(
         self,
         action: WorkflowAction,
-        parameters: Optional[Dict[str, Any]] = None,  # noqa: UP006, UP007
+        parameters: Dict[str, Any] | None = None,  # noqa: UP006
     ) -> ActionResult:
         """
         Execute single workflow action with retries.

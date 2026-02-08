@@ -5,7 +5,7 @@ This module provides specialized methods for managing search configurations that
 define how to identify and extract search results from web pages.
 """
 
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from loguru import logger
@@ -22,7 +22,7 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
             postgres_service, table_name='workflow_search_config', **kwargs
         )
 
-    async def create(self, config_data: dict[str, Any]) -> Optional[UUID]:  # noqa: UP007
+    async def create(self, config_data: dict[str, Any]) -> UUID | None:
         """
         Create a new workflow search configuration.
 
@@ -62,7 +62,7 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to create workflow search config: {e}')
             return None
 
-    async def get_by_workflow_id(self, workflow_id: UUID) -> Optional[dict[str, Any]]:  # noqa: UP007
+    async def get_by_workflow_id(self, workflow_id: UUID) -> dict[str, Any] | None:
         """
         Get search configuration for a workflow.
 

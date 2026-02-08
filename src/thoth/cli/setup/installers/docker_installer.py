@@ -26,14 +26,14 @@ class DockerInstaller:
             Platform name: 'linux', 'macos', or 'windows'
         """
         system = platform.system().lower()
-        if system == "darwin":
-            return "macos"
-        elif system == "linux":
-            return "linux"
-        elif system == "windows":
-            return "windows"
+        if system == 'darwin':
+            return 'macos'
+        elif system == 'linux':
+            return 'linux'
+        elif system == 'windows':
+            return 'windows'
         else:
-            return "unknown"
+            return 'unknown'
 
     @staticmethod
     def detect_linux_distro() -> str | None:
@@ -45,21 +45,21 @@ class DockerInstaller:
         """
         try:
             # Try /etc/os-release first (standard)
-            os_release = Path("/etc/os-release")
+            os_release = Path('/etc/os-release')
             if os_release.exists():
                 content = os_release.read_text()
-                if "ubuntu" in content.lower():
-                    return "ubuntu"
-                elif "debian" in content.lower():
-                    return "debian"
-                elif "fedora" in content.lower():
-                    return "fedora"
-                elif "arch" in content.lower():
-                    return "arch"
+                if 'ubuntu' in content.lower():
+                    return 'ubuntu'
+                elif 'debian' in content.lower():
+                    return 'debian'
+                elif 'fedora' in content.lower():
+                    return 'fedora'
+                elif 'arch' in content.lower():
+                    return 'arch'
 
             # Try lsb_release command
             result = subprocess.run(
-                ["lsb_release", "-is"],
+                ['lsb_release', '-is'],
                 capture_output=True,
                 text=True,
                 timeout=5,
@@ -69,7 +69,7 @@ class DockerInstaller:
                 return distro
 
         except Exception as e:
-            logger.debug(f"Could not detect Linux distro: {e}")
+            logger.debug(f'Could not detect Linux distro: {e}')
 
         return None
 
@@ -81,7 +81,7 @@ class DockerInstaller:
         Returns:
             True if brew command is available
         """
-        return shutil.which("brew") is not None
+        return shutil.which('brew') is not None
 
     @staticmethod
     def install_docker_linux() -> tuple[bool, str]:
@@ -93,16 +93,16 @@ class DockerInstaller:
         """
         distro = DockerInstaller.detect_linux_distro()
 
-        if distro in ("ubuntu", "debian"):
+        if distro in ('ubuntu', 'debian'):
             return DockerInstaller._install_docker_debian()
-        elif distro == "fedora":
+        elif distro == 'fedora':
             return DockerInstaller._install_docker_fedora()
-        elif distro == "arch":
+        elif distro == 'arch':
             return DockerInstaller._install_docker_arch()
         else:
             return (
                 False,
-                f"Unsupported Linux distro: {distro}. Please install Docker manually.",
+                f'Unsupported Linux distro: {distro}. Please install Docker manually.',
             )
 
     @staticmethod
@@ -114,11 +114,11 @@ class DockerInstaller:
             Tuple of (success, message)
         """
         try:
-            logger.info("Installing Docker on Debian/Ubuntu...")
+            logger.info('Installing Docker on Debian/Ubuntu...')
 
             # Update package index
             subprocess.run(
-                ["sudo", "apt-get", "update"],
+                ['sudo', 'apt-get', 'update'],
                 check=True,
                 timeout=120,
             )
@@ -126,13 +126,13 @@ class DockerInstaller:
             # Install prerequisites
             subprocess.run(
                 [
-                    "sudo",
-                    "apt-get",
-                    "install",
-                    "-y",
-                    "ca-certificates",
-                    "curl",
-                    "gnupg",
+                    'sudo',
+                    'apt-get',
+                    'install',
+                    '-y',
+                    'ca-certificates',
+                    'curl',
+                    'gnupg',
                 ],
                 check=True,
                 timeout=120,
@@ -141,12 +141,12 @@ class DockerInstaller:
             # Add Docker's official GPG key
             subprocess.run(
                 [
-                    "sudo",
-                    "install",
-                    "-m",
-                    "0755",
-                    "-d",
-                    "/etc/apt/keyrings",
+                    'sudo',
+                    'install',
+                    '-m',
+                    '0755',
+                    '-d',
+                    '/etc/apt/keyrings',
                 ],
                 check=True,
                 timeout=30,
@@ -155,8 +155,8 @@ class DockerInstaller:
             # Add Docker repository
             subprocess.run(
                 [
-                    "bash",
-                    "-c",
+                    'bash',
+                    '-c',
                     'curl -fsSL https://download.docker.com/linux/ubuntu/gpg | '
                     'sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg',
                 ],
@@ -166,34 +166,34 @@ class DockerInstaller:
 
             # Install Docker Engine
             subprocess.run(
-                ["sudo", "apt-get", "update"],
+                ['sudo', 'apt-get', 'update'],
                 check=True,
                 timeout=120,
             )
             subprocess.run(
                 [
-                    "sudo",
-                    "apt-get",
-                    "install",
-                    "-y",
-                    "docker-ce",
-                    "docker-ce-cli",
-                    "containerd.io",
-                    "docker-buildx-plugin",
-                    "docker-compose-plugin",
+                    'sudo',
+                    'apt-get',
+                    'install',
+                    '-y',
+                    'docker-ce',
+                    'docker-ce-cli',
+                    'containerd.io',
+                    'docker-buildx-plugin',
+                    'docker-compose-plugin',
                 ],
                 check=True,
                 timeout=300,
             )
 
-            logger.info("Docker installed successfully on Debian/Ubuntu")
-            return (True, "Docker installed successfully")
+            logger.info('Docker installed successfully on Debian/Ubuntu')
+            return (True, 'Docker installed successfully')
 
         except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to install Docker on Debian/Ubuntu: {e}")
-            return (False, f"Installation failed: {e}")
+            logger.error(f'Failed to install Docker on Debian/Ubuntu: {e}')
+            return (False, f'Installation failed: {e}')
         except subprocess.TimeoutExpired:
-            return (False, "Installation timed out")
+            return (False, 'Installation timed out')
 
     @staticmethod
     def _install_docker_fedora() -> tuple[bool, str]:
@@ -204,22 +204,22 @@ class DockerInstaller:
             Tuple of (success, message)
         """
         try:
-            logger.info("Installing Docker on Fedora...")
+            logger.info('Installing Docker on Fedora...')
 
             # Install Docker using dnf
             subprocess.run(
-                ["sudo", "dnf", "-y", "install", "dnf-plugins-core"],
+                ['sudo', 'dnf', '-y', 'install', 'dnf-plugins-core'],
                 check=True,
                 timeout=120,
             )
 
             subprocess.run(
                 [
-                    "sudo",
-                    "dnf",
-                    "config-manager",
-                    "--add-repo",
-                    "https://download.docker.com/linux/fedora/docker-ce.repo",
+                    'sudo',
+                    'dnf',
+                    'config-manager',
+                    '--add-repo',
+                    'https://download.docker.com/linux/fedora/docker-ce.repo',
                 ],
                 check=True,
                 timeout=60,
@@ -227,27 +227,27 @@ class DockerInstaller:
 
             subprocess.run(
                 [
-                    "sudo",
-                    "dnf",
-                    "install",
-                    "-y",
-                    "docker-ce",
-                    "docker-ce-cli",
-                    "containerd.io",
-                    "docker-compose-plugin",
+                    'sudo',
+                    'dnf',
+                    'install',
+                    '-y',
+                    'docker-ce',
+                    'docker-ce-cli',
+                    'containerd.io',
+                    'docker-compose-plugin',
                 ],
                 check=True,
                 timeout=300,
             )
 
-            logger.info("Docker installed successfully on Fedora")
-            return (True, "Docker installed successfully")
+            logger.info('Docker installed successfully on Fedora')
+            return (True, 'Docker installed successfully')
 
         except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to install Docker on Fedora: {e}")
-            return (False, f"Installation failed: {e}")
+            logger.error(f'Failed to install Docker on Fedora: {e}')
+            return (False, f'Installation failed: {e}')
         except subprocess.TimeoutExpired:
-            return (False, "Installation timed out")
+            return (False, 'Installation timed out')
 
     @staticmethod
     def _install_docker_arch() -> tuple[bool, str]:
@@ -258,29 +258,29 @@ class DockerInstaller:
             Tuple of (success, message)
         """
         try:
-            logger.info("Installing Docker on Arch Linux...")
+            logger.info('Installing Docker on Arch Linux...')
 
             # Install Docker using pacman
             subprocess.run(
-                ["sudo", "pacman", "-Syu", "--noconfirm"],
+                ['sudo', 'pacman', '-Syu', '--noconfirm'],
                 check=True,
                 timeout=120,
             )
 
             subprocess.run(
-                ["sudo", "pacman", "-S", "--noconfirm", "docker", "docker-compose"],
+                ['sudo', 'pacman', '-S', '--noconfirm', 'docker', 'docker-compose'],
                 check=True,
                 timeout=300,
             )
 
-            logger.info("Docker installed successfully on Arch Linux")
-            return (True, "Docker installed successfully")
+            logger.info('Docker installed successfully on Arch Linux')
+            return (True, 'Docker installed successfully')
 
         except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to install Docker on Arch Linux: {e}")
-            return (False, f"Installation failed: {e}")
+            logger.error(f'Failed to install Docker on Arch Linux: {e}')
+            return (False, f'Installation failed: {e}')
         except subprocess.TimeoutExpired:
-            return (False, "Installation timed out")
+            return (False, 'Installation timed out')
 
     @staticmethod
     def install_docker_macos() -> tuple[bool, str]:
@@ -293,30 +293,30 @@ class DockerInstaller:
         if not DockerInstaller.has_homebrew():
             return (
                 False,
-                "Homebrew not found. Install from https://brew.sh first.",
+                'Homebrew not found. Install from https://brew.sh first.',
             )
 
         try:
-            logger.info("Installing Docker on macOS via Homebrew...")
+            logger.info('Installing Docker on macOS via Homebrew...')
 
             # Install Docker Desktop
             subprocess.run(
-                ["brew", "install", "--cask", "docker"],
+                ['brew', 'install', '--cask', 'docker'],
                 check=True,
                 timeout=600,
             )
 
-            logger.info("Docker installed successfully on macOS")
+            logger.info('Docker installed successfully on macOS')
             return (
                 True,
-                "Docker Desktop installed. Please launch Docker.app to start the daemon.",
+                'Docker Desktop installed. Please launch Docker.app to start the daemon.',
             )
 
         except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to install Docker on macOS: {e}")
-            return (False, f"Installation failed: {e}")
+            logger.error(f'Failed to install Docker on macOS: {e}')
+            return (False, f'Installation failed: {e}')
         except subprocess.TimeoutExpired:
-            return (False, "Installation timed out")
+            return (False, 'Installation timed out')
 
     @staticmethod
     def start_docker_daemon() -> tuple[bool, str]:
@@ -331,42 +331,42 @@ class DockerInstaller:
         try:
             # Check if daemon is already running
             result = subprocess.run(
-                ["docker", "info"],
+                ['docker', 'info'],
                 capture_output=True,
                 timeout=10,
             )
 
             if result.returncode == 0:
-                return (True, "Docker daemon is already running")
+                return (True, 'Docker daemon is already running')
 
             # Try to start daemon
-            if plat == "linux":
+            if plat == 'linux':
                 subprocess.run(
-                    ["sudo", "systemctl", "start", "docker"],
+                    ['sudo', 'systemctl', 'start', 'docker'],
                     check=True,
                     timeout=30,
                 )
                 subprocess.run(
-                    ["sudo", "systemctl", "enable", "docker"],
+                    ['sudo', 'systemctl', 'enable', 'docker'],
                     check=True,
                     timeout=30,
                 )
-                return (True, "Docker daemon started successfully")
+                return (True, 'Docker daemon started successfully')
 
-            elif plat == "macos":
+            elif plat == 'macos':
                 return (
                     False,
-                    "Please launch Docker Desktop manually from Applications",
+                    'Please launch Docker Desktop manually from Applications',
                 )
 
             else:
-                return (False, f"Cannot auto-start Docker on {plat}")
+                return (False, f'Cannot auto-start Docker on {plat}')
 
         except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to start Docker daemon: {e}")
-            return (False, f"Failed to start daemon: {e}")
+            logger.error(f'Failed to start Docker daemon: {e}')
+            return (False, f'Failed to start daemon: {e}')
         except subprocess.TimeoutExpired:
-            return (False, "Daemon start timed out")
+            return (False, 'Daemon start timed out')
 
     @staticmethod
     def add_user_to_docker_group() -> tuple[bool, str]:
@@ -378,8 +378,8 @@ class DockerInstaller:
         """
         plat = DockerInstaller.detect_platform()
 
-        if plat != "linux":
-            return (True, "Not needed on this platform")
+        if plat != 'linux':
+            return (True, 'Not needed on this platform')
 
         try:
             import getpass
@@ -387,21 +387,21 @@ class DockerInstaller:
             username = getpass.getuser()
 
             subprocess.run(
-                ["sudo", "usermod", "-aG", "docker", username],
+                ['sudo', 'usermod', '-aG', 'docker', username],
                 check=True,
                 timeout=30,
             )
 
             return (
                 True,
-                f"Added {username} to docker group. Please log out and back in.",
+                f'Added {username} to docker group. Please log out and back in.',
             )
 
         except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to add user to docker group: {e}")
-            return (False, f"Failed: {e}")
+            logger.error(f'Failed to add user to docker group: {e}')
+            return (False, f'Failed: {e}')
         except subprocess.TimeoutExpired:
-            return (False, "Operation timed out")
+            return (False, 'Operation timed out')
 
     @staticmethod
     def install_docker() -> tuple[bool, str]:
@@ -413,9 +413,9 @@ class DockerInstaller:
         """
         plat = DockerInstaller.detect_platform()
 
-        logger.info(f"Installing Docker on {plat}...")
+        logger.info(f'Installing Docker on {plat}...')
 
-        if plat == "linux":
+        if plat == 'linux':
             success, msg = DockerInstaller.install_docker_linux()
             if success:
                 # Add user to docker group
@@ -424,18 +424,18 @@ class DockerInstaller:
                 DockerInstaller.start_docker_daemon()
             return (success, msg)
 
-        elif plat == "macos":
+        elif plat == 'macos':
             return DockerInstaller.install_docker_macos()
 
-        elif plat == "windows":
+        elif plat == 'windows':
             return (
                 False,
-                "Automatic Docker installation not supported on Windows.\n"
-                "Please download from: https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe",
+                'Automatic Docker installation not supported on Windows.\n'
+                'Please download from: https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe',
             )
 
         else:
-            return (False, f"Unsupported platform: {plat}")
+            return (False, f'Unsupported platform: {plat}')
 
     @staticmethod
     def get_install_url() -> str:
@@ -447,11 +447,11 @@ class DockerInstaller:
         """
         plat = DockerInstaller.detect_platform()
 
-        if plat == "linux":
-            return "https://docs.docker.com/engine/install/"
-        elif plat == "macos":
-            return "https://docs.docker.com/desktop/install/mac-install/"
-        elif plat == "windows":
-            return "https://docs.docker.com/desktop/install/windows-install/"
+        if plat == 'linux':
+            return 'https://docs.docker.com/engine/install/'
+        elif plat == 'macos':
+            return 'https://docs.docker.com/desktop/install/mac-install/'
+        elif plat == 'windows':
+            return 'https://docs.docker.com/desktop/install/windows-install/'
         else:
-            return "https://docs.docker.com/get-docker/"
+            return 'https://docs.docker.com/get-docker/'

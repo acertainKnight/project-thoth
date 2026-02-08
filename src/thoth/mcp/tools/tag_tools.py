@@ -8,7 +8,12 @@ and suggesting new tags for articles.
 from typing import Any  # noqa: I001
 
 from ..base_tools import MCPTool, MCPToolCallResult, NoInputTool
-from ...services.background_tasks import BackgroundTask, BackgroundTaskManager, TaskStatus
+from ...services.background_tasks import (
+    BackgroundTask,
+    BackgroundTaskManager,
+    TaskStatus,
+)
+from datetime import UTC
 
 
 class ConsolidateTagsMCPTool(NoInputTool):
@@ -63,9 +68,9 @@ class ConsolidateTagsMCPTool(NoInputTool):
 class SuggestTagsMCPTool(MCPTool):
     """
     MCP tool for suggesting additional tags for articles.
-    
-    **DEPRECATED**: This tool is deprecated. Tag suggestion provides low value 
-    and is rarely used. Use manual tagging or consolidation tools instead. This 
+
+    **DEPRECATED**: This tool is deprecated. Tag suggestion provides low value
+    and is rarely used. Use manual tagging or consolidation tools instead. This
     tool is no longer registered in the MCP tool registry.
     """
 
@@ -222,7 +227,9 @@ class ManageTagVocabularyMCPTool(NoInputTool):
 
             # Get tag usage statistics by sampling articles
             tag_usage = {}
-            sample_results = await self.service_manager.rag.search_async(query='', k=100)
+            sample_results = await self.service_manager.rag.search_async(
+                query='', k=100
+            )
 
             for result in sample_results:
                 metadata = result.get('metadata', {})
@@ -439,8 +446,7 @@ class GetTaskStatusMCPTool(MCPTool):
                 }
                 keywords = type_keywords.get(task_type, [])
                 filtered_tasks = [
-                    t for t in all_tasks
-                    if any(kw in t.name.lower() for kw in keywords)
+                    t for t in all_tasks if any(kw in t.name.lower() for kw in keywords)
                 ]
                 all_tasks = filtered_tasks
 
@@ -483,8 +489,9 @@ class GetTaskStatusMCPTool(MCPTool):
                 for task in running:
                     elapsed = ''
                     if task.started_at:
-                        from datetime import datetime, timezone
-                        now = datetime.now(timezone.utc)
+                        from datetime import datetime
+
+                        now = datetime.now(UTC)
                         elapsed_sec = (now - task.started_at).total_seconds()
                         elapsed = f' ({elapsed_sec:.0f}s)'
                     response_text += f'  - {task.name}{elapsed}\n'
@@ -515,12 +522,18 @@ class GetTaskStatusMCPTool(MCPTool):
                 for task in failed[:3]:  # Show last 3 failed
                     response_text += f'  - {task.name}\n'
                     if task.error:
-                        error_preview = task.error[:50] + '...' if len(task.error) > 50 else task.error
+                        error_preview = (
+                            task.error[:50] + '...'
+                            if len(task.error) > 50
+                            else task.error
+                        )
                         response_text += f'    Error: {error_preview}\n'
                 response_text += '\n'
 
             response_text += f'Showing {len(all_tasks)} tasks. '
-            response_text += 'Use `task_id` parameter to get detailed info on a specific task.'
+            response_text += (
+                'Use `task_id` parameter to get detailed info on a specific task.'
+            )
 
             return MCPToolCallResult(content=[{'type': 'text', 'text': response_text}])
 
@@ -537,13 +550,16 @@ class GetTaskStatusMCPTool(MCPTool):
         )
 
         if task.started_at:
-            response_text += f'**Started:** {task.started_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
+            response_text += (
+                f'**Started:** {task.started_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
+            )
 
         if task.status == TaskStatus.RUNNING:
             # Show running status
             if task.started_at:
-                from datetime import datetime, timezone
-                now = datetime.now(timezone.utc)
+                from datetime import datetime
+
+                now = datetime.now(UTC)
                 elapsed = (now - task.started_at).total_seconds()
                 response_text += f'**Running for:** {elapsed:.1f} seconds\n\n'
             response_text += 'The task is currently running...\n'
@@ -552,9 +568,7 @@ class GetTaskStatusMCPTool(MCPTool):
         elif task.status == TaskStatus.COMPLETED:
             # Show completion with results
             if task.completed_at and task.started_at:
-                duration = (
-                    task.completed_at.timestamp() - task.started_at.timestamp()
-                )
+                duration = task.completed_at.timestamp() - task.started_at.timestamp()
                 response_text += f'**Completed:** {task.completed_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
                 response_text += f'**Duration:** {duration:.2f} seconds\n\n'
 
@@ -584,16 +598,16 @@ class GetTaskStatusMCPTool(MCPTool):
                             response_text += f"  - '{old_tag}' -> '{new_tag}'\n"
 
                         if len(mappings) > 5:
-                            response_text += f'  ... and {len(mappings) - 5} more consolidations\n'
+                            response_text += (
+                                f'  ... and {len(mappings) - 5} more consolidations\n'
+                            )
 
         elif task.status == TaskStatus.FAILED:
             # Show failure with error
             if task.completed_at:
                 response_text += f'**Failed at:** {task.completed_at.strftime("%Y-%m-%d %H:%M:%S UTC")}\n'
 
-            response_text += (
-                f'\n**Task failed with error:**\n```\n{task.error}\n```\n'
-            )
+            response_text += f'\n**Task failed with error:**\n```\n{task.error}\n```\n'
 
         elif task.status == TaskStatus.PENDING:
             response_text += '\n**Task is pending and has not started yet.**'

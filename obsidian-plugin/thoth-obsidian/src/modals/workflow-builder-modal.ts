@@ -1,6 +1,6 @@
 /**
  * Workflow Builder Modal
- * 
+ *
  * Multi-step wizard for adding custom article sources using LLM-powered auto-detection.
  * Steps: URL Input → Analysis → Review Samples → (Optional Refinement) → Confirm & Save
  */
@@ -81,7 +81,7 @@ export class WorkflowBuilderModal extends Modal {
       const stepEl = progressBar.createDiv({ cls: 'progress-step' });
       const isActive = this.getStepIndex(this.currentStep) >= index;
       const isCurrent = this.getStepIndex(this.currentStep) === index;
-      
+
       stepEl.style.cssText = `
         flex: 1;
         text-align: center;
@@ -90,7 +90,7 @@ export class WorkflowBuilderModal extends Modal {
         ${isActive ? 'background: var(--interactive-accent); color: var(--text-on-accent);' : 'background: var(--background-secondary);'}
         ${isCurrent ? 'font-weight: bold; box-shadow: 0 0 8px var(--interactive-accent);' : ''}
       `;
-      
+
       stepEl.textContent = step.label;
     });
   }
@@ -256,7 +256,7 @@ export class WorkflowBuilderModal extends Modal {
     const confLevel = result.confidence >= 0.8 ? 'high' : result.confidence >= 0.6 ? 'medium' : 'low';
     const confColor = confLevel === 'high' ? '#4caf50' : confLevel === 'medium' ? '#ff9800' : '#f44336';
     const confIcon = confLevel === 'high' ? '🟢' : confLevel === 'medium' ? '🟡' : '🔴';
-    
+
     confidenceBadge.innerHTML = `
       <div style="display: inline-block; padding: 8px 16px; background: ${confColor}22; border: 2px solid ${confColor}; border-radius: 6px; margin-bottom: 15px;">
         <strong>${confIcon} ${confLevel.toUpperCase()} CONFIDENCE</strong> (${(result.confidence * 100).toFixed(0)}%)
@@ -266,7 +266,7 @@ export class WorkflowBuilderModal extends Modal {
     // Summary stats
     const stats = container.createDiv({ cls: 'stats' });
     stats.style.cssText = 'display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px;';
-    
+
     [
       { label: 'Page Type', value: result.page_type },
       { label: 'Articles Found', value: result.total_articles_found.toString() },
@@ -376,7 +376,7 @@ export class WorkflowBuilderModal extends Modal {
 
   private async promptForRefinement() {
     const feedback = await this.showInputModal('What\'s incorrect?', 'Describe what\'s wrong (e.g., "The titles are cut off", "These aren\'t papers")', true);
-    
+
     if (!feedback) return;
 
     this.currentStep = 'refining';
@@ -524,7 +524,7 @@ export class WorkflowBuilderModal extends Modal {
   private showInputModal(title: string, placeholder: string, multiline: boolean = false): Promise<string | null> {
     return new Promise((resolve) => {
       const modal = new Modal(this.app);
-      
+
       modal.onOpen = () => {
         const { contentEl } = modal;
         contentEl.empty();

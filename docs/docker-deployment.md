@@ -172,15 +172,15 @@ Create a `.env` file in the project root:
 
 ```bash
 # API Keys (Required)
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-API_MISTRAL_KEY=...
-API_OPENROUTER_KEY=...
+OPENAI_API_KEY=sk-...           # Embeddings (Thoth RAG + Letta memory)
+API_OPENROUTER_KEY=...          # Backend LLM (analysis, queries, routing)
+API_MISTRAL_KEY=...             # PDF OCR extraction
 
 # Vault Path (Required)
 OBSIDIAN_VAULT_PATH=/path/to/vault
 
-# Optional: Discovery
+# API Keys (Optional)
+ANTHROPIC_API_KEY=sk-ant-...    # Direct Anthropic access
 API_SEMANTIC_SCHOLAR_KEY=...
 API_WEB_SEARCH_KEY=...
 

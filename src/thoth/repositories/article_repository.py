@@ -6,7 +6,7 @@ deduplication across sources, and processing status management.
 """
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from loguru import logger
@@ -23,10 +23,10 @@ class ArticleRepository(BaseRepository[dict[str, Any]]):
 
     async def find_duplicate(
         self,
-        doi: Optional[str] = None,  # noqa: UP007
-        arxiv_id: Optional[str] = None,  # noqa: UP007
-        title: Optional[str] = None,  # noqa: UP007
-    ) -> Optional[UUID]:  # noqa: UP007
+        doi: str | None = None,
+        arxiv_id: str | None = None,
+        title: str | None = None,
+    ) -> UUID | None:
         """
         Find duplicate article by identifiers.
 
@@ -51,8 +51,8 @@ class ArticleRepository(BaseRepository[dict[str, Any]]):
 
     async def get_or_create_article(
         self,
-        doi: Optional[str] = None,  # noqa: UP007
-        arxiv_id: Optional[str] = None,  # noqa: UP007
+        doi: str | None = None,
+        arxiv_id: str | None = None,
         title: str = '',
         **article_data,
     ) -> tuple[UUID, bool]:
@@ -101,11 +101,11 @@ class ArticleRepository(BaseRepository[dict[str, Any]]):
         self,
         article_id: UUID,
         source_id: UUID,
-        discovery_query: Optional[str] = None,  # noqa: UP007
-        relevance_score: Optional[float] = None,  # noqa: UP007
-        rank_in_results: Optional[int] = None,  # noqa: UP007
-        source_metadata: Optional[dict[str, Any]] = None,  # noqa: UP007
-        external_id: Optional[str] = None,  # noqa: UP007
+        discovery_query: str | None = None,
+        relevance_score: float | None = None,
+        rank_in_results: int | None = None,
+        source_metadata: dict[str, Any] | None = None,
+        external_id: str | None = None,
     ) -> bool:
         """
         Link article to a discovery source.
@@ -276,7 +276,7 @@ class ArticleRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to get multi-source articles: {e}')
             return []
 
-    async def get_by_doi(self, doi: str) -> Optional[dict[str, Any]]:  # noqa: UP007
+    async def get_by_doi(self, doi: str) -> dict[str, Any] | None:
         """
         Get article by DOI.
 
@@ -306,7 +306,7 @@ class ArticleRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to get article by DOI {doi}: {e}')
             return None
 
-    async def get_by_arxiv_id(self, arxiv_id: str) -> Optional[dict[str, Any]]:  # noqa: UP007
+    async def get_by_arxiv_id(self, arxiv_id: str) -> dict[str, Any] | None:
         """
         Get article by arXiv ID.
 
@@ -340,7 +340,7 @@ class ArticleRepository(BaseRepository[dict[str, Any]]):
         self,
         article_id: UUID,
         status: str,
-        paper_id: Optional[UUID] = None,  # noqa: UP007
+        paper_id: UUID | None = None,
     ) -> bool:
         """
         Update article processing status.
@@ -372,7 +372,7 @@ class ArticleRepository(BaseRepository[dict[str, Any]]):
 
     async def get_discovery_statistics(
         self,
-        source_id: Optional[UUID] = None,  # noqa: UP007
+        source_id: UUID | None = None,
     ) -> dict[str, Any]:
         """
         Get discovery statistics for all sources or a specific source.

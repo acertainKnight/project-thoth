@@ -43,7 +43,7 @@ Agent: "Test results: [X] papers found
 
 Quick scan of titles:
 ✓ [Y] papers look highly relevant
-~ [Z] papers look somewhat relevant  
+~ [Z] papers look somewhat relevant
 ✗ [W] papers look off-topic
 
 Is this mix working for you? Too many? Too few? Wrong topic?"
@@ -198,7 +198,7 @@ K: "twitter sentiment stock prediction"
 ### Card 3: Source Selection
 **Default recommendations**:
 - CS/ML/AI → arxiv + semantic_scholar
-- Medical/Bio → pubmed + biorxiv  
+- Medical/Bio → pubmed + biorxiv
 - General Science → openalex + crossref
 - Economics/Social → openalex + ssrn
 
@@ -274,7 +274,7 @@ Or for cutting-edge: published_after="2024-01-01"
 
 **Fix**:
 ```python
-Add negative keywords: 
+Add negative keywords:
 exclude_terms = ["cryptocurrency", "bitcoin", "crypto", "blockchain"]
 ```
 

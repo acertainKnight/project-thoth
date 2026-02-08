@@ -6,7 +6,7 @@ and querying research questions with source selections.
 """
 
 from datetime import datetime, time
-from typing import Any, List, Optional  # noqa: UP035
+from typing import Any, List  # noqa: UP035
 from uuid import UUID
 
 from loguru import logger
@@ -24,9 +24,9 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
     async def get_by_user(
         self,
         user_id: str,
-        is_active: Optional[bool] = None,  # noqa: UP007
-        limit: Optional[int] = None,  # noqa: UP007
-        offset: Optional[int] = None,  # noqa: UP007
+        is_active: bool | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
     ) -> List[dict[str, Any]]:  # noqa: UP006
         """
         Get research questions for a specific user.
@@ -75,7 +75,7 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
 
     async def get_active_questions(
         self,
-        limit: Optional[int] = None,  # noqa: UP007
+        limit: int | None = None,
     ) -> List[dict[str, Any]]:  # noqa: UP006
         """
         Get all active research questions across all users.
@@ -115,7 +115,7 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
 
     async def get_questions_due_for_run(
         self,
-        as_of: Optional[datetime] = None,  # noqa: UP007
+        as_of: datetime | None = None,
     ) -> List[dict[str, Any]]:  # noqa: UP006
         """
         Get research questions that are due for discovery runs.
@@ -151,7 +151,7 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
     async def update_last_run(
         self,
         question_id: UUID,
-        next_run_at: Optional[datetime] = None,  # noqa: UP007
+        next_run_at: datetime | None = None,
     ) -> bool:
         """
         Update last run timestamp and optionally set next run.
@@ -177,7 +177,7 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to update last run for question {question_id}: {e}')
             return False
 
-    async def get_by_name(self, user_id: str, name: str) -> Optional[dict[str, Any]]:  # noqa: UP007
+    async def get_by_name(self, user_id: str, name: str) -> dict[str, Any] | None:
         """
         Get research question by user and name.
 
@@ -222,13 +222,13 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
         topics: List[str],  # noqa: UP006
         authors: List[str],  # noqa: UP006
         selected_sources: List[str],  # noqa: UP006
-        description: Optional[str] = None,  # noqa: UP007
+        description: str | None = None,
         schedule_frequency: str = 'daily',
         schedule_time: time = time(2, 0, 0),
         min_relevance_score: float = 0.5,
         auto_download_enabled: bool = False,
         auto_download_min_score: float = 0.7,
-    ) -> Optional[UUID]:  # noqa: UP007
+    ) -> UUID | None:
         """
         Create a new research question.
 
@@ -288,17 +288,17 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
     async def update_question(
         self,
         question_id: UUID,
-        name: Optional[str] = None,  # noqa: UP007
-        description: Optional[str] = None,  # noqa: UP007
-        keywords: Optional[List[str]] = None,  # noqa: UP006, UP007
-        topics: Optional[List[str]] = None,  # noqa: UP006, UP007
-        authors: Optional[List[str]] = None,  # noqa: UP006, UP007
-        selected_sources: Optional[List[str]] = None,  # noqa: UP006, UP007
-        schedule_frequency: Optional[str] = None,  # noqa: UP007
-        min_relevance_score: Optional[float] = None,  # noqa: UP007
-        is_active: Optional[bool] = None,  # noqa: UP007
-        last_run_at: Optional[datetime] = None,  # noqa: UP007
-        next_run_at: Optional[datetime] = None,  # noqa: UP007
+        name: str | None = None,
+        description: str | None = None,
+        keywords: List[str] | None = None,  # noqa: UP006
+        topics: List[str] | None = None,  # noqa: UP006
+        authors: List[str] | None = None,  # noqa: UP006
+        selected_sources: List[str] | None = None,  # noqa: UP006
+        schedule_frequency: str | None = None,
+        min_relevance_score: float | None = None,
+        is_active: bool | None = None,
+        last_run_at: datetime | None = None,
+        next_run_at: datetime | None = None,
     ) -> bool:
         """
         Update research question fields.
@@ -357,7 +357,7 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
 
     async def get_statistics(
         self,
-        question_id: Optional[UUID] = None,  # noqa: UP007
+        question_id: UUID | None = None,
     ) -> dict[str, Any]:
         """
         Get statistics for research questions.

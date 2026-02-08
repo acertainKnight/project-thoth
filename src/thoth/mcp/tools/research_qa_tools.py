@@ -71,32 +71,48 @@ class AnswerResearchQuestionMCPTool(MCPTool):
             rag_service = self.service_manager.rag
             if not rag_service:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": "RAG service not available (requires embeddings extras)"}],
-                    isError=True
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': 'RAG service not available (requires embeddings extras)',
+                        }
+                    ],
+                    isError=True,
                 )
 
             search_results = await rag_service.search_async(
                 query=question,
                 k=max_sources,
             )
-            
+
             # Filter by minimum relevance score
             if min_relevance > 0:
-                search_results = [r for r in search_results if r.get('score', 0) >= min_relevance]
+                search_results = [
+                    r for r in search_results if r.get('score', 0) >= min_relevance
+                ]
 
             if not search_results:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": f'No relevant articles found for question: "{question}"'}]
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': f'No relevant articles found for question: "{question}"',
+                        }
+                    ]
                 )
 
             # Build comprehensive response
             response_parts = []
             response_parts.append(f'# Answer to: {question}\n')
-            response_parts.append(f'Based on {len(search_results)} relevant source(s):\n')
+            response_parts.append(
+                f'Based on {len(search_results)} relevant source(s):\n'
+            )
 
             # Group findings by relevance (adjusted thresholds for typical embedding similarity scores)
             high_relevance = [r for r in search_results if r.get('score', 0) >= 0.6]
-            medium_relevance = [r for r in search_results if 0.5 <= r.get('score', 0) < 0.6]
+            medium_relevance = [
+                r for r in search_results if 0.5 <= r.get('score', 0) < 0.6
+            ]
 
             if high_relevance:
                 response_parts.append('\n## Primary Findings (High Relevance)\n')
@@ -108,8 +124,12 @@ class AnswerResearchQuestionMCPTool(MCPTool):
                     score = result.get('score', 0)
 
                     response_parts.append(f'\n### {title}')
-                    response_parts.append(f'**Authors**: {", ".join(authors) if authors else "N/A"}')
-                    response_parts.append(f'**Year**: {year} | **Relevance**: {score:.2f}')
+                    response_parts.append(
+                        f'**Authors**: {", ".join(authors) if authors else "N/A"}'
+                    )
+                    response_parts.append(
+                        f'**Year**: {year} | **Relevance**: {score:.2f}'
+                    )
                     response_parts.append(f'\n{content}...\n')
 
             if medium_relevance:
@@ -118,7 +138,9 @@ class AnswerResearchQuestionMCPTool(MCPTool):
                     title = result.get('metadata', {}).get('title', 'Unknown')
                     year = result.get('metadata', {}).get('year', 'N/A')
                     score = result.get('score', 0)
-                    response_parts.append(f'- {title} ({year}) - Relevance: {score:.2f}')
+                    response_parts.append(
+                        f'- {title} ({year}) - Relevance: {score:.2f}'
+                    )
 
             # Add citations section if requested
             if include_citations:
@@ -139,7 +161,7 @@ class AnswerResearchQuestionMCPTool(MCPTool):
                         response_parts.append(f'   DOI: {doi}')
 
             return MCPToolCallResult(
-                content=[{"type": "text", "text": '\n'.join(response_parts)}]
+                content=[{'type': 'text', 'text': '\n'.join(response_parts)}]
             )
 
         except Exception as e:
@@ -197,19 +219,25 @@ class ExploreCitationNetworkMCPTool(MCPTool):
             citation_service = self.service_manager.citation
             if not citation_service:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": "Citation service not available"}],
-                    isError=True
+                    content=[
+                        {'type': 'text', 'text': 'Citation service not available'}
+                    ],
+                    isError=True,
                 )
 
             # Get citation network
             network = await citation_service.get_citation_network(
-                article_id=article_id,
-                depth=depth
+                article_id=article_id, depth=depth
             )
 
             if not network:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": f'No citation network found for article: {article_id}'}]
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': f'No citation network found for article: {article_id}',
+                        }
+                    ]
                 )
 
             # Build response
@@ -219,7 +247,9 @@ class ExploreCitationNetworkMCPTool(MCPTool):
             # Forward citations (papers citing this one)
             forward = network.get('citing_papers', [])
             if forward:
-                response_parts.append(f'\n## Papers Citing This Work ({len(forward)} total)\n')
+                response_parts.append(
+                    f'\n## Papers Citing This Work ({len(forward)} total)\n'
+                )
                 for paper in forward[:10]:  # Limit to 10
                     title = paper.get('title', 'Unknown')
                     year = paper.get('year', 'N/A')
@@ -230,7 +260,9 @@ class ExploreCitationNetworkMCPTool(MCPTool):
             # Backward citations (papers this one cites)
             backward = network.get('cited_papers', [])
             if backward:
-                response_parts.append(f'\n## Papers Cited by This Work ({len(backward)} total)\n')
+                response_parts.append(
+                    f'\n## Papers Cited by This Work ({len(backward)} total)\n'
+                )
                 for paper in backward[:10]:
                     title = paper.get('title', 'Unknown')
                     year = paper.get('year', 'N/A')
@@ -241,8 +273,12 @@ class ExploreCitationNetworkMCPTool(MCPTool):
             # Co-citations
             co_cited = network.get('co_cited_papers', [])
             if co_cited:
-                response_parts.append(f'\n## Frequently Co-Cited Papers ({len(co_cited)} found)\n')
-                response_parts.append('Papers that are often cited together with this work:\n')
+                response_parts.append(
+                    f'\n## Frequently Co-Cited Papers ({len(co_cited)} found)\n'
+                )
+                response_parts.append(
+                    'Papers that are often cited together with this work:\n'
+                )
                 for paper in co_cited[:5]:
                     title = paper.get('title', 'Unknown')
                     count = paper.get('co_citation_count', 0)
@@ -253,12 +289,18 @@ class ExploreCitationNetworkMCPTool(MCPTool):
                 metrics = network.get('metrics', {})
                 if metrics:
                     response_parts.append('\n## Citation Metrics\n')
-                    response_parts.append(f'- Total citations received: {metrics.get("citation_count", 0)}')
-                    response_parts.append(f'- Total references: {metrics.get("reference_count", 0)}')
-                    response_parts.append(f'- Citation velocity: {metrics.get("citation_velocity", 0):.2f} citations/year')
+                    response_parts.append(
+                        f'- Total citations received: {metrics.get("citation_count", 0)}'
+                    )
+                    response_parts.append(
+                        f'- Total references: {metrics.get("reference_count", 0)}'
+                    )
+                    response_parts.append(
+                        f'- Citation velocity: {metrics.get("citation_velocity", 0):.2f} citations/year'
+                    )
 
             return MCPToolCallResult(
-                content=[{"type": "text", "text": '\n'.join(response_parts)}]
+                content=[{'type': 'text', 'text': '\n'.join(response_parts)}]
             )
 
         except Exception as e:
@@ -296,7 +338,13 @@ class CompareArticlesMCPTool(MCPTool):
                     'type': 'array',
                     'items': {
                         'type': 'string',
-                        'enum': ['methodology', 'findings', 'citations', 'metrics', 'approach']
+                        'enum': [
+                            'methodology',
+                            'findings',
+                            'citations',
+                            'metrics',
+                            'approach',
+                        ],
                     },
                     'description': 'Dimensions to compare (default: all)',
                     'default': ['methodology', 'findings', 'citations', 'metrics'],
@@ -309,19 +357,24 @@ class CompareArticlesMCPTool(MCPTool):
         """Compare multiple articles."""
         try:
             article_ids = arguments['article_ids']
-            dimensions = arguments.get('compare_dimensions', ['methodology', 'findings', 'citations', 'metrics'])
+            dimensions = arguments.get(
+                'compare_dimensions',
+                ['methodology', 'findings', 'citations', 'metrics'],
+            )
 
             if len(article_ids) < 2 or len(article_ids) > 5:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": "Must provide 2-5 articles to compare"}],
-                    isError=True
+                    content=[
+                        {'type': 'text', 'text': 'Must provide 2-5 articles to compare'}
+                    ],
+                    isError=True,
                 )
 
             article_service = self.service_manager.article
             if not article_service:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": "Article service not available"}],
-                    isError=True
+                    content=[{'type': 'text', 'text': 'Article service not available'}],
+                    isError=True,
                 )
 
             # Fetch all articles
@@ -333,8 +386,13 @@ class CompareArticlesMCPTool(MCPTool):
 
             if len(articles) < 2:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": f'Could only retrieve {len(articles)} articles for comparison'}],
-                    isError=True
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': f'Could only retrieve {len(articles)} articles for comparison',
+                        }
+                    ],
+                    isError=True,
                 )
 
             # Build comparison table
@@ -363,7 +421,9 @@ class CompareArticlesMCPTool(MCPTool):
                     title = article.get('title', 'Unknown')[:50]
                     citations = article.get('citation_count', 0)
                     references = article.get('reference_count', 0)
-                    response_parts.append(f'| {title}... | {citations} | {references} |')
+                    response_parts.append(
+                        f'| {title}... | {citations} | {references} |'
+                    )
 
             # Key findings
             if 'findings' in dimensions:
@@ -375,7 +435,7 @@ class CompareArticlesMCPTool(MCPTool):
                     response_parts.append(abstract + '...\n')
 
             return MCPToolCallResult(
-                content=[{"type": "text", "text": '\n'.join(response_parts)}]
+                content=[{'type': 'text', 'text': '\n'.join(response_parts)}]
             )
 
         except Exception as e:
@@ -385,9 +445,9 @@ class CompareArticlesMCPTool(MCPTool):
 class ExtractArticleInsightsMCPTool(MCPTool):
     """
     Extract deep insights from a specific article.
-    
-    **DEPRECATED**: This tool is deprecated. Use `get_article_details` to 
-    retrieve full article content and metadata. This tool is no longer 
+
+    **DEPRECATED**: This tool is deprecated. Use `get_article_details` to
+    retrieve full article content and metadata. This tool is no longer
     registered in the MCP tool registry.
     """
 
@@ -416,10 +476,22 @@ class ExtractArticleInsightsMCPTool(MCPTool):
                     'type': 'array',
                     'items': {
                         'type': 'string',
-                        'enum': ['contributions', 'methodology', 'limitations', 'future_work', 'connections']
+                        'enum': [
+                            'contributions',
+                            'methodology',
+                            'limitations',
+                            'future_work',
+                            'connections',
+                        ],
                     },
                     'description': 'Sections to include in insights (default: all)',
-                    'default': ['contributions', 'methodology', 'limitations', 'future_work', 'connections'],
+                    'default': [
+                        'contributions',
+                        'methodology',
+                        'limitations',
+                        'future_work',
+                        'connections',
+                    ],
                 },
             },
             'required': ['article_id'],
@@ -429,23 +501,32 @@ class ExtractArticleInsightsMCPTool(MCPTool):
         """Extract detailed insights from article."""
         try:
             article_id = arguments['article_id']
-            sections = arguments.get('include_sections', [
-                'contributions', 'methodology', 'limitations', 'future_work', 'connections'
-            ])
+            sections = arguments.get(
+                'include_sections',
+                [
+                    'contributions',
+                    'methodology',
+                    'limitations',
+                    'future_work',
+                    'connections',
+                ],
+            )
 
             article_service = self.service_manager.article
             if not article_service:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": "Article service not available"}],
-                    isError=True
+                    content=[{'type': 'text', 'text': 'Article service not available'}],
+                    isError=True,
                 )
 
             # Get article with full content
             article = await article_service.get_article_with_content(article_id)
             if not article:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": f'Article not found: {article_id}'}],
-                    isError=True
+                    content=[
+                        {'type': 'text', 'text': f'Article not found: {article_id}'}
+                    ],
+                    isError=True,
                 )
 
             # Build insights response
@@ -503,7 +584,7 @@ class ExtractArticleInsightsMCPTool(MCPTool):
                 response_parts.append(f'- Cited by {citation_count} papers')
 
             return MCPToolCallResult(
-                content=[{"type": "text", "text": '\n'.join(response_parts)}]
+                content=[{'type': 'text', 'text': '\n'.join(response_parts)}]
             )
 
         except Exception as e:
@@ -513,9 +594,9 @@ class ExtractArticleInsightsMCPTool(MCPTool):
 class SearchByTopicMCPTool(MCPTool):
     """
     Search articles by research topic with semantic understanding.
-    
-    **DEPRECATED**: This tool is deprecated. Use `search_articles` which 
-    supports topic filtering via tags and queries. This tool is no longer 
+
+    **DEPRECATED**: This tool is deprecated. Use `search_articles` which
+    supports topic filtering via tags and queries. This tool is no longer
     registered in the MCP tool registry.
     """
 
@@ -577,8 +658,13 @@ class SearchByTopicMCPTool(MCPTool):
             rag_service = self.service_manager.rag
             if not rag_service:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": "RAG service not available (requires embeddings extras)"}],
-                    isError=True
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': 'RAG service not available (requires embeddings extras)',
+                        }
+                    ],
+                    isError=True,
                 )
 
             # Build filter
@@ -592,14 +678,17 @@ class SearchByTopicMCPTool(MCPTool):
 
             # Perform semantic search
             results = await rag_service.search_async(
-                query=topic,
-                k=limit,
-                filter=search_filter if search_filter else None
+                query=topic, k=limit, filter=search_filter if search_filter else None
             )
 
             if not results:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": f'No articles found for topic: "{topic}"'}]
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': f'No articles found for topic: "{topic}"',
+                        }
+                    ]
                 )
 
             # Build response
@@ -619,7 +708,9 @@ class SearchByTopicMCPTool(MCPTool):
                     author_str += ' et al.'
 
                 response_parts.append(f'\n## {i}. {title}')
-                response_parts.append(f'**Authors**: {author_str} | **Year**: {year} | **Relevance**: {score:.2f}')
+                response_parts.append(
+                    f'**Authors**: {author_str} | **Year**: {year} | **Relevance**: {score:.2f}'
+                )
 
                 # Add snippet
                 content = result.get('content', '')
@@ -628,7 +719,7 @@ class SearchByTopicMCPTool(MCPTool):
                     response_parts.append(f'\n{snippet}...\n')
 
             return MCPToolCallResult(
-                content=[{"type": "text", "text": '\n'.join(response_parts)}]
+                content=[{'type': 'text', 'text': '\n'.join(response_parts)}]
             )
 
         except Exception as e:
@@ -638,9 +729,9 @@ class SearchByTopicMCPTool(MCPTool):
 class GetArticleFullContentMCPTool(MCPTool):
     """
     Retrieve complete article content including full text.
-    
-    **DEPRECATED**: This tool is deprecated. Use `get_article_details` which 
-    provides the same functionality with better metadata support. This tool is 
+
+    **DEPRECATED**: This tool is deprecated. Use `get_article_details` which
+    provides the same functionality with better metadata support. This tool is
     no longer registered in the MCP tool registry.
     """
 
@@ -669,7 +760,14 @@ class GetArticleFullContentMCPTool(MCPTool):
                     'type': 'array',
                     'items': {
                         'type': 'string',
-                        'enum': ['abstract', 'introduction', 'methods', 'results', 'discussion', 'references']
+                        'enum': [
+                            'abstract',
+                            'introduction',
+                            'methods',
+                            'results',
+                            'discussion',
+                            'references',
+                        ],
                     },
                     'description': 'Specific sections to include (default: all)',
                 },
@@ -686,30 +784,32 @@ class GetArticleFullContentMCPTool(MCPTool):
             article_service = self.service_manager.article
             if not article_service:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": "Article service not available"}],
-                    isError=True
+                    content=[{'type': 'text', 'text': 'Article service not available'}],
+                    isError=True,
                 )
 
             # Get article with full content
             article = await article_service.get_article_with_content(article_id)
             if not article:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": f'Article not found: {article_id}'}],
-                    isError=True
+                    content=[
+                        {'type': 'text', 'text': f'Article not found: {article_id}'}
+                    ],
+                    isError=True,
                 )
 
             # Build full content response
             response_parts = []
-            
+
             # Title and metadata
             title = article.get('title', 'Unknown')
             response_parts.append(f'# {title}\n')
-            
+
             authors = ', '.join(article.get('authors', []))
             year = article.get('year', 'N/A')
             venue = article.get('journal', article.get('venue', 'N/A'))
             doi = article.get('doi', '')
-            
+
             response_parts.append(f'**Authors**: {authors}')
             response_parts.append(f'**Published**: {year} in {venue}')
             if doi:
@@ -718,9 +818,16 @@ class GetArticleFullContentMCPTool(MCPTool):
 
             # Content sections
             content_dict = article.get('content', {})
-            
+
             if not sections:
-                sections = ['abstract', 'introduction', 'methods', 'results', 'discussion', 'references']
+                sections = [
+                    'abstract',
+                    'introduction',
+                    'methods',
+                    'results',
+                    'discussion',
+                    'references',
+                ]
 
             for section in sections:
                 section_content = content_dict.get(section, article.get(section))
@@ -737,7 +844,7 @@ class GetArticleFullContentMCPTool(MCPTool):
                     response_parts.append(full_text)
 
             return MCPToolCallResult(
-                content=[{"type": "text", "text": '\n'.join(response_parts)}]
+                content=[{'type': 'text', 'text': '\n'.join(response_parts)}]
             )
 
         except Exception as e:
@@ -747,9 +854,9 @@ class GetArticleFullContentMCPTool(MCPTool):
 class FindArticlesByAuthorsMCPTool(MCPTool):
     """
     Find all articles by specific author(s).
-    
-    **DEPRECATED**: This tool is deprecated. Use `search_articles` with the 
-    `author` parameter for author-based filtering. This tool is no longer 
+
+    **DEPRECATED**: This tool is deprecated. Use `search_articles` with the
+    `author` parameter for author-based filtering. This tool is no longer
     registered in the MCP tool registry.
     """
 
@@ -762,7 +869,7 @@ class FindArticlesByAuthorsMCPTool(MCPTool):
         return (
             'Find all articles by one or more authors. Supports partial name matching '
             '(e.g., "Smith" will find "John Smith", "Jane Smith", etc.). Useful for '
-            'tracking an author\'s publications or finding collaboration patterns.'
+            "tracking an author's publications or finding collaboration patterns."
         )
 
     @property
@@ -812,8 +919,8 @@ class FindArticlesByAuthorsMCPTool(MCPTool):
             article_service = self.service_manager.article
             if not article_service:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": "Article service not available"}],
-                    isError=True
+                    content=[{'type': 'text', 'text': 'Article service not available'}],
+                    isError=True,
                 )
 
             # Search for articles by author
@@ -822,13 +929,20 @@ class FindArticlesByAuthorsMCPTool(MCPTool):
                 match_all=match_all,
                 year_from=year_from,
                 year_to=year_to,
-                limit=limit
+                limit=limit,
             )
 
             if not articles:
-                author_str = ' AND '.join(authors) if match_all else ' OR '.join(authors)
+                author_str = (
+                    ' AND '.join(authors) if match_all else ' OR '.join(authors)
+                )
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": f'No articles found for author(s): {author_str}'}]
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': f'No articles found for author(s): {author_str}',
+                        }
+                    ]
                 )
 
             # Build response
@@ -856,10 +970,12 @@ class FindArticlesByAuthorsMCPTool(MCPTool):
 
                     response_parts.append(f'### {title}')
                     response_parts.append(f'**Authors**: {all_authors}')
-                    response_parts.append(f'**Venue**: {venue} | **Citations**: {citations}\n')
+                    response_parts.append(
+                        f'**Venue**: {venue} | **Citations**: {citations}\n'
+                    )
 
             return MCPToolCallResult(
-                content=[{"type": "text", "text": '\n'.join(response_parts)}]
+                content=[{'type': 'text', 'text': '\n'.join(response_parts)}]
             )
 
         except Exception as e:
@@ -915,25 +1031,32 @@ class GetCitationContextMCPTool(MCPTool):
             citation_service = self.service_manager.citation
             if not citation_service:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": "Citation service not available"}],
-                    isError=True
+                    content=[
+                        {'type': 'text', 'text': 'Citation service not available'}
+                    ],
+                    isError=True,
                 )
 
             # Get citation context
             contexts = await citation_service.get_citation_context(
                 citing_paper_id=citing_id,
                 cited_paper_id=cited_id,
-                context_window=context_window
+                context_window=context_window,
             )
 
             if not contexts:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": f'No citation context found between papers: {citing_id} → {cited_id}'}]
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': f'No citation context found between papers: {citing_id} → {cited_id}',
+                        }
+                    ]
                 )
 
             # Build response
             response_parts = []
-            response_parts.append(f'# Citation Context\n')
+            response_parts.append('# Citation Context\n')
             response_parts.append(f'**From**: {citing_id}')
             response_parts.append(f'**To**: {cited_id}\n')
 
@@ -945,7 +1068,7 @@ class GetCitationContextMCPTool(MCPTool):
                 response_parts.append(f'{text}\n')
 
             return MCPToolCallResult(
-                content=[{"type": "text", "text": '\n'.join(response_parts)}]
+                content=[{'type': 'text', 'text': '\n'.join(response_parts)}]
             )
 
         except Exception as e:

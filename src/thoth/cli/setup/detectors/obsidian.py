@@ -1,13 +1,12 @@
-
-"""
-Obsidian installation detection and vault discovery.
+"""Obsidian installation detection and vault discovery.
 
 Detects Obsidian installation across platforms and finds valid Obsidian vaults.
 """
+
 from __future__ import annotations
 
 import platform
-import subprocess
+import subprocess  # nosec B404  # Required for platform detection
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
@@ -66,8 +65,7 @@ class ObsidianDetector:
 
     @staticmethod
     def get_platform() -> str:
-        """
-        Get current platform.
+        """Get current platform.
 
         Returns:
             Platform string: 'linux', 'darwin', or 'windows'
@@ -76,8 +74,7 @@ class ObsidianDetector:
 
     @classmethod
     def check_installed(cls) -> tuple[bool, str | None, Path | None]:
-        """
-        Check if Obsidian is installed.
+        """Check if Obsidian is installed.
 
         Returns:
             Tuple of (installed, version, install_path)
@@ -118,8 +115,7 @@ class ObsidianDetector:
 
     @staticmethod
     def _get_version(install_path: Path) -> str | None:
-        """
-        Try to get Obsidian version.
+        """Try to get Obsidian version.
 
         Args:
             install_path: Path to Obsidian installation
@@ -147,8 +143,7 @@ class ObsidianDetector:
 
     @staticmethod
     def is_valid_vault(path: Path) -> bool:
-        """
-        Check if a directory is a valid Obsidian vault.
+        """Check if a directory is a valid Obsidian vault.
 
         A valid vault has a .obsidian directory with app.json
 
@@ -173,8 +168,7 @@ class ObsidianDetector:
     def search_vaults(
         search_paths: list[Path] | None = None, max_depth: int = 2, timeout: int = 5
     ) -> list[ObsidianVault]:
-        """
-        Search for Obsidian vaults using os.walk for better control.
+        """Search for Obsidian vaults using os.walk for better control.
 
         Args:
             search_paths: Paths to search (uses defaults if None)
@@ -197,11 +191,13 @@ class ObsidianDetector:
                 Path.home() / 'obsidian',
             ]
 
-        vaults = []
+        vaults: list[ObsidianVault] = []
         dirs_checked = 0
         max_dirs = 1000  # Limit total directories checked
 
-        logger.info(f'Starting vault search (timeout: {timeout}s, max_depth: {max_depth})')
+        logger.info(
+            f'Starting vault search (timeout: {timeout}s, max_depth: {max_depth})'
+        )
 
         for search_path in search_paths:
             if not search_path.exists():
@@ -215,7 +211,9 @@ class ObsidianDetector:
                 for root, dirs, _files in os.walk(search_path):
                     # Check timeout frequently
                     if time.time() - start_time > timeout:
-                        logger.warning(f'Vault search timeout after {timeout}s (checked {dirs_checked} dirs)')
+                        logger.warning(
+                            f'Vault search timeout after {timeout}s (checked {dirs_checked} dirs)'
+                        )
                         return vaults
 
                     # Limit total directories checked
@@ -237,11 +235,24 @@ class ObsidianDetector:
 
                     # Skip common large directories that won't have vaults
                     dirs[:] = [
-                        d for d in dirs
-                        if d not in {
-                            'node_modules', '.git', '.cache', 'venv', 'env',
-                            '__pycache__', '.venv', 'target', 'build', 'dist',
-                            '.npm', '.nvm', 'Library', 'Applications',
+                        d
+                        for d in dirs
+                        if d
+                        not in {
+                            'node_modules',
+                            '.git',
+                            '.cache',
+                            'venv',
+                            'env',
+                            '__pycache__',
+                            '.venv',
+                            'target',
+                            'build',
+                            'dist',
+                            '.npm',
+                            '.nvm',
+                            'Library',
+                            'Applications',
                         }
                     ]
 
@@ -254,15 +265,16 @@ class ObsidianDetector:
                             # Check for Thoth workspace (new and legacy locations)
                             thoth_dir = vault_path / 'thoth' / '_thoth'
                             legacy_dir = vault_path / '_thoth'
-                            has_thoth = (
-                                (thoth_dir.exists() and thoth_dir.is_dir())
-                                or (legacy_dir.exists() and legacy_dir.is_dir())
+                            has_thoth = (thoth_dir.exists() and thoth_dir.is_dir()) or (
+                                legacy_dir.exists() and legacy_dir.is_dir()
                             )
 
                             # Check for settings.json (new and legacy locations)
                             settings_file = thoth_dir / 'settings.json'
                             legacy_settings = legacy_dir / 'settings.json'
-                            config_exists = settings_file.exists() or legacy_settings.exists()
+                            config_exists = (
+                                settings_file.exists() or legacy_settings.exists()
+                            )
 
                             vault = ObsidianVault(
                                 path=vault_path,
@@ -281,13 +293,14 @@ class ObsidianDetector:
                 logger.debug(f'Error searching {search_path}: {e}')
                 continue
 
-        logger.info(f'Search complete: found {len(vaults)} vault(s) after checking {dirs_checked} directories')
+        logger.info(
+            f'Search complete: found {len(vaults)} vault(s) after checking {dirs_checked} directories'
+        )
         return vaults
 
     @classmethod
     def get_status(cls, search_paths: list[Path] | None = None) -> ObsidianStatus:
-        """
-        Get comprehensive Obsidian status.
+        """Get comprehensive Obsidian status.
 
         Args:
             search_paths: Paths to search for vaults
@@ -311,8 +324,7 @@ class ObsidianDetector:
 
     @classmethod
     def get_download_url(cls) -> str:
-        """
-        Get download URL for current platform.
+        """Get download URL for current platform.
 
         Returns:
             Download URL string
@@ -322,8 +334,7 @@ class ObsidianDetector:
 
     @staticmethod
     def detect_vault_from_env() -> Path | None:
-        """
-        Detect vault path from environment variables.
+        """Detect vault path from environment variables.
 
         Checks OBSIDIAN_VAULT_PATH and THOTH_VAULT_PATH
 

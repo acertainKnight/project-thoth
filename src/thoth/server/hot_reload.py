@@ -6,7 +6,7 @@ without requiring container restarts.
 """
 
 from pathlib import Path  # noqa: I001
-from typing import Callable, Optional, List  # noqa: UP035
+from typing import Callable, List  # noqa: UP035
 import asyncio  # noqa: F401
 import json
 import threading
@@ -59,16 +59,16 @@ class SettingsFileWatcher:
 
         # Concurrency control
         self._reload_lock = threading.Lock()
-        self._debounce_timer: Optional[threading.Timer] = None  # noqa: UP007
+        self._debounce_timer: threading.Timer | None = None
         self._debounce_lock = threading.Lock()
 
         # Watchdog components
-        self._observer: Optional[Observer] = None  # noqa: UP007
-        self._event_handler: Optional[SettingsChangeHandler] = None  # noqa: UP007
+        self._observer: Observer | None = None
+        self._event_handler: SettingsChangeHandler | None = None
 
         # State tracking
         self._is_running = False
-        self._last_reload_time: Optional[float] = None  # noqa: UP007
+        self._last_reload_time: float | None = None
 
         # Validate settings file exists
         if not self.settings_file.exists():
@@ -377,7 +377,7 @@ class SettingsChangeHandler(FileSystemEventHandler):
 
 def create_settings_watcher(
     settings_file: Path,
-    callbacks: Optional[List[Callable[[], None]]] = None,  # noqa: UP006, UP007
+    callbacks: List[Callable[[], None]] | None = None,  # noqa: UP006
     debounce_seconds: float = 2.0,
     validate_before_reload: bool = True,
     auto_start: bool = False,

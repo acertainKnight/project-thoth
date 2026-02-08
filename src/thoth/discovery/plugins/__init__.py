@@ -16,6 +16,7 @@ BrowserWorkflowPlugin = None
 # Optional plugins with external dependencies
 try:
     from .openreview_plugin import OpenReviewPlugin
+
     OPENREVIEW_AVAILABLE = True
 except ImportError:
     OpenReviewPlugin = None
@@ -23,16 +24,18 @@ except ImportError:
 
 try:
     from .acl_anthology_plugin import ACLAnthologyPlugin
+
     ACL_ANTHOLOGY_AVAILABLE = True
 except ImportError:
     ACLAnthologyPlugin = None
     ACL_ANTHOLOGY_AVAILABLE = False
 
 # Always available plugins (use httpx which is already a dependency)
-from .semantic_scholar_plugin import SemanticScholarPlugin
+from .icml_plugin import ICMLPlugin
+
 # from .paperswithcode_plugin import PapersWithCodePlugin  # Disabled - API endpoint has changed/redirects
 from .neurips_plugin import NeurIPSPlugin
-from .icml_plugin import ICMLPlugin
+from .semantic_scholar_plugin import SemanticScholarPlugin
 
 # Register all tested and working plugins
 plugin_registry = DiscoveryPluginRegistry()

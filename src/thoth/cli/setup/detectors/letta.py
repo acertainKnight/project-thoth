@@ -1,9 +1,9 @@
-
 """
 Letta server detection and health checking.
 
 Detects Letta server installation, tests connectivity, and validates API endpoints.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -212,9 +212,7 @@ class LettaDetector:
                 )
 
                 if resp.status_code != 200:
-                    logger.warning(
-                        f'Letta /v1/models/ returned {resp.status_code}'
-                    )
+                    logger.warning(f'Letta /v1/models/ returned {resp.status_code}')
                     return []
 
                 raw_models = resp.json()
@@ -226,14 +224,20 @@ class LettaDetector:
                 for m in raw_models:
                     model_id = m.get('name') or m.get('model') or m.get('id', '')
                     provider = m.get('provider_type') or m.get('provider_name', '')
-                    context_window = m.get('max_context_window') or m.get('context_window', 0)
+                    context_window = m.get('max_context_window') or m.get(
+                        'context_window', 0
+                    )
 
                     if model_id:
-                        models.append({
-                            'id': model_id,
-                            'provider': provider,
-                            'context_window': int(context_window) if context_window else 0,
-                        })
+                        models.append(
+                            {
+                                'id': model_id,
+                                'provider': provider,
+                                'context_window': int(context_window)
+                                if context_window
+                                else 0,
+                            }
+                        )
 
                 logger.info(f'Fetched {len(models)} models from Letta at {url}')
                 return models
@@ -277,9 +281,7 @@ class LettaDetector:
                 if 'letta' in container.get('image', '').lower():
                     # Try to extract port from status/ports info
                     # Default to 8283 if we can't determine
-                    logger.info(
-                        f"Found Letta container: {container.get('name')}"
-                    )
+                    logger.info(f'Found Letta container: {container.get("name")}')
                     # Container found but might be on a different port -
                     # the default URL check above already covers 8283
                     return default_url, None

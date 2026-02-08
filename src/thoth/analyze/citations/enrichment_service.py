@@ -15,7 +15,7 @@ Key Features:
 
 import asyncio
 import threading
-from typing import Any, Dict, List, Optional  # noqa: UP035
+from typing import Any, Dict, List  # noqa: UP035
 
 import httpx
 from loguru import logger
@@ -40,9 +40,9 @@ class CitationEnrichmentService:
 
     def __init__(
         self,
-        crossref_api_key: Optional[str] = None,  # noqa: UP007
-        openalex_email: Optional[str] = None,  # noqa: UP007
-        s2_api_key: Optional[str] = None,  # noqa: UP007
+        crossref_api_key: str | None = None,
+        openalex_email: str | None = None,
+        s2_api_key: str | None = None,
         timeout: int = 30,
         max_retries: int = 3,
         requests_per_second: float = 10.0,
@@ -71,7 +71,7 @@ class CitationEnrichmentService:
         self._rate_lock = threading.Lock()  # Thread-safe lock for rate limiting
 
         # HTTP client (created on first use)
-        self._client: Optional[httpx.AsyncClient] = None  # noqa: UP007
+        self._client: httpx.AsyncClient | None = None
 
         # Statistics
         self._stats = {
@@ -125,8 +125,8 @@ class CitationEnrichmentService:
         self,
         url: str,
         params: dict[str, Any] | None = None,
-        headers: Optional[Dict[str, str]] = None,  # noqa: UP006, UP007
-    ) -> Optional[Dict[str, Any]]:  # noqa: UP006, UP007
+        headers: Dict[str, str] | None = None,  # noqa: UP006
+    ) -> Dict[str, Any] | None:  # noqa: UP006
         """
         Make HTTP request with retries and error handling.
 
@@ -191,7 +191,7 @@ class CitationEnrichmentService:
 
         return None
 
-    async def _fetch_crossref_metadata(self, doi: str) -> Optional[Dict[str, Any]]:  # noqa: UP006, UP007
+    async def _fetch_crossref_metadata(self, doi: str) -> Dict[str, Any] | None:  # noqa: UP006
         """
         Fetch metadata from Crossref API.
 
@@ -214,9 +214,7 @@ class CitationEnrichmentService:
             return response['message']
         return None
 
-    async def _fetch_openalex_metadata(
-        self, openalex_id: str
-    ) -> Optional[Dict[str, Any]]:  # noqa: UP006, UP007
+    async def _fetch_openalex_metadata(self, openalex_id: str) -> Dict[str, Any] | None:  # noqa: UP006
         """
         Fetch metadata from OpenAlex API.
 
@@ -239,7 +237,7 @@ class CitationEnrichmentService:
         logger.debug(f'Fetching OpenAlex metadata for ID: {openalex_id}')
         return await self._make_request(url, params=params)
 
-    async def _fetch_s2_metadata(self, paper_id: str) -> Optional[Dict[str, Any]]:  # noqa: UP006, UP007
+    async def _fetch_s2_metadata(self, paper_id: str) -> Dict[str, Any] | None:  # noqa: UP006
         """
         Fetch metadata from Semantic Scholar API.
 

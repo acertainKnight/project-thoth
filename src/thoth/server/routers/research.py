@@ -51,7 +51,7 @@ class ResearchResponse(BaseModel):
 async def research_chat(
     request: ChatRequest,
     research_agent=Depends(get_research_agent),
-    chat_manager=Depends(get_chat_manager)
+    chat_manager=Depends(get_chat_manager),
 ) -> ChatResponse:
     """
     Enhanced chat endpoint with persistence support.
@@ -146,8 +146,7 @@ async def research_chat(
 
 @router.post('/query')
 async def research_query(
-    request: ResearchRequest,
-    research_agent=Depends(get_research_agent)
+    request: ResearchRequest, research_agent=Depends(get_research_agent)
 ) -> ResearchResponse:
     """
     Direct research query endpoint for quick research tasks.

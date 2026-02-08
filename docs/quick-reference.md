@@ -307,11 +307,11 @@ curl http://localhost:8283/v1/agents/{agent_id}/memory
 ```bash
 # Required
 export OBSIDIAN_VAULT_PATH="/path/to/vault"
-export API_MISTRAL_KEY="your_key"
-export API_OPENROUTER_KEY="your_key"
+export API_OPENAI_KEY="your_key"       # Embeddings (Thoth RAG + Letta)
+export API_OPENROUTER_KEY="your_key"   # Backend LLM (analysis, queries, routing)
+export API_MISTRAL_KEY="your_key"      # PDF OCR extraction
 
 # Optional
-export API_OPENAI_KEY="your_key"
 export API_SEMANTIC_SCHOLAR_KEY="your_key"
 ```
 

@@ -31,7 +31,7 @@ class RAGGroundTruthPair:
     ground_truth_doc_ids: List[str]  # noqa: UP006
     ground_truth_doc_titles: List[str]  # noqa: UP006
     difficulty: str = 'medium'  # easy, medium, hard
-    topic: Optional[str] = None  # noqa: UP007
+    topic: str | None = None
     question_type: str = 'factual'  # factual, analytical, summarization
 
 
@@ -62,7 +62,7 @@ class GroundTruthGenerator:
         self,
         num_samples: int = 100,
         include_synthetic: bool = True,  # noqa: ARG002
-        difficulty_distribution: Optional[Dict[str, float]] = None,  # noqa: UP006, UP007
+        difficulty_distribution: Dict[str, float] | None = None,  # noqa: UP006
     ) -> List[RAGGroundTruthPair]:  # noqa: UP006
         """
         Generate ground truth pairs from existing indexed documents.

@@ -932,4 +932,3 @@ tailscale-serve-stop: ## Stop Tailscale serve
 	@echo "🛑 Stopping Tailscale serve..."
 	sudo tailscale serve --https=443 off
 	@echo "✅ Tailscale serve stopped"
-

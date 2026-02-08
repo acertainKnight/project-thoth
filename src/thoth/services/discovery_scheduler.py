@@ -14,9 +14,8 @@ The scheduler:
 import asyncio
 import time
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
-
 
 from thoth.config import Config
 from thoth.repositories.base import BaseRepository
@@ -38,7 +37,7 @@ class DiscoveryExecutionLogRepository(BaseRepository[dict[str, Any]]):
         self,
         question_id: UUID,
         triggered_by: str = 'scheduler',
-    ) -> Optional[UUID]:  # noqa: UP007
+    ) -> UUID | None:
         """
         Create a new execution log entry with 'running' status.
 
@@ -75,7 +74,9 @@ class DiscoveryExecutionLogRepository(BaseRepository[dict[str, Any]]):
             return None
 
         except Exception as e:
-            self.logger.error(f'Failed to create execution log entry: {e}', exc_info=True)
+            self.logger.error(
+                f'Failed to create execution log entry: {e}', exc_info=True
+            )
             return None
 
     async def complete_execution(
@@ -88,8 +89,8 @@ class DiscoveryExecutionLogRepository(BaseRepository[dict[str, Any]]):
         duplicate_articles: int,
         relevant_articles: int,
         high_relevance_articles: int,
-        error_message: Optional[str] = None,  # noqa: UP007
-        error_details: Optional[dict[str, Any]] = None,  # noqa: UP007
+        error_message: str | None = None,
+        error_details: dict[str, Any] | None = None,
     ) -> bool:
         """
         Mark an execution as completed with results.
@@ -117,7 +118,9 @@ class DiscoveryExecutionLogRepository(BaseRepository[dict[str, Any]]):
             result = await self.postgres.fetchrow(query_duration, execution_id)
 
             if not result:
-                self.logger.error(f'Execution log {execution_id} not found for completion')
+                self.logger.error(
+                    f'Execution log {execution_id} not found for completion'
+                )
                 return False
 
             started_at = result['started_at']
@@ -210,7 +213,7 @@ class ResearchQuestionScheduler(BaseService):
 
         # Scheduler state
         self._running = False
-        self._task: Optional[asyncio.Task] = None  # noqa: UP007
+        self._task: asyncio.Task | None = None
         self._check_interval = 300  # 5 minutes in seconds
 
         self.logger.info('ResearchQuestionScheduler initialized')
@@ -471,7 +474,9 @@ class ResearchQuestionScheduler(BaseService):
             if success:
                 self.logger.debug(f'Updated schedule for question {question_id}')
             else:
-                self.logger.warning(f'Failed to update schedule for question {question_id}')
+                self.logger.warning(
+                    f'Failed to update schedule for question {question_id}'
+                )
 
         except Exception as e:
             self.logger.error(
@@ -522,7 +527,9 @@ class ResearchQuestionScheduler(BaseService):
         )
 
         if not execution_id:
-            self.logger.error(f'Failed to create execution log for question {question_id}')
+            self.logger.error(
+                f'Failed to create execution log for question {question_id}'
+            )
             return {
                 'success': False,
                 'error': 'Failed to create execution log',
@@ -569,7 +576,9 @@ class ResearchQuestionScheduler(BaseService):
             return result
 
         except Exception as e:
-            self.logger.error(f'Exception during immediate discovery: {e}', exc_info=True)
+            self.logger.error(
+                f'Exception during immediate discovery: {e}', exc_info=True
+            )
 
             await self.execution_log.complete_execution(
                 execution_id=execution_id,

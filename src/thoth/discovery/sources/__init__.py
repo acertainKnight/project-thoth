@@ -3,9 +3,6 @@
 from .arxiv import ArxivAPISource, ArxivClient
 from .base import APISourceError, BaseAPISource
 from .biorxiv import BioRxivAPISource
-from .crossref import CrossRefAPISource
-from .openalex import OpenAlexAPISource
-from .pubmed import PubMedAPISource
 
 # Import conference scraper configurations
 from .conference_scrapers import (
@@ -18,6 +15,9 @@ from .conference_scrapers import (
     neurips_scrape_config,
     springer_ml_journal_scrape_config,
 )
+from .crossref import CrossRefAPISource
+from .openalex import OpenAlexAPISource
+from .pubmed import PubMedAPISource
 
 __all__ = [
     # API Sources

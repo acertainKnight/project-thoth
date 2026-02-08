@@ -6,7 +6,7 @@ discovered articles and research questions with relevance scoring.
 """
 
 from datetime import datetime
-from typing import Any, List, Optional  # noqa: UP035
+from typing import Any, List  # noqa: UP035
 from uuid import UUID
 
 from loguru import logger
@@ -33,12 +33,12 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         article_id: UUID,
         question_id: UUID,
         relevance_score: float,
-        matched_keywords: Optional[List[str]] = None,  # noqa: UP006, UP007
-        matched_topics: Optional[List[str]] = None,  # noqa: UP006, UP007
-        matched_authors: Optional[List[str]] = None,  # noqa: UP006, UP007
-        discovered_via_source: Optional[str] = None,  # noqa: UP007
-        discovery_run_id: Optional[UUID] = None,  # noqa: UP007
-    ) -> Optional[UUID]:  # noqa: UP007
+        matched_keywords: List[str] | None = None,  # noqa: UP006
+        matched_topics: List[str] | None = None,  # noqa: UP006
+        matched_authors: List[str] | None = None,  # noqa: UP006
+        discovered_via_source: str | None = None,
+        discovery_run_id: UUID | None = None,
+    ) -> UUID | None:
         """
         Create a new article-question match.
 
@@ -112,7 +112,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         self,
         article_id: str,
         question_id: str,
-    ) -> Optional[dict[str, Any]]:  # noqa: UP007
+    ) -> dict[str, Any] | None:
         """
         Check if a paper is already matched to a research question.
 
@@ -146,11 +146,11 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
     async def get_matches_by_question(
         self,
         question_id: UUID,
-        min_relevance: Optional[float] = None,  # noqa: UP007
-        is_viewed: Optional[bool] = None,  # noqa: UP007
-        is_bookmarked: Optional[bool] = None,  # noqa: UP007
-        limit: Optional[int] = None,  # noqa: UP007
-        offset: Optional[int] = None,  # noqa: UP007
+        min_relevance: float | None = None,
+        is_viewed: bool | None = None,
+        is_bookmarked: bool | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
     ) -> List[dict[str, Any]]:  # noqa: UP006
         """
         Get all article matches for a research question.
@@ -240,6 +240,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                 # But keep backward compatibility check
                 if isinstance(row_dict.get('authors'), str):
                     import json
+
                     try:
                         row_dict['authors'] = json.loads(row_dict['authors'])
                     except (json.JSONDecodeError, TypeError):
@@ -354,7 +355,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
     async def mark_as_viewed(
         self,
         match_id: UUID,
-        viewed_at: Optional[datetime] = None,  # noqa: UP007
+        viewed_at: datetime | None = None,
     ) -> bool:
         """
         Mark a match as viewed by the user.
@@ -399,7 +400,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         self,
         match_id: UUID,
         rating: int,
-        notes: Optional[str] = None,  # noqa: UP007
+        notes: str | None = None,
     ) -> bool:
         """
         Set user rating and notes for a match.

@@ -1,5 +1,4 @@
-"""
-Main setup wizard application.
+"""Main setup wizard application.
 
 Textual TUI application that orchestrates the setup wizard flow.
 """
@@ -10,6 +9,7 @@ from typing import Any, ClassVar
 
 from loguru import logger
 from textual.app import App
+from textual.binding import Binding
 
 from .screens.welcome import WelcomeScreen
 
@@ -135,9 +135,9 @@ class SetupWizardApp(App):
     }
     """
 
-    BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
-        ("ctrl+c", "quit", "Quit"),
-        ("f1", "help", "Help"),
+    BINDINGS: ClassVar[list[Binding | tuple[str, str] | tuple[str, str, str]]] = [
+        ('ctrl+c', 'quit', 'Quit'),
+        ('f1', 'help', 'Help'),
     ]
 
     def __init__(self) -> None:
@@ -147,18 +147,17 @@ class SetupWizardApp(App):
 
     def on_mount(self) -> None:
         """Run when app is mounted."""
-        logger.info("Starting Thoth setup wizard")
+        logger.info('Starting Thoth setup wizard')
         self.push_screen(WelcomeScreen())
 
     def action_help(self) -> None:
         """Show help message."""
         # TODO: Implement proper help overlay in future
-        logger.info("Help requested")
+        logger.info('Help requested')
 
 
 def run_wizard() -> None:
-    """
-    Run the setup wizard.
+    """Run the setup wizard.
 
     Entry point for the setup wizard CLI.
     """
@@ -166,5 +165,5 @@ def run_wizard() -> None:
     app.run()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     run_wizard()

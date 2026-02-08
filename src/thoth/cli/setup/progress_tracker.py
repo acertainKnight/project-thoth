@@ -1,9 +1,9 @@
-
 """
 Progress tracking for setup wizard.
 
 Provides progress bars, spinners, and status indicators for long-running operations.
 """
+
 from __future__ import annotations
 
 from rich.console import Console

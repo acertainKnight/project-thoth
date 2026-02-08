@@ -84,7 +84,7 @@ You can modify any preset to add or remove fields.
     "standard": {
       "fields": {
         // ... existing fields ...
-        
+
         "practical_applications": {
           "type": "string",
           "required": false,
@@ -212,8 +212,8 @@ This ensures you can always:
 View schema info in database:
 
 ```sql
-SELECT title, analysis_schema_name, analysis_schema_version 
-FROM papers 
+SELECT title, analysis_schema_name, analysis_schema_version
+FROM papers
 WHERE analysis_schema_name = 'detailed';
 ```
 
@@ -436,7 +436,7 @@ Complete template with all 4 presets:
   "version": "1.0",
   "lastModified": "2026-01-09T00:00:00Z",
   "active_preset": "standard",
-  
+
   "presets": {
     "standard": { /* 14 fields */ },
     "detailed": { /* 20 fields */ },

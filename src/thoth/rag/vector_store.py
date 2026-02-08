@@ -62,7 +62,7 @@ class VectorStoreManager:
 
     async def _get_pool(self) -> asyncpg.Pool:
         """Get or create connection pool.
-        
+
         Handles the case where the pool was created in a previous event loop
         that has since been closed.
         """
@@ -80,7 +80,7 @@ class VectorStoreManager:
                 except Exception:
                     pass
                 self._pool = None
-        
+
         # Create new pool
         self._pool = await asyncpg.create_pool(
             self.db_url, min_size=1, max_size=5, command_timeout=60
@@ -161,10 +161,7 @@ class VectorStoreManager:
         async with pool.acquire() as conn:
             # Set up JSON codec for the connection
             await conn.set_type_codec(
-                'jsonb',
-                encoder=json.dumps,
-                decoder=json.loads,
-                schema='pg_catalog'
+                'jsonb', encoder=json.dumps, decoder=json.loads, schema='pg_catalog'
             )
 
             for idx, (doc, embedding) in enumerate(zip(documents, embeddings)):  # noqa: B905
@@ -319,6 +316,7 @@ class VectorStoreManager:
                     metadata = dict(raw_metadata)
                 elif isinstance(raw_metadata, str):
                     import json
+
                     try:
                         metadata = json.loads(raw_metadata)
                     except (json.JSONDecodeError, TypeError):
@@ -514,7 +512,9 @@ class VectorStoreManager:
         """
         pool = await self._get_pool()
         async with pool.acquire() as conn:
-            result = await conn.execute('TRUNCATE TABLE document_chunks RESTART IDENTITY CASCADE')
+            result = await conn.execute(
+                'TRUNCATE TABLE document_chunks RESTART IDENTITY CASCADE'
+            )
             logger.warning(f'Cleared document_chunks table: {result}')
 
     def clear_collection(self) -> None:
@@ -545,8 +545,8 @@ class VectorStoreManager:
         Returns:
             A retriever object compatible with LangChain
         """
-        from langchain_core.retrievers import BaseRetriever
         from langchain_core.callbacks import CallbackManagerForRetrieverRun
+        from langchain_core.retrievers import BaseRetriever
 
         search_kwargs = search_kwargs or {}
 

@@ -165,9 +165,9 @@ Choose how to run agent memory:
 **5. API Keys Configuration**
 
 Enter keys for LLM providers:
-- **Mistral AI** (recommended): [console.mistral.ai](https://console.mistral.ai/)
-- **OpenRouter** (fallback): [openrouter.ai/keys](https://openrouter.ai/keys)
-- **OpenAI** (optional): [platform.openai.com](https://platform.openai.com/)
+- **OpenAI** (required — embeddings): [platform.openai.com](https://platform.openai.com/)
+- **OpenRouter** (required — backend LLM): [openrouter.ai/keys](https://openrouter.ai/keys)
+- **Mistral AI** (required — PDF OCR extraction): [console.mistral.ai](https://console.mistral.ai/)
 - **Semantic Scholar** (optional): [semanticscholar.org/product/api](https://www.semanticscholar.org/product/api)
 
 **6. Model Selection**

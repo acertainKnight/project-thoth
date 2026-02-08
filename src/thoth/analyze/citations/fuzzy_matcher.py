@@ -39,7 +39,7 @@ Dependencies:
 - rapidfuzz: Fast fuzzy string matching library
 """
 
-from typing import List, Optional, Tuple  # noqa: I001, UP035
+from typing import List, Tuple  # noqa: I001, UP035
 import re
 import unicodedata
 from rapidfuzz import fuzz
@@ -402,7 +402,7 @@ def match_authors(authors1: List[str], authors2: List[str]) -> float:  # noqa: U
     return 0.6 * first_author_score + 0.4 * overlap_score
 
 
-def match_year(year1: Optional[int], year2: Optional[int]) -> float:  # noqa: UP007
+def match_year(year1: int | None, year2: int | None) -> float:
     """
     Match publication years with tolerance for small differences.
 
@@ -512,8 +512,8 @@ def calculate_fuzzy_score(
     title2: str,
     authors1: List[str],  # noqa: UP006
     authors2: List[str],  # noqa: UP006
-    year1: Optional[int],  # noqa: UP007
-    year2: Optional[int],  # noqa: UP007
+    year1: int | None,
+    year2: int | None,
     journal1: str = '',
     journal2: str = '',
 ) -> Tuple[float, dict]:  # noqa: UP006

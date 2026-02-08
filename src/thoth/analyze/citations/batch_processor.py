@@ -17,7 +17,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Optional  # noqa: UP035
+from typing import Any, List  # noqa: UP035
 
 from loguru import logger
 
@@ -58,7 +58,7 @@ class BatchConfig:
     chunk_size: int = 100
     max_concurrent: int = 10
     checkpoint_interval: int = 500
-    checkpoint_path: Optional[Path] = None  # noqa: UP007
+    checkpoint_path: Path | None = None
     enable_caching: bool = True
     rate_limits: dict[str, float] = field(
         default_factory=lambda: {
@@ -102,8 +102,8 @@ class BatchStatistics:
     partial_resolutions: int = 0
     cache_hits: int = 0
     api_calls: dict[str, int] = field(default_factory=dict)
-    start_time: Optional[datetime] = None  # noqa: UP007
-    end_time: Optional[datetime] = None  # noqa: UP007
+    start_time: datetime | None = None
+    end_time: datetime | None = None
     processing_time_seconds: float = 0.0
     average_time_per_citation: float = 0.0
     checkpoints_saved: int = 0
@@ -175,7 +175,7 @@ class RateLimiter:
     while allowing burst capacity.
     """
 
-    def __init__(self, rate: float, burst: Optional[int] = None):  # noqa: UP007
+    def __init__(self, rate: float, burst: int | None = None):
         """
         Initialize rate limiter.
 
@@ -187,7 +187,7 @@ class RateLimiter:
         self.burst = burst or int(rate)
         self.tokens = self.burst
         self.last_update = time.monotonic()
-        self._lock: Optional[asyncio.Lock] = None  # Lazy init to avoid event loop binding
+        self._lock: asyncio.Lock | None = None  # Lazy init to avoid event loop binding
 
     def _get_lock(self) -> asyncio.Lock:
         """Get or create the lock (lazy init to avoid event loop binding)."""
@@ -423,7 +423,7 @@ class BatchCitationProcessor:
     async def process_batch(
         self,
         citations: List[Citation],  # noqa: UP006
-        config: Optional[BatchConfig] = None,  # noqa: UP007
+        config: BatchConfig | None = None,
     ) -> List[ResolutionResult]:  # noqa: UP006
         """
         Process a batch of citations with chunking, parallelization, and checkpointing.
@@ -558,7 +558,7 @@ class BatchCitationProcessor:
         except Exception as e:
             logger.error(f'Failed to save checkpoint: {e}')
 
-    def load_checkpoint(self, path: Path) -> Optional[List[ResolutionResult]]:  # noqa: UP006, UP007
+    def load_checkpoint(self, path: Path) -> List[ResolutionResult] | None:  # noqa: UP006
         """
         Load processing checkpoint from disk.
 

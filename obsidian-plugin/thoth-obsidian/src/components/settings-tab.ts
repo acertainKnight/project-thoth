@@ -1,6 +1,6 @@
 /**
  * Settings Tab Component
- * 
+ *
  * Plugin-only settings UI. Backend settings are in vault/thoth/_thoth/settings.json.
  */
 
@@ -44,7 +44,7 @@ export class SettingsTabComponent {
 
     // UI Preferences Section
     this.renderUIPreferencesSection(settingsContainer);
-    
+
     // Backend Settings Info
     this.renderBackendSettingsInfo(settingsContainer);
 
@@ -163,13 +163,13 @@ export class SettingsTabComponent {
 
     const populateDropdown = (filterText: string = '') => {
       modelSelect.empty();
-      
+
       // Add default option
       modelSelect.createEl('option', {
         text: 'Server Default (configured in Letta)',
         value: ''
       });
-      
+
       // Filter models
       const filtered = allModels.filter((m) => {
         if (!filterText) return true;
@@ -201,7 +201,7 @@ export class SettingsTabComponent {
 
       // Select current model
       modelSelect.value = currentConfigModel;
-      
+
       // Update status
       if (filtered.length === allModels.length) {
         if (currentConfigModel) {
@@ -224,7 +224,7 @@ export class SettingsTabComponent {
 
     // Async: Fetch models from Letta API and load current config
     const adapter = this.plugin.app.vault.adapter;
-    
+
     Promise.all([
       // Fetch models from Letta
       fetch(`${this.settings.lettaEndpointUrl}/v1/models/`)
@@ -336,16 +336,16 @@ export class SettingsTabComponent {
     info.createEl('p', {
       text: 'Backend settings (API keys, LLM models, paths, discovery config, etc.) are stored separately in:',
     });
-    
+
     const pathCode = info.createEl('code', {
       text: 'vault/thoth/_thoth/settings.json',
       cls: 'thoth-settings-path'
     });
-    
+
     info.createEl('p', {
       text: 'Edit that file directly or use the setup wizard to configure backend settings.',
     });
-    
+
     // Open settings file button (desktop only)
     if (!Platform.isMobile) {
       const openBtn = section.createEl('button', {
@@ -356,7 +356,7 @@ export class SettingsTabComponent {
         // Get vault path
         const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
         const settingsPath = `${vaultPath}/thoth/_thoth/settings.json`;
-        
+
         // Try to open in system editor
         const { exec } = require('child_process');
         exec(`xdg-open "${settingsPath}" || open "${settingsPath}" || start "" "${settingsPath}"`, (error: any) => {

@@ -8,10 +8,8 @@ NOTE: After 2026-01 schema migration:
 - Contains user interaction data (rating, tags, notes)
 """
 
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
-
-from loguru import logger
 
 from thoth.repositories.base import BaseRepository
 
@@ -22,12 +20,12 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
     def __init__(self, postgres_service, **kwargs):
         super().__init__(postgres_service, table_name='processed_papers', **kwargs)
 
-    async def get_by_paper_id(self, paper_id: UUID) -> Optional[dict]:
+    async def get_by_paper_id(self, paper_id: UUID) -> dict | None:
         """Get processed paper entry by paper_metadata ID."""
-        query = "SELECT * FROM processed_papers WHERE paper_id = $1"
+        query = 'SELECT * FROM processed_papers WHERE paper_id = $1'
         return await self.postgres.fetchrow(query, paper_id)
 
-    async def get_with_metadata(self, processed_paper_id: UUID) -> Optional[dict]:
+    async def get_with_metadata(self, processed_paper_id: UUID) -> dict | None:
         """Get processed paper with full paper metadata."""
         query = """
             SELECT
@@ -63,10 +61,10 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
     async def create(
         self,
         paper_id: UUID,
-        pdf_path: Optional[str] = None,
-        markdown_path: Optional[str] = None,
-        note_path: Optional[str] = None,
-        obsidian_uri: Optional[str] = None,
+        pdf_path: str | None = None,
+        markdown_path: str | None = None,
+        note_path: str | None = None,
+        obsidian_uri: str | None = None,
         processing_status: str = 'pending',
         **kwargs,
     ) -> UUID:
@@ -102,10 +100,10 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
     async def update_paths(
         self,
         paper_id: UUID,
-        pdf_path: Optional[str] = None,
-        markdown_path: Optional[str] = None,
-        note_path: Optional[str] = None,
-        obsidian_uri: Optional[str] = None,
+        pdf_path: str | None = None,
+        markdown_path: str | None = None,
+        note_path: str | None = None,
+        obsidian_uri: str | None = None,
     ) -> bool:
         """Update file paths for a processed paper."""
         query = """
@@ -138,15 +136,17 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
             WHERE paper_id = $1
         """
 
-        result = await self.postgres.execute(query, paper_id, processing_status, processed_at)
+        result = await self.postgres.execute(
+            query, paper_id, processing_status, processed_at
+        )
         return result == 'UPDATE 1'
 
     async def update_user_data(
         self,
         paper_id: UUID,
-        user_rating: Optional[int] = None,
-        user_notes: Optional[str] = None,
-        user_tags: Optional[dict] = None,
+        user_rating: int | None = None,
+        user_notes: str | None = None,
+        user_tags: dict | None = None,
     ) -> bool:
         """Update user interaction data."""
         query = """
@@ -159,10 +159,14 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
             WHERE paper_id = $1
         """
 
-        result = await self.postgres.execute(query, paper_id, user_rating, user_notes, user_tags)
+        result = await self.postgres.execute(
+            query, paper_id, user_rating, user_notes, user_tags
+        )
         return result == 'UPDATE 1'
 
-    async def get_by_status(self, processing_status: str, limit: int = 100) -> list[dict]:
+    async def get_by_status(
+        self, processing_status: str, limit: int = 100
+    ) -> list[dict]:
         """Get processed papers by status with metadata."""
         query = """
             SELECT
@@ -219,12 +223,12 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
 
     async def has_processed_paper(self, paper_id: UUID) -> bool:
         """Check if paper has been processed."""
-        query = "SELECT EXISTS(SELECT 1 FROM processed_papers WHERE paper_id = $1)"
+        query = 'SELECT EXISTS(SELECT 1 FROM processed_papers WHERE paper_id = $1)'
         return await self.postgres.fetchval(query, paper_id)
 
     async def delete_by_paper_id(self, paper_id: UUID) -> bool:
         """Delete processed paper entry (paper_metadata remains)."""
-        query = "DELETE FROM processed_papers WHERE paper_id = $1"
+        query = 'DELETE FROM processed_papers WHERE paper_id = $1'
         result = await self.postgres.execute(query, paper_id)
         return result == 'DELETE 1'
 

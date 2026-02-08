@@ -104,7 +104,9 @@ class OpenAlexResolver:
         # Rate limiting state
         self._last_request_time = 0.0
         self._min_interval = 1.0 / requests_per_second
-        self._rate_lock: Optional[asyncio.Lock] = None  # Lazy init to avoid event loop binding
+        self._rate_lock: Optional[asyncio.Lock] = (
+            None  # Lazy init to avoid event loop binding
+        )
 
         # Statistics
         self._requests_made = 0

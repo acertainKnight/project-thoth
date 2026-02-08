@@ -474,9 +474,13 @@ class SettingsService(BaseService):
         if DOCKER_INTEGRATION_AVAILABLE:
             self._init_docker_integration()
 
-        self.logger.info(f'Settings service initialized with file: {self.settings_path}')
+        self.logger.info(
+            f'Settings service initialized with file: {self.settings_path}'
+        )
         if self._is_in_obsidian_vault():
-            self.logger.info('Obsidian vault detected, using vault-relative settings path')
+            self.logger.info(
+                'Obsidian vault detected, using vault-relative settings path'
+            )
         if self._use_container_optimizations:
             self.logger.info(
                 'Container environment detected, using container-optimized file operations'
@@ -651,7 +655,9 @@ class SettingsService(BaseService):
         if self._use_container_optimizations:
             self._create_initial_snapshot()
 
-        self.logger.info(f'Settings service initialized with file: {self.settings_path}')
+        self.logger.info(
+            f'Settings service initialized with file: {self.settings_path}'
+        )
 
     def load_settings(self, force: bool = False) -> dict[str, Any]:
         """
@@ -1655,7 +1661,9 @@ class SettingsService(BaseService):
                     self._snapshots_cache.append(snapshot_info)
 
             except Exception as e:
-                self.logger.warning(f'Failed to process snapshot file {snapshot_file}: {e}')
+                self.logger.warning(
+                    f'Failed to process snapshot file {snapshot_file}: {e}'
+                )
 
         # Sort by timestamp
         self._snapshots_cache.sort(key=lambda s: s.timestamp)

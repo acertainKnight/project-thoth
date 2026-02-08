@@ -76,7 +76,7 @@ class ProcessingService(BaseService):
             try:
                 # First, check if paper exists in paper_metadata by title
                 paper_id = await conn.fetchval(
-                    "SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1)",
+                    'SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1)',
                     paper_title,
                 )
 
@@ -96,7 +96,7 @@ class ProcessingService(BaseService):
                 else:
                     # Update existing paper_metadata timestamp
                     await conn.execute(
-                        "UPDATE paper_metadata SET updated_at = NOW() WHERE id = $1",
+                        'UPDATE paper_metadata SET updated_at = NOW() WHERE id = $1',
                         paper_id,
                     )
 
@@ -143,7 +143,7 @@ class ProcessingService(BaseService):
         if self._llm_service is None:
             self._llm_service = LLMService(self.config)
         return self._llm_service
-    
+
     @property
     def analysis_schema_service(self) -> AnalysisSchemaService:
         """Get or create the analysis schema service."""
@@ -307,9 +307,11 @@ class ProcessingService(BaseService):
             # Get analysis model and custom instructions from schema service
             analysis_model = self.analysis_schema_service.get_active_model()
             custom_instructions = self.analysis_schema_service.get_preset_instructions()
-            
+
             # Analyze content
-            self.logger.info(f'Analyzing content with LLM using schema: {self.analysis_schema_service.get_active_preset_name()}')
+            self.logger.info(
+                f'Analyzing content with LLM using schema: {self.analysis_schema_service.get_active_preset_name()}'
+            )
             self.llm_processor = LLMProcessor(
                 llm_service=self.llm_service,
                 model=self.config.llm_config.model,
@@ -374,16 +376,16 @@ class ProcessingService(BaseService):
     def _join_markdown_pages(self, ocr_response: OCRResponse) -> str:
         """Join the markdown pages into a single markdown document without image references."""
         import re
-        
+
         combined = '\n\n'.join(page.markdown for page in ocr_response.pages)
-        
+
         # Strip image references: ![alt](url) or ![alt][ref]
         image_pattern = r'!\[[^\]]*\]\([^)]+\)|!\[[^\]]*\]\[[^\]]*\]'
         combined = re.sub(image_pattern, '', combined)
-        
+
         # Clean up multiple consecutive newlines left by removed images
         combined = re.sub(r'\n{3,}', '\n\n', combined)
-        
+
         return combined.strip()
 
     def _get_combined_markdown(self, ocr_response: OCRResponse) -> str:

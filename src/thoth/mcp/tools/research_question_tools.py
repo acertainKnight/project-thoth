@@ -29,30 +29,38 @@ class ListAvailableSourcesMCPTool(NoInputTool):
         """List available sources."""
         try:
             from thoth.discovery.plugins import plugin_registry
-            
+
             content_parts = []
 
             # Get all registered plugins dynamically
             registered_plugins = plugin_registry.list_plugins()
-            
+
             if registered_plugins:
-                content_parts.append({
-                    'type': 'text',
-                    'text': '**Built-in API Sources:**\n',
-                })
+                content_parts.append(
+                    {
+                        'type': 'text',
+                        'text': '**Built-in API Sources:**\n',
+                    }
+                )
 
                 for source_id in sorted(registered_plugins):
                     # Get plugin description if available
                     plugin_cls = plugin_registry.get(source_id)
-                    if plugin_cls and hasattr(plugin_cls, '__doc__') and plugin_cls.__doc__:
+                    if (
+                        plugin_cls
+                        and hasattr(plugin_cls, '__doc__')
+                        and plugin_cls.__doc__
+                    ):
                         description = plugin_cls.__doc__.strip().split('\n')[0]
                     else:
                         description = f'{source_id.replace("_", " ").title()} source'
-                    
-                    content_parts.append({
-                        'type': 'text',
-                        'text': f'  - `{source_id}`: {description}\n',
-                    })
+
+                    content_parts.append(
+                        {
+                            'type': 'text',
+                            'text': f'  - `{source_id}`: {description}\n',
+                        }
+                    )
 
             # Query custom sources (browser workflows)
             try:
@@ -65,23 +73,29 @@ class ListAvailableSourcesMCPTool(NoInputTool):
                 workflows = await workflow_repo.get_active_workflows()
 
                 if workflows:
-                    content_parts.append({
-                        'type': 'text',
-                        'text': '\n**Custom Sources (Browser Workflows):**\n',
-                    })
-                    for workflow in workflows:
-                        content_parts.append({
+                    content_parts.append(
+                        {
                             'type': 'text',
-                            'text': f"  - `{workflow['name']}`: {workflow.get('description', 'Custom workflow')}\n",
-                        })
+                            'text': '\n**Custom Sources (Browser Workflows):**\n',
+                        }
+                    )
+                    for workflow in workflows:
+                        content_parts.append(
+                            {
+                                'type': 'text',
+                                'text': f'  - `{workflow["name"]}`: {workflow.get("description", "Custom workflow")}\n',
+                            }
+                        )
             except Exception as e:
                 logger.warning(f'Could not load browser workflows: {e}')
 
             # Add special options
-            content_parts.append({
-                'type': 'text',
-                'text': '\n**Special Options:**\n  - `*`: Query all available sources\n',
-            })
+            content_parts.append(
+                {
+                    'type': 'text',
+                    'text': '\n**Special Options:**\n  - `*`: Query all available sources\n',
+                }
+            )
 
             return MCPToolCallResult(content=content_parts)
 
@@ -210,8 +224,16 @@ class CreateResearchQuestionMCPTool(MCPTool):
 
             if question_id:
                 sources_str = ', '.join(arguments['selected_sources'])
-                description_text = f"\n**Description:** {arguments['description']}" if arguments.get('description') else ""
-                schedule_days = f" on days {arguments['schedule_days_of_week']}" if arguments.get('schedule_days_of_week') else ""
+                description_text = (
+                    f'\n**Description:** {arguments["description"]}'
+                    if arguments.get('description')
+                    else ''
+                )
+                schedule_days = (
+                    f' on days {arguments["schedule_days_of_week"]}'
+                    if arguments.get('schedule_days_of_week')
+                    else ''
+                )
                 return MCPToolCallResult(
                     content=[
                         {
@@ -303,26 +325,32 @@ class ListResearchQuestionsMCPTool(MCPTool):
                 )
 
             content_parts = []
-            content_parts.append({
-                'type': 'text',
-                'text': f'**Found {len(questions)} Research Questions:**\n\n',
-            })
+            content_parts.append(
+                {
+                    'type': 'text',
+                    'text': f'**Found {len(questions)} Research Questions:**\n\n',
+                }
+            )
 
             for question in questions:
-                question_text = f"**{question['name']}**\n"
+                question_text = f'**{question["name"]}**\n'
                 if question.get('description'):
-                    question_text += f"  - Description: {question['description']}\n"
-                question_text += f"  - ID: {question['id']}\n"
-                question_text += f"  - Keywords: {', '.join(question['keywords'])}\n"
-                question_text += f"  - Topics: {', '.join(question.get('topics', []))}\n"
-                question_text += f"  - Sources: {', '.join(question['selected_sources'])}\n"
-                question_text += f"  - Schedule: {question['schedule_frequency']}"
+                    question_text += f'  - Description: {question["description"]}\n'
+                question_text += f'  - ID: {question["id"]}\n'
+                question_text += f'  - Keywords: {", ".join(question["keywords"])}\n'
+                question_text += (
+                    f'  - Topics: {", ".join(question.get("topics", []))}\n'
+                )
+                question_text += (
+                    f'  - Sources: {", ".join(question["selected_sources"])}\n'
+                )
+                question_text += f'  - Schedule: {question["schedule_frequency"]}'
                 if question.get('schedule_time'):
-                    question_text += f" at {question['schedule_time']}"
+                    question_text += f' at {question["schedule_time"]}'
                 if question.get('schedule_days_of_week'):
-                    question_text += f" (days: {question['schedule_days_of_week']})"
-                question_text += "\n"
-                question_text += f"  - Created: {question['created_at']}\n\n"
+                    question_text += f' (days: {question["schedule_days_of_week"]})'
+                question_text += '\n'
+                question_text += f'  - Created: {question["created_at"]}\n\n'
 
                 content_parts.append({'type': 'text', 'text': question_text})
 
@@ -419,8 +447,16 @@ class GetResearchQuestionMCPTool(MCPTool):
             updated_str = _str_val(question.get('updated_at'), 'N/A')
             last_run_str = _str_val(question.get('last_run_at'), 'Never')
 
-            description_text = f"\n**Description:** {question.get('description')}\n" if question.get('description') else ""
-            schedule_days = f"\n  - Days of Week: {schedule_days_of_week}" if schedule_days_of_week else ""
+            description_text = (
+                f'\n**Description:** {question.get("description")}\n'
+                if question.get('description')
+                else ''
+            )
+            schedule_days = (
+                f'\n  - Days of Week: {schedule_days_of_week}'
+                if schedule_days_of_week
+                else ''
+            )
 
             details = f"""**Research Question: {question.get('name', '')}**
 {description_text}

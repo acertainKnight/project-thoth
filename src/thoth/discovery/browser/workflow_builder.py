@@ -29,55 +29,92 @@ from thoth.config import Config, config
 from thoth.discovery.browser.browser_manager import BrowserManager
 from thoth.services.llm_service import LLMService
 
-
 # ---------------------------------------------------------------------------
 # Pydantic schemas for structured LLM output
 # ---------------------------------------------------------------------------
 
+
 class ProposedSelector(BaseModel):
     """A single CSS selector proposed by the LLM for a metadata field."""
 
-    field_name: str = Field(description='Metadata field: title, authors, abstract, url, pdf_url, doi, publication_date, keywords, journal')
-    css_selector: str = Field(description='CSS selector relative to the article container')
-    attribute: str = Field(default='text', description='How to extract value: text, href, src, or a specific attribute name')
-    is_multiple: bool = Field(default=False, description='True if selector returns multiple values (e.g. list of authors)')
+    field_name: str = Field(
+        description='Metadata field: title, authors, abstract, url, pdf_url, doi, publication_date, keywords, journal'
+    )
+    css_selector: str = Field(
+        description='CSS selector relative to the article container'
+    )
+    attribute: str = Field(
+        default='text',
+        description='How to extract value: text, href, src, or a specific attribute name',
+    )
+    is_multiple: bool = Field(
+        default=False,
+        description='True if selector returns multiple values (e.g. list of authors)',
+    )
     confidence: float = Field(default=0.5, description='Confidence score 0.0-1.0')
 
 
 class SearchFilterInfo(BaseModel):
     """Information about a detected search or filter UI element."""
 
-    element_type: str = Field(description='Type: search_input, date_filter, subject_filter, sort_dropdown, keyword_input')
+    element_type: str = Field(
+        description='Type: search_input, date_filter, subject_filter, sort_dropdown, keyword_input'
+    )
     css_selector: str = Field(description='CSS selector for the element')
-    submit_selector: str | None = Field(default=None, description='CSS selector for the submit/search button, if separate from input')
-    filter_type: str = Field(default='text_input', description='How to interact: text_input, dropdown, date_input, checkbox, radio')
+    submit_selector: str | None = Field(
+        default=None,
+        description='CSS selector for the submit/search button, if separate from input',
+    )
+    filter_type: str = Field(
+        default='text_input',
+        description='How to interact: text_input, dropdown, date_input, checkbox, radio',
+    )
     description: str = Field(default='', description='What this filter does')
 
 
 class PageAnalysisResult(BaseModel):
     """Structured output from LLM page analysis."""
 
-    page_type: str = Field(description='Type of page: article_listing, search_results, journal_toc, conference_proceedings, single_article, unknown')
-    article_container_selector: str = Field(description='CSS selector for each article/paper element in the listing')
-    selectors: list[ProposedSelector] = Field(description='Proposed CSS selectors for each metadata field')
-    pagination_selector: str | None = Field(default=None, description='CSS selector for next-page button/link, if pagination exists')
-    search_filters: list[SearchFilterInfo] = Field(default_factory=list, description='Detected search/filter UI elements on the page')
-    notes: str = Field(default='', description='Any observations about the page structure')
+    page_type: str = Field(
+        description='Type of page: article_listing, search_results, journal_toc, conference_proceedings, single_article, unknown'
+    )
+    article_container_selector: str = Field(
+        description='CSS selector for each article/paper element in the listing'
+    )
+    selectors: list[ProposedSelector] = Field(
+        description='Proposed CSS selectors for each metadata field'
+    )
+    pagination_selector: str | None = Field(
+        default=None,
+        description='CSS selector for next-page button/link, if pagination exists',
+    )
+    search_filters: list[SearchFilterInfo] = Field(
+        default_factory=list,
+        description='Detected search/filter UI elements on the page',
+    )
+    notes: str = Field(
+        default='', description='Any observations about the page structure'
+    )
 
 
 class SelectorRefinement(BaseModel):
     """Structured output from LLM selector refinement."""
 
-    article_container_selector: str = Field(description='Refined CSS selector for article container')
+    article_container_selector: str = Field(
+        description='Refined CSS selector for article container'
+    )
     selectors: list[ProposedSelector] = Field(description='Refined CSS selectors')
     pagination_selector: str | None = Field(default=None)
-    search_filters: list[SearchFilterInfo] = Field(default_factory=list, description='Detected search/filter UI elements')
+    search_filters: list[SearchFilterInfo] = Field(
+        default_factory=list, description='Detected search/filter UI elements'
+    )
     notes: str = Field(default='')
 
 
 # ---------------------------------------------------------------------------
 # Data classes for builder results
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class SampleArticle:
@@ -139,7 +176,7 @@ _EXTRACT_DOM_JS = """
 () => {
     // Extract a simplified DOM representation focused on repeated structures
     // that likely represent article listings.
-    
+
     function getSelector(el) {
         if (el.id) return '#' + el.id;
         let s = el.tagName.toLowerCase();
@@ -149,24 +186,24 @@ _EXTRACT_DOM_JS = """
         }
         return s;
     }
-    
+
     function summarizeElement(el, depth, maxDepth) {
         if (depth > maxDepth) return null;
         const tag = el.tagName.toLowerCase();
         const text = el.textContent?.trim().substring(0, 120) || '';
         const href = el.getAttribute('href') || '';
         const children = [];
-        
+
         for (const child of el.children) {
             const summary = summarizeElement(child, depth + 1, maxDepth);
             if (summary) children.push(summary);
         }
-        
+
         return {
             tag,
             id: el.id || undefined,
-            classes: el.className && typeof el.className === 'string' 
-                ? el.className.trim().split(/\\s+/).slice(0, 5) 
+            classes: el.className && typeof el.className === 'string'
+                ? el.className.trim().split(/\\s+/).slice(0, 5)
                 : [],
             text: text.substring(0, 120),
             href: href ? href.substring(0, 200) : undefined,
@@ -174,33 +211,33 @@ _EXTRACT_DOM_JS = """
             children: children.length <= 8 ? children : children.slice(0, 8),
         };
     }
-    
+
     // Find repeated sibling patterns (likely article listings)
     function findRepeatedPatterns() {
         const patterns = [];
         const allElements = document.querySelectorAll('*');
         const checked = new Set();
-        
+
         for (const el of allElements) {
             if (checked.has(el) || !el.parentElement) continue;
             const parent = el.parentElement;
             if (checked.has(parent)) continue;
-            
+
             // Find siblings with same tag+class pattern
             const siblings = Array.from(parent.children);
             if (siblings.length < 3) continue;
-            
+
             const sig = getSelector(siblings[0]);
             const matching = siblings.filter(s => getSelector(s) === sig);
-            
+
             if (matching.length >= 3) {
                 checked.add(parent);
                 const parentSel = getSelector(parent);
                 const itemSel = sig;
-                
+
                 // Get sample items (first 3)
                 const samples = matching.slice(0, 3).map(m => summarizeElement(m, 0, 3));
-                
+
                 patterns.push({
                     parentSelector: parentSel,
                     itemSelector: itemSel,
@@ -210,19 +247,19 @@ _EXTRACT_DOM_JS = """
                 });
             }
         }
-        
+
         // Sort by count (most repeated = most likely articles)
         patterns.sort((a, b) => b.count - a.count);
         return patterns.slice(0, 5);
     }
-    
+
     const patterns = findRepeatedPatterns();
     const title = document.title;
     const metaDesc = document.querySelector('meta[name="description"]')?.content || '';
-    
+
     // Also get basic page structure
     const bodyOutline = summarizeElement(document.body, 0, 2);
-    
+
     return {
         title,
         metaDescription: metaDesc,
@@ -238,6 +275,7 @@ _EXTRACT_DOM_JS = """
 # WorkflowBuilder
 # ---------------------------------------------------------------------------
 
+
 class WorkflowBuilder:
     """
     LLM-powered workflow builder that auto-detects article elements on webpages.
@@ -252,7 +290,9 @@ class WorkflowBuilder:
     Example:
         >>> builder = WorkflowBuilder()
         >>> await builder.initialize()
-        >>> result = await builder.analyze_url('https://proceedings.neurips.cc/paper/2023')
+        >>> result = await builder.analyze_url(
+        ...     'https://proceedings.neurips.cc/paper/2023'
+        ... )
         >>> print(result.sample_articles)
         >>> await builder.shutdown()
     """
@@ -342,11 +382,15 @@ class WorkflowBuilder:
 
             # 5. Test proposed selectors against the live page
             sample_articles, total_found = await self._test_selectors(
-                page, analysis, max_samples=5,
+                page,
+                analysis,
+                max_samples=5,
             )
 
             # Calculate confidence based on what we found
-            confidence = self._calculate_confidence(analysis, sample_articles, total_found)
+            confidence = self._calculate_confidence(
+                analysis, sample_articles, total_found
+            )
 
             logger.info(
                 f'Analysis complete: type={analysis.page_type}, '
@@ -364,9 +408,7 @@ class WorkflowBuilder:
                 }
 
             # Build search_filters list for the output
-            search_filters = [
-                sf.model_dump() for sf in analysis.search_filters
-            ]
+            search_filters = [sf.model_dump() for sf in analysis.search_filters]
 
             return AnalysisOutput(
                 url=url,
@@ -409,7 +451,9 @@ class WorkflowBuilder:
         if not self._initialized:
             await self.initialize()
 
-        logger.info(f'Refining selectors for {url} with feedback: {user_feedback[:100]}')
+        logger.info(
+            f'Refining selectors for {url} with feedback: {user_feedback[:100]}'
+        )
 
         async with self.browser_manager.browser_context(headless=True) as context:
             page = await context.new_page()
@@ -429,15 +473,22 @@ class WorkflowBuilder:
 
             # Ask LLM to refine
             refinement = await self._llm_refine_selectors(
-                url, dom_data, current_selectors, user_feedback,
+                url,
+                dom_data,
+                current_selectors,
+                user_feedback,
             )
 
             # Test refined selectors
             sample_articles, total_found = await self._test_selectors(
-                page, refinement, max_samples=5,
+                page,
+                refinement,
+                max_samples=5,
             )
 
-            confidence = self._calculate_confidence(refinement, sample_articles, total_found)
+            confidence = self._calculate_confidence(
+                refinement, sample_articles, total_found
+            )
 
             selectors_dict = {}
             for sel in refinement.selectors:
@@ -448,9 +499,7 @@ class WorkflowBuilder:
                     'confidence': sel.confidence,
                 }
 
-            search_filters = [
-                sf.model_dump() for sf in refinement.search_filters
-            ]
+            search_filters = [sf.model_dump() for sf in refinement.search_filters]
 
             return AnalysisOutput(
                 url=url,
@@ -545,7 +594,9 @@ Important:
                 method='json_schema',
             )
             result = structured.invoke(prompt)
-            logger.info(f'LLM analysis: page_type={result.page_type}, {len(result.selectors)} selectors proposed')
+            logger.info(
+                f'LLM analysis: page_type={result.page_type}, {len(result.selectors)} selectors proposed'
+            )
             return result
 
         except Exception as e:
@@ -618,7 +669,9 @@ Based on the user's feedback and the page structure, provide corrected CSS selec
             logger.error(f'LLM refinement failed: {e}')
             # Return current selectors unchanged
             return SelectorRefinement(
-                article_container_selector=current_selectors.get('_container', 'article'),
+                article_container_selector=current_selectors.get(
+                    '_container', 'article'
+                ),
                 selectors=[
                     ProposedSelector(
                         field_name=k,
@@ -650,7 +703,9 @@ Based on the user's feedback and the page structure, provide corrected CSS selec
         patterns = dom_data.get('repeatedPatterns', [])
         if patterns:
             for i, pattern in enumerate(patterns):
-                lines.append(f'### Pattern {i + 1}: {pattern["count"]} repeated elements')
+                lines.append(
+                    f'### Pattern {i + 1}: {pattern["count"]} repeated elements'
+                )
                 lines.append(f'Selector: `{pattern["fullSelector"]}`')
                 lines.append('')
 
@@ -736,9 +791,7 @@ Based on the user's feedback and the page structure, provide corrected CSS selec
                 return [], 0
 
             # Build selector map
-            selector_map = {
-                sel.field_name: sel for sel in analysis.selectors
-            }
+            selector_map = {sel.field_name: sel for sel in analysis.selectors}
 
             # Extract sample articles
             samples = []
@@ -833,6 +886,7 @@ Based on the user's feedback and the page structure, provide corrected CSS selec
             if value.startswith('/'):
                 # Extract domain from base URL
                 from urllib.parse import urlparse
+
                 parsed = urlparse(base_url)
                 value = f'{parsed.scheme}://{parsed.netloc}{value}'
             else:

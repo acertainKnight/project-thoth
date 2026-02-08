@@ -417,15 +417,16 @@ def configure_subparser(subparsers) -> None:
         return asyncio.run(run_start_dashboard(args, pipeline))
 
     dashboard_parser.set_defaults(func=dashboard_wrapper)
-    
+
     # Scheduler command (for running research question discovery scheduler)
     scheduler_parser = research_subparsers.add_parser(
         'scheduler',
         help='Run the research question discovery scheduler',
     )
-    
+
     def scheduler_wrapper(args, pipeline):
         from thoth.cli.research_scheduler import run_research_scheduler
+
         return run_research_scheduler(args, pipeline)
-    
+
     scheduler_parser.set_defaults(func=scheduler_wrapper)

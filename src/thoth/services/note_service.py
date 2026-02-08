@@ -118,7 +118,12 @@ class NoteService(BaseService):
         return content
 
     def _save_markdown_to_postgres(
-        self, title: str, markdown_content: str, pdf_path: str, note_path: str, markdown_path: str = None
+        self,
+        title: str,
+        markdown_content: str,
+        pdf_path: str,
+        note_path: str,
+        markdown_path: str = None,
     ) -> None:
         """Update markdown content and file paths in PostgreSQL.
 
@@ -142,7 +147,7 @@ class NoteService(BaseService):
                 # First get the paper_id from paper_metadata
                 # Try exact match first, then normalized match (hyphens -> spaces)
                 paper_id = await conn.fetchval(
-                    "SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1)",
+                    'SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1)',
                     title,
                 )
 
@@ -157,7 +162,7 @@ class NoteService(BaseService):
                 # Also try matching against title_normalized column
                 if paper_id is None:
                     paper_id = await conn.fetchval(
-                        "SELECT id FROM paper_metadata WHERE title_normalized = LOWER($1)",
+                        'SELECT id FROM paper_metadata WHERE title_normalized = LOWER($1)',
                         title.replace('-', ' ').replace(',', '').lower(),
                     )
 
@@ -165,7 +170,7 @@ class NoteService(BaseService):
                     # Update or insert processed_papers
                     result = await conn.execute(
                         """
-                        INSERT INTO processed_papers 
+                        INSERT INTO processed_papers
                             (paper_id, markdown_content, pdf_path, note_path, markdown_path, created_at, updated_at)
                         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
                         ON CONFLICT (paper_id) DO UPDATE SET
@@ -235,8 +240,9 @@ class NoteService(BaseService):
             # Handle dict analysis (from some callers that serialize it)
             if isinstance(analysis, dict):
                 from thoth.utilities.schemas import AnalysisResponse
+
                 analysis = AnalysisResponse(**analysis)
-            
+
             self.validate_input(
                 pdf_path=pdf_path,
                 markdown_path=markdown_path,

@@ -31,7 +31,7 @@ class AnalysisGroundTruthPair:
     paper_title: str
     content_length: int
     complexity: str = 'medium'  # low, medium, high
-    expected_strategy: Optional[str] = None  # direct, map_reduce, refine  # noqa: UP007
+    expected_strategy: str | None = None  # direct, map_reduce, refine
 
 
 class AnalysisGroundTruthGenerator:
@@ -54,7 +54,7 @@ class AnalysisGroundTruthGenerator:
     async def generate_from_database(
         self,
         num_samples: int = 50,
-        complexity_distribution: Optional[Dict[str, float]] = None,  # noqa: UP006, UP007
+        complexity_distribution: Dict[str, float] | None = None,  # noqa: UP006
     ) -> List[AnalysisGroundTruthPair]:  # noqa: UP006
         """
         Generate ground truth analysis pairs from database papers.

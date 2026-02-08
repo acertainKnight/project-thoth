@@ -12,7 +12,6 @@ This module orchestrates Analysis evaluation including:
 
 import asyncio  # noqa: I001
 from pathlib import Path
-from typing import Optional
 import time
 
 from loguru import logger
@@ -28,7 +27,7 @@ from thoth.analyze.evaluation.metrics import calculate_analysis_metrics, Analysi
 async def run_analysis_evaluation(
     num_samples: int = 50,
     output_dir: Path = Path('./analysis_evaluation_results'),
-    use_existing_ground_truth: Optional[Path] = None,  # noqa: UP007
+    use_existing_ground_truth: Path | None = None,
 ) -> AnalysisMetrics:
     """
     Run comprehensive Analysis pipeline evaluation.

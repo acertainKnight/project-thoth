@@ -11,8 +11,6 @@ PostgreSQL. Full testing is better in integration tests. These tests focus on
 model validation and basic endpoint existence.
 """
 
-from unittest.mock import AsyncMock, Mock, patch
-
 import pytest
 
 from thoth.server.routers import research_questions
@@ -36,18 +34,14 @@ class TestPydanticModels:
     def test_research_question_create_requires_name(self):
         """Test ResearchQuestionCreate requires name."""
         from thoth.server.routers.research_questions import ResearchQuestionCreate
-        
+
         with pytest.raises(Exception):  # Pydantic validation error
             ResearchQuestionCreate(selected_sources=['arxiv'])
 
     def test_research_question_create_validates_sources(self):
         """Test ResearchQuestionCreate validates selected_sources."""
         from thoth.server.routers.research_questions import ResearchQuestionCreate
-        
+
         # Should require at least one source
         with pytest.raises(Exception):  # Pydantic validation error
-            ResearchQuestionCreate(
-                name='Test',
-                keywords=['test'],
-                selected_sources=[]
-            )
+            ResearchQuestionCreate(name='Test', keywords=['test'], selected_sources=[])

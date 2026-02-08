@@ -289,7 +289,7 @@ Migrated:
    - Results limit: 10 → 25
    - Relevance threshold: 0.8 → 0.6 (more inclusive)
    - Hybrid search: enabled (combines semantic + keyword)
-   
+
    Try your search again - you should see more results."
 ```
 
@@ -321,16 +321,16 @@ Migrated:
 
 5. Response:
    "Initial configuration complete!
-   
+
    Configured:
    ✓ OpenAI API key
    ✓ Vault path
    ✓ PDF directory
-   
+
    Optional (not configured):
    - Semantic Scholar API key (higher rate limits)
    - Anthropic API key (alternative LLM)
-   
+
    You can now start using Thoth. Would you like me to:
    - Run a test search to verify everything works?
    - Help you import existing PDFs?"

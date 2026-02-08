@@ -20,7 +20,7 @@ Decision Logic:
 """
 
 import logging
-from typing import Any, Dict, List, Optional  # noqa: UP035
+from typing import Any, Dict, List  # noqa: UP035
 
 from .resolution_types import (
     APISource,
@@ -71,7 +71,7 @@ class DecisionEngine:
         self,
         input_citation: str,
         candidates: List[MatchCandidate],  # noqa: UP006
-        metadata: Optional[ResolutionMetadata] = None,  # noqa: UP007
+        metadata: ResolutionMetadata | None = None,
     ) -> ResolutionResult:
         """
         Make a resolution decision based on match candidates and scores.
@@ -396,8 +396,8 @@ class DecisionEngine:
         status: CitationResolutionStatus,
         confidence_score: float,
         confidence_level: ConfidenceLevel,
-        source: Optional[APISource],  # noqa: UP007
-        matched_data: Optional[Dict[str, Any]],  # noqa: UP006, UP007
+        source: APISource | None,
+        matched_data: Dict[str, Any] | None,  # noqa: UP006
         candidates: List[MatchCandidate],  # noqa: UP006
         metadata: ResolutionMetadata,
         decision_rationale: str,
@@ -454,7 +454,7 @@ class DecisionEngine:
 def make_decision(
     citation: str,
     candidates: List[MatchCandidate],  # noqa: UP006
-    metadata: Optional[ResolutionMetadata] = None,  # noqa: UP007
+    metadata: ResolutionMetadata | None = None,
 ) -> ResolutionResult:
     """
     Convenience function to make a citation resolution decision.

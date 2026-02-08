@@ -28,41 +28,38 @@ DEPRECATED TOOLS (code kept but removed from registration):
 # Tool categories by function
 TOOL_CATEGORIES = {
     # Discovery and search
-    "discovery": [
-        "list_available_sources",
-        "create_research_question",
-        "list_research_questions",
-        "get_research_question",
-        "update_research_question",
-        "delete_research_question",
-        "run_discovery_for_question",
+    'discovery': [
+        'list_available_sources',
+        'create_research_question',
+        'list_research_questions',
+        'get_research_question',
+        'update_research_question',
+        'delete_research_question',
+        'run_discovery_for_question',
     ],
-    
     # Workflow builder (custom source auto-detection)
-    "workflow_builder": [
-        "analyze_source_url",
-        "refine_source_selectors",
-        "confirm_source_workflow",
+    'workflow_builder': [
+        'analyze_source_url',
+        'refine_source_selectors',
+        'confirm_source_workflow',
     ],
-    
     # Collection management
-    "collection": [
-        "list_articles",
-        "search_articles",
-        "get_article_details",
-        "collection_stats",
-        "update_article_metadata",
+    'collection': [
+        'list_articles',
+        'search_articles',
+        'get_article_details',
+        'collection_stats',
+        'update_article_metadata',
         # DEPRECATED: "delete_article" - too risky for agent use
     ],
-    
     # Deep analysis
-    "analysis": [
-        "answer_research_question",
-        "explore_citation_network",
-        "compare_articles",
-        "find_related_papers",
-        "evaluate_article",
-        "get_citation_context",
+    'analysis': [
+        'answer_research_question',
+        'explore_citation_network',
+        'compare_articles',
+        'find_related_papers',
+        'evaluate_article',
+        'get_citation_context',
         # DEPRECATED: "extract_article_insights" - redundant with get_article_details
         # DEPRECATED: "get_article_full_content" - merged into get_article_details
         # DEPRECATED: "analyze_topic" - redundant with answer_research_question
@@ -70,73 +67,64 @@ TOOL_CATEGORIES = {
         # DEPRECATED: "search_by_topic" - use search_articles instead
         # DEPRECATED: "find_articles_by_authors" - use search_articles with author filter
     ],
-    
     # Document processing
-    "processing": [
-        "download_pdf",
-        "locate_pdf",
+    'processing': [
+        'download_pdf',
+        'locate_pdf',
         # DEPRECATED: "process_pdf" - use PDF monitor service
         # DEPRECATED: "batch_process_pdfs" - use PDF monitor service
         # DEPRECATED: "validate_pdf_sources" - admin task
         # DEPRECATED: "extract_pdf_metadata" - use PDF monitor service
     ],
-    
     # Citation management
-    "citation": [
-        "format_citations",
-        "export_bibliography",
+    'citation': [
+        'format_citations',
+        'export_bibliography',
         # DEPRECATED: "extract_citations" - merged into explore_citation_network
     ],
-    
     # Tag management
-    "tagging": [
-        "consolidate_tags",
-        "manage_tag_vocabulary",
-        "consolidate_and_retag",
-        "get_task_status",
+    'tagging': [
+        'consolidate_tags',
+        'manage_tag_vocabulary',
+        'consolidate_and_retag',
+        'get_task_status',
         # DEPRECATED: "suggest_tags" - low value
     ],
-    
     # Data management
-    "data": [
-        "generate_reading_list",
-        "sync_with_obsidian",
+    'data': [
+        'generate_reading_list',
+        'sync_with_obsidian',
         # DEPRECATED: "backup_collection" - admin task
         # DEPRECATED: "export_article_data" - admin task
     ],
-    
     # Advanced RAG (loaded via skill only)
-    "rag": [
-        "reindex_collection",
-        "optimize_search",
-        "create_custom_index",
-        "search_custom_index",
-        "list_custom_indexes",
+    'rag': [
+        'reindex_collection',
+        'optimize_search',
+        'create_custom_index',
+        'search_custom_index',
+        'list_custom_indexes',
     ],
-    
     # Schema management
-    "schema": [
-        "get_schema_info",
-        "list_schema_presets",
-        "set_schema_preset",
-        "get_preset_details",
-        "validate_schema_file",
+    'schema': [
+        'get_schema_info',
+        'list_schema_presets',
+        'set_schema_preset',
+        'get_preset_details',
+        'validate_schema_file',
     ],
-    
     # Settings management (loaded via skill only)
-    "settings": [
-        "view_settings",
-        "update_settings",
-        "reset_settings",
+    'settings': [
+        'view_settings',
+        'update_settings',
+        'reset_settings',
     ],
-    
     # Skills
-    "skills": [
-        "list_skills",
-        "load_skill",
-        "unload_skill",
+    'skills': [
+        'list_skills',
+        'load_skill',
+        'unload_skill',
     ],
-    
     # DEPRECATED CATEGORIES (code kept but not registered):
     # "query": Legacy query management - replaced by research_question tools
     # "workflow": Browser workflow tools - complex, rarely used
@@ -146,38 +134,36 @@ TOOL_CATEGORIES = {
 # Role-to-categories mapping
 ROLE_TOOL_CATEGORIES = {
     # Research Orchestrator: User-facing, coordinates, delegates complex work
-    "orchestrator": [
-        "skills",        # Core: load skills for guidance
-        "discovery",     # Find papers
-        "collection",    # Browse collection
-        "processing",    # Download PDFs
-        "tagging",       # Tag management
-        "data",          # Reading lists, obsidian sync
+    'orchestrator': [
+        'skills',  # Core: load skills for guidance
+        'discovery',  # Find papers
+        'collection',  # Browse collection
+        'processing',  # Download PDFs
+        'tagging',  # Tag management
+        'data',  # Reading lists, obsidian sync
     ],
-    
     # Research Analyst: Deep analysis, synthesis, quality assessment
-    "analyst": [
-        "analysis",      # All deep analysis tools
-        "collection",    # Need to access papers
-        "citation",      # Citation formatting
+    'analyst': [
+        'analysis',  # All deep analysis tools
+        'collection',  # Need to access papers
+        'citation',  # Citation formatting
     ],
-    
     # Full access (for backward compatibility or admin)
-    "full": list(TOOL_CATEGORIES.keys()),
+    'full': list(TOOL_CATEGORIES.keys()),
 }
 
 
 def get_tools_for_role(role: str) -> list[str]:
     """
     Get the list of tool names for a specific role.
-    
+
     Args:
         role: Agent role (orchestrator, analyst, full)
-    
+
     Returns:
         List of tool names this role should have access to
     """
-    categories = ROLE_TOOL_CATEGORIES.get(role, ROLE_TOOL_CATEGORIES["full"])
+    categories = ROLE_TOOL_CATEGORIES.get(role, ROLE_TOOL_CATEGORIES['full'])
     tools = []
     for category in categories:
         if category in TOOL_CATEGORIES:
@@ -203,19 +189,19 @@ def get_category_for_tool(tool_name: str) -> str | None:
 
 # Summary for documentation
 ROLE_SUMMARY = {
-    "orchestrator": {
-        "description": "User-facing coordinator with skill-guided tool usage",
-        "categories": ROLE_TOOL_CATEGORIES["orchestrator"],
-        "tool_count": len(get_tools_for_role("orchestrator")),
+    'orchestrator': {
+        'description': 'User-facing coordinator with skill-guided tool usage',
+        'categories': ROLE_TOOL_CATEGORIES['orchestrator'],
+        'tool_count': len(get_tools_for_role('orchestrator')),
     },
-    "analyst": {
-        "description": "Deep analysis specialist for complex research tasks",
-        "categories": ROLE_TOOL_CATEGORIES["analyst"],
-        "tool_count": len(get_tools_for_role("analyst")),
+    'analyst': {
+        'description': 'Deep analysis specialist for complex research tasks',
+        'categories': ROLE_TOOL_CATEGORIES['analyst'],
+        'tool_count': len(get_tools_for_role('analyst')),
     },
-    "full": {
-        "description": "Full access to all tools (admin/legacy)",
-        "categories": ROLE_TOOL_CATEGORIES["full"],
-        "tool_count": len(get_all_tools()),
+    'full': {
+        'description': 'Full access to all tools (admin/legacy)',
+        'categories': ROLE_TOOL_CATEGORIES['full'],
+        'tool_count': len(get_all_tools()),
     },
 }

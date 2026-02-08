@@ -19,15 +19,15 @@ from .vault_selection import VaultSelectionScreen
 from .welcome import WelcomeScreen
 
 __all__ = [
-    "APIKeysScreen",
-    "BaseScreen",
-    "CompletionScreen",
-    "DependencyCheckScreen",
-    "InstallationScreen",
-    "LettaModeSelectionScreen",
-    "ModelSelectionScreen",
-    "OptionalFeaturesScreen",
-    "ReviewScreen",
-    "VaultSelectionScreen",
-    "WelcomeScreen",
+    'APIKeysScreen',
+    'BaseScreen',
+    'CompletionScreen',
+    'DependencyCheckScreen',
+    'InstallationScreen',
+    'LettaModeSelectionScreen',
+    'ModelSelectionScreen',
+    'OptionalFeaturesScreen',
+    'ReviewScreen',
+    'VaultSelectionScreen',
+    'WelcomeScreen',
 ]

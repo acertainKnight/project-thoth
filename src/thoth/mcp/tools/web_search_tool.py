@@ -16,9 +16,9 @@ from ..base_tools import MCPTool, MCPToolCallResult
 class WebSearchMCPTool(MCPTool):
     """
     MCP tool for searching the web using multiple search backends.
-    
-    **DEPRECATED**: This tool is deprecated. Use Letta's built-in `web_search` 
-    tool instead, which provides better integration with the agent framework. 
+
+    **DEPRECATED**: This tool is deprecated. Use Letta's built-in `web_search`
+    tool instead, which provides better integration with the agent framework.
     This tool is no longer registered in the MCP tool registry.
     """
 

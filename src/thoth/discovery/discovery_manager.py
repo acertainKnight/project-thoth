@@ -332,7 +332,7 @@ class DiscoveryManager:
             total_found = len(all_articles)
             unique_articles = self._deduplicate_articles(all_articles)
             duplicates_removed = total_found - len(unique_articles)
-            
+
             if duplicates_removed > 0:
                 logger.info(
                     f'Deduplication: {total_found} articles → {len(unique_articles)} unique '
@@ -342,14 +342,14 @@ class DiscoveryManager:
             # Filter and process unique articles
             total_filtered = 0
             total_downloaded = 0
-            
+
             if unique_articles:
                 # Get combined query filters from all sources
                 combined_filters = []
                 for source in sources:
                     if source.is_active and source.query_filters:
                         combined_filters.extend(source.query_filters)
-                
+
                 filtered_count, downloaded_count, errors = (
                     self._filter_and_process_articles(
                         unique_articles, list(set(combined_filters))
@@ -388,59 +388,59 @@ class DiscoveryManager:
     ) -> list[ScrapedArticleMetadata]:
         """
         Deduplicate articles and merge metadata from multiple sources.
-        
+
         Uses multiple matching strategies with cross-referencing:
         1. ArXiv ID (prioritized - most common in ML/AI)
         2. DOI
         3. Normalized title + first author (fallback)
-        
+
         Args:
             articles: List of articles potentially containing duplicates.
-            
+
         Returns:
             list[ScrapedArticleMetadata]: Deduplicated list with merged metadata.
         """
         if not articles:
             return []
-        
+
         # Use multiple indexes for different ID types
         arxiv_index = {}  # arxiv_id -> article
-        doi_index = {}    # doi -> article
+        doi_index = {}  # doi -> article
         title_index = {}  # title+author -> article
-        
+
         for article in articles:
             # Generate all possible keys for this article
             arxiv_key = None
             doi_key = None
             title_key = None
-            
+
             if article.arxiv_id:
                 # Normalize ArXiv ID (remove version)
                 arxiv_id = article.arxiv_id.strip().lower()
                 if 'v' in arxiv_id:
                     arxiv_id = arxiv_id.split('v')[0]
                 arxiv_key = arxiv_id
-            
+
             if article.doi:
                 doi_key = article.doi.strip().lower()
-            
+
             # Always generate title key as fallback
             title_key = self._generate_title_key(article)
-            
+
             # Check if we've seen this article before (check all indexes)
             existing = None
-            
+
             # Priority 1: Check ArXiv ID
             if arxiv_key and arxiv_key in arxiv_index:
                 existing = arxiv_index[arxiv_key]
-            
+
             # Priority 2: Check DOI
             elif doi_key and doi_key in doi_index:
                 existing = doi_index[doi_key]
                 # Also add to arxiv_index if this article has ArXiv ID
                 if arxiv_key:
                     arxiv_index[arxiv_key] = existing
-            
+
             # Priority 3: Check title
             elif title_key in title_index:
                 existing = title_index[title_key]
@@ -449,11 +449,11 @@ class DiscoveryManager:
                     arxiv_index[arxiv_key] = existing
                 if doi_key:
                     doi_index[doi_key] = existing
-            
+
             if existing:
                 # Duplicate found - merge and update in all indexes
                 merged = self._merge_article_metadata(existing, article)
-                
+
                 # Update all relevant indexes with merged version
                 if arxiv_key:
                     arxiv_index[arxiv_key] = merged
@@ -467,7 +467,7 @@ class DiscoveryManager:
                 if doi_key:
                     doi_index[doi_key] = article
                 title_index[title_key] = article
-        
+
         # Return unique articles (use title_index as it has everything)
         seen_ids = set()
         unique = []
@@ -476,15 +476,15 @@ class DiscoveryManager:
             if article_id not in seen_ids:
                 seen_ids.add(article_id)
                 unique.append(article)
-        
+
         return unique
-    
+
     def _generate_title_key(self, article: ScrapedArticleMetadata) -> str:
         """Generate title+author key for fallback matching.
-        
+
         Args:
             article: Article to generate key for.
-            
+
         Returns:
             str: Title+author key.
         """
@@ -492,47 +492,46 @@ class DiscoveryManager:
         first_author = ''
         if article.authors:
             first_author = self._normalize_author(article.authors[0])
-        
+
         return f'{title}:{first_author}'
-    
-    
+
     def _normalize_title(self, title: str) -> str:
         """
         Normalize title for comparison.
-        
+
         Args:
             title: Original title.
-            
+
         Returns:
             str: Normalized title.
         """
         import re
-        
+
         # Convert to lowercase
         title = title.lower()
-        
+
         # Remove punctuation
         title = re.sub(r'[^\w\s]', '', title)
-        
+
         # Remove extra whitespace
         title = ' '.join(title.split())
-        
+
         return title
-    
+
     def _normalize_author(self, author: str) -> str:
         """
         Normalize author name for comparison.
-        
+
         Args:
             author: Original author name.
-            
+
         Returns:
             str: Normalized author name.
         """
         # Convert to lowercase and remove extra spaces
         author = ' '.join(author.lower().split())
         return author
-    
+
     def _merge_article_metadata(
         self,
         existing: ScrapedArticleMetadata,
@@ -540,13 +539,13 @@ class DiscoveryManager:
     ) -> ScrapedArticleMetadata:
         """
         Merge metadata from two versions of the same article.
-        
+
         Strategy: Keep the most complete/detailed version of each field.
-        
+
         Args:
             existing: Existing article metadata.
             new: New article metadata to merge.
-            
+
         Returns:
             ScrapedArticleMetadata: Merged article with best fields from both.
         """
@@ -554,56 +553,58 @@ class DiscoveryManager:
         existing_dict = existing.model_dump()
         new_dict = new.model_dump()
         merged = existing_dict.copy()
-        
+
         # Merge strategy for each field type
-        
+
         # Title: Keep longer one (usually more complete)
         if len(new_dict.get('title', '')) > len(existing_dict.get('title', '')):
             merged['title'] = new_dict['title']
-        
+
         # Authors: Keep longer list
         if len(new_dict.get('authors', [])) > len(existing_dict.get('authors', [])):
             merged['authors'] = new_dict['authors']
-        
+
         # Abstract: Keep longer one (usually more complete)
         existing_abstract = existing_dict.get('abstract') or ''
         new_abstract = new_dict.get('abstract') or ''
         if len(new_abstract) > len(existing_abstract):
             merged['abstract'] = new_dict['abstract']
-        
+
         # DOI: Prefer non-null
         if not merged.get('doi') and new_dict.get('doi'):
             merged['doi'] = new_dict['doi']
-        
+
         # ArXiv ID: Prefer non-null
         if not merged.get('arxiv_id') and new_dict.get('arxiv_id'):
             merged['arxiv_id'] = new_dict['arxiv_id']
-        
+
         # URLs: Keep both if different (prefer PDF URLs)
         if new_dict.get('url') and not merged.get('url'):
             merged['url'] = new_dict['url']
-        
+
         if new_dict.get('pdf_url') and not merged.get('pdf_url'):
             merged['pdf_url'] = new_dict['pdf_url']
-        
+
         # Keywords: Merge and deduplicate
         existing_keywords = set(existing_dict.get('keywords', []))
         new_keywords = set(new_dict.get('keywords', []))
         merged['keywords'] = list(existing_keywords | new_keywords)
-        
+
         # Publication date: Keep if missing
         if not merged.get('publication_date') and new_dict.get('publication_date'):
             merged['publication_date'] = new_dict['publication_date']
-        
+
         # Journal: Prefer more specific/longer name
-        if len(new_dict.get('journal', '') or '') > len(merged.get('journal', '') or ''):
+        if len(new_dict.get('journal', '') or '') > len(
+            merged.get('journal', '') or ''
+        ):
             merged['journal'] = new_dict['journal']
-        
+
         # Additional metadata: Merge dictionaries
         existing_meta = existing_dict.get('additional_metadata', {}) or {}
         new_meta = new_dict.get('additional_metadata', {}) or {}
         merged['additional_metadata'] = {**existing_meta, **new_meta}
-        
+
         # Track which sources contributed
         sources = merged['additional_metadata'].get('merged_from_sources', [])
         if existing_dict.get('source') not in sources:
@@ -611,10 +612,12 @@ class DiscoveryManager:
         if new_dict.get('source') not in sources:
             sources.append(new_dict.get('source'))
         merged['additional_metadata']['merged_from_sources'] = sources
-        
+
         # Update timestamp to latest
-        merged['scrape_timestamp'] = new_dict.get('scrape_timestamp') or existing_dict.get('scrape_timestamp')
-        
+        merged['scrape_timestamp'] = new_dict.get(
+            'scrape_timestamp'
+        ) or existing_dict.get('scrape_timestamp')
+
         # Create merged article
         return ScrapedArticleMetadata(**merged)
 

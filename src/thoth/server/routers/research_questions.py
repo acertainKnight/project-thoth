@@ -5,7 +5,7 @@ which drive the automated discovery system.
 """
 
 from datetime import datetime, time
-from typing import Any, Optional  # noqa: F401
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Body, HTTPException, Query, Request, status
@@ -31,9 +31,7 @@ class ResearchQuestionCreate(BaseModel):
         max_length=255,
         description='Descriptive name for the research question',
     )
-    description: str | None = Field(
-        None, description='Optional detailed description'
-    )
+    description: str | None = Field(None, description='Optional detailed description')
     keywords: list[str] = Field(
         default_factory=list, description='Keywords to search for'
     )
@@ -54,7 +52,7 @@ class ResearchQuestionCreate(BaseModel):
         description='Preferred run time in HH:MM format (24-hour)',
     )
     schedule_days_of_week: list[int] | None = Field(
-        None, description="Days for weekly schedule: ISO 8601 (1=Monday, 7=Sunday)"
+        None, description='Days for weekly schedule: ISO 8601 (1=Monday, 7=Sunday)'
     )
     min_relevance_score: float = Field(
         default=0.5, ge=0.0, le=1.0, description='Minimum relevance threshold (0.0-1.0)'
@@ -91,20 +89,20 @@ class ResearchQuestionCreate(BaseModel):
 class ResearchQuestionUpdate(BaseModel):
     """Request model for updating a research question."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=255)  # noqa: UP007
-    description: Optional[str] = None  # noqa: UP007
-    keywords: Optional[list[str]] = None  # noqa: UP007
-    topics: Optional[list[str]] = None  # noqa: UP007
-    authors: Optional[list[str]] = None  # noqa: UP007
-    selected_sources: Optional[list[str]] = Field(None, min_items=1)  # noqa: UP007
-    schedule_frequency: Optional[str] = None  # noqa: UP007
-    schedule_time: Optional[str] = Field(None, pattern=r'^\d{2}:\d{2}$')  # noqa: UP007
-    schedule_days_of_week: Optional[list[int]] = None  # noqa: UP007
-    min_relevance_score: Optional[float] = Field(None, ge=0.0, le=1.0)  # noqa: UP007
-    auto_download_enabled: Optional[bool] = None  # noqa: UP007
-    auto_download_min_score: Optional[float] = Field(None, ge=0.0, le=1.0)  # noqa: UP007
-    max_articles_per_run: Optional[int] = Field(None, ge=1, le=500)  # noqa: UP007
-    is_active: Optional[bool] = None  # noqa: UP007
+    name: str | None = Field(None, min_length=1, max_length=255)
+    description: str | None = None
+    keywords: list[str] | None = None
+    topics: list[str] | None = None
+    authors: list[str] | None = None
+    selected_sources: list[str] | None = Field(None, min_items=1)
+    schedule_frequency: str | None = None
+    schedule_time: str | None = Field(None, pattern=r'^\d{2}:\d{2}$')
+    schedule_days_of_week: list[int] | None = None
+    min_relevance_score: float | None = Field(None, ge=0.0, le=1.0)
+    auto_download_enabled: bool | None = None
+    auto_download_min_score: float | None = Field(None, ge=0.0, le=1.0)
+    max_articles_per_run: int | None = Field(None, ge=1, le=500)
+    is_active: bool | None = None
 
     @field_validator('schedule_frequency')
     @classmethod
@@ -125,21 +123,21 @@ class ResearchQuestionResponse(BaseModel):
     id: UUID
     user_id: str
     name: str
-    description: Optional[str] = None  # noqa: UP007
+    description: str | None = None
     keywords: list[str]
     topics: list[str]
     authors: list[str]
     selected_sources: list[str]
     schedule_frequency: str
-    schedule_time: Optional[time] = None  # noqa: UP007
-    schedule_days_of_week: Optional[list[int]] = None  # noqa: UP007
+    schedule_time: time | None = None
+    schedule_days_of_week: list[int] | None = None
     min_relevance_score: float
     auto_download_enabled: bool
     auto_download_min_score: float
     max_articles_per_run: int
     is_active: bool
-    last_run_at: Optional[datetime] = None  # noqa: UP007
-    next_run_at: Optional[datetime] = None  # noqa: UP007
+    last_run_at: datetime | None = None
+    next_run_at: datetime | None = None
     articles_found_count: int = 0
     articles_matched_count: int = 0
     created_at: datetime
@@ -165,7 +163,7 @@ class DiscoveryRunResponse(BaseModel):
     question_id: UUID
     status: str = 'initiated'
     message: str
-    estimated_time: Optional[str] = None  # noqa: UP007
+    estimated_time: str | None = None
 
 
 class ArticleMatchResponse(BaseModel):
@@ -178,23 +176,29 @@ class ArticleMatchResponse(BaseModel):
     matched_keywords: list[str] = Field(default_factory=list)
     matched_topics: list[str] = Field(default_factory=list)
     matched_authors: list[str] = Field(default_factory=list)
-    discovered_via_source: Optional[str] = None  # noqa: UP007
+    discovered_via_source: str | None = None
     is_viewed: bool = False
     is_bookmarked: bool = False
-    user_sentiment: Optional[str] = None  # noqa: UP007
-    sentiment_recorded_at: Optional[datetime] = None  # noqa: UP007
-    matched_at: Optional[datetime] = None  # noqa: UP007
+    user_sentiment: str | None = None
+    sentiment_recorded_at: datetime | None = None
+    matched_at: datetime | None = None
     # Paper details (from paper_metadata)
-    doi: Optional[str] = None  # noqa: UP007
+    doi: str | None = None
     title: str = Field(default='Untitled')
     authors: list[str] = Field(default_factory=list)
-    abstract: Optional[str] = None  # noqa: UP007
-    publication_date: Optional[datetime] = None  # noqa: UP007
-    journal: Optional[str] = None  # noqa: UP007
-    url: Optional[str] = None  # noqa: UP007
-    pdf_url: Optional[str] = None  # noqa: UP007
+    abstract: str | None = None
+    publication_date: datetime | None = None
+    journal: str | None = None
+    url: str | None = None
+    pdf_url: str | None = None
 
-    @field_validator('matched_keywords', 'matched_topics', 'matched_authors', 'authors', mode='before')
+    @field_validator(
+        'matched_keywords',
+        'matched_topics',
+        'matched_authors',
+        'authors',
+        mode='before',
+    )
     @classmethod
     def coerce_to_list(cls, v):
         """Ensure list fields are never None and parse JSON strings.
@@ -247,10 +251,10 @@ class StatisticsResponse(BaseModel):
     total_matches: int = 0
     high_relevance_matches: int = 0
     unviewed_matches: int = 0
-    last_match_at: Optional[datetime] = None  # noqa: UP007
+    last_match_at: datetime | None = None
     total_runs: int = 0
     successful_runs: int = 0
-    avg_relevance_score: Optional[float] = None  # noqa: UP007
+    avg_relevance_score: float | None = None
     source_count: int = 0
 
 
@@ -759,20 +763,23 @@ async def trigger_discovery_run(
         if orchestrator is not None:
             # Run discovery in background task (non-blocking)
             import asyncio
+
             asyncio.create_task(orchestrator.run_discovery_for_question(question_id))
             logger.info(f'Discovery task created for question {question_id}')
         else:
             # Microservices mode: Trigger via database flag for discovery scheduler to pick up
             logger.info('Microservices mode: Marking question for immediate discovery')
-            
+
             # Update the question to trigger immediate run by setting next_run_at to now
             from datetime import datetime
+
             await service.repository.update(
-                question_id,
-                {'next_run_at': datetime.now()}
+                question_id, {'next_run_at': datetime.now()}
             )
-            
-            logger.info(f'Question {question_id} marked for immediate discovery by scheduler')
+
+            logger.info(
+                f'Question {question_id} marked for immediate discovery by scheduler'
+            )
 
         return DiscoveryRunResponse(
             question_id=question_id,
@@ -803,10 +810,8 @@ async def get_matched_articles(
     min_relevance: float | None = Query(
         None, ge=0.0, le=1.0, description='Minimum relevance score filter'
     ),
-    is_viewed: Optional[bool] = Query(None, description='Filter by viewed status'),  # noqa: UP007
-    is_bookmarked: bool | None = Query(
-        None, description='Filter by bookmarked status'
-    ),
+    is_viewed: bool | None = Query(None, description='Filter by viewed status'),
+    is_bookmarked: bool | None = Query(None, description='Filter by bookmarked status'),
     limit: int = Query(50, ge=1, le=500, description='Maximum number of results'),
     offset: int = Query(0, ge=0, description='Number of records to skip'),
 ) -> ArticleMatchList:
@@ -897,7 +902,7 @@ async def get_matched_articles(
             params.append(is_bookmarked)
             param_idx += 1
 
-        query += f' ORDER BY rqm.relevance_score DESC, rqm.matched_at DESC'
+        query += ' ORDER BY rqm.relevance_score DESC, rqm.matched_at DESC'
         query += f' LIMIT ${param_idx} OFFSET ${param_idx + 1}'
         params.extend([limit + 1, offset])  # Get one extra to check if there are more
 
@@ -1342,7 +1347,9 @@ async def download_article_pdf(
             )
 
         # Get paper details (includes pdf_url) - after migration uses paper_id
-        paper_id = match.get('paper_id') or match.get('article_id')  # Support both for transition
+        paper_id = match.get('paper_id') or match.get(
+            'article_id'
+        )  # Support both for transition
 
         # Fetch paper metadata to get pdf_url and title
         query = """
@@ -1368,16 +1375,17 @@ async def download_article_pdf(
             )
 
         # Download PDF using ingestion service
-        from pathlib import Path
-        from thoth.ingestion.pdf_downloader import download_pdf
         from thoth.config import config
+        from thoth.ingestion.pdf_downloader import download_pdf
 
         pdf_dir = config.pdf_dir
 
         # Sanitize filename from article title
-        safe_filename = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title)
+        safe_filename = ''.join(
+            c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title
+        )
         safe_filename = safe_filename[:200]  # Limit length
-        
+
         # Ensure .pdf extension
         if not safe_filename.lower().endswith('.pdf'):
             safe_filename += '.pdf'
@@ -1400,14 +1408,14 @@ async def download_article_pdf(
                 'article_id': str(paper_id),
                 'match_id': str(match_id),
                 'downloaded_path': str(downloaded_path),
-                'message': f'PDF downloaded successfully. File monitor will process it automatically.',
-                'filename': downloaded_path.name
+                'message': 'PDF downloaded successfully. File monitor will process it automatically.',
+                'filename': downloaded_path.name,
             }
         except Exception as e:
             logger.error(f'Failed to download PDF from {pdf_url}: {e}')
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f'Failed to download PDF: {str(e)}'
+                detail=f'Failed to download PDF: {e!s}',
             )
 
         logger.debug(f'Prepared download info for article {paper_id}')

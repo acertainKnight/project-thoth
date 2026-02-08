@@ -5,7 +5,7 @@ This module provides specialized methods for discovery source data access,
 including scheduling, statistics, and active source queries.
 """
 
-from typing import Any, Dict, List, Optional  # noqa: I001, UP035
+from typing import Any, Dict, List  # noqa: I001, UP035
 from datetime import datetime
 from loguru import logger
 
@@ -19,7 +19,7 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
         """Initialize discovery source repository."""
         super().__init__(postgres_service, table_name='discovery_sources', **kwargs)
 
-    async def get_by_name(self, source_name: str) -> Optional[Dict[str, Any]]:  # noqa: UP006, UP007
+    async def get_by_name(self, source_name: str) -> Dict[str, Any] | None:  # noqa: UP006
         """
         Get a discovery source by name.
 
@@ -133,8 +133,8 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
         self,
         source_id: str,
         papers_discovered: int,
-        last_run_at: Optional[datetime] = None,  # noqa: UP007
-        next_run_at: Optional[datetime] = None,  # noqa: UP007
+        last_run_at: datetime | None = None,
+        next_run_at: datetime | None = None,
     ) -> bool:
         """
         Update run statistics for a source.
@@ -178,9 +178,9 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
     async def update_schedule(
         self,
         source_id: str,
-        schedule_interval_minutes: Optional[int] = None,  # noqa: UP007
-        next_run_at: Optional[datetime] = None,  # noqa: UP007
-        enabled: Optional[bool] = None,  # noqa: UP007
+        schedule_interval_minutes: int | None = None,
+        next_run_at: datetime | None = None,
+        enabled: bool | None = None,
     ) -> bool:
         """
         Update scheduling configuration for a source.

@@ -31,7 +31,7 @@ import json
 import os
 import threading
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional  # noqa: UP035
+from typing import Any, Callable, Dict, List  # noqa: UP035
 
 from loguru import logger
 from pydantic import BaseModel, Field, field_validator  # noqa: F401
@@ -191,12 +191,12 @@ class LLMDefaultConfig(BaseModel):
 class LLMCitationModels(BaseModel):
     """Citation sub-models."""
 
-    document_citation: Optional[str] = Field(default=None, alias='documentCitation')  # noqa: UP007
-    reference_cleaning: Optional[str] = Field(default=None, alias='referenceCleaning')  # noqa: UP007
-    structured_extraction: Optional[str] = Field(  # noqa: UP007
+    document_citation: str | None = Field(default=None, alias='documentCitation')
+    reference_cleaning: str | None = Field(default=None, alias='referenceCleaning')
+    structured_extraction: str | None = Field(
         default=None, alias='structuredExtraction'
     )
-    batch_structured_extraction: Optional[str] = Field(  # noqa: UP007
+    batch_structured_extraction: str | None = Field(
         default=None, alias='batchStructuredExtraction'
     )
 
@@ -436,7 +436,9 @@ class LettaFilesystemConfig(BaseModel):
 
     enabled: bool = True
     folder_name: str = Field(default='thoth_processed_articles', alias='folderName')
-    embedding_model: str = Field(default='openai/text-embedding-3-small', alias='embeddingModel')
+    embedding_model: str = Field(
+        default='openai/text-embedding-3-small', alias='embeddingModel'
+    )
     auto_sync: bool = Field(default=False, alias='autoSync')
     sync_on_startup: bool = Field(default=False, alias='syncOnStartup')
     debounce_seconds: int = Field(default=5, alias='debounceSeconds')
@@ -452,31 +454,31 @@ class LettaMemoryConfig(BaseModel):
     mode: str = Field(
         default='self-hosted',
         alias='mode',
-        description='Deployment mode: "cloud" for Letta Cloud, "self-hosted" for local server'
+        description='Deployment mode: "cloud" for Letta Cloud, "self-hosted" for local server',
     )
-    
+
     # Self-hosted configuration
     server_url: str = Field(default='http://localhost:8283', alias='serverUrl')
-    
+
     # Cloud configuration
     cloud_api_key: str = Field(
         default='',
         alias='cloudApiKey',
-        description='Letta Cloud API key (optional if using OAuth)'
+        description='Letta Cloud API key (optional if using OAuth)',
     )
-    
+
     # OAuth configuration
     oauth_enabled: bool = Field(
         default=True,
         alias='oauthEnabled',
-        description='Use OAuth for Letta Cloud authentication (recommended)'
+        description='Use OAuth for Letta Cloud authentication (recommended)',
     )
     oauth_credentials_path: str = Field(
         default='~/.letta/credentials',
         alias='oauthCredentialsPath',
-        description='Path to OAuth credentials file'
+        description='Path to OAuth credentials file',
     )
-    
+
     # Agent LLM model (litellm format, e.g. "anthropic/claude-sonnet-4-20250514")
     agent_model: str = Field(
         default='',
@@ -487,7 +489,7 @@ class LettaMemoryConfig(BaseModel):
             'Empty string means use Letta server default.'
         ),
     )
-    
+
     # Agent configuration
     agent_name: str = Field(default='thoth_research_agent', alias='agentName')
     core_memory_limit: int = Field(default=10000, alias='coreMemoryLimit')
@@ -561,8 +563,8 @@ class EpisodicSummarizationJob(BaseModel):
 
     enabled: bool = True
     interval_hours: int = Field(default=24, alias='intervalHours')
-    time_of_day: Optional[str] = Field(default=None, alias='timeOfDay')  # noqa: UP007
-    days_of_week: Optional[List[str]] = Field(default=None, alias='daysOfWeek')  # noqa: UP006, UP007
+    time_of_day: str | None = Field(default=None, alias='timeOfDay')
+    days_of_week: List[str] | None = Field(default=None, alias='daysOfWeek')  # noqa: UP006
     parameters: EpisodicSummarizationParameters = Field(
         default_factory=EpisodicSummarizationParameters
     )
@@ -619,7 +621,9 @@ class PathsConfig(BaseModel):
     prompts: str = 'thoth/_thoth/data/prompts'
     templates: str = 'thoth/_thoth/data/templates'
     output: str = 'thoth/_thoth/data/output'
-    knowledge_base: str = Field(default='thoth/_thoth/data/knowledge', alias='knowledgeBase')
+    knowledge_base: str = Field(
+        default='thoth/_thoth/data/knowledge', alias='knowledgeBase'
+    )
     graph_storage: str = Field(
         default='thoth/_thoth/data/graph/citations.graphml', alias='graphStorage'
     )
@@ -958,10 +962,10 @@ class FeatureFlagsConfig(BaseModel):
 class Settings(BaseModel):
     """Complete settings - maps EXACTLY to your settings.json file."""
 
-    schema_: Optional[str] = Field(default=None, alias='$schema')  # noqa: UP007
-    version: Optional[str] = None  # noqa: UP007
-    last_modified: Optional[str] = Field(default=None, alias='lastModified')  # noqa: UP007
-    comment_: Optional[str] = Field(default=None, alias='_comment')  # noqa: UP007
+    schema_: str | None = Field(default=None, alias='$schema')
+    version: str | None = None
+    last_modified: str | None = Field(default=None, alias='lastModified')
+    comment_: str | None = Field(default=None, alias='_comment')
 
     api_keys: APIKeys = Field(default_factory=APIKeys, alias='apiKeys')
     llm: LLMConfig = Field(default_factory=LLMConfig)
@@ -1000,51 +1004,58 @@ class Settings(BaseModel):
             # Create minimal default settings for fresh installation
             logger.warning(f'Settings file not found: {settings_file}')
             logger.info('Creating default settings.json for fresh installation...')
-            
+
             # Ensure parent directory exists
             settings_file.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # Create minimal default settings
             default_settings = {
-                "$schema": "./thoth.settings.schema.json",
-                "version": "1.0.0",
-                "lastModified": None,
-                "_comment": "Thoth configuration - edit with setup wizard or manually",
-                "apiKeys": {},
-                "llm": {
-                    "default": {
-                        "model": "google/gemini-2.5-flash",
-                        "temperature": 0.9,
-                        "maxTokens": 500000,
+                '$schema': './thoth.settings.schema.json',
+                'version': '1.0.0',
+                'lastModified': None,
+                '_comment': 'Thoth configuration - edit with setup wizard or manually',
+                'apiKeys': {},
+                'llm': {
+                    'default': {
+                        'model': 'google/gemini-2.5-flash',
+                        'temperature': 0.9,
+                        'maxTokens': 500000,
                     }
                 },
-                "paths": {
-                    "workspace": "/workspace",
-                    "pdf": "data/pdf",
-                    "markdown": "data/markdown",
-                    "notes": "/thoth/notes",
-                    "prompts": "data/prompts",
-                    "templates": "data/templates",
-                    "output": "data/output",
-                    "knowledgeBase": "data/knowledge",
-                    "queries": "data/queries",
-                    "agentStorage": "data/agent",
-                    "logs": "logs"
+                'paths': {
+                    'workspace': '/workspace',
+                    'pdf': 'data/pdf',
+                    'markdown': 'data/markdown',
+                    'notes': '/thoth/notes',
+                    'prompts': 'data/prompts',
+                    'templates': 'data/templates',
+                    'output': 'data/output',
+                    'knowledgeBase': 'data/knowledge',
+                    'queries': 'data/queries',
+                    'agentStorage': 'data/agent',
+                    'logs': 'logs',
                 },
-                "servers": {
-                    "api": {"host": "0.0.0.0", "port": 8000, "autoStart": False},
-                    "mcp": {"host": "localhost", "port": 8001, "autoStart": True, "enabled": True}
+                'servers': {
+                    'api': {'host': '0.0.0.0', 'port': 8000, 'autoStart': False},
+                    'mcp': {
+                        'host': 'localhost',
+                        'port': 8001,
+                        'autoStart': True,
+                        'enabled': True,
+                    },
                 },
-                "logging": {
-                    "level": "WARNING",
-                    "file": {"enabled": True, "path": "/workspace/logs/thoth.log"}
-                }
+                'logging': {
+                    'level': 'WARNING',
+                    'file': {'enabled': True, 'path': '/workspace/logs/thoth.log'},
+                },
             }
-            
+
             # Write default settings
             settings_file.write_text(json.dumps(default_settings, indent=2))
             logger.success(f'Created default settings at {settings_file}')
-            logger.info('You can customize these settings using the setup wizard or by editing the file')
+            logger.info(
+                'You can customize these settings using the setup wizard or by editing the file'
+            )
 
         try:
             data = json.loads(settings_file.read_text())
@@ -1216,7 +1227,7 @@ class Config:
         self.queries_dir = resolve_path(paths.queries)
         self.agent_storage_dir = resolve_path(paths.agent_storage)
         self.logs_dir = resolve_path(paths.logs)
-        
+
         # Analysis schema path (for customizable document analysis)
         self.analysis_schema_path = resolve_path('data/analysis_schema.json')
 

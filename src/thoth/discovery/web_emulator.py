@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -12,8 +12,7 @@ from thoth.utilities.schemas import BrowserRecording
 
 # Lazy import to avoid blocking module load (selenium has heavy imports)
 if TYPE_CHECKING:
-    from selenium import webdriver
-    from selenium.webdriver.chrome.options import Options
+    pass
 
 
 class WebEmulatorRecorder:
@@ -23,7 +22,7 @@ class WebEmulatorRecorder:
         # Import selenium only when actually creating an instance
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
-        
+
         options = Options()
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')

@@ -23,6 +23,7 @@ console = Console()
 # Check if Letta filesystem service is available
 try:
     from thoth.services.letta_filesystem_service import LettaFilesystemService
+
     LETTA_AVAILABLE = True
 except ImportError:
     LETTA_AVAILABLE = False
@@ -428,7 +429,9 @@ async def attach_letta_filesystem(config: Config):
     2. Attaches the folder to all existing agents
     """
     if not LETTA_AVAILABLE:
-        console.print('[yellow]⚠ Letta filesystem service not available, skipping filesystem attachment[/yellow]')
+        console.print(
+            '[yellow]⚠ Letta filesystem service not available, skipping filesystem attachment[/yellow]'
+        )
         return
 
     console.print('\n[bold]7. Attaching Letta filesystem to agents[/bold]')
@@ -443,7 +446,9 @@ async def attach_letta_filesystem(config: Config):
         folder_name = 'thoth_processed_articles'
         if hasattr(config, 'memory_config') and hasattr(config.memory_config, 'letta'):
             if hasattr(config.memory_config.letta, 'filesystem'):
-                folder_name = config.memory_config.letta.filesystem.folder_name or folder_name
+                folder_name = (
+                    config.memory_config.letta.filesystem.folder_name or folder_name
+                )
 
         # Get embedding model from config
         embedding_model = 'text-embedding-3-small'
@@ -457,8 +462,7 @@ async def attach_letta_filesystem(config: Config):
 
         # Get or create folder
         folder_id = await letta_service.get_or_create_folder(
-            name=folder_name,
-            embedding_model=embedding_model
+            name=folder_name, embedding_model=embedding_model
         )
         console.print(f'  ✓ Letta folder ready: {folder_id}')
 
@@ -466,22 +470,24 @@ async def attach_letta_filesystem(config: Config):
         stats = await letta_service.sync_vault_to_folder(
             folder_id=folder_id,
             notes_dir=config.notes_dir,
-            include_papers=True  # Critical: Include PDFs from papers directory
+            include_papers=True,  # Critical: Include PDFs from papers directory
         )
 
-        console.print(f'  ✓ Synced {stats["uploaded"]} files ({stats["skipped"]} unchanged)')
+        console.print(
+            f'  ✓ Synced {stats["uploaded"]} files ({stats["skipped"]} unchanged)'
+        )
         console.print(f'    - {stats["pdfs"]} PDFs, {stats["markdown"]} markdown files')
 
         if stats['errors']:
             console.print(f'  [yellow]⚠ {len(stats["errors"])} sync errors[/yellow]')
 
         # Get all agents
-        agents = await asyncio.to_thread(
-            letta_service._letta_client.agents.list
-        )
+        agents = await asyncio.to_thread(letta_service._letta_client.agents.list)
 
         if not agents:
-            console.print('  [yellow]⚠ No agents found to attach filesystem to[/yellow]')
+            console.print(
+                '  [yellow]⚠ No agents found to attach filesystem to[/yellow]'
+            )
             return
 
         # Attach folder to each agent
@@ -490,27 +496,29 @@ async def attach_letta_filesystem(config: Config):
             try:
                 # Check if folder is already attached
                 agent_folders = await asyncio.to_thread(
-                    letta_service._letta_client.agents.folders.list,
-                    agent.id
+                    letta_service._letta_client.agents.folders.list, agent.id
                 )
 
                 already_attached = any(f.id == folder_id for f in agent_folders)
 
                 if not already_attached:
                     await letta_service.attach_folder_to_agent(
-                        agent_id=agent.id,
-                        folder_id=folder_id
+                        agent_id=agent.id, folder_id=folder_id
                     )
                     attached_count += 1
             except Exception as e:
-                console.print(f'  [yellow]⚠ Could not attach to {agent.name}: {e}[/yellow]')
+                console.print(
+                    f'  [yellow]⚠ Could not attach to {agent.name}: {e}[/yellow]'
+                )
 
         console.print(f'  ✓ Attached filesystem to {attached_count} agent(s)')
 
     except Exception as e:
         console.print(f'  [yellow]⚠ Filesystem attachment failed: {e}[/yellow]')
         console.print('  [yellow]You can run this manually later with:[/yellow]')
-        console.print('  [yellow]  python scripts/migrations/attach_filesystem.py[/yellow]')
+        console.print(
+            '  [yellow]  python scripts/migrations/attach_filesystem.py[/yellow]'
+        )
 
 
 if __name__ == '__main__':

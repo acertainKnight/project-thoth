@@ -98,7 +98,7 @@ For each sub-topic:
 
 3. Track progress
    collection_stats()
-   
+
 4. Adjust if needed
    - Too few results → broaden keywords
    - Wrong focus → refine terms
@@ -129,11 +129,11 @@ Delegate to Research Analyst:
 send_message_to_agent(
   agent_name="Research Analyst",
   message="For the [project name] project, please:
-  
+
   1. Analyze papers in [topic] category
   2. Generate synthesis for [section name]
   3. Identify key themes and research gaps
-  
+
   Papers to analyze: [list of IDs]
   Output format: [structured summary / comparison table / narrative]"
 )
@@ -234,7 +234,7 @@ send_message_to_agent(
 
   Section: Sparse Attention Mechanisms
   Papers: [list of 47 paper IDs]
-  
+
   Please provide:
   1. Taxonomy of approaches
   2. Comparative analysis table

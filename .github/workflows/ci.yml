@@ -98,7 +98,7 @@ jobs:
         run: |
           mkdir -p ${{ github.workspace }}/test_vault/_thoth
           echo '{}' > ${{ github.workspace }}/test_vault/_thoth/settings.json
-      
+
       - name: Debug environment
         env:
           OBSIDIAN_VAULT_PATH: ${{ github.workspace }}/test_vault

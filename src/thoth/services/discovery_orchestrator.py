@@ -11,19 +11,18 @@ This service orchestrates the complete discovery workflow:
 import asyncio
 import time
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
-
 
 from thoth.config import Config
 from thoth.discovery.discovery_manager import DiscoveryManager
-from thoth.repositories.research_question_match_repository import (
-    ResearchQuestionMatchRepository,
-)
 from thoth.repositories.article_research_match_repository import (
     ArticleResearchMatchRepository,
 )
 from thoth.repositories.available_source_repository import AvailableSourceRepository
+from thoth.repositories.research_question_match_repository import (
+    ResearchQuestionMatchRepository,
+)
 from thoth.repositories.research_question_repository import ResearchQuestionRepository
 from thoth.services.base import BaseService
 from thoth.services.llm_service import LLMService
@@ -64,14 +63,16 @@ class DiscoveryOrchestrator(BaseService):
         self.question_repo = ResearchQuestionRepository(postgres_service or config)
         self.source_repo = AvailableSourceRepository(postgres_service or config)
         self.match_repo = ResearchQuestionMatchRepository(postgres_service or config)
-        self.legacy_match_repo = ArticleResearchMatchRepository(postgres_service or config)
+        self.legacy_match_repo = ArticleResearchMatchRepository(
+            postgres_service or config
+        )
 
         self.logger.info('DiscoveryOrchestrator initialized')
 
     async def run_discovery_for_question(
         self,
         question_id: UUID,
-        max_articles: Optional[int] = None,  # noqa: UP007
+        max_articles: int | None = None,
     ) -> dict[str, Any]:
         """
         Run discovery workflow for a single research question.
@@ -132,7 +133,9 @@ class DiscoveryOrchestrator(BaseService):
                     execution_time=time.time() - start_time,
                 )
 
-            self.logger.info(f'Found {len(articles)} articles from {len(sources)} sources')
+            self.logger.info(
+                f'Found {len(articles)} articles from {len(sources)} sources'
+            )
 
             # Step 3: Deduplicate and process articles
             matched_count, processed_count = await self._process_and_match_articles(
@@ -265,7 +268,9 @@ class DiscoveryOrchestrator(BaseService):
             if source in available_set:
                 valid_sources.append(source)
             else:
-                self.logger.warning(f"Source '{source}' not available in registry, skipping")
+                self.logger.warning(
+                    f"Source '{source}' not available in registry, skipping"
+                )
 
         if not valid_sources:
             self.logger.warning(
@@ -322,7 +327,9 @@ class DiscoveryOrchestrator(BaseService):
                     articles_found=len(result),
                 )
 
-        self.logger.info(f'Parallel querying completed: {len(all_articles)} total articles')
+        self.logger.info(
+            f'Parallel querying completed: {len(all_articles)} total articles'
+        )
 
         return all_articles
 
@@ -349,7 +356,9 @@ class DiscoveryOrchestrator(BaseService):
             # Get source configuration from DiscoveryManager (NOW ASYNC)
             source = await self.discovery_manager.get_source(source_name)
             if not source:
-                self.logger.warning(f"Source configuration for '{source_name}' not found")
+                self.logger.warning(
+                    f"Source configuration for '{source_name}' not found"
+                )
                 return []
 
             # Query the source with research question data
@@ -363,7 +372,9 @@ class DiscoveryOrchestrator(BaseService):
             return articles
 
         except Exception as e:
-            self.logger.error(f"Failed to query source '{source_name}': {e}", exc_info=True)
+            self.logger.error(
+                f"Failed to query source '{source_name}': {e}", exc_info=True
+            )
             raise
 
     # ==================== Article Processing & Matching ====================
@@ -396,9 +407,7 @@ class DiscoveryOrchestrator(BaseService):
                 )
 
                 if not article_id:
-                    self.logger.warning(
-                        f'Failed to create paper: {article_meta.title}'
-                    )
+                    self.logger.warning(f'Failed to create paper: {article_meta.title}')
                     continue
 
                 processed_count += 1
@@ -446,7 +455,7 @@ class DiscoveryOrchestrator(BaseService):
     async def _get_or_create_article(
         self,
         article_meta: ScrapedArticleMetadata,
-    ) -> tuple[Optional[UUID], bool]:  # noqa: UP007
+    ) -> tuple[UUID | None, bool]:
         """
         Get or create paper in paper_metadata with deduplication.
 
@@ -636,7 +645,9 @@ Your response (JSON only):"""
                 # Fallback: Remove lines that start with ``` (after stripping whitespace)  # noqa: W505
                 lines = response_text.split('\n')
                 json_lines = [
-                    l for l in lines if l.strip() and not l.strip().startswith('```')  # noqa: E741
+                    l
+                    for l in lines
+                    if l.strip() and not l.strip().startswith('```')
                 ]
                 response_text = '\n'.join(json_lines)
 

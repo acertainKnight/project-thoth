@@ -110,13 +110,15 @@ class LLMRouter(BaseService):
                 continue
 
             # Convert ModelInfo to dict for compatibility with existing code
-            filtered_models.append({
-                'id': model_info.id,
-                'name': model_info.name,
-                'context_length': model_info.context_length,
-                'supported_parameters': model_info.supported_parameters,
-                'description': model_info.name,  # Use name as description
-            })
+            filtered_models.append(
+                {
+                    'id': model_info.id,
+                    'name': model_info.name,
+                    'context_length': model_info.context_length,
+                    'supported_parameters': model_info.supported_parameters,
+                    'description': model_info.name,  # Use name as description
+                }
+            )
 
         if not filtered_models:
             self.logger.error('No candidate models meet the required capabilities.')
@@ -124,13 +126,15 @@ class LLMRouter(BaseService):
                 first_candidate = self.candidate_models[0]
                 if first_candidate in model_details_map:
                     model_info = model_details_map[first_candidate]
-                    return [{
-                        'id': model_info.id,
-                        'name': model_info.name,
-                        'context_length': model_info.context_length,
-                        'supported_parameters': model_info.supported_parameters,
-                        'description': model_info.name,
-                    }]
+                    return [
+                        {
+                            'id': model_info.id,
+                            'name': model_info.name,
+                            'context_length': model_info.context_length,
+                            'supported_parameters': model_info.supported_parameters,
+                            'description': model_info.name,
+                        }
+                    ]
                 return []
         return filtered_models
 
@@ -205,12 +209,15 @@ class LLMRouter(BaseService):
             List of model dicts with id, name, context_length, etc.
         """
         models = ModelRegistry.get_openrouter_models_sync()
-        return [{
-            'id': m.id,
-            'name': m.name,
-            'context_length': m.context_length,
-            'supported_parameters': m.supported_parameters,
-        } for m in models]
+        return [
+            {
+                'id': m.id,
+                'name': m.name,
+                'context_length': m.context_length,
+                'supported_parameters': m.supported_parameters,
+            }
+            for m in models
+        ]
 
     def health_check(self) -> dict[str, str]:
         """Basic health status for the LLMRouter."""

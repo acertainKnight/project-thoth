@@ -10,8 +10,8 @@ When Letta starts via `docker-compose.letta.yml`, two init scripts run:
    - Creates `/letta/.letta/mcp-servers.json` if missing
    - Adds Thoth MCP server configuration
    - Tests connectivity to `thoth-mcp:8000`
-   
-2. **init-schema.sh** - Initializes Letta database schema  
+
+2. **init-schema.sh** - Initializes Letta database schema
    - Creates necessary database tables
    - Runs Letta's standard startup
 

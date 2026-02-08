@@ -91,7 +91,7 @@ pytest tests/
    # With UV (recommended - faster)
    uv venv
    uv sync
-   
+
    # Or with pip
    python -m venv .venv
    source .venv/bin/activate
@@ -195,7 +195,7 @@ def process_document(
     generate_tags: bool = True,
 ) -> dict[str, any]:
     """Process a PDF document through the pipeline.
-    
+
     Parameters
     ----------
     pdf_path : Path
@@ -204,12 +204,12 @@ def process_document(
         Output directory for generated notes
     generate_tags : bool, default=True
         Whether to generate AI tags
-        
+
     Returns
     -------
     dict[str, any]
         Processing results with note path and metadata
-        
+
     Raises
     ------
     FileNotFoundError
@@ -246,11 +246,11 @@ async function sendMessage(message: string): Promise<ChatMessage> {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message }),
     });
-    
+
     if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-    
+
     return response.json();
 }
 ```
@@ -342,9 +342,9 @@ async def test_full_document_pipeline(test_pdf, test_vault):
     """Test complete document processing pipeline."""
     manager = ServiceManager()
     manager.initialize()
-    
+
     result = await manager.processing.process_pdf(test_pdf)
-    
+
     assert result['note_path'].exists()
     assert len(result['citations']) > 0
     assert 'metadata' in result
@@ -372,7 +372,7 @@ def test_citation_parsing(title, authors, year):
     """Test citation parsing with generated test cases."""
     citation = format_citation(title, authors, year)
     parsed = parse_citation(citation)
-    
+
     assert parsed['title'] == title
     assert parsed['authors'] == authors
     assert parsed['year'] == year

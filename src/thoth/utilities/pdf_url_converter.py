@@ -21,7 +21,9 @@ def convert_to_pdf_url(url: str) -> str | None:
         >>> convert_to_pdf_url('https://arxiv.org/abs/2512.10398v2')
         'https://arxiv.org/pdf/2512.10398v2.pdf'
 
-        >>> convert_to_pdf_url('https://www.biorxiv.org/content/10.1101/2023.01.01.123456v1')
+        >>> convert_to_pdf_url(
+        ...     'https://www.biorxiv.org/content/10.1101/2023.01.01.123456v1'
+        ... )
         'https://www.biorxiv.org/content/10.1101/2023.01.01.123456v1.full.pdf'
     """
     if not url:

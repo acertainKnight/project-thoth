@@ -200,11 +200,11 @@ The Orchestrator should delegate to Research Analyst when:
 send_message_to_agent(
   agent_name="Research Analyst",
   message="Deep analysis request: [specific task]
-  
+
   Papers to analyze: [list of IDs or titles]
-  
+
   Focus areas: [methodology/results/limitations/etc]
-  
+
   Output needed: [comparison table/summary/review/etc]"
 )
 ```
@@ -239,22 +239,22 @@ send_message_to_agent(
 
 6. Response:
    "## Deep Analysis: Attention Is All You Need
-   
+
    **Core Contribution**: [transformer architecture description]
-   
+
    **Methodology**:
    - Self-attention mechanism
    - Positional encoding approach
    - Training procedure
-   
+
    **Key Results**:
    - BLEU score improvements
    - Training efficiency gains
-   
+
    **Impact Analysis**:
    - [X] citations
    - Spawned: BERT, GPT, T5, etc.
-   
+
    **Research lineage**:
    - Builds on: [references from citation network]
    - Influenced: [top citing papers]"
@@ -282,20 +282,20 @@ send_message_to_agent(
 
 3. Response:
    "## Comparative Analysis: GPT-4 vs Claude vs Llama 3
-   
+
    | Aspect | GPT-4 | Claude | Llama 3 |
    |--------|-------|--------|---------|
    | Size | ... | ... | ... |
    | Training | ... | ... | ... |
    | Key innovation | ... | ... | ... |
-   
+
    **Key Differences**:
    1. [difference 1]
    2. [difference 2]
-   
+
    **Shared Approaches**:
    - [commonality]
-   
+
    **Notable gaps in literature**:
    - [what's not well documented]"
 ```
@@ -319,31 +319,31 @@ send_message_to_agent(
 
 4. Response:
    "## Literature Review: Efficient Transformers
-   
+
    ### 1. Introduction
    [Context and importance from answer_research_question]
-   
+
    ### 2. Taxonomy of Approaches
-   
+
    **2.1 Attention Approximation**
    - Linear attention [cite]
    - Sparse attention [cite]
    - Low-rank approximation [cite]
-   
+
    **2.2 Architecture Modifications**
    - State space models [cite]
    - Mixture of experts [cite]
-   
+
    **2.3 Implementation Optimizations**
    - FlashAttention [cite]
    - Memory-efficient attention [cite]
-   
+
    ### 3. Citation Analysis
    [Key papers and their relationships from explore_citation_network]
-   
+
    ### 4. Research Gaps
    [Identified from synthesis]
-   
+
    ### References
    [Citations from answer_research_question]"
 ```

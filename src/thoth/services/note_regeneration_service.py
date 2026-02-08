@@ -195,9 +195,7 @@ class NoteRegenerationService:
             )
 
         # For markdown, we have the content stored, so create a temp file or use stored path  # noqa: W505
-        markdown_path = (
-            self.config.markdown_dir / f'{paper_data["title"]}.md'
-        )
+        markdown_path = self.config.markdown_dir / f'{paper_data["title"]}.md'
         if paper_data.get('markdown_content'):
             markdown_path.parent.mkdir(parents=True, exist_ok=True)
             markdown_path.write_text(paper_data['markdown_content'], encoding='utf-8')

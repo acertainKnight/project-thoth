@@ -208,7 +208,7 @@ Agent: "Reading sources and extracting key information...
 - Paper 1: Memory Networks for Transformers
   Claims: 10x context extension with <5% overhead
   Key technique: External memory bank
-  
+
 - Paper 2: Efficient Attention with Memory
   Claims: O(n) complexity vs O(n²)
   Key technique: Compressed memory tokens
@@ -220,7 +220,7 @@ Agent: "Reading sources and extracting key information...
   - Architecture: [diagram/description]
   - Results: [performance numbers]
   - Trade-offs: [speed vs accuracy]
-  
+
 [Continue for all papers]
 
 All 10 papers analyzed!"
@@ -237,11 +237,11 @@ Agent: "Synthesis of findings:
 1. External Memory Banks (4 papers)
    - Pros: Large context extension
    - Cons: Training complexity
-   
+
 2. Compressed Memory Tokens (3 papers)
    - Pros: Efficient, drop-in replacement
    - Cons: Information loss
-   
+
 3. Hierarchical Attention (2 papers)
    - Pros: Natural scaling
    - Cons: Architecture changes needed
@@ -295,7 +295,7 @@ Agent: "Creating comprehensive research report...
 
 Report structure:
 ## Research Question
-## Methodology  
+## Methodology
 ## Key Findings
 ## Detailed Analysis
   ### Approach 1: External Memory Banks
@@ -392,7 +392,7 @@ Main approaches:
    - Papers: [1, 2, 3]
    - Key idea: [...]
    - Pros/Cons: [...]
-   
+
 2. Approach B
    - Papers: [4, 5]
    - Key idea: [...]
@@ -568,7 +568,7 @@ Adding 2-3 foundational papers to report background..."
 ### Finding 1: [Title]
 [Description, supporting papers]
 
-### Finding 2: [Title]  
+### Finding 2: [Title]
 [Description, supporting papers]
 
 ## Detailed Analysis

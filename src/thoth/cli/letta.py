@@ -17,11 +17,12 @@ from loguru import logger
 
 from thoth.config import config
 from thoth.pipeline import ThothPipeline
-from thoth.utilities.interactive import prompt_choice, prompt_text, confirm
+from thoth.utilities.interactive import confirm, prompt_choice, prompt_text
 
 # Check if Letta filesystem service is available
 try:
     from thoth.services.letta_filesystem_service import LettaFilesystemService
+
     LETTA_AVAILABLE = True
 except ImportError:
     LETTA_AVAILABLE = False
@@ -43,7 +44,7 @@ def handle_sync_filesystem(args, pipeline: ThothPipeline) -> int:
         logger.error('Letta filesystem service not available')
         logger.error('Please install letta extras: uv sync --extra memory')
         return 1
-    
+
     try:
         # Initialize service
         letta_service = LettaFilesystemService(config)
@@ -65,8 +66,7 @@ def handle_sync_filesystem(args, pipeline: ThothPipeline) -> int:
             # Get or create folder
             folder_id = loop.run_until_complete(
                 letta_service.get_or_create_folder(
-                    name=folder_name,
-                    embedding_model=embedding_model
+                    name=folder_name, embedding_model=embedding_model
                 )
             )
 
@@ -76,7 +76,9 @@ def handle_sync_filesystem(args, pipeline: ThothPipeline) -> int:
             stats = loop.run_until_complete(
                 letta_service.sync_vault_to_folder(
                     folder_id=folder_id,
-                    notes_dir=config.notes_dir if not args.notes_dir else Path(args.notes_dir)
+                    notes_dir=config.notes_dir
+                    if not args.notes_dir
+                    else Path(args.notes_dir),
                 )
             )
 
@@ -96,8 +98,7 @@ def handle_sync_filesystem(args, pipeline: ThothPipeline) -> int:
                 logger.info(f'Attaching folder to agent: {args.agent_id}')
                 loop.run_until_complete(
                     letta_service.attach_folder_to_agent(
-                        agent_id=args.agent_id,
-                        folder_id=folder_id
+                        agent_id=args.agent_id, folder_id=folder_id
                     )
                 )
                 logger.info('Folder attached to agent successfully')
@@ -110,6 +111,7 @@ def handle_sync_filesystem(args, pipeline: ThothPipeline) -> int:
     except Exception as e:
         logger.error(f'Sync failed: {e}')
         import traceback
+
         traceback.print_exc()
         return 1
 
@@ -129,7 +131,7 @@ def handle_folder_info(args, pipeline: ThothPipeline) -> int:
         logger.error('Letta filesystem service not available')
         logger.error('Please install letta extras: uv sync --extra memory')
         return 1
-    
+
     try:
         letta_service = LettaFilesystemService(config)
         letta_service.initialize()
@@ -166,6 +168,7 @@ def handle_folder_info(args, pipeline: ThothPipeline) -> int:
     except Exception as e:
         logger.error(f'Failed to list folders: {e}')
         import traceback
+
         traceback.print_exc()
         return 1
 
@@ -195,16 +198,19 @@ def handle_auth_login(args, pipeline: ThothPipeline) -> int:
             logger.info('Please manually visit: https://app.letta.com/auth/cli')
 
         logger.info('')
-        logger.info('After logging in, credentials will be saved to: ~/.letta/credentials')
+        logger.info(
+            'After logging in, credentials will be saved to: ~/.letta/credentials'
+        )
 
         # Try to use Letta SDK to complete OAuth flow
         try:
             from letta_client import Letta
+
             client = Letta()  # Triggers OAuth flow if not authenticated
             user_info = client.user.get()
             logger.info('')
             logger.success(f'✓ Successfully authenticated as: {user_info.email}')
-            logger.success(f'✓ Credentials saved to: ~/.letta/credentials')
+            logger.success('✓ Credentials saved to: ~/.letta/credentials')
             return 0
         except Exception as e:
             logger.error('')
@@ -217,6 +223,7 @@ def handle_auth_login(args, pipeline: ThothPipeline) -> int:
     except Exception as e:
         logger.error(f'Login failed: {e}')
         import traceback
+
         traceback.print_exc()
         return 1
 
@@ -270,6 +277,7 @@ def handle_auth_status(args, pipeline: ThothPipeline) -> int:
             # Try to get user info
             try:
                 from letta_client import Letta
+
                 client = Letta()
                 user_info = client.user.get()
                 logger.info(f'  User: {user_info.email}')
@@ -279,7 +287,9 @@ def handle_auth_status(args, pipeline: ThothPipeline) -> int:
                 logger.warning(f'  Warning: Could not fetch user info: {e}')
         else:
             logger.info('✗ Not authenticated')
-            logger.info('  Run "thoth letta auth login" to authenticate with Letta Cloud')
+            logger.info(
+                '  Run "thoth letta auth login" to authenticate with Letta Cloud'
+            )
             logger.info('  Or set LETTA_CLOUD_API_KEY for API key authentication')
 
         # Check environment variables
@@ -317,185 +327,185 @@ def handle_setup(args, pipeline: ThothPipeline) -> int:
         Exit code (0 for success, 1 for failure)
     """
     try:
-        print("=" * 70)
-        print("Letta Setup Wizard")
-        print("=" * 70)
+        print('=' * 70)
+        print('Letta Setup Wizard')
+        print('=' * 70)
         print()
 
         # Step 1: Choose mode
         mode = prompt_choice(
-            "How do you want to use Letta?",
+            'How do you want to use Letta?',
             [
-                ("cloud", "Letta Cloud (hosted, includes free tier)"),
-                ("self-hosted", "Self-hosted (local Docker container)")
-            ]
+                ('cloud', 'Letta Cloud (hosted, includes free tier)'),
+                ('self-hosted', 'Self-hosted (local Docker container)'),
+            ],
         )
 
         config_updates = {}
 
-        if mode == "cloud":
-            print("📡 Setting up Letta Cloud...")
+        if mode == 'cloud':
+            print('📡 Setting up Letta Cloud...')
             print()
 
             # Step 2: Choose auth method
             auth_method = prompt_choice(
-                "How do you want to authenticate?",
+                'How do you want to authenticate?',
                 [
-                    ("oauth", "OAuth (recommended - opens browser)"),
-                    ("apikey", "API Key (manual)")
-                ]
+                    ('oauth', 'OAuth (recommended - opens browser)'),
+                    ('apikey', 'API Key (manual)'),
+                ],
             )
 
-            if auth_method == "oauth":
+            if auth_method == 'oauth':
                 # OAuth flow
                 print()
-                print("🔐 Opening browser for authentication...")
-                print("Please log in at: https://app.letta.com/auth/cli")
+                print('🔐 Opening browser for authentication...')
+                print('Please log in at: https://app.letta.com/auth/cli')
                 print()
 
                 # Try auto-open browser
                 try:
-                    webbrowser.open("https://app.letta.com/auth/cli")
-                    print("✓ Browser opened automatically")
+                    webbrowser.open('https://app.letta.com/auth/cli')
+                    print('✓ Browser opened automatically')
                 except Exception:
-                    print("⚠️  Could not open browser automatically")
-                    print("Please manually visit: https://app.letta.com/auth/cli")
+                    print('⚠️  Could not open browser automatically')
+                    print('Please manually visit: https://app.letta.com/auth/cli')
 
                 print()
-                print("Waiting for authentication...")
+                print('Waiting for authentication...')
 
                 # Wait for OAuth completion
                 try:
                     from letta_client import Letta
+
                     client = Letta()  # Triggers OAuth flow
                     user_info = client.user.get()
-                    print(f"✓ Authenticated as: {user_info.email}")
+                    print(f'✓ Authenticated as: {user_info.email}')
                     print()
 
-                    config_updates = {
-                        "mode": "cloud",
-                        "oauthEnabled": True
-                    }
+                    config_updates = {'mode': 'cloud', 'oauthEnabled': True}
                 except Exception as e:
-                    print(f"✗ Authentication failed: {e}")
+                    print(f'✗ Authentication failed: {e}')
                     return 1
 
             else:  # API key
                 print()
-                print("📋 To get your API key:")
-                print("1. Go to: https://app.letta.com/api-keys")
-                print("2. Create a new API key")
-                print("3. Copy the key (starts with letta_sk_...)")
+                print('📋 To get your API key:')
+                print('1. Go to: https://app.letta.com/api-keys')
+                print('2. Create a new API key')
+                print('3. Copy the key (starts with letta_sk_...)')
                 print()
 
-                api_key = prompt_text("Enter your Letta Cloud API key")
+                api_key = prompt_text('Enter your Letta Cloud API key')
 
                 if not api_key:
-                    print("✗ API key is required")
+                    print('✗ API key is required')
                     return 1
 
-                if not api_key.startswith("letta_sk_"):
+                if not api_key.startswith('letta_sk_'):
                     print("⚠️  Warning: API key should start with 'letta_sk_'")
 
                 # Test API key
                 try:
                     from letta_client import Letta
+
                     client = Letta(token=api_key)
                     user_info = client.user.get()
-                    print(f"✓ API key valid for: {user_info.email}")
+                    print(f'✓ API key valid for: {user_info.email}')
                     print()
 
                     # Save to .env
-                    env_path = Path.cwd() / ".env"
-                    with open(env_path, "a") as f:
-                        f.write(f"\nLETTA_CLOUD_API_KEY={api_key}\n")
-                    print(f"✓ Saved API key to: {env_path}")
+                    env_path = Path.cwd() / '.env'
+                    with open(env_path, 'a') as f:
+                        f.write(f'\nLETTA_CLOUD_API_KEY={api_key}\n')
+                    print(f'✓ Saved API key to: {env_path}')
 
                     config_updates = {
-                        "mode": "cloud",
-                        "oauthEnabled": False,
-                        "cloudApiKey": api_key
+                        'mode': 'cloud',
+                        'oauthEnabled': False,
+                        'cloudApiKey': api_key,
                     }
                 except Exception as e:
-                    print(f"✗ Invalid API key: {e}")
+                    print(f'✗ Invalid API key: {e}')
                     return 1
 
             # Optional: Custom credentials path
             use_custom = prompt_choice(
-                "Use custom credentials path? (advanced)",
+                'Use custom credentials path? (advanced)',
                 [
-                    ("no", "No, use default (~/.letta/credentials)"),
-                    ("yes", "Yes, specify custom path")
-                ]
+                    ('no', 'No, use default (~/.letta/credentials)'),
+                    ('yes', 'Yes, specify custom path'),
+                ],
             )
 
-            if use_custom == "yes":
-                creds_path = prompt_text("Enter credentials path")
-                config_updates["oauthCredentialsPath"] = creds_path
+            if use_custom == 'yes':
+                creds_path = prompt_text('Enter credentials path')
+                config_updates['oauthCredentialsPath'] = creds_path
 
                 # Save to .env
-                env_path = Path.cwd() / ".env"
-                with open(env_path, "a") as f:
-                    f.write(f"\nLETTA_CREDENTIALS_PATH={creds_path}\n")
+                env_path = Path.cwd() / '.env'
+                with open(env_path, 'a') as f:
+                    f.write(f'\nLETTA_CREDENTIALS_PATH={creds_path}\n')
 
         else:  # self-hosted
-            print("🏠 Setting up self-hosted Letta...")
+            print('🏠 Setting up self-hosted Letta...')
             print()
-            print("Using default configuration:")
-            print("  - Server URL: http://localhost:8283")
-            print("  - Password: letta_dev_password")
+            print('Using default configuration:')
+            print('  - Server URL: http://localhost:8283')
+            print('  - Password: letta_dev_password')
             print()
-            print("Start Letta with: docker compose -f docker-compose.letta.yml up -d")
+            print('Start Letta with: docker compose -f docker-compose.letta.yml up -d')
 
             config_updates = {
-                "mode": "self-hosted",
-                "serverUrl": "http://localhost:8283"
+                'mode': 'self-hosted',
+                'serverUrl': 'http://localhost:8283',
             }
 
         # Step 3: Update settings.json (new path, then legacy fallback)
-        settings_path = config.vault_root / "thoth" / "_thoth" / "settings.json"
+        settings_path = config.vault_root / 'thoth' / '_thoth' / 'settings.json'
         if not settings_path.exists():
-            settings_path = config.vault_root / "_thoth" / "settings.json"
+            settings_path = config.vault_root / '_thoth' / 'settings.json'
 
         with open(settings_path) as f:
             settings = json.load(f)
 
         # Update memory.letta section
-        if "memory" not in settings:
-            settings["memory"] = {}
-        if "letta" not in settings["memory"]:
-            settings["memory"]["letta"] = {}
+        if 'memory' not in settings:
+            settings['memory'] = {}
+        if 'letta' not in settings['memory']:
+            settings['memory']['letta'] = {}
 
-        settings["memory"]["letta"].update(config_updates)
+        settings['memory']['letta'].update(config_updates)
 
         # Save settings
-        with open(settings_path, "w") as f:
+        with open(settings_path, 'w') as f:
             json.dump(settings, f, indent=2)
 
         print()
-        print(f"✓ Settings updated: {settings_path}")
+        print(f'✓ Settings updated: {settings_path}')
         print()
-        print("=" * 70)
-        print("🎉 Letta setup complete!")
-        print("=" * 70)
+        print('=' * 70)
+        print('🎉 Letta setup complete!')
+        print('=' * 70)
 
-        if mode == "cloud":
+        if mode == 'cloud':
             print()
-            print("Next steps:")
-            print("  1. Start Thoth: make dev")
-            print("  2. Sync vault files: thoth letta sync")
+            print('Next steps:')
+            print('  1. Start Thoth: make dev')
+            print('  2. Sync vault files: thoth letta sync')
         else:
             print()
-            print("Next steps:")
-            print("  1. Start Letta: docker compose -f docker-compose.letta.yml up -d")
-            print("  2. Start Thoth: make dev")
-            print("  3. Sync vault files: thoth letta sync")
+            print('Next steps:')
+            print('  1. Start Letta: docker compose -f docker-compose.letta.yml up -d')
+            print('  2. Start Thoth: make dev')
+            print('  3. Sync vault files: thoth letta sync')
 
         return 0
 
     except Exception as e:
         logger.error(f'Setup failed: {e}')
         import traceback
+
         traceback.print_exc()
         return 1
 
@@ -515,48 +525,41 @@ def handle_switch_mode(args, pipeline: ThothPipeline) -> int:
         # Get current mode
         current_mode = config.memory_config.letta.mode
 
-        print("=" * 70)
-        print("Letta Mode Switcher")
-        print("=" * 70)
+        print('=' * 70)
+        print('Letta Mode Switcher')
+        print('=' * 70)
         print()
-        print(f"Current mode: {current_mode}")
+        print(f'Current mode: {current_mode}')
         print()
 
         new_mode = prompt_choice(
-            "Switch to which mode?",
-            [
-                ("cloud", "Letta Cloud (hosted)"),
-                ("self-hosted", "Self-hosted (local)")
-            ]
+            'Switch to which mode?',
+            [('cloud', 'Letta Cloud (hosted)'), ('self-hosted', 'Self-hosted (local)')],
         )
 
         if new_mode == current_mode:
-            print(f"Already in {current_mode} mode. No changes needed.")
+            print(f'Already in {current_mode} mode. No changes needed.')
             return 0
 
         # Confirm switch
-        if not confirm(f"Switch from {current_mode} to {new_mode}?"):
-            print("Cancelled.")
+        if not confirm(f'Switch from {current_mode} to {new_mode}?'):
+            print('Cancelled.')
             return 0
 
         print()
-        print(f"🔄 Switching to {new_mode} mode...")
+        print(f'🔄 Switching to {new_mode} mode...')
         print()
 
-        config_updates = {"mode": new_mode}
+        config_updates = {'mode': new_mode}
 
-        if new_mode == "cloud":
+        if new_mode == 'cloud':
             # Cloud mode setup
-            print("Choose authentication method:")
+            print('Choose authentication method:')
             auth_method = prompt_choice(
-                "",
-                [
-                    ("oauth", "OAuth (opens browser)"),
-                    ("apikey", "API Key")
-                ]
+                '', [('oauth', 'OAuth (opens browser)'), ('apikey', 'API Key')]
             )
 
-            if auth_method == "oauth":
+            if auth_method == 'oauth':
                 # Run OAuth login
                 print()
                 logger.info('Opening browser for Letta Cloud authentication...')
@@ -566,84 +569,104 @@ def handle_switch_mode(args, pipeline: ThothPipeline) -> int:
                     pass
 
                 from letta_client import Letta
+
                 client = Letta()
                 user_info = client.user.get()
-                print(f"✓ Authenticated as: {user_info.email}")
+                print(f'✓ Authenticated as: {user_info.email}')
 
-                config_updates["oauthEnabled"] = True
+                config_updates['oauthEnabled'] = True
 
             else:
                 # Prompt for API key
                 print()
-                print("Get your API key from: https://app.letta.com/api-keys")
-                api_key = prompt_text("Enter API key")
+                print('Get your API key from: https://app.letta.com/api-keys')
+                api_key = prompt_text('Enter API key')
 
                 # Save to .env
-                env_path = Path.cwd() / ".env"
-                with open(env_path, "a") as f:
-                    f.write(f"\nLETTA_CLOUD_API_KEY={api_key}\n")
+                env_path = Path.cwd() / '.env'
+                with open(env_path, 'a') as f:
+                    f.write(f'\nLETTA_CLOUD_API_KEY={api_key}\n')
 
-                config_updates["cloudApiKey"] = api_key
-                config_updates["oauthEnabled"] = False
+                config_updates['cloudApiKey'] = api_key
+                config_updates['oauthEnabled'] = False
 
             # Stop self-hosted Letta
             print()
-            print("📦 Stopping self-hosted Letta container...")
+            print('📦 Stopping self-hosted Letta container...')
             subprocess.run(
-                ["docker", "compose", "-f", "docker-compose.letta.yml", "stop", "letta"],
-                capture_output=True
+                [
+                    'docker',
+                    'compose',
+                    '-f',
+                    'docker-compose.letta.yml',
+                    'stop',
+                    'letta',
+                ],
+                capture_output=True,
             )
-            print("✓ Letta container stopped")
+            print('✓ Letta container stopped')
 
         else:  # self-hosted
             # Start self-hosted Letta
-            print("📦 Starting self-hosted Letta container...")
+            print('📦 Starting self-hosted Letta container...')
             subprocess.run(
-                ["docker", "compose", "-f", "docker-compose.letta.yml", "up", "-d", "letta"],
-                capture_output=True
+                [
+                    'docker',
+                    'compose',
+                    '-f',
+                    'docker-compose.letta.yml',
+                    'up',
+                    '-d',
+                    'letta',
+                ],
+                capture_output=True,
             )
 
             # Wait for health check
-            print("Waiting for Letta to start...")
+            print('Waiting for Letta to start...')
             for _ in range(30):
                 try:
                     import requests
-                    response = requests.get("http://localhost:8283/v1/health", timeout=1)
+
+                    response = requests.get(
+                        'http://localhost:8283/v1/health', timeout=1
+                    )
                     if response.status_code == 200:
-                        print("✓ Letta started successfully")
+                        print('✓ Letta started successfully')
                         break
                 except:
                     pass
                 time.sleep(1)
 
         # Update settings.json (new path, then legacy fallback)
-        settings_path = config.vault_root / "thoth" / "_thoth" / "settings.json"
+        settings_path = config.vault_root / 'thoth' / '_thoth' / 'settings.json'
         if not settings_path.exists():
-            settings_path = config.vault_root / "_thoth" / "settings.json"
+            settings_path = config.vault_root / '_thoth' / 'settings.json'
         with open(settings_path) as f:
             settings = json.load(f)
 
-        settings["memory"]["letta"].update(config_updates)
+        settings['memory']['letta'].update(config_updates)
 
-        with open(settings_path, "w") as f:
+        with open(settings_path, 'w') as f:
             json.dump(settings, f, indent=2)
 
         print()
-        print(f"✓ Switched to {new_mode} mode")
-        print("✓ Settings updated")
+        print(f'✓ Switched to {new_mode} mode')
+        print('✓ Settings updated')
         print()
-        print("=" * 70)
-        print("🎉 Mode switch complete!")
-        print("=" * 70)
+        print('=' * 70)
+        print('🎉 Mode switch complete!')
+        print('=' * 70)
         print()
-        print("Restart Thoth services to apply changes:")
-        print("  make dev-stop && make dev")
+        print('Restart Thoth services to apply changes:')
+        print('  make dev-stop && make dev')
 
         return 0
 
     except Exception as e:
         logger.error(f'Mode switch failed: {e}')
         import traceback
+
         traceback.print_exc()
         return 1
 
@@ -683,14 +706,14 @@ def handle_configure_mode(args, pipeline: ThothPipeline) -> int:
             from thoth.cli.setup.detectors.letta import LettaDetector
 
             available, version, healthy = LettaDetector.check_server_sync(
-                url='https://api.letta.com',
-                api_key=api_key,
-                timeout=10
+                url='https://api.letta.com', api_key=api_key, timeout=10
             )
 
             if not available or not healthy:
                 logger.error('Failed to connect to Letta Cloud')
-                logger.error('Please verify your API key at https://app.letta.com/api-keys')
+                logger.error(
+                    'Please verify your API key at https://app.letta.com/api-keys'
+                )
                 return 1
 
             logger.info(f'Successfully connected to Letta Cloud (version: {version})')
@@ -755,13 +778,11 @@ def handle_letta_status(args, pipeline: ThothPipeline) -> int:
         logger.info('Testing connection...')
 
         available, version, healthy = LettaDetector.check_server_sync(
-            url=url,
-            api_key=api_key if mode == 'cloud' else None,
-            timeout=5
+            url=url, api_key=api_key if mode == 'cloud' else None, timeout=5
         )
 
         if available and healthy:
-            logger.info(f'✓ Connected successfully')
+            logger.info('✓ Connected successfully')
             logger.info(f'Version: {version or "unknown"}')
         else:
             logger.error('✗ Connection failed')
@@ -784,116 +805,87 @@ def configure_subparser(subparsers) -> None:
     Args:
         subparsers: ArgumentParser subparsers object
     """
-    parser = subparsers.add_parser(
-        'letta',
-        help='Letta filesystem operations'
-    )
+    parser = subparsers.add_parser('letta', help='Letta filesystem operations')
     letta_subparsers = parser.add_subparsers(
-        dest='letta_command',
-        help='Letta filesystem command',
-        required=True
+        dest='letta_command', help='Letta filesystem command', required=True
     )
 
     # Sync command
     sync_parser = letta_subparsers.add_parser(
-        'sync',
-        help='Sync vault files to Letta filesystem'
+        'sync', help='Sync vault files to Letta filesystem'
     )
     sync_parser.add_argument(
         '--folder-name',
         type=str,
-        help='Letta folder name (default: thoth_processed_articles)'
+        help='Letta folder name (default: thoth_processed_articles)',
     )
     sync_parser.add_argument(
-        '--embedding',
-        type=str,
-        help='Embedding model to use (default: from config)'
+        '--embedding', type=str, help='Embedding model to use (default: from config)'
     )
     sync_parser.add_argument(
-        '--notes-dir',
-        type=str,
-        help='Notes directory to sync (default: from config)'
+        '--notes-dir', type=str, help='Notes directory to sync (default: from config)'
     )
     sync_parser.add_argument(
-        '--agent-id',
-        type=str,
-        help='Attach folder to this agent ID after sync'
+        '--agent-id', type=str, help='Attach folder to this agent ID after sync'
     )
     sync_parser.set_defaults(func=handle_sync_filesystem)
 
     # Folder info command
-    info_parser = letta_subparsers.add_parser(
-        'folders',
-        help='List Letta folders'
-    )
+    info_parser = letta_subparsers.add_parser('folders', help='List Letta folders')
     info_parser.set_defaults(func=handle_folder_info)
 
     # Auth subcommand
     auth_parser = letta_subparsers.add_parser(
-        'auth',
-        help='Manage Letta Cloud authentication'
+        'auth', help='Manage Letta Cloud authentication'
     )
     auth_subparsers = auth_parser.add_subparsers(
-        dest='auth_command',
-        help='Authentication command',
-        required=True
+        dest='auth_command', help='Authentication command', required=True
     )
 
     # auth login
     login_parser = auth_subparsers.add_parser(
-        'login',
-        help='Login to Letta Cloud via OAuth'
+        'login', help='Login to Letta Cloud via OAuth'
     )
     login_parser.set_defaults(func=handle_auth_login)
 
     # auth logout
-    logout_parser = auth_subparsers.add_parser(
-        'logout',
-        help='Logout from Letta Cloud'
-    )
+    logout_parser = auth_subparsers.add_parser('logout', help='Logout from Letta Cloud')
     logout_parser.set_defaults(func=handle_auth_logout)
 
     # auth status
     status_parser = auth_subparsers.add_parser(
-        'status',
-        help='Check authentication status'
+        'status', help='Check authentication status'
     )
     status_parser.set_defaults(func=handle_auth_status)
 
     # Setup wizard
     setup_parser = letta_subparsers.add_parser(
-        'setup',
-        help='Interactive setup wizard for Letta configuration'
+        'setup', help='Interactive setup wizard for Letta configuration'
     )
     setup_parser.set_defaults(func=handle_setup)
 
     # Mode switcher
     switch_parser = letta_subparsers.add_parser(
-        'switch-mode',
-        help='Interactive mode switcher (cloud <-> self-hosted)'
+        'switch-mode', help='Interactive mode switcher (cloud <-> self-hosted)'
     )
     switch_parser.set_defaults(func=handle_switch_mode)
 
     # Configure mode (new command)
     configure_parser = letta_subparsers.add_parser(
-        'configure',
-        help='Configure Letta mode (cloud or self-hosted)'
+        'configure', help='Configure Letta mode (cloud or self-hosted)'
     )
     configure_parser.add_argument(
         'mode',
         choices=['cloud', 'self-hosted'],
-        help='Letta mode: cloud or self-hosted'
+        help='Letta mode: cloud or self-hosted',
     )
     configure_parser.add_argument(
-        '--api-key',
-        type=str,
-        help='Letta Cloud API key (required for cloud mode)'
+        '--api-key', type=str, help='Letta Cloud API key (required for cloud mode)'
     )
     configure_parser.set_defaults(func=handle_configure_mode)
 
     # Status command (new command)
     status_parser = letta_subparsers.add_parser(
-        'status',
-        help='Show current Letta configuration and connection status'
+        'status', help='Show current Letta configuration and connection status'
     )
     status_parser.set_defaults(func=handle_letta_status)

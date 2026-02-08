@@ -53,7 +53,9 @@ class CitationService(BaseService):
             from thoth.config import Config
 
             Config.register_reload_callback('citation_service', self._on_config_reload)
-            self.logger.debug('CitationService registered for config reload notifications')
+            self.logger.debug(
+                'CitationService registered for config reload notifications'
+            )
 
     @property
     def citation_processor(self) -> CitationProcessor:
@@ -122,7 +124,9 @@ class CitationService(BaseService):
             if hasattr(self.config, 'llm_config') and hasattr(
                 self.config.llm_config, 'citation'
             ):
-                self.logger.info(f'Citation model: {self.config.llm_config.citation.model}')
+                self.logger.info(
+                    f'Citation model: {self.config.llm_config.citation.model}'
+                )
 
             # Log citation config if available
             if hasattr(self.config, 'citation_config'):

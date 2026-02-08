@@ -176,8 +176,8 @@ class UpdateSettingsMCPTool(MCPTool):
                 if context_len is None:
                     return (
                         f"Advisory: Model '{model_id}' not found in OpenRouter registry. "
-                        "This may be a newly added model or a typo. "
-                        "The setting was still updated successfully."
+                        'This may be a newly added model or a typo. '
+                        'The setting was still updated successfully.'
                     )
             return None
         except Exception:

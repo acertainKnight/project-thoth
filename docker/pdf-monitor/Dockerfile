@@ -4,7 +4,7 @@
 # ==============================================================================
 
 # Build stage - Install dependencies and build application
-FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim as builder
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim as builder
 
 # Set environment variables for build optimization
 ENV UV_COMPILE_BYTECODE=1 \
@@ -31,7 +31,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # ==============================================================================
 # Production stage - Minimal production image
-FROM python:3.11-slim as production
+FROM python:3.12-slim as production
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \

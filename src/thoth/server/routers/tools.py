@@ -34,6 +34,7 @@ class CommandExecutionRequest(BaseModel):
 # Response Models
 class SearchPapersResult(BaseModel):
     """Response for search papers tool."""
+
     tool: str
     query: str
     results: list[Any]
@@ -44,6 +45,7 @@ class SearchPapersResult(BaseModel):
 
 class AnalyzeDocumentResult(BaseModel):
     """Response for analyze document tool."""
+
     tool: str
     document_id: str
     analysis_type: str
@@ -54,6 +56,7 @@ class AnalyzeDocumentResult(BaseModel):
 
 class DownloadPdfResult(BaseModel):
     """Response for download PDF tool."""
+
     tool: str
     url: str
     pdf_path: str
@@ -64,6 +67,7 @@ class DownloadPdfResult(BaseModel):
 
 class RagSearchResult(BaseModel):
     """Response for RAG search tool."""
+
     tool: str
     query: str
     results: list[Any]
@@ -74,6 +78,7 @@ class RagSearchResult(BaseModel):
 
 class ToolExecutionResult(BaseModel):
     """Generic tool execution result."""
+
     tool: str
     parameters_used: dict[str, Any]
     result: dict[str, Any] | None = None
@@ -84,6 +89,7 @@ class ToolExecutionResult(BaseModel):
 
 class CommandExecutionResponse(BaseModel):
     """Response for command execution."""
+
     command: str
     args: list[str]
     kwargs: dict[str, Any]
@@ -94,6 +100,7 @@ class CommandExecutionResponse(BaseModel):
 
 class DiscoveryCommandResult(BaseModel):
     """Result for discovery command."""
+
     action: str
     sources: list[Any] | None = None
     source: str | None = None
@@ -102,6 +109,7 @@ class DiscoveryCommandResult(BaseModel):
 
 class RagCommandResult(BaseModel):
     """Result for RAG command."""
+
     action: str
     query: str | None = None
     results: list[dict[str, Any]] | None = None
@@ -109,6 +117,7 @@ class RagCommandResult(BaseModel):
 
 class NotesCommandResult(BaseModel):
     """Result for notes command."""
+
     action: str
     notes: list[Any] | None = None
     document_id: str | None = None
@@ -117,6 +126,7 @@ class NotesCommandResult(BaseModel):
 
 class PdfLocateCommandResult(BaseModel):
     """Result for PDF locate command."""
+
     identifier: str
     locations: list[Any]
     found: bool
@@ -126,7 +136,7 @@ class PdfLocateCommandResult(BaseModel):
 async def execute_tool_direct(
     request: ToolExecutionRequest,
     research_agent=Depends(get_research_agent),
-    service_manager: ServiceManager = Depends(get_service_manager)
+    service_manager: ServiceManager = Depends(get_service_manager),
 ):
     """Execute a specific tool directly, optionally bypassing the agent."""
     if research_agent is None:
@@ -146,13 +156,17 @@ async def execute_tool_direct(
                 )
 
             # Execute the tool (implementation based on tool structure)
-            result = await execute_tool_directly(request.tool_name, request.parameters, service_manager)
+            result = await execute_tool_directly(
+                request.tool_name, request.parameters, service_manager
+            )
 
             return JSONResponse(
                 {
                     'tool': request.tool_name,
                     'parameters': request.parameters,
-                    'result': result.model_dump() if hasattr(result, 'model_dump') else result,
+                    'result': result.model_dump()
+                    if hasattr(result, 'model_dump')
+                    else result,
                     'bypassed_agent': True,
                 }
             )
@@ -182,7 +196,13 @@ async def execute_tool_direct(
 
 async def execute_tool_directly(
     tool_name: str, parameters: dict[str, Any], service_manager: ServiceManager
-) -> SearchPapersResult | AnalyzeDocumentResult | DownloadPdfResult | RagSearchResult | ToolExecutionResult:
+) -> (
+    SearchPapersResult
+    | AnalyzeDocumentResult
+    | DownloadPdfResult
+    | RagSearchResult
+    | ToolExecutionResult
+):
     """Execute a tool directly without going through the agent."""
     try:
         # Map tool names to their direct execution methods
@@ -316,7 +336,7 @@ async def execute_rag_search_tool(
 @router.post('/execute/command')
 async def execute_command(
     request: CommandExecutionRequest,
-    service_manager: ServiceManager = Depends(get_service_manager)
+    service_manager: ServiceManager = Depends(get_service_manager),
 ):
     """Execute a Thoth CLI command through the API."""
     try:
@@ -327,7 +347,9 @@ async def execute_command(
             # Execute synchronously
             result = await execute_command_sync(request, service_manager)
 
-        return JSONResponse(result.model_dump() if hasattr(result, 'model_dump') else result)
+        return JSONResponse(
+            result.model_dump() if hasattr(result, 'model_dump') else result
+        )
 
     except Exception as e:
         logger.error(f'Command execution failed: {e}')
@@ -337,8 +359,7 @@ async def execute_command(
 
 
 async def execute_command_streaming(
-    request: CommandExecutionRequest,
-    service_manager: ServiceManager
+    request: CommandExecutionRequest, service_manager: ServiceManager
 ) -> CommandExecutionResponse:
     """Execute a command with streaming support."""
     # Implementation would depend on the specific command structure
@@ -354,8 +375,7 @@ async def execute_command_streaming(
 
 
 async def execute_command_sync(
-    request: CommandExecutionRequest,
-    service_manager: ServiceManager
+    request: CommandExecutionRequest, service_manager: ServiceManager
 ) -> CommandExecutionResponse:
     """Execute a command synchronously."""
     command_handlers = {
@@ -386,7 +406,7 @@ async def execute_command_sync(
 async def execute_discovery_command(
     args: list[str],
     kwargs: dict[str, Any],  # noqa: ARG001
-    service_manager: ServiceManager
+    service_manager: ServiceManager,
 ) -> DiscoveryCommandResult:
     """Execute a discovery command."""
     discovery_service = service_manager.discovery
@@ -409,7 +429,7 @@ async def execute_discovery_command(
 async def execute_pdf_locate_command(
     args: list[str],
     kwargs: dict[str, Any],  # noqa: ARG001
-    service_manager: ServiceManager
+    service_manager: ServiceManager,
 ) -> PdfLocateCommandResult:
     """Execute a PDF locate command."""
     pdf_locator_service = service_manager.pdf_locator
@@ -428,9 +448,7 @@ async def execute_pdf_locate_command(
 
 
 async def execute_rag_command(
-    args: list[str],
-    kwargs: dict[str, Any],
-    service_manager: ServiceManager
+    args: list[str], kwargs: dict[str, Any], service_manager: ServiceManager
 ) -> RagCommandResult:
     """Execute a RAG command."""
     rag_service = service_manager.rag
@@ -449,9 +467,7 @@ async def execute_rag_command(
 
 
 async def execute_notes_command(
-    args: list[str],
-    kwargs: dict[str, Any],
-    service_manager: ServiceManager
+    args: list[str], kwargs: dict[str, Any], service_manager: ServiceManager
 ) -> NotesCommandResult:
     """Execute a notes command."""
     note_service = service_manager.note

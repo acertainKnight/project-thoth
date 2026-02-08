@@ -439,7 +439,9 @@ class RAGService(BaseService):
         except Exception as e:
             raise ServiceError(self.handle_error(e, 'indexing knowledge base')) from e
 
-    def index_paper_by_id(self, paper_id: str, markdown_content: str | None = None) -> list[str]:
+    def index_paper_by_id(
+        self, paper_id: str, markdown_content: str | None = None
+    ) -> list[str]:
         """
         Index a paper by its UUID from the database.
 
@@ -455,7 +457,9 @@ class RAGService(BaseService):
         """
         try:
             self.validate_input(paper_id=paper_id)
-            doc_ids = self.rag_manager.index_paper_by_id(paper_id, markdown_content=markdown_content)
+            doc_ids = self.rag_manager.index_paper_by_id(
+                paper_id, markdown_content=markdown_content
+            )
             self.log_operation(
                 'paper_indexed_by_id',
                 paper_id=paper_id,
@@ -492,7 +496,9 @@ class RAGService(BaseService):
         try:
             db_url = getattr(self.config.secrets, 'database_url', None)
             if not db_url:
-                raise ServiceError('DATABASE_URL not configured - PostgreSQL is required')
+                raise ServiceError(
+                    'DATABASE_URL not configured - PostgreSQL is required'
+                )
 
             async def fetch_papers():
                 conn = await asyncpg.connect(db_url)
@@ -501,14 +507,14 @@ class RAGService(BaseService):
                         SELECT pm.id, pm.title, pp.markdown_content
                         FROM paper_metadata pm
                         JOIN processed_papers pp ON pp.paper_id = pm.id
-                        WHERE pp.markdown_content IS NOT NULL 
+                        WHERE pp.markdown_content IS NOT NULL
                           AND pp.markdown_content != ''
                     """
                     if not force:
                         query += """
                           AND pm.id NOT IN (
-                            SELECT DISTINCT (metadata->>'paper_id')::uuid 
-                            FROM document_chunks 
+                            SELECT DISTINCT (metadata->>'paper_id')::uuid
+                            FROM document_chunks
                             WHERE metadata->>'paper_id' IS NOT NULL
                           )
                         """
@@ -535,7 +541,9 @@ class RAGService(BaseService):
                 content = row['markdown_content']
 
                 try:
-                    doc_ids = self.rag_manager.index_paper_by_id(paper_id, markdown_content=content)
+                    doc_ids = self.rag_manager.index_paper_by_id(
+                        paper_id, markdown_content=content
+                    )
                     stats['total_chunks'] += len(doc_ids)
                     stats['papers_indexed'] += 1
                     self.logger.info(f'Indexed {len(doc_ids)} chunks for: {title[:50]}')

@@ -11,7 +11,7 @@ Supports two selector formats:
   (produced by the LLM-powered WorkflowBuilder)
 """
 
-from __future__ import annotations  # noqa: I001
+from __future__ import annotations
 
 import re
 from datetime import datetime
@@ -23,12 +23,15 @@ from loguru import logger
 # Make playwright imports optional to avoid blocking if not installed
 if TYPE_CHECKING:
     from playwright.async_api import ElementHandle, Page
+
     PlaywrightTimeoutError = TimeoutError
 else:
     try:
         from playwright.async_api import (
             ElementHandle,
             Page,
+        )
+        from playwright.async_api import (
             TimeoutError as PlaywrightTimeoutError,
         )
     except ImportError:
@@ -87,6 +90,7 @@ def _clean_text_field(text: str | None) -> str | None:
 # Selector normalization
 # ---------------------------------------------------------------------------
 
+
 def _normalize_selector(raw: str | dict[str, Any] | None) -> dict[str, Any] | None:
     """Convert a selector to the rich format regardless of input shape.
 
@@ -132,7 +136,11 @@ class ExtractionService:
         ...         'article_container': '.article-item',
         ...         'fields': {
         ...             'title': {'css_selector': 'h3.title', 'attribute': 'text'},
-        ...             'authors': {'css_selector': '.author', 'attribute': 'text', 'is_multiple': True},
+        ...             'authors': {
+        ...                 'css_selector': '.author',
+        ...                 'attribute': 'text',
+        ...                 'is_multiple': True,
+        ...             },
         ...         },
         ...     },
         ...     max_articles=100,
@@ -224,7 +232,8 @@ class ExtractionService:
                 )
 
                 page_articles = await self._extract_articles_from_page(
-                    extraction_rules, max_articles - len(articles),
+                    extraction_rules,
+                    max_articles - len(articles),
                 )
 
                 if not page_articles:
@@ -245,10 +254,9 @@ class ExtractionService:
                     break
 
                 # Try pagination
-                pagination_config = (
-                    extraction_rules.get('pagination')
-                    or extraction_rules.get('pagination_config')
-                )
+                pagination_config = extraction_rules.get(
+                    'pagination'
+                ) or extraction_rules.get('pagination_config')
                 if not pagination_config:
                     logger.debug('No pagination config, stopping after first page')
                     break
@@ -379,16 +387,15 @@ class ExtractionService:
 
             # --- Authors ---
             authors_raw = await self._extract_field(
-                article_element, selectors.get('authors'),
+                article_element,
+                selectors.get('authors'),
             )
             if isinstance(authors_raw, list):
                 authors = [_clean_author_name(a) for a in authors_raw if a.strip()]
             elif isinstance(authors_raw, str):
                 # Single string — split on commas
                 authors = [
-                    _clean_author_name(a)
-                    for a in authors_raw.split(',')
-                    if a.strip()
+                    _clean_author_name(a) for a in authors_raw.split(',') if a.strip()
                 ]
             else:
                 authors = []
@@ -399,26 +406,30 @@ class ExtractionService:
             )
             doi = await self._extract_field(article_element, selectors.get('doi'))
             arxiv_id = await self._extract_field(
-                article_element, selectors.get('arxiv_id'),
+                article_element,
+                selectors.get('arxiv_id'),
             )
             journal = _clean_text_field(
                 await self._extract_field(article_element, selectors.get('journal')),
             )
             publication_date = _clean_text_field(
                 await self._extract_field(
-                    article_element, selectors.get('publication_date'),
+                    article_element,
+                    selectors.get('publication_date'),
                 ),
             )
 
             # --- URL fields ---
             url = await self._extract_field(article_element, selectors.get('url'))
             pdf_url = await self._extract_field(
-                article_element, selectors.get('pdf_url'),
+                article_element,
+                selectors.get('pdf_url'),
             )
 
             # --- Keywords ---
             keywords_raw = await self._extract_field(
-                article_element, selectors.get('keywords'),
+                article_element,
+                selectors.get('keywords'),
             )
             if isinstance(keywords_raw, list):
                 keywords = [k.strip() for k in keywords_raw if k.strip()]

@@ -152,9 +152,7 @@ class PubMedAPISource(BaseAPISource):
             'email': 'research@example.com',  # Should be configurable
         }
 
-        response = httpx.get(
-            f'{self.base_url}/esearch.fcgi', params=params, timeout=30
-        )
+        response = httpx.get(f'{self.base_url}/esearch.fcgi', params=params, timeout=30)
         response.raise_for_status()
 
         data = response.json()
@@ -205,9 +203,7 @@ class PubMedAPISource(BaseAPISource):
             'email': 'research@example.com',  # Should be configurable
         }
 
-        response = httpx.get(
-            f'{self.base_url}/efetch.fcgi', params=params, timeout=60
-        )
+        response = httpx.get(f'{self.base_url}/efetch.fcgi', params=params, timeout=60)
         response.raise_for_status()
 
         # Parse XML response

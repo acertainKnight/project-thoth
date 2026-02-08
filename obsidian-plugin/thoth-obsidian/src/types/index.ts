@@ -36,5 +36,3 @@ export interface NotificationProgress {
   close: () => void;
   setType: (type: 'info' | 'success' | 'warning' | 'error') => void;
 }
-
-

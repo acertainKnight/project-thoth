@@ -10,56 +10,71 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
-
 from loguru import logger
+from pydantic import BaseModel, Field
 
 from thoth.services.skill_service import SkillService
 
-router = APIRouter(prefix="/api/skills", tags=["skills"])
+router = APIRouter(prefix='/api/skills', tags=['skills'])
 
 
 # Request/Response Models
 class SkillMetadata(BaseModel):
     """Skill metadata from YAML frontmatter."""
 
-    id: str = Field(..., description="Skill identifier")
-    name: str = Field(..., description="Skill display name")
-    description: str = Field(..., description="Short description of skill purpose")
-    source: Literal["bundled", "vault", "bundle"] = Field(..., description="Skill source location")
+    id: str = Field(..., description='Skill identifier')
+    name: str = Field(..., description='Skill display name')
+    description: str = Field(..., description='Short description of skill purpose')
+    source: Literal['bundled', 'vault', 'bundle'] = Field(
+        ..., description='Skill source location'
+    )
     bundle: str | None = Field(None, description="Bundle name if source is 'bundle'")
-    path: str = Field(..., description="Filesystem path to skill")
+    path: str = Field(..., description='Filesystem path to skill')
 
 
 class SkillContent(BaseModel):
     """Full skill content with metadata."""
 
     metadata: SkillMetadata
-    content: str = Field(..., description="Full SKILL.md markdown content")
+    content: str = Field(..., description='Full SKILL.md markdown content')
 
 
 class SkillCreate(BaseModel):
     """Request model for creating a new skill."""
 
-    skill_id: str = Field(..., description="Skill identifier (alphanumeric with hyphens)", min_length=3, max_length=100)
-    name: str = Field(..., description="Skill display name", min_length=1, max_length=200)
-    description: str = Field(..., description="Skill description", min_length=1, max_length=500)
-    content: str = Field(..., description="Skill markdown content (without frontmatter)", min_length=10)
-    bundle: str | None = Field(None, description="Bundle name to create skill in (orchestrator, discovery, etc.)")
+    skill_id: str = Field(
+        ...,
+        description='Skill identifier (alphanumeric with hyphens)',
+        min_length=3,
+        max_length=100,
+    )
+    name: str = Field(
+        ..., description='Skill display name', min_length=1, max_length=200
+    )
+    description: str = Field(
+        ..., description='Skill description', min_length=1, max_length=500
+    )
+    content: str = Field(
+        ..., description='Skill markdown content (without frontmatter)', min_length=10
+    )
+    bundle: str | None = Field(
+        None,
+        description='Bundle name to create skill in (orchestrator, discovery, etc.)',
+    )
 
 
 class SkillUpdate(BaseModel):
     """Request model for updating a skill."""
 
-    name: str | None = Field(None, description="Updated skill name")
-    description: str | None = Field(None, description="Updated description")
-    content: str | None = Field(None, description="Updated markdown content")
+    name: str | None = Field(None, description='Updated skill name')
+    description: str | None = Field(None, description='Updated description')
+    content: str | None = Field(None, description='Updated markdown content')
 
 
 class SkillsListResponse(BaseModel):
     """Response model for listing skills."""
 
-    total: int = Field(..., description="Total number of skills")
+    total: int = Field(..., description='Total number of skills')
     skills: list[SkillMetadata]
 
 
@@ -71,11 +86,13 @@ class RoleBundleResponse(BaseModel):
     skills: list[str]
 
 
-@router.get("/", response_model=SkillsListResponse)
+@router.get('/', response_model=SkillsListResponse)
 async def list_skills(
-    source: Literal["all", "bundled", "vault", "bundle"] | None = Query(None, description="Filter by source"),
-    role: str | None = Query(None, description="Filter by agent role"),
-    search: str | None = Query(None, description="Search in name or description"),
+    source: Literal['all', 'bundled', 'vault', 'bundle'] | None = Query(
+        None, description='Filter by source'
+    ),
+    role: str | None = Query(None, description='Filter by agent role'),
+    search: str | None = Query(None, description='Search in name or description'),
 ) -> SkillsListResponse:
     """
     List all available skills with optional filtering.
@@ -99,21 +116,26 @@ async def list_skills(
 
             skills_list = []
             for skill_id in skill_ids:
-                if skill_id.startswith("bundles/"):
+                if skill_id.startswith('bundles/'):
                     # Bundle skill
-                    parts = skill_id.split("/")
+                    parts = skill_id.split('/')
                     bundle_name = parts[1]
                     skill_name = parts[2]
-                    skill_path = skill_service.bundles_dir / bundle_name / skill_name / "SKILL.md"
+                    skill_path = (
+                        skill_service.bundles_dir
+                        / bundle_name
+                        / skill_name
+                        / 'SKILL.md'
+                    )
 
                     if skill_path.exists():
                         metadata = skill_service._parse_skill_metadata(skill_path)
                         skills_list.append(
                             SkillMetadata(
                                 id=skill_id,
-                                name=metadata.get("name", skill_name),
-                                description=metadata.get("description", ""),
-                                source="bundle",
+                                name=metadata.get('name', skill_name),
+                                description=metadata.get('description', ''),
+                                source='bundle',
                                 bundle=bundle_name,
                                 path=str(skill_path),
                             )
@@ -123,11 +145,11 @@ async def list_skills(
                     skills_list.append(
                         SkillMetadata(
                             id=skill_id,
-                            name=skill_info["name"],
-                            description=skill_info["description"],
-                            source=skill_info["source"],
+                            name=skill_info['name'],
+                            description=skill_info['description'],
+                            source=skill_info['source'],
                             bundle=None,
-                            path=str(skill_info["path"]),
+                            path=str(skill_info['path']),
                         )
                     )
         else:
@@ -137,11 +159,11 @@ async def list_skills(
             skills_list = [
                 SkillMetadata(
                     id=skill_id,
-                    name=info["name"],
-                    description=info["description"],
-                    source=info["source"],
+                    name=info['name'],
+                    description=info['description'],
+                    source=info['source'],
                     bundle=None,
-                    path=str(info["path"]),
+                    path=str(info['path']),
                 )
                 for skill_id, info in all_skills_dict.items()
             ]
@@ -150,25 +172,30 @@ async def list_skills(
             bundles = skill_service.discover_bundle_skills()
             for bundle_name, skill_ids in bundles.items():
                 for skill_id in skill_ids:
-                    parts = skill_id.split("/")
+                    parts = skill_id.split('/')
                     skill_name = parts[2]
-                    skill_path = skill_service.bundles_dir / bundle_name / skill_name / "SKILL.md"
+                    skill_path = (
+                        skill_service.bundles_dir
+                        / bundle_name
+                        / skill_name
+                        / 'SKILL.md'
+                    )
 
                     if skill_path.exists():
                         metadata = skill_service._parse_skill_metadata(skill_path)
                         skills_list.append(
                             SkillMetadata(
                                 id=skill_id,
-                                name=metadata.get("name", skill_name),
-                                description=metadata.get("description", ""),
-                                source="bundle",
+                                name=metadata.get('name', skill_name),
+                                description=metadata.get('description', ''),
+                                source='bundle',
                                 bundle=bundle_name,
                                 path=str(skill_path),
                             )
                         )
 
         # Apply source filter
-        if source and source != "all":
+        if source and source != 'all':
             skills_list = [s for s in skills_list if s.source == source]
 
         # Apply search filter
@@ -177,7 +204,8 @@ async def list_skills(
             skills_list = [
                 s
                 for s in skills_list
-                if search_lower in s.name.lower() or search_lower in s.description.lower()
+                if search_lower in s.name.lower()
+                or search_lower in s.description.lower()
             ]
 
         # Sort by name
@@ -186,11 +214,11 @@ async def list_skills(
         return SkillsListResponse(total=len(skills_list), skills=skills_list)
 
     except Exception as e:
-        logger.error(f"Error listing skills: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to list skills: {str(e)}")
+        logger.error(f'Error listing skills: {e}')
+        raise HTTPException(status_code=500, detail=f'Failed to list skills: {e!s}')
 
 
-@router.get("/{skill_id:path}", response_model=SkillContent)
+@router.get('/{skill_id:path}', response_model=SkillContent)
 async def get_skill(skill_id: str) -> SkillContent:
     """
     Get full content of a specific skill.
@@ -207,37 +235,41 @@ async def get_skill(skill_id: str) -> SkillContent:
         content = skill_service.get_skill_content(skill_id)
 
         if content is None:
-            raise HTTPException(status_code=404, detail=f"Skill not found: {skill_id}")
+            raise HTTPException(status_code=404, detail=f'Skill not found: {skill_id}')
 
         # Get metadata
-        if skill_id.startswith("bundles/"):
-            parts = skill_id.split("/")
+        if skill_id.startswith('bundles/'):
+            parts = skill_id.split('/')
             bundle_name = parts[1]
             skill_name = parts[2]
-            skill_path = skill_service.bundles_dir / bundle_name / skill_name / "SKILL.md"
+            skill_path = (
+                skill_service.bundles_dir / bundle_name / skill_name / 'SKILL.md'
+            )
             metadata_dict = skill_service._parse_skill_metadata(skill_path)
 
             metadata = SkillMetadata(
                 id=skill_id,
-                name=metadata_dict.get("name", skill_name),
-                description=metadata_dict.get("description", ""),
-                source="bundle",
+                name=metadata_dict.get('name', skill_name),
+                description=metadata_dict.get('description', ''),
+                source='bundle',
                 bundle=bundle_name,
                 path=str(skill_path),
             )
         else:
             skills = skill_service.discover_skills()
             if skill_id not in skills:
-                raise HTTPException(status_code=404, detail=f"Skill not found: {skill_id}")
+                raise HTTPException(
+                    status_code=404, detail=f'Skill not found: {skill_id}'
+                )
 
             skill_info = skills[skill_id]
             metadata = SkillMetadata(
                 id=skill_id,
-                name=skill_info["name"],
-                description=skill_info["description"],
-                source=skill_info["source"],
+                name=skill_info['name'],
+                description=skill_info['description'],
+                source=skill_info['source'],
                 bundle=None,
-                path=str(skill_info["path"]),
+                path=str(skill_info['path']),
             )
 
         return SkillContent(metadata=metadata, content=content)
@@ -245,11 +277,11 @@ async def get_skill(skill_id: str) -> SkillContent:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting skill {skill_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get skill: {str(e)}")
+        logger.error(f'Error getting skill {skill_id}: {e}')
+        raise HTTPException(status_code=500, detail=f'Failed to get skill: {e!s}')
 
 
-@router.post("/", response_model=SkillMetadata, status_code=201)
+@router.post('/', response_model=SkillMetadata, status_code=201)
 async def create_skill(skill_data: SkillCreate) -> SkillMetadata:
     """
     Create a new skill in the vault.
@@ -267,9 +299,10 @@ async def create_skill(skill_data: SkillCreate) -> SkillMetadata:
         skill_service = SkillService()
 
         # Validate skill_id format
-        if not skill_data.skill_id.replace("-", "").isalnum():
+        if not skill_data.skill_id.replace('-', '').isalnum():
             raise HTTPException(
-                status_code=400, detail="Skill ID must be alphanumeric with hyphens only"
+                status_code=400,
+                detail='Skill ID must be alphanumeric with hyphens only',
             )
 
         # Determine skill path
@@ -277,24 +310,24 @@ async def create_skill(skill_data: SkillCreate) -> SkillMetadata:
             skill_dir = (
                 skill_service.bundles_dir / skill_data.bundle / skill_data.skill_id
             )
-            skill_id = f"bundles/{skill_data.bundle}/{skill_data.skill_id}"
-            source = "bundle"
+            skill_id = f'bundles/{skill_data.bundle}/{skill_data.skill_id}'
+            source = 'bundle'
         else:
             skill_dir = skill_service.vault_skills_dir / skill_data.skill_id
             skill_id = skill_data.skill_id
-            source = "vault"
+            source = 'vault'
 
         # Check if skill already exists
         if skill_dir.exists():
             raise HTTPException(
-                status_code=409, detail=f"Skill already exists: {skill_id}"
+                status_code=409, detail=f'Skill already exists: {skill_id}'
             )
 
         # Create skill directory
         skill_dir.mkdir(parents=True, exist_ok=True)
 
         # Create SKILL.md with frontmatter
-        skill_file = skill_dir / "SKILL.md"
+        skill_file = skill_dir / 'SKILL.md'
         skill_content = f"""---
 name: {skill_data.name}
 description: {skill_data.description}
@@ -303,10 +336,10 @@ description: {skill_data.description}
 {skill_data.content}
 """
 
-        with open(skill_file, "w", encoding="utf-8") as f:
+        with open(skill_file, 'w', encoding='utf-8') as f:
             f.write(skill_content)
 
-        logger.info(f"Created skill: {skill_id} at {skill_file}")
+        logger.info(f'Created skill: {skill_id} at {skill_file}')
 
         return SkillMetadata(
             id=skill_id,
@@ -320,11 +353,11 @@ description: {skill_data.description}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating skill: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create skill: {str(e)}")
+        logger.error(f'Error creating skill: {e}')
+        raise HTTPException(status_code=500, detail=f'Failed to create skill: {e!s}')
 
 
-@router.put("/{skill_id:path}", response_model=SkillMetadata)
+@router.put('/{skill_id:path}', response_model=SkillMetadata)
 async def update_skill(skill_id: str, skill_data: SkillUpdate) -> SkillMetadata:
     """
     Update an existing skill in the vault.
@@ -345,40 +378,44 @@ async def update_skill(skill_id: str, skill_data: SkillUpdate) -> SkillMetadata:
         # Get current skill
         current_content = skill_service.get_skill_content(skill_id)
         if current_content is None:
-            raise HTTPException(status_code=404, detail=f"Skill not found: {skill_id}")
+            raise HTTPException(status_code=404, detail=f'Skill not found: {skill_id}')
 
         # Check if skill is in vault or bundle (not bundled)
-        if skill_id.startswith("bundles/"):
-            parts = skill_id.split("/")
+        if skill_id.startswith('bundles/'):
+            parts = skill_id.split('/')
             bundle_name = parts[1]
             skill_name = parts[2]
-            skill_file = skill_service.bundles_dir / bundle_name / skill_name / "SKILL.md"
+            skill_file = (
+                skill_service.bundles_dir / bundle_name / skill_name / 'SKILL.md'
+            )
         else:
             skills = skill_service.discover_skills()
             if skill_id not in skills:
-                raise HTTPException(status_code=404, detail=f"Skill not found: {skill_id}")
-
-            skill_info = skills[skill_id]
-            if skill_info["source"] == "bundled":
                 raise HTTPException(
-                    status_code=403, detail="Cannot update bundled skills"
+                    status_code=404, detail=f'Skill not found: {skill_id}'
                 )
 
-            skill_file = Path(skill_info["path"])
+            skill_info = skills[skill_id]
+            if skill_info['source'] == 'bundled':
+                raise HTTPException(
+                    status_code=403, detail='Cannot update bundled skills'
+                )
+
+            skill_file = Path(skill_info['path'])
 
         # Parse current metadata
         current_metadata = skill_service._parse_skill_metadata(skill_file)
 
         # Update metadata
-        new_name = skill_data.name or current_metadata.get("name", skill_id)
-        new_desc = skill_data.description or current_metadata.get("description", "")
+        new_name = skill_data.name or current_metadata.get('name', skill_id)
+        new_desc = skill_data.description or current_metadata.get('description', '')
 
         # Update content
         if skill_data.content is not None:
             new_content = skill_data.content
         else:
             # Extract content (remove frontmatter)
-            parts = current_content.split("---", 2)
+            parts = current_content.split('---', 2)
             new_content = parts[2].strip() if len(parts) >= 3 else current_content
 
         # Write updated skill
@@ -390,18 +427,18 @@ description: {new_desc}
 {new_content}
 """
 
-        with open(skill_file, "w", encoding="utf-8") as f:
+        with open(skill_file, 'w', encoding='utf-8') as f:
             f.write(updated_content)
 
-        logger.info(f"Updated skill: {skill_id}")
+        logger.info(f'Updated skill: {skill_id}')
 
         # Return updated metadata
-        if skill_id.startswith("bundles/"):
-            parts = skill_id.split("/")
-            source = "bundle"
+        if skill_id.startswith('bundles/'):
+            parts = skill_id.split('/')
+            source = 'bundle'
             bundle = parts[1]
         else:
-            source = "vault"
+            source = 'vault'
             bundle = None
 
         return SkillMetadata(
@@ -416,11 +453,11 @@ description: {new_desc}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating skill {skill_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update skill: {str(e)}")
+        logger.error(f'Error updating skill {skill_id}: {e}')
+        raise HTTPException(status_code=500, detail=f'Failed to update skill: {e!s}')
 
 
-@router.delete("/{skill_id:path}", status_code=204)
+@router.delete('/{skill_id:path}', status_code=204)
 async def delete_skill(skill_id: str) -> None:
     """
     Delete a skill from the vault.
@@ -435,41 +472,45 @@ async def delete_skill(skill_id: str) -> None:
         skill_service = SkillService()
 
         # Check if skill exists and is not bundled
-        if skill_id.startswith("bundles/"):
-            parts = skill_id.split("/")
+        if skill_id.startswith('bundles/'):
+            parts = skill_id.split('/')
             bundle_name = parts[1]
             skill_name = parts[2]
             skill_dir = skill_service.bundles_dir / bundle_name / skill_name
         else:
             skills = skill_service.discover_skills()
             if skill_id not in skills:
-                raise HTTPException(status_code=404, detail=f"Skill not found: {skill_id}")
-
-            skill_info = skills[skill_id]
-            if skill_info["source"] == "bundled":
                 raise HTTPException(
-                    status_code=403, detail="Cannot delete bundled skills"
+                    status_code=404, detail=f'Skill not found: {skill_id}'
                 )
 
-            skill_dir = Path(skill_info["path"]).parent
+            skill_info = skills[skill_id]
+            if skill_info['source'] == 'bundled':
+                raise HTTPException(
+                    status_code=403, detail='Cannot delete bundled skills'
+                )
+
+            skill_dir = Path(skill_info['path']).parent
 
         # Delete skill directory
         if skill_dir.exists():
             import shutil
 
             shutil.rmtree(skill_dir)
-            logger.info(f"Deleted skill: {skill_id} at {skill_dir}")
+            logger.info(f'Deleted skill: {skill_id} at {skill_dir}')
         else:
-            raise HTTPException(status_code=404, detail=f"Skill directory not found: {skill_id}")
+            raise HTTPException(
+                status_code=404, detail=f'Skill directory not found: {skill_id}'
+            )
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting skill {skill_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete skill: {str(e)}")
+        logger.error(f'Error deleting skill {skill_id}: {e}')
+        raise HTTPException(status_code=500, detail=f'Failed to delete skill: {e!s}')
 
 
-@router.get("/roles/{role}/summary")
+@router.get('/roles/{role}/summary')
 async def get_role_skills_summary(role: str) -> dict[str, Any]:
     """
     Get a token-efficient summary of skills for a specific agent role.
@@ -484,16 +525,16 @@ async def get_role_skills_summary(role: str) -> dict[str, Any]:
         skill_service = SkillService()
         summary = skill_service.format_role_skills_summary(role)
 
-        return {"role": role, "summary": summary, "format": "markdown"}
+        return {'role': role, 'summary': summary, 'format': 'markdown'}
 
     except Exception as e:
-        logger.error(f"Error getting role skills summary for {role}: {e}")
+        logger.error(f'Error getting role skills summary for {role}: {e}')
         raise HTTPException(
-            status_code=500, detail=f"Failed to get role skills summary: {str(e)}"
+            status_code=500, detail=f'Failed to get role skills summary: {e!s}'
         )
 
 
-@router.get("/bundles/", response_model=list[RoleBundleResponse])
+@router.get('/bundles/', response_model=list[RoleBundleResponse])
 async def list_bundles() -> list[RoleBundleResponse]:
     """
     List all skill bundles and their associated roles.
@@ -519,5 +560,5 @@ async def list_bundles() -> list[RoleBundleResponse]:
         return role_bundles
 
     except Exception as e:
-        logger.error(f"Error listing bundles: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to list bundles: {str(e)}")
+        logger.error(f'Error listing bundles: {e}')
+        raise HTTPException(status_code=500, detail=f'Failed to list bundles: {e!s}')

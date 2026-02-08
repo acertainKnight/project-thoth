@@ -95,7 +95,7 @@ class MCPTool(ABC):
 
     def _validate_type(self, value: Any, expected_type: str) -> bool:
         """Validate a value matches the expected JSON Schema type.
-        
+
         Note: Also accepts string representations of numbers/integers/booleans
         since LLM agents often serialize these as strings.
         """
@@ -145,9 +145,9 @@ class MCPTool(ABC):
 
         # Include full traceback in response so downstream agents can see it
         error_response = (
-            f"Error in {self.name}: {error!s}\n\n"
-            f"Exception Type: {type(error).__name__}\n\n"
-            f"Traceback:\n{tb_str}"
+            f'Error in {self.name}: {error!s}\n\n'
+            f'Exception Type: {type(error).__name__}\n\n'
+            f'Traceback:\n{tb_str}'
         )
 
         return MCPToolCallResult(
@@ -215,11 +215,11 @@ class MCPToolRegistry:
     def get_tool_schemas(self, role: str | None = None) -> list[MCPToolSchema]:
         """
         Get MCP schemas for registered tools, optionally filtered by role.
-        
+
         Args:
             role: Optional role to filter tools (e.g., 'orchestrator', 'analyst')
                   If None, returns all tools.
-        
+
         Returns:
             List of MCPToolSchema objects for the tools
         """
@@ -230,44 +230,45 @@ class MCPToolRegistry:
     def get_tool_names(self, role: str | None = None) -> list[str]:
         """
         Get names of registered tools, optionally filtered by role.
-        
+
         Args:
             role: Optional role to filter tools
-        
+
         Returns:
             List of tool names
         """
         if role:
             from .tool_categories import get_tools_for_role
+
             role_tools = set(get_tools_for_role(role))
             all_names = set(self._tools.keys())
             all_names.update(self._tool_classes.keys())
             return [name for name in all_names if name in role_tools]
-        
+
         names = set(self._tools.keys())
         names.update(self._tool_classes.keys())
         return list(names)
-    
+
     def get_tools_for_role(self, role: str) -> list[MCPTool]:
         """
         Get tools filtered by agent role.
-        
+
         Args:
             role: Agent role ('orchestrator', 'analyst', 'full')
-        
+
         Returns:
             List of MCPTool instances for this role
         """
         from .tool_categories import get_tools_for_role
-        
+
         role_tool_names = set(get_tools_for_role(role))
         tools = []
-        
+
         for name in role_tool_names:
             tool = self.get_tool(name)
             if tool:
                 tools.append(tool)
-        
+
         return tools
 
     async def execute_tool(
@@ -306,7 +307,7 @@ class MCPToolRegistry:
         self, schema: dict[str, Any], arguments: dict[str, Any]
     ) -> dict[str, Any]:
         """Coerce argument values to match schema types.
-        
+
         LLM agents often serialize numbers/booleans as strings. This method
         converts them to the appropriate Python types based on the schema.
         """

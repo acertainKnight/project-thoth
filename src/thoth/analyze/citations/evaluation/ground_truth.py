@@ -10,7 +10,7 @@ This "round-trip" approach provides realistic ground truth without manual labeli
 """
 
 from dataclasses import dataclass  # noqa: I001
-from typing import List, Optional, Dict, Any  # noqa: UP035
+from typing import List, Dict, Any  # noqa: UP035
 from enum import Enum
 import random
 from loguru import logger
@@ -47,15 +47,15 @@ class GroundTruthCitation:
     """
 
     citation: Citation
-    ground_truth_doi: Optional[str]  # noqa: UP007
+    ground_truth_doi: str | None
     ground_truth_title: str
     ground_truth_authors: List[str]  # noqa: UP006
-    ground_truth_year: Optional[int]  # noqa: UP007
-    ground_truth_openalex_id: Optional[str] = None  # noqa: UP007
-    ground_truth_s2_id: Optional[str] = None  # noqa: UP007
+    ground_truth_year: int | None
+    ground_truth_openalex_id: str | None = None
+    ground_truth_s2_id: str | None = None
     degradation_type: CitationDegradation = CitationDegradation.CLEAN
     difficulty: str = 'medium'  # easy, medium, hard
-    source_paper_id: Optional[int] = None  # noqa: UP007
+    source_paper_id: int | None = None
     metadata: Dict[str, Any] = None  # noqa: UP006
 
     def __post_init__(self):
@@ -362,8 +362,8 @@ class GroundTruthGenerator:
         self,
         title: str,
         authors: List[str],  # noqa: UP006
-        year: Optional[int],  # noqa: UP007
-        journal: Optional[str],  # noqa: UP007
+        year: int | None,
+        journal: str | None,
     ) -> str:
         """Format citation components into citation text."""
         parts = []

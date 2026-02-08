@@ -24,6 +24,7 @@ router = APIRouter()
 # Response Models
 class ArticleListResponse(BaseModel):
     """Response for listing articles."""
+
     articles: list[dict[str, Any]]
     total: int
     limit: int
@@ -32,6 +33,7 @@ class ArticleListResponse(BaseModel):
 
 class BatchProcessResult(BaseModel):
     """Result for a single batch item."""
+
     status: str
     path: str | None = None
     query: str | None = None
@@ -42,7 +44,7 @@ class BatchProcessResult(BaseModel):
 # Collection and Articles endpoints
 @router.get('/collection/stats')
 async def get_collection_stats(
-    service_manager: ServiceManager = Depends(get_service_manager)
+    service_manager: ServiceManager = Depends(get_service_manager),
 ):
     """Get collection statistics."""
     try:
@@ -55,15 +57,10 @@ async def get_collection_stats(
         }
 
         # If we have access to document services, get real stats
-        if (
-            hasattr(service_manager, 'citation_service')
-            and service_manager.citation
-        ):
+        if hasattr(service_manager, 'citation_service') and service_manager.citation:
             try:
                 # Try to get real collection stats
-                pdf_tracker = getattr(
-                    service_manager.citation, 'pdf_tracker', None
-                )
+                pdf_tracker = getattr(service_manager.citation, 'pdf_tracker', None)
                 if pdf_tracker:
                     processed_files = getattr(pdf_tracker, '_processed_files', {})
                     stats['processed_documents'] = len(processed_files)
@@ -89,7 +86,7 @@ async def get_collection_stats(
 async def list_articles(
     limit: int = 10,
     offset: int = 0,
-    service_manager: ServiceManager = Depends(get_service_manager)
+    service_manager: ServiceManager = Depends(get_service_manager),
 ) -> ArticleListResponse:
     """List articles in the collection."""
     try:
@@ -153,7 +150,7 @@ def get_operation_status_endpoint(operation_id: str):
 @router.post('/stream/operation')
 async def start_streaming_operation(
     request: StreamingOperationRequest,
-    service_manager: ServiceManager = Depends(get_service_manager)
+    service_manager: ServiceManager = Depends(get_service_manager),
 ):
     """Start a streaming operation and return operation ID for tracking."""
     operation_id = request.operation_id or str(uuid.uuid4())
@@ -173,7 +170,9 @@ async def start_streaming_operation(
 
 
 async def execute_streaming_operation(
-    operation_id: str, request: StreamingOperationRequest, service_manager: ServiceManager
+    operation_id: str,
+    request: StreamingOperationRequest,
+    service_manager: ServiceManager,
 ):
     """Execute a streaming operation with progress updates."""
     try:
@@ -182,11 +181,17 @@ async def execute_streaming_operation(
         )
 
         if request.operation_type == 'pdf_process':
-            await stream_pdf_processing(operation_id, request.parameters, service_manager)
+            await stream_pdf_processing(
+                operation_id, request.parameters, service_manager
+            )
         elif request.operation_type == 'discovery_run':
-            await stream_discovery_run(operation_id, request.parameters, service_manager)
+            await stream_discovery_run(
+                operation_id, request.parameters, service_manager
+            )
         elif request.operation_type == 'batch_process':
-            await stream_batch_process(operation_id, request.parameters, service_manager)
+            await stream_batch_process(
+                operation_id, request.parameters, service_manager
+            )
         else:
             raise ValueError(f'Unknown operation type: {request.operation_type}')
 
@@ -366,7 +371,9 @@ async def process_single_pdf(item: dict[str, Any]) -> BatchProcessResult:
 
         return BatchProcessResult(status='success', path=str(pdf_path), result=result)
     except Exception as e:
-        return BatchProcessResult(status='error', path=item.get('path', ''), error=str(e))
+        return BatchProcessResult(
+            status='error', path=item.get('path', ''), error=str(e)
+        )
 
 
 async def process_discovery_query(item: dict[str, Any]) -> BatchProcessResult:
@@ -381,15 +388,19 @@ async def process_discovery_query(item: dict[str, Any]) -> BatchProcessResult:
             discovery_service.search_papers, query, max_results
         )
 
-        return BatchProcessResult(status='success', query=query, result={'results': results})
+        return BatchProcessResult(
+            status='success', query=query, result={'results': results}
+        )
     except Exception as e:
-        return BatchProcessResult(status='error', query=item.get('query', ''), error=str(e))
+        return BatchProcessResult(
+            status='error', query=item.get('query', ''), error=str(e)
+        )
 
 
 @router.post('/batch/process')
 async def batch_process(
     request: BatchProcessRequest,
-    service_manager: ServiceManager = Depends(get_service_manager)
+    service_manager: ServiceManager = Depends(get_service_manager),
 ):
     """Start a batch processing operation."""
     operation_id = str(uuid.uuid4())
@@ -406,7 +417,9 @@ async def batch_process(
     )
 
     # Start the operation in background, passing service_manager
-    create_background_task(execute_batch_process(operation_id, request, service_manager))
+    create_background_task(
+        execute_batch_process(operation_id, request, service_manager)
+    )
 
     return JSONResponse(
         {

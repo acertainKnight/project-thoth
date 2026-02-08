@@ -7,8 +7,6 @@ Provides tools for listing, switching, and managing analysis schemas.
 import json
 from typing import Any
 
-from loguru import logger
-
 from thoth.mcp.base_tools import MCPTool
 from thoth.mcp.protocol import MCPToolCallResult
 
@@ -18,29 +16,29 @@ class GetSchemaInfoTool(MCPTool):
 
     @property
     def name(self) -> str:
-        return "get_schema_info"
+        return 'get_schema_info'
 
     @property
     def description(self) -> str:
-        return "Get information about the currently active analysis schema including preset name, version, and available fields"
+        return 'Get information about the currently active analysis schema including preset name, version, and available fields'
 
     @property
     def input_schema(self) -> dict[str, Any]:
         """Define tool input schema."""
-        return {
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
+        return {'type': 'object', 'properties': {}, 'required': []}
 
     async def execute(self, arguments: dict[str, Any]) -> MCPToolCallResult:
         """Execute the tool."""
         try:
             # Get schema service
-            if not self.service_manager or not hasattr(self.service_manager, 'processing'):
+            if not self.service_manager or not hasattr(
+                self.service_manager, 'processing'
+            ):
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": "Processing service not available"}],
-                    isError=True
+                    content=[
+                        {'type': 'text', 'text': 'Processing service not available'}
+                    ],
+                    isError=True,
                 )
 
             schema_service = self.service_manager.processing.analysis_schema_service
@@ -63,7 +61,7 @@ class GetSchemaInfoTool(MCPTool):
 **Fields:** {', '.join(fields)}
 **Schema Path:** {schema_service.schema_path}"""
 
-            return MCPToolCallResult(content=[{"type": "text", "text": result_text}])
+            return MCPToolCallResult(content=[{'type': 'text', 'text': result_text}])
 
         except Exception as e:
             return self.handle_error(e)
@@ -74,29 +72,29 @@ class ListSchemaPresetsTool(MCPTool):
 
     @property
     def name(self) -> str:
-        return "list_schema_presets"
+        return 'list_schema_presets'
 
     @property
     def description(self) -> str:
-        return "List all available analysis schema presets with their descriptions"
+        return 'List all available analysis schema presets with their descriptions'
 
     @property
     def input_schema(self) -> dict[str, Any]:
         """Define tool input schema."""
-        return {
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
+        return {'type': 'object', 'properties': {}, 'required': []}
 
     async def execute(self, arguments: dict[str, Any]) -> MCPToolCallResult:
         """Execute the tool."""
         try:
             # Get schema service
-            if not self.service_manager or not hasattr(self.service_manager, 'processing'):
+            if not self.service_manager or not hasattr(
+                self.service_manager, 'processing'
+            ):
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": "Processing service not available"}],
-                    isError=True
+                    content=[
+                        {'type': 'text', 'text': 'Processing service not available'}
+                    ],
+                    isError=True,
                 )
 
             schema_service = self.service_manager.processing.analysis_schema_service
@@ -113,10 +111,10 @@ class ListSchemaPresetsTool(MCPTool):
 **Presets:**
 """
             for preset in presets:
-                marker = "→ " if preset == active_preset else "  "
-                result_text += f"{marker}{preset}\n"
+                marker = '→ ' if preset == active_preset else '  '
+                result_text += f'{marker}{preset}\n'
 
-            return MCPToolCallResult(content=[{"type": "text", "text": result_text}])
+            return MCPToolCallResult(content=[{'type': 'text', 'text': result_text}])
 
         except Exception as e:
             return self.handle_error(e)
@@ -127,7 +125,7 @@ class SetSchemaPresetTool(MCPTool):
 
     @property
     def name(self) -> str:
-        return "set_schema_preset"
+        return 'set_schema_preset'
 
     @property
     def description(self) -> str:
@@ -137,14 +135,14 @@ class SetSchemaPresetTool(MCPTool):
     def input_schema(self) -> dict[str, Any]:
         """Define tool input schema."""
         return {
-            "type": "object",
-            "properties": {
-                "preset": {
-                    "type": "string",
-                    "description": "The preset name to activate (e.g., 'standard', 'detailed', 'minimal', 'custom')"
+            'type': 'object',
+            'properties': {
+                'preset': {
+                    'type': 'string',
+                    'description': "The preset name to activate (e.g., 'standard', 'detailed', 'minimal', 'custom')",
                 }
             },
-            "required": ["preset"]
+            'required': ['preset'],
         }
 
     async def execute(self, arguments: dict[str, Any]) -> MCPToolCallResult:
@@ -153,15 +151,21 @@ class SetSchemaPresetTool(MCPTool):
             preset = arguments.get('preset')
             if not preset:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": "Error: 'preset' argument is required"}],
-                    isError=True
+                    content=[
+                        {'type': 'text', 'text': "Error: 'preset' argument is required"}
+                    ],
+                    isError=True,
                 )
 
             # Get schema service
-            if not self.service_manager or not hasattr(self.service_manager, 'processing'):
+            if not self.service_manager or not hasattr(
+                self.service_manager, 'processing'
+            ):
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": "Processing service not available"}],
-                    isError=True
+                    content=[
+                        {'type': 'text', 'text': 'Processing service not available'}
+                    ],
+                    isError=True,
                 )
 
             schema_service = self.service_manager.processing.analysis_schema_service
@@ -173,8 +177,13 @@ class SetSchemaPresetTool(MCPTool):
             if preset not in schema_config['presets']:
                 available = list(schema_config['presets'].keys())
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": f"Preset '{preset}' not found. Available presets: {', '.join(available)}"}],
-                    isError=True
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': f"Preset '{preset}' not found. Available presets: {', '.join(available)}",
+                        }
+                    ],
+                    isError=True,
                 )
 
             # Update active preset
@@ -199,7 +208,7 @@ class SetSchemaPresetTool(MCPTool):
 **Field Count:** {field_count}
 **Instructions:** {instructions}"""
 
-            return MCPToolCallResult(content=[{"type": "text", "text": result_text}])
+            return MCPToolCallResult(content=[{'type': 'text', 'text': result_text}])
 
         except Exception as e:
             return self.handle_error(e)
@@ -210,24 +219,24 @@ class GetPresetDetailsTool(MCPTool):
 
     @property
     def name(self) -> str:
-        return "get_preset_details"
+        return 'get_preset_details'
 
     @property
     def description(self) -> str:
-        return "Get detailed information about a specific analysis schema preset including all fields and their specifications"
+        return 'Get detailed information about a specific analysis schema preset including all fields and their specifications'
 
     @property
     def input_schema(self) -> dict[str, Any]:
         """Define tool input schema."""
         return {
-            "type": "object",
-            "properties": {
-                "preset": {
-                    "type": "string",
-                    "description": "The preset name to get details for (e.g., 'standard', 'detailed', 'minimal')"
+            'type': 'object',
+            'properties': {
+                'preset': {
+                    'type': 'string',
+                    'description': "The preset name to get details for (e.g., 'standard', 'detailed', 'minimal')",
                 }
             },
-            "required": ["preset"]
+            'required': ['preset'],
         }
 
     async def execute(self, arguments: dict[str, Any]) -> MCPToolCallResult:
@@ -236,15 +245,21 @@ class GetPresetDetailsTool(MCPTool):
             preset = arguments.get('preset')
             if not preset:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": "Error: 'preset' argument is required"}],
-                    isError=True
+                    content=[
+                        {'type': 'text', 'text': "Error: 'preset' argument is required"}
+                    ],
+                    isError=True,
                 )
 
             # Get schema service
-            if not self.service_manager or not hasattr(self.service_manager, 'processing'):
+            if not self.service_manager or not hasattr(
+                self.service_manager, 'processing'
+            ):
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": "Processing service not available"}],
-                    isError=True
+                    content=[
+                        {'type': 'text', 'text': 'Processing service not available'}
+                    ],
+                    isError=True,
                 )
 
             schema_service = self.service_manager.processing.analysis_schema_service
@@ -256,8 +271,13 @@ class GetPresetDetailsTool(MCPTool):
             if preset not in schema_config['presets']:
                 available = list(schema_config['presets'].keys())
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": f"Preset '{preset}' not found. Available presets: {', '.join(available)}"}],
-                    isError=True
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': f"Preset '{preset}' not found. Available presets: {', '.join(available)}",
+                        }
+                    ],
+                    isError=True,
                 )
 
             preset_config = schema_config['presets'][preset]
@@ -273,11 +293,15 @@ class GetPresetDetailsTool(MCPTool):
 """
             for field_name, field_spec in preset_config.get('fields', {}).items():
                 field_type = field_spec.get('type', 'string')
-                required = "required" if field_spec.get('required', False) else "optional"
+                required = (
+                    'required' if field_spec.get('required', False) else 'optional'
+                )
                 description = field_spec.get('description', '')
-                result_text += f"  - **{field_name}** ({field_type}, {required}): {description}\n"
+                result_text += (
+                    f'  - **{field_name}** ({field_type}, {required}): {description}\n'
+                )
 
-            return MCPToolCallResult(content=[{"type": "text", "text": result_text}])
+            return MCPToolCallResult(content=[{'type': 'text', 'text': result_text}])
 
         except Exception as e:
             return self.handle_error(e)
@@ -288,29 +312,29 @@ class ValidateSchemaFileTool(MCPTool):
 
     @property
     def name(self) -> str:
-        return "validate_schema_file"
+        return 'validate_schema_file'
 
     @property
     def description(self) -> str:
-        return "Validate the analysis schema configuration file for syntax and structure errors"
+        return 'Validate the analysis schema configuration file for syntax and structure errors'
 
     @property
     def input_schema(self) -> dict[str, Any]:
         """Define tool input schema."""
-        return {
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
+        return {'type': 'object', 'properties': {}, 'required': []}
 
     async def execute(self, arguments: dict[str, Any]) -> MCPToolCallResult:
         """Execute the tool."""
         try:
             # Get schema service
-            if not self.service_manager or not hasattr(self.service_manager, 'processing'):
+            if not self.service_manager or not hasattr(
+                self.service_manager, 'processing'
+            ):
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": "Processing service not available"}],
-                    isError=True
+                    content=[
+                        {'type': 'text', 'text': 'Processing service not available'}
+                    ],
+                    isError=True,
                 )
 
             schema_service = self.service_manager.processing.analysis_schema_service
@@ -319,13 +343,18 @@ class ValidateSchemaFileTool(MCPTool):
             # Check file exists
             if not schema_path.exists():
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": f"Schema file not found: {schema_path}"}],
-                    isError=True
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': f'Schema file not found: {schema_path}',
+                        }
+                    ],
+                    isError=True,
                 )
 
             # Try to load and validate
             try:
-                with open(schema_path, 'r', encoding='utf-8') as f:
+                with open(schema_path, encoding='utf-8') as f:
                     schema_config = json.load(f)
 
                 # Validate structure
@@ -344,12 +373,16 @@ class ValidateSchemaFileTool(MCPTool):
 **Active Preset:** {active_preset}
 **Preset Count:** {preset_count}"""
 
-                return MCPToolCallResult(content=[{"type": "text", "text": result_text}])
+                return MCPToolCallResult(
+                    content=[{'type': 'text', 'text': result_text}]
+                )
 
             except json.JSONDecodeError as e:
                 return MCPToolCallResult(
-                    content=[{"type": "text", "text": f"Invalid JSON in schema file: {e}"}],
-                    isError=True
+                    content=[
+                        {'type': 'text', 'text': f'Invalid JSON in schema file: {e}'}
+                    ],
+                    isError=True,
                 )
             except Exception as e:
                 return self.handle_error(e)

@@ -355,12 +355,16 @@ class DiscoveryServer(BaseService):
         """Activate a source in the scheduler if it's not already active."""
         try:
             if not source.schedule_config or not source.schedule_config.enabled:
-                self.self.logger.debug(f'Source {source.name} not enabled for scheduling')
+                self.self.logger.debug(
+                    f'Source {source.name} not enabled for scheduling'
+                )
                 return
 
             # The discovery service scheduler will automatically pick up
             # sources that have schedule configs when it runs its check loop
-            self.self.logger.info(f'Source {source.name} will be activated in scheduler')
+            self.self.logger.info(
+                f'Source {source.name} will be activated in scheduler'
+            )
 
         except Exception as e:
             self.self.logger.error(f'Error activating source {source.name}: {e}')

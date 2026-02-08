@@ -15,13 +15,12 @@ initialization failures. The monitor should be as simple as:
     watch folder → check database → process if needed
 """
 
+# Configure safe environment before any ML imports
+import os
 import sys
-from pathlib import Path
 
 from loguru import logger
 
-# Configure safe environment before any ML imports
-import os
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 os.environ['OMP_NUM_THREADS'] = '1'
 os.environ['MKL_NUM_THREADS'] = '1'
@@ -44,6 +43,7 @@ def main() -> int:
         # Import initialize_thoth function (no CLI imports)
         logger.info('Importing initialize_thoth...')
         from thoth.initialization import initialize_thoth
+
         logger.info('✓ initialize_thoth imported successfully')
 
         # Initialize Thoth with optimized pipeline
@@ -54,16 +54,20 @@ def main() -> int:
         # Import PDFMonitor (no CLI dependency)
         logger.info('Importing PDFMonitor...')
         from thoth.server.pdf_monitor import PDFMonitor
+
         logger.info('✓ PDFMonitor imported successfully')
 
         # Load config for watch directory
         logger.info('Loading configuration...')
         from thoth.config import config
+
         logger.info('✓ Configuration loaded')
 
         # Determine watch directory
         watch_dir = None
-        if hasattr(config, 'servers_config') and hasattr(config.servers_config, 'monitor'):
+        if hasattr(config, 'servers_config') and hasattr(
+            config.servers_config, 'monitor'
+        ):
             watch_dirs = config.servers_config.monitor.watch_directories
             if watch_dirs:
                 # Use first watch directory (relative to vault root)

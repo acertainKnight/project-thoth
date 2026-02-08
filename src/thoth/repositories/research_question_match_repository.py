@@ -9,8 +9,7 @@ NOTE: After 2026-01 schema migration:
 """
 
 import json
-from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from dateutil import parser as dateutil_parser
@@ -24,12 +23,14 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
 
     def __init__(self, postgres_service, **kwargs):
         """Initialize research question match repository."""
-        super().__init__(postgres_service, table_name='research_question_matches', **kwargs)
+        super().__init__(
+            postgres_service, table_name='research_question_matches', **kwargs
+        )
 
     async def find_or_create_paper(
         self,
-        doi: Optional[str] = None,
-        arxiv_id: Optional[str] = None,
+        doi: str | None = None,
+        arxiv_id: str | None = None,
         title: str = '',
         **paper_data,
     ) -> tuple[UUID, bool]:
@@ -48,7 +49,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
         try:
             # Use database function to find duplicate
             existing_id = await self.postgres.fetchval(
-                "SELECT find_duplicate_paper($1, $2, $3)",
+                'SELECT find_duplicate_paper($1, $2, $3)',
                 doi,
                 arxiv_id,
                 title,
@@ -64,7 +65,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
             authors = paper_data.get('authors')
             if isinstance(authors, list):
                 authors = json.dumps(authors)
-            
+
             # Convert publication_date string to datetime if needed
             publication_date = paper_data.get('publication_date')
             if isinstance(publication_date, str):
@@ -72,7 +73,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
                     publication_date = dateutil_parser.parse(publication_date)
                 except (ValueError, TypeError):
                     publication_date = None
-            
+
             insert_data = {
                 'doi': doi,
                 'arxiv_id': arxiv_id,
@@ -124,10 +125,10 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
         paper_id: UUID,
         question_id: UUID,
         relevance_score: float,
-        matched_keywords: Optional[list[str]] = None,
-        matched_topics: Optional[list[str]] = None,
-        matched_authors: Optional[list[str]] = None,
-        discovered_via_source: Optional[str] = None,
+        matched_keywords: list[str] | None = None,
+        matched_topics: list[str] | None = None,
+        matched_authors: list[str] | None = None,
+        discovered_via_source: str | None = None,
     ) -> UUID:
         """
         Create a research question match.
@@ -252,9 +253,9 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
     async def update_user_interaction(
         self,
         match_id: UUID,
-        is_viewed: Optional[bool] = None,
-        is_bookmarked: Optional[bool] = None,
-        user_sentiment: Optional[str] = None,
+        is_viewed: bool | None = None,
+        is_bookmarked: bool | None = None,
+        user_sentiment: str | None = None,
     ) -> bool:
         """
         Update user interaction flags for a match.
@@ -324,7 +325,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
         return [dict(row) for row in results]
 
     async def get_bookmarked_matches(
-        self, question_id: Optional[UUID] = None, limit: int = 100
+        self, question_id: UUID | None = None, limit: int = 100
     ) -> list[dict[str, Any]]:
         """Get bookmarked matches, optionally filtered by question."""
         if question_id:
@@ -380,26 +381,26 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
 
     async def delete_match(self, match_id: UUID) -> bool:
         """Delete a specific match."""
-        query = "DELETE FROM research_question_matches WHERE id = $1"
+        query = 'DELETE FROM research_question_matches WHERE id = $1'
         result = await self.postgres.execute(query, match_id)
         return result == 'DELETE 1'
 
     async def delete_matches_for_question(self, question_id: UUID) -> int:
         """Delete all matches for a research question."""
-        query = "DELETE FROM research_question_matches WHERE question_id = $1"
+        query = 'DELETE FROM research_question_matches WHERE question_id = $1'
         result = await self.postgres.execute(query, question_id)
         # Parse "DELETE N" response
         count = int(result.split()[-1]) if result.startswith('DELETE') else 0
         return count
 
-    async def get_paper_by_doi(self, doi: str) -> Optional[UUID]:
+    async def get_paper_by_doi(self, doi: str) -> UUID | None:
         """Get paper_id by DOI from paper_metadata."""
-        query = "SELECT id FROM paper_metadata WHERE doi = $1"
+        query = 'SELECT id FROM paper_metadata WHERE doi = $1'
         return await self.postgres.fetchval(query, doi)
 
-    async def get_paper_by_arxiv_id(self, arxiv_id: str) -> Optional[UUID]:
+    async def get_paper_by_arxiv_id(self, arxiv_id: str) -> UUID | None:
         """Get paper_id by arXiv ID from paper_metadata."""
-        query = "SELECT id FROM paper_metadata WHERE arxiv_id = $1"
+        query = 'SELECT id FROM paper_metadata WHERE arxiv_id = $1'
         return await self.postgres.fetchval(query, arxiv_id)
 
     def _normalize_title_python(self, title: str) -> str:
@@ -421,5 +422,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
     # Legacy method names for backward compatibility during transition
     async def get_or_create_article(self, *args, **kwargs):
         """DEPRECATED: Use find_or_create_paper() instead."""
-        logger.warning('get_or_create_article() is deprecated, use find_or_create_paper()')
+        logger.warning(
+            'get_or_create_article() is deprecated, use find_or_create_paper()'
+        )
         return await self.find_or_create_paper(*args, **kwargs)

@@ -6,7 +6,7 @@ LLM-powered auto-detection of article sources via the WorkflowBuilder.
 """  # noqa: W505
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -27,6 +27,11 @@ from thoth.repositories.workflow_executions_repository import (
 from thoth.repositories.workflow_search_config_repository import (
     WorkflowSearchConfigRepository,
 )
+from thoth.server.dependencies import (
+    get_postgres_service,
+    get_workflow_builder,
+    get_workflow_execution_service,
+)
 from thoth.services.postgres_service import PostgresService
 from thoth.utilities.schemas.browser_workflow import (
     BrowserWorkflowCreate,  # noqa: F401
@@ -37,12 +42,6 @@ from thoth.utilities.schemas.browser_workflow import (
     WorkflowAction,  # noqa: F401
 )
 
-from thoth.server.dependencies import (
-    get_postgres_service,
-    get_workflow_builder,
-    get_workflow_execution_service,
-)
-
 router = APIRouter(prefix='/api/workflows', tags=['browser_workflows'])
 
 # REMOVED: Module-level globals - Phase 5
@@ -51,7 +50,7 @@ router = APIRouter(prefix='/api/workflows', tags=['browser_workflows'])
 
 # Dependency injection helpers - updated to use central dependencies
 async def get_workflow_repo(
-    postgres_service: Optional[PostgresService] = Depends(get_postgres_service)
+    postgres_service: PostgresService | None = Depends(get_postgres_service),
 ) -> BrowserWorkflowRepository:
     """Get browser workflow repository dependency."""
     if postgres_service is None:
@@ -63,7 +62,7 @@ async def get_workflow_repo(
 
 
 async def get_executions_repo(
-    postgres_service: Optional[PostgresService] = Depends(get_postgres_service)
+    postgres_service: PostgresService | None = Depends(get_postgres_service),
 ) -> WorkflowExecutionsRepository:
     """Get workflow executions repository dependency."""
     if postgres_service is None:
@@ -75,7 +74,7 @@ async def get_executions_repo(
 
 
 async def get_actions_repo(
-    postgres_service: Optional[PostgresService] = Depends(get_postgres_service)
+    postgres_service: PostgresService | None = Depends(get_postgres_service),
 ) -> WorkflowActionsRepository:
     """Get workflow actions repository dependency."""
     if postgres_service is None:
@@ -87,7 +86,7 @@ async def get_actions_repo(
 
 
 async def get_search_config_repo(
-    postgres_service: Optional[PostgresService] = Depends(get_postgres_service)
+    postgres_service: PostgresService | None = Depends(get_postgres_service),
 ) -> WorkflowSearchConfigRepository:
     """Get workflow search config repository dependency."""
     if postgres_service is None:
@@ -99,9 +98,9 @@ async def get_search_config_repo(
 
 
 async def get_execution_service(
-    workflow_execution_service: Optional[WorkflowExecutionService] = Depends(
+    workflow_execution_service: WorkflowExecutionService | None = Depends(
         get_workflow_execution_service
-    )
+    ),
 ) -> WorkflowExecutionService:
     """Get workflow execution service dependency."""
     if workflow_execution_service is None:
@@ -117,15 +116,15 @@ class WorkflowCreateRequest(BaseModel):
     """Request model for creating a new workflow."""
 
     name: str = Field(..., description='Unique workflow name')
-    description: Optional[str] = Field(None, description='Workflow description')  # noqa: UP007
+    description: str | None = Field(None, description='Workflow description')
     website_domain: str = Field(..., description='Target website domain')
     start_url: str = Field(..., description='Starting URL for workflow')
     extraction_rules: dict[str, Any] = Field(
         ..., description='Article extraction rules'
     )
     requires_authentication: bool = Field(default=False)
-    authentication_type: Optional[str] = Field(default=None)  # noqa: UP007
-    pagination_config: Optional[dict[str, Any]] = Field(default=None)  # noqa: UP007
+    authentication_type: str | None = Field(default=None)
+    pagination_config: dict[str, Any] | None = Field(default=None)
     max_articles_per_run: int = Field(default=100, ge=1)
     timeout_seconds: int = Field(default=60, ge=1)
 
@@ -133,17 +132,17 @@ class WorkflowCreateRequest(BaseModel):
 class WorkflowUpdateRequest(BaseModel):
     """Request model for updating a workflow."""
 
-    name: Optional[str] = Field(None)  # noqa: UP007
-    description: Optional[str] = Field(None)  # noqa: UP007
-    website_domain: Optional[str] = Field(None)  # noqa: UP007
-    start_url: Optional[str] = Field(None)  # noqa: UP007
-    extraction_rules: Optional[dict[str, Any]] = Field(None)  # noqa: UP007
-    requires_authentication: Optional[bool] = Field(None)  # noqa: UP007
-    authentication_type: Optional[str] = Field(None)  # noqa: UP007
-    pagination_config: Optional[dict[str, Any]] = Field(None)  # noqa: UP007
-    max_articles_per_run: Optional[int] = Field(None, ge=1)  # noqa: UP007
-    timeout_seconds: Optional[int] = Field(None, ge=1)  # noqa: UP007
-    is_active: Optional[bool] = Field(None)  # noqa: UP007
+    name: str | None = Field(None)
+    description: str | None = Field(None)
+    website_domain: str | None = Field(None)
+    start_url: str | None = Field(None)
+    extraction_rules: dict[str, Any] | None = Field(None)
+    requires_authentication: bool | None = Field(None)
+    authentication_type: str | None = Field(None)
+    pagination_config: dict[str, Any] | None = Field(None)
+    max_articles_per_run: int | None = Field(None, ge=1)
+    timeout_seconds: int | None = Field(None, ge=1)
+    is_active: bool | None = Field(None)
 
 
 class WorkflowResponse(BaseModel):
@@ -151,12 +150,12 @@ class WorkflowResponse(BaseModel):
 
     id: UUID
     name: str
-    description: Optional[str]  # noqa: UP007
+    description: str | None
     website_domain: str
     start_url: str
     requires_authentication: bool
     extraction_rules: dict[str, Any]
-    pagination_config: Optional[dict[str, Any]]  # noqa: UP007
+    pagination_config: dict[str, Any] | None
     max_articles_per_run: int
     timeout_seconds: int
     is_active: bool
@@ -165,10 +164,10 @@ class WorkflowResponse(BaseModel):
     successful_executions: int
     failed_executions: int
     total_articles_extracted: int
-    average_execution_time_ms: Optional[int]  # noqa: UP007
-    last_executed_at: Optional[datetime]  # noqa: UP007
-    last_success_at: Optional[datetime]  # noqa: UP007
-    last_failure_at: Optional[datetime]  # noqa: UP007
+    average_execution_time_ms: int | None
+    last_executed_at: datetime | None
+    last_success_at: datetime | None
+    last_failure_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -176,19 +175,19 @@ class WorkflowResponse(BaseModel):
 class WorkflowDetailResponse(WorkflowResponse):
     """Detailed workflow response with search config."""
 
-    search_config: Optional[dict[str, Any]] = Field(None)  # noqa: UP007
+    search_config: dict[str, Any] | None = Field(None)
 
 
 class WorkflowExecutionRequest(BaseModel):
     """Request model for executing a workflow."""
 
     keywords: list[str] = Field(default_factory=list)
-    date_range: Optional[str] = Field(None)  # noqa: UP007
-    date_from: Optional[str] = Field(None)  # noqa: UP007
-    date_to: Optional[str] = Field(None)  # noqa: UP007
-    subject: Optional[str] = Field(None)  # noqa: UP007
+    date_range: str | None = Field(None)
+    date_from: str | None = Field(None)
+    date_to: str | None = Field(None)
+    subject: str | None = Field(None)
     custom_filters: dict[str, Any] = Field(default_factory=dict)
-    max_articles: Optional[int] = Field(None, ge=1)  # noqa: UP007
+    max_articles: int | None = Field(None, ge=1)
 
 
 class WorkflowExecutionResponse(BaseModel):
@@ -207,11 +206,11 @@ class ExecutionHistoryResponse(BaseModel):
     workflow_id: UUID
     status: str
     started_at: datetime
-    completed_at: Optional[datetime]  # noqa: UP007
-    duration_ms: Optional[int]  # noqa: UP007
+    completed_at: datetime | None
+    duration_ms: int | None
     articles_extracted: int
     pages_visited: int
-    error_message: Optional[str]  # noqa: UP007
+    error_message: str | None
     execution_parameters: dict[str, Any]
     triggered_by: str
 
@@ -221,12 +220,12 @@ class WorkflowActionRequest(BaseModel):
 
     step_number: int = Field(..., ge=0)
     action_type: str = Field(...)
-    target_selector: Optional[dict[str, Any]] = Field(None)  # noqa: UP007
-    target_description: Optional[str] = Field(None)  # noqa: UP007
-    action_value: Optional[str] = Field(None)  # noqa: UP007
+    target_selector: dict[str, Any] | None = Field(None)
+    target_description: str | None = Field(None)
+    action_value: str | None = Field(None)
     is_parameterized: bool = Field(default=False)
-    parameter_name: Optional[str] = Field(None)  # noqa: UP007
-    wait_condition: Optional[str] = Field(None)  # noqa: UP007
+    parameter_name: str | None = Field(None)
+    wait_condition: str | None = Field(None)
     wait_timeout_ms: int = Field(default=30000, ge=0)
     retry_on_failure: bool = Field(default=True)
     max_retries: int = Field(default=3, ge=0)
@@ -250,7 +249,9 @@ class CreateWorkflowResponse(BaseModel):
 # Endpoints
 
 
-@router.post('', response_model=CreateWorkflowResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    '', response_model=CreateWorkflowResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_workflow(
     request: WorkflowCreateRequest,
     repo: BrowserWorkflowRepository = Depends(get_workflow_repo),  # noqa: B008
@@ -308,8 +309,8 @@ async def create_workflow(
 
 @router.get('', response_model=list[WorkflowResponse])
 async def list_workflows(
-    is_active: Optional[bool] = Query(None, description='Filter by active status'),  # noqa: UP007
-    domain: Optional[str] = Query(None, description='Filter by website domain'),  # noqa: UP007
+    is_active: bool | None = Query(None, description='Filter by active status'),
+    domain: str | None = Query(None, description='Filter by website domain'),
     repo: BrowserWorkflowRepository = Depends(get_workflow_repo),  # noqa: B008
 ):
     """List all workflows with optional filters.
@@ -340,7 +341,9 @@ async def list_workflows(
         else:
             query = 'SELECT * FROM browser_workflows'
             result = await repo.postgres.fetch(query)
-            workflows = [BrowserWorkflowRepository._deserialize_row(dict(w)) for w in result]
+            workflows = [
+                BrowserWorkflowRepository._deserialize_row(dict(w)) for w in result
+            ]
 
         return [WorkflowResponse(**w) for w in workflows]
 
@@ -520,7 +523,7 @@ async def _execute_workflow_background(
         if result.stats.success:
             await executions_repo.update_status(
                 execution_id,
-                ExecutionStatus.SUCCESS.value,  # noqa: F821
+                ExecutionStatus.SUCCESS.value,
             )
             logger.info(
                 f'Workflow execution {execution_id} completed successfully: '
@@ -529,7 +532,7 @@ async def _execute_workflow_background(
         else:
             await executions_repo.update_status(
                 execution_id,
-                ExecutionStatus.FAILED.value,  # noqa: F821
+                ExecutionStatus.FAILED.value,
                 error_message=result.stats.error_message,
             )
             logger.error(
@@ -544,7 +547,7 @@ async def _execute_workflow_background(
         try:
             await executions_repo.update_status(
                 execution_id,
-                ExecutionStatus.FAILED.value,  # noqa: F821
+                ExecutionStatus.FAILED.value,
                 error_message=str(e),
             )
         except Exception as update_error:
@@ -594,7 +597,7 @@ async def execute_workflow(
         # Create execution record
         execution_data = {
             'workflow_id': workflow_id,
-            'status': ExecutionStatus.RUNNING.value,  # noqa: F821
+            'status': ExecutionStatus.RUNNING.value,
             'execution_parameters': request.model_dump(),
             'triggered_by': ExecutionTrigger.MANUAL.value,
             'started_at': datetime.utcnow(),
@@ -634,7 +637,7 @@ async def execute_workflow(
         return WorkflowExecutionResponse(
             execution_id=execution_id,
             workflow_id=workflow_id,
-            status=ExecutionStatus.RUNNING.value,  # noqa: F821
+            status=ExecutionStatus.RUNNING.value,
             message='Workflow execution started in background',
         )
 
@@ -822,11 +825,16 @@ class ConfirmWorkflowRequest(BaseModel):
     url: str = Field(..., description='The analyzed URL')
     name: str = Field(..., description='Name for the workflow')
     description: str | None = Field(None, description='Optional description')
-    article_container_selector: str = Field(..., description='Confirmed container selector')
-    selectors: dict[str, SelectorInfo] = Field(..., description='Confirmed field selectors')
+    article_container_selector: str = Field(
+        ..., description='Confirmed container selector'
+    )
+    selectors: dict[str, SelectorInfo] = Field(
+        ..., description='Confirmed field selectors'
+    )
     pagination_selector: str | None = Field(None, description='Pagination selector')
     search_filters: list[SearchFilterResponse] = Field(
-        default_factory=list, description='Detected search/filter UI elements',
+        default_factory=list,
+        description='Detected search/filter UI elements',
     )
     max_articles_per_run: int = Field(default=100, ge=1)
     requires_authentication: bool = Field(default=False)
@@ -857,27 +865,29 @@ async def analyze_url(
         )
 
         # Convert to response model
-        selectors = {
-            k: SelectorInfo(**v) for k, v in result.selectors.items()
-        }
+        selectors = {k: SelectorInfo(**v) for k, v in result.selectors.items()}
 
         sample_articles = []
         for article in result.sample_articles:
-            sample_articles.append(SampleArticleResponse(
-                title=article.title,
-                authors=article.authors if isinstance(article.authors, list) else [],
-                abstract=article.abstract,
-                url=article.url,
-                pdf_url=article.pdf_url,
-                doi=article.doi,
-                publication_date=article.publication_date,
-                keywords=article.keywords if isinstance(article.keywords, list) else [],
-                journal=article.journal,
-            ))
+            sample_articles.append(
+                SampleArticleResponse(
+                    title=article.title,
+                    authors=article.authors
+                    if isinstance(article.authors, list)
+                    else [],
+                    abstract=article.abstract,
+                    url=article.url,
+                    pdf_url=article.pdf_url,
+                    doi=article.doi,
+                    publication_date=article.publication_date,
+                    keywords=article.keywords
+                    if isinstance(article.keywords, list)
+                    else [],
+                    journal=article.journal,
+                )
+            )
 
-        search_filters = [
-            SearchFilterResponse(**sf) for sf in result.search_filters
-        ]
+        search_filters = [SearchFilterResponse(**sf) for sf in result.search_filters]
 
         return AnalyzeUrlResponse(
             url=result.url,
@@ -927,27 +937,29 @@ async def refine_selectors(
             include_screenshot=request.include_screenshot,
         )
 
-        selectors = {
-            k: SelectorInfo(**v) for k, v in result.selectors.items()
-        }
+        selectors = {k: SelectorInfo(**v) for k, v in result.selectors.items()}
 
         sample_articles = []
         for article in result.sample_articles:
-            sample_articles.append(SampleArticleResponse(
-                title=article.title,
-                authors=article.authors if isinstance(article.authors, list) else [],
-                abstract=article.abstract,
-                url=article.url,
-                pdf_url=article.pdf_url,
-                doi=article.doi,
-                publication_date=article.publication_date,
-                keywords=article.keywords if isinstance(article.keywords, list) else [],
-                journal=article.journal,
-            ))
+            sample_articles.append(
+                SampleArticleResponse(
+                    title=article.title,
+                    authors=article.authors
+                    if isinstance(article.authors, list)
+                    else [],
+                    abstract=article.abstract,
+                    url=article.url,
+                    pdf_url=article.pdf_url,
+                    doi=article.doi,
+                    publication_date=article.publication_date,
+                    keywords=article.keywords
+                    if isinstance(article.keywords, list)
+                    else [],
+                    journal=article.journal,
+                )
+            )
 
-        search_filters = [
-            SearchFilterResponse(**sf) for sf in result.search_filters
-        ]
+        search_filters = [SearchFilterResponse(**sf) for sf in result.search_filters]
 
         return AnalyzeUrlResponse(
             url=result.url,
@@ -972,7 +984,11 @@ async def refine_selectors(
         )
 
 
-@router.post('/confirm', response_model=CreateWorkflowResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    '/confirm',
+    response_model=CreateWorkflowResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def confirm_workflow(
     request: ConfirmWorkflowRequest,
     repo: BrowserWorkflowRepository = Depends(get_workflow_repo),  # noqa: B008
@@ -1031,13 +1047,15 @@ async def confirm_workflow(
                         'sort_dropdown': 'sort_order',
                     }.get(sf.element_type, sf.element_type)
 
-                    filters.append({
-                        'name': sf.description or sf.element_type,
-                        'parameter_name': param_name,
-                        'selector': {'css': sf.css_selector},
-                        'filter_type': sf.filter_type,
-                        'optional': True,
-                    })
+                    filters.append(
+                        {
+                            'name': sf.description or sf.element_type,
+                            'parameter_name': param_name,
+                            'selector': {'css': sf.css_selector},
+                            'filter_type': sf.filter_type,
+                            'optional': True,
+                        }
+                    )
 
             search_config = {
                 'search_input_selector': (
@@ -1052,7 +1070,8 @@ async def confirm_workflow(
 
         workflow_data = {
             'name': request.name,
-            'description': request.description or f'Auto-detected workflow for {domain}',
+            'description': request.description
+            or f'Auto-detected workflow for {domain}',
             'website_domain': domain,
             'start_url': request.url,
             'extraction_rules': extraction_rules,
@@ -1086,14 +1105,19 @@ async def confirm_workflow(
             )
             # Store search_config in the workflow's extraction_rules for now
             # (search_config_repo requires workflow to already exist)
-            await repo.update(workflow_id, {
-                'extraction_rules': {
-                    **extraction_rules,
-                    'search_config': search_config,
+            await repo.update(
+                workflow_id,
+                {
+                    'extraction_rules': {
+                        **extraction_rules,
+                        'search_config': search_config,
+                    },
                 },
-            })
+            )
 
-        logger.info(f'Created workflow from builder: {workflow_id} ({request.name}) for {domain}')
+        logger.info(
+            f'Created workflow from builder: {workflow_id} ({request.name}) for {domain}'
+        )
         return CreateWorkflowResponse(workflow_id=workflow_id)
 
     except HTTPException:

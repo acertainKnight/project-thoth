@@ -21,8 +21,8 @@ class WelcomeScreen(BaseScreen):
     def __init__(self) -> None:
         """Initialize welcome screen."""
         super().__init__(
-            title="Welcome to Thoth Setup",
-            subtitle="AI-Powered Research Assistant for Obsidian",
+            title='Welcome to Thoth Setup',
+            subtitle='AI-Powered Research Assistant for Obsidian',
         )
 
     def compose_content(self) -> ComposeResult:
@@ -65,7 +65,7 @@ to help you discover, analyze, and manage academic papers and research.
 [dim]Press Enter or → to start.[/dim]
         """
 
-        yield Static(welcome_text, classes="welcome-content")
+        yield Static(welcome_text, classes='welcome-content')
 
     def compose_buttons(self) -> ComposeResult:
         """
@@ -74,8 +74,8 @@ to help you discover, analyze, and manage academic papers and research.
         Returns:
             Button widgets
         """
-        yield Button("Exit", id="cancel", variant="error")
-        yield Button("Begin Setup", id="next", variant="success")
+        yield Button('Exit', id='cancel', variant='error')
+        yield Button('Begin Setup', id='next', variant='success')
 
     async def validate_and_proceed(self) -> dict[str, Any] | None:
         """
@@ -84,12 +84,12 @@ to help you discover, analyze, and manage academic papers and research.
         Returns:
             Empty dict (no data to collect from welcome screen)
         """
-        logger.info("Starting Thoth setup wizard")
+        logger.info('Starting Thoth setup wizard')
         return {}
 
     async def on_next_screen(self) -> None:
         """Navigate to vault selection screen."""
         from .vault_selection import VaultSelectionScreen
 
-        logger.info("Proceeding to vault selection")
+        logger.info('Proceeding to vault selection')
         await self.app.push_screen(VaultSelectionScreen())

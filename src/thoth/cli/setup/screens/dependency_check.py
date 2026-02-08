@@ -17,7 +17,6 @@ from typing import Any
 
 from loguru import logger
 from textual.app import ComposeResult
-from textual.containers import Vertical
 from textual.widgets import Button, ProgressBar, Static
 
 from ..detectors.docker import DockerDetector, DockerStatus
@@ -32,28 +31,28 @@ class DependencyCheckScreen(BaseScreen):
     def __init__(self) -> None:
         """Initialize dependency check screen."""
         super().__init__(
-            title="Check Dependencies",
-            subtitle="Verifying Docker, PostgreSQL, and Letta installation",
+            title='Check Dependencies',
+            subtitle='Verifying Docker, PostgreSQL, and Letta installation',
         )
         self.docker_status: DockerStatus | None = None
         self.postgres_status: PostgreSQLStatus | None = None
         self.letta_status: LettaStatus | None = None
         self.all_ready = False
-        self.letta_mode: str = "self-hosted"  # Default to self-hosted
-        self.letta_api_key: str = ""
+        self.letta_mode: str = 'self-hosted'  # Default to self-hosted
+        self.letta_api_key: str = ''
 
     def on_mount(self) -> None:
         """Run when screen is mounted."""
         # Read Letta mode from wizard data
-        if hasattr(self.app, "wizard_data"):
-            self.letta_mode = self.app.wizard_data.get("letta_mode", "self-hosted")
-            self.letta_api_key = self.app.wizard_data.get("letta_api_key", "")
-            logger.info(f"Letta mode from wizard: {self.letta_mode}")
+        if hasattr(self.app, 'wizard_data'):
+            self.letta_mode = self.app.wizard_data.get('letta_mode', 'self-hosted')
+            self.letta_api_key = self.app.wizard_data.get('letta_api_key', '')
+            logger.info(f'Letta mode from wizard: {self.letta_mode}')
 
         # Hide progress bar initially
         try:
-            progress_bar = self.query_one("#install-progress", ProgressBar)
-            progress_bar.styles.display = "none"
+            progress_bar = self.query_one('#install-progress', ProgressBar)
+            progress_bar.styles.display = 'none'
         except Exception:
             pass  # Widget might not be ready yet
 
@@ -61,10 +60,10 @@ class DependencyCheckScreen(BaseScreen):
 
     async def check_dependencies(self) -> None:
         """Check all dependencies."""
-        if self.letta_mode == "cloud":
-            self.show_info("Checking dependencies (Letta Cloud mode)...")
+        if self.letta_mode == 'cloud':
+            self.show_info('Checking dependencies (Letta Cloud mode)...')
         else:
-            self.show_info("Checking dependencies...")
+            self.show_info('Checking dependencies...')
 
         try:
             # For cloud mode, we still need Docker for PostgreSQL (Thoth's DB)
@@ -82,120 +81,119 @@ class DependencyCheckScreen(BaseScreen):
             self.all_ready = self._are_all_dependencies_ready()
 
             if self.all_ready:
-                self.show_info("All dependencies are ready!")
+                self.show_info('All dependencies are ready!')
             else:
                 # If self-hosted Letta failed, offer cloud fallback
-                if (
-                    self.letta_mode == "self-hosted"
-                    and not (self.letta_status and self.letta_status.available)
+                if self.letta_mode == 'self-hosted' and not (
+                    self.letta_status and self.letta_status.available
                 ):
                     self.show_error(
-                        "Letta self-hosted setup unavailable. "
-                        "Consider using Letta Cloud instead."
+                        'Letta self-hosted setup unavailable. '
+                        'Consider using Letta Cloud instead.'
                     )
                 else:
                     self.show_info(
-                        "Some dependencies need to be installed. Click Install to proceed."
+                        'Some dependencies need to be installed. Click Install to proceed.'
                     )
 
             self._update_button_visibility()
             self.refresh()
 
         except Exception as e:
-            logger.error(f"Error checking dependencies: {e}")
-            self.show_error(f"Failed to check dependencies: {e}")
+            logger.error(f'Error checking dependencies: {e}')
+            self.show_error(f'Failed to check dependencies: {e}')
 
     async def check_docker(self) -> None:
         """Check Docker installation."""
-        logger.info("Checking Docker...")
-        self._update_status("docker", "Checking...")
-        
+        logger.info('Checking Docker...')
+        self._update_status('docker', 'Checking...')
+
         # Add small delay to show the checking state
         await asyncio.sleep(0.2)
-        
+
         self.docker_status = DockerDetector.get_status()
-        self._update_status("docker", self._format_docker_status())
+        self._update_status('docker', self._format_docker_status())
 
         if self.docker_status.available:
             logger.info(
-                f"Docker available: {self.docker_status.version or 'unknown version'}"
+                f'Docker available: {self.docker_status.version or "unknown version"}'
             )
             if self.docker_status.compose_available:
-                logger.info("Docker Compose is available")
+                logger.info('Docker Compose is available')
             else:
-                logger.warning("Docker Compose not available")
+                logger.warning('Docker Compose not available')
         else:
-            logger.warning("Docker not available")
+            logger.warning('Docker not available')
 
     async def check_postgresql(self) -> None:
         """Check PostgreSQL installation."""
-        logger.info("Checking PostgreSQL...")
-        self._update_status("postgres", "Checking...")
-        
+        logger.info('Checking PostgreSQL...')
+        self._update_status('postgres', 'Checking...')
+
         # Add small delay to show the checking state
         await asyncio.sleep(0.2)
 
         # Check if PostgreSQL is running in Docker
         if self.docker_status and self.docker_status.compose_available:
             containers = DockerDetector.list_running_containers()
-            postgres_running = any("postgres" in c["image"].lower() for c in containers)
+            postgres_running = any('postgres' in c['image'].lower() for c in containers)
 
             if postgres_running:
                 # Try to connect using the default local Docker URL
-                db_url = "postgresql://thoth:thoth@localhost:5432/thoth"
+                db_url = 'postgresql://thoth:thoth@localhost:5432/thoth'
                 self.postgres_status = await PostgreSQLDetector.test_connection(db_url)
                 if self.postgres_status.available:
-                    logger.info("PostgreSQL is running and available")
+                    logger.info('PostgreSQL is running and available')
                 else:
-                    logger.warning("PostgreSQL container found but not responding")
+                    logger.warning('PostgreSQL container found but not responding')
             else:
-                logger.info("PostgreSQL not running in Docker")
+                logger.info('PostgreSQL not running in Docker')
                 self.postgres_status = PostgreSQLStatus(
                     connected=False,
                     version=None,
                     pgvector_available=False,
-                    host="localhost",
+                    host='localhost',
                     port=5432,
                     database=None,
-                    error_message="PostgreSQL not running",
+                    error_message='PostgreSQL not running',
                 )
         else:
             # Check system PostgreSQL
-            db_url = "postgresql://thoth:thoth@localhost:5432/thoth"
+            db_url = 'postgresql://thoth:thoth@localhost:5432/thoth'
             self.postgres_status = await PostgreSQLDetector.test_connection(db_url)
-        
-        self._update_status("postgres", self._format_postgres_status())
+
+        self._update_status('postgres', self._format_postgres_status())
 
     async def check_letta(self) -> None:
         """Check Letta server (cloud or self-hosted based on mode)."""
-        if self.letta_mode == "cloud":
-            logger.info("Checking Letta Cloud...")
-            self._update_status("letta", "Checking Letta Cloud...")
+        if self.letta_mode == 'cloud':
+            logger.info('Checking Letta Cloud...')
+            self._update_status('letta', 'Checking Letta Cloud...')
             await asyncio.sleep(0.2)
-            
+
             self.letta_status = LettaDetector.get_status(
-                url="https://api.letta.com",
+                url='https://api.letta.com',
                 api_key=self.letta_api_key,
-                mode="cloud",
+                mode='cloud',
             )
         else:
-            logger.info("Checking Letta (self-hosted)...")
-            self._update_status("letta", "Checking Letta (self-hosted)...")
+            logger.info('Checking Letta (self-hosted)...')
+            self._update_status('letta', 'Checking Letta (self-hosted)...')
             await asyncio.sleep(0.2)
-            
+
             self.letta_status = LettaDetector.get_status(
-                mode="self-hosted",
+                mode='self-hosted',
             )
 
-        self._update_status("letta", self._format_letta_status())
+        self._update_status('letta', self._format_letta_status())
 
         if self.letta_status.available:
             logger.info(
-                f"Letta available at {self.letta_status.url} "
-                f"(version: {self.letta_status.version or 'unknown'})"
+                f'Letta available at {self.letta_status.url} '
+                f'(version: {self.letta_status.version or "unknown"})'
             )
         else:
-            logger.warning(f"Letta not available ({self.letta_mode} mode)")
+            logger.warning(f'Letta not available ({self.letta_mode} mode)')
 
     def _are_all_dependencies_ready(self) -> bool:
         """
@@ -208,7 +206,7 @@ class DependencyCheckScreen(BaseScreen):
         letta_ready = self.letta_status and self.letta_status.available
 
         # For cloud mode, Docker/PostgreSQL not required for Letta (only for Thoth)
-        if self.letta_mode == "cloud":
+        if self.letta_mode == 'cloud':
             # In cloud mode, we still need Docker+PostgreSQL for Thoth itself
             docker_ready = (
                 self.docker_status
@@ -236,7 +234,7 @@ class DependencyCheckScreen(BaseScreen):
             text: New status text to display
         """
         try:
-            status_widget = self.query_one(f"#{service}-status", Static)
+            status_widget = self.query_one(f'#{service}-status', Static)
             status_widget.update(text)
         except Exception:
             # Widget might not be mounted yet
@@ -249,32 +247,28 @@ class DependencyCheckScreen(BaseScreen):
         Returns:
             Content widgets
         """
-        yield Static("[bold]Dependency Status:[/bold]\n", classes="section-title")
+        yield Static('[bold]Dependency Status:[/bold]\n', classes='section-title')
 
         # Docker status - with ID for dynamic updates
         yield Static(
-            self._format_docker_status(),
-            id="docker-status",
-            classes="dependency-item"
+            self._format_docker_status(), id='docker-status', classes='dependency-item'
         )
 
         # PostgreSQL status - with ID for dynamic updates
         yield Static(
             self._format_postgres_status(),
-            id="postgres-status",
-            classes="dependency-item"
+            id='postgres-status',
+            classes='dependency-item',
         )
 
         # Letta status - with ID for dynamic updates
         yield Static(
-            self._format_letta_status(),
-            id="letta-status",
-            classes="dependency-item"
+            self._format_letta_status(), id='letta-status', classes='dependency-item'
         )
 
         # Progress bar (shown during installation)
-        yield Static("")  # Spacer
-        yield ProgressBar(id="install-progress", total=100, show_eta=False)
+        yield Static('')  # Spacer
+        yield ProgressBar(id='install-progress', total=100, show_eta=False)
 
     def _format_docker_status(self) -> str:
         """
@@ -284,15 +278,15 @@ class DependencyCheckScreen(BaseScreen):
             Formatted status string
         """
         if not self.docker_status:
-            return "[dim]Docker: Checking...[/dim]"
+            return '[dim]Docker: Checking...[/dim]'
 
         if self.docker_status.available and self.docker_status.compose_available:
-            version = self.docker_status.version or "unknown"
-            return f"[green]✓[/green] Docker: {version} (Compose available)"
+            version = self.docker_status.version or 'unknown'
+            return f'[green]✓[/green] Docker: {version} (Compose available)'
         elif self.docker_status.available:
-            return "[yellow]⚠[/yellow] Docker: Available but Compose missing"
+            return '[yellow]⚠[/yellow] Docker: Available but Compose missing'
         else:
-            return "[red]✗[/red] Docker: Not installed"
+            return '[red]✗[/red] Docker: Not installed'
 
     def _format_postgres_status(self) -> str:
         """
@@ -302,13 +296,13 @@ class DependencyCheckScreen(BaseScreen):
             Formatted status string
         """
         if not self.postgres_status:
-            return "[dim]PostgreSQL: Checking...[/dim]"
+            return '[dim]PostgreSQL: Checking...[/dim]'
 
         if self.postgres_status.available:
-            version = self.postgres_status.version or "unknown"
-            return f"[green]✓[/green] PostgreSQL: {version} (Running)"
+            version = self.postgres_status.version or 'unknown'
+            return f'[green]✓[/green] PostgreSQL: {version} (Running)'
         else:
-            return "[red]✗[/red] PostgreSQL: Not running"
+            return '[red]✗[/red] PostgreSQL: Not running'
 
     def _format_letta_status(self) -> str:
         """
@@ -318,14 +312,14 @@ class DependencyCheckScreen(BaseScreen):
             Formatted status string
         """
         if not self.letta_status:
-            return "[dim]Letta: Checking...[/dim]"
+            return '[dim]Letta: Checking...[/dim]'
 
         if self.letta_status.available:
-            version = self.letta_status.version or "unknown"
+            version = self.letta_status.version or 'unknown'
             mode = self.letta_status.mode
-            return f"[green]✓[/green] Letta: {version} ({mode})"
+            return f'[green]✓[/green] Letta: {version} ({mode})'
         else:
-            return "[red]✗[/red] Letta: Not running"
+            return '[red]✗[/red] Letta: Not running'
 
     def compose_buttons(self) -> ComposeResult:
         """
@@ -337,11 +331,11 @@ class DependencyCheckScreen(BaseScreen):
         Returns:
             Button widgets
         """
-        yield Button("Cancel & Exit", id="cancel", variant="error")
-        yield Button("← Back", id="back", variant="default")
-        yield Button("Skip", id="skip", variant="warning")
-        yield Button("Install", id="install", variant="primary")
-        yield Button("Next →", id="next", variant="success", classes="hidden")
+        yield Button('Cancel & Exit', id='cancel', variant='error')
+        yield Button('← Back', id='back', variant='default')
+        yield Button('Skip', id='skip', variant='warning')
+        yield Button('Install', id='install', variant='primary')
+        yield Button('Next →', id='next', variant='success', classes='hidden')
 
     async def validate_and_proceed(self) -> dict[str, Any] | None:
         """
@@ -352,22 +346,22 @@ class DependencyCheckScreen(BaseScreen):
         """
         if not self.all_ready:
             self.show_error(
-                "Not all dependencies are ready. Please install them or skip."
+                'Not all dependencies are ready. Please install them or skip.'
             )
             return None
 
-        logger.info("All dependencies validated and ready")
+        logger.info('All dependencies validated and ready')
         return {
-            "docker_available": self.docker_status.available
+            'docker_available': self.docker_status.available
             if self.docker_status
             else False,
-            "postgres_available": self.postgres_status.available
+            'postgres_available': self.postgres_status.available
             if self.postgres_status
             else False,
-            "letta_available": self.letta_status.available
+            'letta_available': self.letta_status.available
             if self.letta_status
             else False,
-            "letta_mode": self.letta_mode,
+            'letta_mode': self.letta_mode,
         }
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -379,23 +373,23 @@ class DependencyCheckScreen(BaseScreen):
         """
         button_id = event.button.id
 
-        if button_id == "cancel":
+        if button_id == 'cancel':
             self.action_cancel()
-        elif button_id == "back":
+        elif button_id == 'back':
             self.action_back()
-        elif button_id == "skip":
-            logger.warning("User chose to skip dependency installation")
+        elif button_id == 'skip':
+            logger.warning('User chose to skip dependency installation')
             self.all_ready = True
             await self.on_next_screen()
-        elif button_id == "install":
+        elif button_id == 'install':
             await self.install_dependencies()
-        elif button_id == "next":
+        elif button_id == 'next':
             # Validate and proceed to next screen
             data = await self.validate_and_proceed()
             if data is not None:
-                logger.info("Dependencies validated successfully")
+                logger.info('Dependencies validated successfully')
                 # Store data in app state
-                if hasattr(self.app, "wizard_data"):
+                if hasattr(self.app, 'wizard_data'):
                     self.app.wizard_data.update(data)
                 # Proceed to next screen
                 await self.on_next_screen()
@@ -403,37 +397,37 @@ class DependencyCheckScreen(BaseScreen):
     def _update_button_visibility(self) -> None:
         """Show/hide Next and Install buttons based on dependency status."""
         try:
-            next_btn = self.query_one("#next", Button)
-            install_btn = self.query_one("#install", Button)
-            skip_btn = self.query_one("#skip", Button)
+            next_btn = self.query_one('#next', Button)
+            install_btn = self.query_one('#install', Button)
+            skip_btn = self.query_one('#skip', Button)
 
             if self.all_ready:
-                next_btn.remove_class("hidden")
-                install_btn.add_class("hidden")
-                skip_btn.add_class("hidden")
+                next_btn.remove_class('hidden')
+                install_btn.add_class('hidden')
+                skip_btn.add_class('hidden')
             else:
-                next_btn.add_class("hidden")
-                install_btn.remove_class("hidden")
-                skip_btn.remove_class("hidden")
+                next_btn.add_class('hidden')
+                install_btn.remove_class('hidden')
+                skip_btn.remove_class('hidden')
         except Exception:
             pass  # Widgets might not be mounted yet
 
     async def install_dependencies(self) -> None:
         """Install missing dependencies."""
-        self.show_info("Installing dependencies...")
+        self.show_info('Installing dependencies...')
 
         try:
             # Show progress bar
-            progress_bar = self.query_one("#install-progress", ProgressBar)
-            progress_bar.styles.display = "block"
+            progress_bar = self.query_one('#install-progress', ProgressBar)
+            progress_bar.styles.display = 'block'
             progress_bar.update(progress=10)
 
             # Install Docker (if not available)
             if not self.docker_status or not self.docker_status.available:
                 self.show_error(
-                    "Docker is required but not available. "
-                    "Please install Docker from https://docs.docker.com/get-docker/ "
-                    "and restart the wizard."
+                    'Docker is required but not available. '
+                    'Please install Docker from https://docs.docker.com/get-docker/ '
+                    'and restart the wizard.'
                 )
                 return
 
@@ -441,70 +435,76 @@ class DependencyCheckScreen(BaseScreen):
 
             # Start PostgreSQL via Docker Compose
             if not self.postgres_status or not self.postgres_status.available:
-                self.show_info("Starting PostgreSQL via Docker Compose...")
+                self.show_info('Starting PostgreSQL via Docker Compose...')
                 try:
                     import subprocess
                     from pathlib import Path
 
                     # Find docker-compose.yml in project root
-                    compose_file = Path.cwd() / "docker-compose.yml"
-                    dev_compose_file = Path.cwd() / "docker-compose.dev.yml"
+                    compose_file = Path.cwd() / 'docker-compose.yml'
+                    dev_compose_file = Path.cwd() / 'docker-compose.dev.yml'
 
                     if compose_file.exists() or dev_compose_file.exists():
                         # Start PostgreSQL service
                         result = subprocess.run(
-                            ["docker", "compose", "up", "-d", "postgres"],
+                            ['docker', 'compose', 'up', '-d', 'postgres'],
                             capture_output=True,
                             text=True,
                             timeout=60,
                         )
 
                         if result.returncode == 0:
-                            self.show_info("PostgreSQL started successfully")
+                            self.show_info('PostgreSQL started successfully')
                         else:
-                            self.show_error(f"Failed to start PostgreSQL: {result.stderr}")
+                            self.show_error(
+                                f'Failed to start PostgreSQL: {result.stderr}'
+                            )
                     else:
-                        self.show_info("docker-compose.yml not found. Run 'docker compose up -d postgres' manually")
+                        self.show_info(
+                            "docker-compose.yml not found. Run 'docker compose up -d postgres' manually"
+                        )
 
                 except subprocess.TimeoutExpired:
-                    self.show_error("Docker Compose startup timed out")
+                    self.show_error('Docker Compose startup timed out')
                 except Exception as e:
-                    logger.error(f"Error starting PostgreSQL: {e}")
+                    logger.error(f'Error starting PostgreSQL: {e}')
                     self.show_info("Run 'docker compose up -d postgres' manually")
 
             progress_bar.update(progress=60)
 
             # Start Letta via Docker Compose
             if not self.letta_status or not self.letta_status.available:
-                self.show_info("Starting Letta via Docker Compose...")
+                self.show_info('Starting Letta via Docker Compose...')
                 try:
                     import subprocess
                     from pathlib import Path
 
                     # Find docker-compose.yml in project root
-                    compose_file = Path.cwd() / "docker-compose.yml"
-                    dev_compose_file = Path.cwd() / "docker-compose.dev.yml"
+                    compose_file = Path.cwd() / 'docker-compose.yml'
+                    dev_compose_file = Path.cwd() / 'docker-compose.dev.yml'
 
                     if compose_file.exists() or dev_compose_file.exists():
                         # Start Letta service
                         result = subprocess.run(
-                            ["docker", "compose", "up", "-d", "letta"],
+                            ['docker', 'compose', 'up', '-d', 'letta'],
                             capture_output=True,
                             text=True,
                             timeout=60,
                         )
 
                         if result.returncode == 0:
-                            self.show_info("Letta started successfully")
+                            self.show_info('Letta started successfully')
                         else:
-                            self.show_error(f"Failed to start Letta: {result.stderr}")
+                            self.show_error(f'Failed to start Letta: {result.stderr}')
                     else:
-                        self.show_info("docker-compose.yml not found. Run 'docker compose up -d letta' manually")
+                        self.show_info(
+                            "docker-compose.yml not found. Run 'docker compose up -d letta' manually"
+                        )
 
                 except subprocess.TimeoutExpired:
-                    self.show_error("Docker Compose startup timed out")
+                    self.show_error('Docker Compose startup timed out')
                 except Exception as e:
-                    logger.error(f"Error starting Letta: {e}")
+                    logger.error(f'Error starting Letta: {e}')
                     self.show_info("Run 'docker compose up -d letta' manually")
 
             progress_bar.update(progress=90)
@@ -515,19 +515,19 @@ class DependencyCheckScreen(BaseScreen):
             progress_bar.update(progress=100)
 
             if self.all_ready:
-                self.show_info("All dependencies installed successfully!")
+                self.show_info('All dependencies installed successfully!')
             else:
-                self.show_error("Some dependencies could not be installed")
+                self.show_error('Some dependencies could not be installed')
 
             self._update_button_visibility()
 
         except Exception as e:
-            logger.error(f"Error installing dependencies: {e}")
-            self.show_error(f"Failed to install dependencies: {e}")
+            logger.error(f'Error installing dependencies: {e}')
+            self.show_error(f'Failed to install dependencies: {e}')
 
     async def on_next_screen(self) -> None:
         """Navigate to optional features screen."""
         from .optional_features import OptionalFeaturesScreen
 
-        logger.info("Proceeding to optional features")
+        logger.info('Proceeding to optional features')
         await self.app.push_screen(OptionalFeaturesScreen())

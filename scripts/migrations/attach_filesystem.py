@@ -49,7 +49,9 @@ async def attach_filesystem_to_agents():
         folder_name = 'thoth_processed_articles'
         if hasattr(config, 'memory_config') and hasattr(config.memory_config, 'letta'):
             if hasattr(config.memory_config.letta, 'filesystem'):
-                folder_name = config.memory_config.letta.filesystem.folder_name or folder_name
+                folder_name = (
+                    config.memory_config.letta.filesystem.folder_name or folder_name
+                )
 
         console.print(f'Using folder name: {folder_name}')
 
@@ -68,8 +70,7 @@ async def attach_filesystem_to_agents():
         # Step 1: Get or create folder
         console.print('\n[bold]Step 1: Setting up Letta folder[/bold]')
         folder_id = await letta_service.get_or_create_folder(
-            name=folder_name,
-            embedding_model=embedding_model
+            name=folder_name, embedding_model=embedding_model
         )
         console.print(f'✓ Folder ID: {folder_id}')
 
@@ -79,7 +80,7 @@ async def attach_filesystem_to_agents():
         stats = await letta_service.sync_vault_to_folder(
             folder_id=folder_id,
             notes_dir=config.notes_dir,
-            include_papers=True  # Critical: Include PDFs from papers directory
+            include_papers=True,  # Critical: Include PDFs from papers directory
         )
 
         console.print(f'✓ Total files: {stats["total_files"]}')
@@ -95,9 +96,7 @@ async def attach_filesystem_to_agents():
 
         # Step 3: Get all agents
         console.print('\n[bold]Step 3: Getting all agents[/bold]')
-        agents = await asyncio.to_thread(
-            letta_service._letta_client.agents.list
-        )
+        agents = await asyncio.to_thread(letta_service._letta_client.agents.list)
 
         if not agents:
             console.print('[yellow]⚠ No agents found[/yellow]')
@@ -115,8 +114,7 @@ async def attach_filesystem_to_agents():
             try:
                 # Check if folder is already attached
                 agent_folders = await asyncio.to_thread(
-                    letta_service._letta_client.agents.folders.list,
-                    agent.id
+                    letta_service._letta_client.agents.folders.list, agent.id
                 )
 
                 already_attached = any(f.id == folder_id for f in agent_folders)
@@ -128,8 +126,7 @@ async def attach_filesystem_to_agents():
 
                 # Attach folder to agent
                 await letta_service.attach_folder_to_agent(
-                    agent_id=agent.id,
-                    folder_id=folder_id
+                    agent_id=agent.id, folder_id=folder_id
                 )
                 console.print(f'  ✓ Attached: {agent.name} ({agent.id})')
                 attached_count += 1
@@ -148,6 +145,7 @@ async def attach_filesystem_to_agents():
     except Exception as e:
         console.print(f'\n[red]✗ Error during filesystem attachment: {e}[/red]')
         import traceback
+
         traceback.print_exc()
 
 

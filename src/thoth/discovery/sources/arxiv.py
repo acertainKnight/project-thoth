@@ -12,7 +12,6 @@ from datetime import datetime
 from typing import Any
 
 import httpx
-import httpx
 from bs4 import BeautifulSoup
 from loguru import logger
 

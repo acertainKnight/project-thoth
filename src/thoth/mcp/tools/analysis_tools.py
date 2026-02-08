@@ -143,9 +143,9 @@ class EvaluateArticleMCPTool(MCPTool):
 class AnalyzeTopicMCPTool(MCPTool):
     """
     MCP tool for analyzing a research topic across the knowledge base.
-    
-    **DEPRECATED**: This tool is deprecated. Use `answer_research_question` 
-    instead, which provides comprehensive synthesis with citations. This tool 
+
+    **DEPRECATED**: This tool is deprecated. Use `answer_research_question`
+    instead, which provides comprehensive synthesis with citations. This tool
     is no longer registered in the MCP tool registry.
     """
 
@@ -196,7 +196,9 @@ class AnalyzeTopicMCPTool(MCPTool):
             k = k_values.get(depth, max_papers)
 
             # Search for papers on this topic
-            search_results = await self.service_manager.rag.search_async(query=topic, k=k)
+            search_results = await self.service_manager.rag.search_async(
+                query=topic, k=k
+            )
 
             if not search_results:
                 return MCPToolCallResult(
@@ -491,9 +493,9 @@ class FindRelatedPapersMCPTool(MCPTool):
 class GenerateResearchSummaryMCPTool(MCPTool):
     """
     MCP tool for generating comprehensive research summaries.
-    
-    **DEPRECATED**: This tool is deprecated. Use `answer_research_question` 
-    instead, which provides better synthesis with citations. This tool is no 
+
+    **DEPRECATED**: This tool is deprecated. Use `answer_research_question`
+    instead, which provides better synthesis with citations. This tool is no
     longer registered in the MCP tool registry.
     """
 

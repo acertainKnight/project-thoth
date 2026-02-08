@@ -1,5 +1,4 @@
-"""
-Vault selection screen for setup wizard.
+"""Vault selection screen for setup wizard.
 
 Detects and displays available Obsidian vaults for user selection.
 Includes an advanced expandable section for customising Thoth's
@@ -22,10 +21,10 @@ from .base import BaseScreen
 
 # Default paths relative to vault root
 DEFAULT_PATHS = {
-    "pdf": "thoth/papers/pdfs",
-    "notes": "thoth/notes",
-    "markdown": "thoth/papers/markdown",
-    "workspace": "thoth/_thoth",
+    'pdf': 'thoth/papers/pdfs',
+    'notes': 'thoth/notes',
+    'markdown': 'thoth/papers/markdown',
+    'workspace': 'thoth/_thoth',
 }
 
 
@@ -35,13 +34,13 @@ class VaultSelectionScreen(BaseScreen):
     def __init__(self) -> None:
         """Initialize vault selection screen."""
         super().__init__(
-            title="Select Obsidian Vault",
-            subtitle="Choose the vault where Thoth will be installed",
+            title='Select Obsidian Vault',
+            subtitle='Choose the vault where Thoth will be installed',
         )
         self.obsidian_status: ObsidianStatus | None = None
         self.vaults: list[ObsidianVault] = []
         self.selected_vault: Path | None = None
-        self.custom_path: str = ""
+        self.custom_path: str = ''
 
     def on_mount(self) -> None:
         """Run when screen is mounted."""
@@ -50,32 +49,30 @@ class VaultSelectionScreen(BaseScreen):
 
     async def detect_obsidian(self) -> None:
         """Detect Obsidian installation and vaults."""
-        self.show_info("Detecting Obsidian installation and vaults...")
+        self.show_info('Detecting Obsidian installation and vaults...')
 
         try:
             # First, check if vault is already configured via environment
             env_vault = ObsidianDetector.detect_vault_from_env()
             if env_vault:
-                logger.info(f"Vault detected from environment: {env_vault}")
+                logger.info(f'Vault detected from environment: {env_vault}')
                 # Create a vault entry from the environment variable
                 self.vaults = [
                     ObsidianVault(
                         path=env_vault,
                         name=env_vault.name,
                         has_thoth_workspace=(
-                            (env_vault / "thoth" / "_thoth").exists()
-                            or (env_vault / "_thoth").exists()
+                            (env_vault / 'thoth' / '_thoth').exists()
+                            or (env_vault / '_thoth').exists()
                         ),
                         config_exists=(
-                            (env_vault / "thoth" / "_thoth" / "settings.json").exists()
-                            or (env_vault / "_thoth" / "settings.json").exists()
+                            (env_vault / 'thoth' / '_thoth' / 'settings.json').exists()
+                            or (env_vault / '_thoth' / 'settings.json').exists()
                         ),
                     )
                 ]
                 self.clear_messages()
-                self.show_info(
-                    f"Found vault from environment: {env_vault.name}"
-                )
+                self.show_info(f'Found vault from environment: {env_vault.name}')
                 self.refresh()
                 return
 
@@ -84,12 +81,10 @@ class VaultSelectionScreen(BaseScreen):
 
             if not self.obsidian_status.installed:
                 download_url = ObsidianDetector.get_download_url()
-                self.show_error(
-                    f"Obsidian not detected. Download from: {download_url}"
-                )
+                self.show_error(f'Obsidian not detected. Download from: {download_url}')
             else:
                 logger.info(
-                    f"Obsidian detected: {self.obsidian_status.version or 'unknown version'}"
+                    f'Obsidian detected: {self.obsidian_status.version or "unknown version"}'
                 )
 
             # Get vaults (with timeout protection)
@@ -98,127 +93,127 @@ class VaultSelectionScreen(BaseScreen):
             if not self.vaults:
                 self.clear_messages()
                 self.show_error(
-                    "No vaults found automatically. Please enter your vault path below."
+                    'No vaults found automatically. Please enter your vault path below.'
                 )
                 # Focus the custom path input
                 await asyncio.sleep(0.1)  # Let UI update
                 try:
-                    custom_input = self.query_one("#custom-path", Input)
+                    custom_input = self.query_one('#custom-path', Input)
                     custom_input.focus()
                 except Exception:
                     pass  # Input might not be mounted yet
             else:
                 self.clear_messages()
-                logger.info(f"Found {len(self.vaults)} vault(s)")
+                logger.info(f'Found {len(self.vaults)} vault(s)')
 
             # Refresh UI to show vaults
             self.refresh()
 
         except Exception as e:
-            logger.error(f"Error detecting Obsidian: {e}")
-            self.show_error(f"Failed to detect Obsidian: {e}")
+            logger.error(f'Error detecting Obsidian: {e}')
+            self.show_error(f'Failed to detect Obsidian: {e}')
 
     def compose_content(self) -> ComposeResult:
-        """
-        Compose vault selection content.
+        """Compose vault selection content.
 
         Returns:
             Content widgets
         """
         # Vault list section (only show if we have vaults)
         if self.vaults:
-            yield Static("[bold]Detected Vaults:[/bold]", classes="section-title")
-            with Vertical(id="vault-list"):
-                with RadioSet(id="vault-radio"):
+            yield Static('[bold]Detected Vaults:[/bold]', classes='section-title')
+            with Vertical(id='vault-list'):
+                with RadioSet(id='vault-radio'):
                     for vault in self.vaults:
-                        status = ""
+                        status = ''
                         if vault.has_thoth_workspace:
-                            status = " [cyan](Thoth installed)[/cyan]"
+                            status = ' [cyan](Thoth installed)[/cyan]'
                         yield RadioButton(
-                            f"{vault.name} - {vault.path}{status}",
-                            value=str(vault.path),
+                            f'{vault.name} - {vault.path}{status}',
+                            value=str(vault.path),  # type: ignore[arg-type]
                         )
 
             # Custom path as alternative
-            yield Label("\n[bold]Or enter vault path manually:[/bold]")
+            yield Label('\n[bold]Or enter vault path manually:[/bold]')
         else:
             # No vaults found - make custom path primary
             yield Static(
-                "[yellow]⚠ No vaults found automatically[/yellow]",
-                classes="section-title",
+                '[yellow]⚠ No vaults found automatically[/yellow]',
+                classes='section-title',
             )
             yield Static(
-                "[dim]Searching timed out or no vaults in common locations.[/dim]"
+                '[dim]Searching timed out or no vaults in common locations.[/dim]'
             )
-            yield Label("\n[bold cyan]Please enter your Obsidian vault path:[/bold cyan]")
+            yield Label(
+                '\n[bold cyan]Please enter your Obsidian vault path:[/bold cyan]'
+            )
 
         # Custom path input (always shown)
         yield Input(
-            placeholder="/path/to/your/obsidian/vault (e.g., ~/Documents/MyVault)",
-            id="custom-path",
+            placeholder='/path/to/your/obsidian/vault (e.g., ~/Documents/MyVault)',
+            id='custom-path',
         )
 
         # Help text
         if not self.vaults:
             yield Static(
-                "\n[cyan]For Docker/test environments:[/cyan]\n"
-                "[dim]If running in Docker, the vault is typically at: [bold]/vault[/bold][/dim]\n"
-                "[dim]You can also set OBSIDIAN_VAULT_PATH environment variable[/dim]",
-                classes="help-text",
+                '\n[cyan]For Docker/test environments:[/cyan]\n'
+                '[dim]If running in Docker, the vault is typically at: [bold]/vault[/bold][/dim]\n'
+                '[dim]You can also set OBSIDIAN_VAULT_PATH environment variable[/dim]',
+                classes='help-text',
             )
 
         # Advanced: directory path configuration
-        with Collapsible(title="Advanced: Customize Directory Paths", collapsed=True):
+        with Collapsible(title='Advanced: Customize Directory Paths', collapsed=True):
             yield Static(
-                "[dim]Paths are relative to your vault. For example, if your vault\n"
-                "is at [bold]~/Documents/MyVault[/bold], the default PDF path becomes\n"
-                "[bold]~/Documents/MyVault/thoth/papers/pdfs[/bold].\n"
-                "Defaults are fine for most users.[/dim]\n",
+                '[dim]Paths are relative to your vault. For example, if your vault\n'
+                'is at [bold]~/Documents/MyVault[/bold], the default PDF path becomes\n'
+                '[bold]~/Documents/MyVault/thoth/papers/pdfs[/bold].\n'
+                'Defaults are fine for most users.[/dim]\n',
             )
 
-            yield Label("[cyan]PDF Directory[/cyan]")
+            yield Label('[cyan]PDF Directory[/cyan]')
             yield Static(
-                "[dim]Where Thoth stores and reads research PDFs.  vault/[bold]...[/bold][/dim]",
+                '[dim]Where Thoth stores and reads research PDFs.  vault/[bold]...[/bold][/dim]',
             )
             yield Input(
-                placeholder=DEFAULT_PATHS["pdf"],
-                value=DEFAULT_PATHS["pdf"],
-                id="path-pdf",
+                placeholder=DEFAULT_PATHS['pdf'],
+                value=DEFAULT_PATHS['pdf'],
+                id='path-pdf',
             )
 
-            yield Label("[cyan]Notes Directory[/cyan]")
+            yield Label('[cyan]Notes Directory[/cyan]')
             yield Static(
-                "[dim]Where Thoth creates analysis notes and summaries.  vault/[bold]...[/bold][/dim]",
+                '[dim]Where Thoth creates analysis notes and summaries.  vault/[bold]...[/bold][/dim]',
             )
             yield Input(
-                placeholder=DEFAULT_PATHS["notes"],
-                value=DEFAULT_PATHS["notes"],
-                id="path-notes",
+                placeholder=DEFAULT_PATHS['notes'],
+                value=DEFAULT_PATHS['notes'],
+                id='path-notes',
             )
 
-            yield Label("[cyan]Markdown Directory[/cyan]")
+            yield Label('[cyan]Markdown Directory[/cyan]')
             yield Static(
-                "[dim]Parsed markdown from PDFs (used for RAG indexing).  vault/[bold]...[/bold][/dim]",
+                '[dim]Parsed markdown from PDFs (used for RAG indexing).  vault/[bold]...[/bold][/dim]',
             )
             yield Input(
-                placeholder=DEFAULT_PATHS["markdown"],
-                value=DEFAULT_PATHS["markdown"],
-                id="path-markdown",
+                placeholder=DEFAULT_PATHS['markdown'],
+                value=DEFAULT_PATHS['markdown'],
+                id='path-markdown',
             )
 
-            yield Label("[cyan]Workspace Directory[/cyan]")
+            yield Label('[cyan]Workspace Directory[/cyan]')
             yield Static(
-                "[dim]Internal data (settings, cache, logs). Usually no need to change.  vault/[bold]...[/bold][/dim]",
+                '[dim]Internal data (settings, cache, logs). Usually no need to change.  vault/[bold]...[/bold][/dim]',
             )
             yield Input(
-                placeholder=DEFAULT_PATHS["workspace"],
-                value=DEFAULT_PATHS["workspace"],
-                id="path-workspace",
+                placeholder=DEFAULT_PATHS['workspace'],
+                value=DEFAULT_PATHS['workspace'],
+                id='path-workspace',
             )
 
     async def validate_and_proceed(self) -> dict[str, Any] | None:
-        """
-        Validate vault selection and collect directory path settings.
+        """Validate vault selection and collect directory path settings.
 
         Returns:
             Dict with selected vault path and custom paths, or None if invalid.
@@ -227,72 +222,73 @@ class VaultSelectionScreen(BaseScreen):
         selected_value = None
         if self.vaults:
             try:
-                radio_set = self.query_one("#vault-radio", RadioSet)
+                radio_set = self.query_one('#vault-radio', RadioSet)
                 selected_value = radio_set.pressed_button
-            except Exception:
-                pass  # Radio set might not exist if no vaults
+            except Exception as e:
+                logger.debug(f'Radio set might not exist if no vaults: {e}')
 
         if selected_value:
-            self.selected_vault = Path(selected_value.value)
+            self.selected_vault = Path(str(selected_value.value))
         else:
             # Check custom path
-            custom_input = self.query_one("#custom-path", Input)
+            custom_input = self.query_one('#custom-path', Input)
             custom_path_str = custom_input.value.strip()
 
             if custom_path_str:
                 self.selected_vault = Path(custom_path_str).expanduser().resolve()
             else:
                 if self.vaults:
-                    self.show_error("Please select a vault or enter a custom path")
+                    self.show_error('Please select a vault or enter a custom path')
                 else:
-                    self.show_error("Please enter your Obsidian vault path")
+                    self.show_error('Please enter your Obsidian vault path')
                 return None
 
         # Validate vault path
         if not self.selected_vault.exists():
-            self.show_error(f"Vault path does not exist: {self.selected_vault}")
+            self.show_error(f'Vault path does not exist: {self.selected_vault}')
             return None
 
         if not self.selected_vault.is_dir():
-            self.show_error(f"Vault path is not a directory: {self.selected_vault}")
+            self.show_error(f'Vault path is not a directory: {self.selected_vault}')
             return None
 
         # Check if it's a valid Obsidian vault
         if not ObsidianDetector.is_valid_vault(self.selected_vault):
             self.show_error(
-                "Selected path is not a valid Obsidian vault (missing .obsidian directory)"
+                'Selected path is not a valid Obsidian vault (missing .obsidian directory)'
             )
             return None
 
         # Collect directory path settings from advanced section
         paths_config: dict[str, str] = {}
-        for key in ("pdf", "notes", "markdown", "workspace"):
+        for key in ('pdf', 'notes', 'markdown', 'workspace'):
             try:
-                path_input = self.query_one(f"#path-{key}", Input)
+                path_input = self.query_one(f'#path-{key}', Input)
                 value = path_input.value.strip()
                 paths_config[key] = value if value else DEFAULT_PATHS[key]
-            except Exception:
+            except Exception as e:
+                logger.debug(f'Could not read path input for {key}, using default: {e}')
                 paths_config[key] = DEFAULT_PATHS[key]
 
         # Validate paths don't contain suspicious characters
         for key, path_val in paths_config.items():
-            if ".." in path_val:
+            if '..' in path_val:
                 self.show_error(f"Path for {key} must not contain '..'")
                 return None
-            if path_val.startswith("/") or path_val.startswith("~"):
+            if path_val.startswith('/') or path_val.startswith('~'):
                 self.show_error(
-                    f"Path for {key} must be relative to the vault root "
+                    f'Path for {key} must be relative to the vault root '
                     f"(got '{path_val}')"
                 )
                 return None
 
-        logger.info(f"Selected vault: {self.selected_vault}")
-        logger.info(f"Paths config: {paths_config}")
-        return {"vault_path": self.selected_vault, "paths_config": paths_config}
+        logger.info(f'Selected vault: {self.selected_vault}')
+        logger.info(f'Paths config: {paths_config}')
+        return {'vault_path': self.selected_vault, 'paths_config': paths_config}
 
     async def on_next_screen(self) -> None:
         """Navigate to deployment mode selection screen."""
         from .deployment_mode import DeploymentModeScreen
 
-        logger.info("Proceeding to deployment mode selection")
+        logger.info('Proceeding to deployment mode selection')
         await self.app.push_screen(DeploymentModeScreen())

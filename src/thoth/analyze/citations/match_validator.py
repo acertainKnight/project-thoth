@@ -29,7 +29,7 @@ Classes:
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional  # noqa: UP035
+from typing import List  # noqa: UP035
 
 from loguru import logger
 
@@ -77,7 +77,7 @@ class MatchCandidate:
     source: str = 'unknown'
     component_scores: ComponentScores = field(default_factory=ComponentScores)
     passed_constraints: bool = True
-    rejection_reason: Optional[str] = None  # noqa: UP007
+    rejection_reason: str | None = None
 
     @property
     def overall_score(self) -> float:
@@ -394,7 +394,7 @@ class MatchValidator:
     def get_best_match(
         self,
         candidates: List[MatchCandidate],  # noqa: UP006
-    ) -> Optional[MatchCandidate]:  # noqa: UP007
+    ) -> MatchCandidate | None:
         """
         Select the best matching candidate from a list.
 

@@ -41,28 +41,28 @@ class ModelInfo:
 # Fallback models if API is unreachable
 FALLBACK_OPENROUTER_MODELS = [
     ModelInfo(
-        id="google/gemini-2.0-flash-exp:free",
-        name="Google Gemini 2.0 Flash (Free)",
+        id='google/gemini-2.0-flash-exp:free',
+        name='Google Gemini 2.0 Flash (Free)',
         context_length=100000,
-        supported_parameters=["structured_outputs"],
+        supported_parameters=['structured_outputs'],
     ),
     ModelInfo(
-        id="anthropic/claude-3.5-sonnet",
-        name="Claude 3.5 Sonnet",
+        id='anthropic/claude-3.5-sonnet',
+        name='Claude 3.5 Sonnet',
         context_length=200000,
-        supported_parameters=["structured_outputs"],
+        supported_parameters=['structured_outputs'],
     ),
     ModelInfo(
-        id="openai/gpt-4o",
-        name="GPT-4o",
+        id='openai/gpt-4o',
+        name='GPT-4o',
         context_length=128000,
-        supported_parameters=["structured_outputs"],
+        supported_parameters=['structured_outputs'],
     ),
     ModelInfo(
-        id="openai/gpt-4o-mini",
-        name="GPT-4o Mini",
+        id='openai/gpt-4o-mini',
+        name='GPT-4o Mini',
         context_length=128000,
-        supported_parameters=["structured_outputs"],
+        supported_parameters=['structured_outputs'],
     ),
 ]
 
@@ -94,7 +94,7 @@ class ModelRegistry:
         Example:
             >>> models = await ModelRegistry.get_openrouter_models()
             >>> for model in models:
-            ...     print(f"{model.id}: {model.context_length} tokens")
+            ...     print(f'{model.id}: {model.context_length} tokens')
         """
         current_time = time.time()
 
@@ -108,50 +108,50 @@ class ModelRegistry:
 
         try:
             async with httpx.AsyncClient(timeout=15) as client:
-                resp = await client.get("https://openrouter.ai/api/v1/models")
+                resp = await client.get('https://openrouter.ai/api/v1/models')
                 if resp.status_code == 200:
-                    data = resp.json().get("data", [])
+                    data = resp.json().get('data', [])
                     models = []
                     for m in data:
-                        supported = m.get("supported_parameters", [])
-                        model_id = m.get("id", "")
+                        supported = m.get('supported_parameters', [])
+                        model_id = m.get('id', '')
 
                         # Skip beta/auto models
-                        if ":beta" in model_id or model_id == "auto":
+                        if ':beta' in model_id or model_id == 'auto':
                             continue
 
-                        pricing = m.get("pricing", {})
+                        pricing = m.get('pricing', {})
                         models.append(
                             ModelInfo(
                                 id=model_id,
-                                name=m.get("name", model_id),
-                                context_length=m.get("context_length", 0),
+                                name=m.get('name', model_id),
+                                context_length=m.get('context_length', 0),
                                 supported_parameters=supported,
-                                pricing_prompt=pricing.get("prompt"),
-                                pricing_completion=pricing.get("completion"),
+                                pricing_prompt=pricing.get('prompt'),
+                                pricing_completion=pricing.get('completion'),
                             )
                         )
 
                     if models:
                         # Sort: free models first, then by name
                         def sort_key(model: ModelInfo) -> tuple[int, str]:
-                            return (0 if ":free" in model.id else 1, model.id)
+                            return (0 if ':free' in model.id else 1, model.id)
 
                         cls._cache = sorted(models, key=sort_key)
                         cls._cache_time = current_time
                         logger.info(
-                            f"Fetched and cached {len(cls._cache)} models from OpenRouter."
+                            f'Fetched and cached {len(cls._cache)} models from OpenRouter.'
                         )
                         return cls._cache
         except Exception as e:
-            logger.error(f"Failed to fetch models from OpenRouter: {e}")
+            logger.error(f'Failed to fetch models from OpenRouter: {e}')
 
         # Return stale cache if available, otherwise fallback
         if cls._cache:
-            logger.warning("Returning stale cache due to API error")
+            logger.warning('Returning stale cache due to API error')
             return cls._cache
 
-        logger.warning("Using fallback model list")
+        logger.warning('Using fallback model list')
         return FALLBACK_OPENROUTER_MODELS
 
     @classmethod
@@ -197,13 +197,11 @@ class ModelRegistry:
         Example:
             >>> all_models = ModelRegistry.get_openrouter_models_sync()
             >>> structured = ModelRegistry.filter_structured_output(all_models)
-            >>> print(f"{len(structured)} of {len(all_models)} support structured outputs")
+            >>> print(
+            ...     f'{len(structured)} of {len(all_models)} support structured outputs'
+            ... )
         """
-        return [
-            m
-            for m in models
-            if "structured_outputs" in m.supported_parameters
-        ]
+        return [m for m in models if 'structured_outputs' in m.supported_parameters]
 
     @classmethod
     def get_context_length(cls, model_id: str) -> int | None:
@@ -217,8 +215,8 @@ class ModelRegistry:
             Context length in tokens, or None if model not found
 
         Example:
-            >>> length = ModelRegistry.get_context_length("openai/gpt-4o")
-            >>> print(f"Context length: {length}")
+            >>> length = ModelRegistry.get_context_length('openai/gpt-4o')
+            >>> print(f'Context length: {length}')
         """
         for model in cls._cache:
             if model.id == model_id:

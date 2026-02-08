@@ -9,7 +9,7 @@ NOTE: After 2026-01 schema migration:
 - All existing queries work unchanged via papers view
 """
 
-from typing import Any, Dict, List, Optional  # noqa: I001, UP035
+from typing import Any, Dict, List  # noqa: I001, UP035
 from loguru import logger
 
 from thoth.repositories.base import BaseRepository
@@ -161,8 +161,8 @@ class CitationRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
         self,
         citing_paper_id: int,
         cited_paper_id: int,
-        metadata: Optional[Dict] = None,  # noqa: UP006, UP007
-    ) -> Optional[int]:  # noqa: UP007
+        metadata: Dict | None = None,  # noqa: UP006
+    ) -> int | None:
         """
         Create a citation relationship.
 

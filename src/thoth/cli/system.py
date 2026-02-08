@@ -25,7 +25,9 @@ def run_monitor(args, pipeline: ThothPipeline) -> int:
     # Use watch_directories from settings if no CLI arg provided
     if args.watch_dir:
         watch_dir = Path(args.watch_dir)
-    elif hasattr(config, 'servers_config') and hasattr(config.servers_config, 'monitor'):
+    elif hasattr(config, 'servers_config') and hasattr(
+        config.servers_config, 'monitor'
+    ):
         watch_dirs = config.servers_config.monitor.watch_directories
         if watch_dirs:
             # Use first watch directory (relative to vault root)
@@ -45,8 +47,8 @@ def run_monitor(args, pipeline: ThothPipeline) -> int:
     # Show deprecation warning if --optimized flag was used (it's now always optimized)
     if hasattr(args, 'optimized') and args.optimized:
         warnings.warn(
-            "The --optimized flag is deprecated and has no effect. "
-            "The monitor now always uses the optimized pipeline.",
+            'The --optimized flag is deprecated and has no effect. '
+            'The monitor now always uses the optimized pipeline.',
             DeprecationWarning,
             stacklevel=2,
         )

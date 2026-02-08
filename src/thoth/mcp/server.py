@@ -32,7 +32,7 @@ class MCPServer:
 
     This server handles the complete MCP protocol including initialization,
     tool calling, resource management, and multiple transport support.
-    
+
     Supports role-based tool filtering to reduce tool count per agent:
     - orchestrator: ~20 tools (discovery, collection, skills)
     - analyst: ~15 tools (analysis, citation, collection)
@@ -212,19 +212,19 @@ class MCPServer:
     async def _handle_tools_list(self, request_id: Any) -> JSONRPCResponse:
         """
         Handle tools/list request.
-        
+
         If a role was specified during server initialization, only tools
         for that role are returned. Otherwise, all tools are returned.
         """
         try:
             # Use role-based filtering if a role was specified
             tools = self.tool_registry.get_tool_schemas(role=self.role)
-            
+
             if self.role:
                 logger.info(f'Returning {len(tools)} tools for role: {self.role}')
             else:
                 logger.info(f'Returning all {len(tools)} tools (no role filter)')
-            
+
             result = {'tools': [tool.model_dump() for tool in tools]}
             return self.protocol_handler.create_response(request_id, result)
         except Exception as e:
@@ -481,11 +481,11 @@ def create_mcp_server(
         Configured MCPServer instance
     """
     import os
-    
+
     # Check for auth token from environment if not provided
     if auth_token is None:
         auth_token = os.getenv('THOTH_MCP_AUTH_TOKEN')
-    
+
     server = MCPServer(service_manager)
 
     if enable_stdio:

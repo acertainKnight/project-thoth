@@ -12,7 +12,6 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
 from loguru import logger
 
 from thoth.rag.embeddings import EmbeddingManager
@@ -220,6 +219,7 @@ class RAGManager:
             Paper ID (UUID string) if found, None otherwise.
         """
         import asyncio
+
         import asyncpg
 
         db_url = getattr(self.config.secrets, 'database_url', None)
@@ -232,7 +232,7 @@ class RAGManager:
             try:
                 # Try exact match first, then normalized match
                 paper_id = await conn.fetchval(
-                    "SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1)",
+                    'SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1)',
                     title,
                 )
                 if paper_id:
@@ -241,7 +241,7 @@ class RAGManager:
                 # Try fuzzy match with title normalization
                 normalized_title = title.replace('_', ' ').replace('-', ' ')
                 paper_id = await conn.fetchval(
-                    "SELECT id FROM paper_metadata WHERE LOWER(title_normalized) = LOWER($1)",
+                    'SELECT id FROM paper_metadata WHERE LOWER(title_normalized) = LOWER($1)',
                     normalized_title,
                 )
                 return str(paper_id) if paper_id else None
@@ -256,7 +256,9 @@ class RAGManager:
             # No event loop running - safe to use asyncio.run()
             return asyncio.run(lookup())
 
-    def index_paper_by_id(self, paper_id: str, markdown_content: str | None = None) -> list[str]:
+    def index_paper_by_id(
+        self, paper_id: str, markdown_content: str | None = None
+    ) -> list[str]:
         """
         Index a paper directly from the database by its ID.
 
@@ -268,8 +270,9 @@ class RAGManager:
             List of document IDs that were indexed.
         """
         import asyncio
-        import asyncpg
         from uuid import UUID
+
+        import asyncpg
 
         try:
             logger.info(f'Indexing paper by ID: {paper_id}')
@@ -302,13 +305,20 @@ class RAGManager:
                         return []
 
                     # Strip image references from content if configured
-                    if self.config.rag_config.skip_files_with_images and self._has_images(content):
-                        logger.debug(f'Stripping image references from paper {paper_id}')
+                    if (
+                        self.config.rag_config.skip_files_with_images
+                        and self._has_images(content)
+                    ):
+                        logger.debug(
+                            f'Stripping image references from paper {paper_id}'
+                        )
                         content = self._strip_images(content)
-                        
+
                         # Check if there's still meaningful content after stripping images
                         if len(content.strip()) < 100:
-                            logger.warning(f'Paper {paper_id} has insufficient content after image removal')
+                            logger.warning(
+                                f'Paper {paper_id} has insufficient content after image removal'
+                            )
                             return []
 
                     # Prepare metadata
@@ -318,7 +328,7 @@ class RAGManager:
                         'doi': row['doi'],
                         'authors': row['authors'],
                         'document_type': 'article',
-                        'source': f"database:paper:{paper_id}",
+                        'source': f'database:paper:{paper_id}',
                     }
 
                     # Split into chunks
@@ -343,7 +353,9 @@ class RAGManager:
                     doc_ids = await self.vector_store_manager.add_documents_async(
                         documents, paper_id=paper_uuid
                     )
-                    logger.info(f'Successfully indexed {len(doc_ids)} chunks for paper {paper_id}')
+                    logger.info(
+                        f'Successfully indexed {len(doc_ids)} chunks for paper {paper_id}'
+                    )
                     return doc_ids
                 finally:
                     await conn.close()
@@ -364,7 +376,9 @@ class RAGManager:
             logger.error(f'Error indexing paper {paper_id}: {e}')
             raise
 
-    def index_markdown_file(self, file_path: Path, paper_id: str | None = None) -> list[str]:
+    def index_markdown_file(
+        self, file_path: Path, paper_id: str | None = None
+    ) -> list[str]:
         """
         Index a markdown file into the vector store.
 
@@ -399,11 +413,13 @@ class RAGManager:
                 if paper_id:
                     logger.debug(f'Found paper_id {paper_id} for title: {title}')
                 else:
-                    logger.warning(f'Could not find paper_id for: {title}. Using index_paper_by_id with database content is recommended.')
+                    logger.warning(
+                        f'Could not find paper_id for: {title}. Using index_paper_by_id with database content is recommended.'
+                    )
                     # For now, we'll create a fallback - but this requires paper_id in DB
                     raise ValueError(
-                        f"Cannot index {file_path}: paper_id not found in database. "
-                        "Ensure the paper exists in paper_metadata first, or use index_paper_by_id()."
+                        f'Cannot index {file_path}: paper_id not found in database. '
+                        'Ensure the paper exists in paper_metadata first, or use index_paper_by_id().'
                     )
 
             # If we have paper_id, use the database-backed method for consistency
@@ -480,10 +496,12 @@ class RAGManager:
         """
         try:
             if return_scores:
-                return await self.vector_store_manager.similarity_search_with_score_async(
-                    query=query,
-                    k=k,
-                    filter=filter,
+                return (
+                    await self.vector_store_manager.similarity_search_with_score_async(
+                        query=query,
+                        k=k,
+                        filter=filter,
+                    )
                 )
             else:
                 return await self.vector_store_manager.similarity_search_async(
@@ -562,13 +580,13 @@ class RAGManager:
 
             # Format context from retrieved documents
             def format_docs(documents: list[Document]) -> str:
-                return "\n\n".join(doc.page_content for doc in documents)
+                return '\n\n'.join(doc.page_content for doc in documents)
 
             context = format_docs(docs)
 
             # Create RAG prompt
             prompt = ChatPromptTemplate.from_template(
-                """Answer the question based only on the following context. 
+                """Answer the question based only on the following context.
 If you cannot answer the question based on the context, say so.
 
 Context:
@@ -583,7 +601,7 @@ Answer:"""
             chain = prompt | self.llm | StrOutputParser()
 
             # Get answer
-            answer = chain.invoke({"context": context, "question": question})
+            answer = chain.invoke({'context': context, 'question': question})
 
             # Format response
             response = {

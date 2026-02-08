@@ -344,7 +344,7 @@ Task 1 failed: "Discovery timeout on PubMed"
 ```
 1. Check workflow_state for stuck tasks
 2. Send status update to user:
-   "Discovery is taking longer than expected (3 min so far). 
+   "Discovery is taking longer than expected (3 min so far).
     I'll keep monitoring and update you when complete."
 3. Consider parallel alternative approaches
 4. Set reasonable timeout (10 min for discovery)
@@ -370,7 +370,7 @@ Final: [comprehensive response]
 Let user control when to proceed:
 
 ```
-Phase 1 complete: "Found 38 papers. Review the list and let me know 
+Phase 1 complete: "Found 38 papers. Review the list and let me know
                    if you want me to proceed with downloads."
 [User confirms]
 Phase 2 starts: Download PDFs

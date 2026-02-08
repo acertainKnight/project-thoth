@@ -11,13 +11,13 @@ from thoth.utilities.schemas import ScrapeConfiguration
 
 def neurips_scrape_config(year: int = 2024) -> ScrapeConfiguration:
     """Create scraper configuration for NeurIPS proceedings.
-    
+
     Args:
         year: Year of the conference (e.g., 2024).
-        
+
     Returns:
         ScrapeConfiguration for NeurIPS proceedings.
-        
+
     Example:
         >>> config = neurips_scrape_config(2024)
         >>> scraper = WebScraper()
@@ -57,21 +57,21 @@ def neurips_scrape_config(year: int = 2024) -> ScrapeConfiguration:
 
 def icml_pmlr_scrape_config(volume: int = 235) -> ScrapeConfiguration:
     """Create scraper configuration for ICML/PMLR proceedings.
-    
+
     PMLR (Proceedings of Machine Learning Research) hosts ICML and other conferences.
     Each conference has a volume number (e.g., v235 for ICML 2024).
-    
+
     Args:
         volume: PMLR volume number (e.g., 235 for ICML 2024, 267 for ICML 2025).
-        
+
     Returns:
         ScrapeConfiguration for ICML/PMLR proceedings.
-        
+
     Example:
         >>> config = icml_pmlr_scrape_config(volume=235)  # ICML 2024
         >>> scraper = WebScraper(config)
         >>> results = scraper.scrape(max_results=10)
-    
+
     Volume mappings:
         - ICML 2024: v235
         - ICML 2025: v267
@@ -121,13 +121,13 @@ def icml_pmlr_scrape_config(volume: int = 235) -> ScrapeConfiguration:
 
 def jmlr_scrape_config(volume: int = 26) -> ScrapeConfiguration:
     """Create scraper configuration for JMLR (Journal of Machine Learning Research).
-    
+
     Args:
         volume: JMLR volume number (e.g., 26 for 2025).
-        
+
     Returns:
         ScrapeConfiguration for JMLR papers.
-        
+
     Example:
         >>> config = jmlr_scrape_config(volume=26)
         >>> scraper = WebScraper(config)
@@ -176,15 +176,15 @@ def jmlr_scrape_config(volume: int = 26) -> ScrapeConfiguration:
 
 def aaai_scrape_config(year: int = 2024) -> ScrapeConfiguration:
     """Create scraper configuration for AAAI proceedings.
-    
+
     AAAI proceedings are hosted on Open Journal Systems (OJS).
-    
+
     Args:
         year: Year of the conference (e.g., 2024).
-        
+
     Returns:
         ScrapeConfiguration for AAAI proceedings.
-        
+
     Example:
         >>> config = aaai_scrape_config(2024)
         >>> scraper = WebScraper(config)
@@ -193,7 +193,7 @@ def aaai_scrape_config(year: int = 2024) -> ScrapeConfiguration:
     # AAAI uses OJS, need to find the correct issue URL for the year
     # Example: https://ojs.aaai.org/index.php/AAAI/issue/view/569 (AAAI-24)
     return ScrapeConfiguration(
-        base_url=f'https://ojs.aaai.org/index.php/AAAI/issue/archive',
+        base_url='https://ojs.aaai.org/index.php/AAAI/issue/archive',
         navigation_rules={
             'article_container': 'div.obj_article_summary',  # OJS article summary divs
         },
@@ -231,13 +231,13 @@ def aaai_scrape_config(year: int = 2024) -> ScrapeConfiguration:
 
 def ijcai_scrape_config(year: int = 2024) -> ScrapeConfiguration:
     """Create scraper configuration for IJCAI proceedings.
-    
+
     Args:
         year: Year of the conference (e.g., 2024).
-        
+
     Returns:
         ScrapeConfiguration for IJCAI proceedings.
-        
+
     Example:
         >>> config = ijcai_scrape_config(2024)
         >>> scraper = WebScraper(config)
@@ -287,20 +287,20 @@ def springer_ml_journal_scrape_config(
     journal: str = 'machine-learning',
 ) -> ScrapeConfiguration:
     """Create scraper configuration for Springer Machine Learning journal.
-    
+
     Args:
         journal: Journal URL slug (default: 'machine-learning').
-        
+
     Returns:
         ScrapeConfiguration for Springer ML journal.
-        
+
     Example:
         >>> config = springer_ml_journal_scrape_config()
         >>> scraper = WebScraper(config)
         >>> results = scraper.scrape(max_results=10)
     """
     return ScrapeConfiguration(
-        base_url=f'https://link.springer.com/journal/10994/articles',
+        base_url='https://link.springer.com/journal/10994/articles',
         navigation_rules={
             'article_container': 'li.c-list-group__item',
         },
@@ -366,14 +366,14 @@ PMLR_VOLUME_MAP = {
 
 def get_pmlr_volume(conference: str, year: int) -> int | None:
     """Get PMLR volume number for a conference and year.
-    
+
     Args:
         conference: Conference name (e.g., 'icml', 'aistats', 'corl').
         year: Year of the conference.
-        
+
     Returns:
         Volume number or None if not found.
-        
+
     Example:
         >>> volume = get_pmlr_volume('icml', 2024)
         >>> print(volume)  # 235

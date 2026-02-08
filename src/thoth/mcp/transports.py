@@ -183,15 +183,17 @@ class HTTPTransport(MCPTransport):
             if not self._check_auth(request):
                 return Response(
                     status_code=401,
-                    content=json.dumps({
-                        'jsonrpc': '2.0',
-                        'error': {
-                            'code': -32001,
-                            'message': 'Unauthorized - Invalid or missing Bearer token'
-                        },
-                        'id': None
-                    }),
-                    media_type='application/json'
+                    content=json.dumps(
+                        {
+                            'jsonrpc': '2.0',
+                            'error': {
+                                'code': -32001,
+                                'message': 'Unauthorized - Invalid or missing Bearer token',
+                            },
+                            'id': None,
+                        }
+                    ),
+                    media_type='application/json',
                 )
 
             try:
@@ -333,15 +335,17 @@ class SSETransport(MCPTransport):
             if not self._check_auth(request):
                 return Response(
                     status_code=401,
-                    content=json.dumps({
-                        'jsonrpc': '2.0',
-                        'error': {
-                            'code': -32001,
-                            'message': 'Unauthorized - Invalid or missing Bearer token'
-                        },
-                        'id': None
-                    }),
-                    media_type='application/json'
+                    content=json.dumps(
+                        {
+                            'jsonrpc': '2.0',
+                            'error': {
+                                'code': -32001,
+                                'message': 'Unauthorized - Invalid or missing Bearer token',
+                            },
+                            'id': None,
+                        }
+                    ),
+                    media_type='application/json',
                 )
 
             try:
@@ -380,7 +384,7 @@ class SSETransport(MCPTransport):
                 return Response(
                     status_code=401,
                     content='Unauthorized - Invalid or missing Bearer token',
-                    media_type='text/plain'
+                    media_type='text/plain',
                 )
 
             import uuid
@@ -423,7 +427,7 @@ class SSETransport(MCPTransport):
                 return Response(
                     status_code=401,
                     content='Unauthorized - Invalid or missing Bearer token',
-                    media_type='text/plain'
+                    media_type='text/plain',
                 )
 
             async def event_stream():

@@ -14,7 +14,6 @@ the status field. The service automatically detects and processes these changes.
 import asyncio
 from datetime import datetime, timedelta  # noqa: F401
 from pathlib import Path
-from typing import Optional
 
 from loguru import logger
 from watchdog.events import FileModifiedEvent, FileSystemEventHandler  # noqa: F401
@@ -125,7 +124,7 @@ class DiscoveryDashboardService:
         self,
         postgres_service: PostgresService,
         obsidian_review_service: ObsidianReviewService,
-        dashboard_dir: Optional[Path] = None,  # noqa: UP007
+        dashboard_dir: Path | None = None,
         check_interval: int = 60,
         auto_export: bool = True,
         auto_import: bool = True,
@@ -156,8 +155,8 @@ class DiscoveryDashboardService:
         self.last_export_times: dict[str, datetime] = {}
 
         # File watcher for automatic import
-        self.observer: Optional[PollingObserver] = None  # noqa: UP007
-        self.watcher: Optional[DiscoveryDashboardWatcher] = None  # noqa: UP007
+        self.observer: PollingObserver | None = None
+        self.watcher: DiscoveryDashboardWatcher | None = None
 
         # Track files we're writing to prevent file watcher loops
         self.writing_files: set[str] = set()
@@ -456,7 +455,7 @@ class DiscoveryDashboardService:
         matches = await self.pg.fetch(query, question_id, min_relevance, limit)
         return [dict(match) for match in matches]
 
-    async def _extract_dashboard_metadata(self, dashboard_file: Path) -> Optional[dict]:  # noqa: UP007
+    async def _extract_dashboard_metadata(self, dashboard_file: Path) -> dict | None:
         """
         Extract question_id and question_name from dashboard YAML frontmatter.
 

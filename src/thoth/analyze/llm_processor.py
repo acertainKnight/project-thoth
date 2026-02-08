@@ -8,13 +8,13 @@ from pathlib import Path
 from typing import Any, Literal
 
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
-from pydantic import BaseModel
 from langchain_core.documents import Document
-from langchain_text_splitters import MarkdownTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable, RunnableConfig
+from langchain_text_splitters import MarkdownTextSplitter
 from langgraph.graph import END, StateGraph
 from loguru import logger
+from pydantic import BaseModel
 
 from thoth.services.llm_service import LLMService
 from thoth.utilities.schemas import AnalysisResponse, AnalysisState
@@ -75,7 +75,9 @@ class LLMProcessor:
         self.max_context_length = max_context_length
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        self.analysis_model = analysis_model or AnalysisResponse  # Use provided or default
+        self.analysis_model = (
+            analysis_model or AnalysisResponse
+        )  # Use provided or default
         self.custom_instructions = custom_instructions or ''
         self.prompts_dir = Path(prompts_dir) / model.split('/')[0]
         # Default prompts packaged with Thoth
@@ -284,7 +286,7 @@ class LLMProcessor:
                 {
                     'content': chunk.page_content,
                     'analysis_schema': self.analysis_model.model_json_schema(),
-                'custom_instructions': self.custom_instructions,
+                    'custom_instructions': self.custom_instructions,
                 }
             )
             chunk_results.append(result)
@@ -334,7 +336,7 @@ class LLMProcessor:
                     {
                         'content': chunk.page_content,
                         'analysis_schema': self.analysis_model.model_json_schema(),
-                'custom_instructions': self.custom_instructions,
+                        'custom_instructions': self.custom_instructions,
                     }
                 )
                 logger.debug(f'Initial analysis: {current_analysis}')
@@ -356,7 +358,7 @@ class LLMProcessor:
                         'existing_analysis': current_analysis.model_dump(),  # Pass as dict
                         'new_section': chunk.page_content,
                         'analysis_schema': self.analysis_model.model_json_schema(),
-                'custom_instructions': self.custom_instructions,
+                        'custom_instructions': self.custom_instructions,
                     }
                 )
                 current_analysis = refined_analysis  # Update for next iteration

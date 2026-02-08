@@ -163,6 +163,7 @@ class DownloadPdfMCPTool(MCPTool):
             else:
                 # Use configured vault PDF directory from settings
                 from thoth.config import config
+
                 output_path = Path(config.pdf_dir)
 
             output_path.mkdir(parents=True, exist_ok=True)

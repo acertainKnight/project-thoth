@@ -4,7 +4,6 @@ Database migration manager for Thoth.
 Handles schema versioning and migration execution for PostgreSQL.
 """
 
-from datetime import datetime
 from typing import Any
 
 import asyncpg
@@ -56,16 +55,18 @@ class MigrationManager:
             conn = await asyncpg.connect(self.database_url)
             try:
                 # Create migrations tracking table
-                await conn.execute('''
+                await conn.execute("""
                     CREATE TABLE IF NOT EXISTS _migrations (
                         version INTEGER PRIMARY KEY,
                         name TEXT NOT NULL,
                         applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                     )
-                ''')
+                """)
 
                 # Get applied versions
-                applied = await conn.fetch('SELECT version FROM _migrations ORDER BY version')
+                applied = await conn.fetch(
+                    'SELECT version FROM _migrations ORDER BY version'
+                )
                 applied_versions = {row['version'] for row in applied}
 
                 # Apply pending migrations
@@ -79,7 +80,8 @@ class MigrationManager:
                         # Record migration
                         await conn.execute(
                             'INSERT INTO _migrations (version, name) VALUES ($1, $2)',
-                            version, name
+                            version,
+                            name,
                         )
 
                         logger.success(f'Applied migration {version:03d}: {name}')
@@ -112,8 +114,7 @@ class MigrationManager:
 
                 # Calculate pending
                 pending = [
-                    (v, n) for v, n, _ in self._migrations
-                    if v not in applied_versions
+                    (v, n) for v, n, _ in self._migrations if v not in applied_versions
                 ]
 
                 # Get last migration info
@@ -123,7 +124,9 @@ class MigrationManager:
                     last_migration = {
                         'version': last['version'],
                         'name': last['name'],
-                        'applied_at': last['applied_at'].isoformat() if last['applied_at'] else None
+                        'applied_at': last['applied_at'].isoformat()
+                        if last['applied_at']
+                        else None,
                     }
 
                 return {
@@ -131,7 +134,7 @@ class MigrationManager:
                     'pending_count': len(pending),
                     'applied_versions': applied_versions,
                     'pending_migrations': pending,
-                    'last_migration': last_migration
+                    'last_migration': last_migration,
                 }
 
             finally:
@@ -144,7 +147,7 @@ class MigrationManager:
                 'pending_count': len(self._migrations),
                 'applied_versions': [],
                 'pending_migrations': [(v, n) for v, n, _ in self._migrations],
-                'last_migration': None
+                'last_migration': None,
             }
 
 
@@ -152,7 +155,7 @@ class MigrationManager:
 # Migration SQL Definitions
 # =============================================================================
 
-MIGRATION_001_INITIAL_SCHEMA = '''
+MIGRATION_001_INITIAL_SCHEMA = """
 -- Migration 001: Initial Schema
 -- Creates all core tables for Thoth
 
@@ -202,18 +205,18 @@ CREATE TABLE IF NOT EXISTS paper_metadata (
 );
 
 -- Indexes for paper_metadata
-CREATE UNIQUE INDEX IF NOT EXISTS idx_paper_metadata_doi 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_paper_metadata_doi
     ON paper_metadata(doi) WHERE doi IS NOT NULL AND doi <> '';
-CREATE UNIQUE INDEX IF NOT EXISTS idx_paper_metadata_arxiv 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_paper_metadata_arxiv
     ON paper_metadata(arxiv_id) WHERE arxiv_id IS NOT NULL AND arxiv_id <> '';
-CREATE INDEX IF NOT EXISTS idx_paper_metadata_title_trgm 
+CREATE INDEX IF NOT EXISTS idx_paper_metadata_title_trgm
     ON paper_metadata USING gin (title_normalized gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_paper_metadata_search 
+CREATE INDEX IF NOT EXISTS idx_paper_metadata_search
     ON paper_metadata USING gin (search_vector);
 CREATE INDEX IF NOT EXISTS idx_paper_metadata_year ON paper_metadata(year);
 CREATE INDEX IF NOT EXISTS idx_paper_metadata_source ON paper_metadata(source_of_truth);
 CREATE INDEX IF NOT EXISTS idx_paper_metadata_updated ON paper_metadata(updated_at DESC);
-CREATE INDEX IF NOT EXISTS idx_paper_metadata_authors 
+CREATE INDEX IF NOT EXISTS idx_paper_metadata_authors
     ON paper_metadata USING gin (authors jsonb_path_ops);
 
 -- Processed papers (user's read papers with file paths and content)
@@ -240,9 +243,9 @@ CREATE TABLE IF NOT EXISTS processed_papers (
 -- Indexes for processed_papers
 CREATE INDEX IF NOT EXISTS idx_processed_papers_status ON processed_papers(processing_status);
 CREATE INDEX IF NOT EXISTS idx_processed_papers_accessed ON processed_papers(last_accessed DESC);
-CREATE INDEX IF NOT EXISTS idx_processed_papers_rating 
+CREATE INDEX IF NOT EXISTS idx_processed_papers_rating
     ON processed_papers(user_rating) WHERE user_rating IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_processed_papers_pdf_path 
+CREATE INDEX IF NOT EXISTS idx_processed_papers_pdf_path
     ON processed_papers(pdf_path) WHERE pdf_path IS NOT NULL;
 
 -- Papers VIEW (backward-compatible interface)
@@ -617,4 +620,4 @@ CREATE INDEX IF NOT EXISTS idx_memory_user_id ON memory(user_id);
 CREATE INDEX IF NOT EXISTS idx_memory_user_scope ON memory(user_id, scope);
 CREATE INDEX IF NOT EXISTS idx_memory_created_at ON memory(created_at);
 CREATE INDEX IF NOT EXISTS idx_memory_salience ON memory(salience_score);
-'''
+"""

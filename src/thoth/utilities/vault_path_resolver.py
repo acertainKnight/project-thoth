@@ -7,7 +7,6 @@ ensuring consistent path handling across different environments (local developme
 
 import os
 from pathlib import Path
-from typing import Optional
 
 from loguru import logger
 
@@ -181,7 +180,7 @@ class VaultPathResolver:
             return False
 
 
-def detect_vault_path() -> Optional[Path]:  # noqa: UP007
+def detect_vault_path() -> Path | None:
     """Auto-detect Obsidian vault path from environment or current directory.
 
     Detection priority:
@@ -234,7 +233,7 @@ def detect_vault_path() -> Optional[Path]:  # noqa: UP007
     return None
 
 
-def create_vault_resolver(vault_path: Optional[str | Path] = None) -> VaultPathResolver:  # noqa: UP007
+def create_vault_resolver(vault_path: str | Path | None = None) -> VaultPathResolver:
     """Create a VaultPathResolver with auto-detection if path not provided.
 
     Args:

@@ -6,7 +6,7 @@ and published papers available on arXiv.
 """
 
 import re  # noqa: I001
-from typing import List, Optional  # noqa: UP035
+from typing import List  # noqa: UP035
 from dataclasses import dataclass
 import httpx
 from loguru import logger
@@ -33,11 +33,11 @@ class ArxivMatch:
     """
 
     arxiv_id: str
-    doi: Optional[str]  # noqa: UP007
+    doi: str | None
     title: str
     authors: List[str]  # noqa: UP006
-    year: Optional[int]  # noqa: UP007
-    abstract: Optional[str]  # noqa: UP007
+    year: int | None
+    abstract: str | None
     pdf_url: str
     categories: List[str]  # noqa: UP006
     published: str
@@ -69,7 +69,7 @@ class ArxivResolver:
         """Close the HTTP client."""
         await self.client.aclose()
 
-    def _extract_arxiv_id(self, url: str) -> Optional[str]:  # noqa: UP007
+    def _extract_arxiv_id(self, url: str) -> str | None:
         """
         Extract arXiv ID from URL.
 
@@ -92,7 +92,7 @@ class ArxivResolver:
 
         return None
 
-    def _parse_entry(self, entry_xml: str) -> Optional[ArxivMatch]:  # noqa: UP007
+    def _parse_entry(self, entry_xml: str) -> ArxivMatch | None:
         """
         Parse arXiv API entry XML to ArxivMatch.
 
@@ -234,9 +234,7 @@ class ArxivResolver:
                     matches.append(match)
 
             title_preview = citation.title[:50] if citation.title else 'Unknown'
-            logger.info(
-                f'Found {len(matches)} arXiv matches for: {title_preview}...'
-            )
+            logger.info(f'Found {len(matches)} arXiv matches for: {title_preview}...')
             return matches
 
         except httpx.HTTPError as e:

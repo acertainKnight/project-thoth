@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from thoth.pipelines.optimized_document_pipeline import OptimizedDocumentPipeline
     from thoth.pipeline import ThothPipeline
+    from thoth.pipelines.optimized_document_pipeline import OptimizedDocumentPipeline
 
 from loguru import logger
 
@@ -207,8 +207,9 @@ class PDFTracker:
 
     def _load_from_postgres(self) -> None:
         """Load processed PDFs tracking from PostgreSQL using synchronous psycopg2."""
-        import psycopg2
         from urllib.parse import urlparse
+
+        import psycopg2
 
         db_url = (
             getattr(self.config.secrets, 'database_url', None)
@@ -216,11 +217,11 @@ class PDFTracker:
             else None
         )
         if not db_url:
-            print("PDFTracker: No DATABASE_URL found!", flush=True)
+            print('PDFTracker: No DATABASE_URL found!', flush=True)
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
-        print("PDFTracker: _load_from_postgres() called", flush=True)
-        print(f"PDFTracker: DATABASE_URL configured: {db_url[:30]}...", flush=True)
+        print('PDFTracker: _load_from_postgres() called', flush=True)
+        print(f'PDFTracker: DATABASE_URL configured: {db_url[:30]}...', flush=True)
 
         # Parse PostgreSQL URL for psycopg2
         parsed = urlparse(db_url)
@@ -232,16 +233,16 @@ class PDFTracker:
             'database': parsed.path.lstrip('/'),
         }
 
-        print("PDFTracker: Connecting to PostgreSQL...", flush=True)
+        print('PDFTracker: Connecting to PostgreSQL...', flush=True)
         conn = psycopg2.connect(**conn_params)
         try:
-            print("PDFTracker: Connected, fetching rows...", flush=True)
+            print('PDFTracker: Connected, fetching rows...', flush=True)
             cursor = conn.cursor()
             cursor.execute(
                 'SELECT pdf_path, new_pdf_path, note_path, file_size, file_mtime FROM processed_pdfs'
             )
             rows = cursor.fetchall()
-            print(f"PDFTracker: Fetched {len(rows)} rows from database", flush=True)
+            print(f'PDFTracker: Fetched {len(rows)} rows from database', flush=True)
 
             for row in rows:
                 # Stored paths are already relative (e.g., "thoth/papers/pdfs/file.pdf")
@@ -265,11 +266,14 @@ class PDFTracker:
                 self.processed_files[str(pdf_path_key)] = tracked_info
 
             cursor.close()
-            print(f"PDFTracker: Loaded {len(rows)} files into processed_files dict", flush=True)
+            print(
+                f'PDFTracker: Loaded {len(rows)} files into processed_files dict',
+                flush=True,
+            )
             logger.info(f'Loaded {len(rows)} processed PDFs from PostgreSQL')
         finally:
             conn.close()
-            print("PDFTracker: Database connection closed", flush=True)
+            print('PDFTracker: Database connection closed', flush=True)
 
     def _save_tracked_files(self):
         """
@@ -282,8 +286,9 @@ class PDFTracker:
 
     def _save_to_postgres(self) -> None:
         """Save processed PDFs tracking to PostgreSQL using synchronous psycopg2."""
-        import psycopg2
         from urllib.parse import urlparse
+
+        import psycopg2
 
         db_url = (
             getattr(self.config.secrets, 'database_url', None)
@@ -337,8 +342,13 @@ class PDFTracker:
 
             conn.commit()
             cursor.close()
-            logger.info(f'Saved {len(self.processed_files)} processed PDFs to PostgreSQL')
-            print(f"PDFTracker: Saved {len(self.processed_files)} processed PDFs to PostgreSQL", flush=True)
+            logger.info(
+                f'Saved {len(self.processed_files)} processed PDFs to PostgreSQL'
+            )
+            print(
+                f'PDFTracker: Saved {len(self.processed_files)} processed PDFs to PostgreSQL',
+                flush=True,
+            )
         finally:
             conn.close()
 
@@ -366,7 +376,9 @@ class PDFTracker:
                 # Check if path matches a renamed filename (new_pdf_path values)
                 for original_path, metadata in self.processed_files.items():
                     if metadata.get('new_pdf_path') == relative_path:
-                        logger.debug(f'Found as renamed path: {relative_path} (original: {original_path})')
+                        logger.debug(
+                            f'Found as renamed path: {relative_path} (original: {original_path})'
+                        )
                         return True
 
                 logger.debug(f'Not processed: {file_path} -> {relative_path}')
@@ -544,9 +556,7 @@ class PDFTracker:
 
             # Handle migration case: if size/mtime not in tracker, backfill from filesystem
             if 'size' not in tracked_info or 'mtime' not in tracked_info:
-                logger.debug(
-                    f'Backfilling size/mtime for {lookup_key} from filesystem'
-                )
+                logger.debug(f'Backfilling size/mtime for {lookup_key} from filesystem')
                 tracked_info['size'] = stats.st_size
                 tracked_info['mtime'] = stats.st_mtime
                 # Save the updated tracker immediately
@@ -638,7 +648,7 @@ class PDFMonitor:
             recursive: Whether to watch subdirectories recursively.
         """
         import warnings
-        
+
         self.config = config
         self.watch_dir = watch_dir or self.config.pdf_dir
 
@@ -651,21 +661,23 @@ class PDFMonitor:
                 "Cannot specify both 'pipeline' and 'document_pipeline' parameters. "
                 "Use 'document_pipeline' only (pipeline is deprecated)."
             )
-        
+
         if pipeline is not None:
             # OLD parameter - issue deprecation warning
             warnings.warn(
                 "PDFMonitor parameter 'pipeline' is deprecated and will be removed in a future version. "
                 "Use 'document_pipeline' instead:\n\n"
-                "    from thoth.initialization import initialize_thoth\n"
-                "    _, document_pipeline, _ = initialize_thoth()\n"
-                "    monitor = PDFMonitor(document_pipeline=document_pipeline)\n",
+                '    from thoth.initialization import initialize_thoth\n'
+                '    _, document_pipeline, _ = initialize_thoth()\n'
+                '    monitor = PDFMonitor(document_pipeline=document_pipeline)\n',
                 DeprecationWarning,
                 stacklevel=2,
             )
             # Extract the document pipeline from ThothPipeline wrapper
             # Check if it's actually a ThothPipeline by checking for the class name
-            if pipeline.__class__.__name__ == 'ThothPipeline' and hasattr(pipeline, 'document_pipeline'):
+            if pipeline.__class__.__name__ == 'ThothPipeline' and hasattr(
+                pipeline, 'document_pipeline'
+            ):
                 self.pipeline = pipeline.document_pipeline
             else:
                 # If passed an OptimizedDocumentPipeline directly, or a mock, use it as-is
@@ -676,7 +688,7 @@ class PDFMonitor:
         else:
             # Neither provided - create new pipeline using initialize_thoth()
             from thoth.initialization import initialize_thoth
-            
+
             _, self.pipeline, _ = initialize_thoth()
 
         # Set up the observer
@@ -708,35 +720,38 @@ class PDFMonitor:
         This method initiates the file system monitor and begins watching
         for new PDF files.
         """
-        print("MONITOR: 🚀 PDFMonitor.start() method entered", flush=True)
+        print('MONITOR: 🚀 PDFMonitor.start() method entered', flush=True)
         logger.info('🚀 PDFMonitor.start() method called')
-        print(f"MONITOR: 🔍 WATCHDOG_AVAILABLE = {WATCHDOG_AVAILABLE}", flush=True)
+        print(f'MONITOR: 🔍 WATCHDOG_AVAILABLE = {WATCHDOG_AVAILABLE}', flush=True)
         logger.info(f'🔍 WATCHDOG_AVAILABLE = {WATCHDOG_AVAILABLE}')
 
         if not WATCHDOG_AVAILABLE:
-            print("MONITOR: ⚠️  Watchdog not available!", flush=True)
+            print('MONITOR: ⚠️  Watchdog not available!', flush=True)
             logger.warning('Watchdog not available, PDF monitoring disabled')
             return
 
         # Process existing files first
-        print("MONITOR: 📋 About to call _process_existing_files()...", flush=True)
+        print('MONITOR: 📋 About to call _process_existing_files()...', flush=True)
         logger.info('📋 About to call _process_existing_files()...')
         self._process_existing_files()
-        print("MONITOR: ✅ _process_existing_files() completed", flush=True)
+        print('MONITOR: ✅ _process_existing_files() completed', flush=True)
         logger.info('✅ _process_existing_files() completed')
 
         # DEBUG: Explicit trace before observer start
-        print("MONITOR: 🔍 Line 728: About to call _start_observer()...", flush=True)
+        print('MONITOR: 🔍 Line 728: About to call _start_observer()...', flush=True)
         logger.info('🔍 Line 728: About to call _start_observer()...')
 
         # Set up and start the observer
         try:
-            print("MONITOR: 🔍 Line 732: Calling _start_observer()...", flush=True)
+            print('MONITOR: 🔍 Line 732: Calling _start_observer()...', flush=True)
             self._start_observer()
-            print("MONITOR: ✅ Line 734: _start_observer() returned successfully", flush=True)
+            print(
+                'MONITOR: ✅ Line 734: _start_observer() returned successfully',
+                flush=True,
+            )
             logger.info('✅ _start_observer() returned successfully')
         except Exception as e:
-            print(f"MONITOR: ❌ EXCEPTION in _start_observer(): {e!s}", flush=True)
+            print(f'MONITOR: ❌ EXCEPTION in _start_observer(): {e!s}', flush=True)
             logger.exception('EXCEPTION in _start_observer():')
             raise
 
@@ -842,52 +857,76 @@ class PDFMonitor:
         """
         Process any existing PDF files in the watch directory.
         """
-        print(f"MONITOR: 📂 _process_existing_files() entered, checking {self.watch_dir}", flush=True)
+        print(
+            f'MONITOR: 📂 _process_existing_files() entered, checking {self.watch_dir}',
+            flush=True,
+        )
         logger.info(f'📂 Checking for existing PDF files in {self.watch_dir}')
 
         # Use recursive glob if recursive flag is set
         glob_pattern = '**/*.pdf' if self.recursive else '*.pdf'
-        print(f"MONITOR: 🔍 Using glob pattern: {glob_pattern}", flush=True)
+        print(f'MONITOR: 🔍 Using glob pattern: {glob_pattern}', flush=True)
 
         # Count files first
-        print("MONITOR: 🔄 Globbing for PDF files...", flush=True)
+        print('MONITOR: 🔄 Globbing for PDF files...', flush=True)
         pdf_files = list(self.watch_dir.glob(glob_pattern))
-        print(f"MONITOR: 📋 Found {len(pdf_files)} PDF files before filtering", flush=True)
+        print(
+            f'MONITOR: 📋 Found {len(pdf_files)} PDF files before filtering', flush=True
+        )
 
         if self.recursive:
             pdf_files = [f for f in pdf_files if f.is_file()]
-            print(f"MONITOR: 📋 After filtering: {len(pdf_files)} files", flush=True)
+            print(f'MONITOR: 📋 After filtering: {len(pdf_files)} files', flush=True)
 
         # CRITICAL FIX: Pre-filter to only unprocessed PDFs BEFORE iterating
         if self.pipeline.pdf_tracker:
             unprocessed_files = []
             for pdf_file in pdf_files:
                 # Check if already processed and unchanged
-                if not (self.pipeline.pdf_tracker.is_processed(pdf_file) and
-                        self.pipeline.pdf_tracker.verify_file_unchanged(pdf_file)):
+                if not (
+                    self.pipeline.pdf_tracker.is_processed(pdf_file)
+                    and self.pipeline.pdf_tracker.verify_file_unchanged(pdf_file)
+                ):
                     unprocessed_files.append(pdf_file)
 
-            print(f"MONITOR: 🔍 Pre-filter results: {len(unprocessed_files)} unprocessed out of {len(pdf_files)} total PDFs", flush=True)
-            logger.info(f'🔍 Pre-filter: {len(unprocessed_files)} unprocessed out of {len(pdf_files)} total PDFs')
+            print(
+                f'MONITOR: 🔍 Pre-filter results: {len(unprocessed_files)} unprocessed out of {len(pdf_files)} total PDFs',
+                flush=True,
+            )
+            logger.info(
+                f'🔍 Pre-filter: {len(unprocessed_files)} unprocessed out of {len(pdf_files)} total PDFs'
+            )
             pdf_files = unprocessed_files
 
         logger.info(f'📊 Found {len(pdf_files)} PDF files to process')
-        print(f"MONITOR: 📊 Starting to process {len(pdf_files)} PDFs", flush=True)
+        print(f'MONITOR: 📊 Starting to process {len(pdf_files)} PDFs', flush=True)
 
         for i, pdf_file in enumerate(pdf_files, 1):
-            print(f"MONITOR: 📄 Processing #{i}/{len(pdf_files)}: {pdf_file.name}", flush=True)
+            print(
+                f'MONITOR: 📄 Processing #{i}/{len(pdf_files)}: {pdf_file.name}',
+                flush=True,
+            )
             logger.info(f'📄 Processing PDF {i}/{len(pdf_files)}: {pdf_file.name}')
 
             try:
                 # The pipeline now handles tracking and reprocessing checks
-                print(f"MONITOR: ▶️  Calling pipeline.process_pdf() for {pdf_file.name}...", flush=True)
+                print(
+                    f'MONITOR: ▶️  Calling pipeline.process_pdf() for {pdf_file.name}...',
+                    flush=True,
+                )
                 logger.info(f'▶️  Calling pipeline.process_pdf() for {pdf_file.name}...')
                 self.pipeline.process_pdf(pdf_file)
-                print(f"MONITOR: ✅ process_pdf() returned for {pdf_file.name}", flush=True)
+                print(
+                    f'MONITOR: ✅ process_pdf() returned for {pdf_file.name}',
+                    flush=True,
+                )
                 self.files_processed += 1
                 logger.info(f'✅ Successfully processed {pdf_file.name}')
             except Exception as e:
-                print(f"MONITOR: ❌ Exception processing {pdf_file.name}: {e!s}", flush=True)
+                print(
+                    f'MONITOR: ❌ Exception processing {pdf_file.name}: {e!s}',
+                    flush=True,
+                )
                 logger.error(f'❌ Error processing existing file {pdf_file}: {e!s}')
                 logger.exception('Full traceback:')
 
@@ -900,22 +939,22 @@ class PDFMonitor:
         """
         Start or restart the observer with current watch directory.
         """
-        print("MONITOR: 🎯 _start_observer() ENTERED", flush=True)
+        print('MONITOR: 🎯 _start_observer() ENTERED', flush=True)
         logger.info('🎯 _start_observer() ENTERED')
 
-        print("MONITOR: 🔍 Creating PDFHandler...", flush=True)
+        print('MONITOR: 🔍 Creating PDFHandler...', flush=True)
         event_handler = PDFHandler(self.pipeline)
-        print("MONITOR: ✅ PDFHandler created", flush=True)
+        print('MONITOR: ✅ PDFHandler created', flush=True)
 
-        print(f"MONITOR: 🔍 Scheduling observer for {self.watch_dir}...", flush=True)
+        print(f'MONITOR: 🔍 Scheduling observer for {self.watch_dir}...', flush=True)
         self.observer.schedule(
             event_handler, str(self.watch_dir), recursive=self.recursive
         )
-        print("MONITOR: ✅ Observer scheduled", flush=True)
+        print('MONITOR: ✅ Observer scheduled', flush=True)
 
-        print("MONITOR: 🔍 Starting observer thread...", flush=True)
+        print('MONITOR: 🔍 Starting observer thread...', flush=True)
         self.observer.start()
-        print("MONITOR: ✅ Observer thread started", flush=True)
+        print('MONITOR: ✅ Observer thread started', flush=True)
         logger.info(f'Observer started watching {self.watch_dir}')
 
     def _on_config_reload(self):

@@ -19,7 +19,7 @@ mkdir -p /letta/.letta
 # Check if MCP config already exists
 if [ -f "$MCP_CONFIG_FILE" ]; then
     echo "✓ MCP configuration file exists"
-    
+
     # Check if thoth server is already configured
     if grep -q '"thoth"' "$MCP_CONFIG_FILE"; then
         echo "✓ Thoth MCP server already configured"
@@ -84,13 +84,13 @@ echo "Checking Thoth MCP server connectivity..."
 if command -v curl &> /dev/null; then
     if curl -sf "$THOTH_MCP_URL/health" > /dev/null 2>&1; then
         echo "✓ Thoth MCP server is accessible at $THOTH_MCP_URL"
-        
+
         # Try to get tool count
         TOOL_COUNT=$(curl -sf -X POST \
             -H "Content-Type: application/json" \
             -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
             "$THOTH_MCP_URL/mcp" 2>/dev/null | grep -o '"tools":\[' | wc -l || echo "0")
-        
+
         if [ "$TOOL_COUNT" -gt 0 ]; then
             echo "✓ MCP tools endpoint responding"
         fi

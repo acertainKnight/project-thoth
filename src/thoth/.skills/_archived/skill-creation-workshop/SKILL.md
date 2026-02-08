@@ -21,7 +21,7 @@ Agent: "You want to create a skill for [X]. Let me check if this needs a skill.
    - ✗ No → Probably just a tool call
 
 2. Is it CONVERSATIONAL? (requires guidance and feedback?)
-   - ✓ Yes → Continue  
+   - ✓ Yes → Continue
    - ✗ No → Probably just documentation
 
 3. Is it COMPLEX? (multi-step with decisions?)
@@ -76,7 +76,7 @@ Agent: "Let's map out the workflow. Walk me through it:
 - Standard opening conversation
 - Get user from start → end quickly
 
-## Diagnosis Section  
+## Diagnosis Section
 - Decision trees for different starting points
 - "If user has X → do Y"
 
@@ -173,7 +173,7 @@ Agent: "[Opening question/statement]"
 ### Pattern 1: [Name]
 [Conversation flow with specific dialogue]
 
-### Pattern 2: [Name]  
+### Pattern 2: [Name]
 [Another conversation flow]
 
 ---
@@ -292,7 +292,7 @@ User wants help with [X]
 ├─ Is it ONE tool call? → ❌ NO SKILL NEEDED
 │  Example: "Summarize paper" → Just call summarize_paper()
 │
-├─ Is it just INFORMATION? → ❌ NO SKILL NEEDED  
+├─ Is it just INFORMATION? → ❌ NO SKILL NEEDED
 │  Example: "What sources exist?" → Just documentation
 │
 ├─ Is it a SIMPLE sequence? → ❌ NO SKILL NEEDED
@@ -308,7 +308,7 @@ User wants help with [X]
 
 ### Section 1: Quick Start (REQUIRED)
 **Purpose**: Get agent acting in 30 seconds
-**Content**: 
+**Content**:
 - Standard opening (what to say first)
 - Most common conversation flow
 - Expected outcome
@@ -377,7 +377,7 @@ User wants help with [X]
 ```markdown
 ## Understanding Keywords
 
-Keywords are fundamental to effective search. The agent should help 
+Keywords are fundamental to effective search. The agent should help
 the user understand that keywords need to balance precision and recall.
 There are many approaches to keyword optimization, and the agent should
 guide the user through exploring these options.
@@ -482,7 +482,7 @@ Agent: "[Next exact words]"
 
 **Symptom**: >500 lines, agent loses focus
 
-**Fix**: 
+**Fix**:
 1. Cut philosophy/background - keep only actions
 2. Move advanced content to separate file
 3. Merge redundant sections
@@ -533,7 +533,7 @@ Check [X]:
 4. Refine: Iterate based on results
 5. Deploy: Finalize and activate
 
-### Pattern 2: Optimization Workflow  
+### Pattern 2: Optimization Workflow
 **Examples**: keyword optimization, threshold tuning
 
 **Structure**:
@@ -581,5 +581,5 @@ Check [X]:
 2. Iterate until agent can execute workflow smoothly
 3. Test with real scenario before finalizing
 
-**Success metric**: 
+**Success metric**:
 Agent can load skill, read Quick Start, and successfully guide user through workflow on first try.

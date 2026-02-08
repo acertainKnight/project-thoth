@@ -1,6 +1,6 @@
 """Central service manager for Thoth components."""
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -74,10 +74,11 @@ except ImportError:
 class ServiceUnavailableError(Exception):
     """
     Raised when an optional service is not available.
-    
+
     This error indicates that the service requires additional dependencies
     that are not currently installed.
     """
+
     pass
 
 
@@ -87,7 +88,7 @@ class ServiceManager:
 
     This class provides a single point of access for all services,
     handling initialization and dependency injection.
-    
+
     Services are accessed by short names (e.g., service_manager.llm)
     NOT by long names (e.g., service_manager.llm_service).
     """
@@ -110,17 +111,19 @@ class ServiceManager:
         research_question: ResearchQuestionService
         tag: TagService
         skill: SkillService
-        
+
         # Optional services (may be None if extras not installed)
         letta_filesystem: LettaFilesystemService | None  # Requires 'memory' extras
-        letta_filesystem_watcher: LettaFilesystemWatcherService | None  # Requires 'memory' extras
+        letta_filesystem_watcher: (
+            LettaFilesystemWatcherService | None
+        )  # Requires 'memory' extras
         processing: ProcessingService | None  # Requires 'pdf' extras
         rag: RAGService | None  # Requires 'embeddings' extras
         rag_watcher: RAGWatcherService | None  # Requires 'embeddings' extras
         cache: CacheService | None  # Requires optimization extras
         async_processing: AsyncProcessingService | None  # Requires optimization extras
 
-    def __init__(self, config: "Config | None" = None):
+    def __init__(self, config: 'Config | None' = None):
         """
         Initialize the ServiceManager.
 
@@ -130,6 +133,7 @@ class ServiceManager:
         # CRITICAL FIX: Import global_config here to avoid circular import deadlock
         if config is None:
             from thoth.config import config as global_config
+
             config = global_config
 
         self.config = config
@@ -216,8 +220,10 @@ class ServiceManager:
             from thoth.repositories.available_source_repository import (
                 AvailableSourceRepository,
             )
+
             source_repo = AvailableSourceRepository(self._services['postgres'])
             from thoth.discovery.discovery_manager import DiscoveryManager
+
             self._services['discovery_manager'] = DiscoveryManager(
                 sources_config_dir=self.config.discovery_sources_dir,
                 source_repo=source_repo,
@@ -230,7 +236,9 @@ class ServiceManager:
             )
             logger.success('✓ Discovery services initialized successfully')
         except ImportError as e:
-            logger.warning(f'Discovery services unavailable (missing dependencies): {e}')
+            logger.warning(
+                f'Discovery services unavailable (missing dependencies): {e}'
+            )
             logger.warning('Install browser dependencies: uv sync --extra discovery')
             self._services['discovery_manager'] = None
             self._services['discovery_orchestrator'] = None
@@ -269,37 +277,45 @@ class ServiceManager:
 
         # Initialize Letta filesystem service (optional - requires memory extras)
         if LETTA_FILESYSTEM_AVAILABLE:
-            self._services['letta_filesystem'] = LettaFilesystemService(config=self.config)
+            self._services['letta_filesystem'] = LettaFilesystemService(
+                config=self.config
+            )
             self.logger.debug('Letta filesystem service initialized')
-            
+
             # Initialize Letta filesystem watcher (auto-sync on file changes)
             self._services['letta_filesystem_watcher'] = LettaFilesystemWatcherService(
                 config=self.config,
-                letta_filesystem_service=self._services['letta_filesystem']
+                letta_filesystem_service=self._services['letta_filesystem'],
             )
             # Start watcher if autoSync is enabled in config
             self._services['letta_filesystem_watcher'].start()
         else:
             self._services['letta_filesystem'] = None
             self._services['letta_filesystem_watcher'] = None
-            self.logger.debug('Letta filesystem service not available (requires memory extras with pgvector)')
+            self.logger.debug(
+                'Letta filesystem service not available (requires memory extras with pgvector)'
+            )
 
         # Initialize Letta filesystem service (optional - requires memory extras)
         if LETTA_FILESYSTEM_AVAILABLE:
-            self._services['letta_filesystem'] = LettaFilesystemService(config=self.config)
+            self._services['letta_filesystem'] = LettaFilesystemService(
+                config=self.config
+            )
             self.logger.debug('Letta filesystem service initialized')
-            
+
             # Initialize Letta filesystem watcher (auto-sync on file changes)
             self._services['letta_filesystem_watcher'] = LettaFilesystemWatcherService(
                 config=self.config,
-                letta_filesystem_service=self._services['letta_filesystem']
+                letta_filesystem_service=self._services['letta_filesystem'],
             )
             # Start watcher if autoSync is enabled in config
             self._services['letta_filesystem_watcher'].start()
         else:
             self._services['letta_filesystem'] = None
             self._services['letta_filesystem_watcher'] = None
-            self.logger.debug('Letta filesystem service not available (requires memory extras with pgvector)')
+            self.logger.debug(
+                'Letta filesystem service not available (requires memory extras with pgvector)'
+            )
 
         # Initialize optimized services if available
         if OPTIMIZED_SERVICES_AVAILABLE:
@@ -319,7 +335,7 @@ class ServiceManager:
         # Try to get the service
         if name in self._services:
             service = self._services[name]
-            
+
             # If service is None (optional service not installed), provide helpful error
             if service is None:
                 # Map service names to their extras groups
@@ -332,9 +348,9 @@ class ServiceManager:
                 extras_name = extras_map.get(name, 'unknown')
                 raise ServiceUnavailableError(
                     f"Service '{name}' is not available. "
-                    f"Install required dependencies: uv sync --extra {extras_name}"
+                    f'Install required dependencies: uv sync --extra {extras_name}'
                 )
-            
+
             return service
 
         # If not found, provide helpful error message
@@ -346,12 +362,11 @@ class ServiceManager:
                     f"ServiceManager has no attribute '{name}'. "
                     f"Use short name 'service_manager.{short_name}' instead of 'service_manager.{name}'"
                 )
-        
+
         # General error with available services
         available = ', '.join(sorted(self._services.keys()))
         raise AttributeError(
-            f"ServiceManager has no service '{name}'. "
-            f"Available services: {available}"
+            f"ServiceManager has no service '{name}'. Available services: {available}"
         )
 
     def get_service(self, name: str) -> BaseService:
@@ -405,34 +420,34 @@ class ServiceManager:
     def require_service(self, service_name: str, extras_name: str) -> BaseService:
         """
         Get a required service or raise a helpful error if not available.
-        
+
         This method is especially useful for optional services that require
         additional dependencies to be installed.
-        
+
         Args:
             service_name: Name of the service (e.g., 'rag', 'processing')
             extras_name: Name of the extras group to install (e.g., 'embeddings', 'pdf')
-            
+
         Returns:
             BaseService: The requested service
-            
+
         Raises:
             ServiceUnavailableError: If the service is not available
-            
+
         Example:
             >>> rag = service_manager.require_service('rag', 'embeddings')
             >>> results = rag.search(query)
         """
         self._ensure_initialized()
-        
+
         service = self._services.get(service_name)
-        
+
         if service is None:
             raise ServiceUnavailableError(
                 f"Service '{service_name}' is not available. "
-                f"Install required dependencies: uv sync --extra {extras_name}"
+                f'Install required dependencies: uv sync --extra {extras_name}'
             )
-        
+
         return service
 
     def get_all_services(self) -> dict[str, BaseService]:

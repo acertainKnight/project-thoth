@@ -300,7 +300,7 @@ def test_year_score_bounds(year1: int, year2: int):
     ),
     data=st.data(),
 )
-@pytest.mark.skip(reason="Hypothesis property test failing - needs investigation")
+@pytest.mark.skip(reason='Hypothesis property test failing - needs investigation')
 def test_title_similarity_monotonicity(base_title: str, data):  # noqa: ARG001
     """
     Property: More similar titles should have higher scores.

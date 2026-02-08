@@ -5,7 +5,7 @@ This module provides specialized methods for managing workflow action sequences,
 step ordering, and action configuration for browser automation workflows.
 """
 
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from loguru import logger
@@ -20,7 +20,7 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
         """Initialize workflow actions repository."""
         super().__init__(postgres_service, table_name='workflow_actions', **kwargs)
 
-    async def create(self, action_data: dict[str, Any]) -> Optional[UUID]:  # noqa: UP007
+    async def create(self, action_data: dict[str, Any]) -> UUID | None:
         """
         Create a new workflow action step.
 
@@ -91,7 +91,7 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
 
     async def get_by_step_number(
         self, workflow_id: UUID, step_number: int
-    ) -> Optional[dict[str, Any]]:  # noqa: UP007
+    ) -> dict[str, Any] | None:
         """
         Get a specific action step by its step number.
 

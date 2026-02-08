@@ -13,7 +13,7 @@
 # ==============================================================================
 # Builder stage - Install dependencies only (not the project)
 # ==============================================================================
-FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
 # UV best practices for Docker builds
 ENV UV_COMPILE_BYTECODE=1 \
@@ -36,7 +36,7 @@ ADD . /app
 # ==============================================================================
 # Runtime stage - Development image with hot-reload support
 # ==============================================================================
-FROM python:3.11-slim AS runtime
+FROM python:3.12-slim AS runtime
 
 # Install runtime system dependencies including Playwright dependencies
 RUN apt-get update && apt-get install -y \

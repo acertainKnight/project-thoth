@@ -19,16 +19,19 @@ from loguru import logger
 # Make playwright imports optional to avoid blocking if not installed
 if TYPE_CHECKING:
     from playwright.async_api import Browser, BrowserContext, Page
+
     async_playwright = None  # type: ignore
     PlaywrightError = Exception
 else:
     try:
         from playwright.async_api import (
-            Browser,  # noqa: F401
+            Browser,
             BrowserContext,
-            Error as PlaywrightError,
-            Page,  # noqa: F401
+            Page,
             async_playwright,
+        )
+        from playwright.async_api import (
+            Error as PlaywrightError,
         )
     except ImportError:
         # Playwright not installed - create placeholders
@@ -120,8 +123,8 @@ class BrowserManager:
     async def get_browser(
         self,
         headless: bool = True,
-        viewport: Optional[Dict[str, int]] = None,  # noqa: UP006, UP007
-        user_agent: Optional[str] = None,  # noqa: UP007
+        viewport: Dict[str, int] | None = None,  # noqa: UP006
+        user_agent: str | None = None,
     ) -> BrowserContext:
         """
         Get a browser context from the pool.
@@ -195,9 +198,9 @@ class BrowserManager:
     async def browser_context(
         self,
         headless: bool = True,
-        viewport: Optional[Dict[str, int]] = None,  # noqa: UP006, UP007
-        user_agent: Optional[str] = None,  # noqa: UP007
-        session_id: Optional[UUID] = None,  # noqa: UP007
+        viewport: Dict[str, int] | None = None,  # noqa: UP006
+        user_agent: str | None = None,
+        session_id: UUID | None = None,
     ) -> AsyncIterator[BrowserContext]:
         """
         Context manager for safely acquiring and releasing browser contexts.
@@ -268,7 +271,7 @@ class BrowserManager:
         self,
         session_id: UUID,
         headless: bool = True,
-        viewport: Optional[Dict[str, int]] = None,  # noqa: UP006, UP007
+        viewport: Dict[str, int] | None = None,  # noqa: UP006
     ) -> BrowserContext:
         """
         Load a previously saved browser session.

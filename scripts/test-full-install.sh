@@ -120,7 +120,11 @@ echo -e "  .obsidian: $([ -d "$TEST_VAULT/.obsidian" ] && echo "${GREEN}✓${NC}
 # ── Step 2: Build setup image ────────────────────────────────────
 echo -e "\n${GREEN}[2/3] Building setup image...${NC}"
 cd "$PROJECT_DIR"
-docker build -f Dockerfile.setup -t thoth-setup:test . 2>&1 | tail -5
+docker build -f Dockerfile.setup -t thoth-setup:test . 2>&1 | tail -10
+if ! docker image inspect thoth-setup:test &>/dev/null; then
+    echo -e "  ${RED}✗ Image build FAILED${NC}"
+    exit 1
+fi
 echo -e "  ${GREEN}✓ Image built${NC}"
 
 # ── Step 3: Run wizard ───────────────────────────────────────────

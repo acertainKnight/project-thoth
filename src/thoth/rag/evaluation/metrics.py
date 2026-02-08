@@ -64,9 +64,7 @@ class RAGMetrics:
     retrieval: RetrievalMetrics
     answer_quality: AnswerQualityMetrics
     performance: PerformanceMetrics
-    by_difficulty: dict[
-        str, 'RAGMetrics'
-    ]  # Metrics stratified by difficulty
+    by_difficulty: dict[str, 'RAGMetrics']  # Metrics stratified by difficulty
     by_question_type: Dict[str, 'RAGMetrics']  # Metrics by question type  # noqa: UP006
 
 
@@ -127,7 +125,7 @@ def calculate_ndcg_at_k(
     retrieved_doc_ids: List[str],  # noqa: UP006
     relevant_doc_ids: List[str],  # noqa: UP006
     k: int,
-    relevance_scores: Optional[Dict[str, float]] = None,  # noqa: UP006, UP007
+    relevance_scores: Dict[str, float] | None = None,  # noqa: UP006
 ) -> float:
     """
     Calculate NDCG@K: Normalized Discounted Cumulative Gain.
@@ -336,7 +334,7 @@ def calculate_rag_metrics(
     ground_truth_list,
     retrieval_results_list,  # noqa: ARG001
     answer_results_list,  # noqa: ARG001
-    latency_data: Optional[List[Dict[str, float]]] = None,  # noqa: ARG001, UP006, UP007
+    latency_data: List[Dict[str, float]] | None = None,  # noqa: ARG001, UP006
 ) -> RAGMetrics:
     """
     Calculate comprehensive RAG metrics from evaluation results.

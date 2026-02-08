@@ -16,7 +16,7 @@ Key Types:
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional  # noqa: UP035
+from typing import Any, Dict, List  # noqa: UP035
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -153,17 +153,17 @@ class ResolutionMetadata(BaseModel):
     attempt_count: int = Field(
         default=0, ge=0, description='Number of resolution attempts made'
     )
-    last_attempt_time: Optional[datetime] = Field(  # noqa: UP007
+    last_attempt_time: datetime | None = Field(
         default=None, description='Timestamp of most recent resolution attempt'
     )
-    error_message: Optional[str] = Field(  # noqa: UP007
+    error_message: str | None = Field(
         default=None, description='Error message if resolution failed'
     )
     api_sources_tried: List[APISource] = Field(  # noqa: UP006
         default_factory=list,
         description='List of API sources consulted during resolution',
     )
-    processing_time_ms: Optional[float] = Field(  # noqa: UP007
+    processing_time_ms: float | None = Field(
         default=None, ge=0.0, description='Processing time in milliseconds'
     )
     additional_info: Dict[str, Any] = Field(  # noqa: UP006
@@ -212,10 +212,10 @@ class ResolutionResult(BaseModel):
     confidence_level: ConfidenceLevel = Field(
         description='Categorized confidence level (HIGH/MEDIUM/LOW)'
     )
-    source: Optional[APISource] = Field(  # noqa: UP007
+    source: APISource | None = Field(
         default=None, description='Primary API source used for resolution'
     )
-    matched_data: Optional[Dict[str, Any]] = Field(  # noqa: UP006, UP007
+    matched_data: Dict[str, Any] | None = Field(  # noqa: UP006
         default=None, description='Resolved citation data if successful'
     )
     candidates: List[MatchCandidate] = Field(  # noqa: UP006

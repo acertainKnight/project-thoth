@@ -91,7 +91,7 @@ Agent: "Let me search for BERT discussions."
 
 Agent: "Found 3 conversations:
 - Nov 20: Initial BERT paper analysis
-- Nov 22: Compared BERT vs RoBERTa  
+- Nov 22: Compared BERT vs RoBERTa
 - Dec 1: Used BERT for sentiment analysis
 
 The Nov 20 conversation has the main analysis. Want to see it?"
@@ -188,7 +188,7 @@ That's the complete context. Need more?"
 # After specific date
 --start-date "2025-11-01"
 
-# Before specific date  
+# Before specific date
 --end-date "2025-10-31"
 ```
 
@@ -232,7 +232,7 @@ npx tsx [SKILL_DIR]/scripts/get-messages.ts \
   --before "message-id-from-search" \
   --limit 10
 
-# Get context after  
+# Get context after
 npx tsx [SKILL_DIR]/scripts/get-messages.ts \
   --after "message-id-from-search" \
   --order asc \

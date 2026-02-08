@@ -1,10 +1,9 @@
 """Test suite for ResearchQuestionService."""
 
-import pytest
 from unittest.mock import Mock
 
-from thoth.services.research_question_service import ResearchQuestionService
 from thoth.config import Config
+from thoth.services.research_question_service import ResearchQuestionService
 
 
 class TestResearchQuestionServiceInitialization:
@@ -14,8 +13,10 @@ class TestResearchQuestionServiceInitialization:
         """Test ResearchQuestionService initializes correctly."""
         mock_config = Mock(spec=Config)
         mock_postgres = Mock()
-        service = ResearchQuestionService(config=mock_config, postgres_service=mock_postgres)
-        
+        service = ResearchQuestionService(
+            config=mock_config, postgres_service=mock_postgres
+        )
+
         assert service.postgres_service is mock_postgres
         assert service.config is not None
 
@@ -24,10 +25,9 @@ class TestResearchQuestionServiceInitialization:
         mock_config = Mock(spec=Config)
         mock_postgres = Mock()
         service = ResearchQuestionService(
-            config=mock_config,
-            postgres_service=mock_postgres
+            config=mock_config, postgres_service=mock_postgres
         )
-        
+
         assert service.config is mock_config
 
 
@@ -38,8 +38,10 @@ class TestResearchQuestionServiceMethods:
         """Test ResearchQuestionService has all required methods."""
         mock_config = Mock(spec=Config)
         mock_postgres = Mock()
-        service = ResearchQuestionService(config=mock_config, postgres_service=mock_postgres)
-        
+        service = ResearchQuestionService(
+            config=mock_config, postgres_service=mock_postgres
+        )
+
         # Check key methods exist (actual async methods from implementation)
         assert hasattr(service, 'create_research_question')
         assert hasattr(service, 'update_research_question')
@@ -51,7 +53,9 @@ class TestResearchQuestionServiceMethods:
         """Test initialize() method."""
         mock_config = Mock(spec=Config)
         mock_postgres = Mock()
-        service = ResearchQuestionService(config=mock_config, postgres_service=mock_postgres)
-        
+        service = ResearchQuestionService(
+            config=mock_config, postgres_service=mock_postgres
+        )
+
         # Service doesn't have initialize(), no-op test
         assert service is not None
