@@ -40,7 +40,7 @@ async def main():
         print(f'Found {len(workflows)} active workflows')
 
         for workflow in workflows:
-            print(f"  - {workflow.get('name')} ({workflow.get('id')})")
+            print(f'  - {workflow.get("name")} ({workflow.get("id")})')
 
         # Execute a workflow (replace with actual workflow ID)
         if workflows:
@@ -56,13 +56,15 @@ async def main():
 
             # Execute workflow
             result = await service.execute_workflow(
-                workflow_id=UUID(workflow_id) if isinstance(workflow_id, str) else workflow_id,
+                workflow_id=UUID(workflow_id)
+                if isinstance(workflow_id, str)
+                else workflow_id,
                 parameters=parameters,
                 max_articles=50,
             )
 
             # Print results
-            print(f'\nExecution Results:')
+            print('\nExecution Results:')
             print(f'  Success: {result.stats.success}')
             print(f'  Articles extracted: {result.stats.articles_extracted}')
             print(f'  Duration: {result.stats.duration_ms}ms')
@@ -73,7 +75,7 @@ async def main():
 
             # Print articles
             if result.articles:
-                print(f'\nExtracted Articles:')
+                print('\nExtracted Articles:')
                 for i, article in enumerate(result.articles[:5], 1):
                     print(f'  {i}. {article.title}')
                     if article.authors:
@@ -84,7 +86,7 @@ async def main():
 
             # Print execution log summary
             if result.execution_log:
-                print(f'\nExecution Log Summary:')
+                print('\nExecution Log Summary:')
                 for log_entry in result.execution_log[-5:]:
                     action = log_entry.get('action', 'unknown')
                     timestamp = log_entry.get('timestamp', '')

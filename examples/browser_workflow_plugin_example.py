@@ -5,7 +5,6 @@ to search for articles using browser automation workflows.
 """
 
 import asyncio
-from uuid import UUID
 
 from thoth.discovery.plugins import BrowserWorkflowPlugin
 from thoth.services.postgres_service import PostgresService
@@ -28,10 +27,7 @@ async def main():
     }
 
     # Create and initialize plugin
-    plugin = BrowserWorkflowPlugin(
-        postgres_service=postgres,
-        config=config
-    )
+    plugin = BrowserWorkflowPlugin(postgres_service=postgres, config=config)
     await plugin.initialize()
 
     try:
@@ -46,22 +42,22 @@ async def main():
         )
 
         # Discover articles using browser workflow
-        print(f"Executing browser workflow for query: {query.name}")
+        print(f'Executing browser workflow for query: {query.name}')
         articles = await plugin.discover_async(
             query=query,
             max_results=50,
         )
 
         # Display results
-        print(f"\n✓ Found {len(articles)} articles")
+        print(f'\n✓ Found {len(articles)} articles')
         for i, article in enumerate(articles, 1):
-            print(f"\n{i}. {article.title}")
-            print(f"   Authors: {', '.join(article.authors[:3])}")
-            print(f"   Source: {article.source}")
-            print(f"   URL: {article.url}")
+            print(f'\n{i}. {article.title}')
+            print(f'   Authors: {", ".join(article.authors[:3])}')
+            print(f'   Source: {article.source}')
+            print(f'   URL: {article.url}')
             if article.abstract:
                 abstract_preview = article.abstract[:150]
-                print(f"   Abstract: {abstract_preview}...")
+                print(f'   Abstract: {abstract_preview}...')
 
     finally:
         # Cleanup

@@ -18,9 +18,9 @@ async def main():
     # Note: Providing an email gets you into the "polite pool" with 10x higher rate limits
     resolver = OpenAlexResolver(
         email='your-email@example.com',  # Optional but recommended
-        requests_per_second=10.0,         # Rate limit
-        max_retries=3,                    # Retry attempts
-        timeout=30,                       # Request timeout
+        requests_per_second=10.0,  # Rate limit
+        max_retries=3,  # Retry attempts
+        timeout=30,  # Request timeout
     )
 
     # Example 1: Single citation resolution
@@ -41,7 +41,9 @@ async def main():
         print(f'\n{i}. {candidate.title}')
         print(f'   OpenAlex ID: {candidate.openalex_id}')
         print(f'   DOI: {candidate.doi}')
-        print(f'   Authors: {", ".join(candidate.authors[:3]) if candidate.authors else "N/A"}...')
+        print(
+            f'   Authors: {", ".join(candidate.authors[:3]) if candidate.authors else "N/A"}...'
+        )
         print(f'   Year: {candidate.year}')
         print(f'   Citations: {candidate.citation_count}')
         print(f'   Confidence: {candidate.confidence_score:.2f}')
@@ -92,12 +94,12 @@ async def main():
         best_match = candidates[0]
         enriched_citation = best_match.to_citation()
 
-        print(f'\nOriginal citation:')
+        print('\nOriginal citation:')
         print(f'  Title: {citation.title}')
         print(f'  Authors: {citation.authors}')
         print(f'  Year: {citation.year}')
 
-        print(f'\nEnriched citation:')
+        print('\nEnriched citation:')
         print(f'  Title: {enriched_citation.title}')
         print(f'  Authors: {enriched_citation.authors}')
         print(f'  Year: {enriched_citation.year}')

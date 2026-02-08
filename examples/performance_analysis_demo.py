@@ -29,6 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from loguru import logger
+from thoth.utilities.config import get_config
 
 from thoth.performance.benchmarking import BenchmarkSuite
 from thoth.performance.dashboard import PerformanceDashboard
@@ -48,7 +49,6 @@ from thoth.performance.workflow_monitor import (
     WorkflowStatus,
 )
 from thoth.services.service_manager import ServiceManager
-from thoth.utilities.config import get_config
 
 
 class PerformanceAnalysisDemo:

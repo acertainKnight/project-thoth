@@ -645,9 +645,7 @@ Your response (JSON only):"""
                 # Fallback: Remove lines that start with ``` (after stripping whitespace)  # noqa: W505
                 lines = response_text.split('\n')
                 json_lines = [
-                    l
-                    for l in lines
-                    if l.strip() and not l.strip().startswith('```')
+                    l for l in lines if l.strip() and not l.strip().startswith('```')
                 ]
                 response_text = '\n'.join(json_lines)
 
