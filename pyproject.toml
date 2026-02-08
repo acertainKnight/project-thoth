@@ -7,7 +7,7 @@ name = "thoth"
 description = "Thoth AI Research Agent - An autonomous system for academic research paper processing and knowledge management"
 readme = "README.md"
 requires-python = ">=3.12, <3.13"
-version = '0.3.0-alpha.3'
+version = '0.3.0-alpha.4'
 authors = [{name="Nick Hallmark", email="NHALLMARK3@BLOOMBERG.NET"}]
 
 dependencies = [
@@ -111,13 +111,10 @@ embeddings = [
     "sentence-transformers>=3.0.0",
 ]
 
-# Advanced memory (EXTREMELY HEAVY: ~3GB with nvidia libs)
-# NOTE: Letta agents run as separate service (port 8283), not bundled with Thoth
-# Keep dependencies for type hints and optional Letta proxy endpoints
+# Letta client SDK for communicating with the Letta server container
+# Only the lightweight client - the full letta server runs in its own container
 memory = [
-    "letta>=0.9,<1.0",
-    "letta-mcp-server>=0.1.0",
-    "sqlite-vec>=0.1.6",
+    "letta-client>=1.0.0",
 ]
 
 # ==============================================================================
@@ -125,9 +122,9 @@ memory = [
 # ==============================================================================
 
 # thoth-api: REST API server (~1.5GB)
-# Core API server - cachetools is now a core dep so vectordb not needed here
+# Includes memory (letta-client) for filesystem sync with Letta agents
 service-api = [
-    "thoth[api,discovery,pdf,langchain]",
+    "thoth[api,discovery,pdf,langchain,memory]",
 ]
 
 # thoth-dashboard: Dashboard sync (~1.5GB)
@@ -144,9 +141,8 @@ service-discovery = [
 # thoth-mcp: MCP server with 60+ research tools (~2GB)
 # thoth-mcp: MCP protocol interface (~1.5GB)
 # Provides MCP protocol interface to Thoth research tools
-# embeddings and memory (letta) are OPTIONAL - users can add if needed
 service-mcp = [
-    "thoth[api,pdf,mcp,discovery,langchain]",
+    "thoth[api,pdf,mcp,discovery,langchain,memory]",
 ]
 
 # thoth-monitor: PDF processing (~2GB)
@@ -157,7 +153,7 @@ service-monitor = [
 ]
 
 service-all = [
-    "thoth[api,pdf,mcp,discovery,langchain]",
+    "thoth[api,pdf,mcp,discovery,langchain,memory]",
 ]
 
 # Optional heavy dependencies (only install if you need local models)

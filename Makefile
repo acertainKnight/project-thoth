@@ -79,7 +79,9 @@ help: ## Show available commands
 	@echo "$(YELLOW)💻 Local Mode (No Docker):$(NC)"
 	@echo "  $(GREEN)local-start$(NC)          Start services locally"
 	@echo "  $(GREEN)local-stop$(NC)           Stop local services"
-	@echo "  $(GREEN)dev-thoth-restart$(NC)    Restart only Thoth dev containers (not Letta)"
+	@echo "  $(GREEN)dev-thoth-start$(NC)      Start all Thoth dev containers (not Letta)"
+	@echo "  $(GREEN)dev-thoth-stop$(NC)       Stop all Thoth dev containers (not Letta)"
+	@echo "  $(GREEN)dev-thoth-restart$(NC)    Restart all Thoth dev containers (not Letta)"
 	@echo ""
 	@echo "$(YELLOW)🔌 Plugin Development:$(NC)"
 	@echo "  $(GREEN)deploy-plugin$(NC)        Deploy plugin with vault integration"
@@ -251,11 +253,17 @@ dev-stop: ## Stop development environment (both modes)
 health: ## Check health of all services
 	@echo "$(YELLOW)Service Health Checks:$(NC)"
 	@echo "====================="
-	@echo -n "  API (8000):      "
-	@curl -sf http://localhost:8000/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
-	@echo -n "  MCP (8001):      "
-	@curl -sf http://localhost:8001/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
-	@echo -n "  Letta (8283):    "
+	@echo -n "  API (8000):         "
+	@curl -so /dev/null -w '%{http_code}' http://localhost:8000/health 2>/dev/null | grep -qE '^(200|503)' && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
+	@echo -n "  MCP (8082):         "
+	@curl -sf http://localhost:8082/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
+	@echo -n "  Discovery:          "
+	@docker ps --filter name=thoth-dev-discovery --format '{{.Status}}' 2>/dev/null | grep -q 'healthy' && echo "$(GREEN)✓ Healthy$(NC)" || (docker ps --filter name=thoth-dev-discovery --format '{{.Status}}' 2>/dev/null | grep -q 'Up' && echo "$(YELLOW)⚡ Running$(NC)" || echo "$(RED)✗ Down$(NC)")
+	@echo -n "  Monitor:            "
+	@docker ps --filter name=thoth-dev-pdf-monitor --format '{{.Status}}' 2>/dev/null | grep -q 'Up' && echo "$(GREEN)✓ Running$(NC)" || echo "$(RED)✗ Down$(NC)"
+	@echo -n "  Dashboard:          "
+	@docker ps --filter name=thoth-dev-dashboard --format '{{.Status}}' 2>/dev/null | grep -q 'Up' && echo "$(GREEN)✓ Running$(NC)" || echo "$(RED)✗ Down$(NC)"
+	@echo -n "  Letta (8283):       "
 	@curl -sf http://localhost:8283/v1/health >/dev/null 2>&1 && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Down$(NC)"
 
 .PHONY: test-config
@@ -623,13 +631,26 @@ watch: ## Start PDF directory watcher (hot-reloads from settings.json)
 	@echo "$(YELLOW)Logs: ./workspace/logs/monitor.log$(NC)"
 	@echo "$(YELLOW)To stop: pkill -f 'thoth monitor'$(NC)"
 
+.PHONY: dev-thoth-start
+dev-thoth-start: ## Start all Thoth dev containers (does not start Letta)
+	@echo "$(YELLOW)Starting Thoth dev containers...$(NC)"
+	@docker compose -f docker-compose.dev.yml --profile microservices up -d
+	@echo "$(GREEN)✅ Thoth dev containers started$(NC)"
+	@make dev-status
+
+.PHONY: dev-thoth-stop
+dev-thoth-stop: ## Stop all Thoth dev containers (does not stop Letta)
+	@echo "$(YELLOW)Stopping Thoth dev containers...$(NC)"
+	@docker compose -f docker-compose.dev.yml --profile microservices stop
+	@echo "$(GREEN)✅ Thoth dev containers stopped$(NC)"
+
 .PHONY: dev-thoth-restart
-dev-thoth-restart: ## Restart only Thoth dev containers (docker-compose.dev.yml; does not restart Letta)
+dev-thoth-restart: ## Restart all Thoth dev containers (does not restart Letta)
 	@echo "$(YELLOW)Restarting Thoth dev containers...$(NC)"
-	@for c in thoth-dev-all-in-one thoth-dev-api thoth-dev-mcp thoth-dev-discovery thoth-dev-pdf-monitor thoth-dev-dashboard; do \
-		docker restart $$c 2>/dev/null || true; \
-	done
-	@echo "$(GREEN)✅ Thoth dev containers restart requested$(NC)"
+	@docker compose -f docker-compose.dev.yml --profile microservices stop
+	@docker compose -f docker-compose.dev.yml --profile microservices up -d
+	@echo "$(GREEN)✅ Thoth dev containers restarted$(NC)"
+	@make dev-status
 
 .PHONY: local-stop
 local-stop: ## Stop local services and Letta Docker containers
