@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/logo.png" alt="Thoth Logo" width="200">
+</p>
+
 # Thoth Research Assistant
 
 An advanced AI-powered research assistant system built for flexibility, extensibility, and user control. Thoth combines intelligent automation with comprehensive customization — every prompt, schema, and source can be tailored to your workflow.
