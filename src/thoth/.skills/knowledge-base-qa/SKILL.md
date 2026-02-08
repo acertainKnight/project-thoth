@@ -6,6 +6,7 @@ description: Answer questions using your existing research collection. Use when 
 tools:
 - answer_research_question
 - read_full_article
+- unload_article
 - search_articles
 - get_article_details
 - collection_stats
@@ -23,16 +24,33 @@ For knowledge base queries, use these tools:
 |------|---------|
 | `answer_research_question` | Primary Q&A with synthesis |
 | `read_full_article` | Read complete article content for deep understanding |
+| `unload_article` | Free article memory slot (max 3 articles) |
 | `search_articles` | Find specific papers (supports topic filtering) |
 | `get_article_details` | Get paper metadata and preview |
 | `collection_stats` | Check what's in the collection |
+
+### Article Memory Limit
+
+**IMPORTANT**: You can load a maximum of **3 articles** at a time into your working memory.
+
+- Use `read_full_article` to load article content (requires your `agent_id`)
+- Each load consumes one memory slot (displayed after loading)
+- When memory is full (3/3), you must use `unload_article` before loading new articles
+- Use `unload_article` to free slots when done with an article
+
+**Why this limit?** Deep article reading loads substantial content. The 3-article limit ensures you can work with multiple papers while maintaining context window efficiency.
+
+**Workflow tip**: If you need to reference more than 3 papers, use `unload_article` to swap articles in and out of memory as needed.
 
 ### Reading Full Articles
 
 When you need more than a quick answer, **read the full article**:
 
 ```
-read_full_article(article_identifier="paper title or DOI")
+read_full_article(
+  article_identifier="paper title or DOI",
+  agent_id="your_agent_id"
+)
 ```
 
 This returns the complete markdown content, allowing you to:
@@ -42,6 +60,15 @@ This returns the complete markdown content, allowing you to:
 - Read multiple papers to build comprehensive knowledge
 
 **Iterative Learning**: You can read one article, identify questions, then read more articles to fill knowledge gaps. Keep reading until you fully understand the topic.
+
+**Memory Management**: When you've loaded 3 articles and need to read another, use `unload_article` first:
+
+```
+unload_article(
+  article_identifier="title or DOI of article to unload",
+  agent_id="your_agent_id"
+)
+```
 
 ## Quick Answer Workflow
 

@@ -5,6 +5,7 @@ description: Conduct deep analysis of research papers, synthesize literature, an
   reviews, or cross-paper synthesis.
 tools:
 - read_full_article
+- unload_article
 - answer_research_question
 - explore_citation_network
 - compare_articles
@@ -26,6 +27,7 @@ For deep research, use these analysis tools:
 | Tool | Purpose |
 |------|---------|
 | `read_full_article` | **Read complete article content for deep learning** |
+| `unload_article` | **Free article memory slot (max 3 articles)** |
 | `answer_research_question` | Multi-source synthesis with citations |
 | `explore_citation_network` | Citation graph analysis |
 | `compare_articles` | Side-by-side comparison |
@@ -37,9 +39,25 @@ For deep research, use these analysis tools:
 
 **Note**: These are analysis-heavy tools. For simpler queries, use the `knowledge-base-qa` skill instead.
 
+## Article Memory Limit
+
+**CRITICAL**: You can load a maximum of **3 articles** at a time into your working memory.
+
+- Use `read_full_article(article_identifier="...", agent_id="your_agent_id")` to load articles
+- Each load consumes one memory slot (status displayed after loading)
+- When memory is full (3/3), use `unload_article` before loading new articles
+- Use `unload_article(article_identifier="...", agent_id="your_agent_id")` to free slots
+
+**Deep research workflow**: When analyzing many papers, strategically load and unload articles:
+1. Load 3 key papers initially
+2. Analyze and extract insights
+3. Unload papers you're done with
+4. Load new papers to fill knowledge gaps
+5. Repeat until synthesis is complete
+
 ## Iterative Learning Pattern
 
-**Key Principle**: You can read, learn from an article, and keep reading to build deep understanding.
+**Key Principle**: You can read, learn from an article, and keep reading to build deep understanding. With the 3-article memory limit, manage your loaded articles strategically.
 
 ### The Learning Loop
 
@@ -47,9 +65,13 @@ For deep research, use these analysis tools:
 1. DISCOVER: Search for relevant papers
    search_articles(query="topic")
 
-2. READ DEEPLY: Load full article content
-   read_full_article(article_identifier="paper title or DOI")
+2. READ DEEPLY: Load full article content (max 3 at a time)
+   read_full_article(
+     article_identifier="paper title or DOI",
+     agent_id="your_agent_id"
+   )
    → Read the entire article, not just previews
+   → Status shows: "Article Memory: 2/3 slots used"
 
 3. ANALYZE: Extract key insights
    - What are the main contributions?
@@ -60,11 +82,21 @@ For deep research, use these analysis tools:
    - What concepts need clarification?
    - What related work should you read?
 
-5. REPEAT: Read more articles to fill gaps
-   find_related_papers(article_id="...")
-   read_full_article(article_identifier="next paper")
+5. MANAGE MEMORY: Free slots if needed
+   If you've loaded 3 articles and need to read another:
+   unload_article(
+     article_identifier="title or DOI to unload",
+     agent_id="your_agent_id"
+   )
 
-6. SYNTHESIZE: Combine insights across papers
+6. REPEAT: Read more articles to fill gaps
+   find_related_papers(article_id="...")
+   read_full_article(
+     article_identifier="next paper",
+     agent_id="your_agent_id"
+   )
+
+7. SYNTHESIZE: Combine insights across papers
    answer_research_question(question="synthesis query")
 ```
 
@@ -81,6 +113,8 @@ Use `get_article_details` when:
 - You just need metadata (authors, date, journal)
 - You're doing initial screening of papers
 - A quick preview is sufficient
+
+**Memory tip**: Load articles you'll actively analyze. Use `unload_article` to swap out papers you're done with when you need to load new ones.
 
 ### External Content
 
@@ -104,7 +138,10 @@ Use deep research when user asks for:
 
 ```
 1. Read the full article content
-   read_full_article(article_identifier="[paper title or DOI]")
+   read_full_article(
+     article_identifier="[paper title or DOI]",
+     agent_id="your_agent_id"
+   )
    → Returns complete markdown content for deep reading
 
 2. Explore citation context
@@ -122,7 +159,18 @@ Use deep research when user asks for:
 
 4. If you have questions, read related papers
    find_related_papers(article_id="[paper ID]")
-   read_full_article(article_identifier="[related paper]")
+
+   # If memory is full (3/3), unload one first
+   unload_article(
+     article_identifier="[article to remove]",
+     agent_id="your_agent_id"
+   )
+
+   # Then load new article
+   read_full_article(
+     article_identifier="[related paper]",
+     agent_id="your_agent_id"
+   )
    → Keep reading until you understand the topic
 ```
 
@@ -218,8 +266,12 @@ send_message_to_agent(
 **User**: "Analyze the 'Attention Is All You Need' paper in depth"
 
 ```
-1. read_full_article(article_identifier="Attention Is All You Need")
+1. read_full_article(
+     article_identifier="Attention Is All You Need",
+     agent_id="your_agent_id"
+   )
    → Read the complete paper content
+   → Status: "Article Memory: 1/3 slots used"
 
 2. [Read and understand the paper thoroughly]
    - Note key contributions, methodology, results
@@ -231,8 +283,23 @@ send_message_to_agent(
    )
 
 4. If concepts are unclear, read related papers:
-   read_full_article(article_identifier="[related paper on attention]")
+   # Load up to 2 more articles (3 total max)
+   read_full_article(
+     article_identifier="[related paper on attention]",
+     agent_id="your_agent_id"
+   )
+   → Status: "Article Memory: 2/3 slots used"
    → Keep learning until you understand
+
+   # If you need a 4th article, unload one first
+   unload_article(
+     article_identifier="[first paper]",
+     agent_id="your_agent_id"
+   )
+   read_full_article(
+     article_identifier="[4th paper]",
+     agent_id="your_agent_id"
+   )
 
 5. evaluate_article(
      article_id="[paper ID]",

@@ -39,6 +39,7 @@ from .analysis_tools import (
 )
 from .article_loading_tools import (
     ReadFullArticleMCPTool,
+    UnloadArticleMCPTool,
 )
 from .article_tools import (
     SearchArticlesMCPTool,
@@ -164,6 +165,7 @@ from .workflow_builder_tools import (
 MCP_TOOL_CLASSES = [
     # Article reading and loading
     ReadFullArticleMCPTool,
+    UnloadArticleMCPTool,
     # Discovery and research questions
     ListAvailableSourcesMCPTool,
     CreateResearchQuestionMCPTool,
@@ -295,6 +297,7 @@ __all__ = [  # noqa: RUF022
     'AnalyzeSourceUrlMCPTool',
     'AnswerResearchQuestionMCPTool',
     'ReadFullArticleMCPTool',
+    'UnloadArticleMCPTool',
     'CollectionStatsMCPTool',
     'CompareArticlesMCPTool',
     'ConfirmSourceWorkflowMCPTool',

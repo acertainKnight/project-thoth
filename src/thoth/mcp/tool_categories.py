@@ -52,6 +52,11 @@ TOOL_CATEGORIES = {
         'update_article_metadata',
         # DEPRECATED: "delete_article" - too risky for agent use
     ],
+    # Article reading (deep content access)
+    'reading': [
+        'read_full_article',
+        'unload_article',
+    ],
     # Deep analysis
     'analysis': [
         'answer_research_question',
@@ -143,6 +148,7 @@ ROLE_TOOL_CATEGORIES = {
         'skills',  # Core: load skills for guidance
         'discovery',  # Find papers
         'collection',  # Browse collection
+        'reading',  # Deep article reading
         'processing',  # Download PDFs
         'tagging',  # Tag management
         'data',  # Reading lists, obsidian sync
@@ -151,6 +157,7 @@ ROLE_TOOL_CATEGORIES = {
     'analyst': [
         'analysis',  # All deep analysis tools
         'collection',  # Need to access papers
+        'reading',  # Deep article reading
         'citation',  # Citation formatting
     ],
     # Full access (for backward compatibility or admin)
