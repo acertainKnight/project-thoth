@@ -66,6 +66,9 @@ class ResearchQuestionCreate(BaseModel):
     max_articles_per_run: int = Field(
         default=50, ge=1, le=500, description='Maximum articles per discovery run'
     )
+    publication_date_range: dict[str, str] | None = Field(
+        None, description='Date range for filtering publications (start/end keys)'
+    )
 
     @field_validator('keywords', 'topics')
     @classmethod
@@ -103,6 +106,9 @@ class ResearchQuestionUpdate(BaseModel):
     auto_download_min_score: float | None = Field(None, ge=0.0, le=1.0)
     max_articles_per_run: int | None = Field(None, ge=1, le=500)
     is_active: bool | None = None
+    publication_date_range: dict[str, str] | None = Field(
+        None, description='Date range for filtering publications (start/end keys)'
+    )
 
     @field_validator('schedule_frequency')
     @classmethod
@@ -136,6 +142,7 @@ class ResearchQuestionResponse(BaseModel):
     auto_download_min_score: float
     max_articles_per_run: int
     is_active: bool
+    publication_date_range: dict[str, str] | None = None
     last_run_at: datetime | None = None
     next_run_at: datetime | None = None
     articles_found_count: int = 0
@@ -145,6 +152,21 @@ class ResearchQuestionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_validator('publication_date_range', mode='before')
+    @classmethod
+    def parse_publication_date_range(cls, v):
+        """Parse publication_date_range if it's a JSON string."""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            import json
+
+            try:
+                return json.loads(v)
+            except (json.JSONDecodeError, TypeError):
+                return None
+        return v
 
 
 class ResearchQuestionList(BaseModel):
@@ -394,6 +416,7 @@ async def create_research_question(
             auto_download_enabled=question.auto_download_enabled,
             auto_download_min_score=question.auto_download_min_score,
             max_articles_per_run=question.max_articles_per_run,
+            publication_date_range=question.publication_date_range,
         )
 
         if not question_id:
@@ -764,10 +787,12 @@ async def trigger_discovery_run(
             # Run discovery in background task (non-blocking)
             import asyncio
 
-            asyncio.create_task(orchestrator.run_discovery_for_question(question_id))
+            _task = asyncio.create_task(  # noqa: RUF006
+                orchestrator.run_discovery_for_question(question_id)
+            )
             logger.info(f'Discovery task created for question {question_id}')
         else:
-            # Microservices mode: Trigger via database flag for discovery scheduler to pick up
+            # Microservices: Trigger via database flag for scheduler
             logger.info('Microservices mode: Marking question for immediate discovery')
 
             # Update the question to trigger immediate run by setting next_run_at to now
@@ -1293,7 +1318,7 @@ async def download_article_pdf(
     question_id: UUID,
     match_id: UUID,
     request: Request,
-    output_directory: str | None = Body(None, embed=True),
+    output_directory: str | None = Body(None, embed=True),  # noqa: ARG001
 ) -> dict[str, Any]:
     """
     Download PDF for a matched article.
@@ -1301,7 +1326,7 @@ async def download_article_pdf(
     Args:
         question_id: Research question UUID
         match_id: Article match UUID
-        output_directory: Optional custom output directory
+        output_directory: Optional custom output directory (not currently used)
         request: FastAPI request object
 
     Returns:
@@ -1416,7 +1441,7 @@ async def download_article_pdf(
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f'Failed to download PDF: {e!s}',
-            )
+            ) from e
 
         logger.debug(f'Prepared download info for article {paper_id}')
 

@@ -196,6 +196,20 @@ class CreateResearchQuestionMCPTool(MCPTool):
                     'minimum': 0.0,
                     'maximum': 1.0,
                 },
+                'publication_date_range': {
+                    'type': 'object',
+                    'description': 'Date range for filtering publications',
+                    'properties': {
+                        'start': {
+                            'type': 'string',
+                            'description': 'Start date (YYYY-MM-DD format or relative like "2023-01-01")',
+                        },
+                        'end': {
+                            'type': 'string',
+                            'description': 'End date (YYYY-MM-DD format or "present")',
+                        },
+                    },
+                },
             },
             'required': ['name', 'keywords', 'selected_sources'],
         }
@@ -220,6 +234,7 @@ class CreateResearchQuestionMCPTool(MCPTool):
                 auto_download_enabled=arguments.get('auto_download_enabled', False),
                 auto_download_min_score=arguments.get('auto_download_min_score', 0.7),
                 max_articles_per_run=arguments.get('max_articles_per_run', 50),
+                publication_date_range=arguments.get('publication_date_range'),
             )
 
             if question_id:
@@ -234,6 +249,11 @@ class CreateResearchQuestionMCPTool(MCPTool):
                     if arguments.get('schedule_days_of_week')
                     else ''
                 )
+                date_range_text = ''
+                if arguments.get('publication_date_range'):
+                    dr = arguments['publication_date_range']
+                    date_range_text = f'\n**Date Range:** {dr.get("start", "start")} to {dr.get("end", "present")}'
+
                 return MCPToolCallResult(
                     content=[
                         {
@@ -248,7 +268,7 @@ class CreateResearchQuestionMCPTool(MCPTool):
 **Schedule:** {arguments.get('schedule_frequency', 'daily')} at {arguments.get('schedule_time', '03:00')}{schedule_days}
 **Min Relevance:** {arguments.get('min_relevance_score', 0.7)}
 **Auto Download:** {arguments.get('auto_download_enabled', False)} (min score: {arguments.get('auto_download_min_score', 0.7)})
-**Max Articles/Run:** {arguments.get('max_articles_per_run', 50)}
+**Max Articles/Run:** {arguments.get('max_articles_per_run', 50)}{date_range_text}
 
 The scheduler will automatically run discovery based on the schedule. You can also manually trigger discovery using `run_discovery_for_question`.
 """,
@@ -392,7 +412,6 @@ class GetResearchQuestionMCPTool(MCPTool):
     async def execute(self, arguments: dict[str, Any]) -> MCPToolCallResult:
         """Get research question details."""
         try:
-            research_question_service = self.service_manager.research_question
             question_id = UUID(arguments['question_id'])
 
             # Get question from repository
@@ -592,6 +611,20 @@ class UpdateResearchQuestionMCPTool(MCPTool):
                     'type': 'boolean',
                     'description': 'Activate or deactivate the question',
                 },
+                'publication_date_range': {
+                    'type': 'object',
+                    'description': 'Date range for filtering publications',
+                    'properties': {
+                        'start': {
+                            'type': 'string',
+                            'description': 'Start date (YYYY-MM-DD format or relative like "2023-01-01")',
+                        },
+                        'end': {
+                            'type': 'string',
+                            'description': 'End date (YYYY-MM-DD format or "present")',
+                        },
+                    },
+                },
             },
             'required': ['question_id'],
         }
@@ -620,6 +653,7 @@ class UpdateResearchQuestionMCPTool(MCPTool):
                 'auto_download_min_score',
                 'max_articles_per_run',
                 'is_active',
+                'publication_date_range',
             ]:
                 if field in arguments:
                     updates[field] = arguments[field]
@@ -803,7 +837,6 @@ class RunDiscoveryForQuestionMCPTool(MCPTool):
         """Run discovery for question."""
         try:
             question_id = UUID(arguments['question_id'])
-            user_id = arguments.get('user_id', 'default_user')
             max_articles = arguments.get('max_articles')
             force_run = arguments.get('force_run', False)
 

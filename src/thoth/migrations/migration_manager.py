@@ -38,6 +38,7 @@ class MigrationManager:
         # Define migrations inline for simplicity and portability
         migrations = [
             (1, 'initial_schema', MIGRATION_001_INITIAL_SCHEMA),
+            (2, 'add_publication_date_range', MIGRATION_002_ADD_PUBLICATION_DATE_RANGE),
         ]
         return sorted(migrations, key=lambda x: x[0])
 
@@ -74,17 +75,37 @@ class MigrationManager:
                     if version not in applied_versions:
                         logger.info(f'Applying migration {version:03d}: {name}')
 
-                        # Execute migration SQL
-                        await conn.execute(sql)
+                        try:
+                            # Execute migration SQL
+                            await conn.execute(sql)
 
-                        # Record migration
-                        await conn.execute(
-                            'INSERT INTO _migrations (version, name) VALUES ($1, $2)',
-                            version,
-                            name,
-                        )
+                            # Record migration
+                            await conn.execute(
+                                'INSERT INTO _migrations (version, name) VALUES ($1, $2)',
+                                version,
+                                name,
+                            )
 
-                        logger.success(f'Applied migration {version:03d}: {name}')
+                            logger.success(f'Applied migration {version:03d}: {name}')
+                        except asyncpg.exceptions.PostgresError as e:
+                            # Check if "already exists" error from migration 001
+                            if version == 1 and (
+                                'already exists' in str(e).lower()
+                                or 'does not exist' in str(e).lower()
+                            ):
+                                logger.warning(
+                                    f'Migration 001 partially applied (tables '
+                                    f'already exist). Marking as applied: {e}'
+                                )
+                                # Mark migration 001 as applied since tables exist
+                                await conn.execute(
+                                    'INSERT INTO _migrations (version, name) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                                    version,
+                                    name,
+                                )
+                            else:
+                                # Re-raise other errors
+                                raise
 
                 return True
 
@@ -620,4 +641,16 @@ CREATE INDEX IF NOT EXISTS idx_memory_user_id ON memory(user_id);
 CREATE INDEX IF NOT EXISTS idx_memory_user_scope ON memory(user_id, scope);
 CREATE INDEX IF NOT EXISTS idx_memory_created_at ON memory(created_at);
 CREATE INDEX IF NOT EXISTS idx_memory_salience ON memory(salience_score);
+"""
+
+MIGRATION_002_ADD_PUBLICATION_DATE_RANGE = """
+-- Migration 002: Add publication_date_range to research_questions
+-- Adds JSONB field to store date range filtering for publications
+
+ALTER TABLE research_questions
+ADD COLUMN IF NOT EXISTS publication_date_range JSONB;
+
+-- Add comment explaining the field structure
+COMMENT ON COLUMN research_questions.publication_date_range IS
+'Date range for filtering publications. Expected structure: {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD" or "present"}';
 """

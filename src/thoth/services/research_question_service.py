@@ -53,6 +53,7 @@ class ResearchQuestionService(BaseService):
         auto_download_enabled: bool = False,
         auto_download_min_score: float = 0.7,
         max_articles_per_run: int = 50,  # noqa: ARG002
+        publication_date_range: dict[str, str] | None = None,
     ) -> UUID | None:
         """
         Create a new research question with validation.
@@ -72,6 +73,7 @@ class ResearchQuestionService(BaseService):
             auto_download_enabled: Automatically download matching PDFs
             auto_download_min_score: Minimum score threshold for auto-download
             max_articles_per_run: Maximum articles per discovery run
+            publication_date_range: Date range for filtering publications
 
         Returns:
             UUID of created question, or None if creation failed
@@ -127,6 +129,7 @@ class ResearchQuestionService(BaseService):
             min_relevance_score=min_relevance_score,
             auto_download_enabled=auto_download_enabled,
             auto_download_min_score=auto_download_min_score,
+            publication_date_range=publication_date_range,
         )
 
         if question_id:

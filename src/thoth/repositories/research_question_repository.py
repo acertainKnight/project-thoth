@@ -228,6 +228,7 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
         min_relevance_score: float = 0.5,
         auto_download_enabled: bool = False,
         auto_download_min_score: float = 0.7,
+        publication_date_range: dict[str, str] | None = None,
     ) -> UUID | None:
         """
         Create a new research question.
@@ -245,6 +246,7 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
             min_relevance_score: Minimum relevance threshold
             auto_download_enabled: Enable auto-download
             auto_download_min_score: Min score for auto-download
+            publication_date_range: Date range for filtering publications
 
         Returns:
             Optional[UUID]: Created question ID or None
@@ -271,6 +273,7 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
                 'min_relevance_score': min_relevance_score,
                 'auto_download_enabled': auto_download_enabled,
                 'auto_download_min_score': auto_download_min_score,
+                'publication_date_range': publication_date_range,
                 'is_active': True,
             }
 
@@ -299,6 +302,7 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
         is_active: bool | None = None,
         last_run_at: datetime | None = None,
         next_run_at: datetime | None = None,
+        publication_date_range: dict[str, str] | None = None,
     ) -> bool:
         """
         Update research question fields.
@@ -316,6 +320,7 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
             is_active: New active status
             last_run_at: Last discovery run timestamp
             next_run_at: Next scheduled run timestamp
+            publication_date_range: Date range for filtering publications
 
         Returns:
             bool: True if successful
@@ -345,6 +350,8 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
                 data['last_run_at'] = last_run_at
             if next_run_at is not None:
                 data['next_run_at'] = next_run_at
+            if publication_date_range is not None:
+                data['publication_date_range'] = publication_date_range
 
             if not data:
                 return True

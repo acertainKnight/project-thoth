@@ -361,12 +361,27 @@ class DiscoveryOrchestrator(BaseService):
                 )
                 return []
 
+            # Prepare question data with date filters
+            # Convert publication_date_range to date_filter_start/end if present
+            question_data = dict(question)
+            if question_data.get('publication_date_range'):
+                date_range = question_data['publication_date_range']
+                if isinstance(date_range, dict):
+                    if 'start' in date_range:
+                        question_data['date_filter_start'] = date_range['start']
+                    if 'end' in date_range:
+                        question_data['date_filter_end'] = date_range['end']
+                    self.logger.debug(
+                        f'Converted publication_date_range to date filters: '
+                        f'{date_range.get("start")} to {date_range.get("end")}'
+                    )
+
             # Query the source with research question data
             articles = await asyncio.to_thread(
                 self.discovery_manager._discover_from_source,
                 source,
                 max_articles,
-                question,  # Pass question parameter explicitly
+                question_data,  # Pass enhanced question data with date filters
             )
 
             return articles
@@ -402,7 +417,7 @@ class DiscoveryOrchestrator(BaseService):
         for article_meta in articles:
             try:
                 # Step 1: Get or create paper in paper_metadata (handles deduplication)
-                article_id, was_created = await self._get_or_create_article(
+                article_id, _was_created = await self._get_or_create_article(
                     article_meta
                 )
 
@@ -413,7 +428,8 @@ class DiscoveryOrchestrator(BaseService):
                 processed_count += 1
 
                 # Step 2: Calculate relevance using LLM
-                # Note: create_match has ON CONFLICT handling, so duplicate matches are updated
+                # Note: create_match has ON CONFLICT handling,
+                # so duplicate matches are updated
                 relevance_result = await self._calculate_relevance_score(
                     article_meta=article_meta,
                     question=question,
@@ -645,7 +661,9 @@ Your response (JSON only):"""
                 # Fallback: Remove lines that start with ``` (after stripping whitespace)  # noqa: W505
                 lines = response_text.split('\n')
                 json_lines = [
-                    l for l in lines if l.strip() and not l.strip().startswith('```')
+                    line
+                    for line in lines
+                    if line.strip() and not line.strip().startswith('```')
                 ]
                 response_text = '\n'.join(json_lines)
 

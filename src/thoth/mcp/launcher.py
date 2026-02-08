@@ -44,6 +44,44 @@ async def launch_mcp_server(
         file_access_paths: List of file system paths to expose as resources
     """
     try:
+        # Run database migrations first
+        logger.info('Checking for pending database migrations...')
+        try:
+            from thoth.config import config
+            from thoth.migrations.migration_manager import MigrationManager
+
+            # Get database URL from config
+            database_url = None
+            if hasattr(config, 'secrets') and hasattr(config.secrets, 'database_url'):
+                database_url = config.secrets.database_url
+            else:
+                # Use docker-compose service name
+                database_url = (
+                    'postgresql://thoth:thoth_password@letta-postgres:5432/thoth'
+                )
+
+            migration_manager = MigrationManager(database_url)
+            success = await migration_manager.initialize_database()
+
+            if success:
+                status = await migration_manager.get_migration_status()
+                logger.success(
+                    f'✅ Database migrations complete: {status["applied_count"]} applied, '
+                    f'{status["pending_count"]} pending'
+                )
+                if status['last_migration']:
+                    last = status['last_migration']
+                    logger.info(
+                        f'   Current version: {last["version"]} ({last["name"]})'
+                    )
+            else:
+                logger.warning('⚠️  Database migrations failed (continuing anyway)')
+        except Exception as e:
+            logger.warning(f'Could not run database migrations: {e}')
+            logger.warning(
+                'Continuing without migrations - manual migration may be needed'
+            )
+
         # Initialize Thoth pipeline and services
         logger.info('Initializing Thoth pipeline...')
         pipeline = ThothPipeline()
