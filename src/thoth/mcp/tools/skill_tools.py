@@ -109,8 +109,12 @@ class ListSkillsMCPTool(MCPTool):
 
                         if skill_path.exists():
                             metadata = skill_service._parse_skill_metadata(skill_path)
+                            name = metadata.get('name', skill_name)
+                            display_name = name.replace('-', ' ').title()
+
                             skills[skill_id] = {
-                                'name': metadata.get('name', skill_name),
+                                'name': name,  # AgentSkills.io: matches directory
+                                'display_name': display_name,  # Human-readable
                                 'description': metadata.get('description', ''),
                                 'source': 'bundle',
                                 'bundle': bundle_name,
@@ -152,7 +156,8 @@ class ListSkillsMCPTool(MCPTool):
                     else:
                         source_label = '📁 vault'
 
-                    lines.append(f'### {skill_info["name"]} ({source_label})')
+                    display_name = skill_info.get('display_name', skill_info['name'])
+                    lines.append(f'### {display_name} ({source_label})')
                     lines.append(f'ID: `{skill_id}`')
                     lines.append(f'Description: {skill_info["description"]}')
                     lines.append('')
@@ -166,7 +171,8 @@ class ListSkillsMCPTool(MCPTool):
                         source_icon = '📦'
                     else:
                         source_icon = '📁'
-                    lines.append(f'  {source_icon} {skill_id} - {skill_info["name"]}')
+                    display_name = skill_info.get('display_name', skill_info['name'])
+                    lines.append(f'  {source_icon} {skill_id} - {display_name}')
 
                 lines.append('\nUse show_details=true to see full descriptions.')
                 lines.append(

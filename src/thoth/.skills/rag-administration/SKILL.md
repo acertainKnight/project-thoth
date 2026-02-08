@@ -1,14 +1,16 @@
 ---
-name: RAG System Administration
-description: Manage and optimize the RAG (Retrieval-Augmented Generation) system including reindexing, search optimization, and custom index creation. Use when user wants to improve search quality, reindex their collection, or create specialized indexes.
+name: rag-administration
+description: Manage and optimize the RAG (Retrieval-Augmented Generation) system including
+  reindexing, search optimization, and custom index creation. Use when user wants
+  to improve search quality, reindex their collection, or create specialized indexes.
 tools:
-  - reindex_collection
-  - optimize_search
-  - create_custom_index
-  - search_custom_index
-  - list_custom_indexes
-  - view_settings
-  - update_settings
+- reindex_collection
+- optimize_search
+- create_custom_index
+- search_custom_index
+- list_custom_indexes
+- view_settings
+- update_settings
 ---
 
 # RAG System Administration

@@ -1,14 +1,16 @@
 ---
-name: Research Query Management
-description: Set up and manage automated recurring research searches. Use when user wants to stay updated on a topic, create scheduled searches, or refine existing queries.
+name: research-query-management
+description: Set up and manage automated recurring research searches. Use when user
+  wants to stay updated on a topic, create scheduled searches, or refine existing
+  queries.
 tools:
-  - list_available_sources
-  - create_research_question
-  - list_research_questions
-  - get_research_question
-  - update_research_question
-  - delete_research_question
-  - run_discovery_for_question
+- list_available_sources
+- create_research_question
+- list_research_questions
+- get_research_question
+- update_research_question
+- delete_research_question
+- run_discovery_for_question
 ---
 
 # Research Query Management

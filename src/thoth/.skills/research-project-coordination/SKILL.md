@@ -1,16 +1,18 @@
 ---
-name: Research Project Coordination
-description: Manage large-scale research projects requiring multiple phases of discovery, analysis, and synthesis. Use when user is working on survey papers, thesis chapters, or comprehensive research projects.
+name: research-project-coordination
+description: Manage large-scale research projects requiring multiple phases of discovery,
+  analysis, and synthesis. Use when user is working on survey papers, thesis chapters,
+  or comprehensive research projects.
 tools:
-  - create_research_question
-  - run_discovery_for_question
-  - list_research_questions
-  - list_articles
-  - search_articles
-  - collection_stats
-  - compare_articles
-  - answer_research_question
-  - explore_citation_network
+- create_research_question
+- run_discovery_for_question
+- list_research_questions
+- list_articles
+- search_articles
+- collection_stats
+- compare_articles
+- answer_research_question
+- explore_citation_network
 ---
 
 # Research Project Coordination

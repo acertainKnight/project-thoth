@@ -1,6 +1,7 @@
 ---
-name: Research Workflow Coordination
-description: Coordinate multi-phase research workflows with parallel specialist execution. Use when orchestrating complex research tasks requiring multiple agents.
+name: research-workflow-coordination
+description: Coordinate multi-phase research workflows with parallel specialist execution.
+  Use when orchestrating complex research tasks requiring multiple agents.
 ---
 
 # Research Workflow Coordination

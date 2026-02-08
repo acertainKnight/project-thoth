@@ -328,7 +328,7 @@ Agent:
 2. **Create SKILL.md**:
    ```yaml
    ---
-   name: My Custom Skill
+   name: my-skill              # MUST match directory name
    description: What this skill does
    tools:
      - tool_name_1
@@ -348,6 +348,8 @@ Agent:
    3. Step 3: Return results
    ```
 
+   **Note**: The `name` field must be lowercase with hyphens and match the directory name (`my-skill`). In the UI and tool outputs, this will automatically display as "My Skill".
+
 3. **Agent discovers automatically** (no restart needed)
 
 4. **Load skill**:
@@ -360,7 +362,7 @@ Agent:
 
 ```yaml
 ---
-name: Literature Review
+name: literature-review        # Must match directory name
 description: Generate comprehensive literature reviews for academic papers
 tools:
   - search_articles
@@ -422,14 +424,16 @@ Structure review as:
 
 ```yaml
 ---
-name: Skill Name                # Required: Display name
-description: What this skill does  # Required: When to use it
-tools:                          # Required: Tool names (list)
+name: skill-name               # Required: Must match directory name (AgentSkills.io)
+description: What this skill does  # Required: When to use it (1-1024 chars)
+tools:                          # Optional: Tool names (list)
   - tool_1
   - tool_2
   - tool_3
 ---
 ```
+
+**Note**: The `name` field must match the directory name per AgentSkills.io standard. For display purposes, the system automatically generates a human-readable title (e.g., `skill-name` → "Skill Name").
 
 ### Body Content (Markdown)
 
@@ -488,14 +492,16 @@ Agent: list_skills()
 ```json
 {
   "bundled": [
-    {"id": "paper-discovery", "name": "Paper Discovery", "description": "...", "loaded": true},
-    {"id": "knowledge-base-qa", "name": "Knowledge Base Q&A", "description": "...", "loaded": false}
+    {"id": "paper-discovery", "name": "paper-discovery", "display_name": "Paper Discovery", "description": "...", "loaded": true},
+    {"id": "knowledge-base-qa", "name": "knowledge-base-qa", "display_name": "Knowledge Base Qa", "description": "...", "loaded": false}
   ],
   "vault": [
-    {"id": "my-skill", "name": "My Custom Skill", "description": "...", "loaded": false}
+    {"id": "my-skill", "name": "my-skill", "display_name": "My Skill", "description": "...", "loaded": false}
   ]
 }
 ```
+
+**Note**: `name` matches directory (AgentSkills.io), `display_name` is human-readable (auto-generated).
 
 ---
 

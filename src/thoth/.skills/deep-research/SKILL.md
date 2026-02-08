@@ -1,16 +1,18 @@
 ---
-name: Deep Research & Literature Synthesis
-description: Conduct deep analysis of research papers, synthesize literature, and generate comprehensive reviews. Use when user needs thorough paper analysis, literature reviews, or cross-paper synthesis.
+name: deep-research
+description: Conduct deep analysis of research papers, synthesize literature, and
+  generate comprehensive reviews. Use when user needs thorough paper analysis, literature
+  reviews, or cross-paper synthesis.
 tools:
-  - read_full_article
-  - answer_research_question
-  - explore_citation_network
-  - compare_articles
-  - find_related_papers
-  - evaluate_article
-  - get_citation_context
-  - search_articles
-  - get_article_details
+- read_full_article
+- answer_research_question
+- explore_citation_network
+- compare_articles
+- find_related_papers
+- evaluate_article
+- get_citation_context
+- search_articles
+- get_article_details
 ---
 
 # Deep Research & Literature Synthesis

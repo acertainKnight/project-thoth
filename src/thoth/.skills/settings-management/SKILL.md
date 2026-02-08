@@ -1,12 +1,13 @@
 ---
-name: Settings Management
-description: View and modify Thoth configuration settings. Use when user wants to change API keys, paths, search settings, or other configuration options.
+name: settings-management
+description: View and modify Thoth configuration settings. Use when user wants to
+  change API keys, paths, search settings, or other configuration options.
 tools:
-  - view_settings
-  - update_settings
-  - validate_settings
-  - reset_settings
-  - migrate_settings
+- view_settings
+- update_settings
+- validate_settings
+- reset_settings
+- migrate_settings
 ---
 
 # Settings Management

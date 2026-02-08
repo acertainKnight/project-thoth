@@ -1,6 +1,7 @@
 ---
-name: Research Discovery Execution
-description: Execute and monitor discovery sessions for finding research papers across academic sources. Use when running discovery searches.
+name: research-discovery-execution
+description: Execute and monitor discovery sessions for finding research papers across
+  academic sources. Use when running discovery searches.
 ---
 
 # Research Discovery Execution

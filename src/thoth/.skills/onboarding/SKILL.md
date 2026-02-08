@@ -1,9 +1,11 @@
 ---
-name: User Onboarding
-description: Initialize a new user's research assistant. Use this on first interaction or when user asks to "get started", "set up", or "introduce yourself". Also use when you don't know the user's research interests.
+name: onboarding
+description: Initialize a new user's research assistant. Use this on first interaction
+  or when user asks to "get started", "set up", or "introduce yourself". Also use
+  when you don't know the user's research interests.
 tools:
-  - search_articles
-  - collection_stats
+- search_articles
+- collection_stats
 ---
 
 # User Onboarding & Research Profile Setup

@@ -1,9 +1,10 @@
 ---
-name: Online Research & PDF Discovery
-description: Discover and download academic PDFs using DOIs, arXiv IDs, or paper titles. Downloaded PDFs are automatically processed by the PDF monitor service.
+name: online-research
+description: Discover and download academic PDFs using DOIs, arXiv IDs, or paper titles.
+  Downloaded PDFs are automatically processed by the PDF monitor service.
 tools:
-  - download_pdf
-  - locate_pdf
+- download_pdf
+- locate_pdf
 ---
 
 # Online Research & PDF Discovery

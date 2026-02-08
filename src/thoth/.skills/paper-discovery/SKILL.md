@@ -1,13 +1,14 @@
 ---
-name: Paper Discovery
-description: Find and curate research papers from academic sources. Use when user asks to find papers, search for research, discover articles, or explore a new topic.
+name: paper-discovery
+description: Find and curate research papers from academic sources. Use when user
+  asks to find papers, search for research, discover articles, or explore a new topic.
 tools:
-  - list_available_sources
-  - create_research_question
-  - run_discovery_for_question
-  - list_articles
-  - search_articles
-  - collection_stats
+- list_available_sources
+- create_research_question
+- run_discovery_for_question
+- list_articles
+- search_articles
+- collection_stats
 ---
 
 # Paper Discovery

@@ -1,11 +1,13 @@
 ---
-name: Custom Source Setup
-description: Set up custom article sources from any website using LLM-powered auto-detection. Use when user asks to add a new source, scrape a website, create a workflow, or wants papers from a site not already supported.
+name: custom-source-setup
+description: Set up custom article sources from any website using LLM-powered auto-detection.
+  Use when user asks to add a new source, scrape a website, create a workflow, or
+  wants papers from a site not already supported.
 tools:
-  - analyze_source_url
-  - refine_source_selectors
-  - confirm_source_workflow
-  - list_available_sources
+- analyze_source_url
+- refine_source_selectors
+- confirm_source_workflow
+- list_available_sources
 ---
 
 # Custom Source Setup

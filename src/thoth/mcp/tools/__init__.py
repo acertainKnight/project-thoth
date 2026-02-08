@@ -4,13 +4,16 @@ MCP Tools Package
 This package contains all MCP-compliant tools for the Thoth research assistant.
 
 DEPRECATED TOOLS (code kept for backwards compatibility, not registered):
-- process_pdf, batch_process_pdfs, extract_pdf_metadata: Use PDF monitor service
-- analyze_topic, search_by_topic, generate_research_summary: Redundant with answer_research_question
-- extract_article_insights, get_article_full_content: Merged into get_article_details
+- process_pdf, batch_process_pdfs, extract_pdf_metadata: Use PDF monitor
+- analyze_topic, search_by_topic, generate_research_summary: Redundant with
+  answer_research_question
+- extract_article_insights, get_article_full_content: Merged into
+  get_article_details
 - find_articles_by_authors: Use search_articles with author filter
 - extract_citations: Merged into explore_citation_network
 - suggest_tags: Low value, rarely used
-- backup_collection, restore_collection_backup, export_article_data, delete_article: Admin tasks
+- backup_collection, restore_collection_backup, export_article_data,
+  delete_article: Admin tasks
 - thoth_web_search: Use Letta's built-in web search
 - All browser workflow tools: Complex, rarely used
 - Legacy query tools: Replaced by research_question tools
@@ -29,7 +32,8 @@ from .analysis_tools import (
     EvaluateArticleMCPTool,
     FindRelatedPapersMCPTool,
     # DEPRECATED: AnalyzeTopicMCPTool - redundant with answer_research_question
-    # DEPRECATED: GenerateResearchSummaryMCPTool - redundant with answer_research_question
+    # DEPRECATED: GenerateResearchSummaryMCPTool - redundant with
+    #             answer_research_question
     AnalyzeTopicMCPTool,  # Keep import for backwards compatibility
     GenerateResearchSummaryMCPTool,  # Keep import for backwards compatibility
 )
@@ -115,6 +119,10 @@ from .skill_tools import (
     ListSkillsMCPTool,
     LoadSkillMCPTool,
     UnloadSkillMCPTool,
+)
+from .skill_management_tools import (
+    CreateSkillMCPTool,
+    UpdateSkillMCPTool,
 )
 from .tag_tools import (
     ConsolidateAndRetagMCPTool,
@@ -213,6 +221,8 @@ MCP_TOOL_CLASSES = [
     ListSkillsMCPTool,
     LoadSkillMCPTool,
     UnloadSkillMCPTool,
+    CreateSkillMCPTool,  # Loaded via skill-creation-workshop
+    UpdateSkillMCPTool,  # Loaded via skill-creation-workshop
     # Workflow builder (auto-detect article sources)
     AnalyzeSourceUrlMCPTool,
     RefineSourceSelectorsMCPTool,
@@ -292,6 +302,7 @@ __all__ = [  # noqa: RUF022
     'ConsolidateTagsMCPTool',
     'CreateCustomIndexMCPTool',
     'CreateResearchQuestionMCPTool',
+    'CreateSkillMCPTool',
     'DeleteResearchQuestionMCPTool',
     'DownloadPdfMCPTool',
     'EvaluateArticleMCPTool',
@@ -329,6 +340,7 @@ __all__ = [  # noqa: RUF022
     'UpdateArticleMetadataMCPTool',
     'UpdateResearchQuestionMCPTool',
     'UpdateSettingsMCPTool',
+    'UpdateSkillMCPTool',
     'ValidateSchemaFileTool',
     'ValidateSettingsMCPTool',
     'ViewSettingsMCPTool',

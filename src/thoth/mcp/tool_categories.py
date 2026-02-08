@@ -63,9 +63,11 @@ TOOL_CATEGORIES = {
         # DEPRECATED: "extract_article_insights" - redundant with get_article_details
         # DEPRECATED: "get_article_full_content" - merged into get_article_details
         # DEPRECATED: "analyze_topic" - redundant with answer_research_question
-        # DEPRECATED: "generate_research_summary" - redundant with answer_research_question
+        # DEPRECATED: "generate_research_summary" - redundant with
+        #             answer_research_question
         # DEPRECATED: "search_by_topic" - use search_articles instead
-        # DEPRECATED: "find_articles_by_authors" - use search_articles with author filter
+        # DEPRECATED: "find_articles_by_authors" - use search_articles with
+        #             author filter
     ],
     # Document processing
     'processing': [
@@ -124,6 +126,9 @@ TOOL_CATEGORIES = {
         'list_skills',
         'load_skill',
         'unload_skill',
+        # Skill creation (loaded via skill-creation-workshop skill)
+        'create_skill',
+        'update_skill',
     ],
     # DEPRECATED CATEGORIES (code kept but not registered):
     # "query": Legacy query management - replaced by research_question tools

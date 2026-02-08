@@ -1,12 +1,14 @@
 ---
-name: Knowledge Base Q&A
-description: Answer questions using your existing research collection. Use when user asks questions about papers they have, wants summaries, or seeks insights from their knowledge base.
+name: knowledge-base-qa
+description: Answer questions using your existing research collection. Use when user
+  asks questions about papers they have, wants summaries, or seeks insights from their
+  knowledge base.
 tools:
-  - answer_research_question
-  - read_full_article
-  - search_articles
-  - get_article_details
-  - collection_stats
+- answer_research_question
+- read_full_article
+- search_articles
+- get_article_details
+- collection_stats
 ---
 
 # Knowledge Base Q&A

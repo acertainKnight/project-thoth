@@ -12,7 +12,7 @@ Features:
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from thoth.services.base import BaseService
 
@@ -32,7 +32,7 @@ class SkillService(BaseService):
 
     # Role-to-skill mapping for the optimized 2-agent architecture
     # Maps agent roles to the skills they should have access to
-    ROLE_SKILLS = {
+    ROLE_SKILLS: ClassVar[dict[str, list[str]]] = {
         # Research Orchestrator - user-facing coordinator
         'orchestrator': [
             'paper-discovery',
@@ -102,7 +102,8 @@ class SkillService(BaseService):
             dict: Mapping of skill_id to skill metadata:
                 {
                     'skill_id': {
-                        'name': 'Skill Name',
+                        'name': 'skill-id',  # AgentSkills.io: matches directory
+                        'display_name': 'Skill Name',  # Human-readable title
                         'description': 'Skill description',
                         'path': Path to SKILL.md,
                         'source': 'bundled' or 'vault',
@@ -119,8 +120,14 @@ class SkillService(BaseService):
                     if skill_file.exists():
                         skill_id = skill_dir.name
                         metadata = self._parse_skill_metadata(skill_file)
+                        name = metadata.get('name', skill_id)
+
+                        # Generate display_name from name (title case)
+                        display_name = name.replace('-', ' ').title()
+
                         skills[skill_id] = {
-                            'name': metadata.get('name', skill_id),
+                            'name': name,  # AgentSkills.io: matches directory
+                            'display_name': display_name,  # Human-readable
                             'description': metadata.get('description', ''),
                             'path': skill_file,
                             'source': 'bundled',
@@ -142,8 +149,12 @@ class SkillService(BaseService):
                                 f"Vault skill '{skill_id}' overrides bundled skill"
                             )
 
+                        name = metadata.get('name', skill_id)
+                        display_name = name.replace('-', ' ').title()
+
                         skills[skill_id] = {
-                            'name': metadata.get('name', skill_id),
+                            'name': name,  # AgentSkills.io: matches directory
+                            'display_name': display_name,  # Human-readable
                             'description': metadata.get('description', ''),
                             'path': skill_file,
                             'source': 'vault',
@@ -238,7 +249,8 @@ class SkillService(BaseService):
         Supports both standalone skills and bundle skills.
 
         Args:
-            skill_id: Skill identifier (e.g., 'research-deep-dive' or 'bundles/orchestrator/research-workflow-coordination')
+            skill_id: Skill identifier (e.g., 'research-deep-dive' or
+                'bundles/orchestrator/research-workflow-coordination')
 
         Returns:
             str: Full SKILL.md content, or None if not found
@@ -396,7 +408,7 @@ class SkillService(BaseService):
 
         # Also check bundle skills for backward compatibility
         bundles = self.discover_bundle_skills()
-        for bundle_name, bundle_skills in bundles.items():
+        for _bundle_name, bundle_skills in bundles.items():
             # Include bundle skills if they match role
             for bundle_skill_id in bundle_skills:
                 if bundle_skill_id not in skill_ids:
@@ -435,7 +447,6 @@ class SkillService(BaseService):
 
         # Get metadata for each skill
         all_skills = self.discover_skills()
-        bundles = self.discover_bundle_skills()
 
         for skill_id in skill_ids:
             # Handle bundle skills
@@ -525,9 +536,13 @@ class SkillService(BaseService):
         role_skill_ids = set(self.get_skills_for_role(role))
         return {k: v for k, v in skills.items() if k in role_skill_ids}
 
-    def watch_vault_skills(self, callback) -> None:
+    def watch_vault_skills(self, _callback=None) -> None:
         """
         Watch vault skills directory for changes (hot-reload).
+
+        Args:
+            _callback: Optional callback function for change notifications
+                      (prefixed with _ as currently unused)
 
         This method sets up file system watching for the vault skills directory.
         When changes are detected, the callback is triggered.

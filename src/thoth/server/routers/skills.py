@@ -23,7 +23,8 @@ class SkillMetadata(BaseModel):
     """Skill metadata from YAML frontmatter."""
 
     id: str = Field(..., description='Skill identifier')
-    name: str = Field(..., description='Skill display name')
+    name: str = Field(..., description='AgentSkills.io name field (matches directory)')
+    display_name: str = Field(..., description='Human-readable display name')
     description: str = Field(..., description='Short description of skill purpose')
     source: Literal['bundled', 'vault', 'bundle'] = Field(
         ..., description='Skill source location'
@@ -146,6 +147,9 @@ async def list_skills(
                         SkillMetadata(
                             id=skill_id,
                             name=skill_info['name'],
+                            display_name=skill_info.get(
+                                'display_name', skill_info['name']
+                            ),
                             description=skill_info['description'],
                             source=skill_info['source'],
                             bundle=None,
@@ -160,6 +164,7 @@ async def list_skills(
                 SkillMetadata(
                     id=skill_id,
                     name=info['name'],
+                    display_name=info.get('display_name', info['name']),
                     description=info['description'],
                     source=info['source'],
                     bundle=None,
@@ -183,10 +188,14 @@ async def list_skills(
 
                     if skill_path.exists():
                         metadata = skill_service._parse_skill_metadata(skill_path)
+                        name = metadata.get('name', skill_name)
+                        display_name = name.replace('-', ' ').title()
+
                         skills_list.append(
                             SkillMetadata(
                                 id=skill_id,
-                                name=metadata.get('name', skill_name),
+                                name=name,
+                                display_name=display_name,
                                 description=metadata.get('description', ''),
                                 source='bundle',
                                 bundle=bundle_name,
@@ -215,7 +224,9 @@ async def list_skills(
 
     except Exception as e:
         logger.error(f'Error listing skills: {e}')
-        raise HTTPException(status_code=500, detail=f'Failed to list skills: {e!s}')
+        raise HTTPException(
+            status_code=500, detail=f'Failed to list skills: {e!s}'
+        ) from e
 
 
 @router.get('/{skill_id:path}', response_model=SkillContent)
@@ -224,7 +235,8 @@ async def get_skill(skill_id: str) -> SkillContent:
     Get full content of a specific skill.
 
     **Parameters:**
-    - `skill_id`: Skill identifier (e.g., 'research-deep-dive' or 'bundles/orchestrator/research-workflow-coordination')
+    - `skill_id`: Skill identifier (e.g., 'research-deep-dive' or
+      'bundles/orchestrator/research-workflow-coordination')
 
     Returns skill metadata and full markdown content.
     """
@@ -246,10 +258,13 @@ async def get_skill(skill_id: str) -> SkillContent:
                 skill_service.bundles_dir / bundle_name / skill_name / 'SKILL.md'
             )
             metadata_dict = skill_service._parse_skill_metadata(skill_path)
+            name = metadata_dict.get('name', skill_name)
+            display_name = name.replace('-', ' ').title()
 
             metadata = SkillMetadata(
                 id=skill_id,
-                name=metadata_dict.get('name', skill_name),
+                name=name,
+                display_name=display_name,
                 description=metadata_dict.get('description', ''),
                 source='bundle',
                 bundle=bundle_name,
@@ -266,6 +281,7 @@ async def get_skill(skill_id: str) -> SkillContent:
             metadata = SkillMetadata(
                 id=skill_id,
                 name=skill_info['name'],
+                display_name=skill_info.get('display_name', skill_info['name']),
                 description=skill_info['description'],
                 source=skill_info['source'],
                 bundle=None,
@@ -278,7 +294,9 @@ async def get_skill(skill_id: str) -> SkillContent:
         raise
     except Exception as e:
         logger.error(f'Error getting skill {skill_id}: {e}')
-        raise HTTPException(status_code=500, detail=f'Failed to get skill: {e!s}')
+        raise HTTPException(
+            status_code=500, detail=f'Failed to get skill: {e!s}'
+        ) from e
 
 
 @router.post('/', response_model=SkillMetadata, status_code=201)
@@ -293,7 +311,8 @@ async def create_skill(skill_data: SkillCreate) -> SkillMetadata:
     - `content`: Markdown content (frontmatter added automatically)
     - `bundle`: Optional bundle name (orchestrator, discovery, analysis, etc.)
 
-    Creates skill in `vault/thoth/_thoth/skills/` or `vault/thoth/_thoth/skills/bundles/{bundle}/`.
+    Creates skill in `vault/thoth/_thoth/skills/` or
+    `vault/thoth/_thoth/skills/bundles/{bundle}/`.
     """
     try:
         skill_service = SkillService()
@@ -341,9 +360,17 @@ description: {skill_data.description}
 
         logger.info(f'Created skill: {skill_id} at {skill_file}')
 
+        # Generate display_name from skill_id
+        display_name = (
+            skill_id.split('/')[-1].replace('-', ' ').title()
+            if '/' in skill_id
+            else skill_id.replace('-', ' ').title()
+        )
+
         return SkillMetadata(
             id=skill_id,
-            name=skill_data.name,
+            name=skill_data.skill_id,  # AgentSkills.io: matches directory
+            display_name=display_name,
             description=skill_data.description,
             source=source,
             bundle=skill_data.bundle,
@@ -354,7 +381,9 @@ description: {skill_data.description}
         raise
     except Exception as e:
         logger.error(f'Error creating skill: {e}')
-        raise HTTPException(status_code=500, detail=f'Failed to create skill: {e!s}')
+        raise HTTPException(
+            status_code=500, detail=f'Failed to create skill: {e!s}'
+        ) from e
 
 
 @router.put('/{skill_id:path}', response_model=SkillMetadata)
@@ -437,13 +466,18 @@ description: {new_desc}
             parts = skill_id.split('/')
             source = 'bundle'
             bundle = parts[1]
+            skill_name = parts[2]
         else:
             source = 'vault'
             bundle = None
+            skill_name = skill_id
+
+        display_name = skill_name.replace('-', ' ').title()
 
         return SkillMetadata(
             id=skill_id,
-            name=new_name,
+            name=skill_name,  # AgentSkills.io: matches directory
+            display_name=display_name,
             description=new_desc,
             source=source,
             bundle=bundle,
@@ -454,7 +488,9 @@ description: {new_desc}
         raise
     except Exception as e:
         logger.error(f'Error updating skill {skill_id}: {e}')
-        raise HTTPException(status_code=500, detail=f'Failed to update skill: {e!s}')
+        raise HTTPException(
+            status_code=500, detail=f'Failed to update skill: {e!s}'
+        ) from e
 
 
 @router.delete('/{skill_id:path}', status_code=204)
@@ -507,7 +543,9 @@ async def delete_skill(skill_id: str) -> None:
         raise
     except Exception as e:
         logger.error(f'Error deleting skill {skill_id}: {e}')
-        raise HTTPException(status_code=500, detail=f'Failed to delete skill: {e!s}')
+        raise HTTPException(
+            status_code=500, detail=f'Failed to delete skill: {e!s}'
+        ) from e
 
 
 @router.get('/roles/{role}/summary')
@@ -531,7 +569,7 @@ async def get_role_skills_summary(role: str) -> dict[str, Any]:
         logger.error(f'Error getting role skills summary for {role}: {e}')
         raise HTTPException(
             status_code=500, detail=f'Failed to get role skills summary: {e!s}'
-        )
+        ) from e
 
 
 @router.get('/bundles/', response_model=list[RoleBundleResponse])
@@ -561,4 +599,6 @@ async def list_bundles() -> list[RoleBundleResponse]:
 
     except Exception as e:
         logger.error(f'Error listing bundles: {e}')
-        raise HTTPException(status_code=500, detail=f'Failed to list bundles: {e!s}')
+        raise HTTPException(
+            status_code=500, detail=f'Failed to list bundles: {e!s}'
+        ) from e

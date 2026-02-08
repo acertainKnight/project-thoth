@@ -1,6 +1,10 @@
 ---
-name: Skill Creation Workshop
-description: Collaboratively create and refine new skills through iterative design - validate needs, design structure, draft content, test, and refine.
+name: skill-creation-workshop
+description: Collaboratively create and refine new skills through iterative design
+  - validate needs, design structure, draft content, test, and refine.
+tools:
+- create_skill
+- update_skill
 ---
 
 # Skill Creation Workshop
