@@ -2128,6 +2128,11 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       if (response.ok) {
         const newMessages = await response.json();
 
+        console.log(`[MultiChatModal] Loaded ${newMessages.length} messages for session ${sessionId}`, {
+          loadEarlier,
+          messageTypes: newMessages.map((m: any) => m.message_type || m.type).filter((t: any, i: number, arr: any[]) => arr.indexOf(t) === i)
+        });
+
         // Get or initialize cached messages
         let allMessages = this.messageCache.get(sessionId) || [];
 
@@ -2255,10 +2260,12 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     // Sort by date to ensure chronological order (oldest first)
     // This provides a fallback in case the API order changes
     .sort((a, b) => {
-      const dateA = new Date(a.date).getTime();
-      const dateB = new Date(b.date).getTime();
+      const dateA = new Date(a.date || a.created_at || 0).getTime();
+      const dateB = new Date(b.date || b.created_at || 0).getTime();
       return dateA - dateB;
     });
+
+    console.log(`[MultiChatModal] Rendering ${chatMessages.length} chat messages from ${messages.length} total messages`);
 
     // Load existing messages or show empty state
     if (chatMessages.length === 0) {

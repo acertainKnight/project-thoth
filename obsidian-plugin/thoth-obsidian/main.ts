@@ -779,6 +779,8 @@ export default class ThothPlugin extends Plugin {
     `;
 
     // Handle quick message sending
+    // NOTE: This uses the same Letta API as the full chat (MultiChatModal.sendMessage)
+    // but without streaming for faster, simpler responses in the minimized pill view
     const sendQuickMessage = async () => {
       const message = inputEl.value.trim();
       if (!message || sendBtn.disabled) return;
@@ -793,42 +795,75 @@ export default class ThothPlugin extends Plugin {
       sendBtn.textContent = 'Asking...';
 
       try {
-        // Use the chat modal instance to send message
-        if (this.chatModalInstance && this.chatModalInstance.activeSessionId) {
-          // Send to server using existing chat functionality
-          const endpoint = this.getEndpointUrl();
-          const response = await fetch(`${endpoint}/research/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              message: message,
-              conversation_id: this.chatModalInstance.activeSessionId,
-              timestamp: Date.now(),
-              id: crypto.randomUUID()
-            })
-          });
+        // Ensure we have a chat modal instance
+        if (!this.chatModalInstance) {
+          throw new Error('Chat system not initialized');
+        }
 
-          if (response.ok) {
-            const result = await response.json();
-            const assistantResponse = result.response;
-
-            // Show response
-            responseArea.textContent = assistantResponse.length > 150 ?
-              assistantResponse.substring(0, 150) + '...' : assistantResponse;
-
-            // Update full chat in background
-            if (this.chatModalInstance) {
-              await this.chatModalInstance.loadChatSessions();
-              this.chatModalInstance.renderSessionList();
-            }
-          } else {
-            throw new Error('Failed to send message');
+        // Ensure we have an active session, create one if needed
+        let conversationId = this.chatModalInstance.activeSessionId;
+        if (!conversationId) {
+          responseArea.textContent = 'Initializing chat session...';
+          try {
+            conversationId = await this.chatModalInstance.getOrCreateDefaultConversation();
+            this.chatModalInstance.activeSessionId = conversationId;
+            await this.chatModalInstance.loadChatSessions();
+          } catch (initError) {
+            throw new Error(`Failed to initialize chat: ${initError.message}`);
           }
+        }
+
+        // Send to server using Letta chat endpoint (same as full chat but without streaming)
+        const endpoint = this.getLettaEndpointUrl();
+
+        const response = await fetch(`${endpoint}/v1/conversations/${conversationId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input: message,
+            streaming: false  // No streaming for quick responses
+          })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+
+          // Extract assistant response from Letta response format
+          // Letta returns an array of messages - find the last assistant message
+          let assistantResponse = 'No response received';
+
+          if (Array.isArray(result.messages)) {
+            // Find last assistant_message
+            const assistantMsg = [...result.messages]
+              .reverse()
+              .find((m: any) => m.message_type === 'assistant_message');
+
+            if (assistantMsg) {
+              // Extract text from assistant message
+              assistantResponse = assistantMsg.assistant_message?.text ||
+                                assistantMsg.text ||
+                                assistantMsg.content ||
+                                assistantResponse;
+            }
+          } else if (result.response) {
+            assistantResponse = result.response;
+          }
+
+          // Show response
+          responseArea.style.color = 'var(--text-muted)';
+          responseArea.textContent = assistantResponse.length > 150 ?
+            assistantResponse.substring(0, 150) + '...' : assistantResponse;
+
+          // Update full chat in background
+          await this.chatModalInstance.loadChatSessions();
+          this.chatModalInstance.renderSessionList();
         } else {
-          throw new Error('No active chat session');
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || errorData.detail || `Server error: ${response.status}`);
         }
       } catch (error) {
         console.error('Quick chat error:', error);
+        responseArea.style.color = 'var(--text-error)';
         responseArea.textContent = `Error: ${error.message}`;
       } finally {
         sendBtn.disabled = false;
