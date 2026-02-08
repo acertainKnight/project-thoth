@@ -255,11 +255,12 @@ services:
     profiles: ["microservices"]
     build:
       context: .
-      dockerfile: Dockerfile
-      # target: development  # Not using multi-stage build
+      dockerfile: docker/mcp/Dockerfile
+      target: development
       args:
-        SERVICE_EXTRAS: "service-mcp"  # Includes api,pdf,mcp,discovery,langchain,vectordb,embeddings,memory
+        SERVICE_EXTRAS: "service-mcp"
     container_name: thoth-dev-mcp
+    command: ["python", "-m", "thoth", "mcp", "http", "--host", "0.0.0.0", "--port", "8001", "--log-level", "DEBUG"]
     user: "1000:1000"  # Run as host user for proper file permissions
     env_file:
       - .env
@@ -283,6 +284,9 @@ services:
 
       # Development settings (REQUIRED - dev-specific configuration)
       - THOTH_LOG_LEVEL=DEBUG
+
+      # Prioritize mounted source over installed package for hot-reload
+      - PYTHONPATH=/app/src:${PYTHONPATH:-}
 
       # Hot-reload configuration
       # Automatically reload when vault/thoth/_thoth/settings.json changes

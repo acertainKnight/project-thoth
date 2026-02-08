@@ -5,11 +5,15 @@ This module provides command-line interface for running MCP servers
 with different transport configurations.
 """
 
+from __future__ import annotations
+
 import sys
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from thoth.pipeline import ThothPipeline
+if TYPE_CHECKING:
+    from thoth.pipeline import ThothPipeline
 
 
 def configure_subparser(subparsers):
@@ -103,7 +107,7 @@ def configure_subparser(subparsers):
     legacy_parser.set_defaults(func=run_http_server)
 
 
-def run_stdio_server(args, _pipeline: ThothPipeline):
+def run_stdio_server(args, _pipeline: ThothPipeline | None = None):
     """Run MCP server with stdio transport only."""
     from thoth.mcp.launcher import run_stdio_server
 
@@ -115,7 +119,7 @@ def run_stdio_server(args, _pipeline: ThothPipeline):
     run_stdio_server()
 
 
-def run_http_server(args, _pipeline: ThothPipeline):
+def run_http_server(args, _pipeline: ThothPipeline | None = None):
     """Run MCP server with HTTP transport only."""
     import sys
 
@@ -129,7 +133,7 @@ def run_http_server(args, _pipeline: ThothPipeline):
     run_http_server(host=args.host, port=args.port)
 
 
-def run_full_server(args, _pipeline: ThothPipeline):
+def run_full_server(args, _pipeline: ThothPipeline | None = None):
     """Run MCP server with all transports."""
     import sys
 

@@ -33,14 +33,7 @@ repos:
         args: ['-c', 'pyproject.toml']
         additional_dependencies: ['bandit[toml]']
 
-  # Docstring checks
-  - repo: https://github.com/pycqa/pydocstyle
-    rev: 6.3.0
-    hooks:
-      - id: pydocstyle
-        args: [--convention=google]
-        exclude: ^tests/
-
+  # Docstring checks handled by ruff (pydocstyle rules via [tool.ruff.lint.pydocstyle])
   # Import sorting handled by ruff (select includes "I" rules)
 
   # Run unit tests before push (catches failures before CI)

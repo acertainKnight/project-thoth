@@ -31,12 +31,14 @@ from thoth.server.chat_models import ChatPersistenceManager
 
 # Optional hot reload for development (requires watchdog package)
 try:
+    from watchdog.events import FileSystemEventHandler
     from watchdog.observers import Observer
 
     from thoth.server.hot_reload import SettingsFileWatcher
 except ImportError:
     SettingsFileWatcher = None  # Not available in all service configurations
     Observer = None
+    FileSystemEventHandler = None  # type: ignore[assignment,misc]
 
 # Import routers - browser_workflows is optional (requires playwright)
 from thoth.server.routers import (  # noqa: I001
@@ -63,7 +65,9 @@ except ImportError as e:
     import warnings
 
     warnings.warn(
-        f'Browser workflows not available (missing playwright): {e}', ImportWarning
+        f'Browser workflows not available (missing playwright): {e}',
+        ImportWarning,
+        stacklevel=2,
     )
     browser_workflows = None
     BROWSER_WORKFLOWS_AVAILABLE = False
@@ -84,7 +88,7 @@ _settings_watcher: SettingsFileWatcher | None = None
 # Global watcher instance for schema hot-reload (kept global for lifecycle management)
 _schema_watcher: SettingsFileWatcher | None = None
 
-# Global watcher instance for custom prompts hot-reload (kept global for lifecycle management)
+# Global watcher for custom prompts hot-reload (kept global for lifecycle)
 _prompts_watcher: SettingsFileWatcher | None = None
 
 # Global discovery scheduler instance (kept global for lifecycle management)
@@ -228,10 +232,17 @@ def _on_prompts_reload():
         logger.error(f'Failed to reload custom prompts: {e}')
 
 
-class _PromptsChangeHandler:
-    """Handler for file system events on custom prompt files."""
+class _PromptsChangeHandler(
+    FileSystemEventHandler if FileSystemEventHandler else object
+):
+    """Handler for file system events on custom prompt files.
+
+    Inherits from watchdog.events.FileSystemEventHandler to provide the
+    required dispatch() method that watchdog's Observer calls internally.
+    """
 
     def __init__(self, watcher, prompts_dir: Path):
+        super().__init__()
         self.watcher = watcher
         self.prompts_dir = prompts_dir.resolve()
 
@@ -853,7 +864,7 @@ async def start_server(
             logger.warning(f'Failed to initialize Thoth orchestrator: {e}')
             thoth_orchestrator = None
 
-        # Phase 5 COMPLETE: All routers now use FastAPI Depends() for dependency injection
+        # Phase 5 COMPLETE: All routers use FastAPI Depends() for DI
         # set_dependencies() calls removed - dependencies injected from app.state
 
         # Still need to set directories for health router (not migrated - not necessary)
@@ -946,7 +957,7 @@ def start_obsidian_server(
 # Typically used by: python -m uvicorn thoth.server.app:app
 app = create_app()
 
-# Initialize empty app.state for direct imports (will be populated by lifespan or explicit initialization)
+# Initialize empty app.state for direct imports (populated by lifespan)
 app.state.service_manager = None
 app.state.research_agent = None
 app.state.chat_manager = None

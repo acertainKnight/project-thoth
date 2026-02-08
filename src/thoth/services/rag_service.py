@@ -447,7 +447,7 @@ class RAGService(BaseService):
 
         Args:
             paper_id: UUID of the paper in paper_metadata table
-            markdown_content: Optional markdown content (fetched from DB if not provided)
+            markdown_content: Optional markdown content (fetched if omitted)
 
         Returns:
             list[str]: List of document chunk IDs created
@@ -489,7 +489,6 @@ class RAGService(BaseService):
         Raises:
             ServiceError: If indexing fails
         """
-        import asyncio
 
         import asyncpg
 
@@ -526,7 +525,13 @@ class RAGService(BaseService):
                 finally:
                     await conn.close()
 
-            papers = asyncio.run(fetch_papers())
+            # Use run_async_safely to handle both sync and async calling contexts.
+            # This correctly handles being called from MCP tool handlers (async)
+            # or CLI commands (sync) without "cannot call asyncio.run() from
+            # a running event loop" errors.
+            from thoth.utilities.async_utils import run_async_safely
+
+            papers = run_async_safely(fetch_papers())
 
             stats = {
                 'total_papers': len(papers),

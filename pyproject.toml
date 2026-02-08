@@ -7,7 +7,7 @@ name = "thoth"
 description = "Thoth AI Research Agent - An autonomous system for academic research paper processing and knowledge management"
 readme = "README.md"
 requires-python = ">=3.12, <3.13"
-version = '0.3.0-alpha.2'
+version = '0.3.0-alpha.3'
 authors = [{name="Nick Hallmark", email="NHALLMARK3@BLOOMBERG.NET"}]
 
 dependencies = [
@@ -23,6 +23,7 @@ dependencies = [
     "fuzzywuzzy>=0.18.0",
     "python-levenshtein>=0.27.3",
     "matplotlib>=3.10.3",
+    "cachetools>=5.3.0",  # Required by BaseRepository (used by all services)
 ]
 
 [project.optional-dependencies]
@@ -101,9 +102,8 @@ langchain = [
 ]
 
 # Vector database utilities
-vectordb = [
-    "cachetools>=5.3.0",  # Required by BaseRepository
-]
+# NOTE: cachetools was moved to core dependencies since BaseRepository needs it
+vectordb = []
 
 # Embeddings (VERY HEAVY: ~2GB with PyTorch)
 embeddings = [
@@ -125,27 +125,25 @@ memory = [
 # ==============================================================================
 
 # thoth-api: REST API server (~1.5GB)
-# Core API server - does NOT need vectordb/embeddings by default
-# Add them if you want RAG features with local embeddings
+# Core API server - cachetools is now a core dep so vectordb not needed here
 service-api = [
     "thoth[api,discovery,pdf,langchain]",
 ]
 
 # thoth-dashboard: Dashboard sync (~1.5GB)
-# Needs vectordb for cachetools (BaseRepository), but NOT embeddings
 service-dashboard = [
-    "thoth[api,discovery,pdf,langchain,vectordb]",
+    "thoth[api,discovery,pdf,langchain]",
 ]
 
 # thoth-discovery: Discovery scheduler (~1.5GB)
-# Needs langchain for AnthropicClient + vectordb for cachetools + pdf for pypdf (pipelines)
+# Needs langchain for AnthropicClient + pdf for pypdf (pipelines)
 service-discovery = [
-    "thoth[api,discovery,pdf,langchain,vectordb]",
+    "thoth[api,discovery,pdf,langchain]",
 ]
 
 # thoth-mcp: MCP server with 60+ research tools (~2GB)
+# thoth-mcp: MCP protocol interface (~1.5GB)
 # Provides MCP protocol interface to Thoth research tools
-# Includes discovery and document processing capabilities
 # embeddings and memory (letta) are OPTIONAL - users can add if needed
 service-mcp = [
     "thoth[api,pdf,mcp,discovery,langchain]",
@@ -153,7 +151,7 @@ service-mcp = [
 
 # thoth-monitor: PDF processing (~2GB)
 # Watches for PDFs and processes them
-# embeddings and vectordb are OPTIONAL - add if you want local embeddings
+# embeddings are OPTIONAL - add if you want local embeddings
 service-monitor = [
     "thoth[api,pdf,discovery,mcp,langchain]",
 ]

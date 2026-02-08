@@ -434,8 +434,7 @@ class DiscoveryScheduler:
 
     def _load_from_postgres(self) -> dict[str, Any]:
         """Load discovery schedule from PostgreSQL."""
-        import asyncpg  # noqa: I001
-        import asyncio
+        import asyncpg
 
         db_url = (
             getattr(self.config.secrets, 'database_url', None)
@@ -467,16 +466,10 @@ class DiscoveryScheduler:
             finally:
                 await conn.close()
 
-        # Use asyncio.run() to create a new event loop - safe from any thread
-        try:
-            return asyncio.run(load())
-        except RuntimeError:
-            # If there's already an event loop running, create a new one in a thread
-            import concurrent.futures
+        # Use run_async_safely to handle both sync and async calling contexts.
+        from thoth.utilities.async_utils import run_async_safely
 
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(lambda: asyncio.run(load()))
-                return future.result()
+        return run_async_safely(load())
 
     def _save_schedule_state(self) -> None:
         """
@@ -489,8 +482,7 @@ class DiscoveryScheduler:
 
     def _save_to_postgres(self) -> None:
         """Save discovery schedule to PostgreSQL."""
-        import asyncpg  # noqa: I001
-        import asyncio
+        import asyncpg
 
         db_url = (
             getattr(self.config.secrets, 'database_url', None)
@@ -535,16 +527,10 @@ class DiscoveryScheduler:
             finally:
                 await conn.close()
 
-        # Use asyncio.run() to create a new event loop - safe from any thread
-        try:
-            asyncio.run(save())
-        except RuntimeError:
-            # If there's already an event loop running, create a new one in a thread
-            import concurrent.futures
+        # Use run_async_safely to handle both sync and async calling contexts.
+        from thoth.utilities.async_utils import run_async_safely
 
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(lambda: asyncio.run(save()))
-                future.result()
+        run_async_safely(save())
 
     def sync_with_discovery_manager(self) -> None:
         """

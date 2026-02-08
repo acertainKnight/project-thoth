@@ -35,28 +35,35 @@ logger.info('===== main.py: CLI submodules imported successfully =====')
 def main() -> None:
     """Main entry point for the Thoth CLI."""
     logger.info('===== main(): Function called, parsing arguments =====')
-    parser = argparse.ArgumentParser(
-        description='Thoth - Academic PDF processing system'
-    )
-    subparsers = parser.add_subparsers(
-        dest='command', help='Command to run', required=True
-    )
 
-    # Always register setup command
-    setup_cli.configure_subparser(subparsers)
+    # Quick-check the command from sys.argv before argparse to enable lazy
+    # loading.  This avoids importing heavy dependencies (ThothPipeline,
+    # initialize_thoth, etc.) for lightweight commands like setup, db, and mcp.
+    import sys
 
-    # Parse args early to check if we need other modules
-    args = parser.parse_args()
+    raw_command = sys.argv[1] if len(sys.argv) > 1 else None
 
-    # Skip heavy imports for setup and db commands
-    if args.command in ['setup', 'db']:
-        # For db command, only import database module
-        if args.command == 'db':
+    if raw_command in ('setup', 'db', 'mcp'):
+        parser = argparse.ArgumentParser(
+            description='Thoth - Academic PDF processing system'
+        )
+        subparsers = parser.add_subparsers(
+            dest='command', help='Command to run', required=True
+        )
+
+        # Only register the subparser we actually need
+        setup_cli.configure_subparser(subparsers)
+
+        if raw_command == 'db':
             from . import database
 
             database.configure_subparser(subparsers)
-            # Re-parse after adding db subparser
-            args = parser.parse_args()
+        elif raw_command == 'mcp':
+            from . import mcp
+
+            mcp.configure_subparser(subparsers)
+
+        args = parser.parse_args()
 
         if hasattr(args, 'func'):
             if inspect.iscoroutinefunction(args.func):
@@ -65,7 +72,15 @@ def main() -> None:
                 args.func(args)
         return
 
-    # Import all other CLI modules (only when not running setup/db)
+    # Full CLI mode — register all subparsers and initialize pipeline
+    parser = argparse.ArgumentParser(
+        description='Thoth - Academic PDF processing system'
+    )
+    subparsers = parser.add_subparsers(
+        dest='command', help='Command to run', required=True
+    )
+
+    # Import all CLI modules (full pipeline mode)
     from . import (
         database,
         discovery,

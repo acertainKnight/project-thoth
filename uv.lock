@@ -5811,9 +5811,10 @@ wheels = [
 
 [[package]]
 name = "thoth"
-version = "0.3.0a2"
+version = "0.3.0a3"
 source = { editable = "." }
 dependencies = [
+    { name = "cachetools" },
     { name = "click" },
     { name = "cryptography" },
     { name = "deprecated" },
@@ -5838,7 +5839,6 @@ all = [
     { name = "bibtexparser" },
     { name = "black" },
     { name = "build" },
-    { name = "cachetools" },
     { name = "codespell" },
     { name = "cryptography" },
     { name = "duckduckgo-search" },
@@ -6083,7 +6083,6 @@ service-dashboard = [
     { name = "asyncpg" },
     { name = "beautifulsoup4" },
     { name = "bibtexparser" },
-    { name = "cachetools" },
     { name = "cryptography" },
     { name = "duckduckgo-search" },
     { name = "fake-useragent" },
@@ -6131,7 +6130,6 @@ service-discovery = [
     { name = "asyncpg" },
     { name = "beautifulsoup4" },
     { name = "bibtexparser" },
-    { name = "cachetools" },
     { name = "cryptography" },
     { name = "duckduckgo-search" },
     { name = "fake-useragent" },
@@ -6179,7 +6177,6 @@ service-heavy = [
     { name = "asyncpg" },
     { name = "beautifulsoup4" },
     { name = "bibtexparser" },
-    { name = "cachetools" },
     { name = "cryptography" },
     { name = "duckduckgo-search" },
     { name = "fake-useragent" },
@@ -6343,9 +6340,6 @@ utils = [
     { name = "jsonpatch" },
     { name = "psutil" },
 ]
-vectordb = [
-    { name = "cachetools" },
-]
 viz = [
     { name = "grandalf" },
     { name = "matplotlib" },
@@ -6368,7 +6362,7 @@ requires-dist = [
     { name = "bibtexparser", marker = "extra == 'discovery'", specifier = ">=1.4.2" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=25.1.0" },
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.2.2.post1" },
-    { name = "cachetools", marker = "extra == 'vectordb'", specifier = ">=5.3.0" },
+    { name = "cachetools", specifier = ">=5.3.0" },
     { name = "click", specifier = ">=8.1.8" },
     { name = "codespell", marker = "extra == 'dev'", specifier = ">=2.4.1" },
     { name = "cryptography", specifier = ">=45.0.2" },
@@ -6455,8 +6449,8 @@ requires-dist = [
     { name = "sqlite-vec", marker = "extra == 'memory'", specifier = ">=0.1.6" },
     { name = "textual", marker = "extra == 'setup'", specifier = ">=0.80.0" },
     { name = "thoth", extras = ["api", "discovery", "pdf", "langchain"], marker = "extra == 'service-api'" },
-    { name = "thoth", extras = ["api", "discovery", "pdf", "langchain", "vectordb"], marker = "extra == 'service-dashboard'" },
-    { name = "thoth", extras = ["api", "discovery", "pdf", "langchain", "vectordb"], marker = "extra == 'service-discovery'" },
+    { name = "thoth", extras = ["api", "discovery", "pdf", "langchain"], marker = "extra == 'service-dashboard'" },
+    { name = "thoth", extras = ["api", "discovery", "pdf", "langchain"], marker = "extra == 'service-discovery'" },
     { name = "thoth", extras = ["api", "pdf", "discovery", "mcp", "langchain"], marker = "extra == 'service-monitor'" },
     { name = "thoth", extras = ["api", "pdf", "mcp", "discovery", "langchain"], marker = "extra == 'service-all'" },
     { name = "thoth", extras = ["api", "pdf", "mcp", "discovery", "langchain"], marker = "extra == 'service-mcp'" },

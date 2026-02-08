@@ -8,11 +8,15 @@ in the knowledge base using either local sentence-transformers or OpenAI embeddi
 import os
 from typing import Any
 
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import OpenAIEmbeddings
 from loguru import logger
 
 from thoth.config import config
+
+# HuggingFaceEmbeddings is imported lazily to avoid requiring the heavy
+# sentence-transformers / PyTorch dependencies when using API-based embeddings
+# (OpenAI).  Install with: uv sync --extra embeddings
+HuggingFaceEmbeddings = None  # type: ignore[assignment,misc]
 
 
 class EmbeddingManager:
@@ -133,6 +137,23 @@ class EmbeddingManager:
 
     def _init_local_embeddings(self) -> None:
         """Initialize local sentence-transformers embeddings."""
+        global HuggingFaceEmbeddings
+        if HuggingFaceEmbeddings is None:
+            try:
+                from langchain_huggingface import (
+                    HuggingFaceEmbeddings as _HFE,
+                )
+
+                HuggingFaceEmbeddings = _HFE
+            except ImportError:
+                raise ImportError(
+                    'Local embeddings require langchain-huggingface and '
+                    'sentence-transformers. Install with: uv sync --extra embeddings\n'
+                    'Alternatively, configure an OpenAI embedding model '
+                    '(e.g., "openai/text-embedding-3-small") in settings to '
+                    'use API-based embeddings without heavy dependencies.'
+                ) from None
+
         try:
             # Create local embeddings using HuggingFace/sentence-transformers
             # with safer configuration to prevent segfaults
