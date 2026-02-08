@@ -160,6 +160,15 @@ docs/*SUMMARY*.md
 docs/*TROUBLESHOOTING*.md
 docs/archived/
 
+# Fix logs, migration artifacts, and session notes (should NOT be committed)
+docs/*FIX*.md
+docs/*FIXES*.md
+docs/*MIGRATION*.md
+docs/*session*.md
+*-session-*.md
+obsidian-plugin/**/*SUMMARY*.md
+obsidian-plugin/**/*FIX*.md
+
 # plugin files
 obsidian-plugin/thoth-obsidian/node_modules/
 migrations/

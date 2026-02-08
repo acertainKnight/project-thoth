@@ -1,8 +1,8 @@
 # Discovery System Architecture
 
-**Author**: Staff Engineer Review  
-**Date**: January 2026  
-**Status**: Production  
+**Author**: Staff Engineer Review
+**Date**: January 2026
+**Status**: Production
 **Core**: Multi-source paper aggregation with automated scheduling
 
 ---
@@ -152,13 +152,13 @@ The Discovery System was designed around three core principles:
 class DiscoveryManager:
     def create_source(self, source: DiscoverySource):
         """Create source config file + DB record."""
-        
+
     def update_source(self, source: DiscoverySource):
         """Update both file and DB atomically."""
-        
+
     def delete_source(self, source_name: str):
         """Remove from both stores."""
-        
+
     def list_sources(self, active_only: bool = False):
         """List all configured sources."""
 ```
@@ -177,7 +177,7 @@ class DiscoveryManager:
 def run_discovery(self, source_name=None, max_articles=None):
     """
     Run discovery for one or all sources.
-    
+
     Flow:
     1. Load source configs (from files or DB)
     2. For each source:
@@ -229,18 +229,18 @@ else:
 class BaseAPISource(ABC):
     """
     Abstract base for all API sources.
-    
+
     Contract:
     - discover(query, filters) -> list[ScrapedArticleMetadata]
     - Rate limiting built-in
     - Retry logic with exponential backoff
     - Timeout handling
     """
-    
+
     @abstractmethod
     def discover(self, query, filters):
         pass
-    
+
     @abstractmethod
     def get_rate_limit(self):
         """Return (requests_per_second, burst)."""
@@ -268,13 +268,13 @@ class ArxivClient:
         Rate limiting strategy:
         - delay_seconds: Minimum time between requests
         - Exponential backoff on retries
-        
+
         Why 0.1s (100ms)?
         - ArXiv requests 3s delay (conservative)
         - We use 100ms for responsiveness
         - If rate limited, backoff automatically
         """
-        
+
     def _make_request(self, params):
         """
         Rate limiter implementation:
@@ -285,11 +285,11 @@ class ArxivClient:
         time_since_last = time.time() - self.last_request_time
         if time_since_last < self.delay_seconds:
             time.sleep(self.delay_seconds - time_since_last)
-        
+
     def _parse_arxiv_response(self, xml):
         """
         Parse Atom XML to ArxivPaper objects.
-        
+
         Challenges:
         - XML namespace handling (BeautifulSoup)
         - Optional fields (DOI, journal_ref)
@@ -353,12 +353,12 @@ class PubMedAPISource:
     def discover(self, query, filters):
         """
         Two-phase discovery:
-        
+
         Phase 1: E-search
         - Query: keywords in title/abstract
         - Returns: List of PMIDs
         - Fast but no details
-        
+
         Phase 2: E-fetch (batch)
         - Input: Comma-separated PMIDs
         - Returns: Full XML records
@@ -366,7 +366,7 @@ class PubMedAPISource:
         """
         # Search phase
         pmids = self._esearch(query, max_results)
-        
+
         # Batch fetch (100 PMIDs at a time)
         for pmid_batch in chunk(pmids, 100):
             papers = self._efetch(pmid_batch)
@@ -492,12 +492,12 @@ filters = {
 class DiscoveryScheduler:
     """
     Scheduler runs in daemon thread.
-    
+
     State machine:
     - IDLE: Waiting for next scheduled run
     - RUNNING: Executing discovery
     - PAUSED: Scheduler stopped but not destroyed
-    
+
     Persistence:
     - Schedule state saved to JSON file
     - Survives restarts (resumes from last_run times)
@@ -519,7 +519,7 @@ class DiscoveryScheduler:
 def _scheduler_loop(self):
     """
     Main scheduler loop (runs in daemon thread).
-    
+
     Logic:
     1. Check each source's next_run time
     2. If now >= next_run and enabled:
@@ -531,16 +531,16 @@ def _scheduler_loop(self):
     """
     while self.running:
         now = datetime.now()
-        
+
         for source_name, schedule_info in self.schedule_state.items():
             if not schedule_info['enabled']:
                 continue
-                
+
             next_run = datetime.fromisoformat(schedule_info['next_run'])
-            
+
             if now >= next_run:
                 self._run_scheduled_source(source_name)
-                
+
         time.sleep(60)  # Check every minute
 ```
 
@@ -549,12 +549,12 @@ def _scheduler_loop(self):
 def _calculate_next_run(self, schedule: ScheduleConfig):
     """
     Calculate next run time from schedule config.
-    
+
     Modes:
     1. Interval-based: next_run = now + interval_minutes
     2. Time-of-day: next_run = today at HH:MM or tomorrow if passed
     3. Days-of-week: next_run = next matching weekday at time
-    
+
     Examples:
     - interval_minutes=1440 (daily)
     - time_of_day="09:00", days_of_week=[1,3,5] (Mon/Wed/Fri at 9am)
@@ -562,17 +562,17 @@ def _calculate_next_run(self, schedule: ScheduleConfig):
     if schedule.time_of_day:
         # Parse HH:MM format
         hour, minute = map(int, schedule.time_of_day.split(':'))
-        
+
         # Find next matching day
         target_time = datetime.combine(date.today(), time(hour, minute))
-        
+
         if schedule.days_of_week:
             # Find next weekday in list (0=Monday)
             while target_time.weekday() not in schedule.days_of_week:
                 target_time += timedelta(days=1)
-        
+
         return target_time.isoformat()
-    
+
     else:
         # Simple interval
         return (datetime.now() + timedelta(minutes=schedule.interval_minutes)).isoformat()
@@ -617,7 +617,7 @@ def _calculate_next_run(self, schedule: ScheduleConfig):
 ```python
 # Calculate time until next run
 sleep_duration = min(
-    (next_run - now).total_seconds() 
+    (next_run - now).total_seconds()
     for next_run in all_next_runs
 )
 time.sleep(max(1, sleep_duration))
@@ -642,12 +642,12 @@ This is where discovery becomes **intelligent** instead of just crawling:
 class ContextAnalyzer:
     """
     Analyzes vault to understand user's research interests.
-    
+
     Inputs:
     - Existing papers in vault (titles, abstracts, keywords)
     - User's research questions
     - Citation patterns (what papers cite what)
-    
+
     Outputs:
     - Targeted queries for discovery
     - Relevance scores for discovered papers
@@ -661,23 +661,23 @@ class ContextAnalyzer:
 def analyze_vault_context(self):
     """
     Multi-phase analysis:
-    
+
     Phase 1: Topic Extraction
     - Read all paper notes
     - Extract keywords, topics from frontmatter
     - Build topic frequency map
     - Identify clusters (NLP, CV, etc.)
-    
+
     Phase 2: Author Network
     - Extract author lists
     - Build collaboration graph
     - Identify key researchers
-    
+
     Phase 3: Citation Patterns
     - Which papers are cited most?
     - Recent vs foundational papers
     - Identify research lineage
-    
+
     Phase 4: Query Generation
     - Combine topics + authors + recent trends
     - Generate targeted search queries
@@ -691,13 +691,13 @@ def analyze_vault_context(self):
 def extract_topics(self, notes):
     """
     Extract topics from existing notes.
-    
+
     Method:
     1. Parse YAML frontmatter (tags, keywords)
     2. Extract paper titles
     3. Run TF-IDF on abstracts
     4. Cluster similar terms
-    
+
     Output:
     {
       'machine_learning': {'count': 45, 'keywords': ['neural', 'training']},
@@ -706,19 +706,19 @@ def extract_topics(self, notes):
     }
     """
     topic_freq = defaultdict(lambda: {'count': 0, 'keywords': set()})
-    
+
     for note in notes:
         # Parse frontmatter
         metadata = yaml.safe_load(note.frontmatter)
-        
+
         # Count topics
         for tag in metadata.get('tags', []):
             topic_freq[tag]['count'] += 1
-            
+
         # Extract keywords from title/abstract
         keywords = extract_keywords(metadata['abstract'])
         topic_freq[infer_topic(keywords)]['keywords'].update(keywords)
-    
+
     return dict(topic_freq)
 ```
 
@@ -727,36 +727,36 @@ def extract_topics(self, notes):
 def score_paper_relevance(self, paper, vault_context):
     """
     Score how relevant a discovered paper is.
-    
+
     Factors:
     1. Topic match: Does it match vault topics? (0-1)
     2. Author overlap: Do we have papers by these authors? (0-1)
     3. Citation overlap: Does it cite papers we have? (0-1)
     4. Recency: How recent is it? (bonus for new)
     5. Citation count: Is it influential? (bonus for highly cited)
-    
+
     Combined score: weighted sum
     """
     score = 0.0
-    
+
     # Topic match
     paper_topics = set(paper.keywords)
     vault_topics = set(vault_context.topics.keys())
     topic_overlap = len(paper_topics & vault_topics) / len(paper_topics)
     score += topic_overlap * 0.4
-    
+
     # Author match
     paper_authors = set(paper.authors)
     vault_authors = set(vault_context.known_authors)
     author_match = len(paper_authors & vault_authors) > 0
     score += 0.3 if author_match else 0.0
-    
+
     # Citation overlap
     paper_cites = set(paper.references)
     vault_papers = set(vault_context.paper_ids)
     cites_vault = len(paper_cites & vault_papers) / max(1, len(paper_cites))
     score += cites_vault * 0.3
-    
+
     return score
 ```
 
@@ -798,7 +798,7 @@ BrowserManager
     ├── Session Persistence (cookies + localStorage)
     ├── Headless Mode (production)
     └── Stealth Mode (avoid bot detection)
-        
+
 WorkflowExecutionService
     ├── Workflow Definition (JSON config)
     ├── Step Execution (navigate, click, extract)
@@ -830,36 +830,36 @@ ExtractionService
 class BrowserManager:
     """
     Manages browser lifecycle with pooling.
-    
+
     Design decisions:
-    
+
     1. Why pooling?
     - Browser launch is expensive (~1-2s)
     - Keep browsers alive, reuse contexts
     - Max 5 concurrent (memory limit)
-    
+
     2. Why contexts not tabs?
     - Contexts are isolated (cookies, storage)
     - Parallel workflows don't interfere
     - Clean slate per workflow
-    
+
     3. Why headless?
     - Production servers don't have displays
     - Faster (no rendering)
     - Less memory
     """
-    
+
     async def get_browser(self, headless=True):
         """
         Acquire browser context from pool.
-        
+
         Semaphore pattern:
         - Max 5 concurrent contexts
         - Blocks if all in use
         - Releases on cleanup
         """
         await self._semaphore.acquire()
-        
+
         try:
             browser = await self._browser_type.launch(
                 headless=headless,
@@ -868,16 +868,16 @@ class BrowserManager:
                     '--no-sandbox',  # Docker compatibility
                 ]
             )
-            
+
             context = await browser.new_context(
                 viewport={'width': 1920, 'height': 1080},
                 user_agent='Mozilla/5.0 ...',  # Real browser UA
                 locale='en-US',
                 timezone_id='America/New_York'
             )
-            
+
             return context
-            
+
         except Exception:
             self._semaphore.release()  # Don't leak semaphore
             raise
@@ -955,7 +955,7 @@ class WorkflowExecutionService:
     async def execute_workflow(self, workflow):
         """
         Execute workflow steps sequentially.
-        
+
         Error handling:
         - Screenshot on failure
         - Retry failed steps (max 3)
@@ -963,21 +963,21 @@ class WorkflowExecutionService:
         """
         async with browser_manager.browser_context() as context:
             page = await context.new_page()
-            
+
             for step in workflow['steps']:
                 try:
                     await self._execute_step(page, step)
                 except Exception as e:
                     # Take screenshot
                     await page.screenshot(path=f'error_{step['action']}.png')
-                    
+
                     # Retry
                     if step.get('retry', 0) < 3:
                         step['retry'] = step.get('retry', 0) + 1
                         await self._execute_step(page, step)
                     else:
                         raise WorkflowError(f"Step failed: {step}") from e
-            
+
             # Extract results
             return await self._extract_results(page, workflow)
 ```
@@ -988,35 +988,35 @@ class WorkflowExecutionService:
 def save_session(self, context, session_id):
     """
     Save browser session for reuse.
-    
+
     Saved:
     - Cookies (authentication)
     - localStorage (user preferences)
     - sessionStorage (temporary state)
-    
+
     Use case: Authenticated access to paywalled sites
     """
     session_file = self.session_dir / f'{session_id}.json'
-    
+
     # Get state
     state = await context.storage_state()
-    
+
     # Save to disk
     with open(session_file, 'w') as f:
         json.dump(state, f)
-    
+
     logger.info(f"Saved session {session_id}")
 
 async def load_session(self, session_id):
     """Load previous session state."""
     session_file = self.session_dir / f'{session_id}.json'
-    
+
     if not session_file.exists():
         return None
-    
+
     with open(session_file) as f:
         state = json.load(f)
-    
+
     # Create context with saved state
     context = await browser.new_context(storage_state=state)
     return context
@@ -1030,26 +1030,26 @@ class BrowserManager:
     async def cleanup(self, context):
         """
         Clean up browser context.
-        
+
         Critical:
         - Close all pages
         - Close context
         - Close browser
         - Release semaphore
-        
+
         Without this: Memory leaks, zombie processes
         """
         try:
             # Close all pages
             for page in context.pages:
                 await page.close()
-            
+
             # Close context
             await context.close()
-            
+
             # Close browser
             await context.browser.close()
-            
+
         finally:
             # Always release semaphore (even on error)
             self._semaphore.release()
@@ -1097,7 +1097,7 @@ scheduler.start()  # Runs in background thread
 @app.get('/discovery/health')
 async def discovery_health():
     status = scheduler.get_schedule_status()
-    
+
     return {
         'status': 'healthy' if status['running'] else 'stopped',
         'sources': status['total_sources'],
@@ -1140,36 +1140,36 @@ RATE_LIMITS = {
 class RateLimiter:
     """
     Token bucket algorithm.
-    
+
     - tokens = max_burst
     - Refill rate = requests_per_second
     - Request consumes 1 token
     - Block if no tokens available
     """
-    
+
     def __init__(self, rate, burst):
         self.rate = rate  # tokens/second
         self.burst = burst  # max tokens
         self.tokens = burst
         self.last_update = time.time()
-    
+
     async def acquire(self):
         """Wait until token available."""
         while True:
             now = time.time()
             elapsed = now - self.last_update
-            
+
             # Refill tokens
             self.tokens = min(
                 self.burst,
                 self.tokens + elapsed * self.rate
             )
             self.last_update = now
-            
+
             if self.tokens >= 1:
                 self.tokens -= 1
                 return
-            
+
             # Wait until next token
             await asyncio.sleep(1 / self.rate)
 ```

@@ -1,9 +1,9 @@
 # Model Context Protocol (MCP) Server Architecture
 
-**Author**: Staff Engineer Review  
-**Date**: January 2026  
-**Status**: Production  
-**Primary Transport**: HTTP with SSE Streaming (Port 8000)  
+**Author**: Staff Engineer Review
+**Date**: January 2026
+**Status**: Production
+**Primary Transport**: HTTP with SSE Streaming (Port 8000)
 
 ---
 
@@ -66,7 +66,7 @@ The MCP Server was architected around three core principles:
 class MCPProtocolHandler:
     """
     Protocol-compliant message parsing and routing.
-    
+
     Design Pattern: Facade
     - Hides JSON-RPC complexity from server logic
     - Validates messages against MCP schema
@@ -177,7 +177,7 @@ Server-Sent Events chosen over WebSocket for specific technical reasons:
 async def sse_endpoint_standard():
     """
     Letta-compatible SSE endpoint.
-    
+
     Design: Each client gets isolated queue
     - Prevents cross-client message leakage
     - Enables targeted message delivery
@@ -186,7 +186,7 @@ async def sse_endpoint_standard():
     client_id = str(uuid.uuid4())
     queue = asyncio.Queue()
     self.clients[client_id] = queue
-    
+
     async def event_stream():
         try:
             while True:
@@ -224,7 +224,7 @@ location /sse {
 async def start_all(self):
     """
     Start all transports with graceful failure handling.
-    
+
     Philosophy: Availability over perfection
     - If SSE port conflicts, HTTP still works
     - If all transports fail, raise error
@@ -239,7 +239,7 @@ async def start_all(self):
                 logger.warning(f"Port conflict for {name}")
                 failed_transports.append(name)
                 # Continue trying other transports
-    
+
     if failed_transports and len(failed_transports) == len(self.transports):
         raise RuntimeError("All transports failed")  # Fatal
 ```
@@ -270,23 +270,23 @@ class MCPToolRegistry:
         self.service_manager = service_manager
         self._tools: dict[str, MCPTool] = {}         # Instances
         self._tool_classes: dict[str, type[MCPTool]] = {}  # Classes
-    
+
     def register_class(self, tool_class: type[MCPTool]):
         """
         Register tool class for lazy instantiation.
-        
+
         Design: Store class, instantiate on first use
         - Avoids circular dependencies during startup
         - Enables optional service dependencies
         """
         temp = tool_class(self.service_manager)
         self._tool_classes[temp.name] = tool_class
-    
+
     def get_tool(self, name: str) -> MCPTool | None:
         """Lazy instantiation on first access."""
         if name in self._tools:
             return self._tools[name]  # Already instantiated
-        
+
         if name in self._tool_classes:
             tool = self._tool_classes[name](self.service_manager)
             self._tools[name] = tool  # Cache for next time
@@ -318,11 +318,11 @@ class MCPTool(ABC):
     def input_schema(self) -> dict[str, Any]:
         """JSON Schema for tool input validation."""
         pass
-    
+
     def validate_arguments(self, arguments: dict[str, Any]) -> bool:
         """
         Validate against input schema.
-        
+
         Design: Fail fast at tool boundary
         - Invalid args never reach execute()
         - Clear error messages for LLM debugging
@@ -367,12 +367,12 @@ class MCPTool(ABC):
 class CreateArxivSourceMCPTool(MCPTool):
     """
     Factory tool for ArXiv sources.
-    
+
     Design: Encapsulates ArXiv-specific config
     - Categories (cs.LG, cs.AI)
     - Sort orders (lastUpdatedDate)
     - Schedule intervals
-    
+
     User just says "create arxiv source for ML papers"
     Tool handles ArXiv API specifics
     """
@@ -394,28 +394,28 @@ class CreateArxivSourceMCPTool(MCPTool):
 async def execute(self, arguments: dict[str, Any]):
     """
     Process PDF through pipeline.
-    
+
     Design: Thin wrapper over processing service
     - Tool validates inputs (path, options)
     - Service handles business logic
     - Tool formats output for MCP
-    
+
     Separation of concerns:
     - Tool layer: Protocol adaption
     - Service layer: Domain logic
     """
     pdf_path = arguments['pdf_path']
-    
+
     # Validation at tool layer
     if not Path(pdf_path).exists():
         return MCPToolCallResult(
             content=[{'type': 'text', 'text': 'PDF not found'}],
             isError=True
         )
-    
+
     # Business logic in service layer
     result = await self.service_manager.processing.process_pdf(pdf_path)
-    
+
     # Format for MCP protocol
     return MCPToolCallResult(
         content=[{'type': 'text', 'text': format_result(result)}]
@@ -454,14 +454,14 @@ async def execute(self, arguments: dict[str, Any]):
 class CreateBrowserWorkflowMCPTool:
     """
     Create workflow = define command sequence.
-    
+
     Steps stored as data (not code):
     [
         {'action': 'navigate', 'url': '...'},
         {'action': 'click', 'selector': '...'},
         {'action': 'extract', 'selector': '...'}
     ]
-    
+
     ExecuteWorkflowMCPTool = execute command sequence
     """
 ```
@@ -480,17 +480,17 @@ class CreateBrowserWorkflowMCPTool:
 def handle_error(self, error: Exception) -> MCPToolCallResult:
     """
     Standard error handling across all tools.
-    
+
     Design: LLM-friendly error messages
     - Include exception type (helps LLM understand)
     - Full traceback logged (for debugging)
     - Error flag set (isError=True)
-    
+
     Why: LLMs can often recover from errors if given context
     """
     logger.error(f'Tool error in {self.name}: {error}')
     logger.error(f'Full traceback: {traceback.format_exc()}')
-    
+
     return MCPToolCallResult(
         content=[{
             'type': 'text',
@@ -534,12 +534,12 @@ MCPResourceManager (Coordinator)
 def _is_allowed_path(self, file_path: Path) -> bool:
     """
     Security: Prevent directory traversal.
-    
+
     Design: Whitelist approach
     - Only files under base_paths are accessible
     - Resolve symlinks before checking
     - Reject path traversal attempts (../)
-    
+
     Why: MCP clients could be external/untrusted
     """
     resolved = file_path.resolve()
@@ -555,11 +555,11 @@ def _is_allowed_path(self, file_path: Path) -> bool:
 def _is_text_file(self, file_path: Path, mime_type: str | None) -> bool:
     """
     Content-aware encoding.
-    
+
     Design: Avoid binary corruption in text protocol
     - Text files: Read as UTF-8 string
     - Binary files: Base64 encode
-    
+
     Why: JSON-RPC can't transmit raw binary
     """
 ```
@@ -667,12 +667,12 @@ healthcheck:
 async def _handle_health(self, request_id: Any):
     """
     Comprehensive health check.
-    
+
     Reports:
     - Tool count (should be 54)
     - Active transports
     - Protocol initialization state
-    
+
     Why: Ops visibility into server state
     """
     return {
@@ -705,7 +705,7 @@ upstream letta_backend {
 
 server {
     listen 8284;
-    
+
     location /v1/agents/ {
         proxy_pass http://letta_backend;
         proxy_read_timeout 300s;     # SSE connections are long-lived
@@ -798,7 +798,7 @@ async def test_full_tool_execution():
     """End-to-end tool execution test."""
     server = create_mcp_server(service_manager)
     register_all_mcp_tools(server.tool_registry)
-    
+
     request = JSONRPCRequest(
         id=1,
         method="tools/call",
@@ -807,7 +807,7 @@ async def test_full_tool_execution():
             "arguments": {}
         }
     )
-    
+
     response = await server._handle_message(request)
     assert response.result is not None
     assert 'tools' in response.result
@@ -860,7 +860,7 @@ class MCPErrorCodes:
     METHOD_NOT_FOUND = -32601
     INVALID_PARAMS = -32602
     INTERNAL_ERROR = -32603
-    
+
     # MCP-specific errors (-32000 to -32099)
     TOOL_NOT_FOUND = -32001
     RESOURCE_NOT_FOUND = -32002
@@ -1013,10 +1013,10 @@ tool_execution_counter = Counter('tool_executions_total')
 
 ### Anti-Patterns Avoided
 
-❌ **God Object**: ServiceManager has bounded responsibilities (coordination only)  
-❌ **Tight Coupling**: Tools depend on interfaces, not concrete services  
-❌ **Premature Optimization**: Started simple (HTTP), added SSE when needed  
-❌ **Magic Strings**: All methods/tools use constants from enums/schemas  
+❌ **God Object**: ServiceManager has bounded responsibilities (coordination only)
+❌ **Tight Coupling**: Tools depend on interfaces, not concrete services
+❌ **Premature Optimization**: Started simple (HTTP), added SSE when needed
+❌ **Magic Strings**: All methods/tools use constants from enums/schemas
 
 ---
 

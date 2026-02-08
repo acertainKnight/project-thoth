@@ -43,7 +43,7 @@ OAuth provides the best user experience with automatic credential management.
    ```bash
    thoth letta auth login
    ```
-   
+
    This opens your browser to log in at app.letta.com. Credentials are saved to `~/.letta/credentials`.
 
 2. **Update settings.json**:
@@ -62,7 +62,7 @@ OAuth provides the best user experience with automatic credential management.
    ```bash
    # Only need PostgreSQL for Thoth database
    docker compose -f docker-compose.letta.yml up letta-postgres -d
-   
+
    # Start Thoth services
    make dev
    ```
@@ -85,7 +85,7 @@ If you prefer manual API key management:
    ```bash
    export LETTA_CLOUD_API_KEY=letta_sk_...
    ```
-   
+
    Or add to `.env`:
    ```bash
    LETTA_CLOUD_API_KEY=letta_sk_...

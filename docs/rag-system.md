@@ -121,20 +121,20 @@ Generated Answer + Source Citations
 def add_documents(documents: List[Document], paper_id: UUID) -> List[str]:
     """
     Add documents to the vector store.
-    
+
     Process:
     1. Chunk documents using token-based splitter
     2. Generate embeddings for each chunk
     3. Store in PostgreSQL with metadata
     4. Build HNSW index (if needed)
-    
+
     Returns: List of chunk IDs
     """
 
 def query(question: str, top_k: int = 5) -> Dict:
     """
     Query the RAG system with natural language.
-    
+
     Process:
     1. Embed the query
     2. Similarity search for top_k chunks
@@ -152,7 +152,7 @@ def similarity_search(query: str, top_k: int = 10) -> List[Document]:
 def get_relevant_context(query: str, max_tokens: int = 2000) -> str:
     """
     Get context for external LLM calls.
-    
+
     Used by: Chat systems, agent tools, research workflows
     Returns: Concatenated chunk text up to token limit
     """
@@ -165,16 +165,16 @@ rag_config = {
     'embedding_model': 'sentence-transformers/all-MiniLM-L6-v2',  # or OpenRouter
     'embedding_provider': 'local',  # or 'openrouter'
     'embedding_dimensions': 384,  # Model-dependent
-    
+
     # Chunking settings
     'chunk_size': 500,  # tokens
     'chunk_overlap': 50,  # tokens
     'chunk_encoding': 'cl100k_base',  # tiktoken encoding
-    
+
     # Search settings
     'top_k': 5,
     'similarity_threshold': 0.7,  # Minimum cosine similarity
-    
+
     # QA settings
     'qa_model': 'anthropic/claude-3-5-sonnet',
     'qa_temperature': 0.1,
@@ -219,7 +219,7 @@ def _on_config_reload(self, config: Config) -> None:
 def embed_documents(texts: List[str]) -> List[List[float]]:
     """
     Batch embed multiple documents.
-    
+
     Optimizations:
     - Batch processing (configurable batch_size)
     - Connection pooling (async operations)
@@ -255,7 +255,7 @@ embeddings = model.encode(
 async def embed_with_retry(texts: List[str]) -> List[List[float]]:
     """
     OpenRouter embedding with exponential backoff.
-    
+
     Rate limit handling:
     - 429 response → exponential backoff
     - Max retries: 3
@@ -282,10 +282,10 @@ CREATE TABLE document_chunks (
     metadata JSONB,                 -- Flexible metadata storage
     token_count INTEGER,            -- For context assembly
     created_at TIMESTAMP DEFAULT NOW(),
-    
+
     -- Performance indexes
     INDEX idx_paper_id ON document_chunks(paper_id),
-    INDEX idx_embedding_hnsw ON document_chunks 
+    INDEX idx_embedding_hnsw ON document_chunks
         USING hnsw (embedding vector_cosine_ops)  -- Fast approximate search
 );
 ```
@@ -300,19 +300,19 @@ CREATE TABLE document_chunks (
 **Key Operations:**
 ```python
 async def add_documents_async(
-    documents: List[Document], 
+    documents: List[Document],
     paper_id: UUID
 ) -> List[str]:
     """
     Store documents with embeddings.
-    
+
     Transaction safety:
     - BEGIN transaction
     - Insert all chunks
     - Compute embeddings
     - Update embedding column
     - COMMIT
-    
+
     Rollback on any failure.
     """
 
@@ -323,7 +323,7 @@ async def similarity_search_async(
 ) -> List[Document]:
     """
     Query using pgvector <=> operator.
-    
+
     SQL:
     SELECT *, (embedding <=> $1::vector) AS distance
     FROM document_chunks
@@ -399,10 +399,10 @@ text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
 # In OptimizedDocumentPipeline.process()
 async def process(pdf_path: Path) -> ProcessingResult:
     # ... extract text, citations, etc ...
-    
+
     # Chunk document
     chunks = self.text_splitter.split_text(full_text)
-    
+
     # Convert to LangChain Documents
     documents = [
         Document(
@@ -418,11 +418,11 @@ async def process(pdf_path: Path) -> ProcessingResult:
         )
         for i, chunk in enumerate(chunks)
     ]
-    
+
     # Add to RAG index
     if self.rag_service:
         chunk_ids = await self.rag_service.add_documents_async(
-            documents, 
+            documents,
             paper_id=paper_id
         )
         logger.info(f"Indexed {len(chunk_ids)} chunks for {paper_id}")
@@ -439,7 +439,7 @@ async def process(pdf_path: Path) -> ProcessingResult:
 def semantic_search(query: str, top_k: int = 10) -> List[Dict]:
     """
     Search papers by semantic similarity.
-    
+
     Use cases:
     - Find related papers
     - Discover relevant research
@@ -450,7 +450,7 @@ def semantic_search(query: str, top_k: int = 10) -> List[Dict]:
 def get_relevant_context(query: str, max_tokens: int = 2000) -> str:
     """
     Get context chunks for external LLM use.
-    
+
     Use cases:
     - Provide context to Letta agents
     - Enhance chat responses
@@ -461,7 +461,7 @@ def get_relevant_context(query: str, max_tokens: int = 2000) -> str:
 def query_knowledge_base(question: str, top_k: int = 5) -> Dict:
     """
     Full RAG query with answer generation.
-    
+
     Returns:
     - Generated answer
     - Source citations
@@ -472,7 +472,7 @@ def query_knowledge_base(question: str, top_k: int = 5) -> Dict:
 def build_custom_index(paper_ids: List[UUID], collection_name: str) -> Dict:
     """
     Create topic-specific indexes.
-    
+
     Use cases:
     - Research question-specific indexes
     - Focused literature review
@@ -488,7 +488,7 @@ def build_custom_index(paper_ids: List[UUID], collection_name: str) -> Dict:
 async def discover_papers_for_question(question_id: UUID) -> List[Paper]:
     """
     Use RAG to find relevant papers for research question.
-    
+
     Workflow:
     1. Get research question text
     2. Semantic search over all papers
@@ -497,31 +497,31 @@ async def discover_papers_for_question(question_id: UUID) -> List[Paper]:
     5. Return ranked list
     """
     question = await research_question_repo.get(question_id)
-    
+
     # RAG similarity search
     results = await rag_manager.similarity_search(
         query=question.text,
         top_k=50,
         filter_metadata={'indexed': True}
     )
-    
+
     # Group by paper_id and aggregate scores
     paper_scores = {}
     for doc in results:
         paper_id = doc.metadata['paper_id']
         score = doc.metadata['similarity_score']
-        
+
         if paper_id not in paper_scores:
             paper_scores[paper_id] = []
         paper_scores[paper_id].append(score)
-    
+
     # Rank papers by best chunk score
     ranked_papers = sorted(
         paper_scores.items(),
         key=lambda x: max(x[1]),
         reverse=True
     )[:20]
-    
+
     return ranked_papers
 ```
 
@@ -545,7 +545,7 @@ async def index_multiple_papers(paper_ids: List[UUID], batch_size: int = 10):
     """Process papers in batches to avoid memory issues."""
     for batch in chunks(paper_ids, batch_size):
         await asyncio.gather(*[
-            index_paper(paper_id) 
+            index_paper(paper_id)
             for paper_id in batch
         ])
 
@@ -564,11 +564,11 @@ async def bulk_insert_chunks(chunks: List[Dict]):
     async with pool.acquire() as conn:
         await conn.executemany(
             """
-            INSERT INTO document_chunks 
+            INSERT INTO document_chunks
                 (paper_id, chunk_index, content, embedding, metadata)
             VALUES ($1, $2, $3, $4, $5)
             """,
-            [(c['paper_id'], c['index'], c['text'], c['embedding'], c['metadata']) 
+            [(c['paper_id'], c['index'], c['text'], c['embedding'], c['metadata'])
              for c in chunks]
         )
 ```
@@ -583,7 +583,7 @@ async def bulk_insert_chunks(chunks: List[Dict]):
 **HNSW Index Tuning:**
 ```sql
 -- Create index with custom parameters
-CREATE INDEX idx_embedding_hnsw ON document_chunks 
+CREATE INDEX idx_embedding_hnsw ON document_chunks
 USING hnsw (embedding vector_cosine_ops)
 WITH (
     m = 16,              -- Max connections per node (higher = better accuracy)
@@ -607,7 +607,7 @@ async def filtered_search(query: str, filters: Dict) -> List[Document]:
     ORDER BY distance
     LIMIT $4
     """
-    
+
 # 2. Pagination for large result sets
 async def paginated_search(query: str, page: int, per_page: int = 20):
     """Paginate results to avoid loading all matches."""
@@ -730,7 +730,7 @@ metrics = {
 if new_model != current_model:
     logger.warning("Embedding model changed!")
     logger.info("Run: thoth rag rebuild")
-    
+
 # Versioning strategy
 document_chunks.metadata['embedding_model'] = model_name
 document_chunks.metadata['embedding_version'] = model_version
@@ -740,7 +740,7 @@ document_chunks.metadata['embedding_version'] = model_version
 
 **Problem:** Very large documents (100+ pages) create 200+ chunks.
 
-**Impact:** 
+**Impact:**
 - Slow indexing
 - Many chunks returned for broad queries
 - Context assembly can exceed token limits
@@ -751,7 +751,7 @@ document_chunks.metadata['embedding_version'] = model_version
 if len(chunks) > 100:
     # Create "summary chunks" from section summaries
     summary_chunks = [
-        summarize_section(section) 
+        summarize_section(section)
         for section in split_into_sections(document)
     ]
     # Index both detailed and summary chunks
@@ -828,7 +828,7 @@ results = await rag_manager.query(
 **Implementation:**
 ```sql
 -- PostgreSQL full-text search + pgvector
-SELECT 
+SELECT
     *,
     (embedding <=> $1::vector) AS vector_score,
     ts_rank(to_tsvector('english', content), to_tsquery($2)) AS keyword_score,

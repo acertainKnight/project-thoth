@@ -1,9 +1,9 @@
 # Document Processing Pipeline Architecture
 
-**Author**: Staff Engineer Review  
-**Date**: January 2026  
-**Status**: Production (Optimized for Local/Personal Servers)  
-**Core**: Multi-stage PDF→Note transformation with parallel processing  
+**Author**: Staff Engineer Review
+**Date**: January 2026
+**Status**: Production (Optimized for Local/Personal Servers)
+**Core**: Multi-stage PDF→Note transformation with parallel processing
 
 ---
 
@@ -122,12 +122,12 @@ Sequential would be: 38-75s
 def _calculate_optimal_workers(self):
     """
     Calculate worker counts based on available CPU cores.
-    
+
     Algorithm:
     1. Detect CPU cores (os.cpu_count())
     2. Reserve 1 core for system (avoid saturation)
     3. Allocate remaining cores by task type
-    
+
     Task types:
     - Content Analysis: CPU-bound (parsing, NLP)
     - Citation Extraction: I/O-bound (API calls)
@@ -136,7 +136,7 @@ def _calculate_optimal_workers(self):
     """
     cpu_count = os.cpu_count() or 4
     available = max(1, cpu_count - 1)
-    
+
     return {
         'content_analysis': min(available, 4),  # CPU-bound, memory-limited
         'citation_extraction': min(available, 6),  # I/O-bound, more workers
@@ -216,12 +216,12 @@ def _calculate_optimal_workers(self):
 async def ocr_convert_async(self, pdf_path: Path):
     """
     Convert PDF to Markdown using async OCR API.
-    
+
     Strategy:
     1. Upload PDF to Mistral API (async)
     2. Poll for completion (async with exponential backoff)
     3. Download results (async)
-    
+
     Fallback:
     - If API fails, use local pypdf (sync)
     - Log performance difference (API faster, more accurate)
@@ -235,19 +235,19 @@ async def ocr_convert_async(self, pdf_path: Path):
                 data={'file': pdf_path.read_bytes()}
             )
             task_id = response.json()['task_id']
-            
+
             # Poll for completion (exponential backoff)
             for attempt in range(10):
                 await asyncio.sleep(2 ** attempt)  # 1s, 2s, 4s, 8s...
-                
+
                 status = await session.get(f'/tasks/{task_id}')
                 if status.json()['state'] == 'completed':
                     # Download results
                     markdown = await session.get(f'/tasks/{task_id}/result')
                     return self._save_markdown(markdown.text)
-            
+
             raise TimeoutError("OCR took too long")
-            
+
     except Exception as e:
         logger.warning(f"API OCR failed: {e}, falling back to local")
         return self._local_pdf_to_markdown(pdf_path)
@@ -284,37 +284,37 @@ Total time for 3 PDFs: 25s (3x speedup!)
 async def _parallel_analysis_and_citations(self, markdown_path):
     """
     Run analysis and citation extraction in parallel.
-    
+
     Design:
     - Analysis: CPU-bound (run in thread pool)
     - Citation extraction: I/O-bound (run in async)
     - Both start simultaneously
     - Wait for both to complete (asyncio.gather)
-    
+
     Speedup: 2x (if both take equal time)
     """
     loop = asyncio.get_running_loop()
-    
+
     # Analysis in thread pool (CPU-bound)
     analysis_task = loop.run_in_executor(
         self._content_analysis_executor,
         self._analyze_content,
         markdown_path
     )
-    
+
     # Citations in async (I/O-bound)
     citations_task = loop.run_in_executor(
         self._citation_extraction_executor,
         self._extract_citations_batch,
         markdown_path
     )
-    
+
     # Wait for both (parallel execution)
     analysis, citations = await asyncio.gather(
         analysis_task,
         citations_task
     )
-    
+
     return analysis, citations
 ```
 
@@ -378,9 +378,9 @@ async def process_pdf_async(self, pdf_path):
 class PDFTracker:
     """
     Track processed PDFs to avoid redundant work.
-    
+
     Storage: JSON file (vault/_thoth/processed_pdfs.json)
-    
+
     Schema:
     {
       "path/to/paper.pdf": {
@@ -391,37 +391,37 @@ class PDFTracker:
       }
     }
     """
-    
+
     def is_processed(self, pdf_path: Path) -> bool:
         """Check if PDF was previously processed."""
         return str(pdf_path) in self.tracking_data
-    
+
     def verify_file_unchanged(self, pdf_path: Path) -> bool:
         """
         Verify PDF hasn't changed since last processing.
-        
+
         Uses file hash (SHA-256) to detect modifications.
         """
         if not self.is_processed(pdf_path):
             return False
-        
+
         current_hash = self._compute_hash(pdf_path)
         stored_hash = self.tracking_data[str(pdf_path)]['hash']
-        
+
         return current_hash == stored_hash
-    
+
     def _compute_hash(self, pdf_path: Path) -> str:
         """
         Compute SHA-256 hash of PDF file.
-        
+
         Memory-efficient: Reads file in chunks (1MB at a time).
         """
         sha256 = hashlib.sha256()
-        
+
         with open(pdf_path, 'rb') as f:
             while chunk := f.read(1024 * 1024):  # 1MB chunks
                 sha256.update(chunk)
-        
+
         return f"sha256:{sha256.hexdigest()}"
 ```
 
@@ -446,12 +446,12 @@ class PDFTracker:
 def _schedule_background_rag_indexing(self, markdown_path, note_path):
     """
     Schedule RAG indexing in background.
-    
+
     Design:
     - Submit to background executor (low priority, 2 workers)
     - Return immediately (don't wait)
     - Future can be checked later if needed
-    
+
     Benefits:
     - Foreground pipeline completes faster
     - User gets note immediately
@@ -462,10 +462,10 @@ def _schedule_background_rag_indexing(self, markdown_path, note_path):
         markdown_path,
         note_path
     )
-    
+
     # Store future for status checking (optional)
     self.background_tasks[note_path] = future
-    
+
     logger.debug(f"Scheduled background RAG indexing for {note_path}")
 ```
 
@@ -491,30 +491,30 @@ User sees result 2x faster, indexing happens eventually.
 def _index_document_for_rag(self, markdown_path, note_path):
     """
     RAG indexing with error handling.
-    
+
     If indexing fails:
     1. Log error (don't crash)
     2. Mark for retry (in tracking DB)
     3. Notify user (optional)
-    
+
     User still has note, just no vector search yet.
     """
     try:
         # Generate embeddings
         chunks = self._chunk_document(markdown_path)
         embeddings = self._generate_embeddings(chunks)
-        
+
         # Add to vector DB
         self.rag_service.add_documents(embeddings)
-        
+
         logger.info(f"RAG indexing completed for {note_path}")
-        
+
     except Exception as e:
         logger.error(f"RAG indexing failed for {note_path}: {e}")
-        
+
         # Mark for retry
         self.pdf_tracker.mark_rag_failed(note_path)
-        
+
         # Don't raise - background task failure shouldn't crash pipeline
 ```
 
@@ -532,7 +532,7 @@ def _index_document_for_rag(self, markdown_path, note_path):
 def _stream_process_large_pdf(self, pdf_path: Path):
     """
     Process large PDFs without loading entire file into memory.
-    
+
     Strategy:
     1. Process page-by-page (instead of entire PDF)
     2. Yield results incrementally
@@ -540,17 +540,17 @@ def _stream_process_large_pdf(self, pdf_path: Path):
     """
     with open(pdf_path, 'rb') as pdf_file:
         pdf_reader = PdfReader(pdf_file)
-        
+
         for page_num, page in enumerate(pdf_reader.pages):
             # Process single page
             text = page.extract_text()
-            
+
             # Yield immediately (don't accumulate)
             yield {
                 'page': page_num,
                 'content': text
             }
-            
+
             # Page object can be garbage collected now
 ```
 
@@ -578,11 +578,11 @@ def process_pdf(self, pdf_path):
     markdown = self._ocr_convert(pdf_path)
     analysis = self._analyze_content(markdown)
     citations = self._extract_citations(markdown)
-    
+
     # Force garbage collection
     # Frees memory from temporary objects (PDF, markdown, intermediate results)
     gc.collect()
-    
+
     # Continue with note generation
     note = self._generate_note(analysis, citations)
     return note
@@ -609,7 +609,7 @@ def _ocr_convert_optimized(self, pdf_path: Path):
         return self.services.processing.ocr_convert(pdf_path)
     except APIError as e:
         logger.warning(f"API OCR failed: {e}")
-        
+
         # Fallback to local pypdf (slower, less accurate but works offline)
         return self.services.processing._local_pdf_to_markdown(pdf_path)
     except Exception as e:
@@ -622,7 +622,7 @@ def _ocr_convert_optimized(self, pdf_path: Path):
 def _extract_citations_batch(self, markdown_path):
     """
     Extract citations with graceful degradation.
-    
+
     Error handling:
     - If entire extraction fails: return empty list
     - If individual citations fail: skip them
@@ -633,7 +633,7 @@ def _extract_citations_batch(self, markdown_path):
     except Exception as e:
         logger.error(f"Reference section extraction failed: {e}")
         return []  # Empty citations, not fatal
-    
+
     enriched = []
     for raw in raw_citations:
         try:
@@ -642,7 +642,7 @@ def _extract_citations_batch(self, markdown_path):
         except Exception as e:
             logger.warning(f"Citation parsing failed: {raw}, {e}")
             continue  # Skip bad citation
-    
+
     return enriched  # Return what we successfully parsed
 ```
 
@@ -729,22 +729,22 @@ def process_pdf(self, pdf_path):
 def _enrich_citations_batch(self, citations):
     """
     Enrich citations in batches.
-    
+
     Batch size: 10 citations per API call
     - Reduces API overhead (fewer HTTP requests)
     - Respects API rate limits
     - Amortizes connection cost
     """
     enriched = []
-    
+
     for batch in chunk(citations, 10):
         # Single API call for 10 citations
         results = self.api.enrich_batch(batch)
         enriched.extend(results)
-        
+
         # Rate limiting between batches
         await asyncio.sleep(0.1)
-    
+
     return enriched
 ```
 

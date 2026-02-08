@@ -1,747 +1,552 @@
 # Thoth Architecture
 
-Technical deep-dive into the architecture, design patterns, and implementation of Thoth Research Assistant.
+Comprehensive technical documentation for the Thoth Research Assistant architecture.
 
 ## Table of Contents
 
 - [System Overview](#system-overview)
-- [Microservices Architecture](#microservices-architecture)
-- [Core Components](#core-components)
-- [Data Flow](#data-flow)
-- [Technology Stack](#technology-stack)
-- [Design Patterns](#design-patterns)
-- [Performance Optimizations](#performance-optimizations)
-- [Security](#security)
+- [Core Services](#core-services)
+- [Skill System](#skill-system)
+- [Agent Architecture](#agent-architecture)
+- [MCP Tool System](#mcp-tool-system)
+- [Discovery Engine](#discovery-engine)
+- [Document Processing](#document-processing)
+- [Data Storage](#data-storage)
+- [Configuration System](#configuration-system)
+- [Deployment Architecture](#deployment-architecture)
+
+---
 
 ## System Overview
 
-Thoth is a **production-ready microservices architecture** designed for academic research automation. The system uses a **2-agent architecture** with **skill-based dynamic tool loading**, backed by **54+ MCP research tools** and **6 bundled skills**.
+Thoth uses a modular, service-oriented architecture designed for extensibility and maintainability. The system is built around **independent services** communicating through well-defined interfaces.
 
 ### High-Level Architecture
 
-```
-┌─────────────────┐     ┌─────────────────┐
-│ Obsidian Plugin │────▶│  FastAPI Server │
-│  (TypeScript)   │     │   (Port 8000)   │
-└─────────────────┘     └────────┬────────┘
-                                  │
-                                  ▼
-                      ┌──────────────────────┐
-                      │   ServiceManager     │
-                      │  (32 Services)       │
-                      └────────┬─────────────┘
-                               │
-      ┌────────────────────────┼────────────────────────┐
-      │                        │                        │
-      ▼                        ▼                        ▼
-┌──────────┐           ┌──────────────┐        ┌─────────────┐
-│   MCP    │           │   Document   │        │  Discovery  │
-│  Server  │           │   Pipeline   │        │   Engine    │
-│(54 tools)│           │  (8 stages)  │        │             │
-└──────────┘           └──────────────┘        └─────────────┘
-      │                        │                        │
-      ▼                        ▼                        ▼
-┌──────────┐           ┌──────────────┐        ┌─────────────┐
-│   Letta  │           │  Citation    │        │    ArXiv    │
-│PostgreSQL│           │   System     │        │   Semantic  │
-│+pgvector │           │ (6 stages)   │        │   Scholar   │
-└──────────┘           └──────────────┘        └─────────────┘
+```mermaid
+graph TD
+    User[User] --> ObsidianPlugin[Obsidian Plugin]
+    User --> CLI[CLI]
+
+    ObsidianPlugin --> APIServer[API Server :8080]
+    CLI --> MCPServer[MCP Server :8082]
+
+    APIServer --> ServiceManager
+    MCPServer --> ServiceManager
+
+    ServiceManager --> SkillService[Skill Service]
+    ServiceManager --> LLMRouter[LLM Router]
+    ServiceManager --> RAGService[RAG System]
+    ServiceManager --> DiscoveryEngine[Discovery Engine]
+    ServiceManager --> LettaIntegration[Letta Integration]
+
+    SkillService --> BundledSkills[10 Bundled Skills]
+    SkillService --> VaultSkills[User Skills]
+
+    DiscoveryEngine --> Plugins[7 Source Plugins]
+    DiscoveryEngine --> AutoScraper[LLM Auto-Scraper]
+
+    LettaIntegration --> LettaAPI[Letta REST API :8283]
+    LettaAPI --> PostgresVector[(PostgreSQL + pgvector)]
+
+    RAGService --> PostgresVector
+
+    SettingsJSON[settings.json] -.->|hot-reload| ServiceManager
 ```
 
 ### Design Principles
 
-1. **Microservices**: Independent, focused services with clear boundaries
-2. **Vault-Centric**: Single source of truth in Obsidian vault
-3. **Hot-Reload**: Configuration changes without restart (dev mode)
-4. **Graceful Degradation**: System works with subset of services
-5. **Type Safety**: Pydantic models throughout
-6. **Async-First**: Non-blocking I/O for scalability
-7. **Skill-Based**: On-demand tool loading for token efficiency
+1. **Independent Services**: Letta and Thoth run as separate services - restarting Thoth never affects agent memory
+2. **Vault-Centric**: Single source of truth in `settings.json`
+3. **Hot-Reload**: Configuration changes apply in ~2 seconds (dev mode)
+4. **Skill-Based**: On-demand tool loading for token efficiency
+5. **Type-Safe**: Pydantic models throughout
+6. **Extensible**: Plugin architecture for sources, skills, and tools
 
-### Agent Architecture
+---
 
-Thoth uses a **2-agent system** with dynamic skill-based tool loading:
+## Core Services
 
+### Service Manager
+
+**Location**: `src/thoth/services/service_manager.py` (257 lines)
+
+Central coordinator for all Thoth services implementing dependency injection pattern.
+
+**Initialization Phases**:
+1. **Phase 1**: Core services (LLMService, ArticleService)
+2. **Phase 2**: Path-dependent services (QueryService, DiscoveryService)
+3. **Phase 3**: External APIs (LettaService - optional)
+4. **Phase 4**: Advanced services (CitationService, PostgresService)
+5. **Phase 5**: Discovery orchestration
+
+**Key Services**:
+- `LLMService`: Multi-provider LLM routing (Mistral, OpenRouter, OpenAI, Anthropic)
+- `ArticleService`: Article management and operations
+- `DiscoveryService`: Multi-source paper discovery
+- `RAGService`: Vector search and retrieval (optional, requires extras)
+- `PostgresService`: Database operations
+- `CitationService`: Citation analysis and enrichment
+- `SkillService`: Skill discovery and management
+- `NoteService`: Obsidian note generation
+
+### Initialization Factory
+
+**Location**: `src/thoth/initialization.py` (103 lines)
+
+Factory function `initialize_thoth()` performs complete initialization:
+
+```python
+services, pipeline, citation_graph = initialize_thoth()
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ thoth_main_orchestrator (User-Facing)                       │
-│ - Handles all user interactions                             │
-│ - Loads skills on-demand based on task type                 │
-│ - Delegates deep analysis to Research Analyst               │
-│ Memory: persona, human, research_context, loaded_skills,    │
-│         planning, scratchpad                                │
-└─────────────────────────┬───────────────────────────────────┘
-                          │ Delegation
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│ thoth_research_analyst (Deep Analysis)                      │
-│ - Literature reviews and synthesis                          │
-│ - Paper comparisons and evaluations                         │
-│ - Citation network exploration                              │
-│ Memory: persona, analysis_criteria, paper_summaries,        │
-│         planning, scratchpad                                │
-└─────────────────────────────────────────────────────────────┘
+
+1. Loads configuration from vault
+2. Creates and initializes ServiceManager
+3. Creates PDFTracker
+4. Creates CitationGraph
+5. Creates OptimizedDocumentPipeline
+6. Runs automatic path migration (for synced data)
+
+---
+
+## Skill System
+
+**Locations**:
+- Service: `src/thoth/services/skill_service.py` (533 lines)
+- Bundled skills: `src/thoth/.skills/` (10 skills)
+- User skills: `vault/thoth/_thoth/skills/` (hot-reloadable)
+
+### Two-Tier Discovery
+
+1. **Bundled Skills** (shipped with Thoth):
+   - `paper-discovery`: Find and curate research papers
+   - `deep-research`: Comprehensive literature analysis
+   - `knowledge-base-qa`: Answer questions from existing collection
+   - `online-research`: Web-based research queries
+   - `rag-administration`: Advanced RAG management
+   - `research-project-coordination`: Multi-phase project management
+   - `research-query-management`: Set up automated recurring searches
+   - `settings-management`: Configure Thoth through chat
+   - `custom-source-setup`: Create custom article sources
+   - `onboarding`: Initialize new users
+
+2. **Vault Skills** (user-specific):
+   - Stored in `vault/thoth/_thoth/skills/`
+   - Override bundled skills with same name
+   - Hot-reload without restart
+
+### Skill Format
+
+Each skill is a `SKILL.md` file with YAML frontmatter:
+
+```yaml
+---
+name: Skill Name
+description: What this skill does
+tools:
+  - tool_name_1
+  - tool_name_2
+---
+
+# Skill guidance content
+...
 ```
 
-### Skill System
+### Dynamic Tool Loading
 
-**Bundled Skills** (`src/thoth/.skills/`):
-- `paper-discovery` - Find and curate research papers
-- `knowledge-base-qa` - Answer questions from existing collection
-- `research-query-management` - Set up automated recurring searches
-- `deep-research` - Comprehensive literature analysis
-- `research-project-coordination` - Manage multi-phase projects
-- `onboarding` - Initialize new users
+1. Agent calls `load_skill(skill_ids=["skill-name"], agent_id="...")`
+2. Skill service parses skill YAML frontmatter
+3. Required tools are attached to agent via Letta API
+4. Agent follows skill guidance to complete task
 
-**How Skills Work**:
-1. Agent identifies task type (discovery, Q&A, analysis, etc.)
-2. Agent calls `load_skill(skill_ids=["skill-name"], agent_id="...")`
-3. Required tools are dynamically attached to the agent
-4. Agent follows skill guidance to complete the task
+**Benefits**:
+- Agents start minimal (only 3-4 core tools)
+- Skills load their tools dynamically
+- Reduces token usage
+- Improves LLM performance with smaller context
 
-This keeps each agent's default tool count low, improving LLM performance and reducing token usage.
+---
 
-See [Letta Agent Integration](LETTA_AGENT_INTEGRATION.md) for full details.
+## Agent Architecture
 
-## Microservices Architecture
+### Two-Agent System
 
-### Container Services
+Thoth uses a specialized 2-agent architecture with persistent memory:
 
-#### 1. API Server (Dockerfile: `docker/api/Dockerfile`, ~200MB)
-**Purpose**: REST API and WebSocket communication
+#### 1. Research Orchestrator (`thoth_main_orchestrator`)
+**Role**: User-facing coordinator
 
-**Technologies**:
-- FastAPI for REST endpoints
-- WebSocket for real-time streaming
-- 11 routers (health, config, operations, research, chat, tools, etc.)
+**Core Tools** (minimal, expands via skills):
+- `list_skills`
+- `load_skill`
+- `unload_skill`
+- `search_articles`
 
-**Responsibilities**:
-- HTTP API endpoints
-- WebSocket connections
-- Request validation (Pydantic)
-- Service coordination
-- Hot-reload configuration
+**Memory Blocks** (6 total):
+- `persona` (500 tokens): Core identity and role
+- `human` (2000 tokens): User preferences and context
+- `research_context` (3000 tokens): Active research projects
+- `loaded_skills` (1000 tokens): Currently loaded capabilities
+- `planning` (2000 tokens): Multi-step task plans
+- `scratchpad` (2000 tokens): Working memory
 
-**Exposed Ports**:
-- Development: 8000
-- Production: 8080
+#### 2. Research Analyst (`thoth_research_analyst`)
+**Role**: Deep analysis specialist
 
-#### 2. MCP Server (Dockerfile: `docker/mcp/Dockerfile`, ~2.5GB)
-**Purpose**: Model Context Protocol with 54 research tools
+**Tools** (analysis-focused):
+- `answer_research_question`
+- `explore_citation_network`
+- `compare_articles`
+- `evaluate_article`
+- `find_related_papers`
+- `get_citation_context`
+- Plus all search and skill loading tools
 
-**Technologies**:
-- FastAPI for HTTP/SSE transports
-- JSON-RPC for protocol
-- Asyncio for concurrent tool execution
+**Memory Blocks** (6 total):
+- `persona` (500 tokens): Analysis specialist identity
+- `analysis_criteria` (1000 tokens): Evaluation standards
+- `paper_summaries` (3000 tokens): Recently analyzed papers
+- `methodology_notes` (2000 tokens): Methods and approaches
+- `planning` (2000 tokens): Analysis plans
+- `scratchpad` (2000 tokens): Working memory
 
-**Responsibilities**:
-- MCP protocol implementation
-- 54 built-in research tools
-- 3rd-party plugin system
-- Tool parameter validation
-- Streaming responses (SSE)
+### Memory Persistence
 
-**Exposed Ports**:
-- Development: 8082 external (8000 internal HTTP with /mcp and /sse endpoints)
-- Production: 8081 (SSE), 8082 (HTTP)
-
-#### 3. PDF Monitor (Dockerfile: `docker/pdf-monitor/Dockerfile`, ~2.5GB)
-**Purpose**: Automated PDF processing with Watchdog
-
-**Technologies**:
-- Watchdog for file monitoring
-- OptimizedDocumentPipeline
-- OCR libraries (tesseract)
-- ML dependencies
-
-**Responsibilities**:
-- Monitor `_thoth/data/pdfs/` directory
-- Trigger pipeline on new PDFs
-- Handle file modifications
-- Debounce rapid changes (2s)
-
-**Size Reason**: Large due to OCR and ML dependencies for PDF processing
-
-#### 4. Agent Service (Dockerfile: `docker/agent/Dockerfile`)
-**Purpose**: Agent orchestration and coordination
-
-**Responsibilities**:
-- Agent lifecycle management
-- Tool assignment
-- Memory coordination with Letta
-
-#### 5. Discovery Service (Dockerfile: `docker/discovery/Dockerfile`)
-**Purpose**: Multi-source paper discovery
-
-**Technologies**:
-- Playwright for browser automation
-- ArXiv API client
-- Semantic Scholar API client
-
-**Responsibilities**:
-- ArXiv RSS/API discovery
-- Semantic Scholar integration
-- Browser-based scraping
-- Automated scheduling (cron-like)
-
-**Exposed Ports**:
-- Development: 8004
-
-#### 6. Letta Memory System (`letta/letta:latest`)
-**Purpose**: Persistent agent memory with PostgreSQL+pgvector
-
-**Technologies**:
-- Letta framework
-- PostgreSQL with pgvector extension
-- FastAPI for REST API
-
-**Responsibilities**:
-- Agent memory persistence
+**Powered by Letta + PostgreSQL+pgvector**:
+- Self-editing memory through tool calls
 - Cross-session continuity
-- Salience-based memory management
-- Vector similarity search
+- Vector similarity search for relevant context
+- Persistent conversations
+- See [Letta Documentation](https://docs.letta.com/) for details
 
-**Exposed Ports**:
-- 8283 (REST API)
-- 8284 (Nginx proxy for SSE, production only)
+**Location**: `src/thoth/services/agent_initialization_service.py` (523 lines)
 
-#### 7. PostgreSQL (`pgvector/pgvector:pg15`)
-**Purpose**: Database backend with vector extension
+Agents are auto-created/updated on startup:
+- Creates agents if missing
+- Updates tools/persona if changed
+- **Preserves memory and conversations** during updates
+- Attaches filesystem folders for vault access
 
-**Responsibilities**:
-- Letta memory storage
-- Vector embeddings (pgvector)
-- Agent state persistence
-- Research question storage
+---
 
-**Exposed Ports**:
-- Development: 5433 (external access)
-- Production: Internal only
+## MCP Tool System
+
+**Locations**:
+- Server: `src/thoth/mcp/server.py` (467 lines)
+- Tools: `src/thoth/mcp/tools/` (20+ tool modules)
+- Registry: `src/thoth/mcp/tools/__init__.py`
+
+### 64 Active MCP Tools
+
+Organized across 16 categories:
+
+1. **Research Questions**: Create, list, update, delete, run discovery
+2. **Article Management**: Search, list, update metadata
+3. **Analysis Tools**: Answer questions, compare papers, evaluate quality
+4. **Citation Tools**: Format citations, export bibliography, explore networks
+5. **PDF Tools**: Download, locate PDFs
+6. **Tag Management**: Consolidate tags, manage vocabulary
+7. **Data Management**: Generate reading lists, sync with Obsidian
+8. **Advanced RAG**: Reindex, optimize search, custom indexes
+9. **Schema Management**: List presets, set preset, validate schemas
+10. **Settings Management**: View, update, validate, migrate, reset
+11. **Skill Management**: List, load, unload skills
+12. **Workflow Builder**: Analyze source URLs, refine selectors, confirm workflows
+13. **Discovery**: List available sources, run discovery
+14. **Processing**: Get article details, collection stats
+15. **Reading**: Read full article content
+16. **Task Status**: Get async task status
+
+**Tool Registration**:
+- All tools inherit from `MCPTool` base class
+- Auto-registration via `MCP_TOOL_CLASSES` list
+- Dynamic attachment/detachment based on loaded skills
+
+### MCP Protocol
+
+**Transports**:
+- HTTP (port 8082 external, 8000 internal): `/mcp` POST endpoint + `/sse` streaming
+- JSON-RPC protocol for requests/responses
+- Server-Sent Events for streaming responses
+
+**Features**:
+- Parameter validation with Pydantic
+- Structured output schemas
+- Error handling and recovery
+- 3rd-party plugin support (via plugin_manager.py)
+
+---
+
+## Discovery Engine
+
+**Location**: `src/thoth/discovery/`
+
+### Source Plugins (7 built-in)
+
+Plugin-based architecture allows easy addition of sources:
+
+1. **ArXiv** (`arxiv_plugin.py`): RSS + API search
+2. **Semantic Scholar** (`semantic_scholar_plugin.py`): Academic search API
+3. **NeurIPS** (`neurips_plugin.py`): Conference proceedings
+4. **ICML** (`icml_plugin.py`): Conference proceedings
+5. **OpenReview** (`openreview_plugin.py`): ICLR and other venues
+6. **ACL Anthology** (`acl_anthology_plugin.py`): NLP conferences
+7. **Papers with Code** (`paperswithcode_plugin.py`): ML papers with code
+
+**Plugin Interface**:
+```python
+class DiscoveryPlugin:
+    def discover(self, query: str, max_results: int) -> list[Paper]:
+        """Discover papers matching query."""
+        pass
+```
+
+### Automated Scraper Builder
+
+**Location**: `src/thoth/discovery/browser/workflow_builder.py` (949 lines)
+
+LLM-powered auto-detection of article elements on any webpage:
+
+**Flow**:
+1. User provides URL
+2. Playwright loads page and extracts simplified DOM
+3. LLM analyzes structure and proposes CSS selectors
+4. Selectors tested against live page
+5. Sample results returned for user confirmation
+6. User feedback → LLM refinement (iterative)
+7. Confirmed selectors saved as workflow
+
+**Key Components**:
+- `_extract_dom_js`: JavaScript for simplified DOM extraction
+- `_llm_analyze_page`: Structured LLM analysis with Pydantic schemas
+- `_test_selectors`: Validate proposed selectors on live page
+- `refine_selectors`: Iterative improvement based on feedback
+
+**Pydantic Schemas**:
+- `ProposedSelector`: CSS selector for a metadata field
+- `SearchFilterInfo`: Detected search/filter UI element
+- `PageAnalysisResult`: Complete analysis output
+- `SelectorRefinement`: Refined selectors after feedback
+
+---
+
+## Document Processing
+
+### Optimized Document Pipeline
+
+**Location**: `src/thoth/pipelines/optimized_document_pipeline.py` (489 lines)
+
+8-stage processing pipeline for PDFs:
+
+1. **Text Extraction**: Extract text with pypdf, handle malformed PDFs
+2. **Metadata Extraction**: Title, authors, abstract (LLM-assisted)
+3. **Citation Extraction**: Identify citation patterns, parse bibliography
+4. **Citation Enrichment**: 6-stage resolution chain (see below)
+5. **Semantic Chunking**: 200-500 token segments with LangChain
+6. **Tag Generation**: AI-generated tags via LLM
+7. **Note Generation**: Markdown note with Jinja2 template
+8. **Index Building**: Vector embeddings (optional, requires RAG extras)
+
+### Citation Resolution System
+
+**Location**: `src/thoth/analyze/citations/` (20 modules)
+
+6-stage resolution chain for citation enrichment:
+
+1. **Crossref Resolver**: DOI lookup via Crossref API
+2. **OpenAlex Resolver**: Work ID lookup, author disambiguation
+3. **ArXiv Resolver**: ArXiv ID lookup, paper metadata
+4. **Fuzzy Matcher**: String similarity for malformed citations
+5. **Match Validator**: Confidence scoring (0.0-1.0)
+6. **Decision Engine**: Multi-match resolution, best match selection
+
+**Performance**:
+- Batch processing: ~100 citations/minute
+- Real-time: <1s per citation (with cache)
+- Cache hit rate: 70-90% typical
+
+---
+
+## Data Storage
+
+### PostgreSQL + pgvector
+
+**Services using PostgreSQL**:
+1. **Letta**: Agent memories, tool definitions, conversations
+2. **Thoth**: Research questions, discovery sources, article metadata
+
+**Databases**:
+- `letta`: Agent memory and state
+- `thoth`: Application data (future migration)
+
+### Vault Storage
+
+**Location**: `vault/thoth/_thoth/`
+
+All Thoth data stored in Obsidian vault:
+
+```
+vault/thoth/_thoth/
+├── settings.json          # Main configuration
+├── skills/                # User-created skills
+├── data/
+│   ├── pdfs/             # Downloaded papers
+│   ├── notes/            # Generated markdown notes
+│   └── prompts/          # Custom prompt templates
+├── logs/                 # Application logs
+└── cache/                # Temporary cache
+```
+
+**Benefits**:
+- Single location for all data
+- Syncs with Obsidian vault
+- Easy backup (backup vault)
+- User has full control
+
+---
+
+## Configuration System
+
+**Location**: `src/thoth/config.py` (1564 lines)
+
+### Unified Configuration
+
+**Single source of truth**: `vault/thoth/_thoth/settings.json`
+
+**Features**:
+1. **Vault Detection** (4-level fallback):
+   - `OBSIDIAN_VAULT_PATH` environment variable
+   - `THOTH_VAULT_PATH` (legacy support)
+   - Auto-detect (_thoth/ directory walk-up)
+   - Known location (~/Documents/thoth)
+
+2. **Path Resolution**:
+   - Vault-relative paths → absolute at startup
+   - All services work with absolute paths
+   - Supports synced data across machines
+
+3. **Hot-Reload** (dev mode):
+   - Watches `settings.json` for changes
+   - Triggers reload callbacks (~2 seconds)
+   - Services re-initialize with new config
+
+4. **Type-Safe**:
+   - Pydantic models for all settings
+   - Validation on load
+   - IDE autocomplete support
+
+### Settings Structure
+
+```python
+class Settings:
+    api_keys: APIKeys
+    llm_config: LLMConfig
+    paths: Paths
+    discovery: DiscoveryConfig
+    rag: RAGConfig
+    memory: MemoryConfig
+    citations: CitationsConfig
+    tags: TagsConfig
+    obsidian: ObsidianConfig
+```
+
+**Secrets Separation**:
+- API keys in environment variables OR settings.json
+- Never commit keys to git
+- `.env` file for local development
+
+---
+
+## Deployment Architecture
+
+### Independent Services
+
+**Critical Design**: Letta and Thoth run as **completely separate services**
+
+**Letta Infrastructure** (shared across projects):
+- `letta-postgres`: Database with pgvector (port 5432)
+- `letta-server`: REST API (port 8283)
+- `letta-nginx`: SSE proxy for streaming (port 8284, production)
+- Network: `letta-network` (172.22.0.0/16)
+
+**Thoth Services** (project-specific):
+- `thoth-all-in-one`: API, MCP, Discovery, PDF Monitor (ports 8080, 8082)
+- Network: `thoth-network` (172.20.0.0/16)
+- Connects to: `letta-network` (for database access)
+
+**Benefits**:
+- ✅ Restarting Thoth never affects Letta
+- ✅ Agents and database remain intact
+- ✅ Letta can serve multiple projects simultaneously
+- ✅ Independent debugging and updates
+
+### Deployment Modes
+
+**1. Local Mode** (default):
+- `thoth-all-in-one` container runs all services
+- Supervisor manages internal processes
+- Lower resource usage (~2GB RAM)
+- Best for self-hosted deployments
+
+**2. Microservices Mode**:
+- Separate containers: API, MCP, Monitor, Discovery, Dashboard
+- Better for scaling individual services
+- Higher resource usage (~3GB RAM)
+- Use: `docker compose --profile microservices up`
 
 ### Development vs Production
 
 | Feature | Development | Production |
 |---------|-------------|------------|
-| **Images** | Fresh build each time | Cached, optimized builds |
-| **Volumes** | Host mounts for hot-reload | Named volumes |
+| **Hot-Reload** | ✅ Enabled (~2s) | ❌ Disabled |
 | **Ports** | 8000-8004 | 8080-8082 |
-| **Logging** | DEBUG level | INFO level |
-| **Hot-Reload** | Enabled (~2s) | Disabled |
-| **ChromaDB** | Running (port 8003) | Not deployed |
-| **Discovery** | Running (port 8004) | Not deployed |
+| **Logging** | DEBUG | INFO |
+| **Volumes** | Host mounts | Named volumes |
 | **Resource Limits** | None | CPU/memory limits |
-| **Replicas** | 1 per service | 1-3 per service |
-| **Networks** | Single bridge | Frontend + backend isolation |
 
-## Core Components
-
-### Configuration System (src/thoth/config.py - 1425 lines)
-
-**Architecture**:
-```python
-┌──────────────────────────────────────────────┐
-│           Vault Detection                    │
-│  1. OBSIDIAN_VAULT_PATH env var             │
-│  2. THOTH_VAULT_PATH (legacy)               │
-│  3. Auto-detect (_thoth/ directory)         │
-│  4. Known location (~/Documents/thoth)      │
-└──────────────────────────────────────────────┘
-                    │
-                    ▼
-┌──────────────────────────────────────────────┐
-│      Load settings.json                      │
-│  - Parse JSON to Pydantic models            │
-│  - Validate all fields                      │
-│  - Convert relative → absolute paths        │
-└──────────────────────────────────────────────┘
-                    │
-                    ▼
-┌──────────────────────────────────────────────┐
-│      Hot-Reload System (Dev Only)           │
-│  - Watch settings.json for changes          │
-│  - Trigger reload callbacks                 │
-│  - Services re-initialize (~2s)             │
-└──────────────────────────────────────────────┘
-```
-
-**Key Features**:
-- **Single source of truth**: `vault/_thoth/settings.json`
-- **Type-safe**: Pydantic models with validation
-- **Hot-reload**: Dev mode reloads config in ~2 seconds
-- **Path resolution**: Vault-relative → absolute conversion
-- **Secrets separation**: API keys from `.env`, not settings.json
-
-### Service Manager (src/thoth/services/service_manager.py - 284 lines)
-
-**Dependency Injection Pattern**:
-```python
-ServiceManager
-    │
-    ├─ Initialize Phase 1: Core Services
-    │   ├─ LLMService (no dependencies)
-    │   ├─ ProcessingService (depends: LLMService)
-    │   └─ ArticleService (depends: LLMService)
-    │
-    ├─ Initialize Phase 2: Path-Dependent
-    │   ├─ QueryService (needs: queries_dir)
-    │   ├─ DiscoveryService (needs: sources_dir)
-    │   └─ RAGService (optional, needs embeddings extras)
-    │
-    ├─ Initialize Phase 3: External APIs
-    │   ├─ APIGateway
-    │   └─ LettaService (optional, needs memory extras)
-    │
-    ├─ Initialize Phase 4: Advanced Services
-    │   ├─ CitationService
-    │   ├─ PostgresService
-    │   └─ ResearchQuestionService (depends: PostgresService)
-    │
-    └─ Initialize Phase 5: Discovery & Optimization
-        ├─ DiscoveryManager (depends: AvailableSourceRepository)
-        ├─ DiscoveryOrchestrator (depends: LLM, Manager, Postgres)
-        ├─ CacheService (optional)
-        └─ AsyncProcessingService (optional)
-```
-
-**Features**:
-- **Centralized coordination**: Single point for all services
-- **Lazy initialization**: Services created on first access
-- **Optional services**: Graceful handling of missing extras
-- **Dynamic access**: `manager.llm` returns LLMService instance
-
-### MCP Server (src/thoth/mcp/server.py - 467 lines)
-
-**Protocol Architecture**:
-```
-┌─────────────────────────────────────────────┐
-│            MCP Client                        │
-│  (Obsidian Plugin, CLI, or External)        │
-└──────────────────┬──────────────────────────┘
-                   │ JSON-RPC over HTTP/SSE
-                   ▼
-┌─────────────────────────────────────────────┐
-│         MCPProtocolHandler                   │
-│  - Parse JSON-RPC requests                  │
-│  - Route to method handlers                 │
-│  - Format responses                         │
-└──────────────────┬──────────────────────────┘
-                   │
-      ┌────────────┼────────────┐
-      │            │            │
-      ▼            ▼            ▼
-┌──────────┐ ┌──────────┐ ┌──────────┐
-│   Tool   │ │Resource  │ │ Prompt   │
-│ Registry │ │ Manager  │ │ Manager  │
-└─────┬────┘ └──────────┘ └──────────┘
-      │
-      ▼
-┌─────────────────────────────────────────────┐
-│     54 Research Tools (16 modules)          │
-│  - Query tools                              │
-│  - Discovery tools                          │
-│  - Citation tools                           │
-│  - Article tools                            │
-│  - Processing tools                         │
-│  - PDF content tools                        │
-│  - Advanced RAG tools                       │
-│  - Analysis tools                           │
-│  - Tag tools                                │
-│  - Browser workflow tools                   │
-│  - Web search tool                          │
-│  - Settings tools                           │
-│  - Data management tools                    │
-│  - Custom index tools                       │
-│  - Download PDF tool                        │
-└─────────────────────────────────────────────┘
-```
-
-**Transports**:
-- **HTTP** (port 8000 internal/8082 external): Request/response with SSE streaming
-- **SSE** (port 8081): Server-Sent Events for streaming
-- **Stdio**: CLI integration
-
-### Document Pipeline (src/thoth/pipelines/optimized_document_pipeline.py - 489 lines)
-
-**8-Stage Processing**:
-```
-PDF Input
-    │
-    ▼
-┌─────────────────────────────────────────────┐
-│  Stage 1: Text Extraction                   │
-│  - Extract text with pypdf                  │
-│  - Handle malformed PDFs                    │
-│  - Preserve structure                       │
-└──────────────────┬──────────────────────────┘
-                   ▼
-┌─────────────────────────────────────────────┐
-│  Stage 2: Metadata Extraction               │
-│  - Extract title, authors, abstract         │
-│  - LLM-assisted for complex cases           │
-│  - Validate and normalize                   │
-└──────────────────┬──────────────────────────┘
-                   ▼
-┌─────────────────────────────────────────────┐
-│  Stage 3: Citation Extraction               │
-│  - Identify citation patterns               │
-│  - Parse bibliography section               │
-│  - Create Citation objects                  │
-└──────────────────┬──────────────────────────┘
-                   ▼
-┌─────────────────────────────────────────────┐
-│  Stage 4: Citation Enrichment               │
-│  - Multi-resolver chain (6 stages)          │
-│  - Batch processing for efficiency          │
-│  - Add DOI, metadata, citation counts       │
-└──────────────────┬──────────────────────────┘
-                   ▼
-┌─────────────────────────────────────────────┐
-│  Stage 5: Semantic Chunking                 │
-│  - Split into 200-500 token segments        │
-│  - Preserve section structure               │
-│  - Context-aware with LangChain             │
-└──────────────────┬──────────────────────────┘
-                   ▼
-┌─────────────────────────────────────────────┐
-│  Stage 6: Tag Generation                    │
-│  - AI-generated tags via LLM                │
-│  - Extract topics, methods, domains         │
-│  - Consolidate across document              │
-└──────────────────┬──────────────────────────┘
-                   ▼
-┌─────────────────────────────────────────────┐
-│  Stage 7: Note Generation                   │
-│  - Create markdown note with template       │
-│  - Frontmatter + metadata + citations       │
-│  - Save to notes_dir                        │
-└──────────────────┬──────────────────────────┘
-                   ▼
-┌─────────────────────────────────────────────┐
-│  Stage 8: Index Building (Optional)         │
-│  - Build vector embeddings (RAG)            │
-│  - Add to ChromaDB                          │
-│  - Update citation graph                    │
-└─────────────────────────────────────────────┘
-```
-
-### Citation System (src/thoth/analyze/citations/ - 20 modules, 500K+ lines)
-
-**6-Stage Resolution Chain**:
-```
-Citation String → "Smith et al. (2023)"
-    │
-    ▼
-┌─────────────────────────────────────────────┐
-│  Stage 1: Crossref Resolver (20K lines)     │
-│  - DOI lookup via Crossref API              │
-│  - Title/author search fallback             │
-│  - Confidence scoring                       │
-└──────────────────┬──────────────────────────┘
-                   │ If not found/low confidence
-                   ▼
-┌─────────────────────────────────────────────┐
-│  Stage 2: OpenAlex Resolver (19K lines)     │
-│  - Work ID lookup                           │
-│  - Author disambiguation                    │
-│  - Citation count enrichment                │
-└──────────────────┬──────────────────────────┘
-                   │ If not found/low confidence
-                   ▼
-┌─────────────────────────────────────────────┐
-│  Stage 3: ArXiv Resolver (7.4K lines)       │
-│  - ArXiv ID lookup                          │
-│  - Paper metadata extraction                │
-│  - PDF URL retrieval                        │
-└──────────────────┬──────────────────────────┘
-                   │ If not found
-                   ▼
-┌─────────────────────────────────────────────┐
-│  Stage 4: Fuzzy Matcher (21K lines)         │
-│  - String similarity algorithms             │
-│  - Author name variants                     │
-│  - Title normalization                      │
-│  - Year proximity matching                  │
-└──────────────────┬──────────────────────────┘
-                   ▼
-┌─────────────────────────────────────────────┐
-│  Stage 5: Match Validator (18K lines)       │
-│  - Confidence scoring (0.0-1.0)             │
-│  - Field validation (title, authors, year)  │
-│  - Threshold filtering (0.7 default)        │
-│  - False positive detection                 │
-└──────────────────┬──────────────────────────┘
-                   ▼
-┌─────────────────────────────────────────────┐
-│  Stage 6: Decision Engine (18K lines)       │
-│  - Multi-match resolution                   │
-│  - Best match selection                     │
-│  - Confidence aggregation                   │
-│  - Final metadata package                   │
-└──────────────────┬──────────────────────────┘
-                   ▼
-Enriched Citation (DOI, metadata, counts)
-```
-
-**Performance**:
-- Batch processing: ~100 citations/minute
-- Real-time enrichment: <1s per citation (with cache)
-- Cache hit rate: 70-90% typical
-- Parallel resolvers: 3-5x speedup
-
-## Data Flow
-
-### Document Processing Flow
-
-```
-User drops PDF → _thoth/data/pdfs/
-    │
-    ▼
-PDF Monitor detects new file (Watchdog)
-    │
-    ▼
-Trigger OptimizedDocumentPipeline
-    │
-    ├─ Extract text (pypdf)
-    ├─ Extract metadata (LLM-assisted)
-    ├─ Extract citations (regex patterns)
-    ├─ Enrich citations (6-stage chain)
-    ├─ Generate chunks (LangChain)
-    ├─ Generate tags (LLM)
-    ├─ Create markdown note (Jinja2 template)
-    └─ Build index (ChromaDB, optional)
-    │
-    ▼
-Note saved → _thoth/data/notes/paper_title.md
-    │
-    ▼
-Obsidian detects new note (file watcher)
-    │
-    ▼
-User reads note in Obsidian vault
-```
-
-### Agent Memory Flow
-
-```
-User sends message via Obsidian plugin
-    │
-    ▼
-WebSocket connection to API Server (8000)
-    │
-    ▼
-API routes to Letta REST API (8283)
-    │
-    ▼
-Letta retrieves agent state from PostgreSQL+pgvector
-    │
-    ├─ Load conversation history
-    ├─ Load agent memory (vector similarity)
-    ├─ Load tool assignments
-    └─ Load personality/instructions
-    │
-    ▼
-Letta generates response with MCP tools
-    │
-    ├─ Call MCP Server (8000 internal) for tool execution
-    ├─ Stream response chunks via SSE
-    └─ Update memory in PostgreSQL
-    │
-    ▼
-API streams response back via WebSocket
-    │
-    ▼
-Plugin displays in chat modal (real-time)
-```
-
-### Discovery Flow
-
-```
-User: "Find papers on transformers"
-    │
-    ▼
-Context Analyzer (39K lines)
-    ├─ Analyze vault notes for context
-    ├─ Extract relevant topics
-    ├─ Generate targeted search queries
-    └─ Set relevance scoring criteria
-    │
-    ▼
-Discovery Manager distributes to sources
-    │
-    ├─ ArXiv: RSS feed + API search
-    ├─ Semantic Scholar: API query
-    └─ Browser: Playwright automation
-    │
-    ▼
-Aggregate results from all sources
-    │
-    ├─ Deduplicate by DOI/title (O(n log n))
-    ├─ Score relevance (0-1 scale)
-    └─ Filter by threshold (0.7 default)
-    │
-    ▼
-Return ranked results to user
-    │
-    ▼
-Optional: Download PDFs & process
-```
+---
 
 ## Technology Stack
 
-### Backend (Python)
-
-- **Python**: 3.10-3.12 (NOT 3.13)
-- **FastAPI**: REST API framework with async support
-- **Pydantic**: Data validation and settings management
-- **Letta**: Persistent agent memory system
-- **PostgreSQL+pgvector**: Vector database for embeddings
-- **ChromaDB**: Development vector store
+### Backend
+- **Python 3.12** (3.13 not yet supported)
+- **FastAPI**: REST API framework
+- **Letta**: Persistent agent memory
+- **PostgreSQL+pgvector**: Vector database
 - **LangChain**: Text processing and chunking
+- **Playwright**: Browser automation
+- **Pydantic**: Data validation
 - **NetworkX**: Citation graph analysis
-- **Playwright**: Browser automation for discovery
-- **Ruff**: Linting and formatting
-- **pytest**: Testing framework (998 tests)
-- **Hypothesis**: Property-based testing
 
-### Frontend (TypeScript)
-
-- **TypeScript**: Type-safe development
-- **Obsidian API**: Plugin integration
+### Frontend
+- **TypeScript**: Obsidian plugin
 - **esbuild**: Fast bundling
 - **WebSocket**: Real-time communication
 
 ### Infrastructure
-
 - **Docker**: Containerization
-- **Docker Compose**: Multi-container orchestration
 - **UV**: Fast Python package manager
-- **Nginx**: SSE proxy for Letta (production)
-- **GitHub Actions**: CI/CD pipeline
+- **Nginx**: SSE proxy (production)
+- **GitHub Actions**: CI/CD
 
 ### AI/ML
-
 - **Mistral**: Primary LLM provider
-- **OpenRouter**: Multi-provider LLM routing
-- **Anthropic Claude**: Analysis tasks (via OpenRouter)
-- **Sentence Transformers**: Embedding generation (all-MiniLM-L6-v2)
-- **OpenAI**: Optional LLM provider
-
-## Design Patterns
-
-### 1. Service-Oriented Architecture (SOA)
-
-**ServiceManager** coordinates 32 independent services:
-- Each service has single responsibility
-- Services communicate through manager
-- Dependency injection for loose coupling
-- Optional services for graceful degradation
-
-### 2. Repository Pattern
-
-17 repositories abstract data access:
-- BaseRepository provides common CRUD operations
-- Caching layer built into repositories
-- Type-safe queries with Pydantic models
-- Connection pooling (asyncpg)
-
-### 3. Pipeline Pattern
-
-Document processing uses configurable stages:
-- BasePipeline defines contract
-- OptimizedDocumentPipeline implements 8 stages
-- Each stage is independent and testable
-- Stages can be skipped or customized
-
-### 4. Plugin Architecture
-
-MCP tools use plugin system:
-- MCPTool base class defines interface
-- 54 built-in tools across 16 modules
-- 3rd-party plugin support
-- Dynamic tool discovery and registration
-
-### 5. Observer Pattern
-
-Hot-reload system uses callbacks:
-- Config registers reload callbacks
-- Services subscribe to config changes
-- Callbacks triggered on settings.json modification
-- Services re-initialize with new config
-
-## Performance Optimizations
-
-### Caching Strategy
-
-**Multi-Level Caching**:
-1. **Request Cache** (API layer):
-   - Cache GET requests (5 min TTL)
-   - 70-90% hit rate typical
-   - Automatic invalidation on updates
-
-2. **Service Cache** (Service layer):
-   - Cache expensive operations (LLM calls, API requests)
-   - Configurable TTL per operation
-   - Memory-efficient with size limits
-
-3. **Database Cache** (Repository layer):
-   - Query result caching
-   - Connection pooling (10-50 connections)
-   - Prepared statements
-
-### Async/Await Throughout
-
-- **Non-blocking I/O**: All I/O operations use async/await
-- **Concurrent operations**: Process multiple requests simultaneously
-- **Connection pooling**: Reuse database/HTTP connections
-- **Streaming responses**: WebSocket for real-time updates
-
-### Request Queue Management
-
-- **Max concurrent**: 3 requests to prevent overload
-- **Queue excess**: Additional requests queued
-- **Exponential backoff**: Retry failed requests with increasing delay
-- **Timeout handling**: Automatic cancellation of long-running requests
-
-### Batch Processing
-
-- **Citation enrichment**: Process 50-100 citations at once
-- **Parallel resolvers**: Multiple API calls simultaneously
-- **Chunked embeddings**: Generate 50 embeddings per batch
-- **Database bulk inserts**: Insert 1000s of records efficiently
-
-## Security
-
-### Authentication & Authorization
-
-- **API Keys**: Stored in environment variables, never in code
-- **CORS**: Configurable origins for API access
-- **Rate Limiting**: Prevent API abuse (optional)
-- **JWT Tokens**: For stateful authentication (optional)
-
-### Container Security
-
-- **Non-root user**: All containers run as UID 1000:1000
-- **Minimal base images**: Alpine/slim Python images
-- **No secrets in images**: Environment variables for sensitive data
-- **Network isolation**: Production uses frontend + backend networks
-- **Security scanning**: Bandit for Python code analysis
-
-### Data Protection
-
-- **Vault-centric**: All user data in controlled location
-- **No external transmission**: Data stays local unless explicitly sent to APIs
-- **API key isolation**: Secrets separate from configuration
-- **Encrypted storage**: PostgreSQL can use encryption at rest
-
-### Dependency Management
-
-- **Pinned versions**: Exact versions in pyproject.toml
-- **Security scanning**: Dependabot for vulnerability alerts
-- **Regular updates**: Automated dependency updates
-- **Extras for optional features**: Minimize attack surface
+- **OpenRouter**: Multi-provider routing
+- **OpenAI**: Alternative LLM provider
+- **Sentence Transformers**: Embeddings (all-MiniLM-L6-v2)
 
 ---
 
-This architecture provides a **scalable, maintainable, and secure** foundation for academic research automation. The microservices design enables independent development and deployment, while the unified configuration system simplifies operation.
+## Further Reading
 
-For implementation details, see the [source code](../src/thoth/) and [component documentation](../README.md#key-features).
+- [MCP Architecture](mcp-architecture.md) - Detailed MCP server documentation
+- [Discovery System](discovery-system.md) - Multi-source discovery details
+- [Document Pipeline](document-pipeline.md) - PDF processing pipeline
+- [RAG System](rag-system.md) - Vector search and retrieval
+- [Letta Integration](letta-architecture.md) - Agent system and memory
+- [Docker Deployment](docker-deployment.md) - Container deployment guide
+
+---
+
+**Architecture Version**: 3.0 (Independent Services)
+**Last Updated**: February 2026
