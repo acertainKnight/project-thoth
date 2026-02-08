@@ -2491,13 +2491,15 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
             thinkingRemoved = true;
           }
 
-          // End streaming and flush remaining markdown
+          // End streaming and re-render with Obsidian's native markdown
           if (streamingRenderer) {
             streamingRenderer.end();
 
-            // Add copy buttons to code blocks
-            if (contentEl) {
-              this.addCopyButtonsToCodeBlocks(contentEl);
+            // Re-render accumulated content with Obsidian's native MarkdownRenderer
+            // which properly handles tables, callouts, and other complex markdown
+            // that streaming-markdown doesn't fully support
+            if (contentEl && accumulatedContent) {
+              await this.renderMessageContent(accumulatedContent, contentEl);
             }
 
             // Add message actions (copy button) with accumulated content
