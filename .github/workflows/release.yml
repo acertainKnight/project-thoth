@@ -55,6 +55,18 @@ jobs:
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: Determine release type
+        id: release-type
+        run: |
+          VERSION="${{ steps.get-version.outputs.version }}"
+          if [[ "$VERSION" == *alpha* ]] || [[ "$VERSION" == *beta* ]] || [[ "$VERSION" == *rc* ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "channel=alpha" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+            echo "channel=stable" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create Release
         id: create-release
         uses: actions/create-release@v1
@@ -66,19 +78,30 @@ jobs:
           body: |
             ## 🚀 Release v${{ steps.get-version.outputs.version }}
 
+            **Channel**: ${{ steps.release-type.outputs.channel }}
+
             ### Changes
             ${{ steps.changelog.outputs.changelog }}
 
             ### Installation
 
-            **One-Command Install (Recommended):**
+            **One-Command Install (Latest Stable):**
             ```bash
             curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | bash
             ```
 
-            **Python Package:**
+            **Install This Specific Version:**
             ```bash
-            pip install thoth==${{ steps.get-version.outputs.version }}
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | bash -s -- --version ${{ steps.get-version.outputs.version }}
+            ```
+
+            **Other Channels:**
+            ```bash
+            # Latest alpha/pre-release
+            curl -fsSL ... | bash -s -- --alpha
+
+            # Latest nightly (built from main)
+            curl -fsSL ... | bash -s -- --nightly
             ```
 
             **Docker:**
@@ -89,7 +112,7 @@ jobs:
             **Obsidian Plugin:**
             Download `thoth-obsidian-${{ steps.get-version.outputs.version }}.zip` from the assets below and extract to `.obsidian/plugins/thoth-obsidian/`
           draft: false
-          prerelease: ${{ contains(steps.get-version.outputs.version, 'alpha') || contains(steps.get-version.outputs.version, 'beta') || contains(steps.get-version.outputs.version, 'rc') }}
+          prerelease: ${{ steps.release-type.outputs.is_prerelease }}
 
   build-and-publish:
     name: Build and Publish
@@ -187,16 +210,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Determine if stable
+        id: release-type
+        run: |
+          VERSION="${{ needs.create-release.outputs.version }}"
+          if [[ "$VERSION" == *alpha* ]] || [[ "$VERSION" == *beta* ]] || [[ "$VERSION" == *rc* ]] || [[ "$VERSION" == *nightly* ]]; then
+            echo "is_stable=false" >> $GITHUB_OUTPUT
+          else
+            echo "is_stable=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=semver,pattern={{version}},value=${{ needs.create-release.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ needs.create-release.outputs.version }}
-            type=semver,pattern={{major}},value=${{ needs.create-release.outputs.version }}
-            type=raw,value=latest
+            type=raw,value=${{ needs.create-release.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.create-release.outputs.version }},enable=${{ steps.release-type.outputs.is_stable }}
+            type=semver,pattern={{major}},value=${{ needs.create-release.outputs.version }},enable=${{ steps.release-type.outputs.is_stable }}
+            type=raw,value=latest,enable=${{ steps.release-type.outputs.is_stable }}
+            type=raw,value=alpha,enable=${{ contains(needs.create-release.outputs.version, 'alpha') }}
 
       - name: Build and push all-in-one image
         uses: docker/build-push-action@v5
@@ -232,15 +266,26 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Determine if stable
+        id: release-type
+        run: |
+          VERSION="${{ needs.create-release.outputs.version }}"
+          if [[ "$VERSION" == *alpha* ]] || [[ "$VERSION" == *beta* ]] || [[ "$VERSION" == *rc* ]] || [[ "$VERSION" == *nightly* ]]; then
+            echo "is_stable=false" >> $GITHUB_OUTPUT
+          else
+            echo "is_stable=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}/${{ matrix.service }}
           tags: |
-            type=semver,pattern={{version}},value=${{ needs.create-release.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ needs.create-release.outputs.version }}
-            type=raw,value=latest
+            type=raw,value=${{ needs.create-release.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.create-release.outputs.version }},enable=${{ steps.release-type.outputs.is_stable }}
+            type=raw,value=latest,enable=${{ steps.release-type.outputs.is_stable }}
+            type=raw,value=alpha,enable=${{ contains(needs.create-release.outputs.version, 'alpha') }}
 
       - name: Build and push ${{ matrix.service }}
         uses: docker/build-push-action@v5

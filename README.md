@@ -55,7 +55,7 @@ Thoth revolutionizes academic research by combining cutting-edge AI with intuiti
 
 ### One-Command Installation (No Python Required!)
 
-**Linux/Mac:**
+**Linux/Mac — installs the latest stable release by default:**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/main/install.sh | bash
 ```
@@ -71,12 +71,39 @@ wsl --install
 curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/main/install.sh | bash
 ```
 
+<details>
+<summary><strong>Want a different release channel?</strong></summary>
+
+```bash
+# Install a specific version
+curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/main/install.sh | bash -s -- --version 0.3.0-alpha.2
+
+# Install the latest alpha/pre-release
+curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/main/install.sh | bash -s -- --alpha
+
+# Install the nightly build (latest main, rebuilt on every successful CI)
+curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/main/install.sh | bash -s -- --nightly
+
+# List all available releases
+curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/main/install.sh | bash -s -- --list
+```
+
+| Channel | Flag | Description |
+|---------|------|-------------|
+| **Stable** | *(default)* | Latest tagged stable release — recommended for most users |
+| **Alpha** | `--alpha` | Latest pre-release (alpha/beta/rc) — new features, may have rough edges |
+| **Nightly** | `--nightly` | Built from `main` after every successful CI run — bleeding edge |
+| **Specific** | `--version X.Y.Z` | Pin to an exact version |
+
+</details>
+
 **What happens:**
-1. ✅ Detects if you have Docker (installs/guides if not)
-2. ✅ Runs interactive setup wizard
-3. ✅ Installs `thoth` command to your PATH
-4. ✅ Optionally starts services immediately
-5. ✅ **No Python knowledge required!**
+1. Resolves the requested version from GitHub releases
+2. Detects if you have Docker (installs/guides if not)
+3. Runs interactive setup wizard
+4. Installs `thoth` command to your PATH
+5. Optionally starts services immediately
+6. **No Python knowledge required!**
 
 **Time:** 5 minutes total
 

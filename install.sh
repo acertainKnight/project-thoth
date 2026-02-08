@@ -3,12 +3,53 @@ set -e
 
 # Thoth Easy Installer
 # No Python knowledge required - automatically chooses best installation method
+#
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/main/install.sh | bash
+#
+# Options (pass after `bash -s --`):
+#   --version <ver>   Install a specific version (e.g., 0.3.0, 0.3.0-alpha.2)
+#   --alpha           Install the latest alpha/pre-release
+#   --nightly         Install the latest nightly build (from main)
+#   --list            List available releases and exit
+#   (no flags)        Install the latest stable release
 
 BLUE='\033[0;34m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
+
+GITHUB_REPO="acertainKnight/project-thoth"
+INSTALL_CHANNEL="stable"
+INSTALL_VERSION=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --version)
+            INSTALL_VERSION="$2"
+            INSTALL_CHANNEL="specific"
+            shift 2
+            ;;
+        --alpha)
+            INSTALL_CHANNEL="alpha"
+            shift
+            ;;
+        --nightly)
+            INSTALL_CHANNEL="nightly"
+            shift
+            ;;
+        --list)
+            INSTALL_CHANNEL="list"
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
 
 echo -e "${BLUE}"
 cat << "EOF"
@@ -46,14 +87,14 @@ check_python_version() {
 # Function to install thoth CLI to PATH
 install_cli_to_path() {
     local project_root="$1"
-    
+
     # Determine install location
     if [ -d "$HOME/.local/bin" ]; then
         INSTALL_DIR="$HOME/.local/bin"
     else
         mkdir -p "$HOME/.local/bin"
         INSTALL_DIR="$HOME/.local/bin"
-        
+
         # Add to PATH if not already there
         for rc in ~/.bashrc ~/.zshrc ~/.profile; do
             if [ -f "$rc" ] && ! grep -q ".local/bin" "$rc"; then
@@ -61,7 +102,7 @@ install_cli_to_path() {
             fi
         done
     fi
-    
+
     # Create thoth CLI wrapper
     cat > "$INSTALL_DIR/thoth" << 'EOFCLI'
 #!/bin/bash
@@ -80,47 +121,47 @@ case "$1" in
     start)
         echo "🚀 Starting Thoth services..."
         cd "$PROJECT_ROOT"
-        
+
         # Check Letta mode
         if [ -f "$HOME/.config/thoth/settings.json" ]; then
             LETTA_MODE=$(grep -o '"mode": *"[^"]*"' "$HOME/.config/thoth/settings.json" 2>/dev/null | cut -d'"' -f4 || echo "self-hosted")
         else
             LETTA_MODE="self-hosted"
         fi
-        
+
         # Start Letta if self-hosted
         if [ "$LETTA_MODE" = "self-hosted" ]; then
             echo "  Starting Letta (self-hosted mode)..."
             docker compose -f docker-compose.letta.yml up -d 2>/dev/null || true
             sleep 3
         fi
-        
+
         # Start Thoth services
         docker compose up -d
-        
+
         echo "✅ Thoth is running!"
         [ "$LETTA_MODE" = "cloud" ] && echo "   Letta: Cloud" || echo "   Letta: localhost:8283"
         echo "   API: http://localhost:8000"
         echo "   MCP: http://localhost:8001"
         ;;
-    
+
     stop)
         echo "🛑 Stopping Thoth services..."
         cd "$PROJECT_ROOT"
         docker compose stop
-        
+
         echo "✅ Thoth stopped (RAM freed)"
         echo ""
         echo "💡 Tip: Letta containers still running (if self-hosted)"
         echo "   To stop Letta: docker compose -f docker-compose.letta.yml stop"
         ;;
-    
+
     restart)
         "$0" stop
         sleep 2
         "$0" start
         ;;
-    
+
     status)
         cd "$PROJECT_ROOT"
         echo "📊 Thoth Service Status:"
@@ -129,12 +170,12 @@ case "$1" in
         echo "Letta Status:"
         docker compose -f docker-compose.letta.yml ps 2>/dev/null || echo "  (Not using self-hosted Letta)"
         ;;
-    
+
     logs)
         cd "$PROJECT_ROOT"
         docker compose logs -f "${@:2}"
         ;;
-    
+
     update)
         echo "⬆️  Updating Thoth..."
         cd "$PROJECT_ROOT"
@@ -143,7 +184,7 @@ case "$1" in
         "$0" restart
         echo "✅ Updated to latest version"
         ;;
-    
+
     *)
         # Forward to Python CLI if it exists, otherwise show help
         if [ -f "$PROJECT_ROOT/src/thoth/__main__.py" ]; then
@@ -167,21 +208,138 @@ case "$1" in
         ;;
 esac
 EOFCLI
-    
+
     chmod +x "$INSTALL_DIR/thoth"
-    
+
     # Save project root
     mkdir -p "$HOME/.config/thoth"
     echo "THOTH_PROJECT_ROOT=\"$project_root\"" > "$HOME/.config/thoth/cli.conf"
-    
+
     echo -e "${GREEN}✓ Installed 'thoth' command to $INSTALL_DIR${NC}"
-    
+
     # Check if in PATH
     if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
         echo -e "${YELLOW}Note: Please restart your terminal or run:${NC}"
         echo -e "  ${BLUE}source ~/.bashrc${NC}  # or ~/.zshrc"
     fi
 }
+
+# ── Version Resolution ──────────────────────────────────────────────────────
+
+resolve_version() {
+    local api_url="https://api.github.com/repos/${GITHUB_REPO}/releases"
+
+    case "$INSTALL_CHANNEL" in
+        list)
+            echo -e "${BLUE}Available Thoth releases:${NC}\n"
+            echo -e "${GREEN}Stable releases:${NC}"
+            curl -fsSL "${api_url}" 2>/dev/null \
+                | grep -oP '"tag_name":\s*"\K[^"]+' \
+                | grep -v 'nightly\|alpha\|beta\|rc' \
+                | head -5 \
+                | while read -r tag; do echo "  $tag"; done
+            echo ""
+            echo -e "${YELLOW}Pre-releases (alpha/beta):${NC}"
+            curl -fsSL "${api_url}" 2>/dev/null \
+                | grep -oP '"tag_name":\s*"\K[^"]+' \
+                | grep -E 'alpha|beta|rc' \
+                | head -5 \
+                | while read -r tag; do echo "  $tag"; done
+            echo ""
+            echo -e "${CYAN}Nightly:${NC}"
+            if curl -fsSL "${api_url}/tags/nightly" >/dev/null 2>&1; then
+                echo "  nightly (rolling, built from latest main)"
+            else
+                echo "  (no nightly release found)"
+            fi
+            echo ""
+            echo -e "Install a specific version with:"
+            echo -e "  ${BLUE}curl -fsSL ... | bash -s -- --version 0.3.0${NC}"
+            exit 0
+            ;;
+
+        stable)
+            echo -e "${BLUE}Resolving latest stable release...${NC}"
+            RESOLVED_TAG=$(curl -fsSL "${api_url}/latest" 2>/dev/null \
+                | grep -oP '"tag_name":\s*"\K[^"]+' \
+                | head -1)
+            if [ -z "$RESOLVED_TAG" ]; then
+                echo -e "${YELLOW}No stable release found. Falling back to main branch.${NC}"
+                RESOLVED_TAG=""
+                RESOLVED_REF="main"
+            else
+                echo -e "${GREEN}Found stable release: ${RESOLVED_TAG}${NC}"
+                RESOLVED_REF="$RESOLVED_TAG"
+            fi
+            ;;
+
+        alpha)
+            echo -e "${BLUE}Resolving latest alpha/pre-release...${NC}"
+            RESOLVED_TAG=$(curl -fsSL "${api_url}" 2>/dev/null \
+                | grep -oP '"tag_name":\s*"\K[^"]+' \
+                | grep -v 'nightly' \
+                | head -1)
+            if [ -z "$RESOLVED_TAG" ]; then
+                echo -e "${YELLOW}No pre-release found. Falling back to main branch.${NC}"
+                RESOLVED_TAG=""
+                RESOLVED_REF="main"
+            else
+                echo -e "${GREEN}Found pre-release: ${RESOLVED_TAG}${NC}"
+                RESOLVED_REF="$RESOLVED_TAG"
+            fi
+            ;;
+
+        nightly)
+            echo -e "${BLUE}Using nightly build (latest main)...${NC}"
+            RESOLVED_TAG="nightly"
+            RESOLVED_REF="main"
+            echo -e "${GREEN}Channel: nightly${NC}"
+            ;;
+
+        specific)
+            echo -e "${BLUE}Using specified version: ${INSTALL_VERSION}${NC}"
+            # Normalize: add 'v' prefix if missing
+            if [[ "$INSTALL_VERSION" != v* ]]; then
+                RESOLVED_TAG="v${INSTALL_VERSION}"
+            else
+                RESOLVED_TAG="${INSTALL_VERSION}"
+            fi
+            RESOLVED_REF="$RESOLVED_TAG"
+            # Verify the tag exists
+            if ! curl -fsSL "${api_url}/tags/${RESOLVED_TAG}" >/dev/null 2>&1; then
+                echo -e "${YELLOW}Warning: Release ${RESOLVED_TAG} not found on GitHub.${NC}"
+                echo -e "${YELLOW}Will attempt to use git tag directly.${NC}"
+            else
+                echo -e "${GREEN}Found release: ${RESOLVED_TAG}${NC}"
+            fi
+            ;;
+    esac
+}
+
+resolve_version
+
+# Determine Docker image tag based on channel
+get_docker_image_tag() {
+    case "$INSTALL_CHANNEL" in
+        stable)
+            echo "setup"
+            ;;
+        alpha)
+            echo "setup"
+            ;;
+        nightly)
+            echo "setup-nightly"
+            ;;
+        specific)
+            # For specific versions, try version-specific tag, fall back to setup
+            echo "setup"
+            ;;
+    esac
+}
+
+DOCKER_IMAGE_TAG=$(get_docker_image_tag)
+
+echo ""
 
 # Detect best installation method
 echo -e "${BLUE}Detecting best installation method...${NC}\n"
@@ -195,22 +353,36 @@ if command_exists docker; then
     if [ -f "Dockerfile.setup" ]; then
         PROJECT_ROOT="$(pwd)"
         echo -e "${GREEN}✓ Already in project directory${NC}"
+        # Checkout the resolved ref if specified
+        if [ -n "$RESOLVED_REF" ] && [ "$RESOLVED_REF" != "main" ]; then
+            echo -e "${BLUE}Checking out ${RESOLVED_REF}...${NC}"
+            git fetch --tags 2>/dev/null || true
+            git checkout "$RESOLVED_REF" 2>/dev/null || echo -e "${YELLOW}Could not checkout ${RESOLVED_REF}, using current branch${NC}"
+        fi
     else
         echo "Cloning Thoth repository..."
-        INSTALL_DIR="${HOME}/thoth"
-        git clone https://github.com/acertainKnight/project-thoth.git "$INSTALL_DIR"
-        PROJECT_ROOT="$INSTALL_DIR"
+        CLONE_DIR="${HOME}/thoth"
+        if [ -n "$RESOLVED_REF" ] && [ "$RESOLVED_REF" != "main" ]; then
+            git clone --branch "$RESOLVED_REF" https://github.com/${GITHUB_REPO}.git "$CLONE_DIR" 2>/dev/null \
+                || git clone https://github.com/${GITHUB_REPO}.git "$CLONE_DIR"
+        else
+            git clone https://github.com/${GITHUB_REPO}.git "$CLONE_DIR"
+        fi
+        PROJECT_ROOT="$CLONE_DIR"
         cd "$PROJECT_ROOT"
         echo -e "${GREEN}✓ Repository cloned to $PROJECT_ROOT${NC}"
     fi
 
+    echo -e "${CYAN}Channel: ${INSTALL_CHANNEL}${NC}"
+    [ -n "$RESOLVED_TAG" ] && echo -e "${CYAN}Version: ${RESOLVED_TAG}${NC}"
+
     # Try to pull pre-built image, fall back to local build
     SETUP_IMAGE=""
     echo -e "\n${BLUE}Preparing setup environment...${NC}"
-    
-    if timeout 300 docker pull ghcr.io/acertainknight/project-thoth:setup 2>/dev/null; then
-        echo -e "${GREEN}✓ Pre-built image downloaded${NC}"
-        SETUP_IMAGE="ghcr.io/acertainknight/project-thoth:setup"
+
+    if timeout 300 docker pull "ghcr.io/acertainknight/project-thoth:${DOCKER_IMAGE_TAG}" 2>/dev/null; then
+        echo -e "${GREEN}✓ Pre-built image downloaded (${DOCKER_IMAGE_TAG})${NC}"
+        SETUP_IMAGE="ghcr.io/acertainknight/project-thoth:${DOCKER_IMAGE_TAG}"
     else
         echo -e "${YELLOW}Building setup image locally (first-time: ~5-10 min)...${NC}"
         docker build -f Dockerfile.setup -t thoth-setup:local .

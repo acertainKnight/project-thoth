@@ -1,0 +1,199 @@
+name: Nightly Release
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  nightly-release:
+    name: Nightly Release
+    runs-on: ubuntu-latest
+    # Only run when CI succeeds on main (not PRs)
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set nightly version
+        id: version
+        run: |
+          # Extract base version from pyproject.toml
+          BASE_VERSION=$(grep -oP "version = '[^']*'" pyproject.toml | head -1 | grep -oP "[\d]+\.[\d]+\.[\d]+")
+          DATE=$(date +%Y%m%d)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          NIGHTLY_VERSION="${BASE_VERSION}-nightly.${DATE}+${SHORT_SHA}"
+          NIGHTLY_TAG="nightly"
+          echo "version=${NIGHTLY_VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${NIGHTLY_TAG}" >> $GITHUB_OUTPUT
+          echo "date=${DATE}" >> $GITHUB_OUTPUT
+          echo "sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "base_version=${BASE_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog since last release
+        id: changelog
+        run: |
+          # Get the most recent non-nightly tag
+          LAST_TAG=$(git tag -l 'v*' --sort=-version:refname | grep -v nightly | head -1)
+          if [ -n "$LAST_TAG" ]; then
+            CHANGELOG=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges | head -30)
+          else
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges | head -30)
+          fi
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Delete existing nightly release and tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Delete existing nightly release if it exists
+          gh release delete nightly --yes 2>/dev/null || true
+          # Delete the remote nightly tag
+          git push origin :refs/tags/nightly 2>/dev/null || true
+          # Delete the local nightly tag
+          git tag -d nightly 2>/dev/null || true
+
+      - name: Create nightly tag
+        run: |
+          git tag nightly
+          git push origin nightly
+
+      - name: Create nightly release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create nightly \
+            --title "Nightly Build (${{ steps.version.outputs.date }})" \
+            --notes "$(cat <<'EOF'
+          ## 🌙 Nightly Build — ${{ steps.version.outputs.date }}
+
+          **Version**: \`${{ steps.version.outputs.version }}\`
+          **Commit**: [\`${{ steps.version.outputs.sha }}\`](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+          **Base**: \`v${{ steps.version.outputs.base_version }}\`
+
+          > ⚠️ **This is an automated nightly build.** It is built from the latest commit on \`main\` that passed CI. It may contain experimental features and breaking changes. For production use, install a [stable release](https://github.com/${{ github.repository }}/releases/latest).
+
+          ### Changes since last release
+          ${{ steps.changelog.outputs.changelog }}
+
+          ### Installation
+
+          **Nightly (latest main):**
+          \`\`\`bash
+          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | bash -s -- --nightly
+          \`\`\`
+
+          **Docker:**
+          \`\`\`bash
+          docker pull ghcr.io/${{ github.repository }}:nightly
+          \`\`\`
+          EOF
+          )" \
+            --prerelease
+
+  build-nightly-images:
+    name: Build Nightly Docker Images
+    needs: nightly-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set nightly version
+        id: version
+        run: |
+          BASE_VERSION=$(grep -oP "version = '[^']*'" pyproject.toml | head -1 | grep -oP "[\d]+\.[\d]+\.[\d]+")
+          DATE=$(date +%Y%m%d)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "version=${BASE_VERSION}-nightly.${DATE}+${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Build and push setup image (nightly)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.setup
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:setup-nightly
+          cache-from: type=gha,scope=nightly-setup
+          cache-to: type=gha,scope=nightly-setup,mode=max
+
+      - name: Build and push all-in-one image (nightly)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/all-in-one/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:nightly
+          cache-from: type=gha,scope=nightly-aio
+          cache-to: type=gha,scope=nightly-aio,mode=max
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+
+  build-nightly-service-images:
+    name: Build Nightly Service - ${{ matrix.service }}
+    needs: nightly-release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api, mcp, pdf-monitor, discovery]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set nightly version
+        id: version
+        run: |
+          BASE_VERSION=$(grep -oP "version = '[^']*'" pyproject.toml | head -1 | grep -oP "[\d]+\.[\d]+\.[\d]+")
+          DATE=$(date +%Y%m%d)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "version=${BASE_VERSION}-nightly.${DATE}+${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Build and push ${{ matrix.service }} (nightly)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/${{ matrix.service }}:nightly
+          cache-from: type=gha,scope=nightly-${{ matrix.service }}
+          cache-to: type=gha,scope=nightly-${{ matrix.service }},mode=max
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
