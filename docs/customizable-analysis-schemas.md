@@ -17,7 +17,7 @@ Instead of a fixed set of fields (title, authors, abstract, summary, etc.), you 
 
 On first run, Thoth creates a schema file at:
 ```
-<vault>/_thoth/data/analysis_schema.json
+<vault>/thoth/_thoth/analysis_schema.json
 ```
 
 This file controls all document analysis behavior.
@@ -343,7 +343,7 @@ Papers processed with old schemas remain accessible:
 **Problem**: Changes to schema file not taking effect
 
 **Solutions**:
-1. Check file location: `<vault>/_thoth/data/analysis_schema.json`
+1. Check file location: `<vault>/thoth/_thoth/analysis_schema.json`
 2. Validate JSON syntax: Use a JSON validator
 3. Check logs for error messages
 4. Restart services if not in dev mode

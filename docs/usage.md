@@ -137,9 +137,9 @@ make dev
 ```
 
 **Usage**:
-1. Drop PDF into `vault/thoth/_thoth/data/pdfs/`
+1. Drop PDF into `vault/thoth/papers/pdfs/`
 2. Monitor processes it automatically
-3. Note appears in `vault/thoth/_thoth/data/notes/`
+3. Note appears in `vault/thoth/notes/`
 4. Takes 30-60 seconds per paper
 
 **What Gets Extracted**:
@@ -167,7 +167,7 @@ python -m thoth pdf process ./papers/ --parallel --max-workers 4
 
 ### Custom Extraction
 
-Edit `templates/analysis_schema.json` to control what gets extracted:
+Edit `vault/thoth/_thoth/analysis_schema.json` to control what gets extracted:
 
 ```json
 {
@@ -528,10 +528,17 @@ reset_settings()
 **Vault Structure**:
 ```
 vault/
-├── thoth/_thoth/              # Thoth data (managed)
-│   ├── data/pdfs/            # Drop PDFs here
-│   ├── data/notes/           # Generated notes appear here
-│   └── settings.json         # Edit configuration here
+├── thoth/
+│   ├── _thoth/                # Thoth config (user-editable)
+│   │   ├── settings.json     # Edit configuration here
+│   │   ├── mcps.json         # MCP server config
+│   │   ├── analysis_schema.json
+│   │   ├── prompts/          # Custom prompt templates
+│   │   └── skills/           # User-created skills
+│   ├── papers/
+│   │   ├── pdfs/             # Drop PDFs here
+│   │   └── markdown/         # Converted markdown
+│   └── notes/                 # Generated notes appear here
 ├── Research/                  # Your research (manual)
 │   ├── Projects/
 │   │   ├── Project A/
@@ -610,10 +617,10 @@ python -m thoth rag rebuild
 
 ### Custom Prompts
 
-Override default prompts by creating files in `vault/thoth/_thoth/data/prompts/`:
+Override default prompts by creating files in `vault/thoth/_thoth/prompts/`:
 
 ```
-_thoth/data/prompts/
+_thoth/prompts/
 ├── custom_analysis.j2        # Custom analysis prompt
 ├── custom_summary.j2          # Custom summary prompt
 └── custom_citation.j2         # Custom citation extraction
@@ -624,7 +631,7 @@ Reference in settings.json:
 {
   "processing": {
     "custom_prompts": {
-      "analysis": "_thoth/data/prompts/custom_analysis.j2"
+      "analysis": "_thoth/prompts/custom_analysis.j2"
     }
   }
 }
@@ -692,7 +699,7 @@ docker logs thoth-dev-pdf-monitor  # dev mode
 docker logs thoth-all-in-one       # prod mode
 
 # Check file permissions
-ls -la vault/thoth/_thoth/data/pdfs/
+ls -la vault/thoth/papers/pdfs/
 
 # Manual processing
 python -m thoth pdf process paper.pdf --verbose

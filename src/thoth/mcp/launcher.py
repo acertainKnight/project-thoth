@@ -104,6 +104,31 @@ async def launch_mcp_server(
         logger.info('Registering MCP tools...')
         register_all_mcp_tools(server.tool_registry)
 
+        # Initialize MCP Servers Manager
+        logger.info('Initializing MCP Servers Manager...')
+        from thoth.services.mcp_servers_manager import MCPServersManager
+
+        mcp_manager = MCPServersManager()
+        mcp_manager.initialize()
+
+        # Add to service manager's internal dict
+        service_manager._services['mcp_servers_manager'] = mcp_manager
+
+        # Set dependencies for MCP manager
+        from thoth.services.letta_service import LettaService
+
+        letta_service = LettaService()
+        letta_service.initialize()
+        mcp_manager.set_dependencies(server.tool_registry, letta_service)
+
+        # Load initial config and connect to external MCP servers
+        await mcp_manager.load_config()
+        await mcp_manager._connect_all_enabled_servers()
+
+        # Start file watcher for hot-reload
+        await mcp_manager.start_watching()
+        logger.info('MCP Servers Manager initialized and watching for config changes')
+
         # Setup resource providers
         logger.info('Setting up resource providers...')
 
@@ -158,6 +183,9 @@ async def launch_mcp_server(
 
     except KeyboardInterrupt:
         logger.info('Received interrupt signal, shutting down...')
+        # Stop MCP manager watcher
+        if 'mcp_manager' in locals():
+            await mcp_manager.stop_watching()
         await server.stop()
     except Exception as e:
         logger.error(f'Error starting MCP server: {e}')

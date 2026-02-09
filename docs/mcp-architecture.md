@@ -910,7 +910,7 @@ async def handle_mcp_request(request: Request):
 **Implementation**:
 ```python
 # Prevent directory traversal
-allowed_paths = ['/vault', '/vault/_thoth']
+allowed_paths = ['/vault', '/vault/thoth/_thoth']
 for path in base_paths:
     if not file_path.resolve().is_relative_to(path):
         raise SecurityError('Access denied')

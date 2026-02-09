@@ -252,6 +252,9 @@ select = [
 ignore = ["E501"]
 extend-unsafe-fixes = ["UP034"]
 
+[tool.ruff.lint.per-file-ignores]
+"src/thoth/server/routers/mcp_servers.py" = ["B008"]  # FastAPI Depends() in defaults is intentional
+
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
 

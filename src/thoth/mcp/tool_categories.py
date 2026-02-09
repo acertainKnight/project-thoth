@@ -135,6 +135,15 @@ TOOL_CATEGORIES = {
         'create_skill',
         'update_skill',
     ],
+    # MCP server management
+    'mcp_management': [
+        'list_mcp_servers',
+        'add_mcp_server',
+        'update_mcp_server',
+        'remove_mcp_server',
+        'toggle_mcp_server',
+        'test_mcp_connection',
+    ],
     # DEPRECATED CATEGORIES (code kept but not registered):
     # "query": Legacy query management - replaced by research_question tools
     # "workflow": Browser workflow tools - complex, rarely used
@@ -152,6 +161,7 @@ ROLE_TOOL_CATEGORIES = {
         'processing',  # Download PDFs
         'tagging',  # Tag management
         'data',  # Reading lists, obsidian sync
+        'mcp_management',  # MCP server management
     ],
     # Research Analyst: Deep analysis, synthesis, quality assessment
     'analyst': [

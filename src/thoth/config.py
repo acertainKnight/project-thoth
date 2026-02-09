@@ -618,7 +618,7 @@ class PathsConfig(BaseModel):
     pdf: str = 'thoth/papers/pdfs'
     markdown: str = 'thoth/papers/markdown'
     notes: str = 'thoth/notes'
-    prompts: str = 'thoth/_thoth/data/prompts'
+    prompts: str = 'thoth/_thoth/prompts'
     templates: str = 'thoth/_thoth/data/templates'
     output: str = 'thoth/_thoth/data/output'
     knowledge_base: str = Field(
@@ -639,7 +639,7 @@ class PathsConfig(BaseModel):
 class EndpointConfig(BaseModel):
     """API endpoint configuration."""
 
-    host: str = '0.0.0.0'
+    host: str = '0.0.0.0'  # nosec B104 - bind all interfaces for server listen
     port: int = 8000
     base_url: str = Field(default='http://localhost:8000', alias='baseUrl')
     auto_start: bool = Field(default=False, alias='autoStart')
@@ -655,6 +655,21 @@ class MCPConfig(BaseModel):
     port: int = 8001
     auto_start: bool = Field(default=True, alias='autoStart')
     enabled: bool = True
+    external_servers_file: str | None = Field(
+        default=None,
+        alias='externalServersFile',
+        description='Path to external MCP servers config file (mcps.json)',
+    )
+    plugins_enabled: bool = Field(
+        default=True,
+        alias='pluginsEnabled',
+        description='Whether external MCP plugins are enabled',
+    )
+    max_concurrent_plugins: int = Field(
+        default=10,
+        alias='maxConcurrentPlugins',
+        description='Maximum number of concurrent plugin connections',
+    )
 
     class Config:
         populate_by_name = True
@@ -1023,20 +1038,20 @@ class Settings(BaseModel):
                     }
                 },
                 'paths': {
-                    'workspace': '/workspace',
-                    'pdf': 'data/pdf',
-                    'markdown': 'data/markdown',
-                    'notes': '/thoth/notes',
-                    'prompts': 'data/prompts',
-                    'templates': 'data/templates',
-                    'output': 'data/output',
-                    'knowledgeBase': 'data/knowledge',
-                    'queries': 'data/queries',
-                    'agentStorage': 'data/agent',
-                    'logs': 'logs',
+                    'workspace': 'thoth/_thoth',
+                    'pdf': 'thoth/papers/pdfs',
+                    'markdown': 'thoth/papers/markdown',
+                    'notes': 'thoth/notes',
+                    'prompts': 'thoth/_thoth/prompts',
+                    'templates': 'thoth/_thoth/data/templates',
+                    'output': 'thoth/_thoth/data/output',
+                    'knowledgeBase': 'thoth/_thoth/data/knowledge',
+                    'queries': 'thoth/_thoth/data/queries',
+                    'agentStorage': 'thoth/_thoth/data/agent',
+                    'logs': 'thoth/_thoth/logs',
                 },
                 'servers': {
-                    'api': {'host': '0.0.0.0', 'port': 8000, 'autoStart': False},
+                    'api': {'host': '0.0.0.0', 'port': 8000, 'autoStart': False},  # nosec B104
                     'mcp': {
                         'host': 'localhost',
                         'port': 8001,
@@ -1229,7 +1244,7 @@ class Config:
         self.logs_dir = resolve_path(paths.logs)
 
         # Analysis schema path (for customizable document analysis)
-        self.analysis_schema_path = resolve_path('data/analysis_schema.json')
+        self.analysis_schema_path = resolve_path('thoth/_thoth/analysis_schema.json')
 
         # Resolve discovery paths
         self.discovery_sources_dir = resolve_path(paths.discovery.sources)
@@ -1239,6 +1254,18 @@ class Config:
         # Resolve RAG vector_db_path (avoid relative path permission errors)
         rag_config = self.settings.rag
         rag_config.vector_db_path = str(resolve_path(rag_config.vector_db_path))
+
+        # Resolve external MCP servers config path
+        mcp_config = self.settings.servers.mcp
+        if not mcp_config.external_servers_file:
+            # Default to _thoth/mcps.json
+            mcp_config.external_servers_file = str(
+                self.vault_root / 'thoth' / '_thoth' / 'mcps.json'
+            )
+        else:
+            mcp_config.external_servers_file = str(
+                resolve_path(mcp_config.external_servers_file)
+            )
 
         # Create directories if they don't exist
         for dir_path in [

@@ -7,7 +7,7 @@ academic papers during document analysis through configuration files.
 
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, create_model
 
@@ -43,10 +43,8 @@ class AnalysisSchemaService(BaseService):
         elif hasattr(self.config, 'analysis_schema_path'):
             self.schema_path = Path(self.config.analysis_schema_path)
         else:
-            # Default: vault/thoth/_thoth/data/analysis_schema.json
-            self.schema_path = (
-                self.config.workspace_dir / 'data' / 'analysis_schema.json'
-            )
+            # Default: vault/thoth/_thoth/analysis_schema.json
+            self.schema_path = self.config.workspace_dir / 'analysis_schema.json'
 
         # Cache for generated models
         self._model_cache: dict[str, type[BaseModel]] = {}
@@ -289,7 +287,7 @@ class AnalysisSchemaService(BaseService):
                 )
             else:
                 field_definitions[field_name] = (
-                    Optional[field_type],
+                    field_type | None,
                     Field(default=None, description=description),
                 )
 
@@ -373,8 +371,8 @@ class AnalysisSchemaService(BaseService):
             if self._schema_config:
                 return self._schema_config['active_preset']
 
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.debug(f'Could not get active preset: {e}')
 
         return 'default'
 

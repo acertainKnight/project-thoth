@@ -304,10 +304,10 @@ curl -X POST http://localhost:8082/mcp \
 
 ```bash
 # Copy a test PDF to watch directory
-cp test-paper.pdf "$OBSIDIAN_VAULT_PATH/thoth/_thoth/data/pdfs/"
+cp test-paper.pdf "$OBSIDIAN_VAULT_PATH/thoth/papers/pdfs/"
 
 # Check for generated note
-ls "$OBSIDIAN_VAULT_PATH/thoth/_thoth/data/notes/"
+ls "$OBSIDIAN_VAULT_PATH/thoth/notes/"
 
 # View logs
 tail -f "$OBSIDIAN_VAULT_PATH/thoth/_thoth/logs/thoth.log"
@@ -473,7 +473,7 @@ After successful installation:
 
 - **Documentation**: [docs/](.) - All guides and references
 - **GitHub Issues**: [Report a bug](https://github.com/acertainKnight/project-thoth/issues)
-- **Logs**: `make dev-logs` or check `_thoth/logs/`
+- **Logs**: `make dev-logs` or check `thoth/_thoth/logs/`
 - **Health Check**: `make health` to diagnose service issues
 
 ---

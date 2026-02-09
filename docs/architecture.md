@@ -388,14 +388,15 @@ All Thoth data stored in Obsidian vault:
 ```
 vault/thoth/_thoth/
 ├── settings.json          # Main configuration
-├── skills/                # User-created skills
-├── data/
-│   ├── pdfs/             # Downloaded papers
-│   ├── notes/            # Generated markdown notes
-│   └── prompts/          # Custom prompt templates
-├── logs/                 # Application logs
-└── cache/                # Temporary cache
+├── mcps.json             # MCP server config
+├── analysis_schema.json  # Customizable analysis schema
+├── prompts/              # Custom prompt templates
+├── skills/               # User-created skills
+├── logs/                 # Application logs (runtime)
+└── cache/                # Temporary cache (runtime)
 ```
+
+User content lives alongside: `vault/thoth/papers/pdfs/`, `vault/thoth/papers/markdown/`, and `vault/thoth/notes/`.
 
 **Benefits**:
 - Single location for all data

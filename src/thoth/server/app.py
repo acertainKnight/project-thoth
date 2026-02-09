@@ -46,6 +46,7 @@ from thoth.server.routers import (  # noqa: I001
     chat,
     config as config_router,
     health,
+    mcp_servers,
     models,
     operations,
     research,
@@ -366,21 +367,6 @@ async def lifespan(app: FastAPI):
         logger.warning(f'Could not run database migrations: {e}')
         logger.warning('Continuing without migrations - manual migration may be needed')
 
-    # Initialize Letta agents
-    try:
-        from thoth.services.agent_initialization_service import (
-            AgentInitializationService,
-        )
-
-        agent_init = AgentInitializationService()
-        agent_ids = await agent_init.initialize_all_agents()
-        logger.info(f'✅ Agents initialized: {", ".join(agent_ids.keys())}')
-    except Exception as e:
-        logger.warning(f'Could not initialize agents: {e}')
-        logger.warning(
-            'Continuing without agent initialization - agents may need manual setup'
-        )
-
     # Initialize settings watcher if enabled
     if _should_enable_hot_reload():
         # Settings file watcher
@@ -504,6 +490,57 @@ async def lifespan(app: FastAPI):
             logger.warning(
                 'Continuing without ServiceManager (most features will not work)'
             )
+
+    # Initialize MCP Servers Manager BEFORE agent initialization
+    # (so agents can sync external MCP tools during their init)
+    if service_manager:
+        try:
+            from thoth.services.letta_service import LettaService
+            from thoth.services.mcp_servers_manager import MCPServersManager
+
+            logger.info('Initializing MCP Servers Manager for API server...')
+            mcp_manager = MCPServersManager(config=config)
+            mcp_manager.initialize()
+
+            # Add to service manager's internal dict
+            service_manager._services['mcp_servers_manager'] = mcp_manager
+
+            # Initialize tool registry and Letta service for MCP manager
+            # Note: In API server, we don't have tool_registry from MCP server
+            # So we'll pass None and tools will be synced by MCP server instead
+            letta_service = LettaService()
+            letta_service.initialize()
+            mcp_manager.set_dependencies(None, letta_service)
+
+            # Load config and start watching
+            await mcp_manager.load_config()
+            await mcp_manager.start_watching()
+
+            logger.success('MCP Servers Manager initialized in API server')
+        except Exception as e:
+            logger.error(
+                f'Failed to initialize MCP Servers Manager: {e}', exc_info=True
+            )
+            logger.warning(
+                'Continuing without MCP Servers Manager (MCP management will not work)'
+            )
+
+    # NOW initialize Letta agents (after MCP manager is ready)
+    try:
+        from thoth.services.agent_initialization_service import (
+            AgentInitializationService,
+        )
+
+        agent_init = AgentInitializationService()
+        agent_ids = await agent_init.initialize_all_agents(
+            service_manager=service_manager
+        )
+        logger.info(f'✅ Agents initialized: {", ".join(agent_ids.keys())}')
+    except Exception as e:
+        logger.warning(f'Could not initialize agents: {e}')
+        logger.warning(
+            'Continuing without agent initialization - agents may need manual setup'
+        )
 
     # Initialize PostgreSQL connection pool if postgres service exists
     if service_manager and hasattr(service_manager, 'postgres'):
@@ -631,6 +668,16 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.error(f'Error stopping discovery scheduler: {e}')
 
+        # Stop MCP Servers Manager file watcher
+        if service_manager and 'mcp_servers_manager' in service_manager._services:
+            try:
+                logger.info('Stopping MCP Servers Manager...')
+                mcp_manager = service_manager._services['mcp_servers_manager']
+                await mcp_manager.stop_watching()
+                logger.success('MCP Servers Manager stopped')
+            except Exception as e:
+                logger.error(f'Error stopping MCP Servers Manager: {e}')
+
         # Stop settings watcher
         if _settings_watcher is not None:
             try:
@@ -721,6 +768,7 @@ def create_app() -> FastAPI:
     app.include_router(operations.router, prefix='/operations', tags=['operations'])
     app.include_router(schema.router, tags=['schema'])
     app.include_router(skills.router, tags=['skills'])
+    app.include_router(mcp_servers.router, tags=['mcp-servers'])
     app.include_router(tools.router, prefix='/tools', tags=['tools'])
 
     # Add hot-reload health check endpoint

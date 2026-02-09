@@ -23,17 +23,16 @@
     "retrieval_k": 4
   },
   "paths": {
-    "workspace": ".thoth",
-    "pdf": ".thoth/data/pdfs",
-    "markdown": ".thoth/data/markdown",
-    "notes": ".thoth/data/notes",
-    "prompts": ".thoth/data/prompts",
-    "templates": ".thoth/data/templates",
-    "output": ".thoth/exports",
-    "knowledge": ".thoth/data/knowledge",
-    "queries": ".thoth/data/queries",
-    "logs": ".thoth/logs",
-    "cache": ".thoth/cache"
+    "workspace": "thoth/_thoth",
+    "pdf": "thoth/papers/pdfs",
+    "markdown": "thoth/papers/markdown",
+    "notes": "thoth/notes",
+    "prompts": "thoth/_thoth/prompts",
+    "templates": "thoth/_thoth/data/templates",
+    "output": "thoth/_thoth/data/output",
+    "knowledgeBase": "thoth/_thoth/data/knowledge",
+    "queries": "thoth/_thoth/data/queries",
+    "logs": "thoth/_thoth/logs"
   },
   "features": {
     "enable_research_agent": true,

@@ -66,8 +66,8 @@ class InstallationScreen(BaseScreen):
         try:
             widget = self.query_one(f'#step-{step_num}', Static)
             widget.update(icons.get(state, icons['pending']))
-        except Exception:
-            pass
+        except Exception as e:  # nosec B110 - widget may not exist during teardown
+            logger.debug('Step widget not found or update failed: %s', e)
 
     async def run_installation(self) -> None:
         """Run the installation process with transaction support."""
@@ -152,8 +152,8 @@ class InstallationScreen(BaseScreen):
         try:
             next_btn = self.query_one('#next', Button)
             next_btn.styles.display = 'block'
-        except Exception:
-            pass
+        except Exception as e:  # nosec B110 - button may not exist during teardown
+            logger.debug('Next button not found or update failed: %s', e)
 
     async def create_workspace(self) -> None:
         """Create Thoth workspace and user-facing directories in vault."""
@@ -244,7 +244,7 @@ class InstallationScreen(BaseScreen):
                 'pdf': paths_config.get('pdf', 'thoth/papers/pdfs'),
                 'markdown': paths_config.get('markdown', 'thoth/papers/markdown'),
                 'notes': paths_config.get('notes', 'thoth/notes'),
-                'prompts': f'{workspace_path}/data/prompts',
+                'prompts': f'{workspace_path}/prompts',
                 'templates': f'{workspace_path}/data/templates',
                 'output': f'{workspace_path}/data/output',
                 'knowledgeBase': f'{workspace_path}/data/knowledge',

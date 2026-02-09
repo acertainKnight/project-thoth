@@ -68,6 +68,14 @@ from .data_management_tools import (
 from .download_pdf_tool import (
     DownloadPdfMCPTool,
 )
+from .mcp_server_tools import (
+    AddMCPServerMCPTool,
+    ListMCPServersMCPTool,
+    RemoveMCPServerMCPTool,
+    TestMCPConnectionMCPTool,
+    ToggleMCPServerMCPTool,
+    UpdateMCPServerMCPTool,
+)
 from .pdf_content_tools import (
     LocatePdfMCPTool,
     # DEPRECATED: Use PDF monitor service
@@ -225,6 +233,13 @@ MCP_TOOL_CLASSES = [
     UnloadSkillMCPTool,
     CreateSkillMCPTool,  # Loaded via skill-creation-workshop
     UpdateSkillMCPTool,  # Loaded via skill-creation-workshop
+    # MCP server management
+    ListMCPServersMCPTool,
+    AddMCPServerMCPTool,
+    UpdateMCPServerMCPTool,
+    RemoveMCPServerMCPTool,
+    ToggleMCPServerMCPTool,
+    TestMCPConnectionMCPTool,
     # Workflow builder (auto-detect article sources)
     AnalyzeSourceUrlMCPTool,
     RefineSourceSelectorsMCPTool,

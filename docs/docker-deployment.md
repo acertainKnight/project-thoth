@@ -95,7 +95,7 @@ docker info | grep -E 'CPUs|Total Memory'
 
 1. **Obsidian Vault:** Path to your Obsidian vault with Thoth integration
 2. **API Keys:** OpenAI, Anthropic, Mistral, etc. (in `.env` file)
-3. **Settings:** `vault/_thoth/settings.json` configured
+3. **Settings:** `vault/thoth/_thoth/settings.json` configured
 
 ## Quick Start
 
@@ -191,13 +191,13 @@ THOTH_HOT_RELOAD=1
 
 ### Settings.json
 
-Configure Thoth in `vault/_thoth/settings.json`:
+Configure Thoth in `vault/thoth/_thoth/settings.json`:
 
 ```json
 {
   "version": "1.0.0",
   "paths": {
-    "workspace": "/path/to/vault/_thoth",
+    "workspace": "thoth/_thoth",
     "vault": "/path/to/vault"
   },
   "apiKeys": {
@@ -351,10 +351,10 @@ make dev
 docker exec thoth-dev-all-in-one supervisorctl status thoth-pdf-monitor
 
 # Add PDFs to watch directory
-cp paper.pdf $OBSIDIAN_VAULT_PATH/_thoth/data/pdfs/
+cp paper.pdf $OBSIDIAN_VAULT_PATH/thoth/papers/pdfs/
 
 # Monitor processing logs
-docker exec thoth-dev-all-in-one tail -f /vault/_thoth/logs/monitor-stdout.log
+docker exec thoth-dev-all-in-one tail -f /vault/thoth/_thoth/logs/monitor-stdout.log
 ```
 
 ### Backing Up Data
@@ -365,7 +365,7 @@ docker run --rm -v letta-postgres:/data -v $(pwd):/backup alpine tar czf /backup
 docker run --rm -v letta-data:/data -v $(pwd):/backup alpine tar czf /backup/letta-backup.tar.gz /data
 
 # Backup vault (separate from Docker)
-tar czf vault-backup.tar.gz $OBSIDIAN_VAULT_PATH/_thoth/
+tar czf vault-backup.tar.gz $OBSIDIAN_VAULT_PATH/thoth/_thoth/
 ```
 
 ## Troubleshooting
@@ -456,10 +456,10 @@ netstat -tulpn | grep 8000
 docker volume ls | grep thoth
 
 # Verify vault mount
-docker exec thoth-dev-all-in-one ls /vault/_thoth
+docker exec thoth-dev-all-in-one ls /vault/thoth/_thoth
 
 # Check volume permissions
-docker exec thoth-dev-all-in-one ls -la /vault/_thoth
+docker exec thoth-dev-all-in-one ls -la /vault/thoth/_thoth
 ```
 
 ### Switching Modes Fails
@@ -489,7 +489,7 @@ docker exec thoth-dev-all-in-one supervisorctl status
 docker restart thoth-dev-all-in-one
 
 # View supervisor logs
-docker exec thoth-dev-all-in-one cat /vault/_thoth/logs/supervisord.log
+docker exec thoth-dev-all-in-one cat /vault/thoth/_thoth/logs/supervisord.log
 
 # Manually start service
 docker exec thoth-dev-all-in-one supervisorctl start thoth-api
@@ -600,7 +600,7 @@ networks:
 - name: Test Docker Deployment
   run: |
     export OBSIDIAN_VAULT_PATH=/tmp/test-vault
-    mkdir -p /tmp/test-vault/_thoth
+    mkdir -p /tmp/test-vault/thoth/_thoth
     make dev
     make health
     make dev-stop
@@ -650,4 +650,4 @@ make deploy-plugin      # Deploy Obsidian plugin
 - **Service Dockerfiles:** `/docker/{api,mcp,discovery,pdf-monitor}/Dockerfile`
 - **Documentation:** `/docs`
 - **Vault Data:** `$OBSIDIAN_VAULT_PATH/_thoth`
-- **Logs:** `$OBSIDIAN_VAULT_PATH/_thoth/logs`
+- **Logs:** `$OBSIDIAN_VAULT_PATH/thoth/_thoth/logs`

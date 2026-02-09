@@ -3,6 +3,7 @@ import { ChatSession, ChatMessage } from '../types';
 import type ThothPlugin from '../../main';
 import { ResearchTabComponent } from '../components/research-tab';
 import { SettingsTabComponent } from '../components/settings-tab';
+import { MCPServersTabComponent } from '../components/mcp-servers-tab';
 import * as smd from 'streaming-markdown';
 import { getRandomThinkingPhrase, getToolStatusMessage } from '../utils/thinking-messages';
 
@@ -735,6 +736,7 @@ export class MultiChatModal extends Modal {
       { id: 'chat', label: '💬 Chat', icon: 'message-circle' },
       { id: 'conversations', label: '📝 Conversations', icon: 'message-square' },
       { id: 'research', label: '🔬 Research', icon: 'beaker' },
+      { id: 'mcpServers', label: '🔌 MCP Servers', icon: 'plug' },
       { id: 'settings', label: '⚙️ Settings', icon: 'settings' }
     ];
 
@@ -755,7 +757,7 @@ export class MultiChatModal extends Modal {
   async switchTab(tabId: string) {
     // Update tab buttons
     this.tabContainer.querySelectorAll('.thoth-tab-button').forEach((btn, index) => {
-      if (index === ['chat', 'conversations', 'research', 'settings'].indexOf(tabId)) {
+      if (index === ['chat', 'conversations', 'research', 'mcpServers', 'settings'].indexOf(tabId)) {
         btn.addClass('active');
       } else {
         btn.removeClass('active');
@@ -781,6 +783,9 @@ export class MultiChatModal extends Modal {
         break;
       case 'research':
         await this.renderResearchTab(); // Await async data loading
+        break;
+      case 'mcpServers':
+        await this.renderMCPServersTab(); // Await async data loading
         break;
       case 'settings':
         this.renderSettingsTab();
@@ -3804,6 +3809,14 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     // Render Settings Tab component
     const settingsTab = new SettingsTabComponent(settingsArea, this.plugin);
     settingsTab.render();
+  }
+
+  async renderMCPServersTab() {
+    const mcpServersArea = this.contentContainer.createEl('div', { cls: 'mcp-servers-area' });
+
+    // Render MCP Servers Tab component
+    const mcpServersTab = new MCPServersTabComponent(this.plugin, mcpServersArea);
+    await mcpServersTab.render();
   }
 
   // Helper: Add dynamic status indicator

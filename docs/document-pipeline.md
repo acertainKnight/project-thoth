@@ -379,7 +379,7 @@ class PDFTracker:
     """
     Track processed PDFs to avoid redundant work.
 
-    Storage: JSON file (vault/_thoth/processed_pdfs.json)
+    Storage: JSON file (vault/thoth/_thoth/data/output/processed_pdfs.json)
 
     Schema:
     {

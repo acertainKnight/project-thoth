@@ -17,17 +17,21 @@ class VaultPathResolver:
     The vault structure is:
     - vault_root/           (Obsidian vault directory)
       - .obsidian/          (Obsidian config)
-      - .thoth/             (Thoth workspace)
-        - settings.json     (Thoth settings with relative paths)
-        - data/             (Thoth data directory)
+      - thoth/
+        - _thoth/           (Thoth workspace - user config)
+          - settings.json   (Thoth settings with relative paths)
+          - mcps.json       (MCP server config)
+          - analysis_schema.json
+          - prompts/        (User-editable prompt templates)
+          - skills/         (User-created skills)
+        - papers/
           - pdfs/           (PDF storage)
-          - notes/          (Generated notes)
-          - knowledge/      (Knowledge base)
-        - logs/             (Log files)
+          - markdown/       (Converted markdown)
+        - notes/            (Generated notes)
 
     All paths in settings.json are relative to vault_root, e.g.:
-    - ".thoth/data/pdfs" → vault_root/.thoth/data/pdfs
-    - ".thoth/data/notes" → vault_root/.thoth/data/notes
+    - "thoth/_thoth/prompts" → vault_root/thoth/_thoth/prompts
+    - "thoth/papers/pdfs" → vault_root/thoth/papers/pdfs
     """
 
     def __init__(self, vault_path: str | Path):
@@ -71,27 +75,27 @@ class VaultPathResolver:
                 'This may not be a valid Obsidian vault.'
             )
 
-        # Ensure .thoth directory exists
-        thoth_dir = self.vault_root / '.thoth'
+        # Ensure thoth/_thoth directory exists
+        thoth_dir = self.vault_root / 'thoth' / '_thoth'
         if not thoth_dir.exists():
-            logger.info(f'Creating .thoth directory at {thoth_dir}')
+            logger.info(f'Creating thoth/_thoth directory at {thoth_dir}')
             thoth_dir.mkdir(parents=True, exist_ok=True)
 
     def resolve(self, relative_path: str | Path) -> Path:
         """Convert vault-relative path to absolute path.
 
         Args:
-            relative_path: Path relative to vault root (e.g., ".thoth/data/pdfs")
+            relative_path: Path relative to vault root (e.g., "thoth/papers/pdfs")
 
         Returns:
             Absolute resolved path
 
         Examples:
             >>> resolver = VaultPathResolver('/home/user/Documents/MyVault')
-            >>> resolver.resolve('.thoth/data/pdfs')
-            Path("/home/user/Documents/MyVault/.thoth/data/pdfs")
-            >>> resolver.resolve('.thoth/settings.json')
-            Path("/home/user/Documents/MyVault/.thoth/settings.json")
+            >>> resolver.resolve('thoth/papers/pdfs')
+            Path("/home/user/Documents/MyVault/thoth/papers/pdfs")
+            >>> resolver.resolve('thoth/_thoth/settings.json')
+            Path("/home/user/Documents/MyVault/thoth/_thoth/settings.json")
         """
         if not relative_path:
             return self.vault_root
@@ -122,8 +126,8 @@ class VaultPathResolver:
 
         Examples:
             >>> resolver = VaultPathResolver('/home/user/Documents/MyVault')
-            >>> resolver.make_relative('/home/user/Documents/MyVault/.thoth/data/pdfs')
-            ".thoth/data/pdfs"
+            >>> resolver.make_relative('/home/user/Documents/MyVault/thoth/papers/pdfs')
+            "thoth/papers/pdfs"
         """
         path = Path(absolute_path).resolve()
 

@@ -219,16 +219,22 @@ Comparison Aspects:
         },
     }
 
-    async def initialize_all_agents(self) -> dict[str, str]:
+    async def initialize_all_agents(self, service_manager=None) -> dict[str, str]:
         """
         Initialize all required agents on startup.
 
         This creates agents if they don't exist, or updates their tools/persona
         if they do exist (preserving memory and conversation history).
 
+        Args:
+            service_manager: Optional ServiceManager instance to use for dependencies
+
         Returns:
             Dict mapping agent names to agent IDs
         """
+        # Store service_manager for later use
+        self._service_manager = service_manager
+
         logger.info('🚀 Initializing Thoth research agents...')
 
         agent_ids = {}
@@ -261,6 +267,10 @@ Comparison Aspects:
                     logger.error(f'   ✗ {agent_name}: {e}')
 
         logger.info(f'✅ Initialized {len(agent_ids)}/{len(self.AGENT_CONFIGS)} agents')
+
+        # Sync external MCP tools to agents
+        await self._sync_external_mcp_tools(agent_ids)
+
         return agent_ids
 
     async def _get_all_tools(self, client: httpx.AsyncClient) -> set[str]:
@@ -516,3 +526,35 @@ Comparison Aspects:
 
         except Exception as e:
             logger.warning(f'Could not attach filesystem: {e}')
+
+    async def _sync_external_mcp_tools(self, _agent_ids: dict[str, str]) -> None:
+        """
+        Sync external MCP tools to initialized agents.
+
+        Args:
+            _agent_ids: Dictionary mapping agent names to agent IDs (reserved for
+                future per-agent tool attachment).
+        """
+        try:
+            # Use the stored service_manager if available, otherwise create new instance
+            if hasattr(self, '_service_manager') and self._service_manager:
+                service_manager = self._service_manager
+            else:
+                from thoth.services.service_manager import ServiceManager
+
+                service_manager = ServiceManager()
+
+            mcp_manager = service_manager.get_service('mcp_servers_manager')
+
+            if not mcp_manager:
+                logger.debug(
+                    'MCP Servers Manager not available, skipping external tool sync'
+                )
+                return
+
+            # Trigger tool sync to all agents
+            await mcp_manager.sync_tools_to_agents()
+            logger.info('✓ Synced external MCP tools to agents')
+
+        except Exception as e:
+            logger.warning(f'Could not sync external MCP tools: {e}')

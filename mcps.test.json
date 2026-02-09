@@ -1,0 +1,32 @@
+{
+  "version": "1.0.0",
+  "mcpServers": {
+    "test-filesystem": {
+      "name": "Filesystem Server (Test)",
+      "enabled": true,
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      "autoAttach": false,
+      "timeout": 30
+    },
+    "test-memory": {
+      "name": "Memory Server (Test)",
+      "enabled": true,
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "autoAttach": false,
+      "timeout": 30
+    },
+    "test-time": {
+      "name": "Time Server (Test)",
+      "enabled": true,
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-time"],
+      "autoAttach": false,
+      "timeout": 30
+    }
+  }
+}

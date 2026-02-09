@@ -2921,3 +2921,271 @@
     font-size: 0.9rem;
   }
 }
+
+/* ===== MCP SERVERS TAB ===== */
+
+/* MCP Servers Area */
+.mcp-servers-area {
+  padding: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Header */
+.mcp-servers-header {
+  margin-bottom: 2rem;
+}
+
+.mcp-servers-header h2 {
+  margin: 0 0 0.5rem 0;
+  color: var(--text-accent);
+  font-size: 1.8rem;
+}
+
+.mcp-servers-description {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  margin-bottom: 1rem;
+}
+
+.mcp-add-server-btn {
+  margin-top: 1rem;
+}
+
+/* Server List */
+.mcp-servers-list {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+}
+
+.mcp-servers-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+/* Server Card */
+.mcp-server-card {
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.mcp-server-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+/* Status Indicator */
+.mcp-server-status {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--background-primary);
+}
+
+.mcp-server-status.connected {
+  background: var(--color-green);
+}
+
+.mcp-server-status.disconnected {
+  background: var(--color-orange);
+}
+
+.mcp-server-status.disabled {
+  background: var(--text-faint);
+}
+
+/* Server Info */
+.mcp-server-info h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--text-normal);
+  padding-right: 2rem;
+}
+
+.mcp-server-id {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-family: var(--font-monospace);
+}
+
+/* Server Details */
+.mcp-server-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.mcp-server-transport,
+.mcp-server-tools,
+.mcp-server-auto-attach {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.mcp-server-transport {
+  background: var(--background-secondary);
+  color: var(--text-accent);
+}
+
+.mcp-server-tools {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.mcp-server-auto-attach {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+/* Server Actions */
+.mcp-server-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.mcp-server-actions button {
+  flex: 1;
+  min-width: 70px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mcp-server-actions button:hover {
+  background: var(--background-modifier-hover);
+  transform: translateY(-1px);
+}
+
+.mcp-btn-success {
+  background: var(--color-green) !important;
+  color: white !important;
+  border-color: var(--color-green) !important;
+}
+
+.mcp-btn-warning {
+  background: var(--color-orange) !important;
+  color: white !important;
+  border-color: var(--color-orange) !important;
+}
+
+.mcp-btn-danger {
+  background: var(--color-red) !important;
+  color: white !important;
+  border-color: var(--color-red) !important;
+}
+
+.mcp-btn-secondary {
+  background: var(--background-secondary) !important;
+}
+
+/* Server Dialog */
+.mcp-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mcp-server-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1001;
+  max-width: 600px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.mcp-dialog-content {
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.mcp-dialog-content h2 {
+  margin: 0 0 1rem 0;
+  color: var(--text-accent);
+}
+
+.mcp-server-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.stdio-fields,
+.url-fields {
+  padding-left: 1rem;
+  border-left: 2px solid var(--background-modifier-border);
+}
+
+.mcp-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.mcp-dialog-buttons button {
+  padding: 0.5rem 1rem;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .mcp-servers-area {
+    padding: 1rem;
+  }
+
+  .mcp-servers-list {
+    grid-template-columns: 1fr;
+  }
+
+  .mcp-server-card {
+    padding: 0.75rem;
+  }
+
+  .mcp-server-actions {
+    flex-direction: column;
+  }
+
+  .mcp-server-actions button {
+    width: 100%;
+  }
+
+  .mcp-server-dialog {
+    width: 95%;
+  }
+}

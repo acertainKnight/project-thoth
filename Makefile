@@ -123,7 +123,7 @@ deploy-and-start: ## 🚀 ONE COMMAND: Deploy plugin + start complete ecosystem
 	@echo "$(GREEN)✅ COMPLETE SETUP FINISHED!$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Next steps:$(NC)"
-	@echo "1. Configure API keys: $(OBSIDIAN_VAULT)/_thoth/settings.json"
+	@echo "1. Configure API keys: $(OBSIDIAN_VAULT)/thoth/_thoth/settings.json"
 	@echo "2. Check MCP plugins: $(OBSIDIAN_VAULT)/.obsidian/plugins/thoth-obsidian/mcp-plugins.json"
 	@echo "3. Reload Obsidian: Ctrl/Cmd+P → 'Reload app without saving'"
 	@echo "4. Enable plugin: Settings → Community plugins → Enable 'Thoth'"
@@ -273,8 +273,8 @@ test-config: ## Test configuration loading
 		from thoth.config import config; \
 		print('$(GREEN)✓ Config loaded successfully$(NC)'); \
 		print(f'  Vault root: {config.vault_root}'); \
-		print(f'  Settings file: {config.vault_root}/_thoth/settings.json'); \
-		print(f'  Workspace: {config.vault_root}/_thoth')" 2>/dev/null || \
+		print(f'  Settings file: {config.vault_root}/thoth/_thoth/settings.json'); \
+		print(f'  Workspace: {config.vault_root}/thoth/_thoth')" 2>/dev/null || \
 		echo "$(RED)✗ Configuration test failed$(NC)"
 
 # =============================================================================
@@ -288,11 +288,11 @@ reload-settings: ## Manually trigger settings reload (tests hot-reload)
 		echo "$(RED)ERROR: OBSIDIAN_VAULT_PATH not set$(NC)"; \
 		exit 1; \
 	fi
-	@if [ ! -f "$(OBSIDIAN_VAULT_PATH)/_thoth/settings.json" ]; then \
+	@if [ ! -f "$(OBSIDIAN_VAULT_PATH)/thoth/_thoth/settings.json" ]; then \
 		echo "$(RED)ERROR: Settings file not found$(NC)"; \
 		exit 1; \
 	fi
-	@touch "$(OBSIDIAN_VAULT_PATH)/_thoth/settings.json"
+	@touch "$(OBSIDIAN_VAULT_PATH)/thoth/_thoth/settings.json"
 	@echo "$(GREEN)✓ Settings file touched, watching logs for reload...$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Check logs with: make dev-logs$(NC)"
@@ -302,7 +302,7 @@ reload-settings: ## Manually trigger settings reload (tests hot-reload)
 .PHONY: watch-settings
 watch-settings: ## Watch settings file for changes (live monitoring)
 	@echo "$(YELLOW)Watching settings file for changes...$(NC)"
-	@echo "$(CYAN)Edit $(OBSIDIAN_VAULT_PATH)/_thoth/settings.json in another window$(NC)"
+	@echo "$(CYAN)Edit $(OBSIDIAN_VAULT_PATH)/thoth/_thoth/settings.json in another window$(NC)"
 	@echo "$(CYAN)Logs will appear below (Ctrl+C to stop)$(NC)"
 	@echo ""
 	@docker compose -f docker-compose.dev.yml logs -f thoth-api | grep --line-buffered -i "reload\|settings"
@@ -317,7 +317,7 @@ test-hot-reload: ## Test hot-reload functionality end-to-end
 	@echo "$(GREEN)✓ Hot-reload endpoint responding$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Step 2: Trigger settings reload$(NC)"
-	@touch "$(OBSIDIAN_VAULT_PATH)/_thoth/settings.json"
+	@touch "$(OBSIDIAN_VAULT_PATH)/thoth/_thoth/settings.json"
 	@echo "$(GREEN)✓ Settings file touched$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Step 3: Wait for reload (3 seconds)$(NC)"
@@ -337,7 +337,7 @@ hot-reload-status: ## Check hot-reload status for all services
 	@curl -sf http://localhost:8000/health/hot-reload 2>/dev/null | jq . || echo "$(RED)Not available$(NC)"
 	@echo ""
 	@echo "$(CYAN)Settings File:$(NC)"
-	@ls -lh "$(OBSIDIAN_VAULT_PATH)/_thoth/settings.json" 2>/dev/null || echo "$(RED)Not found$(NC)"
+	@ls -lh "$(OBSIDIAN_VAULT_PATH)/thoth/_thoth/settings.json" 2>/dev/null || echo "$(RED)Not found$(NC)"
 	@echo ""
 	@echo "$(CYAN)Environment Variables:$(NC)"
 	@docker compose -f docker-compose.dev.yml exec -T thoth-api env | grep -E "HOT_RELOAD|DOCKER_ENV" || echo "$(RED)Not set$(NC)"
@@ -436,20 +436,20 @@ local-start: ## Start services locally (Letta in Docker, rest local)
 	@sleep 3
 	@echo "$(CYAN)Starting API server...$(NC)"
 	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT_PATH}"; \
-	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/_thoth" THOTH_SETTINGS_FILE="$$VAULT/_thoth/settings.json" DOCKER_ENV=false THOTH_LETTA_URL=http://localhost:8283 LOG_LEVEL=WARNING uv run python -m thoth api --host 0.0.0.0 --port 8000 > ./workspace/logs/api.log 2>&1 &'
+	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/thoth/_thoth" THOTH_SETTINGS_FILE="$$VAULT/thoth/_thoth/settings.json" DOCKER_ENV=false THOTH_LETTA_URL=http://localhost:8283 LOG_LEVEL=WARNING uv run python -m thoth api --host 0.0.0.0 --port 8000 > ./workspace/logs/api.log 2>&1 &'
 	@sleep 3
 	@echo "$(CYAN)Starting MCP server...$(NC)"
 	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT_PATH}"; \
-	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/_thoth" THOTH_SETTINGS_FILE="$$VAULT/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth mcp http --host 0.0.0.0 --port 8001 > ./workspace/logs/mcp.log 2>&1 &'
+	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/thoth/_thoth" THOTH_SETTINGS_FILE="$$VAULT/thoth/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth mcp http --host 0.0.0.0 --port 8001 > ./workspace/logs/mcp.log 2>&1 &'
 	@sleep 2
 	@echo "$(CYAN)Starting Discovery service...$(NC)"
 	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT_PATH}"; \
-	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/_thoth" THOTH_SETTINGS_FILE="$$VAULT/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth discovery server > ./workspace/logs/discovery.log 2>&1 &'
+	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/thoth/_thoth" THOTH_SETTINGS_FILE="$$VAULT/thoth/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=WARNING uv run python -m thoth discovery server > ./workspace/logs/discovery.log 2>&1 &'
 	@sleep 2
 	@bash -c 'source .env.vault 2>/dev/null || true; VAULT="$${OBSIDIAN_VAULT_PATH}"; \
 	WATCH="$(WATCH_DIR)"; \
 	echo "$(CYAN)Starting PDF Monitor (watching $$WATCH)...$(NC)"; \
-	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/_thoth" THOTH_SETTINGS_FILE="$$VAULT/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=INFO uv run python -m thoth monitor --watch-dir "$$WATCH" --optimized --recursive > ./workspace/logs/monitor.log 2>&1 &'
+	PYTHONPATH=src THOTH_WORKSPACE_DIR="$$VAULT/thoth/_thoth" THOTH_SETTINGS_FILE="$$VAULT/thoth/_thoth/settings.json" DOCKER_ENV=false LOG_LEVEL=INFO uv run python -m thoth monitor --watch-dir "$$WATCH" --optimized --recursive > ./workspace/logs/monitor.log 2>&1 &'
 	@sleep 1
 	@echo "$(GREEN)✅ All services started:$(NC)"
 	@echo "  • Letta Memory: http://localhost:8283 $(CYAN)(Docker)$(NC)"
@@ -505,7 +505,7 @@ prod: ## Start production server (local mode with 3 containers)
 			exit 1; \
 		fi; \
 		if [ -z "$$THOTH_DATA_MOUNT" ] && [ -n "$$VAULT_PATH" ]; then \
-			export THOTH_DATA_MOUNT="$$VAULT_PATH/_thoth"; \
+			export THOTH_DATA_MOUNT="$$VAULT_PATH/thoth/_thoth"; \
 		fi; \
 		echo "$(CYAN)Vault: $$VAULT_PATH$(NC)"; \
 		echo "$(CYAN)Data mount: $$THOTH_DATA_MOUNT$(NC)"; \
@@ -513,7 +513,7 @@ prod: ## Start production server (local mode with 3 containers)
 			echo "$(GREEN)✓ Found settings.json$(NC)"; \
 		else \
 			echo "$(YELLOW)⚠️  No settings.json at $$THOTH_DATA_MOUNT/settings.json$(NC)"; \
-			echo "$(YELLOW)   Configure API keys in vault/_thoth/settings.json$(NC)"; \
+			echo "$(YELLOW)   Configure API keys in vault/thoth/_thoth/settings.json$(NC)"; \
 		fi; \
 		echo ""; \
 		echo "$(CYAN)Building and starting production containers...$(NC)"; \
@@ -553,7 +553,7 @@ prod-microservices: ## Start production in microservices mode (7 containers)
 			exit 1; \
 		fi; \
 		if [ -z "$$THOTH_DATA_MOUNT" ] && [ -n "$$VAULT_PATH" ]; then \
-			export THOTH_DATA_MOUNT="$$VAULT_PATH/_thoth"; \
+			export THOTH_DATA_MOUNT="$$VAULT_PATH/thoth/_thoth"; \
 		fi; \
 		echo "$(CYAN)Vault: $$VAULT_PATH$(NC)"; \
 		export THOTH_DATA_MOUNT; \
@@ -624,7 +624,7 @@ prod-clean: ## Clean production deployment (WARNING: deletes volumes)
 watch: ## Start PDF directory watcher (hot-reloads from settings.json)
 	@echo "$(YELLOW)Starting PDF directory watcher with hot reload...$(NC)"
 	@echo "$(CYAN)Watching: $(WATCH_DIR)$(NC)"
-	@echo "$(CYAN)Hot reload: Edit _thoth/settings.json → monitor auto-reloads!$(NC)"
+	@echo "$(CYAN)Hot reload: Edit thoth/_thoth/settings.json → monitor auto-reloads!$(NC)"
 	@echo ""
 	@PYTHONPATH=src THOTH_WORKSPACE_DIR=./workspace DOCKER_ENV=false uv run python -m thoth monitor --watch-dir "$(WATCH_DIR)" --optimized --recursive > ./workspace/logs/monitor.log 2>&1 &
 	@echo "$(GREEN)✅ PDF watcher started with hot reload$(NC)"
@@ -857,25 +857,19 @@ _build-plugin:
 .PHONY: _setup-vault-integration
 _setup-vault-integration:
 	@echo "$(YELLOW)Setting up vault integration...$(NC)"
-	@mkdir -p "$(OBSIDIAN_VAULT)/_thoth/data/pdfs"
-	@mkdir -p "$(OBSIDIAN_VAULT)/_thoth/data/markdown"
-	@mkdir -p "$(OBSIDIAN_VAULT)/_thoth/data/notes"
-	@mkdir -p "$(OBSIDIAN_VAULT)/_thoth/data/knowledge"
-	@mkdir -p "$(OBSIDIAN_VAULT)/_thoth/data/queries"
-	@mkdir -p "$(OBSIDIAN_VAULT)/_thoth/data/agents"
-	@mkdir -p "$(OBSIDIAN_VAULT)/_thoth/data/discovery"
-	@mkdir -p "$(OBSIDIAN_VAULT)/_thoth/data/prompts"
-	@mkdir -p "$(OBSIDIAN_VAULT)/_thoth/cache"
-	@mkdir -p "$(OBSIDIAN_VAULT)/_thoth/logs"
-	@mkdir -p "$(OBSIDIAN_VAULT)/_thoth/config"
+	@mkdir -p "$(OBSIDIAN_VAULT)/thoth/_thoth/prompts"
+	@mkdir -p "$(OBSIDIAN_VAULT)/thoth/_thoth/skills"
+	@mkdir -p "$(OBSIDIAN_VAULT)/thoth/papers/pdfs"
+	@mkdir -p "$(OBSIDIAN_VAULT)/thoth/papers/markdown"
+	@mkdir -p "$(OBSIDIAN_VAULT)/thoth/notes"
 	@mkdir -p "$(OBSIDIAN_VAULT)/.obsidian/plugins/thoth-obsidian"
 	@echo "$(GREEN)✅ Directory structure created$(NC)"
-	@if [ ! -f "$(OBSIDIAN_VAULT)/_thoth/settings.json" ]; then \
+	@if [ ! -f "$(OBSIDIAN_VAULT)/thoth/_thoth/settings.json" ]; then \
 		if [ -f "templates/thoth.settings.json" ]; then \
-			cp "templates/thoth.settings.json" "$(OBSIDIAN_VAULT)/_thoth/settings.json"; \
+			cp "templates/thoth.settings.json" "$(OBSIDIAN_VAULT)/thoth/_thoth/settings.json"; \
 			echo "$(GREEN)✅ Full settings template deployed$(NC)"; \
 		else \
-			python3 -c "import json; json.dump({'version': '1.0.0', 'paths': {'workspace': '$(OBSIDIAN_VAULT)/_thoth', 'vault': '$(OBSIDIAN_VAULT)'}, 'apiKeys': {'openaiKey': '', 'anthropicKey': '', 'mistralKey': '', 'openrouterKey': ''}, 'servers': {'api': {'host': '0.0.0.0', 'port': 8000, 'autoStart': True}, 'mcp': {'host': 'localhost', 'port': 8001, 'autoStart': True, 'enabled': True}}}, open('$(OBSIDIAN_VAULT)/_thoth/settings.json', 'w'), indent=2)"; \
+			python3 -c "import json; json.dump({'version': '1.0.0', 'paths': {'workspace': 'thoth/_thoth', 'vault': '$(OBSIDIAN_VAULT)'}, 'apiKeys': {'openaiKey': '', 'anthropicKey': '', 'mistralKey': '', 'openrouterKey': ''}, 'servers': {'api': {'host': '0.0.0.0', 'port': 8000, 'autoStart': True}, 'mcp': {'host': 'localhost', 'port': 8001, 'autoStart': True, 'enabled': True}}}, open('$(OBSIDIAN_VAULT)/thoth/_thoth/settings.json', 'w'), indent=2)"; \
 			echo "$(GREEN)✅ Default settings created$(NC)"; \
 		fi; \
 	else \
@@ -885,7 +879,7 @@ _setup-vault-integration:
 		echo "$(YELLOW)Copying prompt templates (preserving existing)...$(NC)"; \
 		find data/prompts -type f -name "*.j2" | while IFS= read -r file; do \
 			rel_path=$${file#data/prompts/}; \
-			dest="$(OBSIDIAN_VAULT)/_thoth/data/prompts/$$rel_path"; \
+			dest="$(OBSIDIAN_VAULT)/thoth/_thoth/prompts/$$rel_path"; \
 			mkdir -p "$$(dirname "$$dest")"; \
 			if [ ! -f "$$dest" ]; then \
 				cp "$$file" "$$dest" && echo "  ✓ Copied: $$rel_path"; \
@@ -896,7 +890,7 @@ _setup-vault-integration:
 		echo "$(GREEN)✅ Prompt templates processed$(NC)"; \
 	fi
 	@if [ ! -f "$(OBSIDIAN_VAULT)/.obsidian/plugins/thoth-obsidian/mcp-plugins.json" ]; then \
-		python3 -c "import json; json.dump({'version': '1.0.0', 'plugins': {'filesystem': {'enabled': False, 'name': 'Vault Files', 'description': 'Access files within the vault', 'transport': 'stdio', 'command': ['npx', '@modelcontextprotocol/server-filesystem', '{{obsidian_vault}}'], 'priority': 1, 'capabilities': ['tools'], 'sandbox': True, 'allowed_file_paths': ['{{obsidian_vault}}', '{{obsidian_vault}}/attachments']}, 'sqlite': {'enabled': False, 'name': 'Research DB', 'description': 'SQLite database for research', 'transport': 'stdio', 'command': ['npx', '@modelcontextprotocol/server-sqlite', '--db-path', '{{obsidian_vault}}/_thoth/research.db'], 'priority': 2, 'capabilities': ['tools'], 'sandbox': True}, 'git': {'enabled': False, 'name': 'Vault Git', 'description': 'Git operations for the vault', 'transport': 'stdio', 'command': ['npx', '@modelcontextprotocol/server-git', '--repository', '{{obsidian_vault}}'], 'priority': 3, 'capabilities': ['tools'], 'sandbox': True}}, 'vault_variables': {'obsidian_vault': '$(OBSIDIAN_VAULT)', 'vault_path': '$(OBSIDIAN_VAULT)', 'workspace': '$(OBSIDIAN_VAULT)/_thoth'}}, open('$(OBSIDIAN_VAULT)/.obsidian/plugins/thoth-obsidian/mcp-plugins.json', 'w'), indent=2)"; \
+		python3 -c "import json; json.dump({'version': '1.0.0', 'plugins': {'filesystem': {'enabled': False, 'name': 'Vault Files', 'description': 'Access files within the vault', 'transport': 'stdio', 'command': ['npx', '@modelcontextprotocol/server-filesystem', '{{obsidian_vault}}'], 'priority': 1, 'capabilities': ['tools'], 'sandbox': True, 'allowed_file_paths': ['{{obsidian_vault}}', '{{obsidian_vault}}/attachments']}, 'sqlite': {'enabled': False, 'name': 'Research DB', 'description': 'SQLite database for research', 'transport': 'stdio', 'command': ['npx', '@modelcontextprotocol/server-sqlite', '--db-path', '{{obsidian_vault}}/thoth/_thoth/research.db'], 'priority': 2, 'capabilities': ['tools'], 'sandbox': True}, 'git': {'enabled': False, 'name': 'Vault Git', 'description': 'Git operations for the vault', 'transport': 'stdio', 'command': ['npx', '@modelcontextprotocol/server-git', '--repository', '{{obsidian_vault}}'], 'priority': 3, 'capabilities': ['tools'], 'sandbox': True}}, 'vault_variables': {'obsidian_vault': '$(OBSIDIAN_VAULT)', 'vault_path': '$(OBSIDIAN_VAULT)', 'workspace': '$(OBSIDIAN_VAULT)/thoth/_thoth'}}, open('$(OBSIDIAN_VAULT)/.obsidian/plugins/thoth-obsidian/mcp-plugins.json', 'w'), indent=2)"; \
 		echo "$(GREEN)✅ MCP plugins config created$(NC)"; \
 	else \
 		echo "$(GREEN)✅ MCP plugins config preserved$(NC)"; \
