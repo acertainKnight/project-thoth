@@ -61,7 +61,7 @@ export class ResearchTabComponent {
     this.plugin = plugin;
   }
 
-  async render() {
+  async render(reloadData: boolean = true) {
     this.containerEl.empty();
 
     // Create main layout
@@ -77,15 +77,20 @@ export class ResearchTabComponent {
     });
     refreshBtn.onclick = () => this.refresh();
 
-    // Load research questions
-    await this.loadResearchQuestions();
+    // Load research questions (only on fresh load / refresh)
+    if (reloadData) {
+      await this.loadResearchQuestions();
+    }
 
     // Questions section
     this.renderQuestionsSection(researchContainer);
 
     // Articles section (if question selected)
     if (this.selectedQuestion) {
-      await this.loadArticles(this.selectedQuestion.id);
+      if (reloadData) {
+        await this.loadArticles(this.selectedQuestion.id);
+      }
+      this.applyCurrentFilter();
       this.renderArticlesSection(researchContainer);
     }
 
@@ -377,10 +382,14 @@ export class ResearchTabComponent {
       if (response.ok) {
         const data = await response.json();
         console.log('[ResearchTab] Received articles data:', data);
-        this.allArticles = data.matches || [];
-        this.articles = [...this.allArticles]; // Create filtered copy
-        this.currentFilter = 'all'; // Reset filter
-        console.log('[ResearchTab] Loaded articles:', this.articles.length);
+        const rawArticles: MatchedArticle[] = data.matches || [];
+        // On fresh load, filter out articles already rated or downloaded
+        // so the user only sees unprocessed articles in their triage queue
+        this.allArticles = rawArticles.filter(a => !a.user_sentiment);
+        this.articles = [...this.allArticles];
+        this.currentFilter = 'all';
+        console.log('[ResearchTab] Loaded articles:', rawArticles.length,
+          '| After filtering rated/downloaded:', this.allArticles.length);
       } else {
         const errorText = await response.text();
         console.error('[ResearchTab] Articles API error:', response.status, errorText);
@@ -430,7 +439,8 @@ export class ResearchTabComponent {
         const updatedArticle = await response.json();
         console.log('[ResearchTab] Article rated successfully:', updatedArticle);
         article.user_sentiment = sentiment;
-        await this.render();
+        // Re-render without reloading so rated article stays visible this session
+        await this.render(false);
         new Notice(`Marked as ${sentiment}`);
       } else {
         const errorText = await response.text();
@@ -468,7 +478,7 @@ export class ResearchTabComponent {
 
       if (response.ok) {
         article.is_viewed = newValue;
-        await this.render();
+        await this.render(false);
       } else {
         throw new Error('Failed to update status');
       }
@@ -494,7 +504,7 @@ export class ResearchTabComponent {
 
       if (response.ok) {
         article.is_bookmarked = newValue;
-        await this.render();
+        await this.render(false);
         new Notice(newValue ? 'Bookmarked' : 'Removed bookmark');
       } else {
         throw new Error('Failed to update bookmark');
@@ -528,7 +538,12 @@ export class ResearchTabComponent {
         // Update local state
         article.is_bookmarked = true;
         article.is_viewed = true;
-        await this.render();
+
+        // Auto-like the article on download
+        await this.sendLikeRating(article);
+
+        // Re-render without reloading data so article stays visible this session
+        await this.render(false);
 
         console.log('Download result:', result);
       } else {
@@ -537,7 +552,36 @@ export class ResearchTabComponent {
       }
     } catch (error) {
       console.error('Error saving article:', error);
-      new Notice(`Failed to save article: ${error.message}`);
+      new Notice(`Failed to save article: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Sends a "like" rating to the server for the given article.
+   * Used to auto-like articles when they are downloaded.
+   */
+  private async sendLikeRating(article: MatchedArticle) {
+    if (!this.selectedQuestion) return;
+
+    try {
+      const endpoint = this.plugin.getEndpointUrl();
+      const response = await fetch(
+        `${endpoint}/api/research/questions/${this.selectedQuestion.id}/articles/${article.match_id}/sentiment`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sentiment: 'like' })
+        }
+      );
+
+      if (response.ok) {
+        article.user_sentiment = 'like';
+        console.log('[ResearchTab] Auto-liked downloaded article:', article.title);
+      } else {
+        console.error('[ResearchTab] Failed to auto-like article:', response.status);
+      }
+    } catch (error) {
+      console.error('[ResearchTab] Error auto-liking article:', error);
     }
   }
 
@@ -635,13 +679,10 @@ export class ResearchTabComponent {
     }
   }
 
-  private async filterArticles(filter: string) {
-    this.currentFilter = filter;
-
-    // Apply filter starting from all articles
+  private applyCurrentFilter() {
     let filtered = [...this.allArticles];
 
-    switch (filter) {
+    switch (this.currentFilter) {
       case 'new':
         filtered = filtered.filter(a => !a.is_viewed);
         break;
@@ -650,12 +691,15 @@ export class ResearchTabComponent {
         break;
       case 'all':
       default:
-        // Show all articles
         break;
     }
 
     this.articles = filtered;
-    await this.render();
+  }
+
+  private async filterArticles(filter: string) {
+    this.currentFilter = filter;
+    await this.render(false);
   }
 
   private async refresh() {
