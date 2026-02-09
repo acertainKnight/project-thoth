@@ -39,7 +39,9 @@ class MCPServersManager(BaseService):
         self.config_path: Path | None = None
         self.current_config: MCPServersConfig | None = None
         self.connected_servers: dict[str, Any] = {}
-        self.server_tools: dict[str, list[str]] = {}  # server_id -> tool names
+        self.server_tools: dict[
+            str, list[dict[str, str]]
+        ] = {}  # server_id -> list of tool dicts
         self.watch_task: asyncio.Task | None = None
         self._last_mtime: float | None = None
         self._mcp_registry: Any | None = None
@@ -65,7 +67,8 @@ class MCPServersManager(BaseService):
 
         Args:
             mcp_registry: MCPToolRegistry for registering proxied tools
-            letta_service: LettaService for attaching tools to agents
+            letta_service: LettaService for registering MCP servers and attaching
+                tools to agents
         """
         self._mcp_registry = mcp_registry
         self._letta_service = letta_service
@@ -321,31 +324,64 @@ class MCPServersManager(BaseService):
                     f'Server {server_id}: unsupported transport {server_entry.transport}'
                 )
 
-            # Create session and load tools
-            session = await create_session(connection_config).__aenter__()
-            tools = await load_mcp_tools(session)
-
-            if tools:
-                self.connected_servers[server_id] = session
-                tool_names = [tool.name for tool in tools]
-                self.server_tools[server_id] = tool_names
-
-                # Register tools with Thoth's MCP registry (with prefix)
-                if self._mcp_registry:
-                    for tool in tools:
-                        # Prefix tool name with server ID
-                        prefixed_name = f'{server_id}__{tool.name}'
-
-                        # Create a proxy tool that wraps the external tool
-                        # This would need the actual MCPTool implementation
-                        # For now, just log
-                        self.logger.debug(f'Would register tool: {prefixed_name}')
-
-                self.logger.info(
-                    f'Connected to {server_id}: discovered {len(tools)} tools'
+            # Register server with Letta first (if available)
+            # Letta will handle the connection and tool discovery
+            if self._letta_service:
+                letta_registered = await self._register_mcp_server_with_letta(
+                    server_id, server_entry
                 )
+                if letta_registered:
+                    # Get tools from Letta's discovery
+                    tool_details = await self._sync_tools_from_letta(server_id)
+                    if tool_details:
+                        self.server_tools[server_id] = tool_details
+                        self.logger.info(
+                            f'Registered MCP server {server_id} with Letta: {len(tool_details)} tools available'
+                        )
+                        # Mark as connected (Letta manages the actual connection)
+                        self.connected_servers[server_id] = 'letta_managed'
+                    else:
+                        self.logger.warning(
+                            f'Server {server_id} registered with Letta but no tools discovered'
+                        )
+                else:
+                    self.logger.error(
+                        f'Failed to register server {server_id} with Letta'
+                    )
             else:
-                self.logger.warning(f'Server {server_id} provided no tools')
+                # Fallback: Direct connection via langchain_mcp_adapters
+                # This is for development/testing when Letta is not available
+                self.logger.warning(
+                    f'Letta service not available - using direct MCP connection for {server_id}'
+                )
+
+                session = await create_session(connection_config).__aenter__()
+                tools = await load_mcp_tools(session)
+
+                if tools:
+                    self.connected_servers[server_id] = session
+
+                    # Store tool details (name, description, prefixed name)
+                    tool_details = []
+                    for tool in tools:
+                        prefixed_name = f'{server_id}__{tool.name}'
+                        tool_details.append(
+                            {
+                                'name': tool.name,
+                                'description': getattr(tool, 'description', '') or '',
+                                'prefixed_name': prefixed_name,
+                            }
+                        )
+                    self.server_tools[server_id] = tool_details
+
+                    self.logger.info(
+                        f'Connected directly to {server_id}: discovered {len(tools)} tools'
+                    )
+                    self.logger.warning(
+                        'Tools will not be available to Letta agents without Letta registration'
+                    )
+                else:
+                    self.logger.warning(f'Server {server_id} provided no tools')
 
         except Exception as e:
             self.logger.error(f'Failed to connect to server {server_id}: {e}')
@@ -393,10 +429,14 @@ class MCPServersManager(BaseService):
 
             # Collect all tools to attach
             tools_to_attach = []
-            for server_id in auto_attach_servers.keys():
+            for server_id, server_entry in auto_attach_servers.items():
                 if server_id in self.server_tools:
+                    # Get prefixed names from tool details, excluding disabled tools
+                    disabled = set(server_entry.disabled_tools)
                     prefixed_names = [
-                        f'{server_id}__{name}' for name in self.server_tools[server_id]
+                        tool['prefixed_name']
+                        for tool in self.server_tools[server_id]
+                        if tool['name'] not in disabled
                     ]
                     tools_to_attach.extend(prefixed_names)
 
@@ -585,3 +625,129 @@ class MCPServersManager(BaseService):
         """
         config_obj = await self.load_config()
         return config_obj.mcp_servers
+
+    def get_server_tool_details(self, server_id: str) -> list[dict[str, str]]:
+        """
+        Get detailed tool information for a specific server.
+
+        Args:
+            server_id: Server identifier
+
+        Returns:
+            list: List of tool dicts with 'name', 'description', 'prefixed_name' keys
+        """
+        return self.server_tools.get(server_id, [])
+
+    def get_tools_for_server(self, server_id: str) -> list[str]:
+        """
+        Get tool names for a specific server (convenience method).
+
+        Args:
+            server_id: Server identifier
+
+        Returns:
+            list: List of tool names (unprefixed)
+        """
+        tool_details = self.server_tools.get(server_id, [])
+        return [tool['name'] for tool in tool_details]
+
+    async def _register_mcp_server_with_letta(
+        self, server_id: str, server_entry: MCPServerEntry
+    ) -> bool:
+        """
+        Register an MCP server with Letta's native MCP server support.
+
+        Args:
+            server_id: MCP server identifier
+            server_entry: Server configuration
+
+        Returns:
+            bool: True if registration successful, False otherwise
+        """
+        if not self._letta_service:
+            self.logger.warning(
+                'Letta service not available - cannot register MCP server'
+            )
+            return False
+
+        try:
+            # Build server config for Letta
+            server_config = {
+                'transport': server_entry.transport,
+            }
+
+            if server_entry.transport == 'stdio':
+                server_config['command'] = server_entry.command
+                server_config['args'] = server_entry.args
+                if server_entry.env:
+                    server_config['env'] = server_entry.env
+            elif server_entry.transport in ['http', 'sse']:
+                server_config['url'] = server_entry.url
+
+            # Register server with Letta
+            result = self._letta_service.register_mcp_server(server_id, server_config)
+
+            if result.get('success'):
+                self.logger.info(
+                    f"Registered MCP server '{server_id}' with Letta - Letta will discover tools automatically"
+                )
+                return True
+            else:
+                self.logger.error(
+                    f"Failed to register MCP server '{server_id}' with Letta: {result.get('error')}"
+                )
+                return False
+
+        except Exception as e:
+            self.logger.error(
+                f"Error registering MCP server '{server_id}' with Letta: {e}"
+            )
+            return False
+
+    async def _sync_tools_from_letta(self, server_id: str) -> list[dict[str, str]]:
+        """
+        Get tool list from Letta's MCP server registration.
+
+        Args:
+            server_id: MCP server identifier
+
+        Returns:
+            list: Tool details from Letta (with unprefixed 'name' and prefixed
+                'prefixed_name')
+        """
+        if not self._letta_service:
+            return []
+
+        try:
+            # Get tools discovered by Letta
+            letta_tools = self._letta_service.list_mcp_tools_by_server(server_id)
+
+            tool_details = []
+            for tool in letta_tools:
+                tool_name = tool.get('name', '')
+
+                # Letta may return prefixed names (server-id__tool-name)
+                # Extract the unprefixed name for storage
+                if '__' in tool_name and tool_name.startswith(f'{server_id}__'):
+                    unprefixed_name = tool_name.split('__', 1)[1]
+                else:
+                    unprefixed_name = tool_name
+
+                tool_details.append(
+                    {
+                        'name': unprefixed_name,  # Store unprefixed for API simplicity
+                        'description': tool.get('description', ''),
+                        'prefixed_name': tool_name,  # Store full name as Letta knows it
+                    }
+                )
+
+            self.logger.info(
+                f'Retrieved {len(tool_details)} tools from Letta for server {server_id}'
+            )
+            return tool_details
+
+        except Exception as e:
+            self.logger.error(
+                f'Failed to sync tools from Letta for server {server_id}: {e}'
+            )
+            return []

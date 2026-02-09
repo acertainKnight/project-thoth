@@ -9,6 +9,14 @@ interface MCPServer {
   transport: string;
   auto_attach: boolean;
   tool_count: number;
+  tools?: MCPServerTool[];
+}
+
+interface MCPServerTool {
+  name: string;
+  description: string;
+  prefixed_name: string;
+  attached: boolean;
 }
 
 interface MCPServerConfig {
@@ -23,10 +31,19 @@ interface MCPServerConfig {
   timeout: number;
 }
 
+interface LettaAgent {
+  id: string;
+  name: string;
+}
+
 export class MCPServersTabComponent {
   plugin: ThothPlugin;
   container: HTMLElement;
   servers: MCPServer[] = [];
+  expandedServers: Set<string> = new Set();
+  selectedTools: Map<string, Set<string>> = new Map();
+  selectedAgent: string | null = null;
+  agents: LettaAgent[] = [];
 
   constructor(plugin: ThothPlugin, container: HTMLElement) {
     this.plugin = plugin;
@@ -51,8 +68,36 @@ export class MCPServersTabComponent {
     });
     addButton.onclick = () => this.showAddServerDialog();
 
-    // Load and display servers
-    await this.loadServers();
+    // Load agents and servers
+    await Promise.all([this.loadServers(), this.loadAgents()]);
+
+    // Agent selector (if agents available)
+    if (this.agents.length > 0) {
+      const agentSelector = this.container.createDiv({ cls: 'mcp-agent-selector' });
+      agentSelector.createEl('label', { text: 'Target Agent: ' });
+      const select = agentSelector.createEl('select');
+
+      const defaultOption = select.createEl('option', { text: '-- Select Agent --', value: '' });
+      for (const agent of this.agents) {
+        select.createEl('option', { text: agent.name, value: agent.id });
+      }
+
+      if (this.selectedAgent) {
+        select.value = this.selectedAgent;
+      }
+
+      select.onchange = async () => {
+        this.selectedAgent = select.value || null;
+        // Refresh tool lists if any servers are expanded
+        for (const serverId of this.expandedServers) {
+          const server = this.servers.find(s => s.server_id === serverId);
+          if (server) {
+            server.tools = await this.loadServerTools(serverId);
+          }
+        }
+        await this.render();
+      };
+    }
 
     // Server list
     const listContainer = this.container.createDiv({ cls: 'mcp-servers-list' });
@@ -64,7 +109,7 @@ export class MCPServersTabComponent {
       });
     } else {
       for (const server of this.servers) {
-        this.renderServerCard(listContainer, server);
+        await this.renderServerCard(listContainer, server);
       }
     }
   }
@@ -88,7 +133,46 @@ export class MCPServersTabComponent {
     }
   }
 
-  renderServerCard(container: HTMLElement, server: MCPServer): void {
+  async loadAgents(): Promise<void> {
+    try {
+      const lettaEndpoint = this.plugin.settings.lettaEndpointUrl || 'http://localhost:8283';
+      const response = await fetch(`${lettaEndpoint}/v1/agents/`);
+      if (response.ok) {
+        this.agents = await response.json();
+      } else {
+        console.error('Failed to load agents:', response.statusText);
+        this.agents = [];
+      }
+    } catch (error) {
+      console.error('Error loading agents:', error);
+      this.agents = [];
+    }
+  }
+
+  async loadServerTools(serverId: string): Promise<MCPServerTool[]> {
+    try {
+      const endpoint = this.plugin.settings.remoteMode
+        ? `${this.plugin.settings.remoteEndpointUrl}/api/mcp-servers/${serverId}/tools`
+        : `http://localhost:8282/api/mcp-servers/${serverId}/tools`;
+
+      const url = this.selectedAgent
+        ? `${endpoint}?agent_id=${this.selectedAgent}`
+        : endpoint;
+
+      const response = await fetch(url);
+      if (response.ok) {
+        return await response.json();
+      } else {
+        console.error('Failed to load tools:', response.statusText);
+        return [];
+      }
+    } catch (error) {
+      console.error('Error loading tools:', error);
+      return [];
+    }
+  }
+
+  async renderServerCard(container: HTMLElement, server: MCPServer): Promise<void> {
     const card = container.createDiv({ cls: 'mcp-server-card' });
 
     // Status indicator
@@ -124,6 +208,25 @@ export class MCPServersTabComponent {
     // Actions
     const actions = card.createDiv({ cls: 'mcp-server-actions' });
 
+    // Show/Hide Tools button
+    const isExpanded = this.expandedServers.has(server.server_id);
+    const toolsBtn = actions.createEl('button', {
+      text: isExpanded ? 'Hide Tools' : 'Show Tools',
+      cls: 'mcp-btn-secondary'
+    });
+    toolsBtn.onclick = async () => {
+      if (this.expandedServers.has(server.server_id)) {
+        this.expandedServers.delete(server.server_id);
+      } else {
+        this.expandedServers.add(server.server_id);
+        // Load tools if not already loaded
+        if (!server.tools) {
+          server.tools = await this.loadServerTools(server.server_id);
+        }
+      }
+      await this.render();
+    };
+
     // Toggle button
     const toggleBtn = actions.createEl('button', {
       text: server.enabled ? 'Disable' : 'Enable',
@@ -151,6 +254,11 @@ export class MCPServersTabComponent {
       cls: 'mcp-btn-danger'
     });
     removeBtn.onclick = () => this.removeServer(server.server_id);
+
+    // Tools list (if expanded)
+    if (isExpanded && server.tools) {
+      await this.renderToolsList(card, server);
+    }
   }
 
   async toggleServer(serverId: string, enabled: boolean): Promise<void> {
@@ -325,5 +433,212 @@ export class MCPServersTabComponent {
     // Similar to showAddServerDialog but for editing
     // TODO: Implement edit dialog
     alert('Edit functionality coming soon. For now, please edit mcps.json directly.');
+  }
+
+  async renderToolsList(card: HTMLElement, server: MCPServer): Promise<void> {
+    if (!server.tools || server.tools.length === 0) {
+      const emptyMsg = card.createDiv({ cls: 'mcp-tool-list-empty' });
+      emptyMsg.createEl('p', { text: 'No tools available from this server.' });
+      return;
+    }
+
+    const toolsContainer = card.createDiv({ cls: 'mcp-tool-list' });
+
+    // Action bar at top
+    const actionBar = toolsContainer.createDiv({ cls: 'mcp-tool-actions' });
+
+    // Select All / Deselect All buttons
+    const selectAllBtn = actionBar.createEl('button', {
+      text: 'Select All',
+      cls: 'mcp-btn-secondary'
+    });
+    selectAllBtn.onclick = () => {
+      if (!this.selectedTools.has(server.server_id)) {
+        this.selectedTools.set(server.server_id, new Set());
+      }
+      const selected = this.selectedTools.get(server.server_id)!;
+      for (const tool of server.tools!) {
+        selected.add(tool.name);
+      }
+      this.render();
+    };
+
+    const deselectAllBtn = actionBar.createEl('button', {
+      text: 'Deselect All',
+      cls: 'mcp-btn-secondary'
+    });
+    deselectAllBtn.onclick = () => {
+      this.selectedTools.set(server.server_id, new Set());
+      this.render();
+    };
+
+    // Get selected tools for this server
+    const selected = this.selectedTools.get(server.server_id) || new Set();
+
+    // Attach/Detach buttons
+    if (this.selectedAgent && selected.size > 0) {
+      const attachBtn = actionBar.createEl('button', {
+        text: `Attach Selected (${selected.size})`,
+        cls: 'mcp-btn-success'
+      });
+      attachBtn.onclick = () => this.attachTools(server.server_id, Array.from(selected));
+
+      const detachBtn = actionBar.createEl('button', {
+        text: `Detach Selected (${selected.size})`,
+        cls: 'mcp-btn-warning'
+      });
+      detachBtn.onclick = () => this.detachTools(server.server_id, Array.from(selected));
+    } else if (!this.selectedAgent) {
+      actionBar.createEl('span', {
+        text: 'Select an agent above to attach/detach tools',
+        cls: 'mcp-tool-hint'
+      });
+    }
+
+    // Tools list
+    for (const tool of server.tools) {
+      const toolItem = toolsContainer.createDiv({ cls: 'mcp-tool-item' });
+
+      // Checkbox
+      const checkbox = toolItem.createEl('input', {
+        type: 'checkbox',
+        cls: 'mcp-tool-checkbox'
+      });
+      checkbox.checked = selected.has(tool.name);
+      checkbox.onchange = () => {
+        if (!this.selectedTools.has(server.server_id)) {
+          this.selectedTools.set(server.server_id, new Set());
+        }
+        const toolSet = this.selectedTools.get(server.server_id)!;
+        if (checkbox.checked) {
+          toolSet.add(tool.name);
+        } else {
+          toolSet.delete(tool.name);
+        }
+        this.render();
+      };
+
+      // Tool info
+      const toolInfo = toolItem.createDiv({ cls: 'mcp-tool-info' });
+
+      const toolHeader = toolInfo.createDiv({ cls: 'mcp-tool-header' });
+      toolHeader.createEl('span', { text: tool.name, cls: 'mcp-tool-name' });
+
+      if (tool.attached) {
+        toolHeader.createEl('span', { text: '✓ Attached', cls: 'mcp-tool-attached-badge' });
+      }
+
+      if (tool.description) {
+        toolInfo.createEl('div', { text: tool.description, cls: 'mcp-tool-description' });
+      }
+
+      // Prefixed name with copy button
+      const prefixedContainer = toolInfo.createDiv({ cls: 'mcp-tool-prefixed-container' });
+      prefixedContainer.createEl('code', {
+        text: tool.prefixed_name,
+        cls: 'mcp-tool-prefixed-name'
+      });
+
+      const copyBtn = prefixedContainer.createEl('button', {
+        text: '📋',
+        cls: 'mcp-tool-copy-btn',
+        attr: { 'aria-label': 'Copy tool name' }
+      });
+      copyBtn.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(tool.prefixed_name);
+          copyBtn.textContent = '✓';
+          setTimeout(() => {
+            copyBtn.textContent = '📋';
+          }, 2000);
+        } catch (error) {
+          console.error('Failed to copy:', error);
+          alert(`Failed to copy. Tool name: ${tool.prefixed_name}`);
+        }
+      };
+    }
+  }
+
+  async attachTools(serverId: string, toolNames: string[]): Promise<void> {
+    if (!this.selectedAgent) {
+      alert('Please select an agent first.');
+      return;
+    }
+
+    try {
+      const endpoint = this.plugin.settings.remoteMode
+        ? `${this.plugin.settings.remoteEndpointUrl}/api/mcp-servers/${serverId}/tools/attach`
+        : `http://localhost:8282/api/mcp-servers/${serverId}/tools/attach`;
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agent_id: this.selectedAgent,
+          tool_names: toolNames
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const attached = result.attached?.length || 0;
+        const alreadyAttached = result.already_attached?.length || 0;
+        alert(`✓ Success!\nAttached: ${attached}\nAlready attached: ${alreadyAttached}`);
+
+        // Refresh server tools to update attached status
+        const server = this.servers.find(s => s.server_id === serverId);
+        if (server) {
+          server.tools = await this.loadServerTools(serverId);
+        }
+        await this.render();
+      } else {
+        const error = await response.text();
+        alert(`Failed to attach tools: ${error}`);
+      }
+    } catch (error) {
+      console.error('Error attaching tools:', error);
+      alert(`Error: ${error}`);
+    }
+  }
+
+  async detachTools(serverId: string, toolNames: string[]): Promise<void> {
+    if (!this.selectedAgent) {
+      alert('Please select an agent first.');
+      return;
+    }
+
+    try {
+      const endpoint = this.plugin.settings.remoteMode
+        ? `${this.plugin.settings.remoteEndpointUrl}/api/mcp-servers/${serverId}/tools/detach`
+        : `http://localhost:8282/api/mcp-servers/${serverId}/tools/detach`;
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agent_id: this.selectedAgent,
+          tool_names: toolNames
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const detached = result.detached?.length || 0;
+        alert(`✓ Detached ${detached} tool(s) successfully!`);
+
+        // Refresh server tools to update attached status
+        const server = this.servers.find(s => s.server_id === serverId);
+        if (server) {
+          server.tools = await this.loadServerTools(serverId);
+        }
+        await this.render();
+      } else {
+        const error = await response.text();
+        alert(`Failed to detach tools: ${error}`);
+      }
+    } catch (error) {
+      console.error('Error detaching tools:', error);
+      alert(`Error: ${error}`);
+    }
   }
 }

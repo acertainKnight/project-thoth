@@ -245,3 +245,124 @@ class LettaService(BaseService):
             return resp.status_code == 200
         except Exception:
             return False
+
+    def register_mcp_server(
+        self, server_id: str, server_config: dict[str, Any]
+    ) -> dict[str, Any]:
+        """
+        Register an MCP server with Letta.
+
+        Args:
+            server_id: Unique identifier for the server
+            server_config: MCP server configuration (transport, command/url, etc.)
+
+        Returns:
+            dict: Registration result with server info
+        """
+        try:
+            # Build Letta MCP server config
+            letta_config: dict[str, Any] = {
+                'name': server_id,
+            }
+
+            # Map transport types
+            if server_config['transport'] == 'stdio':
+                letta_config['transport'] = 'stdio'
+                letta_config['command'] = server_config['command']
+                letta_config['args'] = server_config.get('args', [])
+                if server_config.get('env'):
+                    letta_config['env'] = server_config['env']
+            elif server_config['transport'] in ['http', 'sse']:
+                # Letta uses 'streamable_http' or 'sse' transport names
+                letta_config['transport'] = (
+                    'streamable_http' if server_config['transport'] == 'http' else 'sse'
+                )
+                letta_config['url'] = server_config['url']
+
+            # Register with Letta
+            resp = requests.post(
+                f'{self.letta_url}/v1/mcp-servers/',
+                headers=self._get_headers(),
+                json=letta_config,
+                timeout=30,
+            )
+
+            if resp.status_code in [200, 201]:
+                result = resp.json()
+                self.logger.info(f"Registered MCP server '{server_id}' with Letta")
+                return {'success': True, 'server': result}
+            else:
+                error_msg = resp.text[:200]
+                self.logger.error(
+                    f"Failed to register MCP server '{server_id}': {resp.status_code} - {error_msg}"
+                )
+                return {'success': False, 'error': error_msg}
+
+        except Exception as e:
+            self.logger.error(f"Error registering MCP server '{server_id}': {e}")
+            return {'success': False, 'error': str(e)}
+
+    def list_mcp_tools_by_server(self, server_id: str) -> list[dict[str, Any]]:
+        """
+        List tools available from a registered MCP server.
+
+        Args:
+            server_id: Server identifier
+
+        Returns:
+            list: Tools available from this server
+        """
+        try:
+            resp = requests.get(
+                f'{self.letta_url}/v1/mcp-servers/{server_id}/tools/',
+                headers=self._get_headers(),
+                timeout=30,
+            )
+
+            if resp.status_code == 200:
+                return resp.json()
+            else:
+                self.logger.error(
+                    f'Failed to list tools from MCP server {server_id}: {resp.status_code}'
+                )
+                return []
+
+        except Exception as e:
+            self.logger.error(f'Error listing MCP tools from {server_id}: {e}')
+            return []
+
+    def add_mcp_tool(self, server_id: str, tool_name: str) -> dict[str, Any] | None:
+        """
+        Add a specific tool from a registered MCP server to Letta's tool registry.
+
+        Args:
+            server_id: Server identifier
+            tool_name: Name of the tool on the MCP server
+
+        Returns:
+            dict: Tool information if successful, None otherwise
+        """
+        try:
+            resp = requests.post(
+                f'{self.letta_url}/v1/mcp-servers/{server_id}/tools/{tool_name}/add',
+                headers=self._get_headers(),
+                timeout=30,
+            )
+
+            if resp.status_code in [200, 201]:
+                tool = resp.json()
+                self.logger.info(
+                    f"Added tool '{tool_name}' from MCP server '{server_id}' (ID: {tool.get('id')})"
+                )
+                return tool
+            else:
+                self.logger.error(
+                    f"Failed to add MCP tool '{tool_name}' from {server_id}: {resp.status_code}"
+                )
+                return None
+
+        except Exception as e:
+            self.logger.error(
+                f"Error adding MCP tool '{tool_name}' from {server_id}: {e}"
+            )
+            return None

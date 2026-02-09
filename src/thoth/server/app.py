@@ -505,11 +505,11 @@ async def lifespan(app: FastAPI):
             # Add to service manager's internal dict
             service_manager._services['mcp_servers_manager'] = mcp_manager
 
-            # Initialize tool registry and Letta service for MCP manager
-            # Note: In API server, we don't have tool_registry from MCP server
-            # So we'll pass None and tools will be synced by MCP server instead
+            # Initialize Letta service for MCP manager
+            # LettaService handles MCP server registration with Letta
             letta_service = LettaService()
             letta_service.initialize()
+
             mcp_manager.set_dependencies(None, letta_service)
 
             # Load config and start watching

@@ -41,6 +41,11 @@ class MCPServerEntry(BaseModel):
         alias='autoAttach',
         description='Whether to automatically attach discovered tools to Letta agents',
     )
+    disabled_tools: list[str] = Field(
+        default_factory=list,
+        alias='disabledTools',
+        description='List of tool names that should not be auto-attached (only applies when auto_attach is true)',
+    )
     timeout: int = Field(default=30, description='Connection timeout in seconds')
 
     class Config:
