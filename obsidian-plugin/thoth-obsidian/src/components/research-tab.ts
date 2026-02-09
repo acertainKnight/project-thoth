@@ -91,9 +91,6 @@ export class ResearchTabComponent {
 
     // Browser Workflows section
     await this.renderBrowserWorkflowsSection(researchContainer);
-
-    // Quick Actions section
-    this.renderQuickActionsSection(researchContainer);
   }
 
   private async loadResearchQuestions() {
@@ -763,90 +760,6 @@ export class ResearchTabComponent {
         new Notice('Failed to execute workflow');
       }
     };
-  }
-
-  // Quick Actions Section
-  private renderQuickActionsSection(container: HTMLElement) {
-    const section = container.createDiv({ cls: 'thoth-quick-actions-section' });
-
-    const sectionHeader = section.createDiv({ cls: 'thoth-section-header' });
-    sectionHeader.createEl('h3', { text: '⚡ Quick Actions' });
-
-    const actionsGrid = section.createDiv({ cls: 'thoth-quick-actions-grid' });
-
-    // Search Knowledge Base
-    this.createQuickAction(
-      actionsGrid,
-      '🔍',
-      'Search Knowledge Base',
-      'Search your processed articles and notes',
-      () => {
-        new Notice('Opening knowledge base search...');
-        // Could open a search modal or trigger RAG search
-      }
-    );
-
-    // Process PDF
-    this.createQuickAction(
-      actionsGrid,
-      '📄',
-      'Process PDF',
-      'Upload and process a new research paper',
-      () => {
-        new Notice('PDF processing UI coming soon! Drop PDFs in your vault/thoth/papers/pdfs folder.');
-      }
-    );
-
-    // View Statistics
-    this.createQuickAction(
-      actionsGrid,
-      '📊',
-      'View Statistics',
-      'See your research collection stats',
-      async () => {
-        try {
-          const endpoint = (this.plugin as any).getEndpointUrl();
-          const response = await fetch(`${endpoint}/health`);
-          // Accept both 200 (healthy) and 503 (partially unhealthy but running)
-          if (response.ok || response.status === 503) {
-            const data = await response.json();
-            const status = data.healthy ? '✓ Healthy' : '⚠ Partially Degraded';
-            new Notice(`System: ${status}. Services: ${Object.keys(data.services || {}).length}`);
-          } else {
-            new Notice(`Unable to fetch health status (${response.status})`);
-          }
-        } catch (error) {
-          new Notice('Unable to connect to backend');
-        }
-      }
-    );
-  }
-
-  private createQuickAction(
-    container: HTMLElement,
-    icon: string,
-    title: string,
-    description: string,
-    onClick: () => void
-  ) {
-    const action = container.createDiv({ cls: 'thoth-quick-action' });
-
-    action.createEl('div', {
-      text: icon,
-      cls: 'thoth-action-icon'
-    });
-
-    action.createEl('div', {
-      text: title,
-      cls: 'thoth-action-title'
-    });
-
-    action.createEl('div', {
-      text: description,
-      cls: 'thoth-action-description'
-    });
-
-    action.onclick = onClick;
   }
 
   private async createNoteFromArticle(article: MatchedArticle) {
