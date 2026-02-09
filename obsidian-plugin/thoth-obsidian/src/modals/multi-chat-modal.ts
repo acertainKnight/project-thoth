@@ -1198,6 +1198,12 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         overflow: hidden;
       }
 
+      .tab-content-container > .research-area {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+      }
+
       .chat-top-bar {
         display: flex;
         align-items: center;
