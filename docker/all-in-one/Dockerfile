@@ -92,17 +92,15 @@ RUN chmod 755 /entrypoint.sh && chown root:root /entrypoint.sh
 RUN chmod -R a+r /app/src && \
     find /app/src -type d -exec chmod a+rx {} \;
 
-# Switch to non-root user temporarily for Playwright install
-USER thoth
-
 # Set working directory
 WORKDIR /app
 
-# Install Playwright browsers
-RUN /app/.venv/bin/playwright install --with-deps chromium || echo "Playwright install skipped"
-
-# Switch back to root for remaining setup
-USER root
+# Install Playwright Chromium browsers as root (requires root for system deps)
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
+RUN mkdir -p /app/.cache/ms-playwright && \
+    /app/.venv/bin/playwright install chromium && \
+    /app/.venv/bin/playwright install-deps chromium && \
+    chown -R thoth:thoth /app/.cache
 
 # Create default workspace structure
 RUN mkdir -p /workspace/{data,cache} \

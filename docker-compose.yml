@@ -59,6 +59,9 @@ x-thoth-common: &thoth-common
     - API_SEMANTIC_SCHOLAR_KEY=${API_SEMANTIC_SCHOLAR_KEY:-}
     - API_WEB_SEARCH_KEY=${API_WEB_SEARCH_KEY:-}
 
+    # Playwright browser path (fixed location, independent of HOME)
+    - PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
+
     # Discovery settings
     - THOTH_DISCOVERY_AUTO_START_SCHEDULER=false
     - THOTH_DISCOVERY_DEFAULT_MAX_ARTICLES=50

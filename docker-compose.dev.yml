@@ -95,6 +95,9 @@ services:
       - THOTH_HOT_RELOAD=1
       - DOCKER_ENV=true
 
+      # Playwright browser path (fixed location, independent of HOME)
+      - PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
+
       # API Keys
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
@@ -236,7 +239,6 @@ services:
       - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
       - ./src:/app/src:ro  # Mount source for development
       - ./data/prompts:/app/prompts:ro  # System prompts
-      - thoth-dev-playwright:/app/.cache/ms-playwright  # Persist Playwright browsers
     ports:
       - "8000:8000"
     networks:
@@ -356,6 +358,9 @@ services:
       # No container restart needed!
       - THOTH_HOT_RELOAD=1
       - DOCKER_ENV=true
+
+      # Playwright browser path (fixed location, independent of HOME/user)
+      - PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
 
       # Discovery settings (REQUIRED - service-specific overrides)
       - THOTH_DISCOVERY_AUTO_START_SCHEDULER=true
@@ -495,10 +500,6 @@ volumes:
   thoth-dev-letta-postgres:
     driver: local
     name: thoth-dev-letta-postgres
-
-  thoth-dev-playwright:
-    driver: local
-    name: thoth-dev-playwright
 
   # NOTE: workspace is now local bind mount (./workspace)
   # See bind mount volumes in services above

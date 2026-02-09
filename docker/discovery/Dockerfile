@@ -80,10 +80,12 @@ COPY --from=builder --chown=thoth:thoth /app /app
 # Make sure we can run uv in the runtime
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Install Playwright browsers as root (before switching users)
-RUN /app/.venv/bin/playwright install chromium && \
+# Install Playwright Chromium browsers as root (requires root for system deps)
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
+RUN mkdir -p /app/.cache/ms-playwright && \
+    /app/.venv/bin/playwright install chromium && \
     /app/.venv/bin/playwright install-deps chromium && \
-    chown -R thoth:thoth /root/.cache/ms-playwright 2>/dev/null || true
+    chown -R thoth:thoth /app/.cache
 
 # Switch to non-root user
 USER thoth

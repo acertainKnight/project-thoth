@@ -71,8 +71,10 @@ RUN apt-get update && apt-get install -y \
 # Copy the virtual environment from builder (deps only, no project)
 COPY --from=builder --chown=root:root /app/.venv /app/.venv
 
-# Install Playwright browsers as root
-RUN /app/.venv/bin/playwright install chromium && \
+# Install Playwright Chromium browsers as root (requires root for system deps)
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
+RUN mkdir -p /app/.cache/ms-playwright && \
+    /app/.venv/bin/playwright install chromium && \
     /app/.venv/bin/playwright install-deps chromium
 
 # Copy source code (will be overwritten by volume mount in dev)

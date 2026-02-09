@@ -93,17 +93,15 @@ RUN mkdir -p /app/cache/ocr /app/cache/analysis /app/cache/citations /app/cache/
     chown -R thoth:thoth /app/cache && \
     chmod -R 755 /app/cache
 
-# Switch to non-root user temporarily for Playwright install
-USER thoth
-
 # Set working directory
 WORKDIR /app
 
-# Install Playwright browsers
-RUN /app/.venv/bin/playwright install --with-deps chromium || echo "Playwright install skipped"
-
-# Switch back to root for remaining setup
-USER root
+# Install Playwright Chromium browsers as root (requires root for system deps)
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
+RUN mkdir -p /app/.cache/ms-playwright && \
+    /app/.venv/bin/playwright install chromium && \
+    /app/.venv/bin/playwright install-deps chromium && \
+    chown -R thoth:thoth /app/.cache
 
 # Create default workspace structure with Letta directories
 RUN mkdir -p /workspace/{data,cache} \

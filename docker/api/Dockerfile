@@ -93,22 +93,15 @@ RUN chmod 755 /entrypoint.sh && chown root:root /entrypoint.sh
 RUN chmod -R a+r /app/src && \
     find /app/src -type d -exec chmod a+rx {} \;
 
-# Switch to non-root user temporarily for Playwright install
-USER thoth
-
 # Set working directory
 WORKDIR /app
 
-# Create Playwright cache directory with correct permissions
-RUN mkdir -p /app/.cache/ms-playwright
-
-# Switch back to root for Playwright browser installation (needs system deps)
-USER root
-
-# Install Playwright browsers as root (required for system dependencies)
-RUN /app/.venv/bin/playwright install chromium && \
+# Install Playwright Chromium browsers as root (requires root for system deps)
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
+RUN mkdir -p /app/.cache/ms-playwright && \
+    /app/.venv/bin/playwright install chromium && \
     /app/.venv/bin/playwright install-deps chromium && \
-    chown -R thoth:thoth /root/.cache/ms-playwright 2>/dev/null || true
+    chown -R thoth:thoth /app/.cache
 
 # Create default workspace structure with Letta directories
 RUN mkdir -p /workspace/{pdfs,notes,data,queries,discovery,knowledge,logs,cache} \
