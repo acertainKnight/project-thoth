@@ -111,6 +111,19 @@ class SelectorRefinement(BaseModel):
     notes: str = Field(default='')
 
 
+class DetailPageAnalysisResult(BaseModel):
+    """Structured output from LLM detail page analysis."""
+
+    selectors: list[ProposedSelector] = Field(
+        description='CSS selectors for extracting metadata from detail page'
+    )
+    relevant_links: list[dict[str, str]] = Field(
+        default_factory=list,
+        description='Links to follow if metadata still missing (e.g., PDF, full text links)',
+    )
+    notes: str = Field(default='', description='Analysis observations')
+
+
 # ---------------------------------------------------------------------------
 # Data classes for builder results
 # ---------------------------------------------------------------------------
@@ -132,6 +145,17 @@ class SampleArticle:
 
 
 @dataclass
+class DetailPageLevel:
+    """Configuration for extracting metadata from a detail page level."""
+
+    url_source_field: str  # 'url' or '_followed_link'
+    fields: dict[str, dict[str, Any]]  # selectors for this level
+    use_meta_tags: bool  # whether to extract from <meta> tags
+    follow_links: list[dict[str, str]]  # links to follow to next level
+    sample_data: dict[str, Any] = field(default_factory=dict)  # sample extracted data
+
+
+@dataclass
 class AnalysisOutput:
     """Complete output from the workflow builder analysis."""
 
@@ -147,6 +171,7 @@ class AnalysisOutput:
     screenshot_base64: str | None = None
     notes: str = ''
     confidence: float = 0.0
+    detail_page_extraction: list[DetailPageLevel] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -165,6 +190,16 @@ class AnalysisOutput:
             'screenshot_base64': self.screenshot_base64,
             'notes': self.notes,
             'confidence': self.confidence,
+            'detail_page_extraction': [
+                {
+                    'url_source_field': level.url_source_field,
+                    'fields': level.fields,
+                    'use_meta_tags': level.use_meta_tags,
+                    'follow_links': level.follow_links,
+                    'sample_data': level.sample_data,
+                }
+                for level in self.detail_page_extraction
+            ],
         }
 
 
@@ -326,6 +361,327 @@ class WorkflowBuilder:
             await self.browser_manager.shutdown()
             self._initialized = False
 
+    async def _extract_meta_tags(self, page: Any) -> dict[str, Any]:
+        """
+        Extract academic metadata from <meta> tags on the page.
+
+        Args:
+            page: Playwright page instance.
+
+        Returns:
+            Dict mapping field names to extracted values.
+        """
+        # Meta tag mapping for academic fields
+        meta_tag_map = {
+            'abstract': [
+                'citation_abstract',
+                'DC.description',
+                'og:description',
+                'description',
+            ],
+            'pdf_url': ['citation_pdf_url'],
+            'doi': ['citation_doi', 'DC.identifier'],
+            'publication_date': [
+                'citation_publication_date',
+                'citation_date',
+                'DC.date',
+            ],
+            'journal': ['citation_journal_title', 'citation_inbook_title'],
+            'authors': ['citation_author'],  # multiple tags
+        }
+
+        extracted = {}
+
+        # Extract meta tags via JavaScript
+        js_code = """
+        () => {
+            const result = {};
+            const metaTags = document.querySelectorAll('meta[name], meta[property]');
+            for (const tag of metaTags) {
+                const name = tag.getAttribute('name') || tag.getAttribute('property');
+                const content = tag.getAttribute('content');
+                if (name && content) {
+                    if (!result[name]) {
+                        result[name] = [];
+                    }
+                    result[name].push(content);
+                }
+            }
+            return result;
+        }
+        """
+
+        try:
+            meta_data = await page.evaluate(js_code)
+
+            # Map to field names
+            for field, tag_names in meta_tag_map.items():
+                for tag_name in tag_names:
+                    if tag_name in meta_data:
+                        values = meta_data[tag_name]
+                        if field == 'authors':
+                            # Multiple author tags
+                            extracted[field] = values
+                        else:
+                            # Single value (use first)
+                            extracted[field] = values[0] if values else None
+                        break  # Use first matching tag
+
+            return extracted
+
+        except Exception as e:
+            logger.debug(f'Error extracting meta tags: {e}')
+            return {}
+
+    async def _llm_analyze_detail_page(
+        self,
+        url: str,
+        dom_data: dict[str, Any],
+        missing_fields: list[str],
+    ) -> DetailPageAnalysisResult:
+        """
+        Ask LLM to analyze a detail page and propose selectors for missing fields.
+
+        Args:
+            url: The detail page URL.
+            dom_data: Simplified DOM data from the page.
+            missing_fields: List of fields we're trying to find
+                (e.g., ['abstract', 'pdf_url']).
+
+        Returns:
+            DetailPageAnalysisResult with proposed selectors.
+        """
+        dom_summary = self._format_dom_for_llm(dom_data)
+
+        missing_str = ', '.join(missing_fields)
+
+        prompt = f"""You are an expert web scraper analyzing an academic article detail page.
+
+## Page Information
+- URL: {url}
+- Title: {dom_data.get('title', 'Unknown')}
+
+## Missing Fields
+We need to find these fields on this page: {missing_str}
+
+## Page Structure
+{dom_summary}
+
+## Your Task
+Identify CSS selectors to extract the missing fields from this article detail page.
+
+For each missing field, provide:
+- **field_name**: One of {missing_str}
+- **css_selector**: CSS selector to find the content
+- **attribute**: 'text' for text content, 'href' for links, 'src' for images
+- **is_multiple**: false (these should be single values)
+
+Additionally, if you see links that might lead to PDFs or full-text versions (if pdf_url is missing), identify them:
+- **relevant_links**: Links to follow if metadata is still missing (e.g., PDF download links, "Full Text" links)
+  - Provide css_selector and attribute='href' for each link
+
+Important:
+- Focus only on the missing fields listed above
+- Be precise with selectors
+
+**For PDFs** - Look carefully for these patterns:
+- Links ending in .pdf: `a[href$=".pdf"]`, `a[href*=".pdf"]`
+- Download buttons/links: `a.download`, `button.download`, `a[download]`
+- PDF-specific classes: `.pdf-link`, `.pdf-download`, `[class*="pdf"]`
+- Text containing "PDF": `a:has-text("PDF")`, `button:has-text("Download PDF")`
+- Common academic patterns: `a[href*="/pdf/"]`, `a[href*="download"]`
+
+**For Abstracts**:
+- Common patterns: `.abstract`, `#abstract`, `[class*="abstract"]`, `.summary`, `#abstract-text`
+- Sometimes in expandable sections: `details.abstract`, `.abstract-content`
+
+**For DOI**:
+- Common patterns: `.doi`, `#doi`, `[class*="doi"]`, `a[href*="doi.org"]`"""
+
+        try:
+            client = self.llm_service.get_client(
+                model=self.config.llm_config.default.model,
+            )
+            structured = client.with_structured_output(
+                DetailPageAnalysisResult,
+                method='json_schema',
+            )
+            result = structured.invoke(prompt)
+            logger.info(
+                f'Detail page LLM analysis: {len(result.selectors)} selectors proposed'
+            )
+            return result
+
+        except Exception as e:
+            logger.error(f'Detail page LLM analysis failed: {e}')
+            # Return empty result
+            return DetailPageAnalysisResult(
+                selectors=[],
+                notes=f'LLM analysis failed: {e}',
+            )
+
+    async def _analyze_detail_page_level(
+        self,
+        page: Any,
+        detail_url: str,
+        missing_fields: list[str],
+        current_depth: int,
+    ) -> DetailPageLevel | None:
+        """
+        Analyze a single detail page level to extract missing metadata.
+
+        Args:
+            page: Playwright page instance (will be navigated).
+            detail_url: URL to navigate to.
+            missing_fields: Fields we're looking for.
+            current_depth: Current depth (2 or 3).
+
+        Returns:
+            DetailPageLevel config or None if analysis failed.
+        """
+        try:
+            logger.info(f'Analyzing detail page (level {current_depth}): {detail_url}')
+
+            # Navigate to detail page
+            await page.goto(detail_url, wait_until='domcontentloaded')
+            await asyncio.sleep(1)  # Let JS render
+
+            # Extract meta tags first (reliable fallback)
+            meta_extracted = await self._extract_meta_tags(page)
+            logger.info(
+                f'Meta tags extracted at level {current_depth}: {list(meta_extracted.keys())}'
+            )
+            for field, value in meta_extracted.items():
+                val_preview = str(value)[:60] if value else 'None'
+                logger.debug(f'  {field}: {val_preview}...')
+
+            # Extract DOM for LLM analysis
+            dom_data = await page.evaluate(_EXTRACT_DOM_JS)
+
+            # Ask LLM to analyze the detail page
+            llm_result = await self._llm_analyze_detail_page(
+                url=detail_url,
+                dom_data=dom_data,
+                missing_fields=missing_fields,
+            )
+
+            # Build field selectors dict
+            fields = {}
+            for sel in llm_result.selectors:
+                if sel.field_name in missing_fields:
+                    fields[sel.field_name] = {
+                        'css_selector': sel.css_selector,
+                        'attribute': sel.attribute,
+                        'is_multiple': sel.is_multiple,
+                        'confidence': sel.confidence,
+                    }
+
+            # Heuristic fallback for PDF if LLM missed it
+            if 'pdf_url' in missing_fields and 'pdf_url' not in fields:
+                logger.info('LLM did not find pdf_url, trying heuristic detection')
+                pdf_selectors = [
+                    'a[href$=".pdf"]',
+                    'a[href*=".pdf"]',
+                    'a.pdf-link',
+                    'a.download',
+                    'button.download',
+                    'a[download]',
+                    'a:has-text("PDF")',
+                    'a:has-text("Download PDF")',
+                    'a[href*="/pdf/"]',
+                    'a[class*="pdf" i]',
+                ]
+
+                for selector in pdf_selectors:
+                    try:
+                        elem = await page.query_selector(selector)
+                        if elem:
+                            href = await elem.get_attribute('href')
+                            if href and (
+                                '.pdf' in href.lower() or '/pdf' in href.lower()
+                            ):
+                                fields['pdf_url'] = {
+                                    'css_selector': selector,
+                                    'attribute': 'href',
+                                    'is_multiple': False,
+                                    'confidence': 0.7,
+                                }
+                                logger.info(
+                                    f'Heuristically detected pdf_url: {selector}'
+                                )
+                                break
+                    except Exception:  # nosec B112
+                        continue  # Try next PDF selector if this one fails
+
+            # Build follow_links (for next level, if needed)
+            follow_links = []
+            if current_depth < 3 and llm_result.relevant_links:
+                # Only add follow links if we haven't reached max depth
+                for link in llm_result.relevant_links[:3]:  # Limit to 3 links
+                    follow_links.append(
+                        {
+                            'css_selector': link.get('css_selector', ''),
+                            'attribute': 'href',
+                        }
+                    )
+
+            # Extract sample data from this page
+            sample_data = {}
+            for field_name, selector in fields.items():
+                try:
+                    css = selector['css_selector']
+                    attr = selector['attribute']
+                    elem = await page.query_selector(css)
+                    if elem:
+                        if attr == 'text':
+                            value = await elem.text_content()
+                        else:
+                            value = await elem.get_attribute(attr)
+                        if value:
+                            sample_data[field_name] = value.strip()[
+                                :200
+                            ]  # Truncate for sample
+                            logger.debug(
+                                f'Extracted {field_name} from detail page: {value[:50]}...'
+                            )
+                    else:
+                        logger.debug(
+                            f'Selector for {field_name} matched no elements: {css}'
+                        )
+                except Exception as e:
+                    logger.debug(f'Error extracting sample {field_name}: {e}')
+
+            # Add meta tag values to sample data if found
+            for field, value in meta_extracted.items():
+                if field not in sample_data and value:
+                    if isinstance(value, list):
+                        sample_data[field] = ', '.join(value[:3])
+                    else:
+                        sample_data[field] = str(value)[:200]
+                    logger.debug(
+                        f'Extracted {field} from meta tags: {sample_data[field][:50]}...'
+                    )
+
+            logger.info(
+                f'Detail page level {current_depth} sample extraction: '
+                f'Found {len(sample_data)} fields: {list(sample_data.keys())}'
+            )
+
+            # Determine url_source_field
+            url_source_field = 'url' if current_depth == 2 else '_followed_link'
+
+            return DetailPageLevel(
+                url_source_field=url_source_field,
+                fields=fields,
+                use_meta_tags=True,  # Always use meta tags for academic pages
+                follow_links=follow_links,
+                sample_data=sample_data,
+            )
+
+        except Exception as e:
+            logger.error(f'Error analyzing detail page level {current_depth}: {e}')
+            return None
+
     async def analyze_url(
         self,
         url: str,
@@ -387,6 +743,37 @@ class WorkflowBuilder:
                 max_samples=5,
             )
 
+            # 5b. Heuristic pagination detection if LLM missed it
+            if not analysis.pagination_selector and total_found >= 10:
+                logger.info('LLM did not detect pagination, trying heuristic detection')
+                # Try common pagination patterns
+                common_pagination_selectors = [
+                    'button[aria-label*="next" i]',
+                    'button[aria-label*="Next" i]',
+                    'a[aria-label*="next" i]',
+                    'a[rel="next"]',
+                    'button.next',
+                    'a.next',
+                    '.pagination .next',
+                    'button:has(svg):has-text(">")',
+                    'button:has-text("Next")',
+                    'a:has-text("Next")',
+                    'a:has-text(">")',
+                    'a:has-text(">>")',
+                ]
+
+                for selector in common_pagination_selectors:
+                    try:
+                        elem = await page.query_selector(selector)
+                        if elem:
+                            analysis.pagination_selector = selector
+                            logger.info(
+                                f'Heuristically detected pagination: {selector}'
+                            )
+                            break
+                    except Exception:  # nosec B112
+                        continue  # Try next pagination selector if this one fails
+
             # Calculate confidence based on what we found
             confidence = self._calculate_confidence(
                 analysis, sample_articles, total_found
@@ -394,8 +781,21 @@ class WorkflowBuilder:
 
             logger.info(
                 f'Analysis complete: type={analysis.page_type}, '
-                f'articles={total_found}, confidence={confidence:.2f}'
+                f'articles={total_found}, confidence={confidence:.2f}, '
+                f'pagination_detected={analysis.pagination_selector is not None}'
             )
+
+            # Debug: Log what was detected in samples
+            if sample_articles:
+                first_sample = sample_articles[0]
+                logger.debug(
+                    f'First sample fields: title={bool(first_sample.title)}, '
+                    f'authors={bool(first_sample.authors)}, '
+                    f'abstract={bool(first_sample.abstract)}, '
+                    f'url={bool(first_sample.url)}, '
+                    f'pdf_url={bool(first_sample.pdf_url)}, '
+                    f'doi={bool(first_sample.doi)}'
+                )
 
             # Build selectors dict for the output
             selectors_dict = {}
@@ -410,6 +810,117 @@ class WorkflowBuilder:
             # Build search_filters list for the output
             search_filters = [sf.model_dump() for sf in analysis.search_filters]
 
+            # Check if we need detail page analysis
+            detail_page_levels: list[DetailPageLevel] = []
+            if sample_articles and total_found > 0:
+                # Check if samples are missing key metadata but have url
+                # We look for missing: abstract, pdf_url, or doi
+                sample_with_url = None
+                missing_fields = []
+
+                for sample in sample_articles[:3]:  # Check first 3 samples
+                    if sample.url:
+                        sample_with_url = sample
+                        # Build list of missing fields
+                        if not sample.abstract:
+                            missing_fields.append('abstract')
+                        if not sample.pdf_url:
+                            missing_fields.append('pdf_url')
+                        if not sample.doi:
+                            missing_fields.append('doi')
+                        # If we found missing fields on a sample with URL,
+                        # we can analyze
+                        if missing_fields:
+                            break
+
+                if missing_fields and sample_with_url:
+                    logger.info(
+                        f'Samples missing {missing_fields} - initiating detail page analysis'
+                    )
+
+                    try:
+                        # Open detail page in a new page (same context)
+                        detail_page = await context.new_page()
+
+                        # Analyze level 2 (the article detail page)
+                        level_2 = await self._analyze_detail_page_level(
+                            page=detail_page,
+                            detail_url=sample_with_url.url,
+                            missing_fields=missing_fields,
+                            current_depth=2,
+                        )
+
+                        if level_2:
+                            detail_page_levels.append(level_2)
+                            logger.info(
+                                f'Level 2 analysis complete: '
+                                f'{len(level_2.fields)} fields, '
+                                f'{len(level_2.follow_links)} follow links'
+                            )
+
+                            # Check if we still need level 3
+                            still_missing = [
+                                f
+                                for f in missing_fields
+                                if f not in level_2.sample_data
+                                or not level_2.sample_data[f]
+                            ]
+
+                            if (
+                                still_missing
+                                and level_2.follow_links
+                                and len(detail_page_levels) < 2
+                            ):
+                                logger.info(
+                                    f'Still missing {still_missing}, analyzing level 3'
+                                )
+
+                                # Follow first link for level 3
+                                first_link = level_2.follow_links[0]
+                                try:
+                                    link_elem = await detail_page.query_selector(
+                                        first_link['css_selector']
+                                    )
+                                    if link_elem:
+                                        link_url = await link_elem.get_attribute('href')
+                                        if link_url:
+                                            # Make absolute
+                                            from urllib.parse import urljoin
+
+                                            link_url = urljoin(
+                                                sample_with_url.url, link_url
+                                            )
+
+                                            # Analyze level 3
+                                            level_3 = (
+                                                await self._analyze_detail_page_level(
+                                                    page=detail_page,
+                                                    detail_url=link_url,
+                                                    missing_fields=still_missing,
+                                                    current_depth=3,
+                                                )
+                                            )
+
+                                            if level_3:
+                                                # Level 3 should not have follow_links
+                                                # (max depth cap)
+                                                level_3.follow_links = []
+                                                detail_page_levels.append(level_3)
+                                                logger.info(
+                                                    f'Level 3 analysis complete: '
+                                                    f'{len(level_3.fields)} fields'
+                                                )
+
+                                except Exception as e:
+                                    logger.warning(
+                                        f'Could not follow link to level 3: {e}'
+                                    )
+
+                        await detail_page.close()
+
+                    except Exception as e:
+                        logger.error(f'Detail page analysis failed: {e}')
+
             return AnalysisOutput(
                 url=url,
                 page_title=page_title,
@@ -423,6 +934,7 @@ class WorkflowBuilder:
                 screenshot_base64=screenshot_b64,
                 notes=analysis.notes,
                 confidence=confidence,
+                detail_page_extraction=detail_page_levels,
             )
 
     async def refine_selectors(
@@ -582,7 +1094,12 @@ Important:
 - For pdf_url, use attribute="href"
 - Only include selectors for fields you can actually identify in the DOM
 - Set confidence scores honestly based on how certain you are
-- If pagination exists (next page button/link), identify its selector
+- **Pagination**: Look carefully for pagination controls:
+  - Traditional: `a[rel="next"]`, `button.next`, `.pagination a.next`, `a:contains("Next")`
+  - Numeric: `.pagination a`, `.page-link`, `button[aria-label*="next"]`
+  - Arrow icons: `button svg`, `.icon-next`, `.arrow-right`
+  - Text-based: Look for elements containing "Next", ">", ">>", or page numbers
+  - If you see repeated article elements (10-20+) and the page says something like "1-15 of 1000", pagination likely exists
 - If search or filter inputs exist, identify them so we can inject keywords and date filters"""
 
         try:
@@ -906,7 +1423,7 @@ Based on the user's feedback and the page structure, provide corrected CSS selec
 
     def _calculate_confidence(
         self,
-        analysis: PageAnalysisResult | SelectorRefinement,
+        _analysis: PageAnalysisResult | SelectorRefinement,
         samples: list[SampleArticle],
         total_found: int,
     ) -> float:
@@ -914,7 +1431,7 @@ Based on the user's feedback and the page structure, provide corrected CSS selec
         Calculate confidence score for the analysis results.
 
         Args:
-            analysis: LLM analysis result.
+            _analysis: LLM analysis result (reserved for future use).
             samples: Sample articles extracted.
             total_found: Total article containers found.
 
