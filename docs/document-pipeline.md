@@ -82,7 +82,8 @@ The pipeline was designed with **local server constraints** in mind:
                            │
 ┌──────────────────────────▼───────────────────────────────────────┐
 │              5. Background Indexing                              │
-│  - RAG vector embeddings (non-blocking)                          │
+│  - Hybrid RAG indexing: vector embeddings + FTS vectors          │
+│  - Document-aware chunking (markdown headers → recursive)        │
 │  - Knowledge graph updates                                       │
 │  - Citation network updates                                      │
 └───────────────────────────────────────────────────────────────────┘

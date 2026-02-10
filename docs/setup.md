@@ -168,6 +168,7 @@ Enter keys for LLM providers:
 - **OpenAI** (required — embeddings): [platform.openai.com](https://platform.openai.com/)
 - **OpenRouter** (required — backend LLM): [openrouter.ai/keys](https://openrouter.ai/keys)
 - **Mistral AI** (required — PDF OCR extraction): [console.mistral.ai](https://console.mistral.ai/)
+- **Cohere** (optional — dedicated reranking API): [dashboard.cohere.com](https://dashboard.cohere.com/api-keys)
 - **Semantic Scholar** (optional): [semanticscholar.org/product/api](https://www.semanticscholar.org/product/api)
 
 **6. Model Selection**
@@ -187,8 +188,12 @@ Choose deployment architecture:
 
 Enable additional capabilities:
 - ✅ **RAG** (semantic search): Requires embeddings
+- ✅ **Hybrid Search**: Combines semantic + keyword search (~35% better accuracy, enabled by default)
+- ✅ **Reranking**: LLM-based (zero-cost) or Cohere API (~20-30% improvement, enabled by default)
 - ✅ **Discovery** (automated paper finding): Requires browser automation
 - ✅ **Advanced Citation Analysis**: Requires external APIs
+- ⚠️ **Contextual Enrichment**: LLM per-chunk enrichment (disabled by default, expensive at indexing time)
+- ⚠️ **Adaptive Routing**: Query classification for optimized retrieval (disabled by default, experimental)
 
 **9. Configuration Review**
 
@@ -478,5 +483,5 @@ After successful installation:
 
 ---
 
-**Setup Guide Version**: 3.0
+**Setup Guide Version**: 3.1
 **Last Updated**: February 2026

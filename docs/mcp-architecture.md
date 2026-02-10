@@ -434,9 +434,19 @@ async def execute(self, arguments: dict[str, Any]):
 - **Optimization**: Custom index creation for specific queries
 
 **Tools**:
-- `ReindexCollectionMCPTool`: Rebuild vector index
-- `OptimizeSearchMCPTool`: Tune search parameters
+- `ReindexCollectionMCPTool`: Rebuild hybrid index (vector embeddings + FTS vectors)
+- `OptimizeSearchMCPTool`: Tune search parameters, test hybrid search + reranking pipeline
 - `CreateCustomIndexMCPTool`: Domain-specific indexes
+- `AnswerResearchQuestionMCPTool`: Full hybrid RAG pipeline (search → rerank → generate)
+
+**Hybrid Search Pipeline (via MCP)**:
+```
+MCP tool call → RAG Manager → Parallel Retrieval
+    ├─ Semantic search (pgvector cosine similarity)
+    └─ BM25 search (PostgreSQL tsvector)
+        ↓
+    RRF Fusion → Reranking (LLM or Cohere) → Results
+```
 
 **Trade-off**: Complexity vs flexibility (chose flexibility for research tool)
 

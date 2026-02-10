@@ -20,9 +20,11 @@ Manage the Retrieval-Augmented Generation (RAG) system that powers knowledge bas
 ## Overview
 
 The RAG system consists of:
-1. **Vector Store** - Stores embeddings for semantic search
-2. **Indexes** - Organized collections of embeddings
-3. **Settings** - Configuration for chunking, embedding models, and search parameters
+1. **Hybrid Search** - Semantic (pgvector) + BM25 (tsvector) with Reciprocal Rank Fusion
+2. **Reranking** - LLM-based (zero-cost) or Cohere API for precision re-scoring
+3. **Vector Store** - Stores embeddings for semantic search (PostgreSQL + pgvector)
+4. **Indexes** - Organized collections of embeddings
+5. **Settings** - Configuration for chunking, embedding models, search, and reranking
 
 ## Core Capabilities
 
@@ -173,21 +175,36 @@ search_custom_index(
 ```json
 {
   "rag": {
-    "embedding_model": "text-embedding-3-small",
-    "chunk_size": 1000,
-    "chunk_overlap": 200,
-    "max_chunks_per_doc": 50,
-    "min_chunk_size": 100,
-    "collection_name": "thoth_articles"
-  },
-  "search": {
-    "default_limit": 10,
-    "min_relevance": 0.7,
-    "hybrid_search": true,
-    "rerank": false
+    "embeddingModel": "text-embedding-3-small",
+    "collectionName": "thoth_papers",
+    "chunkSize": 500,
+    "chunkOverlap": 50,
+    "topK": 5,
+    "hybridSearchEnabled": true,
+    "hybridSearchWeight": 0.7,
+    "rerankingEnabled": true,
+    "rerankerProvider": "auto",
+    "rerankerModel": "google/gemini-2.5-flash",
+    "contextualEnrichmentEnabled": false,
+    "adaptiveRoutingEnabled": false,
+    "qa": {
+      "model": "anthropic/claude-3-5-sonnet",
+      "temperature": 0.1
+    }
   }
 }
 ```
+
+### Setting Details
+
+| Setting | Purpose | Notes |
+|---------|---------|-------|
+| `hybridSearchEnabled` | Combine semantic + BM25 search | ~35% better accuracy, no extra cost |
+| `hybridSearchWeight` | Balance (0.0=BM25 only, 1.0=semantic only) | 0.7 is recommended |
+| `rerankingEnabled` | Re-score results with more powerful model | ~20-30% improvement |
+| `rerankerProvider` | `auto` (Cohere if key, else LLM), `cohere`, or `llm` | Auto recommended |
+| `contextualEnrichmentEnabled` | Add LLM context per chunk at index time | Expensive, disabled by default |
+| `adaptiveRoutingEnabled` | Classify queries for routing | Experimental, disabled by default |
 
 ### Changing Embedding Models
 

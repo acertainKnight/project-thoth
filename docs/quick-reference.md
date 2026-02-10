@@ -139,9 +139,11 @@ thoth research discover <id>           # Run discovery for question
 
 ```bash
 thoth rag build               # Build vector index
-thoth rag rebuild             # Rebuild index
-thoth rag search "query"      # Semantic search
+thoth rag rebuild             # Rebuild index (re-chunks + re-embeds)
+thoth rag index --force       # Force reindex all papers
+thoth rag search "query"      # Hybrid search (semantic + BM25 + reranking)
 thoth rag search "query" --top-k 10 --min-score 0.7
+thoth rag clear --confirm     # Clear all document chunks
 ```
 
 ### Notes
@@ -308,10 +310,11 @@ curl http://localhost:8283/v1/agents/{agent_id}/memory
 # Required
 export OBSIDIAN_VAULT_PATH="/path/to/vault"
 export API_OPENAI_KEY="your_key"       # Embeddings (Thoth RAG + Letta)
-export API_OPENROUTER_KEY="your_key"   # Backend LLM (analysis, queries, routing)
+export API_OPENROUTER_KEY="your_key"   # Backend LLM (analysis, queries, routing, LLM reranking)
 export API_MISTRAL_KEY="your_key"      # PDF OCR extraction
 
 # Optional
+export API_COHERE_KEY="your_key"       # Cohere Rerank API (higher quality reranking)
 export API_SEMANTIC_SCHOLAR_KEY="your_key"
 ```
 
@@ -326,6 +329,11 @@ export API_SEMANTIC_SCHOLAR_KEY="your_key"
 {
   "llm_config": {
     "default": {"model": "mistral/mistral-large-latest", "temperature": 0.7}
+  },
+  "rag": {
+    "hybridSearchEnabled": true,
+    "rerankingEnabled": true,
+    "rerankerProvider": "auto"
   },
   "discovery": {"default_max_articles": 50},
   "processing": {"generate_tags": true, "enrich_citations": true},

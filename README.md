@@ -263,10 +263,14 @@ graph TD
 - **Citation analysis**: 6-stage resolution chain (Crossref → OpenAlex → ArXiv → Fuzzy Matcher → Validator → Decision Engine)
 - **Obsidian note generation**: Template-based markdown notes from analyzed papers
 
-### RAG & Semantic Search
-- **PostgreSQL+pgvector backend**: Unified storage for vectors and metadata
+### RAG & Hybrid Search
+- **Hybrid retrieval**: Semantic (pgvector) + BM25 (tsvector) search with Reciprocal Rank Fusion
+- **Reranking pipeline**: LLM-based (zero-cost via OpenRouter) or Cohere API for precision re-scoring
+- **Document-aware chunking**: Two-stage markdown header + recursive splitting preserves paper structure
+- **PostgreSQL+pgvector+tsvector backend**: Unified storage for vectors, full-text search, and metadata
 - **Custom indexes**: Create domain-specific search indexes via MCP tools
 - **Embedding model**: OpenAI text-embedding-3-small (configurable)
+- **Automatic migrations**: Database schema upgrades applied seamlessly on startup
 - **Advanced RAG tools**: Reindex, optimize search, create custom indexes
 
 ### Configuration & Extensibility
@@ -391,6 +395,7 @@ These features are prioritized based on community feedback. If you have ideas or
 | `API_OPENAI_KEY` | **Yes** | Embeddings for Thoth RAG + Letta memory |
 | `API_OPENROUTER_KEY` | **Yes** | Backend LLM for analysis, queries, and routing |
 | `API_MISTRAL_KEY` | **Yes** | PDF OCR extraction (uses mistral-ocr-latest) |
+| `API_COHERE_KEY` | No | Cohere Rerank API (higher quality reranking) |
 | `API_SEMANTIC_SCHOLAR_KEY` | No | Semantic Scholar API key |
 
 ### Letta Setup

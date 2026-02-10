@@ -84,7 +84,7 @@ Central coordinator for all Thoth services implementing dependency injection pat
 - `LLMService`: Multi-provider LLM routing (Mistral, OpenRouter, OpenAI, Anthropic)
 - `ArticleService`: Article management and operations
 - `DiscoveryService`: Multi-source paper discovery
-- `RAGService`: Vector search and retrieval (optional, requires extras)
+- `RAGService`: Hybrid search (semantic + BM25) with reranking (optional, requires extras)
 - `PostgresService`: Database operations
 - `CitationService`: Citation analysis and enrichment
 - `SkillService`: Skill discovery and management
@@ -342,10 +342,10 @@ LLM-powered auto-detection of article elements on any webpage:
 2. **Metadata Extraction**: Title, authors, abstract (LLM-assisted)
 3. **Citation Extraction**: Identify citation patterns, parse bibliography
 4. **Citation Enrichment**: 6-stage resolution chain (see below)
-5. **Semantic Chunking**: 200-500 token segments with LangChain
+5. **Document-Aware Chunking**: Two-stage markdown header + recursive splitting with LangChain
 6. **Tag Generation**: AI-generated tags via LLM
 7. **Note Generation**: Markdown note with Jinja2 template
-8. **Index Building**: Vector embeddings (optional, requires RAG extras)
+8. **Hybrid Index Building**: Vector embeddings + full-text search vectors (optional, requires RAG extras)
 
 ### Citation Resolution System
 
@@ -534,7 +534,9 @@ class Settings:
 - **Mistral**: Primary LLM provider
 - **OpenRouter**: Multi-provider routing
 - **OpenAI**: Alternative LLM provider
-- **Sentence Transformers**: Embeddings (all-MiniLM-L6-v2)
+- **Sentence Transformers**: Local embeddings (all-MiniLM-L6-v2)
+- **OpenAI Embeddings**: Cloud embeddings (text-embedding-3-small)
+- **Cohere**: Reranking API (optional)
 
 ---
 
@@ -549,5 +551,5 @@ class Settings:
 
 ---
 
-**Architecture Version**: 3.0 (Independent Services)
+**Architecture Version**: 3.1 (Hybrid RAG)
 **Last Updated**: February 2026

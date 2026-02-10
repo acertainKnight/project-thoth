@@ -180,6 +180,7 @@ API_MISTRAL_KEY=...             # PDF OCR extraction
 OBSIDIAN_VAULT_PATH=/path/to/vault
 
 # API Keys (Optional)
+API_COHERE_KEY=...              # Cohere Rerank API (higher quality reranking)
 ANTHROPIC_API_KEY=sk-ant-...    # Direct Anthropic access
 API_SEMANTIC_SCHOLAR_KEY=...
 API_WEB_SEARCH_KEY=...
@@ -536,6 +537,18 @@ If you were using ChromaDB:
 1. All vector storage now uses PostgreSQL+pgvector
 2. No data migration needed (embeddings regenerate automatically)
 3. Better performance and reliability with PostgreSQL
+
+### Hybrid RAG Upgrade
+
+When upgrading to the hybrid search architecture:
+
+1. **Database migrations run automatically** on container startup (API server, MCP server, and all-in-one container all check for pending migrations)
+2. Migration 003 adds `search_vector` (tsvector), `parent_chunk_id`, and `embedding_version` columns
+3. The `search_vector` column auto-populates from existing `content` (generated column)
+4. Existing data is preserved — no manual intervention needed
+5. Optional: Force reindex with `thoth rag index --force` to apply document-aware chunking to existing papers
+
+**New users** get the full hybrid RAG system from the setup wizard. **Existing users** get automatic schema upgrades on restart.
 
 ## Advanced Topics
 

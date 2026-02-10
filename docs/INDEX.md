@@ -27,7 +27,7 @@ Complete guide to Thoth's documentation organized by category.
 |----------|-------------|---------|
 | [Discovery System](discovery-system.md) | Multi-source paper discovery | Source plugin developers |
 | [Document Pipeline](document-pipeline.md) | PDF processing and extraction | Pipeline customizers |
-| [RAG System](rag-system.md) | Vector search and retrieval | RAG administrators |
+| [RAG System](rag-system.md) | Hybrid search, reranking, and retrieval | RAG administrators |
 | [Customizable Analysis Schemas](customizable-analysis-schemas.md) | Extraction schema customization | Advanced users |
 
 ## ⚙️ Setup & Configuration
@@ -106,7 +106,7 @@ Complete guide to Thoth's documentation organized by category.
 | skills-system.md | ✅ Complete | Feb 2026 |
 | discovery-system.md | ✅ Complete | Jan 2026 |
 | document-pipeline.md | ✅ Complete | Jan 2026 |
-| rag-system.md | ✅ Complete | Jan 2026 |
+| rag-system.md | ✅ Complete | Feb 2026 |
 | letta-setup.md | ✅ Complete | Jan 2026 |
 | letta-cloud-setup.md | ✅ Complete | Jan 2026 |
 | docker-deployment.md | ✅ Complete | Jan 2026 |
