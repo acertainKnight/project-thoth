@@ -373,9 +373,12 @@ def test_text_normalization_idempotency(text: str):
 @pytest.mark.property
 @given(text=st.text(min_size=1, max_size=500))
 def test_text_normalization_lowercase(text: str):
-    """Property: Normalized text should be lowercase."""
+    """Property: Normalized text should be case-normalized (stable under casefold)."""
     normalized = normalize_text(text)
-    assert normalized == normalized.lower(), 'Normalized text should be lowercase'
+    # Implementation uses casefold(); casefold can differ from lower() (e.g. U+13A0)
+    assert normalized == normalized.casefold(), (
+        'Normalized text should be case-normalized (casefold-stable)'
+    )
 
 
 @pytest.mark.property
