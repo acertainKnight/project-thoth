@@ -8,7 +8,10 @@ system, coordinating embeddings, vector storage, and question answering.
 from pathlib import Path  # noqa: I001
 from typing import Any
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import (
+    RecursiveCharacterTextSplitter,
+    MarkdownHeaderTextSplitter,
+)
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -16,6 +19,9 @@ from loguru import logger
 
 from thoth.rag.embeddings import EmbeddingManager
 from thoth.rag.vector_store import VectorStoreManager
+from thoth.rag.reranker import create_reranker, BaseReranker
+from thoth.rag.contextual_enrichment import ContextualEnricher
+from thoth.rag.query_router import QueryRouter
 from thoth.utilities import OpenRouterClient
 from thoth.config import config
 
@@ -93,7 +99,19 @@ class RAGManager:
             embedding_function=self.embedding_manager.get_embedding_model(),
         )
 
-        # Initialize text splitter (token-based)
+        # Initialize text splitters (two-stage for markdown)
+        # Stage 1: Split by markdown headers to preserve document structure
+        self.header_splitter = MarkdownHeaderTextSplitter(
+            headers_to_split_on=[
+                ('#', 'h1'),
+                ('##', 'h2'),
+                ('###', 'h3'),
+                ('####', 'h4'),
+            ],
+            strip_headers=False,  # Keep headers in content for context
+        )
+
+        # Stage 2: Split large sections into smaller chunks (token-based)
         self.text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
             encoding_name=self.chunk_encoding,
             chunk_size=self.chunk_size,
@@ -108,6 +126,47 @@ class RAGManager:
             temperature=self.config.rag_config.qa.temperature,
             max_tokens=self.config.rag_config.qa.max_tokens,
         )
+
+        # Initialize reranker (Phase 2)
+        if self.config.rag_config.reranking_enabled:
+            api_keys = {
+                'cohere_key': self.config.api_keys.cohere_key,
+            }
+            self.reranker: BaseReranker = create_reranker(
+                provider=self.config.rag_config.reranker_provider,
+                api_keys=api_keys,
+                llm_client=self.llm,
+                reranker_model=self.config.rag_config.reranker_model,
+            )
+            logger.debug(f'Initialized reranker: {self.reranker.get_name()}')
+        else:
+            from thoth.rag.reranker import NoOpReranker
+
+            self.reranker = NoOpReranker()
+            logger.debug('Reranking disabled')
+
+        # Initialize contextual enricher (Phase 4)
+        contextual_enabled = getattr(
+            self.config.rag_config, 'contextual_enrichment_enabled', False
+        )
+        self.contextual_enricher = ContextualEnricher(
+            llm_client=self.llm,
+            enabled=contextual_enabled,
+        )
+        logger.debug(f'Contextual enrichment: {contextual_enabled}')
+
+        # Initialize query router (Phase 5)
+        routing_enabled = getattr(
+            self.config.rag_config, 'adaptive_routing_enabled', False
+        )
+        use_semantic_router = getattr(
+            self.config.rag_config, 'use_semantic_router', False
+        )
+        self.query_router = QueryRouter(
+            enabled=routing_enabled,
+            use_semantic_router=use_semantic_router,
+        )
+        logger.debug(f'Adaptive routing: {routing_enabled}')
 
         logger.debug('All RAG components initialized')
 
@@ -249,7 +308,7 @@ class RAGManager:
                 await conn.close()
 
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             # Already in async context - shouldn't happen in normal use
             return None
         except RuntimeError:
@@ -264,7 +323,8 @@ class RAGManager:
 
         Args:
             paper_id: UUID of the paper to index.
-            markdown_content: Optional markdown content (if not provided, fetched from DB).
+            markdown_content: Optional markdown content (if not provided,
+                fetched from DB).
 
         Returns:
             List of document IDs that were indexed.
@@ -314,7 +374,8 @@ class RAGManager:
                         )
                         content = self._strip_images(content)
 
-                        # Check if there's still meaningful content after stripping images
+                        # Check if there's still meaningful content after
+                        # stripping images
                         if len(content.strip()) < 100:
                             logger.warning(
                                 f'Paper {paper_id} has insufficient content after image removal'
@@ -331,23 +392,20 @@ class RAGManager:
                         'source': f'database:paper:{paper_id}',
                     }
 
-                    # Split into chunks
-                    chunks = self.text_splitter.split_text(content)
-                    logger.debug(f'Split paper into {len(chunks)} token-based chunks')
+                    # Split into chunks using two-stage strategy
+                    documents = self._split_markdown_content(content, metadata)
+                    logger.debug(
+                        f'Split paper into {len(documents)} chunks using two-stage strategy'
+                    )
 
-                    # Create documents with metadata
-                    documents = []
-                    for i, chunk in enumerate(chunks):
-                        doc_metadata = {
-                            **metadata,
-                            'chunk_index': i,
-                            'total_chunks': len(chunks),
-                        }
-                        doc = Document(
-                            page_content=chunk,
-                            metadata=doc_metadata,
+                    # Apply contextual enrichment if enabled (Phase 4)
+                    if self.contextual_enricher.enabled:
+                        documents = await self.contextual_enricher.enrich_chunks_async(
+                            chunks=documents,
+                            document_text=content,
+                            document_title=row['title'],
                         )
-                        documents.append(doc)
+                        logger.debug('Applied contextual enrichment to chunks')
 
                     # Index documents using async method
                     doc_ids = await self.vector_store_manager.add_documents_async(
@@ -361,7 +419,7 @@ class RAGManager:
                     await conn.close()
 
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()
                 raise RuntimeError(
                     'index_paper_by_id() called from async context. '
                     "Use 'await index_paper_by_id_async()' instead."
@@ -384,7 +442,8 @@ class RAGManager:
 
         Args:
             file_path: Path to the markdown file.
-            paper_id: Optional paper ID (UUID string). If not provided, attempts lookup by title.
+            paper_id: Optional paper ID (UUID string). If not provided,
+                attempts lookup by title.
 
         Returns:
             List of document IDs that were indexed.
@@ -416,7 +475,8 @@ class RAGManager:
                     logger.warning(
                         f'Could not find paper_id for: {title}. Using index_paper_by_id with database content is recommended.'
                     )
-                    # For now, we'll create a fallback - but this requires paper_id in DB
+                    # For now, we'll create a fallback - but this requires
+                    # paper_id in DB
                     raise ValueError(
                         f'Cannot index {file_path}: paper_id not found in database. '
                         'Ensure the paper exists in paper_metadata first, or use index_paper_by_id().'
@@ -485,6 +545,8 @@ class RAGManager:
         Search for relevant documents (async version).
         Use this from async contexts to avoid event loop conflicts.
 
+        Supports hybrid search and reranking based on configuration.
+
         Args:
             query: Search query.
             k: Number of results to return.
@@ -495,20 +557,48 @@ class RAGManager:
             List of documents or tuples of (document, score).
         """
         try:
-            if return_scores:
-                return (
-                    await self.vector_store_manager.similarity_search_with_score_async(
+            # Determine if we should use reranking
+            use_reranking = (
+                self.config.rag_config.reranking_enabled
+                and isinstance(self.reranker, BaseReranker)
+                and self.reranker.get_name() != 'noop'
+            )
+
+            if use_reranking:
+                # Over-retrieve candidates for reranking
+                candidates_k = self.config.rag_config.retrieval_candidates
+                candidates = await self.vector_store_manager.similarity_search_async(
+                    query=query, k=candidates_k, filter=filter
+                )
+
+                # Rerank to top k
+                reranked = await self.reranker.rerank_async(
+                    query=query,
+                    documents=candidates,
+                    top_n=k,
+                )
+
+                if return_scores:
+                    # Return with rerank scores
+                    return [
+                        (doc, doc.metadata.get('rerank_score', 0.0)) for doc in reranked
+                    ]
+                else:
+                    return reranked
+            else:
+                # Standard search without reranking
+                if return_scores:
+                    return await self.vector_store_manager.similarity_search_with_score_async(
                         query=query,
                         k=k,
                         filter=filter,
                     )
-                )
-            else:
-                return await self.vector_store_manager.similarity_search_async(
-                    query=query,
-                    k=k,
-                    filter=filter,
-                )
+                else:
+                    return await self.vector_store_manager.similarity_search_async(
+                        query=query,
+                        k=k,
+                        filter=filter,
+                    )
         except Exception as e:
             logger.error(f'Error searching documents: {e}')
             raise
@@ -523,6 +613,8 @@ class RAGManager:
         """
         Search for relevant documents (sync wrapper).
 
+        Supports hybrid search and reranking based on configuration.
+
         Args:
             query: Search query.
             k: Number of results to return.
@@ -533,18 +625,48 @@ class RAGManager:
             List of documents or tuples of (document, score).
         """
         try:
-            if return_scores:
-                return self.vector_store_manager.similarity_search_with_score(
-                    query=query,
-                    k=k,
-                    filter=filter,
+            # Determine if we should use reranking
+            use_reranking = (
+                self.config.rag_config.reranking_enabled
+                and isinstance(self.reranker, BaseReranker)
+                and self.reranker.get_name() != 'noop'
+            )
+
+            if use_reranking:
+                # Over-retrieve candidates for reranking
+                candidates_k = self.config.rag_config.retrieval_candidates
+                candidates = self.vector_store_manager.similarity_search(
+                    query=query, k=candidates_k, filter=filter
                 )
+
+                # Rerank to top k
+                reranked = self.reranker.rerank(
+                    query=query,
+                    documents=candidates,
+                    top_n=k,
+                )
+
+                if return_scores:
+                    # Return with rerank scores
+                    return [
+                        (doc, doc.metadata.get('rerank_score', 0.0)) for doc in reranked
+                    ]
+                else:
+                    return reranked
             else:
-                return self.vector_store_manager.similarity_search(
-                    query=query,
-                    k=k,
-                    filter=filter,
-                )
+                # Standard search without reranking
+                if return_scores:
+                    return self.vector_store_manager.similarity_search_with_score(
+                        query=query,
+                        k=k,
+                        filter=filter,
+                    )
+                else:
+                    return self.vector_store_manager.similarity_search(
+                        query=query,
+                        k=k,
+                        filter=filter,
+                    )
         except Exception as e:
             logger.error(f'Error searching documents: {e}')
             raise
@@ -559,9 +681,11 @@ class RAGManager:
         """
         Answer a question using the RAG system.
 
+        Uses hybrid search and reranking if enabled in configuration.
+
         Args:
             question: The question to answer.
-            k: Number of documents to retrieve for context.
+            k: Number of documents to retrieve for context (after reranking).
             filter: Optional metadata filter for retrieval.
             return_sources: Whether to return source documents.
 
@@ -571,11 +695,12 @@ class RAGManager:
         try:
             logger.info(f'Answering question: {question}')
 
-            # Retrieve relevant documents
-            docs = self.vector_store_manager.similarity_search(
+            # Retrieve relevant documents (uses reranking if enabled)
+            docs = self.search(
                 query=question,
                 k=k,
                 filter=filter,
+                return_scores=False,
             )
 
             # Format context from retrieved documents
@@ -689,3 +814,96 @@ Answer:"""
         metadata['title'] = title
 
         return metadata
+
+    def _split_markdown_content(
+        self, content: str, base_metadata: dict[str, Any]
+    ) -> list[Document]:
+        """
+        Split markdown content using two-stage strategy.
+
+        Stage 1: Split by markdown headers to preserve document structure
+        Stage 2: Subdivide large sections using token-based chunking
+
+        Args:
+            content: Markdown content to split
+            base_metadata: Base metadata to attach to all chunks
+
+        Returns:
+            List of Document objects with hierarchical metadata
+        """
+        # Stage 1: Split by headers
+        header_splits = self.header_splitter.split_text(content)
+
+        # Stage 2: Further split large sections
+        all_documents = []
+        chunk_index = 0
+
+        for header_doc in header_splits:
+            # Extract header hierarchy from metadata
+            header_metadata = (
+                header_doc.metadata if hasattr(header_doc, 'metadata') else {}
+            )
+
+            # Build section path from headers
+            section_path = []
+            heading_level = 0
+            for i in range(1, 5):  # h1 through h4
+                header_key = f'h{i}'
+                if header_key in header_metadata:
+                    section_path.append(header_metadata[header_key])
+                    heading_level = i
+
+            # Check if section is large enough to need further splitting
+            section_text = (
+                header_doc.page_content
+                if hasattr(header_doc, 'page_content')
+                else str(header_doc)
+            )
+
+            # Count tokens approximately
+            import tiktoken
+
+            try:
+                enc = tiktoken.get_encoding(self.chunk_encoding)
+                token_count = len(enc.encode(section_text))
+            except Exception:
+                # Fallback: estimate tokens as words * 1.3
+                token_count = len(section_text.split()) * 1.3
+
+            if token_count > self.chunk_size:
+                # Need to split this section further
+                subsections = self.text_splitter.split_text(section_text)
+
+                for i, subsection in enumerate(subsections):
+                    doc_metadata = {
+                        **base_metadata,
+                        'chunk_index': chunk_index,
+                        'section_path': section_path,
+                        'heading_level': heading_level,
+                        'is_subsection': True,
+                        'subsection_index': i,
+                        'total_subsections': len(subsections),
+                    }
+                    all_documents.append(
+                        Document(page_content=subsection, metadata=doc_metadata)
+                    )
+                    chunk_index += 1
+            else:
+                # Section is small enough, use as-is
+                doc_metadata = {
+                    **base_metadata,
+                    'chunk_index': chunk_index,
+                    'section_path': section_path,
+                    'heading_level': heading_level,
+                    'is_subsection': False,
+                }
+                all_documents.append(
+                    Document(page_content=section_text, metadata=doc_metadata)
+                )
+                chunk_index += 1
+
+        # Add total_chunks to all metadata
+        for doc in all_documents:
+            doc.metadata['total_chunks'] = len(all_documents)
+
+        return all_documents

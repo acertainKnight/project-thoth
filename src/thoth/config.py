@@ -156,6 +156,9 @@ class APIKeys(BaseModel):
     )
     letta_api_key: str = Field(default='', alias='lettaApiKey')
     unpaywall_email: str = Field(default='', alias='unpaywallEmail')
+    cohere_key: str = Field(
+        default='', alias='cohereKey', description='Cohere API key for reranking'
+    )
 
     class Config:
         populate_by_name = True
@@ -426,6 +429,81 @@ class RAGConfig(BaseModel):
     chunk_overlap: int = Field(default=200, alias='chunkOverlap')
     chunk_encoding: str = Field(default='cl100k_base', alias='chunkEncoding')
     qa: RAGQAConfig = Field(default_factory=RAGQAConfig)
+
+    # Hybrid search configuration (Phase 1)
+    hybrid_search_enabled: bool = Field(default=True, alias='hybridSearchEnabled')
+    hybrid_rrf_k: int = Field(
+        default=60,
+        alias='hybridRrfK',
+        description='RRF constant for rank fusion (typically 60)',
+    )
+    hybrid_vector_weight: float = Field(
+        default=0.7,
+        alias='hybridVectorWeight',
+        description='Weight for vector search in hybrid fusion (0.0-1.0)',
+    )
+    hybrid_text_weight: float = Field(
+        default=0.3,
+        alias='hybridTextWeight',
+        description='Weight for text search in hybrid fusion (0.0-1.0)',
+    )
+    full_text_backend: str = Field(
+        default='tsvector',
+        alias='fullTextBackend',
+        description='Full-text search backend: tsvector (default) or paradedb',
+    )
+
+    # Reranking configuration (Phase 2)
+    reranking_enabled: bool = Field(default=True, alias='rerankingEnabled')
+    reranker_provider: str = Field(
+        default='auto',
+        alias='rerankerProvider',
+        description='Reranker provider: auto, cohere, llm, or none',
+    )
+    reranker_model: str = Field(
+        default='rerank-v3.5',
+        alias='rerankerModel',
+        description='Reranker model name (for Cohere)',
+    )
+    reranker_top_n: int = Field(
+        default=5,
+        alias='rerankerTopN',
+        description='Number of top results after reranking',
+    )
+    retrieval_candidates: int = Field(
+        default=30,
+        alias='retrievalCandidates',
+        description='Number of candidates to retrieve before reranking',
+    )
+
+    # Contextual enrichment configuration (Phase 4)
+    contextual_enrichment_enabled: bool = Field(
+        default=False,
+        alias='contextualEnrichmentEnabled',
+        description='Enable Anthropic-style contextual retrieval (adds context to chunks before embedding)',
+    )
+    contextual_enrichment_model: str = Field(
+        default='google/gemini-2.0-flash-lite',
+        alias='contextualEnrichmentModel',
+        description='Model for generating chunk context (use cheap model)',
+    )
+
+    # Adaptive routing configuration (Phase 5)
+    adaptive_routing_enabled: bool = Field(
+        default=False,
+        alias='adaptiveRoutingEnabled',
+        description='Enable adaptive query routing (classifies queries and selects strategy)',
+    )
+    use_semantic_router: bool = Field(
+        default=False,
+        alias='useSemanticRouter',
+        description='Use semantic-router library for ML-based classification (requires installation)',
+    )
+    crag_confidence_threshold: float = Field(
+        default=0.6,
+        alias='cragConfidenceThreshold',
+        description='Confidence threshold for CRAG fallback (0-1, lower = more aggressive)',
+    )
 
     class Config:
         populate_by_name = True

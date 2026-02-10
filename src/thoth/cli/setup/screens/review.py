@@ -92,6 +92,37 @@ class ReviewScreen(BaseScreen):
                 embedding_model = rag_config.get('embeddingModel', 'Not set')
                 yield Static(f'    • Embeddings: {embedding_model}')
 
+                # Advanced RAG settings
+                hybrid = rag_config.get('hybridSearchEnabled', False)
+                reranking = rag_config.get('rerankingEnabled', False)
+                reranker = rag_config.get('rerankerProvider', 'auto')
+                contextual = rag_config.get('contextualEnrichmentEnabled', False)
+                adaptive = rag_config.get('adaptiveRoutingEnabled', False)
+
+                hybrid_status = (
+                    '[green]enabled[/green]' if hybrid else '[dim]disabled[/dim]'
+                )
+                rerank_status = (
+                    f'[green]enabled ({reranker})[/green]'
+                    if reranking
+                    else '[dim]disabled[/dim]'
+                )
+                contextual_status = (
+                    '[yellow]enabled (requires re-indexing)[/yellow]'
+                    if contextual
+                    else '[dim]disabled[/dim]'
+                )
+                adaptive_status = (
+                    '[yellow]enabled[/yellow]' if adaptive else '[dim]disabled[/dim]'
+                )
+
+                yield Static(
+                    f'    • Hybrid Search: {hybrid_status}\n'
+                    f'    • Reranking: {rerank_status}\n'
+                    f'    • Contextual Enrichment: {contextual_status}\n'
+                    f'    • Adaptive Routing: {adaptive_status}'
+                )
+
             # Advanced models (collapsed summary)
             if llm_config:
                 citation_model = llm_config.get('citation', {}).get('model', 'Not set')

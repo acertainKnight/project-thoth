@@ -17,10 +17,31 @@
     "use_semantic_scholar": false
   },
   "rag": {
-    "embedding_model": "openai/text-embedding-3-small",
-    "chunk_size": 1000,
-    "chunk_overlap": 200,
-    "retrieval_k": 4
+    "embeddingModel": "openai/text-embedding-3-small",
+    "chunkSize": 1000,
+    "chunkOverlap": 200,
+    "chunkEncoding": "cl100k_base",
+    "qa": {
+      "model": "google/gemini-2.5-flash",
+      "temperature": 0.2,
+      "maxTokens": 2000,
+      "retrievalK": 4
+    },
+    "hybridSearchEnabled": true,
+    "hybridRrfK": 60,
+    "hybridVectorWeight": 0.7,
+    "hybridTextWeight": 0.3,
+    "fullTextBackend": "tsvector",
+    "rerankingEnabled": true,
+    "rerankerProvider": "auto",
+    "rerankerModel": "rerank-v3.5",
+    "rerankerTopN": 5,
+    "retrievalCandidates": 30,
+    "contextualEnrichmentEnabled": false,
+    "contextualEnrichmentModel": "google/gemini-2.0-flash-lite",
+    "adaptiveRoutingEnabled": false,
+    "useSemanticRouter": false,
+    "cragConfidenceThreshold": 0.6
   },
   "paths": {
     "workspace": "thoth/_thoth",

@@ -2,6 +2,7 @@
 Vector store manager for Thoth RAG system using PostgreSQL + pgvector.
 
 This module provides database-only vector storage with no file system dependencies.
+Supports hybrid search (vector + BM25) with Reciprocal Rank Fusion.
 """
 
 import asyncio
@@ -13,6 +14,7 @@ from langchain_core.documents import Document
 from loguru import logger
 
 from thoth.config import Config
+from thoth.rag.search_backends import FullTextSearchBackend, create_backend
 
 
 class VectorStoreManager:
@@ -58,7 +60,13 @@ class VectorStoreManager:
         # Connection pool for async operations
         self._pool: asyncpg.Pool | None = None
 
-        logger.info('VectorStoreManager initialized (PostgreSQL + pgvector)')
+        # Initialize full-text search backend for hybrid search
+        backend_type = self.config.rag_config.full_text_backend
+        self._ft_backend: FullTextSearchBackend = create_backend(backend_type)
+
+        logger.info(
+            f'VectorStoreManager initialized (PostgreSQL + pgvector + {self._ft_backend.get_backend_name()})'
+        )
 
     async def _get_pool(self) -> asyncpg.Pool:
         """Get or create connection pool.
@@ -77,7 +85,8 @@ class VectorStoreManager:
                 # Pool is invalid (likely from a closed event loop), close and recreate
                 try:
                     await self._pool.close()
-                except Exception:
+                except Exception:  # nosec B110
+                    # Suppress all errors during cleanup
                     pass
                 self._pool = None
 
@@ -272,10 +281,41 @@ class VectorStoreManager:
         self,
         query: str,
         k: int = 4,
-        filter: dict[str, Any] | None = None,  # noqa: ARG002
-        **kwargs: Any,  # noqa: ARG002
+        filter: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> list[Document]:
-        """Perform similarity search asynchronously."""
+        """
+        Perform similarity search asynchronously.
+
+        Supports both pure vector search and hybrid search (vector + BM25)
+        with Reciprocal Rank Fusion based on configuration.
+
+        Args:
+            query: Search query text
+            k: Number of results to return
+            filter: Metadata filter (not yet implemented)
+            **kwargs: Additional parameters (use_hybrid=True to force hybrid)
+
+        Returns:
+            List of Document objects ranked by relevance
+        """
+        # Check if hybrid search is enabled
+        use_hybrid = kwargs.get(
+            'use_hybrid', self.config.rag_config.hybrid_search_enabled
+        )
+
+        if use_hybrid:
+            return await self._hybrid_search_async(query, k, filter)
+        else:
+            return await self._vector_only_search_async(query, k, filter)
+
+    async def _vector_only_search_async(
+        self,
+        query: str,
+        k: int,
+        filter: dict[str, Any] | None = None,  # noqa: ARG002
+    ) -> list[Document]:
+        """Pure vector similarity search (original implementation)."""
         # Generate query embedding
         query_embedding = self.embedding_function.embed_query(query)
 
@@ -285,8 +325,6 @@ class VectorStoreManager:
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             # Use pgvector cosine similarity search with HNSW index
-            # The <=> operator uses the HNSW index automatically
-            # Cast the embedding string to vector type for pgvector
             rows = await conn.fetch(
                 """
                 SELECT
@@ -308,38 +346,241 @@ class VectorStoreManager:
                 k,
             )
 
-            documents = []
-            for row in rows:
-                # Handle metadata - could be dict, JSON string, or other format
-                raw_metadata = row['metadata']
-                if isinstance(raw_metadata, dict):
-                    metadata = dict(raw_metadata)
-                elif isinstance(raw_metadata, str):
-                    import json
-
-                    try:
-                        metadata = json.loads(raw_metadata)
-                    except (json.JSONDecodeError, TypeError):
-                        metadata = {}
-                else:
-                    metadata = {}
-                metadata.update(
-                    {
-                        'chunk_id': str(row['id']),
-                        'chunk_type': row['chunk_type'],
-                        'paper_title': row['title'],
-                        'doi': row['doi'],
-                        'authors': row['authors'],
-                        'similarity': float(row['similarity']),
-                    }
-                )
-
-                documents.append(
-                    Document(page_content=row['content'], metadata=metadata)
-                )
-
-            logger.debug(f'Found {len(documents)} similar documents for query')
+            documents = self._rows_to_documents(rows)
+            logger.debug(f'Vector-only search found {len(documents)} documents')
             return documents
+
+    async def _hybrid_search_async(
+        self,
+        query: str,
+        k: int,
+        filter: dict[str, Any] | None = None,
+    ) -> list[Document]:
+        """
+        Hybrid search combining vector similarity and BM25 keyword matching.
+
+        Uses Reciprocal Rank Fusion (RRF) to merge results from both methods.
+        Over-retrieves from each method then fuses with RRF scoring.
+
+        Args:
+            query: Search query text
+            k: Final number of results to return
+            filter: Metadata filter (not yet implemented)
+
+        Returns:
+            List of Document objects ranked by RRF score
+        """
+        # Get config parameters
+        rrf_k = self.config.rag_config.hybrid_rrf_k
+        vector_weight = self.config.rag_config.hybrid_vector_weight
+        text_weight = self.config.rag_config.hybrid_text_weight
+
+        # Over-retrieve from each method (5x to ensure good fusion)
+        candidates_per_method = k * 5
+
+        # Generate query embedding for vector search
+        query_embedding = self.embedding_function.embed_query(query)
+        embedding_str = '[' + ','.join(str(x) for x in query_embedding) + ']'
+
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            # Execute both searches in parallel using asyncio.gather
+            vector_results, text_results = await asyncio.gather(
+                self._get_vector_candidates(conn, embedding_str, candidates_per_method),
+                self._get_text_candidates(conn, query, candidates_per_method),
+                return_exceptions=True,
+            )
+
+            # Handle errors gracefully
+            if isinstance(vector_results, Exception):
+                logger.error(f'Vector search failed: {vector_results}')
+                vector_results = []
+            if isinstance(text_results, Exception):
+                logger.warning(f'Text search failed: {text_results}, using vector-only')
+                text_results = []
+
+            # If text search returned nothing, fall back to vector-only
+            if not text_results:
+                logger.debug('No text search results, falling back to vector-only')
+                return await self._vector_only_search_async(query, k, filter)
+
+            # Apply RRF fusion
+            fused_results = self._apply_rrf_fusion(
+                vector_results, text_results, rrf_k, vector_weight, text_weight
+            )
+
+            # Fetch full document data for top k results
+            documents = await self._fetch_documents_by_ids(
+                conn, [r['id'] for r in fused_results[:k]]
+            )
+
+            logger.debug(
+                f'Hybrid search: {len(vector_results)} vector + {len(text_results)} text '
+                f'-> {len(documents)} fused results'
+            )
+            return documents
+
+    async def _get_vector_candidates(
+        self, conn: asyncpg.Connection, embedding_str: str, k: int
+    ) -> list[dict[str, Any]]:
+        """Get top-k vector similarity candidates."""
+        rows = await conn.fetch(
+            """
+            SELECT
+                dc.id,
+                dc.paper_id,
+                1 - (dc.embedding <=> $1::vector) as score
+            FROM document_chunks dc
+            WHERE dc.embedding IS NOT NULL
+            ORDER BY dc.embedding <=> $1::vector
+            LIMIT $2
+        """,
+            embedding_str,
+            k,
+        )
+
+        return [
+            {'id': row['id'], 'paper_id': row['paper_id'], 'score': float(row['score'])}
+            for row in rows
+        ]
+
+    async def _get_text_candidates(
+        self, conn: asyncpg.Connection, query: str, k: int
+    ) -> list[dict[str, Any]]:
+        """Get top-k BM25/full-text candidates using configured backend."""
+        results = await self._ft_backend.search(conn, query, k)
+        return [
+            {'id': r['id'], 'paper_id': r['paper_id'], 'score': r['score']}
+            for r in results
+        ]
+
+    def _apply_rrf_fusion(
+        self,
+        vector_results: list[dict[str, Any]],
+        text_results: list[dict[str, Any]],
+        rrf_k: int,
+        vector_weight: float,
+        text_weight: float,
+    ) -> list[dict[str, Any]]:
+        """
+        Apply Reciprocal Rank Fusion to merge vector and text results.
+
+        RRF formula: score = sum(weight / (rrf_k + rank))
+        where rank is 1-indexed position in the result list.
+
+        Args:
+            vector_results: Results from vector search
+            text_results: Results from full-text search
+            rrf_k: RRF constant (typically 60)
+            vector_weight: Weight for vector search (typically 0.7)
+            text_weight: Weight for text search (typically 0.3)
+
+        Returns:
+            List of dicts with id, paper_id, rrf_score sorted by score desc
+        """
+        # Build score dictionary
+        scores: dict[str, dict[str, Any]] = {}
+
+        # Add vector scores
+        for rank, result in enumerate(vector_results, start=1):
+            doc_id = str(result['id'])
+            rrf_score = vector_weight / (rrf_k + rank)
+            scores[doc_id] = {
+                'id': result['id'],
+                'paper_id': result['paper_id'],
+                'rrf_score': rrf_score,
+                'vector_rank': rank,
+                'text_rank': None,
+            }
+
+        # Add text scores
+        for rank, result in enumerate(text_results, start=1):
+            doc_id = str(result['id'])
+            rrf_score = text_weight / (rrf_k + rank)
+
+            if doc_id in scores:
+                # Document appears in both - add scores
+                scores[doc_id]['rrf_score'] += rrf_score
+                scores[doc_id]['text_rank'] = rank
+            else:
+                # Document only in text results
+                scores[doc_id] = {
+                    'id': result['id'],
+                    'paper_id': result['paper_id'],
+                    'rrf_score': rrf_score,
+                    'vector_rank': None,
+                    'text_rank': rank,
+                }
+
+        # Sort by RRF score descending
+        sorted_results = sorted(
+            scores.values(), key=lambda x: x['rrf_score'], reverse=True
+        )
+
+        return sorted_results
+
+    async def _fetch_documents_by_ids(
+        self, conn: asyncpg.Connection, doc_ids: list[UUID]
+    ) -> list[Document]:
+        """Fetch full document data for given IDs."""
+        if not doc_ids:
+            return []
+
+        rows = await conn.fetch(
+            """
+            SELECT
+                dc.id,
+                dc.content,
+                dc.metadata,
+                dc.chunk_type,
+                p.title,
+                p.doi,
+                p.authors
+            FROM document_chunks dc
+            JOIN papers p ON dc.paper_id = p.id
+            WHERE dc.id = ANY($1::uuid[])
+            ORDER BY array_position($1::uuid[], dc.id)
+        """,
+            doc_ids,
+        )
+
+        return self._rows_to_documents(rows)
+
+    def _rows_to_documents(self, rows: list[asyncpg.Record]) -> list[Document]:
+        """Convert database rows to LangChain Documents."""
+        documents = []
+        for row in rows:
+            # Handle metadata
+            raw_metadata = row['metadata']
+            if isinstance(raw_metadata, dict):
+                metadata = dict(raw_metadata)
+            elif isinstance(raw_metadata, str):
+                import json
+
+                try:
+                    metadata = json.loads(raw_metadata)
+                except (json.JSONDecodeError, TypeError):
+                    metadata = {}
+            else:
+                metadata = {}
+
+            metadata.update(
+                {
+                    'chunk_id': str(row['id']),
+                    'chunk_type': row.get('chunk_type', 'content'),
+                    'paper_title': row.get('title'),
+                    'doi': row.get('doi'),
+                    'authors': row.get('authors'),
+                }
+            )
+
+            # Add similarity if present
+            if 'similarity' in row:
+                metadata['similarity'] = float(row['similarity'])
+
+            documents.append(Document(page_content=row['content'], metadata=metadata))
+
+        return documents
 
     async def similarity_search_with_score_async(
         self,
@@ -564,7 +805,7 @@ class VectorStoreManager:
                 self,
                 query: str,
                 *,
-                run_manager: CallbackManagerForRetrieverRun | None = None,
+                run_manager: CallbackManagerForRetrieverRun | None = None,  # noqa: ARG002
             ) -> list[Document]:
                 """Get relevant documents synchronously."""
                 return self.vector_store.similarity_search(
@@ -577,7 +818,7 @@ class VectorStoreManager:
                 self,
                 query: str,
                 *,
-                run_manager: CallbackManagerForRetrieverRun | None = None,
+                run_manager: CallbackManagerForRetrieverRun | None = None,  # noqa: ARG002
             ) -> list[Document]:
                 """Get relevant documents asynchronously."""
                 return await self.vector_store.similarity_search_async(

@@ -12,7 +12,7 @@ from typing import Any
 
 from loguru import logger
 from textual.app import ComposeResult
-from textual.widgets import Collapsible, Input, Label, Select, Static
+from textual.widgets import Checkbox, Collapsible, Input, Label, Select, Static
 
 from ..config_manager import ConfigManager
 from ..model_fetcher import (
@@ -356,6 +356,88 @@ class ModelSelectionScreen(BaseScreen):
                 value=str(self._get_default('rag.chunkOverlap', '200')),
             )
 
+            # Advanced RAG settings
+            yield Static('\n[bold]Advanced RAG Settings[/bold]')
+            yield Static(
+                '[dim]These settings enhance retrieval quality. Hybrid search and reranking\n'
+                'are enabled by default with zero extra cost.[/dim]\n'
+            )
+
+            yield Label('Hybrid Search (BM25 + Vector)')
+            yield Static(
+                '[dim][green]✓ Recommended:[/green] Combines semantic and keyword search.\n'
+                '  ~35% better retrieval accuracy with no extra API costs.[/dim]'
+            )
+            yield Checkbox(
+                'Enable hybrid search',
+                id='hybrid-search-enabled',
+                value=self._get_default('rag.hybridSearchEnabled', True),
+            )
+
+            yield Label('\nReranking')
+            yield Static(
+                '[dim][green]✓ Recommended:[/green] Re-scores retrieved results for precision.\n'
+                '  ~20-30% additional improvement. Uses LLM by default (zero cost).[/dim]'
+            )
+            yield Checkbox(
+                'Enable reranking',
+                id='reranking-enabled',
+                value=self._get_default('rag.rerankingEnabled', True),
+            )
+
+            yield Label('Reranker Provider')
+            yield Static(
+                '[dim]auto: Cohere if API key present, else LLM (recommended)\n'
+                'cohere: Best quality, requires paid API key (~$1/1000 queries)\n'
+                'llm: Uses existing LLM, zero additional cost\n'
+                'none: Disable reranking[/dim]'
+            )
+            yield Select(
+                options=[
+                    ('Auto-detect (recommended)', 'auto'),
+                    ('Cohere (best quality, paid)', 'cohere'),
+                    ('LLM-based (zero cost)', 'llm'),
+                    ('Disabled', 'none'),
+                ],
+                id='reranker-provider',
+                value=self._get_default('rag.rerankerProvider', 'auto'),
+            )
+
+            yield Label('\nContextual Enrichment')
+            yield Static(
+                '[yellow bold]⚠  IMPORTANT DECISION - READ CAREFULLY:[/yellow bold]\n'
+                '[dim]Anthropic technique that prepends LLM-generated context to chunks.\n'
+                '  [green]✓ Benefit:[/green] ~67% better retrieval accuracy (per Anthropic benchmarks)\n'
+                '  [red]✗ Cost:[/red] ~$10-80 to re-index your entire corpus (one-time)\n'
+                '  [red]✗ Limitation:[/red] Requires re-indexing ALL papers when enabled\n\n'
+                '[yellow]Recommendation:[/yellow] Leave DISABLED now. Enable later BEFORE indexing\n'
+                'your papers if you want the highest quality retrieval.[/dim]'
+            )
+            yield Checkbox(
+                'Enable contextual enrichment (requires re-indexing)',
+                id='contextual-enrichment-enabled',
+                value=self._get_default('rag.contextualEnrichmentEnabled', False),
+            )
+
+            yield Label('\nAdaptive Query Routing')
+            yield Static(
+                '[yellow bold]⚠  ADVANCED FEATURE:[/yellow bold]\n'
+                '[dim]Classifies queries and routes to optimal RAG strategy:\n'
+                '  • Direct answer (simple factual questions)\n'
+                '  • Standard RAG (single retrieval)\n'
+                '  • Multi-hop RAG (complex research questions)\n'
+                '  • CRAG fallback (web search if low confidence)\n\n'
+                '  [yellow]Trade-offs:[/yellow] Adds query latency, requires tuning\n'
+                '  [yellow]Best for:[/yellow] Diverse query types after analyzing patterns\n\n'
+                '[yellow]Recommendation:[/yellow] Leave DISABLED. Enable after you understand\n'
+                'your query patterns and want to optimize routing.[/dim]'
+            )
+            yield Checkbox(
+                'Enable adaptive routing (adds latency, requires tuning)',
+                id='adaptive-routing-enabled',
+                value=self._get_default('rag.adaptiveRoutingEnabled', False),
+            )
+
             yield Label('Document Processing Chunk Size (tokens)')
             yield Input(
                 placeholder='4000',
@@ -516,6 +598,20 @@ class ModelSelectionScreen(BaseScreen):
                 'qa': {
                     'model': self.query_one('#model-rag-qa', Select).value,
                 },
+                # Advanced RAG settings
+                'hybridSearchEnabled': self.query_one(
+                    '#hybrid-search-enabled', Checkbox
+                ).value,
+                'rerankingEnabled': self.query_one(
+                    '#reranking-enabled', Checkbox
+                ).value,
+                'rerankerProvider': self.query_one('#reranker-provider', Select).value,
+                'contextualEnrichmentEnabled': self.query_one(
+                    '#contextual-enrichment-enabled', Checkbox
+                ).value,
+                'adaptiveRoutingEnabled': self.query_one(
+                    '#adaptive-routing-enabled', Checkbox
+                ).value,
             }
 
             model_settings['memory'] = {

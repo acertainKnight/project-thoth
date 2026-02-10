@@ -39,6 +39,7 @@ class MigrationManager:
         migrations = [
             (1, 'initial_schema', MIGRATION_001_INITIAL_SCHEMA),
             (2, 'add_publication_date_range', MIGRATION_002_ADD_PUBLICATION_DATE_RANGE),
+            (3, 'add_hybrid_search_support', MIGRATION_003_ADD_HYBRID_SEARCH_SUPPORT),
         ]
         return sorted(migrations, key=lambda x: x[0])
 
@@ -653,4 +654,68 @@ ADD COLUMN IF NOT EXISTS publication_date_range JSONB;
 -- Add comment explaining the field structure
 COMMENT ON COLUMN research_questions.publication_date_range IS
 'Date range for filtering publications. Expected structure: {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD" or "present"}';
+"""
+
+MIGRATION_003_ADD_HYBRID_SEARCH_SUPPORT = """
+-- Migration 003: Add hybrid search support to document_chunks
+-- Enables BM25-style full-text search to complement vector search
+
+-- Add tsvector column for full-text search (auto-updates when content changes)
+ALTER TABLE document_chunks
+ADD COLUMN IF NOT EXISTS search_vector tsvector
+GENERATED ALWAYS AS (to_tsvector('english', content)) STORED;
+
+-- Add GIN index for fast full-text search
+CREATE INDEX IF NOT EXISTS idx_chunks_fts
+ON document_chunks USING gin(search_vector);
+
+-- Add columns for advanced chunking strategies
+-- Parent-child chunk relationships for hierarchical retrieval
+ALTER TABLE document_chunks
+ADD COLUMN IF NOT EXISTS parent_chunk_id UUID REFERENCES document_chunks(id);
+
+-- Track embedding version to support re-indexing when strategy changes
+ALTER TABLE document_chunks
+ADD COLUMN IF NOT EXISTS embedding_version VARCHAR(32) DEFAULT 'v1';
+
+-- Track chunk type for filtering (content, table, figure_caption, abstract, references)
+ALTER TABLE document_chunks
+ADD COLUMN IF NOT EXISTS chunk_type VARCHAR(32) DEFAULT 'content';
+
+-- Track token count for context window management
+ALTER TABLE document_chunks
+ADD COLUMN IF NOT EXISTS token_count INTEGER;
+
+-- Add updated_at timestamp for tracking changes
+ALTER TABLE document_chunks
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+-- Add index for parent-child lookups
+CREATE INDEX IF NOT EXISTS idx_chunks_parent ON document_chunks(parent_chunk_id);
+
+-- Add index for embedding version (useful for batch re-indexing)
+CREATE INDEX IF NOT EXISTS idx_chunks_embedding_version ON document_chunks(embedding_version);
+
+-- Add index for chunk type filtering
+CREATE INDEX IF NOT EXISTS idx_chunks_type ON document_chunks(chunk_type);
+
+-- Add unique constraint for paper_id + chunk_index (prevents duplicates)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chunks_paper_chunk
+ON document_chunks(paper_id, chunk_index);
+
+-- Add comments for documentation
+COMMENT ON COLUMN document_chunks.search_vector IS
+'Full-text search vector for BM25-style keyword matching. Auto-generated from content.';
+
+COMMENT ON COLUMN document_chunks.parent_chunk_id IS
+'Reference to parent chunk for hierarchical retrieval. Small chunks for precise search, large chunks for context.';
+
+COMMENT ON COLUMN document_chunks.embedding_version IS
+'Tracks embedding strategy version (e.g., v1, v2-contextual). Used to identify chunks needing re-indexing.';
+
+COMMENT ON COLUMN document_chunks.chunk_type IS
+'Type of chunk content: content (default), table, figure_caption, abstract, references.';
+
+COMMENT ON COLUMN document_chunks.token_count IS
+'Approximate token count for context window management and retrieval strategies.';
 """

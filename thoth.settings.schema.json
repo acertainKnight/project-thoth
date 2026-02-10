@@ -71,6 +71,92 @@
             "maxTokens": { "type": "integer", "minimum": 1 },
             "retrievalK": { "type": "integer", "minimum": 1 }
           }
+        },
+        "hybridSearchEnabled": {
+          "type": "boolean",
+          "description": "Enable hybrid search (vector + BM25) with RRF fusion",
+          "default": true
+        },
+        "hybridRrfK": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "RRF constant for rank fusion (typically 60)",
+          "default": 60
+        },
+        "hybridVectorWeight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Weight for vector search in hybrid fusion",
+          "default": 0.7
+        },
+        "hybridTextWeight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Weight for text search in hybrid fusion",
+          "default": 0.3
+        },
+        "fullTextBackend": {
+          "type": "string",
+          "enum": ["tsvector", "paradedb"],
+          "description": "Full-text search backend",
+          "default": "tsvector"
+        },
+        "rerankingEnabled": {
+          "type": "boolean",
+          "description": "Enable reranking layer for improved precision",
+          "default": true
+        },
+        "rerankerProvider": {
+          "type": "string",
+          "enum": ["auto", "cohere", "llm", "none"],
+          "description": "Reranker provider (auto-detects based on API keys)",
+          "default": "auto"
+        },
+        "rerankerModel": {
+          "type": "string",
+          "description": "Reranker model name (for Cohere)",
+          "default": "rerank-v3.5"
+        },
+        "rerankerTopN": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of top results after reranking",
+          "default": 5
+        },
+        "retrievalCandidates": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of candidates to retrieve before reranking",
+          "default": 30
+        },
+        "contextualEnrichmentEnabled": {
+          "type": "boolean",
+          "description": "Enable Anthropic-style contextual retrieval (requires re-indexing)",
+          "default": false
+        },
+        "contextualEnrichmentModel": {
+          "type": "string",
+          "description": "Model for generating chunk context",
+          "default": "google/gemini-2.0-flash-lite"
+        },
+        "adaptiveRoutingEnabled": {
+          "type": "boolean",
+          "description": "Enable adaptive query routing with classification",
+          "default": false
+        },
+        "useSemanticRouter": {
+          "type": "boolean",
+          "description": "Use semantic-router library for ML-based classification",
+          "default": false
+        },
+        "cragConfidenceThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Confidence threshold for CRAG fallback",
+          "default": 0.6
         }
       }
     },

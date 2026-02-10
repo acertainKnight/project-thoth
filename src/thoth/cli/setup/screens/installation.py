@@ -300,6 +300,7 @@ class InstallationScreen(BaseScreen):
                 'openrouterKey': api_keys.get('openrouter', ''),
                 'googleApiKey': api_keys.get('google', ''),
                 'mistralKey': api_keys.get('mistral', ''),
+                'cohereKey': api_keys.get('cohere', ''),
             }
 
         # Add Letta API key if cloud mode

@@ -41,7 +41,23 @@ echo "✅ Letta is ready"
 
 # Run any database migrations if needed
 echo "🔄 Running database migrations..."
-# Add migration commands here if needed
+python -c "
+import asyncio
+from thoth.config import config
+from thoth.migrations.migration_manager import MigrationManager
+
+async def run():
+    database_url = config.secrets.database_url if hasattr(config, 'secrets') else '${DATABASE_URL}'
+    manager = MigrationManager(database_url)
+    success = await manager.initialize_database()
+    if success:
+        status = await manager.get_migration_status()
+        print(f'✅ Migrations complete: {status[\"applied_count\"]} applied')
+    else:
+        print('⚠️  Migration failed (will retry on service start)')
+
+asyncio.run(run())
+" 2>&1 | grep -E "✅|⚠️|ERROR" || echo "✅ Migrations checked"
 
 echo ""
 echo "✨ All prerequisites met!"

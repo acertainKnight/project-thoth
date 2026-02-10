@@ -32,6 +32,7 @@ class APIKeyValidator:
         'mistral': r'^[A-Za-z0-9]{32}$',
         'openrouter': r'^sk-or-v1-[A-Za-z0-9]{64}$',
         'semantic_scholar': r'^[A-Za-z0-9]{40}$',
+        'cohere': r'^[A-Za-z0-9\-_]{40,}$',  # Cohere keys are typically 40+ chars
     }
 
     @classmethod

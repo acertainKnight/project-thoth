@@ -29,6 +29,7 @@ PROVIDER_KEY_URLS: dict[str, str] = {
     'anthropic': 'https://console.anthropic.com/settings/keys',
     'google': 'https://aistudio.google.com/apikey',
     'mistral': 'https://console.mistral.ai/api-keys',
+    'cohere': 'https://dashboard.cohere.com/api-keys',
 }
 
 
@@ -39,6 +40,7 @@ class APIKeysScreen(BaseScreen):
     OPTIONAL_PROVIDERS: ClassVar[dict[str, str]] = {
         'anthropic': 'Anthropic',
         'google': 'Google Gemini',
+        'cohere': 'Cohere (Reranking)',
     }
 
     def __init__(self, vault_path: Path | None = None) -> None:
@@ -172,6 +174,25 @@ class APIKeysScreen(BaseScreen):
                 password=True,
                 id='api-key-google',
                 value=self._get_existing_api_key('google'),
+            )
+
+        # Cohere (for production reranking)
+        yield Checkbox(
+            'Cohere (Advanced RAG)',
+            id='enable-cohere',
+            value=self._is_provider_enabled('cohere'),
+        )
+        with Vertical(id='config-cohere', classes='provider-config'):
+            yield Static(
+                '[dim]Production-grade reranking for RAG retrieval.\n'
+                f'Get key: {PROVIDER_KEY_URLS["cohere"]}\n'
+                'Optional - Thoth uses LLM reranking if not provided.[/dim]',
+            )
+            yield Input(
+                placeholder='Cohere API key',
+                password=True,
+                id='api-key-cohere',
+                value=self._get_existing_api_key('cohere'),
             )
 
     def _is_provider_enabled(self, provider_id: str) -> bool:

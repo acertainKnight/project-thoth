@@ -111,6 +111,16 @@ embeddings = [
     "sentence-transformers>=3.0.0",
 ]
 
+# Reranking (optional - for production-grade reranking via Cohere API)
+reranking = [
+    "cohere>=5.0",
+]
+
+# Query routing (optional - for adaptive RAG with semantic query classification)
+routing = [
+    "semantic-router>=0.1.0",
+]
+
 # Letta client SDK for communicating with the Letta server container
 # Only the lightweight client - the full letta server runs in its own container
 memory = [
