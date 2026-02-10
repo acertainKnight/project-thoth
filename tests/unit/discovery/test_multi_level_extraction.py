@@ -425,7 +425,14 @@ class TestWorkflowReplay:
         mock_context = MagicMock()
         mock_context.new_page = AsyncMock(return_value=AsyncMock())
         mock_page.context = mock_context
-        mock_page.query_selector_all = AsyncMock(return_value=[])
+
+        # Create mock article elements
+        mock_article = MagicMock()
+        mock_title = MagicMock()
+        mock_title.text_content = AsyncMock(return_value='Test Article')
+        mock_article.query_selector = AsyncMock(return_value=mock_title)
+
+        mock_page.query_selector_all = AsyncMock(return_value=[mock_article])
         mock_page.wait_for_selector = AsyncMock()
 
         service = ExtractionService(
