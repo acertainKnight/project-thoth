@@ -6,6 +6,7 @@ Performs the actual installation of Thoth components.
 from __future__ import annotations
 
 import asyncio
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -188,10 +189,67 @@ class InstallationScreen(BaseScreen):
                 full.mkdir(parents=True, exist_ok=True)
                 self.transaction.record_create_directory(full)
 
+        # Copy template files from project to vault
+        templates_dest = workspace_dir / 'templates'
+        templates_dest.mkdir(parents=True, exist_ok=True)
+        self.transaction.record_create_directory(templates_dest)
+
+        # Find template source directory (relative to this file)
+        repo_root = Path(__file__).resolve().parents[3]
+        templates_source = repo_root / 'templates'
+
+        if templates_source.exists():
+            for template_file in templates_source.glob('*'):
+                if template_file.is_file():
+                    dest_file = templates_dest / template_file.name
+                    shutil.copy2(template_file, dest_file)
+                    self.transaction.record_write_file(dest_file)
+                    logger.info(f'Copied template: {template_file.name}')
+
+            # Copy analysis_schema.json to workspace root as the working copy.
+            # The templates/ copy is the default seed; the workspace root copy
+            # is the live file that AnalysisSchemaService and MCP tools read/write.
+            schema_source = templates_source / 'analysis_schema.json'
+            if schema_source.exists():
+                schema_dest = workspace_dir / 'analysis_schema.json'
+                shutil.copy2(schema_source, schema_dest)
+                self.transaction.record_write_file(schema_dest)
+                logger.info('Copied analysis_schema.json working copy to workspace')
+        else:
+            logger.warning(f'Template source directory not found: {templates_source}')
+
+        # Copy prompt files from project to vault
+        prompts_dest = workspace_dir / 'prompts'
+        prompts_dest.mkdir(parents=True, exist_ok=True)
+        self.transaction.record_create_directory(prompts_dest)
+
+        prompts_source = repo_root / 'data' / 'prompts'
+
+        if prompts_source.exists():
+            # Copy prompts directory structure (e.g. google/ and other providers)
+            for item in prompts_source.iterdir():
+                if item.is_dir():
+                    # Copy subdirectory (e.g., google/)
+                    dest_subdir = prompts_dest / item.name
+                    if not dest_subdir.exists():
+                        shutil.copytree(item, dest_subdir)
+                        self.transaction.record_create_directory(dest_subdir)
+                        logger.info(f'Copied prompts subdirectory: {item.name}')
+                elif item.is_file():
+                    # Copy individual prompt file
+                    dest_file = prompts_dest / item.name
+                    shutil.copy2(item, dest_file)
+                    self.transaction.record_write_file(dest_file)
+                    logger.info(f'Copied prompt: {item.name}')
+        else:
+            logger.warning(f'Prompts source directory not found: {prompts_source}')
+
         logger.info(f'Created workspace at {workspace_dir}')
         logger.info(f'Created PDF dir at {self.vault_path / pdf_rel}')
         logger.info(f'Created notes dir at {self.vault_path / notes_rel}')
         logger.info(f'Created markdown dir at {self.vault_path / markdown_rel}')
+        logger.info(f'Copied templates to {templates_dest}')
+        logger.info(f'Copied prompts to {prompts_dest}')
 
     async def save_configuration(self) -> None:
         """Save configuration to settings.json, .env, and .env.letta."""
@@ -245,7 +303,7 @@ class InstallationScreen(BaseScreen):
                 'markdown': paths_config.get('markdown', 'thoth/papers/markdown'),
                 'notes': paths_config.get('notes', 'thoth/notes'),
                 'prompts': f'{workspace_path}/prompts',
-                'templates': f'{workspace_path}/data/templates',
+                'templates': f'{workspace_path}/templates',
                 'output': f'{workspace_path}/data/output',
                 'knowledgeBase': f'{workspace_path}/data/knowledge',
                 'graphStorage': f'{workspace_path}/data/graph/citations.graphml',

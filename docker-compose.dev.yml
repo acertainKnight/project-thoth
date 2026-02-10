@@ -108,7 +108,6 @@ services:
     volumes:
       - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw
       - ./src:/app/src:ro
-      - ./data/prompts:/app/prompts:ro
     ports:
       - "8000:8000"  # API
       - "8082:8000"  # MCP (HTTP transport includes /mcp and /sse endpoints)
@@ -238,7 +237,6 @@ services:
     volumes:
       - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
       - ./src:/app/src:ro  # Mount source for development
-      - ./data/prompts:/app/prompts:ro  # System prompts
     ports:
       - "8000:8000"
     networks:
@@ -333,14 +331,8 @@ services:
     env_file:
       - .env
     environment:
-      # =============================================================================
-      # SIMPLIFIED CONFIGURATION - All paths loaded from settings.json via config.py
-      # =============================================================================
-      # Previously had 40+ environment variables that duplicated settings.json.
-      # Removed: LETTA_DIR, LETTA_LOGS_DIR, LETTA_CACHE_DIR, LETTA_CONFIG_DIR,
-      #          HOME, THOTH_DISCOVERY_HOST, THOTH_DISCOVERY_PORT (defaults in config.py)
-      #          THOTH_DISCOVERY_CHECK_INTERVAL (loaded from settings.json)
-      # =============================================================================
+      # Prioritize mounted source over installed package for hot-reload
+      - PYTHONPATH=/app/src
 
       # Vault configuration (REQUIRED - tells config.py where to find settings)
       - OBSIDIAN_VAULT_PATH=/vault
@@ -354,8 +346,6 @@ services:
       - THOTH_LOG_LEVEL=DEBUG
 
       # Hot-reload configuration
-      # Automatically reload when vault/thoth/_thoth/settings.json changes
-      # No container restart needed!
       - THOTH_HOT_RELOAD=1
       - DOCKER_ENV=true
 
@@ -399,6 +389,9 @@ services:
     env_file:
       - .env
     environment:
+      # Prioritize mounted source over installed package for hot-reload
+      - PYTHONPATH=/app/src
+
       # Vault configuration (REQUIRED - tells config.py where to find settings)
       - OBSIDIAN_VAULT_PATH=/vault
       - THOTH_SETTINGS_FILE=/vault/thoth/_thoth/settings.json
@@ -424,7 +417,6 @@ services:
     volumes:
       - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
       - ./src:/app/src:ro  # Mount source for development
-      - ./data/prompts:/app/prompts:ro  # System prompts
     networks:
       - thoth-dev-network
       - letta-network  # Connect to external Letta network for PostgreSQL access
@@ -456,6 +448,9 @@ services:
     env_file:
       - .env
     environment:
+      # Prioritize mounted source over installed package for hot-reload
+      - PYTHONPATH=/app/src
+
       # Vault configuration (REQUIRED - tells config.py where to find settings)
       - OBSIDIAN_VAULT_PATH=/vault
       - THOTH_SETTINGS_FILE=/vault/thoth/_thoth/settings.json
@@ -477,7 +472,6 @@ services:
     volumes:
       - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
       - ./src:/app/src:ro  # Mount source for development
-      - ./data/prompts:/app/prompts:ro  # System prompts
     networks:
       - thoth-dev-network
       - letta-network  # Connect to external Letta network

@@ -21,8 +21,9 @@ class VaultPathResolver:
         - _thoth/           (Thoth workspace - user config)
           - settings.json   (Thoth settings with relative paths)
           - mcps.json       (MCP server config)
-          - analysis_schema.json
-          - prompts/        (User-editable prompt templates)
+          - analysis_schema.json  (Working copy - editable via MCP tools)
+          - templates/      (Note & schema templates, populated by setup)
+          - prompts/        (LLM prompt templates, populated by setup)
           - skills/         (User-created skills)
         - papers/
           - pdfs/           (PDF storage)

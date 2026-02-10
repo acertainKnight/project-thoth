@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
 from pathlib import Path
 from typing import Any, TypedDict
 
-from jinja2 import ChoiceLoader, Environment, FileSystemLoader
+from jinja2 import ChoiceLoader, Environment, FileSystemLoader, select_autoescape
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable, RunnableConfig
 from langgraph.graph import END, StateGraph
@@ -67,12 +67,9 @@ class CitationProcessor:
             model_provider = config.llm_config.provider.lower()
 
         self.prompts_dir = prompts_dir / model_provider
-        # Default prompts packaged with Thoth
+        # Default prompts packaged with Thoth (fallback to repo data/prompts/)
         self.default_prompts_dir = (
-            Path(__file__).resolve().parents[3]
-            / 'templates'
-            / 'prompts'
-            / model_provider
+            Path(__file__).resolve().parents[3] / 'data' / 'prompts' / model_provider
         )
 
         # Fall back to google templates if provider-specific templates don't exist
@@ -82,7 +79,7 @@ class CitationProcessor:
         # Fall back to default google templates if provider templates don't exist
         if not self.default_prompts_dir.exists():
             self.default_prompts_dir = (
-                Path(__file__).resolve().parents[3] / 'templates' / 'prompts' / 'google'
+                Path(__file__).resolve().parents[3] / 'data' / 'prompts' / 'google'
             )
 
         # Initialize Jinja environment with fallback to default prompts
@@ -93,6 +90,7 @@ class CitationProcessor:
                     FileSystemLoader(self.default_prompts_dir),
                 ]
             ),
+            autoescape=select_autoescape(['html', 'xml']),
             trim_blocks=True,
             lstrip_blocks=True,
         )

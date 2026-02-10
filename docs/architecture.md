@@ -387,16 +387,27 @@ All Thoth data stored in Obsidian vault:
 
 ```
 vault/thoth/_thoth/
-├── settings.json          # Main configuration
-├── mcps.json             # MCP server config
-├── analysis_schema.json  # Customizable analysis schema
-├── prompts/              # Custom prompt templates
-├── skills/               # User-created skills
-├── logs/                 # Application logs (runtime)
-└── cache/                # Temporary cache (runtime)
+├── settings.json              # Main configuration (hot-reloadable)
+├── analysis_schema.json       # Customizable analysis schema (working copy)
+├── mcps.json                  # External MCP server config
+├── templates/                 # Note & schema templates (populated by setup wizard)
+│   ├── obsidian_note.md       # Jinja2 template for note rendering
+│   └── analysis_schema.json   # Default schema seed template
+├── prompts/                   # LLM prompt templates (populated by setup wizard)
+│   └── google/                # Provider-specific prompts (*.j2)
+├── skills/                    # User-created skills
+├── data/                      # Runtime data
+│   ├── output/                # Processing output & tracking
+│   ├── knowledge/             # Knowledge base storage
+│   ├── queries/               # Research queries
+│   └── agent/                 # Agent storage
+├── logs/                      # Application logs (runtime)
+└── cache/                     # Temporary cache (runtime)
 ```
 
 User content lives alongside: `vault/thoth/papers/pdfs/`, `vault/thoth/papers/markdown/`, and `vault/thoth/notes/`.
+
+> **Note**: The setup wizard automatically copies template and prompt files from the project into the vault. The `analysis_schema.json` in the workspace root is the working copy that MCP tools and services read/write; the copy in `templates/` is the default seed for resets.
 
 **Benefits**:
 - Single location for all data

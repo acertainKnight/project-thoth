@@ -697,7 +697,7 @@ class PathsConfig(BaseModel):
     markdown: str = 'thoth/papers/markdown'
     notes: str = 'thoth/notes'
     prompts: str = 'thoth/_thoth/prompts'
-    templates: str = 'thoth/_thoth/data/templates'
+    templates: str = 'thoth/_thoth/templates'
     output: str = 'thoth/_thoth/data/output'
     knowledge_base: str = Field(
         default='thoth/_thoth/data/knowledge', alias='knowledgeBase'
@@ -1121,7 +1121,7 @@ class Settings(BaseModel):
                     'markdown': 'thoth/papers/markdown',
                     'notes': 'thoth/notes',
                     'prompts': 'thoth/_thoth/prompts',
-                    'templates': 'thoth/_thoth/data/templates',
+                    'templates': 'thoth/_thoth/templates',
                     'output': 'thoth/_thoth/data/output',
                     'knowledgeBase': 'thoth/_thoth/data/knowledge',
                     'queries': 'thoth/_thoth/data/queries',

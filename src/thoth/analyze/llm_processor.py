@@ -7,7 +7,7 @@ This module handles the analysis of content using LLM.
 from pathlib import Path
 from typing import Any, Literal
 
-from jinja2 import ChoiceLoader, Environment, FileSystemLoader
+from jinja2 import ChoiceLoader, Environment, FileSystemLoader, select_autoescape
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable, RunnableConfig
@@ -66,7 +66,8 @@ class LLMProcessor:
                 'refine'.
             map_reduce_threshold_multiplier: Multiplier for max_context_length to
                 choose 'map_reduce'.
-            analysis_model: Custom Pydantic model for analysis response (defaults to AnalysisResponse).
+            analysis_model: Custom Pydantic model for analysis response
+                (defaults to AnalysisResponse).
             custom_instructions: Additional instructions to guide extraction.
         """
         self.llm_service = llm_service
@@ -80,10 +81,10 @@ class LLMProcessor:
         )  # Use provided or default
         self.custom_instructions = custom_instructions or ''
         self.prompts_dir = Path(prompts_dir) / model.split('/')[0]
-        # Default prompts packaged with Thoth
+        # Default prompts packaged with Thoth (fallback to repo data/prompts/)
         self.default_prompts_dir = (
             Path(__file__).resolve().parents[3]
-            / 'templates'
+            / 'data'
             / 'prompts'
             / model.split('/')[0]
         )
@@ -140,6 +141,7 @@ class LLMProcessor:
                     FileSystemLoader(self.default_prompts_dir),
                 ]
             ),
+            autoescape=select_autoescape(['html', 'xml']),
             trim_blocks=True,
             lstrip_blocks=True,
         )

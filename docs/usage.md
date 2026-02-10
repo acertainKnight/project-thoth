@@ -529,22 +529,33 @@ reset_settings()
 ```
 vault/
 ├── thoth/
-│   ├── _thoth/                # Thoth config (user-editable)
-│   │   ├── settings.json     # Edit configuration here
-│   │   ├── mcps.json         # MCP server config
-│   │   ├── analysis_schema.json
-│   │   ├── prompts/          # Custom prompt templates
-│   │   └── skills/           # User-created skills
+│   ├── _thoth/                       # Thoth config & workspace
+│   │   ├── settings.json             # Main configuration (hot-reloadable)
+│   │   ├── analysis_schema.json      # Customizable analysis schema
+│   │   ├── mcps.json                 # External MCP server config
+│   │   ├── templates/                # Note & schema templates
+│   │   │   ├── obsidian_note.md      # Note rendering template
+│   │   │   └── analysis_schema.json  # Default schema seed
+│   │   ├── prompts/                  # LLM prompt templates
+│   │   │   └── google/               # Provider-specific prompts (*.j2)
+│   │   ├── skills/                   # User-created skills
+│   │   ├── data/                     # Runtime data
+│   │   │   ├── output/              # Processing output & tracking
+│   │   │   ├── knowledge/           # Knowledge base
+│   │   │   ├── queries/             # Research queries
+│   │   │   └── agent/               # Agent storage
+│   │   ├── logs/                     # Application logs
+│   │   └── cache/                    # Temporary cache files
 │   ├── papers/
-│   │   ├── pdfs/             # Drop PDFs here
-│   │   └── markdown/         # Converted markdown
-│   └── notes/                 # Generated notes appear here
-├── Research/                  # Your research (manual)
+│   │   ├── pdfs/                     # Drop PDFs here
+│   │   └── markdown/                 # Converted markdown
+│   └── notes/                        # Generated notes appear here
+├── Research/                         # Your research (manual)
 │   ├── Projects/
 │   │   ├── Project A/
 │   │   └── Project B/
 │   └── Literature Reviews/
-└── Papers/                    # Link to generated notes
+└── Papers/                           # Link to generated notes
 ```
 
 ### Research Workflow Tips

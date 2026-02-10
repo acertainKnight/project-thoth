@@ -49,7 +49,7 @@
     "markdown": "thoth/papers/markdown",
     "notes": "thoth/notes",
     "prompts": "thoth/_thoth/prompts",
-    "templates": "thoth/_thoth/data/templates",
+    "templates": "thoth/_thoth/templates",
     "output": "thoth/_thoth/data/output",
     "knowledgeBase": "thoth/_thoth/data/knowledge",
     "queries": "thoth/_thoth/data/queries",

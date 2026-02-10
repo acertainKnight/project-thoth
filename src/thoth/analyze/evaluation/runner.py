@@ -57,7 +57,7 @@ async def run_analysis_evaluation(
     await postgres.initialize()
 
     llm_service = LLMService(config)
-    prompts_dir = Path(__file__).resolve().parents[3] / 'templates' / 'prompts'
+    prompts_dir = Path(__file__).resolve().parents[3] / 'data' / 'prompts'
 
     llm_processor = LLMProcessor(
         llm_service=llm_service,

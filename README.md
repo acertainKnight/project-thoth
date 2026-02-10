@@ -278,7 +278,7 @@ graph TD
 - **Hot-reload**: Settings changes apply in ~2 seconds (dev mode)
 - **Vault-centric**: Config, data, logs all under `_thoth/` in your Obsidian vault
 - **Two edit interfaces**: Manual file edits OR natural language chat with agent
-- **Template customization**: Edit prompts in `templates/prompts/` (default, openai, google, agent)
+- **Template customization**: Edit prompts in `_thoth/prompts/` (google, openai, agent, etc.)
 
 ---
 
@@ -476,17 +476,28 @@ All Thoth data lives in your Obsidian vault:
 ```
 vault/
 ├── thoth/
-│   ├── _thoth/
-│   │   ├── settings.json          # Main configuration (hot-reloadable)
-│   │   ├── skills/                # User-created skills
-│   │   ├── data/
-│   │   │   ├── pdfs/             # Downloaded research papers
-│   │   │   ├── notes/            # Generated markdown notes
-│   │   │   └── prompts/          # Custom prompt templates
-│   │   ├── logs/                 # Application logs
-│   │   └── cache/                # Temporary cache files
-│   │
-│   └── papers/                    # Obsidian-managed paper notes
+│   ├── _thoth/                        # Internal workspace
+│   │   ├── settings.json              # Main configuration (hot-reloadable)
+│   │   ├── analysis_schema.json       # Customizable analysis schema (editable)
+│   │   ├── mcps.json                  # External MCP server config
+│   │   ├── templates/                 # Note & schema templates (populated by setup)
+│   │   │   ├── obsidian_note.md       # Jinja2 template for generated notes
+│   │   │   └── analysis_schema.json   # Default schema seed template
+│   │   ├── prompts/                   # LLM prompt templates (populated by setup)
+│   │   │   └── google/                # Provider-specific prompts
+│   │   │       └── *.j2              # Jinja2 prompt files
+│   │   ├── skills/                    # User-created skills
+│   │   ├── data/                      # Runtime data
+│   │   │   ├── output/               # Processing output & tracking
+│   │   │   ├── knowledge/            # Knowledge base storage
+│   │   │   ├── queries/              # Research queries
+│   │   │   └── agent/                # Agent storage
+│   │   ├── logs/                      # Application logs
+│   │   └── cache/                     # Temporary cache files
+│   ├── papers/
+│   │   ├── pdfs/                      # Drop research PDFs here
+│   │   └── markdown/                  # Converted markdown files
+│   └── notes/                         # Generated Obsidian notes
 │
 └── .obsidian/plugins/thoth-obsidian/  # Obsidian plugin files
 ```

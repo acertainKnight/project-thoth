@@ -783,10 +783,10 @@ check-vault: ## Check Obsidian vault integration status
 	@echo -n "MCP Config: "
 	@if [ -f "$(OBSIDIAN_VAULT)/.obsidian/plugins/thoth/mcp-plugins.json" ]; then echo "$(GREEN)✅$(NC)"; else echo "$(RED)❌$(NC)"; fi
 	@echo -n "Prompts: "
-	@if [ -d "$(OBSIDIAN_VAULT)/.thoth/data/prompts" ] && [ -n "$$(find '$(OBSIDIAN_VAULT)/.thoth/data/prompts' -name '*.j2' 2>/dev/null)" ]; then echo "$(GREEN)✅$(NC)"; else echo "$(RED)❌$(NC)"; fi
+	@if [ -d "$(OBSIDIAN_VAULT)/thoth/_thoth/prompts" ] && [ -n "$$(find '$(OBSIDIAN_VAULT)/thoth/_thoth/prompts' -name '*.j2' 2>/dev/null)" ]; then echo "$(GREEN)✅$(NC)"; else echo "$(RED)❌$(NC)"; fi
 	@echo ""
-	@if [ -d "$(OBSIDIAN_VAULT)/.thoth/data/prompts" ]; then \
-		echo "Prompt templates: $$(find '$(OBSIDIAN_VAULT)/.thoth/data/prompts' -name '*.j2' 2>/dev/null | wc -l)"; \
+	@if [ -d "$(OBSIDIAN_VAULT)/thoth/_thoth/prompts" ]; then \
+		echo "Prompt templates: $$(find '$(OBSIDIAN_VAULT)/thoth/_thoth/prompts' -name '*.j2' 2>/dev/null | wc -l)"; \
 	fi
 	@if [ -d "$(OBSIDIAN_VAULT)/.thoth/data/pdfs" ]; then \
 		echo "PDF files: $$(find '$(OBSIDIAN_VAULT)/.thoth/data/pdfs' -name '*.pdf' 2>/dev/null | wc -l)"; \

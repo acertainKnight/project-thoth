@@ -225,11 +225,24 @@ Wizard performs installation:
 
 If you prefer to configure manually instead of using the wizard:
 
-### 1. Create Settings File
+### 1. Create Workspace & Copy Required Files
 
 ```bash
-mkdir -p "$OBSIDIAN_VAULT_PATH/thoth/_thoth"
+# Create directory structure
+mkdir -p "$OBSIDIAN_VAULT_PATH/thoth/_thoth"/{templates,prompts,data/{output,knowledge,queries,agent},logs,cache,skills}
+mkdir -p "$OBSIDIAN_VAULT_PATH/thoth/papers"/{pdfs,markdown}
+mkdir -p "$OBSIDIAN_VAULT_PATH/thoth/notes"
+
+# Copy settings
 cp templates/thoth.settings.json "$OBSIDIAN_VAULT_PATH/thoth/_thoth/settings.json"
+
+# Copy templates (required for PDF processing)
+cp templates/obsidian_note.md "$OBSIDIAN_VAULT_PATH/thoth/_thoth/templates/"
+cp templates/analysis_schema.json "$OBSIDIAN_VAULT_PATH/thoth/_thoth/templates/"
+cp templates/analysis_schema.json "$OBSIDIAN_VAULT_PATH/thoth/_thoth/"
+
+# Copy prompt templates (required for LLM analysis)
+cp -r data/prompts/* "$OBSIDIAN_VAULT_PATH/thoth/_thoth/prompts/"
 ```
 
 ### 2. Edit Settings
