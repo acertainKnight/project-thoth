@@ -4,11 +4,18 @@ import { Notice } from 'obsidian';
 export type { ThothSettings } from './settings';
 export { DEFAULT_SETTINGS } from './settings';
 
+export interface ImageAttachment {
+  data: string;
+  media_type: string;
+  name: string;
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
   id?: string;
+  attachments?: ImageAttachment[];
 }
 
 export interface ChatSession {

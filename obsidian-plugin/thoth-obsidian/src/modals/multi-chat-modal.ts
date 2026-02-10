@@ -1,5 +1,5 @@
 import { App, Modal, Notice, Menu, SuggestModal, MarkdownRenderer, MarkdownView } from 'obsidian';
-import { ChatSession, ChatMessage } from '../types';
+import { ChatSession, ChatMessage, ImageAttachment } from '../types';
 import type ThothPlugin from '../../main';
 import { ResearchTabComponent } from '../components/research-tab';
 import { SettingsTabComponent } from '../components/settings-tab';
@@ -65,6 +65,10 @@ export class MultiChatModal extends Modal {
   private hasMoreMessages: Map<string, boolean> = new Map();
   private oldestMessageId: Map<string, string> = new Map();
 
+  // Image attachments
+  private pendingAttachments: ImageAttachment[] = [];
+  private attachmentPreviewContainer: HTMLElement | null = null;
+
   constructor(app: App, plugin: ThothPlugin) {
     super(app);
     this.plugin = plugin;
@@ -101,6 +105,54 @@ export class MultiChatModal extends Modal {
       console.error(`[MultiChatModal] Fetch error:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Read a file as base64-encoded data.
+   *
+   * Args:
+   *     file: The file to read.
+   *
+   * Returns:
+   *     Object containing base64 data (without data URL prefix), media type, and file name.
+   *
+   * Example:
+   *     >>> const result = await this.readFileAsBase64(imageFile);
+   *     >>> console.log(result.media_type); // "image/png"
+   */
+  private async readFileAsBase64(file: File): Promise<ImageAttachment> {
+    const MAX_SIZE = 10 * 1024 * 1024; // 10MB limit
+
+    if (file.size > MAX_SIZE) {
+      throw new Error(`Image too large: ${(file.size / 1024 / 1024).toFixed(1)}MB (max 10MB)`);
+    }
+
+    const supportedTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+    if (!supportedTypes.includes(file.type)) {
+      throw new Error(`Unsupported image format: ${file.type}`);
+    }
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        // Strip the "data:image/png;base64," prefix
+        const base64Data = dataUrl.split(',')[1];
+
+        resolve({
+          data: base64Data,
+          media_type: file.type,
+          name: file.name
+        });
+      };
+
+      reader.onerror = () => {
+        reject(new Error('Failed to read file'));
+      };
+
+      reader.readAsDataURL(file);
+    });
   }
 
   async onOpen() {
@@ -2308,6 +2360,12 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       cls: 'chat-input-area'
     });
 
+    // Attachment preview strip (hidden by default)
+    this.attachmentPreviewContainer = inputArea.createEl('div', {
+      cls: 'chat-attachment-preview'
+    });
+    this.attachmentPreviewContainer.style.display = 'none';
+
     const inputEl = inputArea.createEl('textarea', {
       cls: 'chat-input',
       placeholder: 'Type your message...'
@@ -2320,6 +2378,53 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       }
     });
 
+    // Drag-and-drop support for images
+    let dragCounter = 0;
+
+    inputArea.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragCounter++;
+      inputArea.addClass('drag-over');
+    });
+
+    inputArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = 'copy';
+    });
+
+    inputArea.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter === 0) {
+        inputArea.removeClass('drag-over');
+      }
+    });
+
+    inputArea.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      inputArea.removeClass('drag-over');
+
+      const files = Array.from(e.dataTransfer?.files || []);
+      const imageFiles = files.filter(f => f.type.startsWith('image/'));
+
+      if (imageFiles.length === 0) {
+        new Notice('No image files found in drop');
+        return;
+      }
+
+      for (const file of imageFiles) {
+        try {
+          const attachment = await this.readFileAsBase64(file);
+          await this.addAttachment(attachment);
+          new Notice(`Added image: ${file.name}`);
+        } catch (error) {
+          new Notice(`Failed to add image: ${error.message}`, 5000);
+          console.error('Image drop error:', error);
+        }
+      }
+    });
+
     // Attachment button
     const attachBtn = inputArea.createEl('button', {
       text: '📎',
@@ -2327,9 +2432,16 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       attr: { 'aria-label': 'Attach file', 'title': 'Attach file for context' }
     });
 
-    attachBtn.onclick = (e: MouseEvent) => {
+    console.log('[MultiChatModal] Attachment button created:', attachBtn);
+
+    attachBtn.onclick = async (e: MouseEvent) => {
+      console.log('[MultiChatModal] Attachment button clicked!', e);
       e.preventDefault();
-      this.showAttachmentMenu(inputEl, e);
+      e.stopPropagation();
+
+      // For now, directly open image picker (we can add menu back later if needed)
+      // This bypasses the menu issue
+      await this.uploadImage();
     };
 
     const sendBtn = inputArea.createEl('button', {
@@ -2342,12 +2454,18 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       const message = inputEl.value.trim();
       if (!message || sendBtn.disabled) return;
 
-      // Add user message to UI
-      await this.addMessageToChat(messagesContainer, 'user', message);
+      // Capture pending attachments for this message
+      const messageAttachments = [...this.pendingAttachments];
+
+      // Add user message to UI (with attachments if present)
+      await this.addMessageToChat(messagesContainer, 'user', message, messageAttachments);
       inputEl.value = '';
 
       // Auto-resize input back to minimum height
       inputEl.style.height = '36px';
+
+      // Clear attachments after adding to UI
+      this.clearAttachments();
 
       // Disable send button
       sendBtn.disabled = true;
@@ -2357,13 +2475,37 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       const thinkingMsg = this.addThinkingIndicator(messagesContainer);
 
       try {
+        // Build input payload: use array format if attachments present, string otherwise
+        let inputPayload: string | any[];
+
+        if (messageAttachments.length > 0) {
+          // Multimodal format: array of content parts
+          inputPayload = [
+            {
+              type: 'text',
+              text: message
+            },
+            ...messageAttachments.map(att => ({
+              type: 'image',
+              source: {
+                type: 'base64',
+                data: att.data,
+                media_type: att.media_type
+              }
+            }))
+          ];
+        } else {
+          // Text-only format: plain string (backward compatible)
+          inputPayload = message;
+        }
+
         // Send to Letta conversation with streaming enabled
         const endpoint = this.plugin.getLettaEndpointUrl();
         const response = await fetch(`${endpoint}/v1/conversations/${sessionId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            input: message,
+            input: inputPayload,
             streaming: true,  // Enable SSE streaming for real-time token display
             stream_tokens: true  // Stream individual tokens
           })
@@ -2557,6 +2699,38 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       }
     });
 
+    // Paste support for clipboard images
+    inputEl.addEventListener('paste', async (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      const imageItems: DataTransferItem[] = [];
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          imageItems.push(item);
+        }
+      }
+
+      if (imageItems.length === 0) return;
+
+      // Prevent default paste for images (but allow text to paste normally)
+      e.preventDefault();
+
+      for (const item of imageItems) {
+        const file = item.getAsFile();
+        if (!file) continue;
+
+        try {
+          const attachment = await this.readFileAsBase64(file);
+          await this.addAttachment(attachment);
+          new Notice(`Pasted image: ${file.name || 'clipboard.png'}`);
+        } catch (error) {
+          new Notice(`Failed to paste image: ${error.message}`, 5000);
+          console.error('Image paste error:', error);
+        }
+      }
+    });
+
     // Auto-resize textarea as user types
     inputEl.addEventListener('input', () => {
       inputEl.style.height = '36px';
@@ -2588,7 +2762,12 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     }
   }
 
-  async addMessageToChat(container: HTMLElement, role: string, content: string) {
+  async addMessageToChat(
+    container: HTMLElement,
+    role: string,
+    content: string,
+    attachments?: ImageAttachment[]
+  ) {
     const messageEl = container.createEl('div', {
       cls: `chat-message ${role}`
     });
@@ -2601,6 +2780,43 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     const contentEl = messageEl.createEl('div', {
       cls: 'message-content'
     });
+
+    // Render image attachments if present (for user messages)
+    if (attachments && attachments.length > 0) {
+      const imagesContainer = contentEl.createEl('div', {
+        cls: 'message-images'
+      });
+
+      attachments.forEach(attachment => {
+        const imgWrapper = imagesContainer.createEl('div', {
+          cls: 'message-image-wrapper'
+        });
+
+        const img = imgWrapper.createEl('img', {
+          cls: 'message-image',
+          attr: {
+            src: `data:${attachment.media_type};base64,${attachment.data}`,
+            alt: attachment.name,
+            title: `Click to view full size: ${attachment.name}`
+          }
+        });
+
+        // Make images clickable to view full size
+        img.addEventListener('click', () => {
+          const newWindow = window.open();
+          if (newWindow) {
+            newWindow.document.write(
+              `<html><head><title>${attachment.name}</title></head>` +
+              `<body style="margin:0;display:flex;justify-content:center;align-items:center;background:#000;">` +
+              `<img src="data:${attachment.media_type};base64,${attachment.data}" ` +
+              `style="max-width:100%;max-height:100vh;object-fit:contain;" />` +
+              `</body></html>`
+            );
+            newWindow.document.close();
+          }
+        });
+      });
+    }
 
     // Render markdown content
     await this.renderMessageContent(content, contentEl);
@@ -3906,7 +4122,19 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
   // Helper: Show attachment menu
   showAttachmentMenu(inputEl: HTMLTextAreaElement, event: MouseEvent) {
-    const menu = new Menu();
+    try {
+      console.log('[MultiChatModal] Showing attachment menu');
+      const menu = new Menu();
+
+      menu.addItem((item) => {
+        item
+          .setTitle('🖼️ Upload image')
+          .setIcon('image')
+          .onClick(() => {
+            console.log('[MultiChatModal] Upload image clicked');
+            this.uploadImage();
+          });
+      });
 
     menu.addItem((item) => {
       item
@@ -3948,7 +4176,33 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         });
     });
 
-    menu.showAtMouseEvent(event);
+    console.log('[MultiChatModal] Calling menu.showAtMouseEvent');
+
+      // Try to show menu at mouse position
+      // Get the button's position for better positioning
+      const target = event.target as HTMLElement;
+      const rect = target.getBoundingClientRect();
+
+      console.log('[MultiChatModal] Button position:', {
+        x: event.clientX,
+        y: event.clientY,
+        rect: rect
+      });
+
+      // Show menu at the button position
+      menu.showAtPosition({ x: rect.left, y: rect.bottom + 5 });
+
+      console.log('[MultiChatModal] Menu should now be visible');
+
+      // Check if menu is in DOM
+      setTimeout(() => {
+        const menuElements = document.querySelectorAll('.menu');
+        console.log('[MultiChatModal] Found menu elements:', menuElements.length, menuElements);
+      }, 100);
+    } catch (error) {
+      console.error('[MultiChatModal] Error showing attachment menu:', error);
+      new Notice(`Error showing menu: ${error.message}`);
+    }
   }
 
   // Helper: Attach vault file
@@ -3958,6 +4212,126 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     new Notice('File attachment: Type [[ to create a wiki link to any note in your vault');
     inputEl.value += '[[';
     inputEl.focus();
+  }
+
+  /**
+   * Upload an image via file picker.
+   *
+   * Example:
+   *     >>> await this.uploadImage();
+   */
+  private async uploadImage(): Promise<void> {
+    // Create a hidden file input
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/gif,image/webp';
+    input.multiple = true; // Allow multiple image selection
+
+    input.onchange = async () => {
+      if (!input.files || input.files.length === 0) return;
+
+      for (const file of Array.from(input.files)) {
+        try {
+          const attachment = await this.readFileAsBase64(file);
+          await this.addAttachment(attachment);
+          new Notice(`Added image: ${file.name}`);
+        } catch (error) {
+          new Notice(`Failed to add image: ${error.message}`, 5000);
+          console.error('Image upload error:', error);
+        }
+      }
+    };
+
+    // Trigger the file picker
+    input.click();
+  }
+
+  /**
+   * Add an image attachment to the pending list and update preview.
+   *
+   * Args:
+   *     attachment: The image attachment to add.
+   *
+   * Example:
+   *     >>> await this.addAttachment(imageAttachment);
+   */
+  private async addAttachment(attachment: ImageAttachment): Promise<void> {
+    this.pendingAttachments.push(attachment);
+    this.updateAttachmentPreview();
+  }
+
+  /**
+   * Remove an image attachment from the pending list.
+   *
+   * Args:
+   *     index: The index of the attachment to remove.
+   *
+   * Example:
+   *     >>> this.removeAttachment(0);
+   */
+  private removeAttachment(index: number): void {
+    this.pendingAttachments.splice(index, 1);
+    this.updateAttachmentPreview();
+  }
+
+  /**
+   * Update the attachment preview strip UI.
+   *
+   * Example:
+   *     >>> this.updateAttachmentPreview();
+   */
+  private updateAttachmentPreview(): void {
+    if (!this.attachmentPreviewContainer) return;
+
+    this.attachmentPreviewContainer.empty();
+
+    if (this.pendingAttachments.length === 0) {
+      this.attachmentPreviewContainer.style.display = 'none';
+      return;
+    }
+
+    this.attachmentPreviewContainer.style.display = 'flex';
+
+    this.pendingAttachments.forEach((attachment, index) => {
+      const thumbContainer = this.attachmentPreviewContainer!.createEl('div', {
+        cls: 'chat-attachment-thumb'
+      });
+
+      // Create thumbnail image
+      const img = thumbContainer.createEl('img', {
+        attr: {
+          src: `data:${attachment.media_type};base64,${attachment.data}`,
+          alt: attachment.name,
+          title: attachment.name
+        }
+      });
+
+      // Create remove button
+      const removeBtn = thumbContainer.createEl('button', {
+        cls: 'chat-attachment-remove',
+        text: '×',
+        attr: {
+          'aria-label': 'Remove image',
+          title: 'Remove image'
+        }
+      });
+
+      removeBtn.onclick = (e) => {
+        e.preventDefault();
+        this.removeAttachment(index);
+      };
+    });
+  }
+
+  /**
+   * Clear all pending attachments.
+   *
+   * Example:
+   *     >>> this.clearAttachments();
+   */
+  private clearAttachments(): void {
+    this.pendingAttachments = [];
+    this.updateAttachmentPreview();
   }
 
   /**
