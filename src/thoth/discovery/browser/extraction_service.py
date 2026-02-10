@@ -7,12 +7,13 @@ cleanup for browser-based discovery workflows.
 
 Supports two selector formats:
 - **Simple**: ``{'title': 'h3.title', 'authors': '.author'}`` (legacy)
-- **Rich**: ``{'title': {'css_selector': 'h3.title', 'attribute': 'text', 'is_multiple': false}}``
-  (produced by the LLM-powered WorkflowBuilder)
+- **Rich**: ``{'title': {'css_selector': 'h3.title', 'attribute': 'text',
+  'is_multiple': false}}`` (produced by the LLM-powered WorkflowBuilder)
 """
 
 from __future__ import annotations
 
+import asyncio
 import re
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -41,6 +42,21 @@ else:
         PlaywrightTimeoutError = TimeoutError  # type: ignore
 
 from thoth.utilities.schemas import ScrapedArticleMetadata
+
+# Meta tag mapping for academic metadata extraction
+META_TAG_MAP = {
+    'abstract': [
+        'citation_abstract',
+        'DC.description',
+        'og:description',
+        'description',
+    ],
+    'pdf_url': ['citation_pdf_url'],
+    'doi': ['citation_doi', 'DC.identifier'],
+    'publication_date': ['citation_publication_date', 'citation_date', 'DC.date'],
+    'journal': ['citation_journal_title', 'citation_inbook_title'],
+    'authors': ['citation_author'],  # multiple tags
+}
 
 
 class ExtractionServiceError(Exception):
@@ -121,7 +137,8 @@ class ExtractionService:
     Service for extracting article metadata from web pages using Playwright.
 
     This service:
-    - Accepts both simple string selectors and rich dict selectors (from WorkflowBuilder)
+    - Accepts both simple string selectors and rich dict selectors
+      (from WorkflowBuilder)
     - Extracts article fields: title, authors, abstract, url, doi, published_date
     - Post-processes extracted data (cleans trailing commas, normalizes whitespace)
     - Handles pagination (button click, link click, or URL parameter)
@@ -272,6 +289,20 @@ class ExtractionService:
                 f'Extraction complete: extracted={self._extracted_count}, '
                 f'skipped={self._skipped_count}, errors={self._error_count}'
             )
+
+            # Check for detail page extraction config
+            detail_page_config = extraction_rules.get('detail_page_extraction')
+            if detail_page_config and articles:
+                logger.info('Detail page extraction config found - enriching articles')
+                try:
+                    articles = await self._enrich_with_detail_pages(
+                        articles=articles,
+                        detail_config=detail_page_config,
+                        rate_limit_delay=1.0,
+                    )
+                except Exception as e:
+                    logger.error(f'Detail page enrichment failed: {e}')
+                    # Continue with un-enriched articles
 
             return articles[:max_articles]
 
@@ -579,7 +610,7 @@ class ExtractionService:
                     is_disabled = await target.is_disabled()
                     if is_disabled:
                         return False
-                except Exception:
+                except Exception:  # nosec B110
                     pass  # Not all elements support is_disabled
 
                 # Click and wait for new content
@@ -674,6 +705,296 @@ class ExtractionService:
         doi = re.sub(r'^(doi:|DOI:)\s*', '', doi, flags=re.IGNORECASE)
         doi = re.sub(r'^https?://.*?/(10\.\d+/.*)', r'\1', doi)
         return doi.strip()
+
+    async def _extract_meta_tags(
+        self, page: Page, field_names: list[str]
+    ) -> dict[str, Any]:
+        """
+        Extract academic metadata from <meta> tags on the page.
+
+        Args:
+            page: Playwright page instance.
+            field_names: List of field names to extract.
+
+        Returns:
+            Dict mapping field names to extracted values.
+        """
+        js_code = """
+        () => {
+            const result = {};
+            const metaTags = document.querySelectorAll('meta[name], meta[property]');
+            for (const tag of metaTags) {
+                const name = tag.getAttribute('name') || tag.getAttribute('property');
+                const content = tag.getAttribute('content');
+                if (name && content) {
+                    if (!result[name]) {
+                        result[name] = [];
+                    }
+                    result[name].push(content);
+                }
+            }
+            return result;
+        }
+        """
+
+        try:
+            meta_data = await page.evaluate(js_code)
+            extracted = {}
+
+            # Map to field names
+            for field in field_names:
+                if field in META_TAG_MAP:
+                    for tag_name in META_TAG_MAP[field]:
+                        if tag_name in meta_data:
+                            values = meta_data[tag_name]
+                            if field == 'authors':
+                                # Multiple author tags
+                                extracted[field] = values
+                            else:
+                                # Single value (use first)
+                                extracted[field] = values[0] if values else None
+                            break  # Use first matching tag
+
+            return extracted
+
+        except Exception as e:
+            logger.debug(f'Error extracting meta tags: {e}')
+            return {}
+
+    async def _enrich_with_detail_pages(
+        self,
+        articles: list[ScrapedArticleMetadata],
+        detail_config: list[dict[str, Any]],
+        rate_limit_delay: float = 1.0,
+    ) -> list[ScrapedArticleMetadata]:
+        """
+        Enrich articles with metadata from detail pages using stored extraction config.
+
+        Args:
+            articles: List of articles to enrich.
+            detail_config: List of detail page extraction level configs.
+            rate_limit_delay: Delay between page visits in seconds.
+
+        Returns:
+            Enriched articles list.
+        """
+        if not detail_config:
+            return articles
+
+        logger.info(
+            f'Enriching {len(articles)} articles with {len(detail_config)} detail levels'
+        )
+
+        enriched = []
+        for article in articles:
+            try:
+                # Check if article needs enrichment (has url but missing fields)
+                if not article.url:
+                    enriched.append(article)
+                    continue
+
+                needs_enrichment = False
+                if not article.abstract or not article.pdf_url or not article.doi:
+                    needs_enrichment = True
+
+                if not needs_enrichment:
+                    enriched.append(article)
+                    continue
+
+                logger.info(
+                    f'Enriching article: {article.title[:60]}... (missing: abstract={not article.abstract}, pdf_url={not article.pdf_url}, doi={not article.doi})'
+                )
+
+                # Open detail page
+                detail_page = await self.page.context.new_page()
+
+                try:
+                    # Process each detail level
+                    current_url = article.url
+                    for level_idx, level in enumerate(detail_config):
+                        level_num = level_idx + 2  # Levels are 2 and 3
+
+                        # Navigate to the URL
+                        if level.get('url_source_field') == 'url':
+                            current_url = article.url
+                        # For '_followed_link', we use the current_url from prev level
+
+                        logger.info(f'Level {level_num}: navigating to {current_url}')
+                        await detail_page.goto(
+                            current_url, wait_until='domcontentloaded', timeout=15000
+                        )
+                        await asyncio.sleep(0.5)  # Let JS render
+
+                        # Extract using CSS selectors
+                        fields_config = level.get('fields', {})
+                        for field_name, selector in fields_config.items():
+                            # Skip if we already have this field
+                            if getattr(article, field_name, None):
+                                continue
+
+                            try:
+                                css = selector.get('css_selector', '')
+                                attr = selector.get('attribute', 'text')
+                                is_multiple = selector.get('is_multiple', False)
+
+                                if not css:
+                                    continue
+
+                                if is_multiple:
+                                    elements = await detail_page.query_selector_all(css)
+                                    values = []
+                                    for elem in elements:
+                                        val = await self._get_element_value(elem, attr)
+                                        if val:
+                                            values.append(val.strip())
+                                    if values:
+                                        setattr(article, field_name, values)
+                                else:
+                                    element = await detail_page.query_selector(css)
+                                    if element:
+                                        value = await self._get_element_value(
+                                            element, attr
+                                        )
+                                        if value:
+                                            # Make URLs absolute
+                                            if attr == 'href' and not value.startswith(
+                                                'http'
+                                            ):
+                                                value = self._make_absolute_url(
+                                                    value, current_url
+                                                )
+                                            setattr(article, field_name, value.strip())
+                                            logger.info(
+                                                f'Enriched {field_name} at level {level_num}: {value[:60]}...'
+                                            )
+
+                            except Exception as e:
+                                logger.debug(
+                                    f'Error extracting {field_name} at level {level_num}: {e}'
+                                )
+
+                        # Extract meta tags if enabled
+                        if level.get('use_meta_tags', False):
+                            missing_fields = [
+                                f
+                                for f in [
+                                    'abstract',
+                                    'pdf_url',
+                                    'doi',
+                                    'publication_date',
+                                    'journal',
+                                    'authors',
+                                ]
+                                if not getattr(article, f, None)
+                            ]
+                            if missing_fields:
+                                meta_extracted = await self._extract_meta_tags(
+                                    detail_page, missing_fields
+                                )
+                                for field, value in meta_extracted.items():
+                                    if not getattr(article, field, None) and value:
+                                        if (
+                                            isinstance(value, list)
+                                            and field != 'authors'
+                                        ):
+                                            value = value[0] if value else None
+                                        if value:
+                                            setattr(article, field, value)
+                                            logger.debug(
+                                                f'Enriched {field} from meta tags for: {article.title[:50]}'
+                                            )
+
+                        # Heuristic PDF fallback if still missing
+                        if not article.pdf_url:
+                            logger.debug(
+                                f'No pdf_url yet for {article.title[:50]}, trying heuristics'
+                            )
+                            pdf_selectors = [
+                                'a[href$=".pdf"]',
+                                'a[href*=".pdf"]',
+                                'a.pdf-link',
+                                'a.download',
+                                'a[download]',
+                                'a[href*="/pdf/"]',
+                                'a[href*="download"]',
+                                'button.download[onclick*="pdf"]',
+                            ]
+
+                            for pdf_sel in pdf_selectors:
+                                try:
+                                    elem = await detail_page.query_selector(pdf_sel)
+                                    if elem:
+                                        href = await elem.get_attribute('href')
+                                        if href and (
+                                            '.pdf' in href.lower()
+                                            or '/pdf/' in href.lower()
+                                        ):
+                                            article.pdf_url = self._make_absolute_url(
+                                                href, current_url
+                                            )
+                                            logger.info(
+                                                f'Heuristically found pdf_url: {article.pdf_url[:80]}'
+                                            )
+                                            break
+                                except Exception:  # nosec B112
+                                    continue  # Try next selector if this one fails
+
+                        # Check if we need to follow links to next level
+                        follow_links = level.get('follow_links', [])
+                        if follow_links and level_idx < len(detail_config) - 1:
+                            # Try to follow first link
+                            try:
+                                first_link = follow_links[0]
+                                link_css = first_link.get('css_selector', '')
+                                if link_css:
+                                    link_elem = await detail_page.query_selector(
+                                        link_css
+                                    )
+                                    if link_elem:
+                                        link_href = await link_elem.get_attribute(
+                                            'href'
+                                        )
+                                        if link_href:
+                                            # Update current_url for next level
+                                            current_url = self._make_absolute_url(
+                                                link_href, current_url
+                                            )
+                            except Exception as e:
+                                logger.debug(
+                                    f'Could not follow link at level {level_num}: {e}'
+                                )
+
+                        # Rate limit between levels
+                        if level_idx < len(detail_config) - 1:
+                            await asyncio.sleep(rate_limit_delay)
+
+                    await detail_page.close()
+
+                    # Add enriched article
+                    enriched.append(article)
+
+                    # Rate limit between articles
+                    await asyncio.sleep(rate_limit_delay)
+
+                except Exception as e:
+                    logger.warning(f'Error enriching article {article.title[:50]}: {e}')
+                    await detail_page.close()
+                    enriched.append(article)  # Keep original if enrichment fails
+
+            except Exception as e:
+                logger.error(f'Error in detail page enrichment: {e}')
+                enriched.append(article)
+
+        logger.info(f'Detail page enrichment complete: {len(enriched)} articles')
+        return enriched
+
+    def _make_absolute_url(self, url: str, base_url: str) -> str:
+        """Make a relative URL absolute using a base URL."""
+        if not url or url.startswith('http'):
+            return url
+        from urllib.parse import urljoin
+
+        return urljoin(base_url, url)
 
     @property
     def extraction_stats(self) -> dict[str, int]:

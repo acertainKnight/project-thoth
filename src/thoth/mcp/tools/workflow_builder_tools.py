@@ -95,6 +95,27 @@ class AnalyzeSourceUrlMCPTool(MCPTool):
             else:
                 conf_rating = '🔴 LOW'
 
+            # Format detail page extraction info
+            detail_extraction_text = ''
+            if result.detail_page_extraction:
+                detail_extraction_text = f'\n\n**Detail Page Extraction**: {len(result.detail_page_extraction)} level(s) detected'
+                for i, level in enumerate(result.detail_page_extraction):
+                    level_num = i + 2  # Levels are 2 and 3
+                    fields_list = ', '.join(level.fields.keys())
+                    sample_data_preview = ', '.join(
+                        [
+                            f'{k}: {v[:30]}...'
+                            for k, v in list(level.sample_data.items())[:2]
+                        ]
+                    )
+                    detail_extraction_text += (
+                        f'\n  - **Level {level_num}**: Extracts {fields_list}'
+                    )
+                    if sample_data_preview:
+                        detail_extraction_text += f'\n    Sample: {sample_data_preview}'
+                    if level.follow_links:
+                        detail_extraction_text += f'\n    Follows {len(level.follow_links)} link(s) if metadata still missing'
+
             response_text = f"""✓ URL Analysis Complete
 
 **Page**: {result.page_title}
@@ -105,7 +126,7 @@ class AnalyzeSourceUrlMCPTool(MCPTool):
 **Detected Selectors**:
 - Container: `{result.article_container_selector}`
 - Fields: {', '.join(result.selectors.keys())}
-- Pagination: {'Yes' if result.pagination_selector else 'No'}
+- Pagination: {'Yes' if result.pagination_selector else 'No'}{detail_extraction_text}
 
 **Search Filters Detected**: {len(result.search_filters)}
 {chr(10).join(filters_text) if filters_text else '  (none)'}
@@ -304,6 +325,10 @@ class ConfirmSourceWorkflowMCPTool(MCPTool):
                     'type': 'string',
                     'description': 'Search/filter UI elements as JSON string (optional, from analyze output)',
                 },
+                'detail_page_extraction': {
+                    'type': 'string',
+                    'description': 'Multi-level detail page extraction config as JSON string (optional, from analyze output)',
+                },
                 'max_articles_per_run': {
                     'type': 'integer',
                     'description': 'Maximum articles to extract per run',
@@ -346,6 +371,11 @@ class ConfirmSourceWorkflowMCPTool(MCPTool):
                     json.loads(arguments.get('search_filters', '[]'))
                     if isinstance(arguments.get('search_filters'), str)
                     else arguments.get('search_filters', [])
+                )
+                detail_page_extraction = (
+                    json.loads(arguments.get('detail_page_extraction', '[]'))
+                    if isinstance(arguments.get('detail_page_extraction'), str)
+                    else arguments.get('detail_page_extraction', [])
                 )
             except json.JSONDecodeError as e:
                 return MCPToolCallResult(
@@ -422,6 +452,10 @@ class ConfirmSourceWorkflowMCPTool(MCPTool):
             if search_config:
                 extraction_rules['search_config'] = search_config
 
+            # Add detail page extraction config if provided
+            if detail_page_extraction:
+                extraction_rules['detail_page_extraction'] = detail_page_extraction
+
             # Create workflow
             workflow_data = {
                 'name': arguments['name'],
@@ -462,12 +496,16 @@ class ConfirmSourceWorkflowMCPTool(MCPTool):
                 f'Created workflow via MCP tool: {workflow_id} ({arguments["name"]})'
             )
 
+            detail_info = ''
+            if detail_page_extraction:
+                detail_info = f'\n**Detail Page Extraction**: {len(detail_page_extraction)} level(s) configured - the system will navigate to article detail pages to extract complete metadata'
+
             response_text = f"""✓ Custom Source Created Successfully!
 
 **Workflow ID**: {workflow_id}
 **Name**: {arguments['name']}
 **Domain**: {domain}
-**Max Articles**: {arguments.get('max_articles_per_run', 100)}
+**Max Articles**: {arguments.get('max_articles_per_run', 100)}{detail_info}
 
 **What Happens Next**:
 - This source is now active and will be included in discovery runs
