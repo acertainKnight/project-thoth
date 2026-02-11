@@ -66,7 +66,7 @@ async def launch_mcp_server(
             if success:
                 status = await migration_manager.get_migration_status()
                 logger.success(
-                    f'✅ Database migrations complete: {status["applied_count"]} applied, '
+                    f'Database migrations complete: {status["applied_count"]} applied, '
                     f'{status["pending_count"]} pending'
                 )
                 if status['last_migration']:
@@ -75,7 +75,7 @@ async def launch_mcp_server(
                         f'   Current version: {last["version"]} ({last["name"]})'
                     )
             else:
-                logger.warning('⚠️  Database migrations failed (continuing anyway)')
+                logger.warning('Database migrations failed (continuing anyway)')
         except Exception as e:
             logger.warning(f'Could not run database migrations: {e}')
             logger.warning(
@@ -163,11 +163,11 @@ async def launch_mcp_server(
         logger.info(f'Available tools: {len(server.tool_registry.get_tool_names())}')
 
         if stdio:
-            logger.info(' Stdio transport enabled (for CLI integration)')
+            logger.info('Stdio transport enabled (for CLI integration)')
         if http:
-            logger.info(f' HTTP transport enabled at http://{http_host}:{http_port}')
+            logger.info(f'HTTP transport enabled at http://{http_host}:{http_port}')
         if sse:
-            logger.info(f' SSE transport enabled at http://{sse_host}:{sse_port}')
+            logger.info(f'SSE transport enabled at http://{sse_host}:{sse_port}')
 
         await server.start()
 

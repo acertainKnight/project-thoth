@@ -34,12 +34,12 @@ make dev  # Automatically sets up and starts Letta
 ```
 
 **What happens on first run:**
-1. ✅ Creates `.env.letta` from `.env.letta.example` (if missing)
-2. ✅ Checks if Letta is running
-3. ✅ Prompts to start Letta if not running
-4. ✅ Starts Letta with `docker compose -f docker-compose.letta.yml up -d`
-5. ✅ Waits for Letta to be healthy
-6. ✅ Connects Thoth services to Letta
+1. Creates `.env.letta` from `.env.letta.example` (if missing)
+2. Checks if Letta is running
+3. Prompts to start Letta if not running
+4. Starts Letta with `docker compose -f docker-compose.letta.yml up -d`
+5. Waits for Letta to be healthy
+6. Connects Thoth services to Letta
 
 **No manual configuration needed!** The default `.env.letta` works out of the box.
 

@@ -127,7 +127,7 @@ class RAGManager:
             max_tokens=self.config.rag_config.qa.max_tokens,
         )
 
-        # Initialize reranker (Phase 2)
+        # Initialize reranker
         if self.config.rag_config.reranking_enabled:
             api_keys = {
                 'cohere_key': self.config.api_keys.cohere_key,
@@ -145,7 +145,7 @@ class RAGManager:
             self.reranker = NoOpReranker()
             logger.debug('Reranking disabled')
 
-        # Initialize contextual enricher (Phase 4)
+        # Initialize contextual enricher
         contextual_enabled = getattr(
             self.config.rag_config, 'contextual_enrichment_enabled', False
         )
@@ -155,7 +155,7 @@ class RAGManager:
         )
         logger.debug(f'Contextual enrichment: {contextual_enabled}')
 
-        # Initialize query router (Phase 5)
+        # Initialize query router
         routing_enabled = getattr(
             self.config.rag_config, 'adaptive_routing_enabled', False
         )
@@ -221,7 +221,7 @@ class RAGManager:
             # Note: This recreates embedding manager and LLM clients
             self._init_components()
 
-            logger.success('✅ RAG config reloaded successfully')
+            logger.success('RAG config reloaded successfully')
 
         except Exception as e:
             logger.error(f'RAG config reload failed: {e}')
@@ -398,7 +398,7 @@ class RAGManager:
                         f'Split paper into {len(documents)} chunks using two-stage strategy'
                     )
 
-                    # Apply contextual enrichment if enabled (Phase 4)
+                    # Apply contextual enrichment if enabled
                     if self.contextual_enricher.enabled:
                         documents = await self.contextual_enricher.enrich_chunks_async(
                             chunks=documents,

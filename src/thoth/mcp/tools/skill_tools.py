@@ -150,11 +150,11 @@ class ListSkillsMCPTool(MCPTool):
                 lines = [f'Found {len(skills)} available skills:\n']
                 for skill_id, skill_info in sorted(skills.items()):
                     if skill_info.get('source') == 'bundle':
-                        source_label = f'🎯 bundle ({skill_info.get("bundle")})'
+                        source_label = f'bundle ({skill_info.get("bundle")})'
                     elif skill_info['source'] == 'bundled':
-                        source_label = '📦 bundled'
+                        source_label = 'bundled'
                     else:
-                        source_label = '📁 vault'
+                        source_label = 'vault'
 
                     display_name = skill_info.get('display_name', skill_info['name'])
                     lines.append(f'### {display_name} ({source_label})')
@@ -166,11 +166,11 @@ class ListSkillsMCPTool(MCPTool):
                 lines = [f'Available skills ({len(skills)} total):\n']
                 for skill_id, skill_info in sorted(skills.items()):
                     if skill_info.get('source') == 'bundle':
-                        source_icon = '🎯'
+                        source_icon = '[bundle]'
                     elif skill_info['source'] == 'bundled':
-                        source_icon = '📦'
+                        source_icon = '[bundled]'
                     else:
-                        source_icon = '📁'
+                        source_icon = '[vault]'
                     display_name = skill_info.get('display_name', skill_info['name'])
                     lines.append(f'  {source_icon} {skill_id} - {display_name}')
 
@@ -262,7 +262,7 @@ class LoadSkillMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'⚠️ Error: You already have skill(s) loaded: {currently_loaded}\n\n'
+                            'text': f'Error: You already have skill(s) loaded: {currently_loaded}\n\n'
                             f'Only ONE skill can be loaded at a time. Please use unload_skill first to unload the current skill, then load a new one.',
                         }
                     ],
@@ -279,14 +279,14 @@ class LoadSkillMCPTool(MCPTool):
                 skill_content = skill_service.get_skill_content(skill_id)
 
                 if skill_content is None:
-                    results.append(f"❌ Failed to load '{skill_id}': Skill not found")
+                    results.append(f"Failed to load '{skill_id}': Skill not found")
                     failed_count += 1
                 else:
                     # Get required tools for this skill
                     required_tools = skill_service.get_skill_tools(skill_id)
                     all_tools_to_attach.extend(required_tools)
 
-                    results.append(f"✅ Loaded '{skill_id}' successfully")
+                    results.append(f"Loaded '{skill_id}' successfully")
                     if required_tools:
                         results.append(
                             f'   Required tools: {", ".join(required_tools)}'
@@ -302,7 +302,7 @@ class LoadSkillMCPTool(MCPTool):
             if loaded_count == 0:
                 summary = [
                     '\nSkill Loading Summary:',
-                    f'  ❌ Skills failed: {failed_count}',
+                    f'  Skills failed: {failed_count}',
                     '\nUse list_skills to see available skill IDs.',
                 ]
                 return MCPToolCallResult(
@@ -324,7 +324,7 @@ class LoadSkillMCPTool(MCPTool):
             results.append('\n--- TOOL ATTACHMENT ---')
             if tool_attachment_result['attached']:
                 results.append(
-                    f'🔧 Attached: {", ".join(tool_attachment_result["attached"])}'
+                    f'Attached: {", ".join(tool_attachment_result["attached"])}'
                 )
             if tool_attachment_result['already_attached']:
                 results.append(
@@ -332,7 +332,7 @@ class LoadSkillMCPTool(MCPTool):
                 )
             if tool_attachment_result['not_found']:
                 results.append(
-                    f'⚠ Not found: {", ".join(tool_attachment_result["not_found"])}'
+                    f'Not found: {", ".join(tool_attachment_result["not_found"])}'
                 )
                 logger.warning(
                     f'Tools not found in Letta: {tool_attachment_result["not_found"]}'
@@ -354,7 +354,7 @@ class LoadSkillMCPTool(MCPTool):
                 logger.info(f'Removed load_skill from agent {agent_id[:8]}')
             else:
                 results.append(
-                    '⚠ Failed to remove load_skill (may not have been attached)'
+                    'Failed to remove load_skill (may not have been attached)'
                 )
                 logger.warning(f'Failed to remove load_skill from agent {agent_id[:8]}')
 
@@ -366,11 +366,11 @@ class LoadSkillMCPTool(MCPTool):
                 results.append('✓ Added unload_skill tool')
                 logger.info(f'Added unload_skill to agent {agent_id[:8]}')
             else:
-                results.append('⚠ Failed to add unload_skill')
+                results.append('Failed to add unload_skill')
                 logger.warning(f'Failed to add unload_skill to agent {agent_id[:8]}')
 
             results.append(
-                '\n💡 When you are done with this skill, use unload_skill to unload it and restore load_skill capability.'
+                '\nWhen you are done with this skill, use unload_skill to unload it and restore load_skill capability.'
             )
             results.append('--- END SKILL TOOL SWAP ---\n')
 
@@ -385,14 +385,14 @@ class LoadSkillMCPTool(MCPTool):
             # Summary
             summary = [
                 '\nSkill Loading Summary:',
-                f'  ✅ Skills loaded: {loaded_count}',
-                f'  ❌ Skills failed: {failed_count}',
+                f'  Skills loaded: {loaded_count}',
+                f'  Skills failed: {failed_count}',
             ]
 
             total_attached = len(tool_attachment_result['attached']) + len(
                 tool_attachment_result['already_attached']
             )
-            summary.append(f'  🔧 Tools available: {total_attached}')
+            summary.append(f'  Tools available: {total_attached}')
 
             if failed_count > 0:
                 summary.append(
@@ -483,7 +483,7 @@ class UnloadSkillMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': '⚠️ No skills are currently loaded for this agent. Nothing to unload.',
+                            'text': 'No skills are currently loaded for this agent. Nothing to unload.',
                         }
                     ],
                     isError=False,
@@ -499,7 +499,7 @@ class UnloadSkillMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'⚠️ Error: Skills {unrecognized} are not currently loaded.\n'
+                            'text': f'Error: Skills {unrecognized} are not currently loaded.\n'
                             f'Currently loaded: {", ".join(currently_loaded)}\n'
                             f'Please unload only the skills that are currently loaded.',
                         }
@@ -512,7 +512,7 @@ class UnloadSkillMCPTool(MCPTool):
 
             # Collect tools to detach from all skills being unloaded
             for skill_id in skill_ids:
-                results.append(f"✅ Unloading '{skill_id}'")
+                results.append(f"Unloading '{skill_id}'")
                 required_tools = skill_service.get_skill_tools(skill_id)
                 all_tools_to_detach.extend(required_tools)
 
@@ -529,9 +529,7 @@ class UnloadSkillMCPTool(MCPTool):
 
                 results.append('\n--- TOOL DETACHMENT ---')
                 if detach_result['detached']:
-                    results.append(
-                        f'🔧 Detached: {", ".join(detach_result["detached"])}'
-                    )
+                    results.append(f'Detached: {", ".join(detach_result["detached"])}')
                 if detach_result['not_attached']:
                     results.append(
                         f'✓ Already removed: {", ".join(detach_result["not_attached"])}'
@@ -553,7 +551,7 @@ class UnloadSkillMCPTool(MCPTool):
                 logger.info(f'Removed unload_skill from agent {agent_id[:8]}')
             else:
                 results.append(
-                    '⚠ Failed to remove unload_skill (may not have been attached)'
+                    'Failed to remove unload_skill (may not have been attached)'
                 )
                 logger.warning(
                     f'Failed to remove unload_skill from agent {agent_id[:8]}'
@@ -567,10 +565,10 @@ class UnloadSkillMCPTool(MCPTool):
                 results.append('✓ Added load_skill tool back')
                 logger.info(f'Added load_skill back to agent {agent_id[:8]}')
             else:
-                results.append('⚠ Failed to add load_skill back')
+                results.append('Failed to add load_skill back')
                 logger.warning(f'Failed to add load_skill back to agent {agent_id[:8]}')
 
-            results.append('\n💡 You can now use load_skill to load a new skill.')
+            results.append('\nYou can now use load_skill to load a new skill.')
             results.append('--- END SKILL TOOL SWAP ---\n')
 
             # Clear loaded skills for this agent
@@ -587,7 +585,7 @@ class UnloadSkillMCPTool(MCPTool):
                 )
 
             results.append(
-                f'\n✅ Successfully unloaded {len(skill_ids)} skill(s) and restored load_skill capability.'
+                f'\nSuccessfully unloaded {len(skill_ids)} skill(s) and restored load_skill capability.'
             )
 
             return MCPToolCallResult(

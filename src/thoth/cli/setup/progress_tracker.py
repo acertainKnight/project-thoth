@@ -159,7 +159,7 @@ class StatusIndicator:
         Returns:
             Formatted string with warning indicator
         """
-        return f'[yellow]⚠[/yellow] {message}'
+        return f'[yellow]Warning:[/yellow] {message}'
 
     @staticmethod
     def info(message: str) -> str:

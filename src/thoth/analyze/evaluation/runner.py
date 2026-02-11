@@ -146,7 +146,7 @@ async def run_analysis_evaluation(
         logger.info('Generating evaluation report...')
         await _save_analysis_report(metrics, output_dir)
 
-        logger.info(f'✅ Analysis evaluation complete! Results saved to {output_dir}')
+        logger.info(f'Analysis evaluation complete! Results saved to {output_dir}')
         return metrics
 
     finally:

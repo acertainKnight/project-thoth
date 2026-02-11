@@ -15,7 +15,7 @@ from thoth.server.dependencies import (
 
 router = APIRouter()
 
-# REMOVED: Module-level globals - Phase 5
+# Module-level globals removed; services injected via FastAPI Depends()
 # Dependencies now injected via FastAPI Depends() instead of set_dependencies()
 # Note: WebSocket endpoints get dependencies directly in their signature
 

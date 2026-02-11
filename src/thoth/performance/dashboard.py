@@ -337,7 +337,7 @@ class PerformanceDashboard:
 <body>
     <div class="dashboard">
         <header class="dashboard-header">
-            <h1>🧠 Thoth Performance Dashboard</h1>
+            <h1>Thoth Performance Dashboard</h1>
             <div class="timestamp">Generated: {data.get('generation_time', '').strftime('%Y-%m-%d %H:%M:%S') if isinstance(data.get('generation_time'), datetime) else data.get('generation_time', 'N/A')}</div>
         </header>
 
@@ -559,7 +559,7 @@ class PerformanceDashboard:
 
         return f"""
         <div class="dashboard-section">
-            <div class="section-header">📊 System Overview</div>
+            <div class="section-header">System Overview</div>
             <div class="metric-grid">
                 <div class="metric-card">
                     <div class="metric-value {cpu_status}">{system_info.get('cpu_usage', 0):.1f}%</div>
@@ -606,7 +606,7 @@ class PerformanceDashboard:
     ) -> str:
         """Create performance metrics section."""
         if not performance_metrics:
-            return '<div class="dashboard-section"><div class="section-header">⚡ Performance Metrics</div><p>No performance data available</p></div>'
+            return '<div class="dashboard-section"><div class="section-header">Performance Metrics</div><p>No performance data available</p></div>'
 
         system_perf = performance_metrics.get('system_performance', {})
         api_perf = performance_metrics.get('api_performance', {})
@@ -614,7 +614,7 @@ class PerformanceDashboard:
 
         return f"""
         <div class="dashboard-section">
-            <div class="section-header">⚡ Performance Metrics</div>
+            <div class="section-header">Performance Metrics</div>
             <div class="metric-grid">
                 <div class="metric-card">
                     <div class="metric-value">{system_perf.get('cpu_usage', {}).get('avg', 0):.1f}%</div>
@@ -653,7 +653,7 @@ class PerformanceDashboard:
     ) -> str:
         """Create pipeline analysis section."""
         if not pipeline_analysis:
-            return '<div class="dashboard-section"><div class="section-header">🔄 Pipeline Analysis</div><p>No pipeline data available</p></div>'
+            return '<div class="dashboard-section"><div class="section-header">Pipeline Analysis</div><p>No pipeline data available</p></div>'
 
         sections = []
         for pipeline_type, data in pipeline_analysis.items():
@@ -690,7 +690,7 @@ class PerformanceDashboard:
 
         return f"""
         <div class="dashboard-section">
-            <div class="section-header">🔄 Pipeline Analysis</div>
+            <div class="section-header">Pipeline Analysis</div>
             {''.join(sections)}
         </div>
         """
@@ -746,7 +746,7 @@ class PerformanceDashboard:
     ) -> str:
         """Create reliability analysis section."""
         if not reliability_analysis:
-            return '<div class="dashboard-section"><div class="section-header">🛡️ Reliability Analysis</div><p>No reliability data available</p></div>'
+            return '<div class="dashboard-section"><div class="section-header">Reliability Analysis</div><p>No reliability data available</p></div>'
 
         uptime = reliability_analysis.get('uptime_percentage', 0)
         uptime_status = (
@@ -759,7 +759,7 @@ class PerformanceDashboard:
 
         return f"""
         <div class="dashboard-section">
-            <div class="section-header">🛡️ Reliability Analysis</div>
+            <div class="section-header">Reliability Analysis</div>
             <div class="metric-grid">
                 <div class="metric-card">
                     <div class="metric-value {uptime_status}">{uptime:.2f}%</div>
@@ -789,11 +789,11 @@ class PerformanceDashboard:
     def _create_optimization_section(self, optimization_recs: dict[str, Any]) -> str:
         """Create optimization recommendations section."""
         if not optimization_recs:
-            return '<div class="dashboard-section"><div class="section-header">🚀 Optimization Recommendations</div><p>No optimization data available</p></div>'
+            return '<div class="dashboard-section"><div class="section-header">Optimization Recommendations</div><p>No optimization data available</p></div>'
 
         return f"""
         <div class="dashboard-section">
-            <div class="section-header">🚀 Optimization Recommendations</div>
+            <div class="section-header">Optimization Recommendations</div>
             <div class="metric-grid">
                 <div class="metric-card">
                     <div class="metric-value">{optimization_recs.get('total_recommendations', 0)}</div>

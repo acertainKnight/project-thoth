@@ -44,24 +44,24 @@ def main() -> int:
         logger.info('Importing initialize_thoth...')
         from thoth.initialization import initialize_thoth
 
-        logger.info('✓ initialize_thoth imported successfully')
+        logger.info('initialize_thoth imported successfully')
 
         # Initialize Thoth with optimized pipeline
         logger.info('Calling initialize_thoth()...')
-        services, document_pipeline, citation_tracker = initialize_thoth()
-        logger.info('✓ Thoth initialized successfully')
+        _services, document_pipeline, _citation_tracker = initialize_thoth()
+        logger.info('Thoth initialized successfully')
 
         # Import PDFMonitor (no CLI dependency)
         logger.info('Importing PDFMonitor...')
         from thoth.server.pdf_monitor import PDFMonitor
 
-        logger.info('✓ PDFMonitor imported successfully')
+        logger.info('PDFMonitor imported successfully')
 
         # Load config for watch directory
         logger.info('Loading configuration...')
         from thoth.config import config
 
-        logger.info('✓ Configuration loaded')
+        logger.info('Configuration loaded')
 
         # Determine watch directory
         watch_dir = None
@@ -89,7 +89,7 @@ def main() -> int:
             polling_interval=30.0,  # 30 seconds
             recursive=True,  # Watch subdirectories
         )
-        logger.info('✓ PDFMonitor created successfully')
+        logger.info('PDFMonitor created successfully')
 
         # Start monitoring
         logger.info('═══════════════════════════════════════════════════')

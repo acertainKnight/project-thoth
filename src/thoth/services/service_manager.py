@@ -4,9 +4,10 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-# Lazy import to avoid circular dependency deadlock (caused by playwright/selenium imports)
+# Lazy import to avoid circular dependency (playwright/selenium)
 # DiscoveryManager will be imported only when actually needed
 if TYPE_CHECKING:
+    from thoth.config import Config
     from thoth.discovery.discovery_manager import DiscoveryManager
 
 from thoth.knowledge.graph import CitationGraph
@@ -214,7 +215,7 @@ class ServiceManager:
         )
 
         # Initialize discovery manager (needed for orchestrator)
-        # FIXED: Import deadlock resolved by lazy-loading selenium in emulator_scraper.py
+        # Import deadlock resolved by lazy-loading selenium in emulator_scraper
         logger.info('Initializing discovery services...')
         try:
             from thoth.repositories.available_source_repository import (
@@ -234,7 +235,7 @@ class ServiceManager:
                 discovery_manager=self._services['discovery_manager'],
                 postgres_service=self._services['postgres'],
             )
-            logger.success('✓ Discovery services initialized successfully')
+            logger.success('Discovery services initialized successfully')
         except ImportError as e:
             logger.warning(
                 f'Discovery services unavailable (missing dependencies): {e}'
@@ -256,7 +257,7 @@ class ServiceManager:
                 llm_service=self._services['llm'],
                 citation_tracker=None,  # Will be set by pipeline
             )
-            logger.info('✓ TagService created successfully')
+            logger.info('TagService created successfully')
         except Exception as e:
             # Check if this is an expected API key error during early initialization
             error_msg = str(e)
@@ -271,9 +272,9 @@ class ServiceManager:
         # Initialize skill service for agent skills management
         logger.info('═══ About to initialize SkillService ═══')
         self._services['skill'] = SkillService(config=self.config)
-        logger.info('✓ SkillService created, calling initialize()...')
+        logger.info('SkillService created, calling initialize()...')
         self._services['skill'].initialize()
-        logger.info('✓ SkillService initialized successfully')
+        logger.info('SkillService initialized successfully')
 
         # Initialize Letta filesystem service (optional - requires memory extras)
         if LETTA_FILESYSTEM_AVAILABLE:

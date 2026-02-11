@@ -244,7 +244,7 @@ class CreateSkillMCPTool(MCPTool):
 
             # Build success message
             result_lines = [
-                f'✅ Successfully created skill: {full_skill_id}',
+                f'Successfully created skill: {full_skill_id}',
                 '',
                 '**AgentSkills.io Standard Compliance:**',
                 f'- name: {skill_id} (matches directory ✓)',
@@ -523,7 +523,7 @@ class UpdateSkillMCPTool(MCPTool):
 
             # Build success message
             result_lines = [
-                f'✅ Successfully updated skill: {skill_id}',
+                f'Successfully updated skill: {skill_id}',
                 '',
                 '**AgentSkills.io Standard Compliance:**',
                 f'- name: {skill_dir_name} (matches directory ✓)',

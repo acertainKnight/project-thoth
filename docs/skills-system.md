@@ -98,7 +98,7 @@ Skills are discovered from 2 locations (in order):
 |-------|---------|-------|-------------|
 | **paper-discovery** | Find papers from academic sources | 6 | User wants to find/search papers |
 | **knowledge-base-qa** | Answer questions from collection | 5 | User asks questions about existing papers |
-| **deep-research** | Comprehensive literature analysis | 12 | User needs in-depth analysis, literature review |
+| **deep-research** | In-depth literature analysis | 12 | User needs in-depth analysis, literature review |
 | **research-project-coordination** | Multi-phase project management | 8 | User has long-term research project |
 | **research-query-management** | Automated recurring searches | 7 | User wants scheduled discovery |
 | **rag-administration** | Advanced RAG management | 5 | Admin tasks: reindex, optimize search |
@@ -363,7 +363,7 @@ Agent:
 ```yaml
 ---
 name: literature-review        # Must match directory name
-description: Generate comprehensive literature reviews for academic papers
+description: Generate literature reviews for academic papers
 tools:
   - search_articles
   - answer_research_question
@@ -374,7 +374,7 @@ tools:
 
 # Literature Review
 
-Generate comprehensive literature reviews following academic standards.
+Generate literature reviews following academic standards.
 
 ## Workflow
 
@@ -579,12 +579,12 @@ make dev-logs | grep "load_skill"
 
 Example:
 ```yaml
-❌ BAD:
+BAD:
 --- name: My Skill
 tools: [tool1, tool2]
 ---
 
-✅ GOOD:
+GOOD:
 ---
 name: My Skill
 tools:
@@ -646,12 +646,12 @@ tools:
 ## Summary
 
 **Key Benefits**:
-- ✅ **60-80% fewer tools** in agent context
-- ✅ **Better LLM performance** (clearer choices)
-- ✅ **Token efficiency** (pay for what's active)
-- ✅ **Modular capabilities** (logical units)
-- ✅ **User-extensible** (custom skills)
-- ✅ **Hot-reloadable** (no restart needed)
+- **60-80% fewer tools** in agent context
+- **Better LLM performance** (clearer choices)
+- **Token efficiency** (pay for what's active)
+- **Modular capabilities** (logical units)
+- **User-extensible** (custom skills)
+- **Hot-reloadable** (no restart needed)
 
 **Skill System is Core**: Skills are the foundation of Thoth's agent capabilities, enabling efficient, modular, and user-extensible research assistance.
 

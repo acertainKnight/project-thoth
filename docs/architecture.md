@@ -1,6 +1,6 @@
 # Thoth Architecture
 
-Comprehensive technical documentation for the Thoth Research Assistant architecture.
+Technical documentation for the Thoth Research Assistant architecture.
 
 ## Table of Contents
 
@@ -120,7 +120,7 @@ services, pipeline, citation_graph = initialize_thoth()
 
 1. **Bundled Skills** (shipped with Thoth):
    - `paper-discovery`: Find and curate research papers
-   - `deep-research`: Comprehensive literature analysis
+   - `deep-research`: In-depth literature analysis
    - `knowledge-base-qa`: Answer questions from existing collection
    - `online-research`: Web-based research queries
    - `rag-administration`: Advanced RAG management
@@ -487,10 +487,10 @@ class Settings:
 - Connects to: `letta-network` (for database access)
 
 **Benefits**:
-- ✅ Restarting Thoth never affects Letta
-- ✅ Agents and database remain intact
-- ✅ Letta can serve multiple projects simultaneously
-- ✅ Independent debugging and updates
+- Restarting Thoth never affects Letta
+- Agents and database remain intact
+- Letta can serve multiple projects simultaneously
+- Independent debugging and updates
 
 ### Deployment Modes
 
@@ -510,7 +510,7 @@ class Settings:
 
 | Feature | Development | Production |
 |---------|-------------|------------|
-| **Hot-Reload** | ✅ Enabled (~2s) | ❌ Disabled |
+| **Hot-Reload** | Enabled (~2s) | Disabled |
 | **Ports** | 8000-8004 | 8080-8082 |
 | **Logging** | DEBUG | INFO |
 | **Volumes** | Host mounts | Named volumes |

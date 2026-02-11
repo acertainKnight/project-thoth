@@ -76,7 +76,7 @@ class DeploymentModeScreen(BaseScreen):
             )
 
             yield Static(
-                '\n[yellow]⚠ Before using remote mode:[/yellow]\n'
+                '\n[yellow]Before using remote mode:[/yellow]\n'
                 '  1. Run this wizard on your server FIRST (local mode)\n'
                 '  2. Obsidian + vault must exist on the server\n'
                 '  3. Start services there ([cyan]thoth start[/cyan])',
@@ -177,7 +177,7 @@ class DeploymentModeScreen(BaseScreen):
                         'Is this a Thoth server?'
                     )
                     status_widget.update(
-                        f'[yellow]⚠ Server at {url} is not responding correctly[/yellow]'
+                        f'[yellow]Server at {url} is not responding correctly[/yellow]'
                     )
 
         except httpx.ConnectError:

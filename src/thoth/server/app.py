@@ -355,14 +355,14 @@ async def lifespan(app: FastAPI):
         if success:
             status = await migration_manager.get_migration_status()
             logger.success(
-                f'✅ Database migrations complete: {status["applied_count"]} applied, '
+                f'Database migrations complete: {status["applied_count"]} applied, '
                 f'{status["pending_count"]} pending'
             )
             if status['last_migration']:
                 last = status['last_migration']
-                logger.info(f'   Current version: {last["version"]} ({last["name"]})')
+                logger.info(f'Current version: {last["version"]} ({last["name"]})')
         else:
-            logger.warning('⚠️  Database migrations failed (continuing anyway)')
+            logger.warning('Database migrations failed (continuing anyway)')
     except Exception as e:
         logger.warning(f'Could not run database migrations: {e}')
         logger.warning('Continuing without migrations - manual migration may be needed')
@@ -535,7 +535,7 @@ async def lifespan(app: FastAPI):
         agent_ids = await agent_init.initialize_all_agents(
             service_manager=service_manager
         )
-        logger.info(f'✅ Agents initialized: {", ".join(agent_ids.keys())}')
+        logger.info(f'Agents initialized: {", ".join(agent_ids.keys())}')
     except Exception as e:
         logger.warning(f'Could not initialize agents: {e}')
         logger.warning(
@@ -943,15 +943,13 @@ async def start_server(
             logger.warning(f'Failed to initialize Thoth orchestrator: {e}')
             thoth_orchestrator = None
 
-        # Phase 5 COMPLETE: All routers use FastAPI Depends() for DI
+        # All routers use FastAPI Depends() for DI
         # set_dependencies() calls removed - dependencies injected from app.state
 
         # Still need to set directories for health router (not migrated - not necessary)
         health.set_directories(pdf_dir, notes_dir, base_url)
 
-        logger.info(
-            '✅ Phase 5: All router dependencies injected via FastAPI Depends()'
-        )
+        logger.info('All router dependencies injected via FastAPI Depends()')
 
         logger.info('Thoth server initialization completed successfully')
 

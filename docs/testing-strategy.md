@@ -1,273 +1,99 @@
-# Testing Strategy - Clean Slate Approach
+# Testing Strategy
 
-**Date**: January 4, 2026
-**Status**: Baseline Established
-**Approach**: Rebuild tests properly during improvement plan
+How we test Thoth, and what we prioritize.
 
 ---
 
-## Current Baseline
+## Current State
 
-### ✅ **Working Tests** (840 tests)
-```bash
-tests/unit/  : 840 passed, 3 skipped
-```
-
-**Coverage by module**:
-- `tests/unit/services/` - Service layer tests
-- `tests/unit/repositories/` - Repository pattern tests
-- `tests/unit/citations/` - Citation extraction tests
-- `tests/unit/config/` - Configuration tests
-- `tests/unit/evaluation/` - Evaluation framework tests
-- `tests/unit/mcp/` - MCP tool tests
-- `tests/unit/monitoring/` - Monitoring tests
-- `tests/unit/performance/` - Performance tests
-- `tests/unit/properties/` - Property-based tests (Hypothesis)
-
----
-
-## Deleted Tests (102 tests)
-
-### **Why Delete?**
-1. **Tests never validated** - Written before features existed
-2. **Broken fixtures** - Fundamental async context manager issues
-3. **Setup errors** - Missing dependencies, incorrect mocks
-4. **Negative value** - Failing tests hide real issues
-5. **Technical debt** - Would take 3-5 days to fix aspirational tests
-
-### **What Was Deleted**
-
-**Integration Tests** (15 tests):
-- ❌ `tests/integration/test_database_transactions.py` (7 tests)
-- ❌ `tests/integration/test_citation_workflow.py` (8 tests)
-
-**MCP Integration Tests** (39 tests):
-- ❌ `tests/integration/mcp/test_server_lifecycle.py` (25 tests)
-- ❌ `tests/integration/mcp/test_cli_commands.py` (8 tests)
-- ❌ `tests/integration/mcp/test_monitoring_pipeline.py` (6 tests)
-
-**E2E Tests** (36 tests):
-- ❌ `tests/e2e/test_citation_resolution_workflow.py` (12 tests)
-- ❌ `tests/e2e/test_complete_mcp_workflow.py` (16 tests)
-- ❌ `tests/e2e/test_evaluation_pipeline.py` (8 tests)
-
-**Benchmark Tests** (12 tests):
-- ❌ `tests/benchmarks/test_resolution_performance.py` (12 tests)
-
----
-
-## Testing Philosophy Going Forward
-
-### **KISS Principle**
-- **Keep It Simple, Stupid**
-- Only test what exists and works
-- Tests should validate actual behavior, not aspirations
-- Delete broken tests, don't accumulate them
-
-### **Test-Driven Development (TDD)**
-- Write tests BEFORE or WITH code changes
-- Every phase of improvement plan adds tests
-- Tests must pass before moving to next phase
-- No aspirational tests (test reality, not dreams)
-
-### **Pragmatic Coverage**
-- **Unit tests**: Test individual functions/classes (fast, isolated)
-- **Integration tests**: Test service interactions (rebuild as needed)
-- **E2E tests**: Test complete workflows (add after features work)
-- **Benchmarks**: Track performance (add after optimization)
-
----
-
-## Rebuild Plan by Phase
-
-### **Phase 0: Dead Code Cleanup** ✅
-- **Tests**: None needed (deletion only)
-- **Verification**: Ensure no broken imports
-
-### **Phase 1: Core Service Tests** (Weeks 2-4)
-**Add 100+ new unit tests**:
-- ServiceManager tests (10 tests)
-- BaseService tests (8 tests)
-- LLMService tests (12 tests)
-- ProcessingService tests (10 tests)
-- ArticleService tests (10 tests)
-- CitationService tests (15 tests)
-- RAGService tests (10 tests)
-- DiscoveryService tests (12 tests)
-- PostgresService tests (8 tests)
-- TagService tests (8 tests)
-
-**Rebuild integration tests**:
-- Database transaction tests (real PostgreSQL)
-- Service integration tests (real dependencies)
-
-### **Phase 2: Service Access Standardization** (Week 5-6)
-**Add tests for**:
-- Standardized service access patterns
-- ServiceManager initialization
-- Service dependency injection
-
-### **Phase 3: Service Manager Integration** (Week 7)
-**Add tests for**:
-- Service registration
-- Service lookup
-- Service lifecycle
-
-### **Phase 4: ThothPipeline Deprecation** (Week 8-9)
-**Add tests for**:
-- `initialize_thoth()` factory function
-- Deprecation warnings
-- Backward compatibility
-- PDFMonitor with new pattern
-
-### **Phase 5: Router Dependency Injection** (Week 10-11)
-**Add tests for**:
-- FastAPI dependency injection
-- Router service access
-- Request lifecycle
-
-### **Phase 6: Exception Handling** (Week 12-13)
-**Add tests for**:
-- Error propagation
-- Exception handling patterns
-- Error logging
-
-### **Phase 7: HTTP Client Standardization** (Week 14)
-**Add tests for**:
-- httpx client usage
-- Rate limiting
-- Retry logic
-
-### **Phase 8: Global State Removal** (Week 15+)
-**Add tests for**:
-- No module-level globals
-- Proper state management
-- Thread safety
-
----
-
-## Test Requirements Per Phase
-
-### **Every Phase Must Include**
-
-**1. Unit Tests**:
-```bash
-# All unit tests must pass:
-uv run pytest tests/unit/ -v
-# Should show: 840+ passed (increasing each phase)
-```
-
-**2. Code Coverage**:
-```bash
-# Coverage must not decrease:
-uv run pytest --cov=src/thoth tests/unit/
-# Target: 80% for modified files
-```
-
-**3. Linting**:
-```bash
-# Linting must pass:
-uv run ruff check src/
-```
-
-**4. Phase Checklist**:
-- [ ] All code changes completed
-- [ ] Unit tests written for changes
-- [ ] All unit tests passing
-- [ ] Coverage maintained/improved
-- [ ] Linting passes
-- [ ] Documentation updated
-
----
-
-## Success Criteria
-
-### **Phase Completion**
-✅ All unit tests pass (840+)
-✅ No decrease in coverage
-✅ Linting passes
-✅ New tests for new code
-
-### **Final Success** (After Phase 8)
-✅ 1000+ unit tests passing
-✅ 85%+ code coverage
-✅ 50+ integration tests (rebuilt properly)
-✅ 20+ e2e tests (for real workflows)
-✅ 10+ benchmarks (for critical paths)
-
----
-
-## Production Bug Fixed
-
-### **BaseRepository.transaction() Bug**
-**Issue**: Method was incorrectly defined as `async def` when it should return async context manager directly.
-
-**Before** (broken):
-```python
-async def transaction(self):
-    return self.postgres.transaction()  # Returns coroutine, not context manager
-```
-
-**After** (fixed):
-```python
-def transaction(self):
-    return self.postgres.transaction()  # Returns async context manager
-```
-
-**Impact**:
-- Fixed TypeError in production code
-- Enables proper transaction usage: `async with repo.transaction() as conn:`
-- Would have broken database transactions if used
-
----
-
-## Commits
+**840 passing unit tests** across services, repositories, citations, config, evaluation, MCP, monitoring, and performance modules. All green, no known flaky tests.
 
 ```bash
-# Production fix:
-0c15661 fix(repositories): Remove async from BaseRepository.transaction()
-
-# Test cleanup:
-cf886ae chore(tests): Delete broken integration tests
-efa44fe chore(tests): Delete broken MCP integration tests
-a01c939 chore(tests): Delete entire e2e test directory
-b3cf84d chore(tests): Delete benchmarks test directory
+pytest tests/unit/     # ~840 tests, runs in under 2 minutes
+pytest tests/          # full suite including integration and e2e
 ```
 
-**Total deletions**: 11 test files, 102 tests, ~4,996 lines
+### Test Layout
+
+```
+tests/
+├── unit/                         # fast, isolated tests
+│   ├── citations/                # citation parsing and resolution
+│   ├── config/                   # settings loading, hot-reload, vault detection
+│   ├── discovery/                # multi-level extraction
+│   ├── evaluation/               # ground truth, metrics, visualizations
+│   ├── mcp/                      # MCP tools and health endpoints
+│   ├── monitoring/               # health checks, caching, performance
+│   ├── performance/              # workflow monitoring
+│   ├── properties/               # property-based tests (Hypothesis)
+│   ├── repositories/             # data access layer
+│   ├── server/routers/           # FastAPI endpoint tests
+│   ├── services/                 # service layer logic
+│   ├── setup/                    # setup wizard config and validators
+│   └── utilities/                # async utils, memory leak checks
+├── integration/                  # service interaction tests
+├── e2e/                          # end-to-end workflow tests
+├── fixtures/                     # shared test data and mock factories
+└── conftest.py                   # common fixtures
+```
+
+## Approach
+
+### What we test
+
+- **Services**: Each service in `src/thoth/services/` has corresponding tests. These cover initialization, core methods, error handling, and edge cases with mocked dependencies.
+- **Configuration**: Settings loading from multiple paths, hot-reload callbacks, Pydantic validation, vault detection fallback chain.
+- **Citations**: Parsing, formatting, fuzzy matching, resolution chain logic, and confidence scoring. Includes property-based tests with Hypothesis for robustness.
+- **Repositories**: Data access patterns, transaction handling.
+- **MCP tools**: Tool registration, parameter validation, health endpoints.
+- **Server routers**: FastAPI endpoint response codes, input validation, error handling.
+
+### What we don't test (yet)
+
+Integration and e2e tests are thin. The earlier approach was to write aspirational tests for features that didn't exist yet, which predictably resulted in a pile of broken tests that hid real issues. We deleted those and are rebuilding integration coverage incrementally as features stabilize.
+
+Specifically, we need better coverage for:
+- Database transaction integration (with real PostgreSQL)
+- MCP server lifecycle (startup, tool registration, shutdown)
+- Full document processing pipeline (PDF in, Obsidian note out)
+- Discovery workflow (query to filtered results)
+
+These will be added as the corresponding code matures.
+
+## Running Tests
+
+```bash
+# during development (fast feedback)
+pytest tests/unit/ -v --tb=short
+
+# before committing
+pytest tests/ -v
+
+# with coverage
+pytest --cov=src/thoth --cov-report=term-missing tests/
+
+# specific module
+pytest tests/unit/services/test_rag_service.py
+
+# matching a pattern
+pytest -k "citation"
+```
+
+## Guidelines for New Tests
+
+- Put unit tests in `tests/unit/` mirroring the `src/thoth/` directory structure
+- Use fixtures from `tests/fixtures/` and `tests/conftest.py` for common setup
+- Mock external dependencies (LLM calls, HTTP requests, database connections)
+- Test actual behavior, not implementation details—if a refactor breaks a test but the feature still works, the test was too tightly coupled
+- Use `@pytest.mark.asyncio` for async tests
+- Use Hypothesis for anything involving string parsing, matching, or scoring
+
+## Previous Cleanup
+
+We deleted ~100 tests in January 2026 that were written before their corresponding features existed. They used broken fixtures, had fundamental async issues, and gave false confidence. The current 840-test baseline is clean and trustworthy.
+
+Key fix found during cleanup: `BaseRepository.transaction()` was incorrectly defined as `async def` when it needed to return an async context manager directly. Would have broken any code path using database transactions.
 
 ---
 
-## Philosophy
-
-### **Why This Approach Works**
-
-1. **Clean Baseline**: 840 passing tests we can trust
-2. **No False Positives**: No broken tests hiding real issues
-3. **Incremental Building**: Add tests as we add features
-4. **TDD Approach**: Write tests with code, not before features exist
-5. **Pragmatic**: Focus on value, not test count
-
-### **What We Avoid**
-
-❌ Aspirational tests that never pass
-❌ Broken fixtures that waste time debugging
-❌ Tests for features that don't exist
-❌ Technical debt from abandoned test attempts
-❌ False sense of coverage from failing tests
-
----
-
-## Next Steps
-
-1. ✅ **Clean baseline established** (840 passing unit tests)
-2. 🔄 **Resume Phase 0**: Complete dead code cleanup
-3. ➡️ **Begin Phase 1**: Add comprehensive service tests
-4. ➡️ **Build integration tests**: Real dependencies, real behavior
-5. ➡️ **Add e2e tests**: Test actual workflows that work
-
----
-
-*Testing Strategy: January 4, 2026*
-*Approach: Delete broken, rebuild properly*
-*Status: Clean baseline, ready to proceed*
+*Last updated: February 2026*

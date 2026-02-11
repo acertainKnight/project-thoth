@@ -45,15 +45,15 @@ def main() -> int:
         logger.info('Importing initialize_thoth...')
         from thoth.initialization import initialize_thoth
 
-        logger.info('✓ initialize_thoth imported successfully')
+        logger.info('initialize_thoth imported successfully')
 
         # Initialize Thoth with optimized pipeline
         logger.info('Calling initialize_thoth()...')
         print('MONITOR: Calling initialize_thoth()...', flush=True)
-        services, document_pipeline, citation_tracker = initialize_thoth()
+        _services, document_pipeline, _citation_tracker = initialize_thoth()
         print('MONITOR: initialize_thoth() returned successfully!', flush=True)
-        logger.info('✓ Thoth initialized successfully')
-        print('MONITOR: ✓ Thoth initialized successfully', flush=True)
+        logger.info('Thoth initialized successfully')
+        print('MONITOR:  Thoth initialized successfully', flush=True)
 
         # Import PDFMonitor directly from module (avoid server/__init__.py)
         print('MONITOR: About to import PDFMonitor...', flush=True)
@@ -61,7 +61,7 @@ def main() -> int:
         from thoth.server.pdf_monitor import PDFMonitor
 
         print('MONITOR: PDFMonitor imported successfully!', flush=True)
-        logger.info('✓ PDFMonitor imported successfully')
+        logger.info('PDFMonitor imported successfully')
 
         # Load config for watch directory
         print('MONITOR: Loading configuration...', flush=True)
@@ -69,7 +69,7 @@ def main() -> int:
         from thoth.config import config
 
         print('MONITOR: Configuration loaded', flush=True)
-        logger.info('✓ Configuration loaded')
+        logger.info('Configuration loaded')
 
         # Determine watch directory
         print('MONITOR: Determining watch directory...', flush=True)
@@ -107,7 +107,7 @@ def main() -> int:
             recursive=True,  # Watch subdirectories
         )
         print('MONITOR: PDFMonitor instance created successfully!', flush=True)
-        logger.info('✓ PDFMonitor created successfully')
+        logger.info('PDFMonitor created successfully')
 
         # Start monitoring
         print(

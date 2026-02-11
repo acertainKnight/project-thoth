@@ -92,7 +92,7 @@ class LLMService(BaseService):
                     f'Citation model: {self.config.llm_config.citation.model}'
                 )
 
-            self.logger.success('✅ LLM config reloaded')
+            self.logger.success('LLM config reloaded')
 
         except Exception as e:
             self.logger.error(f'LLM config reload failed: {e}')

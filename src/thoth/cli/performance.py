@@ -239,7 +239,7 @@ def run_cache_stats(args, pipeline: ThothPipeline):  # noqa: ARG001
     stats = cache_service.get_cache_statistics()
 
     print('\n' + '=' * 50)
-    print('💾 CACHE STATISTICS')
+    print('CACHE STATISTICS')
     print('=' * 50)
 
     print('Memory Cache:')

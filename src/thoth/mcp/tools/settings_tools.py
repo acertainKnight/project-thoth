@@ -5,7 +5,7 @@ These tools allow the research agent to view and modify configuration settings
 stored in thoth.settings.json. API keys and sensitive data remain in .env file.
 """
 
-from typing import Any
+from typing import Any, ClassVar
 
 from thoth.mcp.base_tools import MCPTool, MCPToolCallResult, NoInputTool
 from thoth.services.settings_service import SettingsService
@@ -107,7 +107,7 @@ class UpdateSettingsMCPTool(MCPTool):
     """Update Thoth configuration settings."""
 
     # Model setting paths that should be validated against OpenRouter
-    MODEL_SETTING_PATHS = {
+    MODEL_SETTING_PATHS: ClassVar[set[str]] = {
         'llm.default.model',
         'llm.citation.model',
         'llm.tagConsolidator.consolidateModel',
@@ -233,7 +233,7 @@ class UpdateSettingsMCPTool(MCPTool):
                 if path in self.MODEL_SETTING_PATHS and isinstance(value, str):
                     warning = await self._check_model_availability(value)
                     if warning:
-                        result_text += f'\n\n⚠️  {warning}'
+                        result_text += f'\n\nWarning: {warning}'
 
                 return MCPToolCallResult(
                     content=[{'type': 'text', 'text': result_text}]

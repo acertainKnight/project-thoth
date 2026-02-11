@@ -208,7 +208,7 @@ def plot_metrics_by_difficulty(
     x = np.arange(len(difficulties))
     width = 0.25
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    _fig, ax = plt.subplots(figsize=(10, 6))
 
     bars1 = ax.bar(x - width, precisions, width, label='Precision', color='#1f77b4')
     bars2 = ax.bar(x, recalls, width, label='Recall', color='#ff7f0e')
@@ -295,7 +295,7 @@ def create_evaluation_report(
             f.write(f'  F1 Score: {m.f1_score:.3f}\n')
             f.write(f'  Resolved: {m.resolved_citations}/{m.total_citations}\n')
 
-    print(f'\n✅ Evaluation report saved to: {output_dir}')
+    print(f'\nEvaluation report saved to: {output_dir}')
     print(f'   - precision_recall_curve.png')  # noqa: F541
     print(f'   - confusion_matrix.png')  # noqa: F541
     print(f'   - performance_by_difficulty.png')  # noqa: F541

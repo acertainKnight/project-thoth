@@ -31,7 +31,7 @@ Letta provides Thoth's persistent agent system with:
 
 Letta runs as **independent, shared infrastructure** that multiple projects can use:
 
-#### Before (❌ Problem)
+#### Before (Problem)
 ```
 make dev → docker-compose.dev.yml
     ├── thoth-dev-letta (NEW, EMPTY database)
@@ -41,7 +41,7 @@ make dev → docker-compose.dev.yml
 Result: Agents appeared to be gone!
 ```
 
-#### After (✅ Solution)
+#### After (Solution)
 ```
 Standalone Letta (docker-compose.letta.yml)
     ├── letta-server (persistent, shared)
@@ -139,7 +139,7 @@ Orchestrator:
 - Paper comparisons and evaluations
 - Citation network exploration
 - Research gap identification
-- Comprehensive topic analysis
+- Full topic analysis
 
 **Tools** (16):
 - `answer_research_question` - Deep Q&A with citations
@@ -354,10 +354,10 @@ make letta-logs -f  # Follow mode
 **Script**: `scripts/check-letta.sh`
 
 Runs before `make dev` and `make microservices`:
-- ✅ Checks if Letta is running
-- ✅ Offers to start if not running
-- ✅ Verifies API accessibility
-- ✅ Prevents duplicate instances
+- Checks if Letta is running
+- Offers to start if not running
+- Verifies API accessibility
+- Prevents duplicate instances
 
 ---
 
@@ -424,7 +424,7 @@ Orchestrator:
 1. Recognizes complex analysis task
 2. Delegates to thoth_research_analyst
 3. Analyst uses analysis tools systematically
-4. Returns comprehensive comparison
+4. Returns detailed comparison
 5. Orchestrator summarizes for user
 ```
 
@@ -651,11 +651,11 @@ response = await letta_client.send_agent_message(
 ## Summary
 
 **Benefits**:
-- ✅ Agents persist across restarts
-- ✅ Memory survives code changes
-- ✅ Multi-agent coordination
-- ✅ Skill-based dynamic tool loading
-- ✅ Letta shared across projects
+- Agents persist across restarts
+- Memory survives code changes
+- Multi-agent coordination
+- Skill-based dynamic tool loading
+- Letta shared across projects
 
 **Trade-offs**:
 - Letta must be started separately (but automated)

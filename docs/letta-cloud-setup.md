@@ -16,7 +16,7 @@ thoth setup
 
 The setup wizard will:
 1. Detect your Obsidian vault
-2. **Ask you to choose: Letta Cloud or Self-Hosted** ⭐ (NEW!)
+2. **Ask you to choose: Letta Cloud or Self-Hosted** (NEW!)
 3. For cloud: Validate your API key
 4. Configure all dependencies
 5. Save your settings automatically

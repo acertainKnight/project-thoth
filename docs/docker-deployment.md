@@ -18,10 +18,10 @@ Complete guide to deploying Thoth using Docker with both local and microservices
 
 Thoth offers two deployment architectures to suit different use cases:
 
-### Local Mode (Default) ⭐
+### Local Mode (Default)
 **Best for:** Personal use, laptops, small self-hosted deployments
 
-> **📘 Letta Setup**: Letta runs as a standalone service. See [LETTA_SETUP.md](./LETTA_SETUP.md) for details.
+> **Letta Setup**: Letta runs as a standalone service. See [LETTA_SETUP.md](./LETTA_SETUP.md) for details.
 
 - **Containers:** 5 (thoth-all-in-one, letta-server, letta-postgres, letta-redis, letta-nginx)
 - **Resource Usage:** ~3.5GB RAM
@@ -50,9 +50,9 @@ Thoth offers two deployment architectures to suit different use cases:
 | **Startup Time** | ~30s | ~60s |
 | **Service Restart** | Restart all | Restart individual |
 | **Debugging** | View supervisor logs | View per-service logs |
-| **Resource Efficiency** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
-| **Scalability** | ⭐⭐ | ⭐⭐⭐⭐⭐ |
-| **Simplicity** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
+| **Resource Efficiency** | Excellent | Good |
+| **Scalability** | Limited | Excellent |
+| **Simplicity** | Excellent | Good |
 
 ### When to Use Each Mode
 

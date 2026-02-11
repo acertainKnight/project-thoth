@@ -27,14 +27,14 @@ def run_locate_pdf(args, pipeline: ThothPipeline):  # noqa: ARG001
         location = pdf_locator.locate(doi=args.doi, arxiv_id=args.arxiv_id)
 
         if location:
-            logger.info('✓ PDF found!')
-            logger.info(f'  URL: {location.url}')
-            logger.info(f'  Source: {location.source}')
-            logger.info(f'  License: {location.licence or "Unknown"}')
-            logger.info(f'  Open Access: {"Yes" if location.is_oa else "No"}')
+            logger.info('PDF found!')
+            logger.info(f'URL: {location.url}')
+            logger.info(f'Source: {location.source}')
+            logger.info(f'License: {location.licence or "Unknown"}')
+            logger.info(f'Open Access: {"Yes" if location.is_oa else "No"}')
             return 0
         else:
-            logger.error('✗ No PDF found')
+            logger.error('No PDF found')
             return 1
     else:
         logger.error('Provide either a DOI, arXiv ID, or use --all')
@@ -95,9 +95,9 @@ def run_test_source(args, pipeline: ThothPipeline):  # noqa: ARG001
             result = pdf_locator._from_semanticscholar(test_doi)
 
         if result:
-            logger.info(f'  ✓ Found - {result.url}')
+            logger.info(f'Found - {result.url}')
         else:
-            logger.warning('  ✗ Not found')
+            logger.warning('Not found')
 
     return 0
 

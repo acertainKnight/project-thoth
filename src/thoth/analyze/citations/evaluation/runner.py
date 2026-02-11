@@ -88,7 +88,7 @@ async def run_evaluation(
             logger.error('Failed to generate ground truth test set')
             return None
 
-        logger.info(f'✅ Generated {len(ground_truth)} test citations')
+        logger.info(f'Generated {len(ground_truth)} test citations')
         logger.info(
             f'   Easy: {sum(1 for c in ground_truth if c.difficulty == "easy")}'
         )
@@ -107,7 +107,7 @@ async def run_evaluation(
         citations = [gt.citation for gt in ground_truth]
         results = await resolution_chain.batch_resolve(citations, parallel=True)
 
-        logger.info(f'✅ Resolved {len(results)} citations')
+        logger.info(f'Resolved {len(results)} citations')
         resolved_count = sum(1 for r in results if r.status.name == 'RESOLVED')
         logger.info(
             f'   Successfully resolved: {resolved_count}/{len(results)} ({resolved_count / len(results) * 100:.1f}%)'
@@ -198,8 +198,8 @@ async def run_evaluation(
         with open(eval_dir / 'summary.json', 'w') as f:
             json.dump(summary, f, indent=2)
 
-        logger.info(f'\n✅ Evaluation complete!')  # noqa: F541
-        logger.info(f'📊 Results saved to: {eval_dir}')
+        logger.info(f'\n Evaluation complete!')  # noqa: F541
+        logger.info(f'Results saved to: {eval_dir}')
         logger.info('\n' + '=' * 60)
         logger.info('KEY FINDINGS')
         logger.info('=' * 60)

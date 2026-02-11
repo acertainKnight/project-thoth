@@ -13,7 +13,7 @@ from thoth.services.service_manager import ServiceManager
 
 router = APIRouter()
 
-# REMOVED: Module-level globals - Phase 5
+# Module-level globals removed; services injected via FastAPI Depends()
 # Dependencies now injected via FastAPI Depends() instead of set_dependencies()
 
 
@@ -284,7 +284,7 @@ async def execute_analyze_document_tool(
 
 
 async def execute_download_pdf_tool(
-    parameters: dict[str, Any], service_manager: ServiceManager
+    parameters: dict[str, Any], _service_manager: ServiceManager
 ) -> DownloadPdfResult:
     """Execute the download PDF tool directly."""
     url = parameters.get('url', '')
@@ -359,7 +359,7 @@ async def execute_command(
 
 
 async def execute_command_streaming(
-    request: CommandExecutionRequest, service_manager: ServiceManager
+    request: CommandExecutionRequest, _service_manager: ServiceManager
 ) -> CommandExecutionResponse:
     """Execute a command with streaming support."""
     # Implementation would depend on the specific command structure

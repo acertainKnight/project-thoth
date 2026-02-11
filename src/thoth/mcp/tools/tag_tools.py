@@ -45,7 +45,7 @@ class ConsolidateTagsMCPTool(NoInputTool):
             if result.get('consolidation_mappings'):
                 mappings = result['consolidation_mappings']
                 if mappings:
-                    response_text += '🔄 **Tag Mappings Applied:**\n'
+                    response_text += '**Tag Mappings Applied:**\n'
                     for old_tag, new_tag in list(mappings.items())[
                         :10
                     ]:  # Show first 10
@@ -330,14 +330,14 @@ class ConsolidateAndRetagMCPTool(NoInputTool):
                 func=self.service_manager.tag.consolidate_and_retag,
             )
 
-            response_text = '✅ **Tag Consolidation and Retagging Triggered**\n\n'
+            response_text = '**Tag Consolidation and Retagging Triggered**\n\n'
             response_text += f'**Task ID:** `{task_id}`\n\n'
             response_text += '**What happens next:**\n'
             response_text += '  1. Analyzing all tags in your collection\n'
             response_text += '  2. Identifying similar tags for consolidation\n'
             response_text += '  3. Suggesting additional relevant tags\n'
             response_text += '  4. Updating all affected articles\n\n'
-            response_text += '⏱️ **This operation is running in the background.**\n'
+            response_text += '**This operation is running in the background.**\n'
             response_text += (
                 'Use `get_task_status` tool with this task ID to check progress.\n\n'
             )

@@ -146,7 +146,7 @@ async def run_rag_evaluation(
         logger.info('Generating evaluation report...')
         await _save_rag_report(metrics, output_dir)
 
-        logger.info(f'✅ RAG evaluation complete! Results saved to {output_dir}')
+        logger.info(f'RAG evaluation complete! Results saved to {output_dir}')
         return metrics
 
     finally:

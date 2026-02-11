@@ -48,9 +48,9 @@ The MCP Server was architected around three core principles:
 - **Resource Management**: Built-in resource abstraction (files, databases, APIs)
 
 **Trade-offs Accepted**:
-- ✅ Standardization over custom optimizations
-- ✅ JSON-RPC overhead vs raw HTTP (minimal in practice)
-- ✅ SSE complexity for streaming vs polling (worth it for real-time)
+- Standardization over custom optimizations
+- JSON-RPC overhead vs raw HTTP (minimal in practice)
+- SSE complexity for streaming vs polling (worth it for real-time)
 
 ---
 
@@ -146,9 +146,9 @@ CLI Tools    Web Clients   Letta/Claude    (Future transports)
 
 | Transport | Use Case | Clients | Streaming | Production Port |
 |-----------|----------|---------|-----------|-----------------|
-| **HTTP** | Real-time agents, Web APIs | Letta, LangChain, Any HTTP client | ✅ SSE Streaming | 8082 (primary) |
-| **SSE** | Dedicated SSE transport | Legacy SSE clients | ✅ Full | 8081 |
-| **stdio** | Local CLI tools | MCP CLI utilities | ✅ Bidirectional | N/A (stdin/out) |
+| **HTTP** | Real-time agents, Web APIs | Letta, LangChain, Any HTTP client | SSE Streaming | 8082 (primary) |
+| **SSE** | Dedicated SSE transport | Legacy SSE clients | Full | 8081 |
+| **stdio** | Local CLI tools | MCP CLI utilities | Bidirectional | N/A (stdin/out) |
 
 ### 3. SSE Transport Deep Dive
 
@@ -676,7 +676,7 @@ healthcheck:
 ```python
 async def _handle_health(self, request_id: Any):
     """
-    Comprehensive health check.
+    Run health check across all subsystems.
 
     Reports:
     - Tool count (should be 54)
@@ -748,26 +748,26 @@ server {
 ### Bottleneck Analysis
 
 **CPU**:
-- ✅ JSON parsing (ujson if available, ~2x faster than stdlib)
-- ✅ Pydantic validation (compiled to C, minimal overhead)
-- ⚠️ Tool execution (varies by tool, offloaded to services)
+- JSON parsing (ujson if available, ~2x faster than stdlib)
+- Pydantic validation (compiled to C, minimal overhead)
+- Tool execution (varies by tool, offloaded to services)
 
 **Memory**:
-- ✅ Lazy tool instantiation (54 tools, only used ones in memory)
-- ✅ SSE client queues (bounded, max 100 messages per client)
-- ⚠️ No response caching (by design, tools may have side effects)
+- Lazy tool instantiation (54 tools, only used ones in memory)
+- SSE client queues (bounded, max 100 messages per client)
+- No response caching (by design, tools may have side effects)
 
 **I/O**:
-- ✅ Async everywhere (asyncio event loop)
-- ✅ Connection pooling (PostgreSQL, HTTP clients)
-- ⚠️ File I/O blocking (Python limitation, use aiofiles for large files)
+- Async everywhere (asyncio event loop)
+- Connection pooling (PostgreSQL, HTTP clients)
+- File I/O blocking (Python limitation, use aiofiles for large files)
 
 ### Scaling Considerations
 
 **Horizontal Scaling**:
-- ✅ **Stateless**: Run multiple MCP server instances behind load balancer
-- ⚠️ **SSE Sticky Sessions**: Clients must reconnect to same instance (Nginx `ip_hash`)
-- ✅ **Database Pooling**: Each instance has own pool, shared PostgreSQL
+- **Stateless**: Run multiple MCP server instances behind load balancer
+- **SSE Sticky Sessions**: Clients must reconnect to same instance (Nginx `ip_hash`)
+- **Database Pooling**: Each instance has own pool, shared PostgreSQL
 
 **Vertical Scaling**:
 - **CPU**: Single-threaded Python (GIL), add more instances instead
@@ -854,9 +854,9 @@ hey -n 10000 -c 100 -m POST \
 ```
 Client sends: {"jsonrpc":"2.0","method":"tools/call","params":{"name":"invalid"}}
 
-1. Transport: ✅ Valid JSON
-2. Protocol: ✅ Valid JSON-RPC (has jsonrpc, method)
-3. Tool: ❌ Tool "invalid" not found
+1. Transport: Valid JSON
+2. Protocol: Valid JSON-RPC (has jsonrpc, method)
+3. Tool: Tool "invalid" not found
    → Return: {"jsonrpc":"2.0","error":{"code":-32001,"message":"Tool not found"}}
 ```
 
@@ -1023,10 +1023,10 @@ tool_execution_counter = Counter('tool_executions_total')
 
 ### Anti-Patterns Avoided
 
-❌ **God Object**: ServiceManager has bounded responsibilities (coordination only)
-❌ **Tight Coupling**: Tools depend on interfaces, not concrete services
-❌ **Premature Optimization**: Started simple (HTTP), added SSE when needed
-❌ **Magic Strings**: All methods/tools use constants from enums/schemas
+**God Object**: ServiceManager has bounded responsibilities (coordination only)
+**Tight Coupling**: Tools depend on interfaces, not concrete services
+**Premature Optimization**: Started simple (HTTP), added SSE when needed
+**Magic Strings**: All methods/tools use constants from enums/schemas
 
 ---
 
@@ -1058,7 +1058,7 @@ tool_execution_counter = Counter('tool_executions_total')
 
 The MCP Server architecture demonstrates production-grade protocol implementation with careful attention to:
 - **Standards Compliance**: Full MCP 2025-06-18 specification adherence
-- **Operational Excellence**: Multi-transport support, graceful degradation, comprehensive health checks
+- **Operational**: Multi-transport support, graceful degradation, health checks
 - **Developer Experience**: Type-safe tooling, clear error messages, extensive documentation
 - **Future-Proofing**: Extensible design supports new transports, tools, and resource providers
 

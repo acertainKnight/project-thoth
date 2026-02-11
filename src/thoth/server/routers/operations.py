@@ -86,7 +86,7 @@ async def get_collection_stats(
 async def list_articles(
     limit: int = 10,
     offset: int = 0,
-    service_manager: ServiceManager = Depends(get_service_manager),
+    _service_manager: ServiceManager = Depends(get_service_manager),
 ) -> ArticleListResponse:
     """List articles in the collection."""
     try:
@@ -114,7 +114,7 @@ async def list_articles(
         raise HTTPException(status_code=500, detail=f'Error listing articles: {e}')  # noqa: B904
 
 
-# REMOVED: set_service_manager() - Phase 5
+# set_service_manager() removed; services injected via FastAPI Depends()
 # Dependencies now injected via FastAPI Depends() instead of module-level globals
 
 
@@ -325,9 +325,9 @@ async def stream_batch_process(
         batch_tasks = []
         for item in batch_items:
             if process_type == 'pdf':
-                task = process_single_pdf(item)
+                task = process_single_pdf(item, service_manager)
             elif process_type == 'discovery':
-                task = process_discovery_query(item)
+                task = process_discovery_query(item, service_manager)
             else:
                 raise ValueError(f'Unknown process type: {process_type}')
             batch_tasks.append(task)
@@ -356,7 +356,9 @@ async def stream_batch_process(
     )
 
 
-async def process_single_pdf(item: dict[str, Any]) -> BatchProcessResult:
+async def process_single_pdf(
+    item: dict[str, Any], service_manager: ServiceManager
+) -> BatchProcessResult:
     """Process a single PDF item."""
     try:
         pdf_path = Path(item.get('path', ''))
@@ -376,7 +378,9 @@ async def process_single_pdf(item: dict[str, Any]) -> BatchProcessResult:
         )
 
 
-async def process_discovery_query(item: dict[str, Any]) -> BatchProcessResult:
+async def process_discovery_query(
+    item: dict[str, Any], service_manager: ServiceManager
+) -> BatchProcessResult:
     """Process a single discovery query."""
     try:
         query = item.get('query', '')

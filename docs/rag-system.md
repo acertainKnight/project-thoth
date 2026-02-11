@@ -269,7 +269,7 @@ def reciprocal_rank_fusion(
 
 **Why RRF over Linear Combination?**
 - Rank-based: No need to normalize scores across different systems
-- Robust: Handles missing documents gracefully
+- Fault-tolerant: Handles missing documents gracefully
 - Tunable: `semantic_weight` controls the balance
 - Industry-proven: Used by Elasticsearch, Pinecone, etc.
 
@@ -667,7 +667,7 @@ Thoth's RAG system provides production-ready **hybrid search** over research pap
 - **Reranking pipeline**: LLM-based (zero-cost) or Cohere API
 - **Document-aware chunking**: Two-stage markdown header + recursive splitting
 - **PostgreSQL + pgvector + tsvector**: Unified vector and full-text storage
-- **Automatic migrations**: Seamless upgrades for new and existing users
+- **Automatic migrations**: Schema upgrades applied on startup, no manual steps
 - **Flexible embeddings**: Local or cloud, easy switching
 - **MCP integration**: 12 tools for agent access
 - **Hot-reloadable**: Config changes without restart

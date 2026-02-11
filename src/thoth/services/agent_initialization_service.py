@@ -235,14 +235,14 @@ Comparison Aspects:
         # Store service_manager for later use
         self._service_manager = service_manager
 
-        logger.info('🚀 Initializing Thoth research agents...')
+        logger.info('Initializing Thoth research agents...')
 
         agent_ids = {}
 
         async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
             # Get all available tools
             available_tools = await self._get_all_tools(client)
-            logger.info(f'   Found {len(available_tools)} available tools')
+            logger.info(f'Found {len(available_tools)} available tools')
 
             # Create/update each agent
             for agent_name, config in self.AGENT_CONFIGS.items():
@@ -256,7 +256,7 @@ Comparison Aspects:
                             [t for t in config['tools'] if t in available_tools]
                         )
                         logger.info(
-                            f'   ✓ {agent_name}: {agent_id[:16]}... ({tools_count} tools)'
+                            f'    {agent_name}: {agent_id[:16]}... ({tools_count} tools)'
                         )
 
                         # Attach filesystem if it's the main orchestrator
@@ -264,9 +264,9 @@ Comparison Aspects:
                             await self._attach_filesystem(client, agent_id)
 
                 except Exception as e:
-                    logger.error(f'   ✗ {agent_name}: {e}')
+                    logger.error(f'{agent_name}: {e}')
 
-        logger.info(f'✅ Initialized {len(agent_ids)}/{len(self.AGENT_CONFIGS)} agents')
+        logger.info(f'Initialized {len(agent_ids)}/{len(self.AGENT_CONFIGS)} agents')
 
         # Sync external MCP tools to agents
         await self._sync_external_mcp_tools(agent_ids)
@@ -337,7 +337,7 @@ Comparison Aspects:
         tool_names = [t for t in agent_config['tools'] if t in available_tools]
         missing = [t for t in agent_config['tools'] if t not in available_tools]
         if missing:
-            logger.warning(f'   Missing tools for {agent_config["name"]}: {missing}')
+            logger.warning(f'Missing tools for {agent_config["name"]}: {missing}')
 
         # Use placeholder for agent_id - will update after creation
         system_prompt = agent_config['description'].replace('{{AGENT_ID}}', 'PENDING')
@@ -353,7 +353,7 @@ Comparison Aspects:
         # Set LLM model if configured in settings
         if self.agent_model:
             payload['llm_config'] = {'model': self.agent_model}
-            logger.info(f'   Using configured model: {self.agent_model}')
+            logger.info(f'Using configured model: {self.agent_model}')
 
         # Add memory blocks if defined
         if agent_config.get('memory_blocks'):
@@ -496,7 +496,7 @@ Comparison Aspects:
                 f'{self.letta_base_url}/v1/agents/{agent_id}/core-memory/blocks/attach/{block_id}',
                 headers=self.headers,
             )
-            logger.debug(f'   Added missing block: {block_config["label"]}')
+            logger.debug(f'Added missing block: {block_config["label"]}')
 
         except Exception as e:
             logger.warning(f'Could not add block {block_config["label"]}: {e}')
@@ -522,7 +522,7 @@ Comparison Aspects:
                         f'{self.letta_base_url}/v1/agents/{agent_id}/folders/{thoth_folder["id"]}',
                         headers=self.headers,
                     )
-                    logger.info('   ✓ Attached filesystem folder to agent')
+                    logger.info('Attached filesystem folder to agent')
 
         except Exception as e:
             logger.warning(f'Could not attach filesystem: {e}')
@@ -554,7 +554,7 @@ Comparison Aspects:
 
             # Trigger tool sync to all agents
             await mcp_manager.sync_tools_to_agents()
-            logger.info('✓ Synced external MCP tools to agents')
+            logger.info('Synced external MCP tools to agents')
 
         except Exception as e:
             logger.warning(f'Could not sync external MCP tools: {e}')

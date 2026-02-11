@@ -49,7 +49,7 @@ python -m thoth pdf process paper.pdf
 
 **14 fields**: title, authors, year, doi, journal, abstract, key_points, summary, objectives, methodology, results, discussion, strengths, weaknesses, tags
 
-**Use when**: You want comprehensive analysis without overwhelming detail
+**Use when**: You want thorough analysis without overwhelming detail
 
 ### Detailed
 **Best for**: Important papers requiring deep analysis

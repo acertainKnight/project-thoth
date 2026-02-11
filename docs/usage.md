@@ -570,8 +570,8 @@ vault/
 
 **Be specific**:
 ```
-❌ "Find some papers"
-✅ "Find papers on transformer attention mechanisms published in 2024"
+"Find some papers"
+"Find papers on transformer attention mechanisms published in 2024"
 ```
 
 **Use skills explicitly** when needed:
@@ -579,7 +579,7 @@ vault/
 You: "Load the deep-research skill and analyze the paper on attention mechanisms"
 ```
 
-**Leverage memory**:
+**Use memory**:
 ```
 You: "Remember that I'm interested in computational efficiency"
 Agent: [Updates human memory block]

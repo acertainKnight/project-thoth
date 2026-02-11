@@ -107,7 +107,7 @@ class ReadFullArticleMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': '⚠️ Article Memory Full: You have reached the maximum of 3 articles loaded.\n\n'
+                            'text': 'Article Memory Full: You have reached the maximum of 3 articles loaded.\n\n'
                             'Currently loaded:\n'
                             + '\n'.join(
                                 f'  {i + 1}. {title}'
@@ -311,7 +311,7 @@ class ReadFullArticleMCPTool(MCPTool):
             ]
 
             memory_banner = (
-                f'\n\n---\n📚 **Article Memory: {loaded_count}/3 slots used**\n'
+                f'\n\n---\n**Article Memory: {loaded_count}/3 slots used**\n'
             )
             if loaded_titles:
                 memory_banner += '\nCurrently loaded:\n'
@@ -319,10 +319,10 @@ class ReadFullArticleMCPTool(MCPTool):
                     f'  {i + 1}. {title}' for i, title in enumerate(loaded_titles)
                 )
             if loaded_count == 3:
-                memory_banner += '\n\n⚠️ Memory full! Use unload_article to free a slot.'
+                memory_banner += '\n\nMemory full! Use unload_article to free a slot.'
             elif loaded_count > 0:
                 memory_banner += (
-                    '\n\n💡 Use unload_article to free slots when done with an article.'
+                    '\n\nUse unload_article to free slots when done with an article.'
                 )
 
             response_text += memory_banner
@@ -400,7 +400,7 @@ class UnloadArticleMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': '⚠️ No articles are currently loaded in memory. Nothing to unload.',
+                            'text': 'No articles are currently loaded in memory. Nothing to unload.',
                         }
                     ],
                     isError=False,
@@ -444,7 +444,7 @@ class UnloadArticleMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': f'⚠️ Article not found in memory: {identifier}\n\n'
+                            'text': f'Article not found in memory: {identifier}\n\n'
                             f'Currently loaded:\n'
                             + '\n'.join(
                                 f'  {i + 1}. {title}'
@@ -468,7 +468,7 @@ class UnloadArticleMCPTool(MCPTool):
 
             letta_service = LettaService()
 
-            results = [f'✅ Unloaded article: {article_to_remove["title"]}']
+            results = [f'Unloaded article: {article_to_remove["title"]}']
 
             # TOOL MANAGEMENT: Re-attach/detach based on article count
             if articles_before == 3 and articles_after == 2:
@@ -510,7 +510,7 @@ class UnloadArticleMCPTool(MCPTool):
 
             # Add memory status
             loaded_count = articles_after
-            memory_status = f'\n\n📚 **Article Memory: {loaded_count}/3 slots used**'
+            memory_status = f'\n\n**Article Memory: {loaded_count}/3 slots used**'
 
             if loaded_count > 0:
                 loaded_titles = [a['title'] for a in _AGENT_LOADED_ARTICLES[agent_id]]
@@ -518,9 +518,7 @@ class UnloadArticleMCPTool(MCPTool):
                 memory_status += '\n'.join(
                     f'  {i + 1}. {title}' for i, title in enumerate(loaded_titles)
                 )
-                memory_status += (
-                    '\n\n💡 You can now load more articles or unload others.'
-                )
+                memory_status += '\n\nYou can now load more articles or unload others.'
             else:
                 memory_status += '\n\n✓ All article memory slots are free.'
 

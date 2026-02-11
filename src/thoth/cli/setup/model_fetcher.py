@@ -35,7 +35,7 @@ FALLBACK_ANTHROPIC_MODELS = [
 
 # Letta-tested models that pass the "Basic" support test.
 # Source: https://docs.letta.com/connecting-model-providers/supported-models
-# Only includes models with Basic ✅ from Letta's automated scan.
+# Only includes models with Basic pass from Letta's automated scan.
 # Format: (provider, model_id, context_window)
 LETTA_SUPPORTED_MODELS: list[tuple[str, str, int]] = [
     # Anthropic
@@ -219,7 +219,7 @@ async def fetch_letta_compatible_models(
 
     If the Letta mode selection screen detected a running instance and fetched
     live models, those are returned directly. Otherwise falls back to the
-    LETTA_SUPPORTED_MODELS static list (models with Basic ✅ in Letta's test
+    LETTA_SUPPORTED_MODELS static list (models with Basic pass in Letta's test
     matrix), filtered by which API keys the user has.
 
     Source: https://docs.letta.com/connecting-model-providers/supported-models

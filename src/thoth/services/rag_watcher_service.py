@@ -108,17 +108,17 @@ class RAGFileHandler(FileSystemEventHandler):
         if file_path.suffix.lower() == '.pdf':
             # PDF → Markdown conversion
             try:
-                print(f'📄 Processing PDF: {file_path.name}')
+                print(f'Processing PDF: {file_path.name}')
                 markdown_path, _ = self.processing_service.ocr_convert(
                     pdf_path=file_path,
                 )
-                print(f'✅ Converted to markdown: {markdown_path}')
+                print(f'Converted to markdown: {markdown_path}')
 
                 # Index the markdown immediately
                 await self._index_markdown(markdown_path)
 
             except Exception as e:
-                print(f'❌ Error converting PDF {file_path}: {e}')
+                print(f'Error converting PDF {file_path}: {e}')
 
         elif file_path.suffix.lower() == '.md':
             # Markdown → Chunking → Embedding
@@ -132,17 +132,17 @@ class RAGFileHandler(FileSystemEventHandler):
             markdown_path: Path to the markdown file
         """
         try:
-            print(f'🔍 Indexing markdown: {markdown_path.name}')
+            print(f'Indexing markdown: {markdown_path.name}')
 
             # Use async version to avoid event loop conflicts
             doc_ids = self.rag_service.index_file(markdown_path)
 
             print(
-                f'✅ Indexed {len(doc_ids)} chunks from {markdown_path.name} into vector store'
+                f'Indexed {len(doc_ids)} chunks from {markdown_path.name} into vector store'
             )
 
         except Exception as e:
-            print(f'❌ Error indexing markdown {markdown_path}: {e}')
+            print(f'Error indexing markdown {markdown_path}: {e}')
 
 
 class RAGWatcherService(BaseService):
@@ -243,7 +243,7 @@ class RAGWatcherService(BaseService):
             # Start queue processing task
             self._watch_task = asyncio.create_task(self._process_queue_loop(handler))
 
-            self.logger.success('✅ RAG watcher started successfully')
+            self.logger.success('RAG watcher started successfully')
             self.log_operation(
                 'watcher_started', directories=[str(d) for d in watch_dirs]
             )

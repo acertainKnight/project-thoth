@@ -872,7 +872,12 @@ class DiscoveryManager:
 
         for article in articles:
             try:
-                # Process through filter
+                # TODO: self.filter is not initialized in __init__. This is a dead
+                # reference — the newer DiscoveryService._filter_articles() in
+                # services/discovery_service.py replaced this pattern using
+                # article_service.evaluate_for_download(). This legacy code path
+                # will raise AttributeError at runtime until self.filter is wired
+                # up or this method is rewritten to use ArticleService.
                 result = self.filter.process_article(
                     metadata=article,
                     query_names=query_filters if query_filters else None,

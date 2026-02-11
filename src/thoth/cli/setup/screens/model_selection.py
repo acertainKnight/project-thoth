@@ -405,7 +405,7 @@ class ModelSelectionScreen(BaseScreen):
 
             yield Label('\nContextual Enrichment')
             yield Static(
-                '[yellow bold]⚠  IMPORTANT DECISION - READ CAREFULLY:[/yellow bold]\n'
+                '[yellow bold]IMPORTANT DECISION - READ CAREFULLY:[/yellow bold]\n'
                 '[dim]Anthropic technique that prepends LLM-generated context to chunks.\n'
                 '  [green]✓ Benefit:[/green] ~67% better retrieval accuracy (per Anthropic benchmarks)\n'
                 '  [red]✗ Cost:[/red] ~$10-80 to re-index your entire corpus (one-time)\n'
@@ -421,7 +421,7 @@ class ModelSelectionScreen(BaseScreen):
 
             yield Label('\nAdaptive Query Routing')
             yield Static(
-                '[yellow bold]⚠  ADVANCED FEATURE:[/yellow bold]\n'
+                '[yellow bold]ADVANCED FEATURE:[/yellow bold]\n'
                 '[dim]Classifies queries and routes to optimal RAG strategy:\n'
                 '  • Direct answer (simple factual questions)\n'
                 '  • Standard RAG (single retrieval)\n'
@@ -526,7 +526,7 @@ class ModelSelectionScreen(BaseScreen):
             warning_widget = self.query_one(f'#{warning_id}', Static)
             if max_context > model_context:
                 warning_widget.update(
-                    f'[yellow]⚠ Warning: {model_id} has a {model_context:,} token context window, '
+                    f'[yellow]Warning: {model_id} has a {model_context:,} token context window, '
                     f'but this component is configured for {max_context:,} tokens. This may cause errors.[/yellow]'
                 )
                 warning_widget.remove_class('hidden')

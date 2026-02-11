@@ -86,7 +86,7 @@ class OptionalFeaturesScreen(BaseScreen):
         # Local Embeddings - Optional Heavy Feature (last, de-emphasized)
         with Vertical(classes='feature-section'):
             yield Static(
-                '[yellow]⚠  Local ML Models[/yellow] [dim](Advanced)[/dim]',
+                '[yellow]Local ML Models[/yellow] [dim](Advanced)[/dim]',
                 classes='feature-header',
             )
             yield Static(

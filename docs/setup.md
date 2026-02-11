@@ -187,13 +187,13 @@ Choose deployment architecture:
 **8. Optional Features**
 
 Enable additional capabilities:
-- ✅ **RAG** (semantic search): Requires embeddings
-- ✅ **Hybrid Search**: Combines semantic + keyword search (~35% better accuracy, enabled by default)
-- ✅ **Reranking**: LLM-based (zero-cost) or Cohere API (~20-30% improvement, enabled by default)
-- ✅ **Discovery** (automated paper finding): Requires browser automation
-- ✅ **Advanced Citation Analysis**: Requires external APIs
-- ⚠️ **Contextual Enrichment**: LLM per-chunk enrichment (disabled by default, expensive at indexing time)
-- ⚠️ **Adaptive Routing**: Query classification for optimized retrieval (disabled by default, experimental)
+- **RAG** (semantic search): Requires embeddings
+- **Hybrid Search**: Combines semantic + keyword search (~35% better accuracy, enabled by default)
+- **Reranking**: LLM-based (zero-cost) or Cohere API (~20-30% improvement, enabled by default)
+- **Discovery** (automated paper finding): Requires browser automation
+- **Advanced Citation Analysis**: Requires external APIs
+- **Contextual Enrichment**: LLM per-chunk enrichment (disabled by default, expensive at indexing time)
+- **Adaptive Routing**: Query classification for optimized retrieval (disabled by default, experimental)
 
 **9. Configuration Review**
 
@@ -297,10 +297,10 @@ make prod
 make health
 
 # Expected output:
-# ✓ API Server (8000/8080): healthy
-# ✓ MCP Server (8082): healthy
-# ✓ Letta (8283): healthy
-# ✓ PostgreSQL: healthy
+# API Server (8000/8080): healthy
+# MCP Server (8082): healthy
+# Letta (8283): healthy
+# PostgreSQL: healthy
 ```
 
 ### Test API Connection

@@ -42,7 +42,7 @@ def run_watcher_start(args, pipeline: ThothPipeline):
         logger.info('Press Ctrl+C to stop')
 
         # Set up signal handler for graceful shutdown
-        def signal_handler(sig, frame):
+        def signal_handler(_sig, _frame):
             logger.info('\nShutting down RAG watcher...')
             watcher.stop()
             sys.exit(0)
@@ -94,12 +94,12 @@ def run_watcher_status(args, pipeline: ThothPipeline):  # noqa: ARG001
         status = watcher.get_status()
 
         logger.info('RAG Watcher Status:')
-        logger.info(f'  Running: {"Yes" if status["is_running"] else "No"}')
+        logger.info(f'Running: {"Yes" if status["is_running"] else "No"}')
 
         if status['watched_directories']:
-            logger.info('  Watching directories:')
+            logger.info('Watching directories:')
             for directory in status['watched_directories']:
-                logger.info(f'    - {directory}')
+                logger.info(f'- {directory}')
 
         return 0
 
@@ -150,7 +150,7 @@ def run_watcher_backfill(args, pipeline: ThothPipeline):
                 # Index each file
                 for i, file_path in enumerate(files, 1):
                     try:
-                        logger.info(f'  [{i}/{len(files)}] Indexing: {file_path.name}')
+                        logger.info(f'[{i}/{len(files)}] Indexing: {file_path.name}')
 
                         # Check if we should skip (for testing/force options)
                         if hasattr(args, 'skip_existing') and args.skip_existing:
@@ -163,12 +163,12 @@ def run_watcher_backfill(args, pipeline: ThothPipeline):
                         total_files += 1
 
                         logger.success(
-                            f'    ✅ Indexed {len(doc_ids)} chunks from {file_path.name}'
+                            f'Indexed {len(doc_ids)} chunks from {file_path.name}'
                         )
 
                     except Exception as e:
                         error_msg = f'Failed to index {file_path}: {e}'
-                        logger.error(f'    ❌ {error_msg}')
+                        logger.error(f'{error_msg}')
                         errors.append(error_msg)
                         continue
 
@@ -180,24 +180,24 @@ def run_watcher_backfill(args, pipeline: ThothPipeline):
         # Show summary
         logger.info('\n' + '=' * 60)
         logger.info('Backfill Summary:')
-        logger.info(f'  Total files processed: {total_files}')
-        logger.info(f'  Total chunks created: {total_chunks}')
+        logger.info(f'Total files processed: {total_files}')
+        logger.info(f'Total chunks created: {total_chunks}')
 
         if errors:
-            logger.warning(f'  Errors encountered: {len(errors)}')
+            logger.warning(f'Errors encountered: {len(errors)}')
             if hasattr(args, 'verbose') and args.verbose:
                 for error in errors:
-                    logger.warning(f'    - {error}')
+                    logger.warning(f'- {error}')
         else:
-            logger.success('  ✅ All files processed successfully!')
+            logger.success('All files processed successfully!')
 
         # Show vector store stats
         try:
             stats = rag_service.get_statistics()
             logger.info('\nVector Store Statistics:')
-            logger.info(f'  Total documents: {stats.get("document_count", 0)}')
-            logger.info(f'  Collection: {stats.get("collection_name", "Unknown")}')
-            logger.info(f'  Embedding model: {stats.get("embedding_model", "Unknown")}')
+            logger.info(f'Total documents: {stats.get("document_count", 0)}')
+            logger.info(f'Collection: {stats.get("collection_name", "Unknown")}')
+            logger.info(f'Embedding model: {stats.get("embedding_model", "Unknown")}')
         except Exception as e:
             logger.warning(f'Could not retrieve vector store stats: {e}')
 
@@ -300,7 +300,7 @@ def run_watcher_backfill_db(args, pipeline: ThothPipeline):
                     content = row['markdown_content']
 
                     try:
-                        logger.info(f'  [{i}/{len(papers)}] Indexing: {title[:50]}...')
+                        logger.info(f'[{i}/{len(papers)}] Indexing: {title[:50]}...')
 
                         # Strip images if configured
                         if config.rag_config.skip_files_with_images and has_images(
@@ -334,7 +334,7 @@ def run_watcher_backfill_db(args, pipeline: ThothPipeline):
                         # Insert chunks into database
                         chunk_ids = []
                         for idx, (chunk_text, embedding) in enumerate(
-                            zip(chunks, embeddings)
+                            zip(chunks, embeddings, strict=True)
                         ):
                             chunk_metadata = {
                                 **metadata,
@@ -382,11 +382,11 @@ def run_watcher_backfill_db(args, pipeline: ThothPipeline):
 
                         total_chunks += len(chunk_ids)
                         total_papers += 1
-                        logger.success(f'    ✅ Indexed {len(chunk_ids)} chunks')
+                        logger.success(f'Indexed {len(chunk_ids)} chunks')
 
                     except Exception as e:
                         error_msg = f'Failed to index paper {paper_id} ({title}): {e}'
-                        logger.error(f'    ❌ {error_msg}')
+                        logger.error(f'{error_msg}')
                         errors.append(error_msg)
                         continue
 
@@ -410,24 +410,24 @@ def run_watcher_backfill_db(args, pipeline: ThothPipeline):
         # Show summary
         logger.info('\n' + '=' * 60)
         logger.info('Database Backfill Summary:')
-        logger.info(f'  Total papers processed: {total_papers}')
-        logger.info(f'  Total chunks created: {total_chunks}')
+        logger.info(f'Total papers processed: {total_papers}')
+        logger.info(f'Total chunks created: {total_chunks}')
 
         if errors:
-            logger.warning(f'  Errors encountered: {len(errors)}')
+            logger.warning(f'Errors encountered: {len(errors)}')
             if hasattr(args, 'verbose') and args.verbose:
                 for error in errors:
-                    logger.warning(f'    - {error}')
+                    logger.warning(f'- {error}')
         else:
-            logger.success('  ✅ All papers processed successfully!')
+            logger.success('All papers processed successfully!')
 
         # Show vector store stats
         try:
             stats = rag_service.get_statistics()
             logger.info('\nVector Store Statistics:')
-            logger.info(f'  Total chunks: {stats.get("total_chunks", 0)}')
-            logger.info(f'  Total papers indexed: {stats.get("total_papers", 0)}')
-            logger.info(f'  Backend: {stats.get("backend", "Unknown")}')
+            logger.info(f'Total chunks: {stats.get("total_chunks", 0)}')
+            logger.info(f'Total papers indexed: {stats.get("total_papers", 0)}')
+            logger.info(f'Backend: {stats.get("backend", "Unknown")}')
         except Exception as e:
             logger.warning(f'Could not retrieve vector store stats: {e}')
 

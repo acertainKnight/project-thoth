@@ -22,7 +22,7 @@ def _get_database_url() -> str:
     return 'postgresql://thoth:thoth_password@localhost:5432/thoth'
 
 
-async def migrate_command(args) -> None:
+async def migrate_command(_args) -> None:
     """Run database migrations."""
     database_url = _get_database_url()
     migration_manager = MigrationManager(database_url)
@@ -32,9 +32,9 @@ async def migrate_command(args) -> None:
         success = await migration_manager.initialize_database()
 
         if success:
-            logger.success('✓ Database migrations completed successfully!')
+            logger.success('Database migrations completed successfully!')
         else:
-            logger.error('✗ Database migrations failed')
+            logger.error('Database migrations failed')
             exit(1)
 
     except Exception as e:
@@ -42,7 +42,7 @@ async def migrate_command(args) -> None:
         exit(1)
 
 
-async def status_command(args) -> None:
+async def status_command(_args) -> None:
     """Show database migration status."""
     database_url = _get_database_url()
     migration_manager = MigrationManager(database_url)
@@ -67,10 +67,10 @@ async def status_command(args) -> None:
         if status['pending_migrations']:
             logger.warning('Pending migrations:')
             for version, name in status['pending_migrations']:
-                logger.warning(f'  - {version:03d}: {name}')
-            logger.warning("Run 'thoth db migrate' to apply pending migrations")
+                logger.warning(f'- {version:03d}: {name}')
+            logger.warning("Run 'thoth db migrate'to apply pending migrations")
         else:
-            logger.success('✓ Database is up to date')
+            logger.success('Database is up to date')
 
     except Exception as e:
         logger.error(f'Failed to get status: {e}')
@@ -114,9 +114,9 @@ async def reset_command(args) -> None:
         success = await migration_manager.initialize_database()
 
         if success:
-            logger.success('✓ Database reset complete!')
+            logger.success('Database reset complete!')
         else:
-            logger.error('✗ Migration failed after reset')
+            logger.error('Migration failed after reset')
             exit(1)
 
     except Exception as e:

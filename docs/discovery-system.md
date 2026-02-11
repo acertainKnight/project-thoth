@@ -257,7 +257,7 @@ class BaseAPISource(ABC):
 
 **Why ArXiv is Special**:
 - **No API Key Required**: Open access, no authentication
-- **Comprehensive**: Most CS/Physics/Math preprints
+- **Broad coverage**: Most CS/Physics/Math preprints
 - **Rich Metadata**: Categories, versions, journal refs
 
 **Implementation Highlights**:
@@ -329,10 +329,10 @@ api_config = {
 **Chosen**: BeautifulSoup + lxml-xml parser
 
 **Reasoning**:
-- ✅ Tolerates malformed XML (real-world robustness)
-- ✅ Simple API (`.find()`, `.find_all()`)
-- ✅ Namespace handling built-in
-- ⚠️ Slightly slower than pure lxml (acceptable for discovery)
+- Tolerates malformed XML (real-world robustness)
+- Simple API (`.find()`, `.find_all()`)
+- Namespace handling built-in
+- Slightly slower than pure lxml (acceptable for discovery)
 
 #### PubMed Source (`pubmed.py`)
 
@@ -438,7 +438,7 @@ filters = {
 
 **Why OpenAlex is Rising**:
 - **Open Access**: Free, no rate limits with email
-- **Comprehensive**: 250M+ works indexed
+- **Broad coverage**: 250M+ works indexed
 - **Author Disambiguation**: Solved author name problem
 - **Citation Counts**: Open citation data
 
@@ -476,10 +476,10 @@ filters = {
 **OpenAlex as Primary Source Decision**:
 
 **Why OpenAlex Over Alternatives**:
-- ✅ No API key friction (unlike Semantic Scholar Pro)
-- ✅ Better coverage than Google Scholar API (no API!)
-- ✅ Richer metadata than ArXiv (all fields, not just CS)
-- ✅ Citation counts included (unlike CrossRef)
+- No API key friction (unlike Semantic Scholar Pro)
+- Better coverage than Google Scholar API (no API!)
+- Richer metadata than ArXiv (all fields, not just CS)
+- Citation counts included (unlike CrossRef)
 
 ### 3. Discovery Scheduler (`scheduler.py`)
 
@@ -608,10 +608,10 @@ def _calculate_next_run(self, schedule: ScheduleConfig):
 **Chosen**: 60-second polling loop
 
 **Trade-offs**:
-- ✅ Simple, predictable
-- ✅ Tolerates clock changes (NTP sync)
-- ⚠️ 60s granularity (can't schedule "every 30s")
-- ⚠️ Wastes CPU if no sources scheduled soon
+- Simple, predictable
+- Tolerates clock changes (NTP sync)
+- 60s granularity (can't schedule "every 30s")
+- Wastes CPU if no sources scheduled soon
 
 **Alternative Considered** (Dynamic Sleep):
 ```python
@@ -1183,13 +1183,13 @@ class RateLimiter:
 **Current**: Hybrid (files + DB)
 
 **Pros**:
-- ✅ User-editable (files)
-- ✅ Fast queries (DB)
-- ✅ Gradual migration path
+- User-editable (files)
+- Fast queries (DB)
+- Gradual migration path
 
 **Cons**:
-- ⚠️ Sync complexity
-- ⚠️ Consistency issues possible
+- Sync complexity
+- Consistency issues possible
 
 **Future**: DB-first with UI editor
 
@@ -1198,13 +1198,13 @@ class RateLimiter:
 **Current**: 60-second polling loop
 
 **Pros**:
-- ✅ Simple implementation
-- ✅ Predictable behavior
-- ✅ Handles clock changes
+- Simple implementation
+- Predictable behavior
+- Handles clock changes
 
 **Cons**:
-- ⚠️ Wastes CPU checking
-- ⚠️ 60s minimum granularity
+- Wastes CPU checking
+- 60s minimum granularity
 
 **Alternative**: Event-driven with `APScheduler`
 - More complex

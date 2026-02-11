@@ -29,7 +29,7 @@ except ImportError:
     LettaFilesystemService = None  # type: ignore
 
 
-def handle_sync_filesystem(args, pipeline: ThothPipeline) -> int:
+def handle_sync_filesystem(args, _pipeline: ThothPipeline) -> int:
     """
     Sync vault files to Letta filesystem.
 
@@ -91,7 +91,7 @@ def handle_sync_filesystem(args, pipeline: ThothPipeline) -> int:
             if stats['errors']:
                 logger.warning(f'Errors: {len(stats["errors"])}')
                 for error in stats['errors']:
-                    logger.error(f'  - {error}')
+                    logger.error(f'- {error}')
 
             # Attach to agent if requested
             if args.agent_id:
@@ -116,7 +116,7 @@ def handle_sync_filesystem(args, pipeline: ThothPipeline) -> int:
         return 1
 
 
-def handle_folder_info(args, pipeline: ThothPipeline) -> int:
+def handle_folder_info(_args, _pipeline: ThothPipeline) -> int:
     """
     Show information about Letta folders.
 
@@ -153,11 +153,11 @@ def handle_folder_info(args, pipeline: ThothPipeline) -> int:
 
             for folder in folders:
                 logger.info(f'Folder: {folder.name}')
-                logger.info(f'  ID: {folder.id}')
+                logger.info(f'ID: {folder.id}')
                 if hasattr(folder, 'embedding'):
-                    logger.info(f'  Embedding: {folder.embedding}')
+                    logger.info(f'Embedding: {folder.embedding}')
                 if hasattr(folder, 'created_at'):
-                    logger.info(f'  Created: {folder.created_at}')
+                    logger.info(f'Created: {folder.created_at}')
                 logger.info('')
 
             return 0
@@ -173,7 +173,7 @@ def handle_folder_info(args, pipeline: ThothPipeline) -> int:
         return 1
 
 
-def handle_auth_login(args, pipeline: ThothPipeline) -> int:
+def handle_auth_login(_args, _pipeline: ThothPipeline) -> int:
     """
     Handle OAuth login to Letta Cloud.
 
@@ -192,9 +192,9 @@ def handle_auth_login(args, pipeline: ThothPipeline) -> int:
         # Try to auto-open browser
         try:
             webbrowser.open('https://app.letta.com/auth/cli')
-            logger.info('✓ Browser opened automatically')
+            logger.info('Browser opened automatically')
         except Exception:
-            logger.warning('⚠️  Could not open browser automatically')
+            logger.warning('Could not open browser automatically')
             logger.info('Please manually visit: https://app.letta.com/auth/cli')
 
         logger.info('')
@@ -209,12 +209,12 @@ def handle_auth_login(args, pipeline: ThothPipeline) -> int:
             client = Letta()  # Triggers OAuth flow if not authenticated
             user_info = client.user.get()
             logger.info('')
-            logger.success(f'✓ Successfully authenticated as: {user_info.email}')
-            logger.success('✓ Credentials saved to: ~/.letta/credentials')
+            logger.success(f'Successfully authenticated as: {user_info.email}')
+            logger.success('Credentials saved to: ~/.letta/credentials')
             return 0
         except Exception as e:
             logger.error('')
-            logger.error(f'✗ Authentication failed: {e}')
+            logger.error(f'Authentication failed: {e}')
             logger.info('Please try again or use API key authentication instead')
             logger.info('Get your API key from: https://app.letta.com/api-keys')
             logger.info('Then set: export LETTA_CLOUD_API_KEY=letta_sk_...')
@@ -228,7 +228,7 @@ def handle_auth_login(args, pipeline: ThothPipeline) -> int:
         return 1
 
 
-def handle_auth_logout(args, pipeline: ThothPipeline) -> int:
+def handle_auth_logout(_args, _pipeline: ThothPipeline) -> int:
     """
     Handle logout from Letta Cloud.
 
@@ -244,8 +244,8 @@ def handle_auth_logout(args, pipeline: ThothPipeline) -> int:
 
         if creds_path.exists():
             os.remove(creds_path)
-            logger.success('✓ Logged out successfully')
-            logger.info(f'✓ Removed credentials from: {creds_path}')
+            logger.success('Logged out successfully')
+            logger.info(f'Removed credentials from: {creds_path}')
         else:
             logger.info('No active session found')
 
@@ -256,7 +256,7 @@ def handle_auth_logout(args, pipeline: ThothPipeline) -> int:
         return 1
 
 
-def handle_auth_status(args, pipeline: ThothPipeline) -> int:
+def handle_auth_status(_args, _pipeline: ThothPipeline) -> int:
     """
     Check authentication status.
 
@@ -271,8 +271,8 @@ def handle_auth_status(args, pipeline: ThothPipeline) -> int:
         creds_path = Path.home() / '.letta' / 'credentials'
 
         if creds_path.exists():
-            logger.info('✓ Authenticated with Letta Cloud')
-            logger.info(f'  Credentials: {creds_path}')
+            logger.info('Authenticated with Letta Cloud')
+            logger.info(f'Credentials: {creds_path}')
 
             # Try to get user info
             try:
@@ -280,33 +280,33 @@ def handle_auth_status(args, pipeline: ThothPipeline) -> int:
 
                 client = Letta()
                 user_info = client.user.get()
-                logger.info(f'  User: {user_info.email}')
+                logger.info(f'User: {user_info.email}')
                 if hasattr(user_info, 'org_name'):
-                    logger.info(f'  Organization: {user_info.org_name}')
+                    logger.info(f'Organization: {user_info.org_name}')
             except Exception as e:
-                logger.warning(f'  Warning: Could not fetch user info: {e}')
+                logger.warning(f'Warning: Could not fetch user info: {e}')
         else:
-            logger.info('✗ Not authenticated')
+            logger.info('Not authenticated')
             logger.info(
                 '  Run "thoth letta auth login" to authenticate with Letta Cloud'
             )
-            logger.info('  Or set LETTA_CLOUD_API_KEY for API key authentication')
+            logger.info('Or set LETTA_CLOUD_API_KEY for API key authentication')
 
         # Check environment variables
         logger.info('')
         logger.info('Environment configuration:')
         mode = os.getenv('LETTA_MODE', 'self-hosted')
-        logger.info(f'  Mode: {mode}')
+        logger.info(f'Mode: {mode}')
 
         if mode == 'cloud':
             cloud_key = os.getenv('LETTA_CLOUD_API_KEY')
             if cloud_key:
-                logger.info(f'  API Key: {cloud_key[:20]}...')
+                logger.info(f'API Key: {cloud_key[:20]}...')
             else:
-                logger.info('  API Key: Not set')
+                logger.info('API Key: Not set')
         else:
             server_url = os.getenv('LETTA_SERVER_URL', 'http://localhost:8283')
-            logger.info(f'  Server URL: {server_url}')
+            logger.info(f'Server URL: {server_url}')
 
         return 0
 
@@ -315,7 +315,7 @@ def handle_auth_status(args, pipeline: ThothPipeline) -> int:
         return 1
 
 
-def handle_setup(args, pipeline: ThothPipeline) -> int:
+def handle_setup(_args, _pipeline: ThothPipeline) -> int:
     """
     Interactive setup wizard for Letta configuration.
 
@@ -344,7 +344,7 @@ def handle_setup(args, pipeline: ThothPipeline) -> int:
         config_updates = {}
 
         if mode == 'cloud':
-            print('📡 Setting up Letta Cloud...')
+            print('Setting up Letta Cloud...')
             print()
 
             # Step 2: Choose auth method
@@ -359,16 +359,16 @@ def handle_setup(args, pipeline: ThothPipeline) -> int:
             if auth_method == 'oauth':
                 # OAuth flow
                 print()
-                print('🔐 Opening browser for authentication...')
+                print('Opening browser for authentication...')
                 print('Please log in at: https://app.letta.com/auth/cli')
                 print()
 
                 # Try auto-open browser
                 try:
                     webbrowser.open('https://app.letta.com/auth/cli')
-                    print('✓ Browser opened automatically')
+                    print('Browser opened automatically')
                 except Exception:
-                    print('⚠️  Could not open browser automatically')
+                    print('Could not open browser automatically')
                     print('Please manually visit: https://app.letta.com/auth/cli')
 
                 print()
@@ -380,17 +380,17 @@ def handle_setup(args, pipeline: ThothPipeline) -> int:
 
                     client = Letta()  # Triggers OAuth flow
                     user_info = client.user.get()
-                    print(f'✓ Authenticated as: {user_info.email}')
+                    print(f'Authenticated as: {user_info.email}')
                     print()
 
                     config_updates = {'mode': 'cloud', 'oauthEnabled': True}
                 except Exception as e:
-                    print(f'✗ Authentication failed: {e}')
+                    print(f'Authentication failed: {e}')
                     return 1
 
             else:  # API key
                 print()
-                print('📋 To get your API key:')
+                print('To get your API key:')
                 print('1. Go to: https://app.letta.com/api-keys')
                 print('2. Create a new API key')
                 print('3. Copy the key (starts with letta_sk_...)')
@@ -399,11 +399,11 @@ def handle_setup(args, pipeline: ThothPipeline) -> int:
                 api_key = prompt_text('Enter your Letta Cloud API key')
 
                 if not api_key:
-                    print('✗ API key is required')
+                    print('API key is required')
                     return 1
 
                 if not api_key.startswith('letta_sk_'):
-                    print("⚠️  Warning: API key should start with 'letta_sk_'")
+                    print("Warning: API key should start with 'letta_sk_'")
 
                 # Test API key
                 try:
@@ -411,14 +411,14 @@ def handle_setup(args, pipeline: ThothPipeline) -> int:
 
                     client = Letta(token=api_key)
                     user_info = client.user.get()
-                    print(f'✓ API key valid for: {user_info.email}')
+                    print(f'API key valid for: {user_info.email}')
                     print()
 
                     # Save to .env
                     env_path = Path.cwd() / '.env'
                     with open(env_path, 'a') as f:
                         f.write(f'\nLETTA_CLOUD_API_KEY={api_key}\n')
-                    print(f'✓ Saved API key to: {env_path}')
+                    print(f'Saved API key to: {env_path}')
 
                     config_updates = {
                         'mode': 'cloud',
@@ -426,7 +426,7 @@ def handle_setup(args, pipeline: ThothPipeline) -> int:
                         'cloudApiKey': api_key,
                     }
                 except Exception as e:
-                    print(f'✗ Invalid API key: {e}')
+                    print(f'Invalid API key: {e}')
                     return 1
 
             # Optional: Custom credentials path
@@ -448,7 +448,7 @@ def handle_setup(args, pipeline: ThothPipeline) -> int:
                     f.write(f'\nLETTA_CREDENTIALS_PATH={creds_path}\n')
 
         else:  # self-hosted
-            print('🏠 Setting up self-hosted Letta...')
+            print('Setting up self-hosted Letta...')
             print()
             print('Using default configuration:')
             print('  - Server URL: http://localhost:8283')
@@ -482,10 +482,10 @@ def handle_setup(args, pipeline: ThothPipeline) -> int:
             json.dump(settings, f, indent=2)
 
         print()
-        print(f'✓ Settings updated: {settings_path}')
+        print(f'Settings updated: {settings_path}')
         print()
         print('=' * 70)
-        print('🎉 Letta setup complete!')
+        print('Letta setup complete!')
         print('=' * 70)
 
         if mode == 'cloud':
@@ -510,7 +510,7 @@ def handle_setup(args, pipeline: ThothPipeline) -> int:
         return 1
 
 
-def handle_switch_mode(args, pipeline: ThothPipeline) -> int:
+def handle_switch_mode(_args, _pipeline: ThothPipeline) -> int:
     """
     Interactive mode switcher for existing installations.
 
@@ -547,7 +547,7 @@ def handle_switch_mode(args, pipeline: ThothPipeline) -> int:
             return 0
 
         print()
-        print(f'🔄 Switching to {new_mode} mode...')
+        print(f'Switching to {new_mode} mode...')
         print()
 
         config_updates = {'mode': new_mode}
@@ -572,7 +572,7 @@ def handle_switch_mode(args, pipeline: ThothPipeline) -> int:
 
                 client = Letta()
                 user_info = client.user.get()
-                print(f'✓ Authenticated as: {user_info.email}')
+                print(f'Authenticated as: {user_info.email}')
 
                 config_updates['oauthEnabled'] = True
 
@@ -592,7 +592,7 @@ def handle_switch_mode(args, pipeline: ThothPipeline) -> int:
 
             # Stop self-hosted Letta
             print()
-            print('📦 Stopping self-hosted Letta container...')
+            print('Stopping self-hosted Letta container...')
             subprocess.run(
                 [
                     'docker',
@@ -604,11 +604,11 @@ def handle_switch_mode(args, pipeline: ThothPipeline) -> int:
                 ],
                 capture_output=True,
             )
-            print('✓ Letta container stopped')
+            print('Letta container stopped')
 
         else:  # self-hosted
             # Start self-hosted Letta
-            print('📦 Starting self-hosted Letta container...')
+            print('Starting self-hosted Letta container...')
             subprocess.run(
                 [
                     'docker',
@@ -632,9 +632,9 @@ def handle_switch_mode(args, pipeline: ThothPipeline) -> int:
                         'http://localhost:8283/v1/health', timeout=1
                     )
                     if response.status_code == 200:
-                        print('✓ Letta started successfully')
+                        print('Letta started successfully')
                         break
-                except:
+                except Exception:
                     pass
                 time.sleep(1)
 
@@ -651,11 +651,11 @@ def handle_switch_mode(args, pipeline: ThothPipeline) -> int:
             json.dump(settings, f, indent=2)
 
         print()
-        print(f'✓ Switched to {new_mode} mode')
-        print('✓ Settings updated')
+        print(f'Switched to {new_mode} mode')
+        print('Settings updated')
         print()
         print('=' * 70)
-        print('🎉 Mode switch complete!')
+        print('Mode switch complete!')
         print('=' * 70)
         print()
         print('Restart Thoth services to apply changes:')
@@ -671,7 +671,7 @@ def handle_switch_mode(args, pipeline: ThothPipeline) -> int:
         return 1
 
 
-def handle_configure_mode(args, pipeline: ThothPipeline) -> int:
+def handle_configure_mode(args, _pipeline: ThothPipeline) -> int:
     """
     Configure Letta mode (cloud or self-hosted).
 
@@ -736,7 +736,7 @@ def handle_configure_mode(args, pipeline: ThothPipeline) -> int:
         return 1
 
 
-def handle_letta_status(args, pipeline: ThothPipeline) -> int:
+def handle_letta_status(_args, _pipeline: ThothPipeline) -> int:
     """
     Show current Letta configuration and connection status.
 
@@ -782,10 +782,10 @@ def handle_letta_status(args, pipeline: ThothPipeline) -> int:
         )
 
         if available and healthy:
-            logger.info('✓ Connected successfully')
+            logger.info('Connected successfully')
             logger.info(f'Version: {version or "unknown"}')
         else:
-            logger.error('✗ Connection failed')
+            logger.error('Connection failed')
             if mode == 'cloud':
                 logger.error('Check your API key and internet connection')
             else:

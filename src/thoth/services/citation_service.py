@@ -114,7 +114,7 @@ class CitationService(BaseService):
         - PDF locator settings
         """
         try:
-            logger.info('Reloading Citation configuration...')
+            self.logger.info('Reloading Citation configuration...')
 
             # Clear cached processors to force recreation with new config
             self._citation_processor = None
@@ -146,7 +146,7 @@ class CitationService(BaseService):
                         f'SemanticScholar={getattr(apis, "use_semantic_scholar", False)}'
                     )
 
-            self.logger.success('✅ Citation config reloaded')
+            self.logger.success('Citation config reloaded')
 
         except Exception as e:
             self.logger.error(f'Citation config reload failed: {e}')
@@ -593,7 +593,7 @@ class CitationService(BaseService):
                 self._service_manager.initialize()
 
             graph = self.citation_tracker.graph
-            logger.info(
+            self.logger.info(
                 f'Starting regeneration of all notes for {len(graph.nodes)} articles.'
             )
 
@@ -618,7 +618,7 @@ class CitationService(BaseService):
                         (
                             note_path,
                             final_pdf_path,
-                            markdown_path,
+                            _markdown_path,
                         ) = self._service_manager.note.create_note(
                             pdf_path=regeneration_data['pdf_path'],
                             markdown_path=regeneration_data['markdown_path'],

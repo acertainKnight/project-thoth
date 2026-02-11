@@ -609,7 +609,7 @@ class InstallationScreen(BaseScreen):
             success = await migration_manager.initialize_database()
 
             if success:
-                logger.success('✓ Database schema initialized successfully!')
+                logger.success('Database schema initialized successfully!')
 
                 # Show migration status
                 status = await migration_manager.get_migration_status()

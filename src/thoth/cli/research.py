@@ -99,7 +99,7 @@ async def run_export_review(args, pipeline: ThothPipeline) -> int:
             limit=args.limit,
         )
 
-        logger.info(f'✅ Review file generated successfully: {result_path}')
+        logger.info(f'Review file generated successfully: {result_path}')
         logger.info(
             '\nNext steps:\n'
             '1. Open the file in Obsidian\n'
@@ -139,7 +139,7 @@ async def run_start_dashboard(args, pipeline: ThothPipeline) -> int:
         int: Exit code (0 for success, 1 for error)
     """
     try:
-        logger.info('🚀 Starting automatic discovery dashboard service...')
+        logger.info('Starting automatic discovery dashboard service...')
 
         # Initialize repositories
         postgres_service = pipeline.services.postgres
@@ -166,12 +166,12 @@ async def run_start_dashboard(args, pipeline: ThothPipeline) -> int:
         await dashboard_service.start()
 
         logger.success(
-            '✅ Dashboard service started!\n\n'
+            'Dashboard service started!\n\n'
             'The service is now:\n'
-            f'  📊 Checking for new results every {args.check_interval} seconds\n'
-            f'  📁 Watching {dashboard_service.dashboard_dir}\n'
-            f'  🔄 Auto-export: {"enabled" if not args.no_auto_export else "disabled"}\n'
-            f'  📥 Auto-import: {"enabled" if not args.no_auto_import else "disabled"}\n\n'
+            f'  Checking for new results every {args.check_interval} seconds\n'
+            f'  Watching {dashboard_service.dashboard_dir}\n'
+            f'  Auto-export: {"enabled" if not args.no_auto_export else "disabled"}\n'
+            f'  Auto-import: {"enabled" if not args.no_auto_import else "disabled"}\n\n'
             'Open dashboard files in Obsidian and start reviewing!\n'
             'Changes you make will sync automatically.\n\n'
             'Press Ctrl+C to stop the service.'
@@ -182,9 +182,9 @@ async def run_start_dashboard(args, pipeline: ThothPipeline) -> int:
             while True:
                 await asyncio.sleep(1)
         except KeyboardInterrupt:
-            logger.info('\n\n📴 Stopping dashboard service...')
+            logger.info('\n\nStopping dashboard service...')
             await dashboard_service.stop()
-            logger.success('✅ Dashboard service stopped')
+            logger.success('Dashboard service stopped')
 
         return 0
 
@@ -254,7 +254,7 @@ async def run_apply_review(args, pipeline: ThothPipeline) -> int:
 
         # Dry run check
         if args.dry_run:
-            logger.info('🔍 DRY RUN MODE - No changes will be made to the database')
+            logger.info('DRY RUN MODE - No changes will be made to the database')
             logger.info(f'Would process review file: {review_file}')
 
             # Parse and show what would be done
@@ -267,10 +267,10 @@ async def run_apply_review(args, pipeline: ThothPipeline) -> int:
                     preview_stats[status] += 1
 
             logger.info('\nReview summary (would be applied):')
-            logger.info(f'  ⭐ Liked: {preview_stats["liked"]}')
-            logger.info(f'  ❌ Disliked: {preview_stats["disliked"]}')
-            logger.info(f'  ⏭️  Skipped: {preview_stats["skip"]}')
-            logger.info(f'  ⬜ Pending: {preview_stats["pending"]} (no action)')
+            logger.info(f'  Liked: {preview_stats["liked"]}')
+            logger.info(f'  Disliked: {preview_stats["disliked"]}')
+            logger.info(f'  Skipped: {preview_stats["skip"]}')
+            logger.info(f'  Pending: {preview_stats["pending"]} (no action)')
             logger.info('\nRun without --dry-run to apply changes')
 
             return 0
@@ -283,14 +283,14 @@ async def run_apply_review(args, pipeline: ThothPipeline) -> int:
         )
 
         # Display results
-        logger.info('\n✅ Review decisions applied successfully!')
+        logger.info('\nReview decisions applied successfully!')
         logger.info('\nSummary:')
-        logger.info(f'  ⭐ Liked: {stats["liked"]} (bookmarked, rating=5)')
-        logger.info(f'  ❌ Disliked: {stats["disliked"]} (rating=1)')
-        logger.info(f'  ⏭️  Skipped: {stats["skip"]} (marked as viewed)')
+        logger.info(f'  Liked: {stats["liked"]} (bookmarked, rating=5)')
+        logger.info(f'  Disliked: {stats["disliked"]} (rating=1)')
+        logger.info(f'  Skipped: {stats["skip"]} (marked as viewed)')
 
         if stats['errors'] > 0:
-            logger.warning(f'  ⚠️  Errors: {stats["errors"]} (check logs)')
+            logger.warning(f'  Errors: {stats["errors"]} (check logs)')
 
         return 0
 

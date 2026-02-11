@@ -104,19 +104,19 @@ LETTA_MCP_SERVERS=[{"name":"thoth-research-tools","url":"http://thoth-mcp:8000/m
 
 The `docker/letta/init-schema.sh` script automatically:
 
-1. ✅ Creates MCP server entry in database
-2. ✅ Verifies connectivity to Thoth MCP server
-3. ✅ Validates tool endpoint is responding
-4. ⚠️ **Does NOT** attach server to agents (must be done separately)
+1. Creates MCP server entry in database
+2. Verifies connectivity to Thoth MCP server
+3. Validates tool endpoint is responding
+4. **Does NOT** attach server to agents (must be done separately)
 
 **Startup Logs:**
 ```
 === MCP Configuration Complete! ===
-✓ MCP configuration file exists
-✓ Thoth MCP server already configured
-✓ Thoth MCP server is accessible at http://thoth-mcp:8000
-✓ MCP tools endpoint responding
-✓ Registered Thoth MCP server: mcp_server-4dbdb8a0-2c57-445e-96fd-b48e5fc36f5f
+MCP configuration file exists
+Thoth MCP server already configured
+Thoth MCP server is accessible at http://thoth-mcp:8000
+MCP tools endpoint responding
+Registered Thoth MCP server: mcp_server-4dbdb8a0-2c57-445e-96fd-b48e5fc36f5f
 ```
 
 ### During Agent Restoration
@@ -130,14 +130,14 @@ The `scripts/restore-agents-complete.py` script automatically:
 
 **Restoration Output:**
 ```
-✓ Lead Engineer
+Lead Engineer
   ID: agent-abc123...
   Memory blocks: 24/24
   Tools: 3/7
   Tool rules: 18/18
   Tags: 3/3
   System prompt: 14567 chars
-  MCP server: ✓ Thoth Research Tools
+  MCP server: Thoth Research Tools
 ```
 
 ---
@@ -163,14 +163,14 @@ Attaching Thoth MCP Server to Agents
 ============================================================
 
 Looking for Thoth MCP server...
-✓ Found Thoth MCP server: mcp_server-4dbdb8a0-2c57-445e-96fd-b48e5fc36f5f
+Found Thoth MCP server: mcp_server-4dbdb8a0-2c57-445e-96fd-b48e5fc36f5f
 
 Retrieving agents...
 Found 27 agent(s)
 
-  ✓ Lead Engineer - MCP server attached
-  ✓ thoth_main_orchestrator - MCP server attached
-  ⊙ Memo - already has MCP server
+  Lead Engineer - MCP server attached
+  thoth_main_orchestrator - MCP server attached
+  Memo - already has MCP server
   ...
 
 Results:
@@ -182,7 +182,7 @@ Results:
 
 ### Using the Letta ADE (Web Interface)
 
-**⚠️ IMPORTANT**: In Letta 0.16+, MCP server attachment through the ADE is the recommended approach for new agents.
+**IMPORTANT**: In Letta 0.16+, MCP server attachment through the ADE is the recommended approach for new agents.
 
 1. **Open Letta ADE**: Navigate to http://localhost:8284 (or http://localhost:8283)
 2. **Create/Edit Agent**: Click on an agent or create a new one
@@ -291,7 +291,7 @@ curl -s "http://localhost:8283/v1/agents/{agent_id}/tools" \
 
 **Symptoms:**
 ```
-✗ Thoth MCP server not found in Letta
+Thoth MCP server not found in Letta
 ```
 
 **Causes:**
@@ -366,7 +366,7 @@ python3 scripts/attach-mcp-to-agents.py
 
 **Symptoms:**
 ```
-⚠ Warning: Cannot connect to Thoth MCP server at http://thoth-mcp:8000
+Warning: Cannot connect to Thoth MCP server at http://thoth-mcp:8000
 ```
 
 **Causes:**
@@ -443,12 +443,12 @@ python3 scripts/attach-mcp-to-agents.py
 
 ### What Gets Preserved
 
-✅ **Preserved:**
+**Preserved:**
 - MCP server URL and configuration
 - Server name and transport type
 - Agent MCP server attachments (if using restore script)
 
-❌ **Not Preserved:**
+**Not Preserved:**
 - MCP server database ID (regenerated with new UUID)
 - Tool cache (tools fetched dynamically)
 

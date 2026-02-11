@@ -263,7 +263,13 @@ ignore = ["E501"]
 extend-unsafe-fixes = ["UP034"]
 
 [tool.ruff.lint.per-file-ignores]
-"src/thoth/server/routers/mcp_servers.py" = ["B008"]  # FastAPI Depends() in defaults is intentional
+# FastAPI Depends() in argument defaults is intentional
+"src/thoth/server/routers/browser_workflows.py" = ["B008"]
+"src/thoth/server/routers/mcp_servers.py" = ["B008"]
+"src/thoth/server/routers/operations.py" = ["B008"]
+"src/thoth/server/routers/research.py" = ["B008"]
+"src/thoth/server/routers/tools.py" = ["B008"]
+"src/thoth/server/routers/websocket.py" = ["B008"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
@@ -321,7 +327,12 @@ dev = [
 ### Bandit Security Configuration ################################################
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", "venv"]
-skips = ["B101", "B601"]  # Skip assert_used and shell=True warnings
+skips = [
+    "B101", "B601",  # assert_used, paramiko
+    "B404",  # subprocess import (CLI runs docker/compose)
+    "B603", "B607",  # subprocess without shell / partial path (docker CLI)
+    "B110",  # try/except pass (intentional in TUI/setup paths)
+]
 
 ### MyPy Configuration ###########################################################
 [tool.mypy]

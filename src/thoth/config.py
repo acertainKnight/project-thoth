@@ -38,9 +38,7 @@ from pydantic import BaseModel, Field, field_validator  # noqa: F401
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-# ============================================================================
-# 1. VAULT DETECTION
-# ============================================================================
+# --- Vault Detection ---
 
 
 def get_vault_root() -> Path:
@@ -134,9 +132,7 @@ def get_vault_root() -> Path:
     )
 
 
-# ============================================================================
-# 2. PYDANTIC MODELS - Map to your existing settings.json structure
-# ============================================================================
+# --- Pydantic Models ---
 
 
 class APIKeys(BaseModel):
@@ -313,10 +309,8 @@ class LLMConfig(BaseModel):
     class Config:
         populate_by_name = True
 
-    # Convenience properties to access default config attributes
     @property
     def model(self) -> str:
-        """Get default model."""
         return self.default.model
 
     @property
@@ -326,77 +320,63 @@ class LLMConfig(BaseModel):
 
     @property
     def temperature(self) -> float:
-        """Get default temperature."""
         return self.default.temperature
 
     @property
     def max_tokens(self) -> int:
-        """Get default max_tokens."""
         return self.default.max_tokens
 
     @property
     def max_output_tokens(self) -> int:
-        """Get default max_output_tokens."""
         return self.default.max_output_tokens
 
     @property
     def max_context_length(self) -> int:
-        """Get default max_context_length."""
         return self.default.max_context_length
 
     @property
     def chunk_size(self) -> int:
-        """Get default chunk_size for document processing."""
         return self.default.chunk_size
 
     @property
     def chunk_overlap(self) -> int:
-        """Get default chunk_overlap for document processing."""
         return self.default.chunk_overlap
 
     @property
     def top_p(self) -> float:
-        """Get default top_p."""
         return self.default.top_p
 
     @property
     def frequency_penalty(self) -> float:
-        """Get default frequency_penalty."""
         return self.default.frequency_penalty
 
     @property
     def presence_penalty(self) -> float:
-        """Get default presence_penalty."""
         return self.default.presence_penalty
 
     @property
     def streaming(self) -> bool:
-        """Get default streaming setting."""
         return self.default.streaming
 
     @property
     def use_rate_limiter(self) -> bool:
-        """Get default use_rate_limiter setting."""
         return self.default.use_rate_limiter
 
     @property
     def doc_processing(self) -> str:
-        """Get default doc_processing strategy."""
         return self.default.doc_processing
 
     @property
     def refine_threshold_multiplier(self) -> float:
-        """Get default refine_threshold_multiplier."""
         return self.default.refine_threshold_multiplier
 
     @property
     def map_reduce_threshold_multiplier(self) -> float:
-        """Get default map_reduce_threshold_multiplier."""
         return self.default.map_reduce_threshold_multiplier
 
     @property
     def provider(self) -> str:
-        """Get provider from model string or default to openrouter."""
+        """Extract provider prefix from model string, default to openrouter."""
         model = self.default.model
         if '/' in model:
             return model.split('/')[0]
@@ -430,7 +410,7 @@ class RAGConfig(BaseModel):
     chunk_encoding: str = Field(default='cl100k_base', alias='chunkEncoding')
     qa: RAGQAConfig = Field(default_factory=RAGQAConfig)
 
-    # Hybrid search configuration (Phase 1)
+    # Hybrid search configuration
     hybrid_search_enabled: bool = Field(default=True, alias='hybridSearchEnabled')
     hybrid_rrf_k: int = Field(
         default=60,
@@ -453,7 +433,7 @@ class RAGConfig(BaseModel):
         description='Full-text search backend: tsvector (default) or paradedb',
     )
 
-    # Reranking configuration (Phase 2)
+    # Reranking configuration
     reranking_enabled: bool = Field(default=True, alias='rerankingEnabled')
     reranker_provider: str = Field(
         default='auto',
@@ -476,7 +456,7 @@ class RAGConfig(BaseModel):
         description='Number of candidates to retrieve before reranking',
     )
 
-    # Contextual enrichment configuration (Phase 4)
+    # Contextual enrichment configuration
     contextual_enrichment_enabled: bool = Field(
         default=False,
         alias='contextualEnrichmentEnabled',
@@ -488,7 +468,7 @@ class RAGConfig(BaseModel):
         description='Model for generating chunk context (use cheap model)',
     )
 
-    # Adaptive routing configuration (Phase 5)
+    # Adaptive routing configuration
     adaptive_routing_enabled: bool = Field(
         default=False,
         alias='adaptiveRoutingEnabled',
@@ -1159,9 +1139,7 @@ class Settings(BaseModel):
             raise
 
 
-# ============================================================================
-# 3. SECRETS FROM .ENV (Override/supplement settings.json API keys)
-# ============================================================================
+# --- Secrets from .env ---
 
 
 class Secrets(BaseSettings):
@@ -1200,9 +1178,7 @@ class Secrets(BaseSettings):
     brave_api_key: str = Field(default='', alias='BRAVE_API_KEY')
 
 
-# ============================================================================
-# 4. THE SINGLE CONFIG OBJECT
-# ============================================================================
+# --- Config Object ---
 
 
 class Config:
@@ -1438,7 +1414,7 @@ class Config:
         for name, callback in self._reload_callbacks.items():
             try:
                 callback(self)
-                logger.debug(f'✓ Notified callback: {name}')
+                logger.debug(f'Notified callback: {name}')
             except Exception as e:
                 logger.error(f"Callback '{name}' failed: {e}")
 
@@ -1480,7 +1456,7 @@ class Config:
             # Reconfigure logging
             self._configure_logging()
 
-            logger.success('✅ Settings reloaded successfully')
+            logger.success('Settings reloaded successfully')
 
             # Notify all callbacks
             self._notify_reload_callbacks()
@@ -1497,9 +1473,7 @@ class Config:
                 logger.warning('Rolled back to previous settings')
             raise
 
-    # ========================================================================
-    # Convenience properties - access your settings easily
-    # ========================================================================
+    # --- Convenience properties ---
 
     @property
     def reload_callback_count(self) -> int:
@@ -1515,83 +1489,66 @@ class Config:
 
     @property
     def api_keys(self) -> APIKeys:
-        """Get all API keys."""
         return self.settings.api_keys
 
     @property
     def llm_config(self) -> LLMConfig:
-        """Get complete LLM configuration."""
         return self.settings.llm
 
     @property
     def rag_config(self) -> RAGConfig:
-        """Get RAG configuration."""
         return self.settings.rag
 
     @property
     def memory_config(self) -> MemoryConfig:
-        """Get memory configuration."""
         return self.settings.memory
 
     @property
     def servers_config(self) -> ServersConfig:
-        """Get servers configuration."""
         return self.settings.servers
 
     @property
     def discovery_config(self) -> DiscoveryConfig:
-        """Get discovery configuration."""
         return self.settings.discovery
 
     @property
     def citation_config(self) -> CitationConfig:
-        """Get citation configuration."""
         return self.settings.citation
 
     @property
     def performance_config(self) -> PerformanceConfig:
-        """Get performance configuration."""
         return self.settings.performance
 
     @property
     def logging_config(self) -> LoggingConfig:
-        """Get logging configuration."""
         return self.settings.logging
 
     @property
     def api_gateway_config(self) -> APIGatewayConfig:
-        """Get API gateway configuration."""
         return self.settings.api_gateway
 
     @property
     def environment_config(self) -> EnvironmentConfig:
-        """Get environment configuration."""
         return self.settings.environment
 
     @property
     def postgres_config(self) -> PostgresConfig:
-        """Get PostgreSQL configuration."""
         return self.settings.postgres
 
     @property
     def feature_flags_config(self) -> FeatureFlagsConfig:
-        """Get feature flags configuration."""
         return self.settings.feature_flags
 
-    # Additional convenience properties for sub-configs
     @property
     def tag_consolidator_llm_config(self) -> LLMTagConsolidatorConfig:
-        """Get tag consolidator LLM configuration."""
         return self.settings.llm.tag_consolidator
 
     @property
     def query_based_routing_config(self) -> LLMQueryBasedRoutingConfig:
-        """Get query-based routing configuration."""
         return self.settings.llm.query_based_routing
 
     @property
     def research_agent_llm_config(self) -> LLMResearchAgentConfig:
-        """Get research agent LLM configuration."""
         return self.settings.llm.research_agent
 
     @property
@@ -1601,11 +1558,9 @@ class Config:
 
     @property
     def mcp_port(self) -> int:
-        """Get MCP server port for HTTP connection."""
         return int(os.getenv('THOTH_MCP_PORT', '8001'))
 
     def __repr__(self) -> str:
-        """String representation of config."""
         return (
             f'Config(vault_root={self.vault_root}, '
             f'model={self.llm_config.default.model}, '
@@ -1613,9 +1568,7 @@ class Config:
         )
 
 
-# ============================================================================
-# 5. GLOBAL CONFIG INSTANCE - Import this everywhere
-# ============================================================================
+# --- Global Config Instance ---
 
 
 # Use __getattr__ to make 'config' dynamically reference the current singleton
@@ -1625,55 +1578,3 @@ def __getattr__(name: str):
     if name == 'config':
         return Config()
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-
-
-# ============================================================================
-# Usage throughout codebase:
-#
-# from thoth.config import config, Config
-#
-# # Access ALL your settings exactly as before:
-# default_model = config.llm_config.default.model  # google/gemini-2.5-flash
-# citation_model = config.llm_config.citation.model  # openai/gpt-4o-mini
-# tag_consolidate = config.llm_config.tag_consolidator.consolidate_model
-# research_model = config.llm_config.research_agent.model
-# scrape_model = config.llm_config.scrape_filter.model
-#
-# # Paths are now absolute (resolved at startup):
-# pdf_path = config.pdf_dir / "paper.pdf"
-#
-# # API keys from settings.json or .env:
-# openai_key = config.api_keys.openai_key
-# openrouter_key = config.api_keys.openrouter_key
-#
-# # All other settings preserved:
-# rag_settings = config.rag_config
-# memory_settings = config.memory_config
-# performance = config.performance_config
-#
-# # Hot-reload with callbacks:
-# def on_config_reload(config: Config):
-#     print(f"Config reloaded! Vault: {config.vault_root}")
-#
-# Config.register_reload_callback("my_service", on_config_reload)
-# config.reload_settings()  # Will trigger callback
-# ============================================================================
-
-
-# ============================================================================
-# Example usage for testing hot-reload callbacks (commented out):
-#
-# def test_callback(config: Config):
-#     print(f"Config reloaded! Vault: {config.vault_root}")
-#     print(f"Current model: {config.llm_config.default.model}")
-#     print(f"Log level: {config.logging_config.level}")
-#
-# # Register callback
-# Config.register_reload_callback("test", test_callback)
-#
-# # Trigger reload (will call callback)
-# config.reload_settings()
-#
-# # Unregister when done
-# Config.unregister_reload_callback("test")
-# ============================================================================

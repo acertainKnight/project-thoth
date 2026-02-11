@@ -349,10 +349,10 @@ class BenchmarkSuite:
 
                 if result.meets_duration_threshold and result.meets_success_threshold:
                     results.passed_tests += 1
-                    logger.info(f'✓ {test.test_name} PASSED')
+                    logger.info(f'{test.test_name} PASSED')
                 else:
                     results.failed_tests += 1
-                    logger.warning(f'✗ {test.test_name} FAILED')
+                    logger.warning(f'{test.test_name} FAILED')
 
             except Exception as e:
                 logger.error(f'Benchmark {test.test_name} crashed: {e}')
@@ -996,7 +996,7 @@ class BenchmarkSuite:
         )
 
         if results.regression_detected:
-            report_lines.append('⚠️  PERFORMANCE REGRESSION DETECTED')
+            report_lines.append('PERFORMANCE REGRESSION DETECTED')
 
         report_lines.append('')
 
@@ -1057,7 +1057,7 @@ class BenchmarkSuite:
                 report_lines.append('Regressions:')
                 for reg in comp['regressions']:
                     report_lines.append(
-                        f'  ⚠️  {reg["test_name"]}: {reg.get("performance_degradation", 0):.1f}% slower'
+                        f'  {reg["test_name"]}: {reg.get("performance_degradation", 0):.1f}% slower'
                     )
 
         report_lines.append('')

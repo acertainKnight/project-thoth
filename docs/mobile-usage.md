@@ -96,7 +96,7 @@ ngrok http 8000
 The plugin automatically detects mobile and enables remote mode!
 
 1. Open Obsidian Settings → Thoth
-2. You'll see: "📱 Mobile requires connecting to a Thoth server..."
+2. You'll see: "Mobile requires connecting to a Thoth server..."
 3. Enter your **Remote Endpoint URL**:
    - Tailscale: `https://your-machine.tail1234.ts.net:8000`
    - ngrok: `https://abc123.ngrok.io`
@@ -111,7 +111,7 @@ Click the Thoth icon in the ribbon to open chat and start researching!
 
 ## What Works on Mobile
 
-✅ **Full UX Available:**
+**Full UX Available:**
 - Chat interface with AI assistant
 - Multi-chat sessions
 - Research queries
@@ -121,7 +121,7 @@ Click the Thoth icon in the ribbon to open chat and start researching!
 - All UI features
 - WebSocket for live updates
 
-❌ **Not Available on Mobile:**
+**Not Available on Mobile:**
 - Starting/stopping local Thoth agent (requires Node.js)
 - Local file system operations (not needed - server handles this)
 

@@ -69,7 +69,7 @@ class DiscoveryDashboardWatcher(FileSystemEventHandler):
             logger.debug(f'Skipping {file_path.name} - already processing')
             return
 
-        logger.info(f'📝 Detected change in dashboard file: {file_path.name}')
+        logger.info(f'Detected change in dashboard file: {file_path.name}')
 
         # Schedule processing (debounced to avoid rapid-fire updates)
         # Use run_coroutine_threadsafe since we're in a watchdog thread
@@ -177,7 +177,7 @@ class DiscoveryDashboardService:
         1. New discovery results (auto-export)
         2. Dashboard file changes (auto-import)
         """
-        logger.info('🚀 Starting discovery dashboard service...')
+        logger.info('Starting discovery dashboard service...')
 
         # Start file watcher for auto-import
         if self.auto_import:
@@ -187,7 +187,7 @@ class DiscoveryDashboardService:
         if self.auto_export:
             asyncio.create_task(self._auto_export_loop())  # noqa: RUF006
 
-        logger.success('✅ Discovery dashboard service started')
+        logger.success('Discovery dashboard service started')
 
     async def stop(self):
         """Stop the automatic dashboard service."""
@@ -210,7 +210,7 @@ class DiscoveryDashboardService:
         self.observer.schedule(self.watcher, str(self.dashboard_dir), recursive=False)
 
         self.observer.start()
-        logger.info(f'📁 Watching dashboard directory: {self.dashboard_dir}')
+        logger.info(f'Watching dashboard directory: {self.dashboard_dir}')
 
     async def _auto_export_loop(self):
         """
@@ -219,9 +219,7 @@ class DiscoveryDashboardService:
         Runs every check_interval seconds, checking each research question
         for new matches that haven't been exported yet.
         """
-        logger.info(
-            f'📊 Auto-export loop started (checking every {self.check_interval}s)'
-        )
+        logger.info(f'Auto-export loop started (checking every {self.check_interval}s)')
 
         while True:
             try:
@@ -265,7 +263,7 @@ class DiscoveryDashboardService:
 
             if new_count > 0:
                 logger.info(
-                    f"📋 Found {new_count} new matches for '{question_name}' - "
+                    f"Found {new_count} new matches for '{question_name}' - "
                     f'exporting to dashboard...'
                 )
 
@@ -370,7 +368,7 @@ class DiscoveryDashboardService:
             self.writing_files.discard(str(dashboard_file))
 
         logger.success(
-            f'✅ Dashboard exported: {dashboard_file.name}\n'
+            f'Dashboard exported: {dashboard_file.name}\n'
             f'   Articles: {len(matches)} | '
             f'   Liked: {stats["liked"]} | '
             f'   Disliked: {stats["disliked"]} | '
@@ -398,7 +396,7 @@ class DiscoveryDashboardService:
 
             if results and results.get('updated', 0) > 0:
                 logger.success(
-                    f'✅ Imported sentiment changes:\n'
+                    f'Imported sentiment changes:\n'
                     f'   Liked: {results.get("liked", 0)}\n'
                     f'   Disliked: {results.get("disliked", 0)}\n'
                     f'   Skipped: {results.get("skipped", 0)}'
@@ -409,12 +407,12 @@ class DiscoveryDashboardService:
 
                 if question_info:
                     # Regenerate dashboard with updated stats and filtered articles
-                    logger.info(f'🔄 Regenerating dashboard with updated data...')  # noqa: F541
+                    logger.info(f'Regenerating dashboard with updated data...')  # noqa: F541
                     await self.export_to_dashboard(
                         question_id=question_info['question_id'],
                         question_name=question_info['question_name'],
                     )
-                    logger.success(f'✅ Dashboard regenerated successfully')  # noqa: F541
+                    logger.success(f'Dashboard regenerated successfully')  # noqa: F541
 
             else:
                 logger.debug(f'No changes detected in {dashboard_file.name}')
@@ -537,28 +535,28 @@ dashboard_version: 1.0
 
 # Discovery Dashboard: {question_name}
 
-> 🤖 **Automatic Dashboard** - This file updates automatically
+> **Automatic Dashboard** - This file updates automatically
 >
 > **How to use:**
 > 1. Review articles below
 > 2. Change `status:` field to `like`, `dislike`, or `skip`
 > 3. Save the file - changes sync automatically!
 >
-> No CLI commands or API calls needed! 🎉
+> No CLI commands or API calls needed.
 
-## 📊 Statistics
+## Statistics
 
 | Metric | Count |
 |--------|-------|
-| 📚 Total Articles | {stats['total']} |
-| 👍 Liked | {stats['liked']} |
-| 👎 Disliked | {stats['disliked']} |
-| ⏭️ Skipped | {stats['skipped']} |
-| ⏳ Pending Review | {stats['pending']} |
+| Total Articles | {stats['total']} |
+| Liked | {stats['liked']} |
+| Disliked | {stats['disliked']} |
+| Skipped | {stats['skipped']} |
+| Pending Review | {stats['pending']} |
 
 ---
 
-## 📋 Articles to Review
+## Articles to Review
 
 """
 
@@ -595,13 +593,13 @@ dashboard_version: 1.0
         footer = f"""
 ---
 
-## 🔄 Automatic Updates
+## Automatic Updates
 
 This dashboard automatically:
-- ✅ Updates when new articles are discovered
-- ✅ Syncs your review decisions to the database
-- ✅ Refreshes statistics in real-time
-- ✅ No manual commands needed!
+- Updates when new articles are discovered
+- Syncs your review decisions to the database
+- Refreshes statistics in real-time
+- No manual commands needed
 
 **Last updated:** {now}
 

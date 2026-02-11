@@ -42,7 +42,7 @@ def get_project_root() -> Path:
         return fallback
 
     logger.error('Could not find Thoth project root')
-    print('❌ Could not find Thoth installation')
+    print('Could not find Thoth installation')
     print("   Run 'thoth setup' to install Thoth")
     sys.exit(1)
 
@@ -80,11 +80,11 @@ def run_docker_compose(
     Returns:
         Completed process
     """
-    cmd = ['docker', 'compose'] + args
+    cmd = ['docker', 'compose', *args]
     return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=check)
 
 
-def handle_start(args) -> int:
+def handle_start(_args) -> int:
     """
     Start Thoth services.
 
@@ -94,7 +94,7 @@ def handle_start(args) -> int:
     Returns:
         Exit code
     """
-    print('🚀 Starting Thoth services...')
+    print('Starting Thoth services...')
 
     project_root = get_project_root()
     letta_mode = get_letta_mode()
@@ -110,9 +110,9 @@ def handle_start(args) -> int:
             )
             if result.returncode != 0:
                 logger.warning(f'Letta start had issues: {result.stderr}')
-                print('  ⚠️  Letta may need manual start')
+                print('  Letta may need manual start')
             else:
-                print('  ✅ Letta started')
+                print('  Letta started')
 
             # Wait for Letta to be ready
             time.sleep(3)
@@ -121,20 +121,20 @@ def handle_start(args) -> int:
         print('  Starting Thoth services...')
         result = run_docker_compose(['up', '-d'], cwd=project_root)
 
-        print('\n✅ Thoth is running!')
+        print('\nThoth is running!')
         if letta_mode == 'cloud':
             print('   Letta: Cloud (api.letta.com)')
         else:
             print('   Letta: http://localhost:8283')
         print('   API: http://localhost:8000')
         print('   MCP: http://localhost:8001')
-        print("\n💡 Tip: Use 'thoth stop' to free RAM when not in use")
+        print("\nTip: Use 'thoth stop' to free RAM when not in use")
 
         return 0
 
     except subprocess.CalledProcessError as e:
         logger.error(f'Failed to start services: {e.stderr}')
-        print(f'\n❌ Failed to start services: {e.stderr}')
+        print(f'\nFailed to start services: {e.stderr}')
         print("   Check 'docker ps' to see running containers")
         return 1
 
@@ -149,7 +149,7 @@ def handle_stop(args) -> int:
     Returns:
         Exit code
     """
-    print('🛑 Stopping Thoth services...')
+    print('Stopping Thoth services...')
 
     project_root = get_project_root()
     letta_mode = get_letta_mode()
@@ -157,24 +157,24 @@ def handle_stop(args) -> int:
     try:
         # Stop Thoth services
         run_docker_compose(['stop'], cwd=project_root)
-        print('✅ Thoth stopped (RAM freed)')
+        print('Thoth stopped (RAM freed)')
 
         # Ask about Letta if self-hosted
         if letta_mode == 'self-hosted':
-            print('\n💡 Letta containers still running (shared across projects)')
+            print('\nLetta containers still running (shared across projects)')
             if not args.get('quiet', False):
                 response = input('   Stop Letta too? (y/N): ')
                 if response.lower() in ['y', 'yes']:
                     run_docker_compose(
                         ['-f', 'docker-compose.letta.yml', 'stop'], cwd=project_root
                     )
-                    print('   ✅ Letta stopped')
+                    print('   Letta stopped')
 
         return 0
 
     except subprocess.CalledProcessError as e:
         logger.error(f'Failed to stop services: {e.stderr}')
-        print(f'\n❌ Failed to stop services: {e.stderr}')
+        print(f'\nFailed to stop services: {e.stderr}')
         return 1
 
 
@@ -188,7 +188,7 @@ def handle_restart(args) -> int:
     Returns:
         Exit code
     """
-    print('🔄 Restarting Thoth services...')
+    print('Restarting Thoth services...')
 
     # Stop first
     stop_args = {'quiet': True}
@@ -202,7 +202,7 @@ def handle_restart(args) -> int:
     return handle_start(args)
 
 
-def handle_status(args) -> int:
+def handle_status(_args) -> int:
     """
     Show service status.
 
@@ -215,7 +215,7 @@ def handle_status(args) -> int:
     project_root = get_project_root()
     letta_mode = get_letta_mode()
 
-    print('📊 Thoth Service Status:\n')
+    print('Thoth Service Status:\n')
 
     # Show Thoth services
     result = run_docker_compose(['ps'], cwd=project_root, check=False)
@@ -223,7 +223,7 @@ def handle_status(args) -> int:
 
     # Show Letta if self-hosted
     if letta_mode == 'self-hosted':
-        print('\n📊 Letta Service Status:\n')
+        print('\nLetta Service Status:\n')
         result = run_docker_compose(
             ['-f', 'docker-compose.letta.yml', 'ps'], cwd=project_root, check=False
         )
@@ -256,7 +256,7 @@ def handle_logs(args) -> int:
         cmd.append(args['service'])
 
     try:
-        subprocess.run(['docker', 'compose'] + cmd, cwd=project_root, check=True)
+        subprocess.run(['docker', 'compose', *cmd], cwd=project_root, check=True)
         return 0
     except subprocess.CalledProcessError:
         return 1

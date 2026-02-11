@@ -138,7 +138,7 @@ class VaultSelectionScreen(BaseScreen):
         else:
             # No vaults found - make custom path primary
             yield Static(
-                '[yellow]⚠ No vaults found automatically[/yellow]',
+                '[yellow]No vaults found automatically[/yellow]',
                 classes='section-title',
             )
             yield Static(

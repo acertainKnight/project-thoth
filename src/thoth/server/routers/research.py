@@ -14,7 +14,7 @@ from thoth.config import config
 
 router = APIRouter()
 
-# REMOVED: Module-level globals - Phase 5
+# Module-level globals removed; services injected via FastAPI Depends()
 # Dependencies now injected via FastAPI Depends() instead of set_dependencies()
 
 

@@ -284,7 +284,7 @@ class DependencyCheckScreen(BaseScreen):
             version = self.docker_status.version or 'unknown'
             return f'[green]✓[/green] Docker: {version} (Compose available)'
         elif self.docker_status.available:
-            return '[yellow]⚠[/yellow] Docker: Available but Compose missing'
+            return '[yellow]Warning:[/yellow] Docker: Available but Compose missing'
         else:
             return '[red]✗[/red] Docker: Not installed'
 

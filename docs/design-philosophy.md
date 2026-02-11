@@ -1,482 +1,99 @@
-# Thoth Design Philosophy
+# Design Philosophy
 
-Core architectural principles and design decisions that shape Thoth.
-
-## Table of Contents
-
-- [Core Principles](#core-principles)
-- [Key Design Decisions](#key-design-decisions)
-- [Architecture Patterns](#architecture-patterns)
-- [Trade-offs](#trade-offs)
+The decisions behind Thoth's architecture, and the trade-offs involved.
 
 ---
 
 ## Core Principles
 
-### 1. User Control Over Convenience
+### User control over convenience
 
-**Principle**: When choosing between convenience and control, choose control.
+When I had to choose between making something easier and making something more controllable, I picked control. All LLM prompts are Jinja2 templates you can read and edit. Extraction schemas are JSON files you define. Sources are plugins you can add. Skills are files you can create. Configuration is a single `settings.json`, not hidden state spread across a dozen places.
 
-**What this means**:
-- All prompts are editable (Jinja2 templates)
-- Extraction schemas are user-defined (JSON files)
-- Sources are plugins (add any source)
-- Skills are user-creatable (not locked in)
-- Configuration is transparent (settings.json, not opaque)
+The trade-off is obvious: there's more to learn. But research workflows are deeply personal, and I'd rather give someone a tool they can bend to their needs than a polished box they can't open.
 
-**Why**:
-- Research workflows are personal—no one-size-fits-all
-- Users should be able to adapt the system to their needs
-- Transparency builds trust
+### The agent as the configuration interface
 
-**Example**:
-```
-Instead of: Fixed extraction fields
-We chose: User-editable analysis_schema.json
+All that customizability creates a problem: there are a lot of knobs to turn. Prompt templates, extraction schemas, research question configs, LLM routing, discovery sources, analysis settings—it adds up. I didn't want users to need to understand the entire configuration surface before they could get value from the system.
 
-Trade-off: Users must understand schemas
-Benefit: Users extract exactly what they need
-```
+The solution was making the agent itself the primary interface for configuration. Every setting, template, and schema that a user could edit by hand is also exposed to the Letta agent through MCP tools. The agent can read settings, update them, modify prompt templates, adjust research queries, change extraction schemas—all of it.
 
-### 2. Local-First, Privacy-Focused
+So instead of hunting through a settings file to figure out why your article notes don't include methodology sections, you just tell the agent: "I want methodology details in my paper notes going forward." The agent loads the settings-management skill, updates the analysis schema, and the next paper processed reflects the change.
 
-**Principle**: Your data stays on your machine.
+Or if a research question is pulling in too many irrelevant results—"my RL search keeps returning robotics papers I don't care about"—the agent can tighten the query parameters, adjust the source filters, or refine the search terms. You describe the problem, the agent handles the configuration.
 
-**What this means**:
-- All processing happens locally
-- Only LLM API calls leave your system
-- No telemetry or tracking
-- Full offline capability (after setup)
-- Data in your vault, under your control
+This was a deliberate architectural choice, not an afterthought. The MCP tools for settings management, schema editing, and query configuration were built specifically so that the agent could serve as a natural language layer over what would otherwise be a complex manual process. For initial setup, there's also a TUI wizard (`thoth setup`) that walks through the basics, so nobody has to start from a blank config file.
 
-**Why**:
-- Research often involves unpublished work
-- Privacy is non-negotiable for many users
-- Local processing is faster (no network latency)
+The key insight: the system can be as complex as it needs to be under the hood, as long as the user's primary interaction with that complexity is a conversation.
 
-**Example**:
-```
-Instead of: Cloud processing pipeline
-We chose: Local Docker containers
+### Local-first
 
-Trade-off: Users need to run infrastructure
-Benefit: Complete data privacy and control
-```
+All processing happens on your machine. The only network calls are to LLM APIs (OpenRouter, OpenAI, Mistral) and academic APIs (Semantic Scholar, Crossref, etc.). No telemetry, no cloud processing. Your data lives in your Obsidian vault, and you can back it up however you want.
 
-### 3. Extensibility Through Standards
+This matters because research often involves unpublished work. Privacy isn't a feature—it's table stakes.
 
-**Principle**: Use industry standards to enable ecosystem integration.
+### Standards over custom protocols
 
-**What this means**:
-- MCP protocol for tools (not custom REST API)
-- PostgreSQL+pgvector for storage (not proprietary DB)
-- Jinja2 for templates (not custom DSL)
-- JSON Schema for validation (not custom formats)
-- Docker for deployment (not custom packaging)
+Thoth uses MCP for tools, PostgreSQL+pgvector for storage, Jinja2 for templates, JSON Schema for validation, and Docker for deployment. None of these are novel. That's the point.
 
-**Why**:
-- Standards have longevity
-- Standards have tooling and community support
-- Standards enable interoperability
+Custom protocols feel simpler at first, but standards have longevity, community support, and tooling. MCP means any MCP-compatible client can use Thoth's tools. PostgreSQL means your data is in a format the whole industry knows how to work with.
 
-**Example**:
-```
-Instead of: Custom tool protocol
-We chose: Model Context Protocol (MCP)
+### Small pieces, loosely joined
 
-Trade-off: More complex than simple REST
-Benefit: Works with any MCP-compatible system (Letta, Claude Desktop, etc.)
-```
+Letta runs as its own service. Skills load tools on demand rather than all at once. Sources are plugins, not hard-coded. Services communicate through a ServiceManager that handles dependency injection.
 
-### 4. Composition Over Monoliths
+The cost is more moving parts. The benefit is that restarting Thoth never wipes your agent memory, you can swap components without rewriting the system, and failures stay contained.
 
-**Principle**: Small, composable pieces beat large, integrated systems.
+### Start simple, go deep
 
-**What this means**:
-- Letta runs independently (shared infrastructure)
-- Skills load tools dynamically (not all-at-once)
-- Sources are plugins (not built into core)
-- Services are loosely coupled (ServiceManager coordinates)
-
-**Why**:
-- Easier to understand and debug
-- Easier to extend and modify
-- Better failure isolation
-
-**Example**:
-```
-Instead of: All services in one container
-We chose: Letta standalone + Thoth services separate
-
-Trade-off: More infrastructure to manage
-Benefit: Restarting Thoth never affects agents
-```
-
-### 5. Progressive Disclosure
-
-**Principle**: Start simple, reveal complexity when needed.
-
-**What this means**:
-- Quick install: curl | bash
-- Advanced install: Manual with full control
-- Agents start minimal (4 tools)
-- Skills load more tools on-demand
-- Settings have defaults, advanced options available
-
-**Why**:
-- Lower barrier to entry
-- Users aren't overwhelmed
-- Power users can go deep
-
-**Example**:
-```
-Instead of: Expose all 64 tools at once
-We chose: Start with 4, load skills as needed
-
-Trade-off: Extra step to load skills
-Benefit: Better LLM performance, lower token usage
-```
+The install is a single `curl` command. Agents start with 4 tools and expand when you load skills. Settings have sensible defaults. But if you want to customize every prompt template, define your own extraction schema, or write a custom source plugin, you can.
 
 ---
 
-## Key Design Decisions
+## Key Decisions
 
-### Why Letta for Agent Memory?
+### Why Letta for agent memory?
 
-**Decision**: Use Letta as agent memory system
+I evaluated LangChain's memory (too basic, no real persistence), building a custom memory system (not worth reinventing), and Letta (formerly MemGPT).
 
-**Alternatives Considered**:
-1. **LangChain Memory**: Too simple, no persistence
-2. **Custom Memory System**: Reinventing the wheel
-3. **Letta (MemGPT)**: ✅ Chosen
+Letta won because agents can update their own memory through tool calls. It's not just retrieval—the agent decides what to remember and what to forget. The PostgreSQL+pgvector backend means memory survives restarts, and there's no context window ceiling. It comes from real research (the MemGPT paper from UC Berkeley), not just framework marketing.
 
-**Why Letta**:
-- **Research-backed**: Based on MemGPT paper from UC Berkeley
-- **Self-editing memory**: Agents update their own context
-- **Persistent**: PostgreSQL+pgvector backend
-- **Cross-session continuity**: No context window limits
-- **Tool integration**: Native MCP support
+The downside is infrastructure: you need PostgreSQL and a Letta server running. But `make dev` handles that, and the memory quality is worth it.
 
-**Trade-offs**:
-- ❌ Extra infrastructure (PostgreSQL, Letta server)
-- ✅ Stateful agents that remember
-- ✅ Production-ready memory system
+### Why MCP for tools?
 
-### Why MCP for Tools?
+Custom REST endpoints would have been simpler to build. But MCP is becoming the standard protocol for LLM-tool integration. Building on it means Thoth's tools work with any MCP client (Claude Desktop, Letta, etc.), and users can bring in MCP tools from the broader ecosystem.
 
-**Decision**: Implement Model Context Protocol for tools
+The trade-off is JSON-RPC overhead and a more complex server setup. For a research tool that lives on your machine, the performance hit doesn't matter, and the ecosystem compatibility does.
 
-**Alternatives Considered**:
-1. **Custom REST API**: Simple but proprietary
-2. **LangChain Tools**: Python-only, no standard protocol
-3. **MCP**: ✅ Chosen
+### Why skill-based tool loading?
 
-**Why MCP**:
-- **Industry standard**: Adopted by Anthropic, OpenAI ecosystem
-- **Interoperability**: Works with any MCP client
-- **Tool composability**: Dynamic attachment/detachment
-- **Schema-first**: JSON Schema for validation
+Loading all 64 tools into an agent's context at once tanks LLM performance. The model gets confused with too many options, and you burn tokens on tool descriptions for capabilities the agent doesn't need right now.
 
-**Trade-offs**:
-- ❌ More complex than simple REST
-- ❌ JSON-RPC overhead
-- ✅ Future-proof (works with ecosystem tools)
-- ✅ Dynamic tool loading
+Skills group related tools together. When you ask the agent to find papers, it loads the paper-discovery skill and gets the 5-6 tools it needs. When you're done, it unloads them. Token usage drops significantly, and the LLM makes better tool choices with a smaller set.
 
-### Why Skills System?
+### Why plugins for sources?
 
-**Decision**: Skills load tools dynamically instead of loading all tools at once
+Hard-coding academic sources (ArXiv, Semantic Scholar, etc.) would mean every new source requires a code change. The plugin architecture lets users add sources without touching the core.
 
-**Alternatives Considered**:
-1. **Load all tools**: Simple but inefficient
-2. **Manual tool selection**: Too complex for users
-3. **Skill-based loading**: ✅ Chosen
+The most interesting part is the auto-scraper: give it any URL, and it uses Playwright + an LLM to figure out the page structure and propose CSS selectors for extracting articles. You confirm or refine with natural language, and it saves a working scraper. No code needed.
 
-**Why Skills**:
-- **Token efficiency**: 60-80% fewer tools in context
-- **Better LLM performance**: Clearer tool choices
-- **Logical grouping**: Skills = capabilities
-- **User-extensible**: Create custom skills
+### Why template-driven extraction?
 
-**Trade-offs**:
-- ❌ Extra step (load skill before using)
-- ✅ Much better LLM performance
-- ✅ Lower costs (fewer tokens)
+Every prompt Thoth sends to an LLM is a Jinja2 template sitting in a directory you can browse. This means you can see exactly what's being asked, tweak the wording, or write provider-specific versions (the same analysis prompt can be optimized differently for GPT-4 vs. Gemini).
 
-### Why Plugin Architecture for Sources?
-
-**Decision**: Sources are plugins, not hard-coded
-
-**Alternatives Considered**:
-1. **Hard-coded sources**: Simple but inflexible
-2. **Plugin system**: ✅ Chosen
-
-**Why Plugins**:
-- **Open-ended**: Add any source without modifying core
-- **LLM auto-scraper**: Create plugins from URLs
-- **Source-specific optimizations**: Each plugin can optimize for its source
-- **Community contributions**: Easy to share new sources
-
-**Trade-offs**:
-- ❌ More complex architecture
-- ✅ Unlimited sources
-- ✅ User-extensible
-
-### Why Template-Driven Extraction?
-
-**Decision**: Use Jinja2 templates for prompts and JSON schemas for extraction
-
-**Alternatives Considered**:
-1. **Hard-coded prompts**: Simple but inflexible
-2. **DSL for schemas**: Custom but learning curve
-3. **Jinja2 + JSON Schema**: ✅ Chosen
-
-**Why Templates**:
-- **Full transparency**: Users see exact prompts sent to LLMs
-- **Provider-specific optimization**: Different templates for OpenAI/Google/Anthropic
-- **No code changes**: Edit templates to change behavior
-- **Industry standards**: Jinja2 and JSON Schema are widely used
-
-**Trade-offs**:
-- ❌ Users must learn Jinja2 (for advanced customization)
-- ✅ Complete control over LLM prompts
-- ✅ No code changes needed
-
-### Why Hot-Reload Configuration?
-
-**Decision**: Settings changes apply in ~2 seconds without restart (dev mode)
-
-**Alternatives Considered**:
-1. **Restart required**: Traditional approach
-2. **Hot-reload**: ✅ Chosen
-
-**Why Hot-Reload**:
-- **Faster iteration**: Test changes immediately
-- **Better UX**: No service interruptions
-- **Development speed**: Rapid experimentation
-
-**Trade-offs**:
-- ❌ More complex implementation (file watching)
-- ✅ Much better developer experience
-- ✅ Faster configuration tuning
-
-### Why Independent Letta Service?
-
-**Decision**: Letta runs as standalone service, not part of Thoth stack
-
-**Alternatives Considered**:
-1. **Embedded Letta**: Letta starts with Thoth
-2. **Standalone Letta**: ✅ Chosen
-
-**Why Standalone**:
-- **Data persistence**: Restarting Thoth never affects agents
-- **Multi-project sharing**: One Letta, multiple projects
-- **Independent updates**: Update Thoth without touching Letta
-- **Clear separation**: Memory system is infrastructure
-
-**Trade-offs**:
-- ❌ Must start Letta separately (automated by make dev)
-- ✅ Agents always persist
-- ✅ Can serve multiple projects
+The analysis schema—what metadata gets extracted from papers—is a JSON file you edit. Want to extract "methodology type" from every paper? Add it to the schema. The LLM will follow your structure.
 
 ---
 
-## Architecture Patterns
+## Trade-offs I'm Aware Of
 
-### Service-Oriented Architecture
+**Complexity vs. simplicity**: Thoth has more moving parts than a simple script that calls an API. The service-oriented architecture, plugin system, and skill-based loading all add complexity. I think it's justified for the extensibility, but there's a real learning curve.
 
-**Pattern**: Loosely coupled services coordinated by ServiceManager
+**Local infrastructure**: Running Docker containers, PostgreSQL, and a Letta server is more setup than a SaaS tool. The install script and `make dev` abstract most of it, but if something breaks, you're debugging containers.
 
-**Components**:
-- **ServiceManager**: Dependency injection coordinator
-- **Independent Services**: LLMService, DiscoveryService, RAGService, etc.
-- **Defined Interfaces**: Services depend on interfaces, not implementations
-
-**Benefits**:
-- Easy to test (mock interfaces)
-- Easy to swap implementations
-- Clear responsibilities
-
-### Plugin Architecture
-
-**Pattern**: Core + Plugins for extensibility
-
-**Where Used**:
-- **Discovery Sources**: 7 plugins + LLM auto-scraper
-- **Skills**: 10 bundled + unlimited user skills
-- **MCP Tools**: 64 built-in + ecosystem tools
-
-**Benefits**:
-- Core stays simple
-- Users extend without forking
-- Community can contribute plugins
-
-### Factory Pattern
-
-**Pattern**: `initialize_thoth()` factory creates entire system
-
-**Why**:
-- Single entry point for initialization
-- Dependency ordering handled automatically
-- Easy to test (mock factory output)
-
-### Repository Pattern
-
-**Pattern**: Services use repositories for data access
-
-**Examples**:
-- `ArticleRepository`: Database access for articles
-- `CitationRepository`: Citation storage
-- `QueryRepository`: Research questions
-
-**Benefits**:
-- Database abstraction
-- Easy to swap storage backends
-- Clear data access patterns
-
-### Strategy Pattern
-
-**Pattern**: Configurable algorithms
-
-**Examples**:
-- **LLM routing**: Different providers for different tasks
-- **Citation resolution**: 6-stage chain with pluggable resolvers
-- **Discovery**: Different strategies per source
-
-**Benefits**:
-- Runtime configuration
-- Easy to add new strategies
-- Clear algorithm interfaces
+**Standards vs. speed**: Using MCP instead of a simple REST API, PostgreSQL instead of SQLite—these choices optimize for longevity and ecosystem compatibility over development speed. For a tool I plan to use for years, that felt right.
 
 ---
 
-## Trade-offs
-
-### Complexity vs Control
-
-**Choice**: Accept higher complexity for user control
-
-**What we gave up**:
-- Simple "just works" experience (like ChatGPT)
-- One-click deployment
-- Hidden implementation details
-
-**What we gained**:
-- Users can customize everything
-- Transparent operation
-- Extensibility
-
-**When this matters**:
-- Advanced users who need control
-- Research workflows that don't fit defaults
-- Organizations with specific requirements
-
-### Local vs Cloud
-
-**Choice**: Local-first architecture
-
-**What we gave up**:
-- Easy scaling (can't just spin up cloud instances)
-- Managed infrastructure
-- Built-in backups
-
-**What we gained**:
-- Complete privacy
-- No cloud costs (except LLM APIs)
-- Offline capability
-
-**When this matters**:
-- Confidential research
-- Cost-sensitive users
-- Unreliable internet
-
-### Standards vs Optimization
-
-**Choice**: Use standards even when custom might be faster
-
-**What we gave up**:
-- Custom-optimized protocols
-- Simpler implementations
-- Less overhead
-
-**What we gained**:
-- Ecosystem compatibility
-- Longevity (standards outlive custom systems)
-- Tooling and community support
-
-**When this matters**:
-- Long-term maintainability
-- Integration with other tools
-- Future-proofing
-
-### Modular vs Monolithic
-
-**Choice**: Many small services vs one big service
-
-**What we gave up**:
-- Simple deployment (one container)
-- Easy debugging (single log file)
-- Lower resource usage
-
-**What we gained**:
-- Independent scaling
-- Failure isolation
-- Clear responsibilities
-- Easier to understand
-
-**When this matters**:
-- Production deployments
-- Multi-user setups
-- Complex workflows
-
----
-
-## Design Lessons
-
-### What Worked Well
-
-1. **MCP adoption**: Future-proofed tool system, works with ecosystem
-2. **Skill-based loading**: Massive improvement in LLM performance
-3. **Independent Letta**: Agents always persist, no data loss
-4. **Template system**: Users love being able to customize prompts
-5. **Plugin architecture**: Easy to add sources without core changes
-
-### What We'd Do Differently
-
-1. **Start with MCP from day one**: Retrofitting was painful
-2. **Skill system earlier**: Should have been in v1
-3. **Better documentation from start**: Docs lagged behind features
-4. **Type hints everywhere**: Added incrementally, should be default
-
-### Lessons for Future Projects
-
-1. **Use standards early**: Custom protocols seem simple at first, but standards win long-term
-2. **Extensibility points matter**: Plugin architecture takes effort but pays off
-3. **User control beats convenience**: Advanced users will always want control
-4. **Documentation is architecture**: If it's hard to document, the architecture needs work
-
----
-
-## Summary
-
-Thoth's design philosophy centers on **user control**, **local-first privacy**, **standards-based extensibility**, **modular composition**, and **progressive disclosure**.
-
-These principles led to key decisions:
-- **Letta** for agent memory (research-backed, persistent)
-- **MCP** for tools (industry standard, ecosystem compatible)
-- **Skills** for dynamic loading (token-efficient, user-extensible)
-- **Plugins** for sources (open-ended, LLM auto-detection)
-- **Templates** for prompts (transparent, customizable)
-- **Independent services** (failure isolation, multi-project sharing)
-
-Trade-offs were made consciously:
-- Complexity for control
-- Local infrastructure for privacy
-- Standards for future-proofing
-- Modularity for maintainability
-
-**Result**: A research assistant that adapts to users, not the other way around.
-
----
-
-**Last Updated**: February 2026
+*Last updated: February 2026*

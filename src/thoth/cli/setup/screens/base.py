@@ -216,7 +216,7 @@ class BaseScreen(Screen):
         # Update message widget directly
         try:
             msg_widget = self.query_one('#message-area', Static)
-            msg_widget.update(f'[bold red]⚠ {message}[/bold red]')
+            msg_widget.update(f'[bold red]{message}[/bold red]')
             msg_widget.remove_class('hidden')
             msg_widget.add_class('error-message')
             msg_widget.remove_class('info-message')
@@ -253,13 +253,13 @@ class BaseScreen(Screen):
         Args:
             message: Warning message to display
         """
-        self.info_msg = f'[yellow]⚠[/yellow] {message}'
+        self.info_msg = f'[yellow]Warning:[/yellow] {message}'
         logger.warning(f'Screen warning: {message}')
 
         # Update message widget directly
         try:
             msg_widget = self.query_one('#message-area', Static)
-            msg_widget.update(f'[yellow]⚠ {message}[/yellow]')
+            msg_widget.update(f'[yellow]{message}[/yellow]')
             msg_widget.remove_class('hidden')
             msg_widget.add_class('info-message')
             msg_widget.remove_class('error-message')
@@ -372,7 +372,7 @@ class BaseScreen(Screen):
 
     def action_help(self) -> None:
         """Show help overlay."""
-        # TODO: Implement help overlay in Phase 2
+        # TODO: Implement help overlay
         self.show_info(
             'Keyboard shortcuts:\n'
             '  ← / →: Previous / Next screen\n'

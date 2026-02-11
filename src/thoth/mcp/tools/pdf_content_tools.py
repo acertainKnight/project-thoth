@@ -233,7 +233,7 @@ class LocatePdfMCPTool(MCPTool):
                     response_text += '- Check institutional repositories\n\n'
 
                     if doi:
-                        response_text += '🌐 **Direct Links:**\n'
+                        response_text += '**Direct Links:**\n'
                         response_text += f'- DOI URL: https://doi.org/{doi}\n'
 
                     if arxiv_id:
@@ -588,7 +588,7 @@ class ExtractPdfMetadataMCPTool(MCPTool):
 
                     # Document structure analysis
                     if analyze_structure:
-                        response_text += '\n🏗 **Document Structure Analysis:**\n'
+                        response_text += '\n**Document Structure Analysis:**\n'
                         response_text += f'- Total pages: {len(pdf_reader.pages)}\n'
 
                         # Analyze page sizes
