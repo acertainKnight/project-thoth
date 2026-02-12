@@ -46,6 +46,7 @@ class MCPServersManager(BaseService):
         self._last_mtime: float | None = None
         self._mcp_registry: Any | None = None
         self._letta_service: Any | None = None
+        self._letta_id_map: dict[str, str] = {}  # server_id -> Letta UUID
 
     def initialize(self) -> None:
         """Initialize the MCP servers manager."""
@@ -288,57 +289,39 @@ class MCPServersManager(BaseService):
                 f'Connecting to MCP server: {server_id} ({server_entry.name})'
             )
 
-            # Import here to avoid circular dependency
-            from langchain_mcp_adapters.client import load_mcp_tools
-            from langchain_mcp_adapters.sessions import create_session
-
-            # Build connection config
+            # Validate transport config upfront
             if server_entry.transport == 'stdio':
                 if not server_entry.command:
                     raise ValueError(
                         f'Server {server_id}: command required for stdio transport'
                     )
-
-                connection_config = {
-                    'transport': 'stdio',
-                    'command': server_entry.command,
-                    'args': server_entry.args,
-                }
-
-                if server_entry.env:
-                    connection_config['env'] = server_entry.env
-
             elif server_entry.transport in ['http', 'sse']:
                 if not server_entry.url:
                     raise ValueError(
                         f'Server {server_id}: URL required for {server_entry.transport} transport'
                     )
-
-                connection_config = {
-                    'transport': server_entry.transport,
-                    'url': server_entry.url,
-                }
-
             else:
                 raise ValueError(
                     f'Server {server_id}: unsupported transport {server_entry.transport}'
                 )
 
             # Register server with Letta first (if available)
-            # Letta will handle the connection and tool discovery
+            # Letta handles the connection and tool discovery natively
             if self._letta_service:
-                letta_registered = await self._register_mcp_server_with_letta(
+                registration = await self._register_mcp_server_with_letta(
                     server_id, server_entry
                 )
-                if letta_registered:
-                    # Get tools from Letta's discovery
-                    tool_details = await self._sync_tools_from_letta(server_id)
+                if registration:
+                    letta_server_id = registration.get('id', server_id)
+                    self._letta_id_map[server_id] = letta_server_id
+                    tool_details = await self._sync_tools_from_letta(
+                        server_id, letta_server_id
+                    )
                     if tool_details:
                         self.server_tools[server_id] = tool_details
                         self.logger.info(
                             f'Registered MCP server {server_id} with Letta: {len(tool_details)} tools available'
                         )
-                        # Mark as connected (Letta manages the actual connection)
                         self.connected_servers[server_id] = 'letta_managed'
                     else:
                         self.logger.warning(
@@ -350,10 +333,22 @@ class MCPServersManager(BaseService):
                     )
             else:
                 # Fallback: Direct connection via langchain_mcp_adapters
-                # This is for development/testing when Letta is not available
+                # Only needed when Letta is not available (dev/testing)
                 self.logger.warning(
                     f'Letta service not available - using direct MCP connection for {server_id}'
                 )
+
+                from langchain_mcp_adapters.client import load_mcp_tools
+                from langchain_mcp_adapters.sessions import create_session
+
+                connection_config = {'transport': server_entry.transport}
+                if server_entry.transport == 'stdio':
+                    connection_config['command'] = server_entry.command
+                    connection_config['args'] = server_entry.args
+                    if server_entry.env:
+                        connection_config['env'] = server_entry.env
+                else:
+                    connection_config['url'] = server_entry.url
 
                 session = await create_session(connection_config).__aenter__()
                 tools = await load_mcp_tools(session)
@@ -361,7 +356,6 @@ class MCPServersManager(BaseService):
                 if tools:
                     self.connected_servers[server_id] = session
 
-                    # Store tool details (name, description, prefixed name)
                     tool_details = []
                     for tool in tools:
                         prefixed_name = f'{server_id}__{tool.name}'
@@ -653,7 +647,7 @@ class MCPServersManager(BaseService):
 
     async def _register_mcp_server_with_letta(
         self, server_id: str, server_entry: MCPServerEntry
-    ) -> bool:
+    ) -> dict[str, Any] | None:
         """
         Register an MCP server with Letta's native MCP server support.
 
@@ -662,16 +656,15 @@ class MCPServersManager(BaseService):
             server_entry: Server configuration
 
         Returns:
-            bool: True if registration successful, False otherwise
+            Letta server object dict on success (contains 'id'), None on failure.
         """
         if not self._letta_service:
             self.logger.warning(
                 'Letta service not available - cannot register MCP server'
             )
-            return False
+            return None
 
         try:
-            # Build server config for Letta
             server_config = {
                 'transport': server_entry.transport,
             }
@@ -684,70 +677,96 @@ class MCPServersManager(BaseService):
             elif server_entry.transport in ['http', 'sse']:
                 server_config['url'] = server_entry.url
 
-            # Register server with Letta
             result = self._letta_service.register_mcp_server(server_id, server_config)
 
             if result.get('success'):
+                server_obj = result.get('server', {})
                 self.logger.info(
-                    f"Registered MCP server '{server_id}' with Letta - Letta will discover tools automatically"
+                    f"Registered MCP server '{server_id}' with Letta (id={server_obj.get('id')})"
                 )
-                return True
+                return server_obj
             else:
                 self.logger.error(
                     f"Failed to register MCP server '{server_id}' with Letta: {result.get('error')}"
                 )
-                return False
+                return None
 
         except Exception as e:
             self.logger.error(
                 f"Error registering MCP server '{server_id}' with Letta: {e}"
             )
-            return False
+            return None
 
-    async def _sync_tools_from_letta(self, server_id: str) -> list[dict[str, str]]:
+    async def _sync_tools_from_letta(
+        self,
+        server_id: str,
+        letta_server_id: str | None = None,
+        max_retries: int = 4,
+        retry_delay: float = 2.0,
+    ) -> list[dict[str, str]]:
         """
-        Get tool list from Letta's MCP server registration.
+        Get tool list from Letta, retrying to handle async discovery.
+
+        Letta discovers tools asynchronously after registration, so the first
+        query may return empty. This method retries with a short delay to give
+        Letta time to connect and enumerate tools.
 
         Args:
-            server_id: MCP server identifier
+            server_id: Our internal server identifier (e.g. 'cursor-agent')
+            letta_server_id: Letta's UUID for the server. Falls back to
+                server_id if not provided (for backward compat).
+            max_retries: Number of attempts before giving up.
+            retry_delay: Seconds between attempts.
 
         Returns:
-            list: Tool details from Letta (with unprefixed 'name' and prefixed
-                'prefixed_name')
+            list: Tool details from Letta
         """
         if not self._letta_service:
             return []
 
-        try:
-            # Get tools discovered by Letta
-            letta_tools = self._letta_service.list_mcp_tools_by_server(server_id)
+        query_id = letta_server_id or self._letta_id_map.get(server_id, server_id)
 
-            tool_details = []
-            for tool in letta_tools:
-                tool_name = tool.get('name', '')
+        for attempt in range(1, max_retries + 1):
+            try:
+                letta_tools = self._letta_service.list_mcp_tools_by_server(query_id)
 
-                # Letta may return prefixed names (server-id__tool-name)
-                # Extract the unprefixed name for storage
-                if '__' in tool_name and tool_name.startswith(f'{server_id}__'):
-                    unprefixed_name = tool_name.split('__', 1)[1]
-                else:
-                    unprefixed_name = tool_name
+                if letta_tools:
+                    tool_details = []
+                    for tool in letta_tools:
+                        tool_name = tool.get('name', '')
 
-                tool_details.append(
-                    {
-                        'name': unprefixed_name,  # Store unprefixed for API simplicity
-                        'description': tool.get('description', ''),
-                        'prefixed_name': tool_name,  # Store full name as Letta knows it
-                    }
+                        if '__' in tool_name and tool_name.startswith(f'{server_id}__'):
+                            unprefixed_name = tool_name.split('__', 1)[1]
+                        else:
+                            unprefixed_name = tool_name
+
+                        tool_details.append(
+                            {
+                                'name': unprefixed_name,
+                                'description': tool.get('description', ''),
+                                'prefixed_name': tool_name,
+                            }
+                        )
+
+                    self.logger.info(
+                        f'Synced {len(tool_details)} tools from Letta for {server_id} (attempt {attempt})'
+                    )
+                    return tool_details
+
+                if attempt < max_retries:
+                    self.logger.debug(
+                        f'No tools yet for {server_id}, retrying in {retry_delay}s ({attempt}/{max_retries})'
+                    )
+                    await asyncio.sleep(retry_delay)
+
+            except Exception as e:
+                self.logger.error(
+                    f'Failed to sync tools from Letta for {server_id}: {e}'
                 )
+                if attempt < max_retries:
+                    await asyncio.sleep(retry_delay)
 
-            self.logger.info(
-                f'Retrieved {len(tool_details)} tools from Letta for server {server_id}'
-            )
-            return tool_details
-
-        except Exception as e:
-            self.logger.error(
-                f'Failed to sync tools from Letta for server {server_id}: {e}'
-            )
-            return []
+        self.logger.warning(
+            f'No tools discovered for {server_id} after {max_retries} attempts'
+        )
+        return []

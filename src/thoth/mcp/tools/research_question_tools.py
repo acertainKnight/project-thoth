@@ -858,7 +858,7 @@ class RunDiscoveryForQuestionMCPTool(MCPTool):
             result = await discovery_orchestrator.run_discovery_for_question(
                 question_id=question_id,
                 max_articles=max_articles,
-                force_run=force_run,
+                _force_run=force_run,
             )
 
             if result.get('success'):

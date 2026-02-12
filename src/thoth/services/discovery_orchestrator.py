@@ -73,6 +73,7 @@ class DiscoveryOrchestrator(BaseService):
         self,
         question_id: UUID,
         max_articles: int | None = None,
+        _force_run: bool = False,
     ) -> dict[str, Any]:
         """
         Run discovery workflow for a single research question.
@@ -82,6 +83,7 @@ class DiscoveryOrchestrator(BaseService):
         Args:
             question_id: Research question UUID
             max_articles: Maximum articles to process (overrides question config)
+            _force_run: Accepted for backward compat, currently unused.
 
         Returns:
             Discovery result summary with statistics

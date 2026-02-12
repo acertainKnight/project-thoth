@@ -260,24 +260,27 @@ class LettaService(BaseService):
             dict: Registration result with server info
         """
         try:
-            # Build Letta MCP server config
-            letta_config: dict[str, Any] = {
-                'name': server_id,
-            }
+            # Build nested config matching Letta's CreateMCPServerRequest schema:
+            # { "server_name": "...", "config": { "mcp_server_type": "...", ... } }
+            config_block: dict[str, Any] = {}
 
-            # Map transport types
             if server_config['transport'] == 'stdio':
-                letta_config['transport'] = 'stdio'
-                letta_config['command'] = server_config['command']
-                letta_config['args'] = server_config.get('args', [])
+                config_block['mcp_server_type'] = 'stdio'
+                config_block['command'] = server_config['command']
+                config_block['args'] = server_config.get('args', [])
                 if server_config.get('env'):
-                    letta_config['env'] = server_config['env']
+                    config_block['env'] = server_config['env']
             elif server_config['transport'] in ['http', 'sse']:
-                # Letta uses 'streamable_http' or 'sse' transport names
-                letta_config['transport'] = (
+                mcp_type = (
                     'streamable_http' if server_config['transport'] == 'http' else 'sse'
                 )
-                letta_config['url'] = server_config['url']
+                config_block['mcp_server_type'] = mcp_type
+                config_block['server_url'] = server_config['url']
+
+            letta_config: dict[str, Any] = {
+                'server_name': server_id,
+                'config': config_block,
+            }
 
             # Register with Letta
             resp = requests.post(
@@ -291,6 +294,15 @@ class LettaService(BaseService):
                 result = resp.json()
                 self.logger.info(f"Registered MCP server '{server_id}' with Letta")
                 return {'success': True, 'server': result}
+            elif resp.status_code == 409:
+                # Already registered -- look up the existing entry
+                self.logger.info(
+                    f"MCP server '{server_id}' already exists in Letta, fetching existing record"
+                )
+                existing = self._find_mcp_server_by_name(server_id)
+                if existing:
+                    return {'success': True, 'server': existing}
+                return {'success': False, 'error': 'duplicate but lookup failed'}
             else:
                 error_msg = resp.text[:200]
                 self.logger.error(
@@ -302,19 +314,43 @@ class LettaService(BaseService):
             self.logger.error(f"Error registering MCP server '{server_id}': {e}")
             return {'success': False, 'error': str(e)}
 
-    def list_mcp_tools_by_server(self, server_id: str) -> list[dict[str, Any]]:
+    def _find_mcp_server_by_name(self, server_name: str) -> dict[str, Any] | None:
+        """
+        Look up an existing MCP server in Letta by its server_name.
+
+        Args:
+            server_name: The server_name used during registration.
+
+        Returns:
+            Server dict if found, None otherwise.
+        """
+        try:
+            resp = requests.get(
+                f'{self.letta_url}/v1/mcp-servers/',
+                headers=self._get_headers(),
+                timeout=15,
+            )
+            if resp.status_code == 200:
+                for server in resp.json():
+                    if server.get('server_name') == server_name:
+                        return server
+        except Exception as e:
+            self.logger.error(f'Error looking up MCP server {server_name}: {e}')
+        return None
+
+    def list_mcp_tools_by_server(self, mcp_server_id: str) -> list[dict[str, Any]]:
         """
         List tools available from a registered MCP server.
 
         Args:
-            server_id: Server identifier
+            mcp_server_id: Letta's UUID for the MCP server (e.g. 'mcp_server-abc123...')
 
         Returns:
             list: Tools available from this server
         """
         try:
             resp = requests.get(
-                f'{self.letta_url}/v1/mcp-servers/{server_id}/tools/',
+                f'{self.letta_url}/v1/mcp-servers/{mcp_server_id}/tools/',
                 headers=self._get_headers(),
                 timeout=30,
             )
@@ -323,12 +359,12 @@ class LettaService(BaseService):
                 return resp.json()
             else:
                 self.logger.error(
-                    f'Failed to list tools from MCP server {server_id}: {resp.status_code}'
+                    f'Failed to list tools from MCP server {mcp_server_id}: {resp.status_code}'
                 )
                 return []
 
         except Exception as e:
-            self.logger.error(f'Error listing MCP tools from {server_id}: {e}')
+            self.logger.error(f'Error listing MCP tools from {mcp_server_id}: {e}')
             return []
 
     def add_mcp_tool(self, server_id: str, tool_name: str) -> dict[str, Any] | None:

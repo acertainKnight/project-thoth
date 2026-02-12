@@ -175,6 +175,14 @@ class ResearchQuestionService(BaseService):
             )
 
         # Validate if critical fields are being updated
+        if 'name' in updates:
+            # Check for duplicate names (excluding current question)
+            existing = await self.repository.get_by_name(user_id, updates['name'])
+            if existing and existing['id'] != question_id:
+                raise ValueError(
+                    f"Research question '{updates['name']}' already exists for user {user_id}"
+                )
+
         if 'selected_sources' in updates:
             self._validate_source_selection(updates['selected_sources'])
 
@@ -248,10 +256,10 @@ class ResearchQuestionService(BaseService):
 
         # Perform deletion
         if hard_delete:
-            success = await self.repository.delete_question(question_id)
+            success = await self.repository.delete(question_id)
             action = 'deleted'
         else:
-            success = await self.repository.deactivate_question(question_id)
+            success = await self.repository.deactivate(question_id)
             action = 'deactivated'
 
         if success:

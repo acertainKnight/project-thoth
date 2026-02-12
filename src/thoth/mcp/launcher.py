@@ -122,7 +122,7 @@ async def launch_mcp_server(
         mcp_manager.set_dependencies(server.tool_registry, letta_service)
 
         # Load initial config and connect to external MCP servers
-        await mcp_manager.load_config()
+        mcp_manager.current_config = await mcp_manager.load_config()
         await mcp_manager._connect_all_enabled_servers()
 
         # Start file watcher for hot-reload

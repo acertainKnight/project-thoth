@@ -298,7 +298,12 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
         authors: List[str] | None = None,  # noqa: UP006
         selected_sources: List[str] | None = None,  # noqa: UP006
         schedule_frequency: str | None = None,
+        schedule_time: time | None = None,
+        schedule_days_of_week: List[int] | None = None,  # noqa: UP006
         min_relevance_score: float | None = None,
+        auto_download_enabled: bool | None = None,
+        auto_download_min_score: float | None = None,
+        max_articles_per_run: int | None = None,
         is_active: bool | None = None,
         last_run_at: datetime | None = None,
         next_run_at: datetime | None = None,
@@ -316,7 +321,12 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
             authors: New authors list
             selected_sources: New sources list
             schedule_frequency: New frequency
+            schedule_time: New run time
+            schedule_days_of_week: New days for weekly schedule
             min_relevance_score: New relevance threshold
+            auto_download_enabled: Enable/disable auto-download
+            auto_download_min_score: Min score for auto-download
+            max_articles_per_run: Max articles per discovery run
             is_active: New active status
             last_run_at: Last discovery run timestamp
             next_run_at: Next scheduled run timestamp
@@ -342,8 +352,18 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
                 data['selected_sources'] = selected_sources
             if schedule_frequency is not None:
                 data['schedule_frequency'] = schedule_frequency
+            if schedule_time is not None:
+                data['schedule_time'] = schedule_time
+            if schedule_days_of_week is not None:
+                data['schedule_days_of_week'] = schedule_days_of_week
             if min_relevance_score is not None:
                 data['min_relevance_score'] = min_relevance_score
+            if auto_download_enabled is not None:
+                data['auto_download_enabled'] = auto_download_enabled
+            if auto_download_min_score is not None:
+                data['auto_download_min_score'] = auto_download_min_score
+            if max_articles_per_run is not None:
+                data['max_articles_per_run'] = max_articles_per_run
             if is_active is not None:
                 data['is_active'] = is_active
             if last_run_at is not None:
