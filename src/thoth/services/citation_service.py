@@ -103,7 +103,7 @@ class CitationService(BaseService):
         """Initialize the citation service."""
         self.logger.info('Citation service initialized')
 
-    def _on_config_reload(self) -> None:
+    def _on_config_reload(self, config: object = None) -> None:  # noqa: ARG002
         """
         Handle configuration reload for Citation service.
 

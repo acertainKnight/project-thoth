@@ -429,7 +429,7 @@ class AnalysisSchemaService(BaseService):
             self.logger.warning(f'Failed to list presets: {e}')
             return [{'name': 'default', 'description': 'Default schema'}]
 
-    def _on_config_reload(self) -> None:
+    def _on_config_reload(self, config: object = None) -> None:  # noqa: ARG002
         """Callback for config hot-reload - reload schema."""
         try:
             self.logger.info('Config reloaded, reloading analysis schema...')

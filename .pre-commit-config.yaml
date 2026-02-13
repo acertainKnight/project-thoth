@@ -46,3 +46,10 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+      - id: sync-nightly-tag
+        name: sync nightly tag
+        entry: bash -c 'if git tag -l nightly | grep -q nightly; then git tag -f nightly HEAD && git push origin nightly --force --no-verify 2>/dev/null; fi'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

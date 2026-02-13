@@ -80,9 +80,8 @@ class PDFTracker:
         self.processed_files: dict[str, dict] = {}
         self._load_tracked_files()
 
-        # Create the file if it doesn't exist
-        if not self.track_file.exists():
-            self._save_tracked_files()
+        # Legacy: JSON file is no longer used for tracking (migrated to PostgreSQL).
+        # Docker healthcheck verifies the process is alive instead.
 
         logger.info(f'PDF tracker initialized with tracking file: {self.track_file}')
 
@@ -957,7 +956,7 @@ class PDFMonitor:
         print('MONITOR:  Observer thread started', flush=True)
         logger.info(f'Observer started watching {self.watch_dir}')
 
-    def _on_config_reload(self):
+    def _on_config_reload(self, config: object = None) -> None:  # noqa: ARG002
         """
         Handle configuration reload for PDF monitor.
 
