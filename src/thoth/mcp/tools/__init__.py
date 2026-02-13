@@ -190,6 +190,7 @@ MCP_TOOL_CLASSES = [
     SearchArticlesMCPTool,
     UpdateArticleMetadataMCPTool,
     # Analysis tools
+    AgenticResearchQuestionMCPTool,
     AnswerResearchQuestionMCPTool,
     ExploreCitationNetworkMCPTool,
     CompareArticlesMCPTool,
