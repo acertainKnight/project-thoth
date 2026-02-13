@@ -41,6 +41,11 @@ class MigrationManager:
             (2, 'add_publication_date_range', MIGRATION_002_ADD_PUBLICATION_DATE_RANGE),
             (3, 'add_hybrid_search_support', MIGRATION_003_ADD_HYBRID_SEARCH_SUPPORT),
             (4, 'agent_loaded_skills', MIGRATION_004_AGENT_LOADED_SKILLS),
+            (
+                5,
+                'add_discovered_articles_table',
+                MIGRATION_005_ADD_DISCOVERED_ARTICLES_TABLE,
+            ),
         ]
         return sorted(migrations, key=lambda x: x[0])
 
@@ -734,4 +739,332 @@ CREATE TABLE IF NOT EXISTS agent_loaded_skills (
 
 CREATE INDEX IF NOT EXISTS idx_agent_loaded_skills_agent
 ON agent_loaded_skills(agent_id);
+"""
+
+MIGRATION_005_ADD_DISCOVERED_ARTICLES_TABLE = """
+-- Migration 005: discovered_articles + rebuild article_discoveries + database functions
+--
+-- Fixes two schema gaps:
+--
+-- 1. discovered_articles never existed. The ArticleRepository, WorkflowEngine, and
+--    ExtractionService all reference it. This is the raw staging table for articles
+--    found by browser workflows and API sources *before* they get promoted to
+--    paper_metadata and matched against research questions.
+--
+-- 2. article_discoveries (created in migration 001) had placeholder columns
+--    (title, source, is_processed) that don't match what the ArticleRepository
+--    actually writes to (article_id FK, source_id FK, discovery_query, relevance_score,
+--    rank_in_results, source_metadata, external_id, processed). We drop and recreate
+--    it with the correct schema.
+--
+-- Also installs the database functions that several repositories call:
+--    normalize_title, find_duplicate_article, find_duplicate_paper,
+--    has_article_been_processed, mark_article_as_processed, get_new_articles_since
+
+-- =============================================================================
+-- 1. discovered_articles -- raw article staging table
+-- =============================================================================
+--
+-- Lifecycle position:
+--   source query  ->  [discovered_articles]  ->  dedup  ->  paper_metadata
+--                                                        ->  research_question_matches
+
+CREATE TABLE IF NOT EXISTS discovered_articles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    -- Identifiers (used for dedup)
+    doi TEXT,
+    arxiv_id TEXT,
+    title TEXT NOT NULL,
+    title_normalized TEXT,
+
+    -- Paper metadata
+    authors JSONB,
+    abstract TEXT,
+    publication_date DATE,
+    journal TEXT,
+    url TEXT,
+    pdf_url TEXT,
+    keywords JSONB,
+
+    -- Discovery provenance
+    source TEXT NOT NULL,
+    discovered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+    -- Processing pipeline status
+    processing_status TEXT DEFAULT 'pending',
+    processed_at TIMESTAMP WITH TIME ZONE,
+    paper_id UUID REFERENCES paper_metadata(id) ON DELETE SET NULL,
+
+    -- Flexible metadata buckets
+    source_metadata JSONB,
+    additional_metadata JSONB,
+
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Dedup indexes (partial unique on non-null identifiers)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_discovered_articles_doi
+    ON discovered_articles(doi) WHERE doi IS NOT NULL AND doi <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_discovered_articles_arxiv
+    ON discovered_articles(arxiv_id) WHERE arxiv_id IS NOT NULL AND arxiv_id <> '';
+
+-- Lookup indexes
+CREATE INDEX IF NOT EXISTS idx_discovered_articles_title_trgm
+    ON discovered_articles USING gin (title_normalized gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_discovered_articles_source
+    ON discovered_articles(source);
+CREATE INDEX IF NOT EXISTS idx_discovered_articles_status
+    ON discovered_articles(processing_status);
+CREATE INDEX IF NOT EXISTS idx_discovered_articles_discovered
+    ON discovered_articles(discovered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_discovered_articles_paper
+    ON discovered_articles(paper_id) WHERE paper_id IS NOT NULL;
+
+
+-- =============================================================================
+-- 2. article_discoveries -- many-to-many join: articles <-> discovery sources
+-- =============================================================================
+--
+-- Migration 001 created this table with (title, source, is_processed) but the
+-- ArticleRepository writes (article_id, source_id, discovery_query, ...).
+-- Drop and recreate with the real columns.
+
+DROP TABLE IF EXISTS article_discoveries CASCADE;
+
+CREATE TABLE article_discoveries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    article_id UUID NOT NULL REFERENCES discovered_articles(id) ON DELETE CASCADE,
+    source_id UUID NOT NULL REFERENCES available_sources(id) ON DELETE CASCADE,
+
+    -- Discovery context
+    discovery_query TEXT,
+    relevance_score FLOAT,
+    rank_in_results INTEGER,
+    source_metadata JSONB,
+    external_id TEXT,
+
+    -- Processing tracking
+    processed BOOLEAN DEFAULT FALSE,
+    discovered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+    -- Each source discovers an article at most once
+    UNIQUE(article_id, source_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_article_discoveries_article
+    ON article_discoveries(article_id);
+CREATE INDEX IF NOT EXISTS idx_article_discoveries_source
+    ON article_discoveries(source_id);
+CREATE INDEX IF NOT EXISTS idx_article_discoveries_processed
+    ON article_discoveries(processed);
+
+
+-- =============================================================================
+-- 3. Database functions
+-- =============================================================================
+
+-- normalize_title(text) -> text
+-- Lowercase, strip punctuation, collapse whitespace. Used by dedup logic
+-- in both discovered_articles and paper_metadata.
+CREATE OR REPLACE FUNCTION normalize_title(title_input TEXT)
+RETURNS TEXT AS $$
+BEGIN
+    IF title_input IS NULL OR title_input = '' THEN
+        RETURN '';
+    END IF;
+
+    RETURN TRIM(BOTH FROM
+        REGEXP_REPLACE(
+            REGEXP_REPLACE(
+                LOWER(title_input),
+                '[^\\w\\s]', '', 'g'    -- remove punctuation
+            ),
+            '\\s+', ' ', 'g'           -- collapse whitespace
+        )
+    );
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+
+-- find_duplicate_article(doi, arxiv_id, title) -> uuid
+-- Looks in discovered_articles. Priority: DOI > ArXiv ID > normalized title.
+CREATE OR REPLACE FUNCTION find_duplicate_article(
+    doi_input TEXT,
+    arxiv_id_input TEXT,
+    title_input TEXT
+)
+RETURNS UUID AS $$
+DECLARE
+    found_id UUID;
+BEGIN
+    -- DOI match (case-insensitive)
+    IF doi_input IS NOT NULL AND doi_input <> '' THEN
+        SELECT id INTO found_id
+        FROM discovered_articles
+        WHERE LOWER(doi) = LOWER(doi_input)
+        LIMIT 1;
+        IF found_id IS NOT NULL THEN RETURN found_id; END IF;
+    END IF;
+
+    -- ArXiv ID match (strip version suffix)
+    IF arxiv_id_input IS NOT NULL AND arxiv_id_input <> '' THEN
+        SELECT id INTO found_id
+        FROM discovered_articles
+        WHERE REGEXP_REPLACE(LOWER(arxiv_id), 'v[0-9]+$', '') =
+              REGEXP_REPLACE(LOWER(arxiv_id_input), 'v[0-9]+$', '')
+        LIMIT 1;
+        IF found_id IS NOT NULL THEN RETURN found_id; END IF;
+    END IF;
+
+    -- Normalized title match
+    IF title_input IS NOT NULL AND title_input <> '' THEN
+        SELECT id INTO found_id
+        FROM discovered_articles
+        WHERE title_normalized = normalize_title(title_input)
+        LIMIT 1;
+        IF found_id IS NOT NULL THEN RETURN found_id; END IF;
+    END IF;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- find_duplicate_paper(doi, arxiv_id, title) -> uuid
+-- Same logic against paper_metadata. Falls back to trigram similarity.
+CREATE OR REPLACE FUNCTION find_duplicate_paper(
+    doi_input TEXT,
+    arxiv_id_input TEXT,
+    title_input TEXT
+)
+RETURNS UUID AS $$
+DECLARE
+    found_id UUID;
+    norm TEXT;
+BEGIN
+    IF doi_input IS NOT NULL AND doi_input <> '' THEN
+        SELECT id INTO found_id
+        FROM paper_metadata
+        WHERE LOWER(doi) = LOWER(doi_input)
+        LIMIT 1;
+        IF found_id IS NOT NULL THEN RETURN found_id; END IF;
+    END IF;
+
+    IF arxiv_id_input IS NOT NULL AND arxiv_id_input <> '' THEN
+        SELECT id INTO found_id
+        FROM paper_metadata
+        WHERE REGEXP_REPLACE(LOWER(arxiv_id), 'v[0-9]+$', '') =
+              REGEXP_REPLACE(LOWER(arxiv_id_input), 'v[0-9]+$', '')
+        LIMIT 1;
+        IF found_id IS NOT NULL THEN RETURN found_id; END IF;
+    END IF;
+
+    IF title_input IS NOT NULL AND title_input <> '' THEN
+        norm := normalize_title(title_input);
+
+        -- Exact normalized match
+        SELECT id INTO found_id
+        FROM paper_metadata
+        WHERE title_normalized = norm
+        LIMIT 1;
+        IF found_id IS NOT NULL THEN RETURN found_id; END IF;
+
+        -- Fuzzy fallback via trigram similarity (pg_trgm)
+        SELECT id INTO found_id
+        FROM paper_metadata
+        WHERE title_normalized IS NOT NULL
+          AND title_normalized % norm
+        ORDER BY similarity(title_normalized, norm) DESC
+        LIMIT 1;
+        IF found_id IS NOT NULL THEN RETURN found_id; END IF;
+    END IF;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- has_article_been_processed(article_id, source_id) -> boolean
+CREATE OR REPLACE FUNCTION has_article_been_processed(
+    article_id_input UUID,
+    source_id_input UUID
+)
+RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN EXISTS(
+        SELECT 1
+        FROM article_discoveries
+        WHERE article_id = article_id_input
+          AND source_id = source_id_input
+          AND processed = true
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- mark_article_as_processed(article_id, source_id) -> boolean
+CREATE OR REPLACE FUNCTION mark_article_as_processed(
+    article_id_input UUID,
+    source_id_input UUID
+)
+RETURNS BOOLEAN AS $$
+BEGIN
+    UPDATE article_discoveries
+    SET processed = true,
+        updated_at = NOW()
+    WHERE article_id = article_id_input
+      AND source_id = source_id_input;
+
+    RETURN FOUND;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- get_new_articles_since(source_id, timestamp) -> setof discovered_articles
+CREATE OR REPLACE FUNCTION get_new_articles_since(
+    source_id_input UUID,
+    since_timestamp TIMESTAMP WITH TIME ZONE
+)
+RETURNS SETOF discovered_articles AS $$
+BEGIN
+    RETURN QUERY
+    SELECT da.*
+    FROM discovered_articles da
+    JOIN article_discoveries ad ON ad.article_id = da.id
+    WHERE ad.source_id = source_id_input
+      AND ad.discovered_at >= since_timestamp
+    ORDER BY ad.discovered_at DESC;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- =============================================================================
+-- 4. Views
+-- =============================================================================
+
+-- pending_articles: raw articles waiting to be processed
+CREATE OR REPLACE VIEW pending_articles AS
+SELECT *
+FROM discovered_articles
+WHERE processing_status = 'pending'
+ORDER BY discovered_at DESC;
+
+-- multi_source_articles: articles found by more than one source
+-- Uses the article_discoveries join table for actual counting.
+CREATE OR REPLACE VIEW multi_source_articles AS
+SELECT
+    da.*,
+    agg.source_count
+FROM discovered_articles da
+JOIN (
+    SELECT article_id, COUNT(DISTINCT source_id) AS source_count
+    FROM article_discoveries
+    GROUP BY article_id
+    HAVING COUNT(DISTINCT source_id) >= 2
+) agg ON agg.article_id = da.id
+ORDER BY agg.source_count DESC, da.discovered_at DESC;
 """

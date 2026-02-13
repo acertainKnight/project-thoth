@@ -171,7 +171,7 @@ obsidian-plugin/**/*FIX*.md
 
 # plugin files
 obsidian-plugin/thoth-obsidian/node_modules/
-migrations/
+scripts/migrations/
 
 # Generated OpenAPI specs
 openapi_letta.json

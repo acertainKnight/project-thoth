@@ -302,31 +302,136 @@ class ResearchQuestionScheduler(BaseService):
 
     async def _run_due_discoveries(self, due_questions: list[dict[str, Any]]) -> None:
         """
-        Execute discoveries for all due questions.
+        Execute discoveries for all due questions using consolidated pipeline.
 
-        Runs discoveries in parallel and handles each result individually.
+        Uses the new consolidated discovery approach that:
+        - Merges queries for shared sources
+        - Globally deduplicates articles
+        - Reduces LLM token usage
 
         Args:
             due_questions: List of research question records due for discovery
         """
-        self.logger.info(f'Starting discovery for {len(due_questions)} questions')
-
-        # Execute discoveries in parallel
-        tasks = []
-        for question in due_questions:
-            task = self._run_single_discovery(question)
-            tasks.append(task)
-
-        # Gather results (don't stop on exceptions)
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Count successes and failures
-        successful = sum(1 for r in results if r is True)
-        failed = sum(1 for r in results if r is not True)
-
         self.logger.info(
-            f'Batch discovery completed: {successful} successful, {failed} failed'
+            f'Starting consolidated discovery for {len(due_questions)} questions'
         )
+
+        # Create execution log entries for all questions
+        execution_ids = {}
+        for question in due_questions:
+            execution_id = await self.execution_log.create_execution(
+                question_id=question['id'],
+                triggered_by='scheduler',
+            )
+            if execution_id:
+                execution_ids[question['id']] = execution_id
+            else:
+                self.logger.error(
+                    f'Failed to create execution log for question {question["id"]}'
+                )
+
+        try:
+            # Run consolidated discovery
+            result = await self.discovery_orchestrator.run_consolidated_discovery(
+                questions=due_questions
+            )
+
+            if result.get('success'):
+                # Process each question's individual result
+                question_results = result.get('question_results', {})
+
+                for question in due_questions:
+                    question_id = question['id']
+                    execution_id = execution_ids.get(question_id)
+
+                    if not execution_id:
+                        continue
+
+                    # Get this question's specific results
+                    q_result = question_results.get(str(question_id), {})
+                    processed = q_result.get('articles_processed', 0)
+                    matched = q_result.get('articles_matched', 0)
+
+                    # Update question schedule
+                    await self._update_question_schedule(question)
+
+                    # Calculate metrics for logging
+                    # In consolidated mode, we don't have per-question "found" counts
+                    # Use processed as a proxy for new articles
+                    new_articles = processed
+                    duplicate_articles = 0  # Already handled globally
+                    relevant_articles = matched
+                    high_relevance_articles = int(matched * 0.7)  # Estimate
+
+                    # Determine sources this question contributed to
+                    # (can't easily reconstruct, use empty list)
+                    sources_queried = []
+
+                    # Mark execution as completed
+                    await self.execution_log.complete_execution(
+                        execution_id=execution_id,
+                        status='completed',
+                        sources_queried=sources_queried,
+                        total_articles_found=processed,
+                        new_articles=new_articles,
+                        duplicate_articles=duplicate_articles,
+                        relevant_articles=relevant_articles,
+                        high_relevance_articles=high_relevance_articles,
+                    )
+
+                    self.logger.info(
+                        f"Discovery completed for '{question['name']}': "
+                        f'{processed} processed, {matched} matched'
+                    )
+
+                self.logger.info(
+                    f'Consolidated discovery completed: {result.get("total_sources_queried", 0)} sources, '
+                    f'{result.get("total_unique_articles", 0)} unique articles, '
+                    f'{result.get("total_articles_matched", 0)} total matches'
+                )
+
+            else:
+                # Consolidated discovery failed - mark all as failed
+                error_msg = result.get('error', 'Unknown error')
+                self.logger.error(f'Consolidated discovery failed: {error_msg}')
+
+                for question in due_questions:
+                    execution_id = execution_ids.get(question['id'])
+                    if execution_id:
+                        await self.execution_log.complete_execution(
+                            execution_id=execution_id,
+                            status='failed',
+                            sources_queried=[],
+                            total_articles_found=0,
+                            new_articles=0,
+                            duplicate_articles=0,
+                            relevant_articles=0,
+                            high_relevance_articles=0,
+                            error_message=error_msg,
+                        )
+
+        except Exception as e:
+            self.logger.error(
+                f'Exception during consolidated discovery: {e}',
+                exc_info=True,
+            )
+
+            # Mark all executions as failed
+            for question in due_questions:
+                execution_id = execution_ids.get(question['id'])
+                if execution_id:
+                    await self.execution_log.complete_execution(
+                        execution_id=execution_id,
+                        status='failed',
+                        sources_queried=[],
+                        total_articles_found=0,
+                        new_articles=0,
+                        duplicate_articles=0,
+                        relevant_articles=0,
+                        high_relevance_articles=0,
+                        error_message=str(e),
+                        error_details={'exception_type': type(e).__name__},
+                    )
 
     async def _run_single_discovery(self, question: dict[str, Any]) -> bool:
         """

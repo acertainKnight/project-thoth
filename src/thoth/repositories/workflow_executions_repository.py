@@ -37,6 +37,8 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             Optional[UUID]: ID of created execution or None
         """
         try:
+            import json as _json
+
             # Set default started_at if not provided
             if 'started_at' not in execution_data:
                 execution_data['started_at'] = datetime.now()
@@ -45,16 +47,24 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             if 'status' not in execution_data:
                 execution_data['status'] = 'running'
 
-            columns = list(execution_data.keys())
+            # asyncpg requires JSONB values as JSON strings, not raw dicts
+            serialized = {}
+            for k, v in execution_data.items():
+                if isinstance(v, dict) or isinstance(v, list):
+                    serialized[k] = _json.dumps(v)
+                else:
+                    serialized[k] = v
+
+            columns = list(serialized.keys())
             placeholders = [f'${i + 1}' for i in range(len(columns))]
 
             query = f"""
                 INSERT INTO {self.table_name} ({', '.join(columns)})
                 VALUES ({', '.join(placeholders)})
                 RETURNING id
-            """
+            """  # nosec B608  # table_name is set in __init__, not user input
 
-            result = await self.postgres.fetchval(query, *execution_data.values())
+            result = await self.postgres.fetchval(query, *serialized.values())
 
             # Invalidate cache for parent workflow
             if 'workflow_id' in execution_data:
@@ -83,7 +93,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             return cached
 
         try:
-            query = f'SELECT * FROM {self.table_name} WHERE id = $1'
+            query = f'SELECT * FROM {self.table_name} WHERE id = $1'  # nosec B608
             result = await self.postgres.fetchrow(query, execution_id)
 
             if result:
@@ -199,7 +209,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
                 SET {', '.join(set_clauses)}
                 WHERE id = $1
                 RETURNING workflow_id
-            """
+            """  # nosec B608  # table_name is set in __init__, not user input
 
             workflow_id = await self.postgres.fetchval(query, *values)
 
