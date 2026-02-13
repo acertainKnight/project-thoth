@@ -40,6 +40,7 @@ class MigrationManager:
             (1, 'initial_schema', MIGRATION_001_INITIAL_SCHEMA),
             (2, 'add_publication_date_range', MIGRATION_002_ADD_PUBLICATION_DATE_RANGE),
             (3, 'add_hybrid_search_support', MIGRATION_003_ADD_HYBRID_SEARCH_SUPPORT),
+            (4, 'agent_loaded_skills', MIGRATION_004_AGENT_LOADED_SKILLS),
         ]
         return sorted(migrations, key=lambda x: x[0])
 
@@ -718,4 +719,19 @@ COMMENT ON COLUMN document_chunks.chunk_type IS
 
 COMMENT ON COLUMN document_chunks.token_count IS
 'Approximate token count for context window management and retrieval strategies.';
+"""
+
+MIGRATION_004_AGENT_LOADED_SKILLS = """
+-- Migration 004: Track which skills each agent has loaded
+-- Replaces the volatile in-memory registry so skill state survives MCP restarts.
+
+CREATE TABLE IF NOT EXISTS agent_loaded_skills (
+    agent_id    TEXT NOT NULL,
+    skill_id    TEXT NOT NULL,
+    loaded_at   TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (agent_id, skill_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_loaded_skills_agent
+ON agent_loaded_skills(agent_id);
 """

@@ -2519,6 +2519,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           let streamingRenderer: StreamingMarkdownRenderer | null = null;
           let thinkingRemoved = false; // Track if we've removed the thinking indicator
           let accumulatedContent = ''; // Accumulate raw markdown for copy button
+          let skillToolDetected = false; // Track if load_skill or unload_skill was called
 
           // Read SSE stream
           const reader = response.body.getReader();
@@ -2576,6 +2577,12 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                   // Update status indicator - don't create tool call card during streaming
                   if (!thinkingRemoved) {
                     const toolName = msg.tool_call?.name || 'tool';
+
+                    // Detect skill loading/unloading tools
+                    if (toolName === 'load_skill' || toolName === 'unload_skill') {
+                      skillToolDetected = true;
+                    }
+
                     const statusMsg = getToolStatusMessage(toolName);
                     this.updateStatusIndicator(thinkingMsg, `${statusMsg}...`, '🔧');
                   }
@@ -2661,6 +2668,122 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
             }
 
             this.scrollToBottom(messagesContainer, true);
+          }
+
+          // Auto-follow-up for skill loading/unloading
+          if (skillToolDetected) {
+            // Show/update status indicator for skill activation
+            const activationMsg = thinkingRemoved
+              ? this.addThinkingIndicator(messagesContainer)
+              : thinkingMsg;
+            this.updateStatusIndicator(activationMsg, 'Activating skill tools...', '⚡');
+
+            try {
+              // Send invisible follow-up message
+              const followUpResponse = await fetch(`${endpoint}/v1/conversations/${sessionId}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  input: 'Continue. Your skill tools are now active.',
+                  streaming: true,
+                  stream_tokens: true
+                })
+              });
+
+              if (followUpResponse.ok && followUpResponse.body) {
+                // Process follow-up stream (same logic as original stream)
+                let followUpAssistantEl: HTMLElement | null = null;
+                let followUpContentEl: HTMLElement | null = null;
+                let followUpRenderer: StreamingMarkdownRenderer | null = null;
+                let followUpRemoved = false;
+                let followUpContent = '';
+
+                const followUpReader = followUpResponse.body.getReader();
+                const followUpDecoder = new TextDecoder();
+                let followUpBuffer = '';
+
+                while (true) {
+                  const { done, value } = await followUpReader.read();
+                  if (done) break;
+
+                  followUpBuffer += followUpDecoder.decode(value, { stream: true });
+                  const lines = followUpBuffer.split('\n\n');
+                  followUpBuffer = lines.pop() || '';
+
+                  for (const block of lines) {
+                    const dataLine = block.split('\n').find(l => l.trim().startsWith('data:'));
+                    if (!dataLine) continue;
+
+                    const jsonStr = dataLine.replace(/^data:\s*/, '').trim();
+                    if (!jsonStr || jsonStr === '[DONE]') continue;
+
+                    try {
+                      const msg = JSON.parse(jsonStr);
+                      const messageType = msg.message_type;
+
+                      if (messageType === 'assistant_message') {
+                        const delta = msg.content || msg.text || '';
+
+                        if (delta && msg.id) {
+                          // Remove thinking indicator on first content
+                          if (!followUpRemoved) {
+                            activationMsg.remove();
+                            followUpRemoved = true;
+                          }
+
+                          // Create assistant message element
+                          if (!followUpAssistantEl) {
+                            followUpAssistantEl = messagesContainer.createEl('div', {
+                              cls: 'chat-message assistant'
+                            });
+                            followUpAssistantEl.createEl('div', {
+                              text: 'Assistant',
+                              cls: 'message-role'
+                            });
+                            followUpContentEl = followUpAssistantEl.createEl('div', {
+                              cls: 'message-content'
+                            });
+                            followUpRenderer = new StreamingMarkdownRenderer(followUpContentEl);
+                          }
+
+                          followUpContent += delta;
+
+                          if (followUpRenderer) {
+                            followUpRenderer.write(delta);
+                            this.scrollToBottom(messagesContainer, true);
+                          }
+                        }
+                      }
+                    } catch (e) {
+                      if (e.message && !e.message.includes('Failed to parse')) {
+                        throw e;
+                      }
+                    }
+                  }
+                }
+
+                // Ensure indicator removed
+                if (!followUpRemoved) {
+                  activationMsg.remove();
+                }
+
+                // End streaming and re-render
+                if (followUpRenderer && followUpContentEl && followUpContent) {
+                  followUpRenderer.end();
+                  await this.renderMessageContent(followUpContent, followUpContentEl);
+
+                  if (followUpAssistantEl) {
+                    this.addMessageActions(followUpAssistantEl, followUpContent);
+                  }
+
+                  this.scrollToBottom(messagesContainer, true);
+                }
+              }
+            } catch (followUpError) {
+              console.error('[MultiChatModal] Auto-follow-up error:', followUpError);
+              activationMsg.remove();
+              // Don't throw - just log and continue
+            }
           }
 
           // Update session list to reflect new message

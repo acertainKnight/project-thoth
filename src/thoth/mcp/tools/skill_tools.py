@@ -5,16 +5,19 @@ These tools allow agents to dynamically load and unload skills from bundled
 and vault locations. When a skill is loaded, the tools required by that skill
 are automatically attached to the calling agent via the Letta API.
 
+Skill state is persisted in PostgreSQL (agent_loaded_skills table) so it
+survives MCP server restarts.
+
 SKILL LOADING BEHAVIOR:
-- Only ONE skill can be loaded at a time per agent
+- Maximum 3 skills can be loaded per agent at a time
 - When load_skill is called:
   1. The skill content and tools are loaded
-  2. load_skill tool is REMOVED from the agent
-  3. unload_skill tool is ADDED to the agent
+  2. On first load (0 -> 1): unload_skill tool is attached
+  3. On third load (2 -> 3): load_skill tool is detached
 - When unload_skill is called:
   1. The skill is unloaded and tools are detached
-  2. unload_skill tool is REMOVED from the agent
-  3. load_skill tool is ADDED back to the agent
+  2. On unload from 3 to 2: load_skill tool is re-attached
+  3. On unload from 1 to 0: unload_skill tool is detached
 """
 
 from typing import Any
@@ -25,9 +28,38 @@ from thoth.mcp.base_tools import MCPTool, MCPToolCallResult
 from thoth.services.letta_service import LettaService
 from thoth.services.skill_service import SkillService
 
-# Global registry to track which agents have skills loaded
-# Key: agent_id, Value: list of loaded skill_ids
-_AGENT_LOADED_SKILLS: dict[str, list[str]] = {}
+MAX_LOADED_SKILLS = 3
+
+
+# --- Database helpers for skill tracking ---
+
+
+async def _get_loaded_skills(postgres, agent_id: str) -> list[str]:
+    """Return skill IDs currently loaded for an agent."""
+    rows = await postgres.fetch(
+        'SELECT skill_id FROM agent_loaded_skills WHERE agent_id = $1 ORDER BY loaded_at',
+        agent_id,
+    )
+    return [row['skill_id'] for row in rows]
+
+
+async def _add_loaded_skill(postgres, agent_id: str, skill_id: str) -> None:
+    """Record a newly loaded skill. Ignores duplicates."""
+    await postgres.execute(
+        'INSERT INTO agent_loaded_skills (agent_id, skill_id) VALUES ($1, $2) '
+        'ON CONFLICT (agent_id, skill_id) DO NOTHING',
+        agent_id,
+        skill_id,
+    )
+
+
+async def _remove_loaded_skill(postgres, agent_id: str, skill_id: str) -> None:
+    """Remove a skill from the loaded set."""
+    await postgres.execute(
+        'DELETE FROM agent_loaded_skills WHERE agent_id = $1 AND skill_id = $2',
+        agent_id,
+        skill_id,
+    )
 
 
 class ListSkillsMCPTool(MCPTool):
@@ -201,7 +233,9 @@ class LoadSkillMCPTool(MCPTool):
             'Load one or more skills into your context and attach the required tools. '
             'Skills provide specialized knowledge and workflows for different research tasks. '
             'When loaded, the tools needed for that skill are automatically attached to you. '
-            'IMPORTANT: Pass your agent_id so the required tools can be attached to you.'
+            'IMPORTANT: Maximum 3 skills can be loaded at a time. '
+            'When you reach the limit, use unload_skill to free a slot. '
+            'Pass your agent_id so the required tools can be attached to you.'
         )
 
     @property
@@ -228,6 +262,7 @@ class LoadSkillMCPTool(MCPTool):
         try:
             skill_service = SkillService()
             letta_service = LettaService()
+            postgres = self.service_manager.postgres
 
             skill_ids = arguments.get('skill_ids', [])
             agent_id = arguments.get('agent_id')
@@ -243,7 +278,6 @@ class LoadSkillMCPTool(MCPTool):
                     isError=True,
                 )
 
-            # Check if agent_id is provided (required for tool swapping)
             if not agent_id:
                 return MCPToolCallResult(
                     content=[
@@ -255,34 +289,51 @@ class LoadSkillMCPTool(MCPTool):
                     isError=True,
                 )
 
-            # Check if agent already has a skill loaded (only one at a time)
-            if _AGENT_LOADED_SKILLS.get(agent_id):
-                currently_loaded = ', '.join(_AGENT_LOADED_SKILLS[agent_id])
+            # Check capacity from the database
+            currently_loaded = await _get_loaded_skills(postgres, agent_id)
+            slots_available = MAX_LOADED_SKILLS - len(currently_loaded)
+
+            if slots_available <= 0:
+                loaded_list = ', '.join(currently_loaded)
                 return MCPToolCallResult(
                     content=[
                         {
                             'type': 'text',
-                            'text': f'Error: You already have skill(s) loaded: {currently_loaded}\n\n'
-                            f'Only ONE skill can be loaded at a time. Please use unload_skill first to unload the current skill, then load a new one.',
+                            'text': f'Skill Memory Full: You have {MAX_LOADED_SKILLS} skills loaded.\n\n'
+                            f'Currently loaded: {loaded_list}\n\n'
+                            f'Use unload_skill to free a slot before loading new skills.',
                         }
                     ],
                     isError=True,
                 )
+
+            # Trim request to available capacity
+            if len(skill_ids) > slots_available:
+                skill_ids = skill_ids[:slots_available]
+                logger.info(
+                    f'Trimmed skill load request to {slots_available} available slots'
+                )
+
+            skills_before = len(currently_loaded)
 
             # Load each skill
             results = []
             loaded_count = 0
             failed_count = 0
             all_tools_to_attach = []
+            successfully_loaded_ids = []
 
             for skill_id in skill_ids:
+                if skill_id in currently_loaded:
+                    results.append(f"'{skill_id}' is already loaded, skipping")
+                    continue
+
                 skill_content = skill_service.get_skill_content(skill_id)
 
                 if skill_content is None:
                     results.append(f"Failed to load '{skill_id}': Skill not found")
                     failed_count += 1
                 else:
-                    # Get required tools for this skill
                     required_tools = skill_service.get_skill_tools(skill_id)
                     all_tools_to_attach.extend(required_tools)
 
@@ -292,13 +343,12 @@ class LoadSkillMCPTool(MCPTool):
                             f'   Required tools: {", ".join(required_tools)}'
                         )
                     loaded_count += 1
+                    successfully_loaded_ids.append(skill_id)
 
-                    # Add skill content to results
                     results.append(f'\n--- BEGIN SKILL: {skill_id} ---\n')
                     results.append(skill_content)
                     results.append(f'\n--- END SKILL: {skill_id} ---\n')
 
-            # If all skills failed to load, return early
             if loaded_count == 0:
                 summary = [
                     '\nSkill Loading Summary:',
@@ -310,8 +360,7 @@ class LoadSkillMCPTool(MCPTool):
                     isError=True,
                 )
 
-            # Attach skill tools to agent
-            # Remove duplicates while preserving order
+            # Attach skill tools to agent (deduplicated)
             unique_tools = list(dict.fromkeys(all_tools_to_attach))
 
             logger.info(
@@ -328,7 +377,7 @@ class LoadSkillMCPTool(MCPTool):
                 )
             if tool_attachment_result['already_attached']:
                 results.append(
-                    f'✓ Already had: {", ".join(tool_attachment_result["already_attached"])}'
+                    f'Already had: {", ".join(tool_attachment_result["already_attached"])}'
                 )
             if tool_attachment_result['not_found']:
                 results.append(
@@ -339,48 +388,51 @@ class LoadSkillMCPTool(MCPTool):
                 )
             results.append('--- END TOOL ATTACHMENT ---\n')
 
-            # SWAP TOOLS: Remove load_skill, add unload_skill
-            results.append('\n--- SKILL TOOL SWAP ---')
-            logger.info(
-                f'Swapping skill tools for agent {agent_id[:8]}: removing load_skill, adding unload_skill'
-            )
+            # Persist loaded skills to database
+            for skill_id in successfully_loaded_ids:
+                await _add_loaded_skill(postgres, agent_id, skill_id)
 
-            # Detach load_skill
-            detach_result = letta_service.detach_tools_from_agent(
-                agent_id=agent_id, tool_names=['load_skill']
-            )
-            if detach_result['detached']:
-                results.append('✓ Removed load_skill tool')
-                logger.info(f'Removed load_skill from agent {agent_id[:8]}')
-            else:
-                results.append(
-                    'Failed to remove load_skill (may not have been attached)'
+            skills_after = skills_before + loaded_count
+
+            logger.info(f'Agent {agent_id[:8]} now has {skills_after} skills loaded')
+
+            # Dynamic tool management based on count thresholds
+            if skills_before == 0 and skills_after > 0:
+                logger.info(
+                    f'First skill loaded for agent {agent_id[:8]}, attaching unload_skill'
                 )
-                logger.warning(f'Failed to remove load_skill from agent {agent_id[:8]}')
+                attach_result = letta_service.attach_tools_to_agent(
+                    agent_id=agent_id, tool_names=['unload_skill']
+                )
+                if attach_result['attached'] or attach_result['already_attached']:
+                    logger.info(f'Attached unload_skill to agent {agent_id[:8]}')
 
-            # Attach unload_skill
-            attach_result = letta_service.attach_tools_to_agent(
-                agent_id=agent_id, tool_names=['unload_skill']
-            )
-            if attach_result['attached'] or attach_result['already_attached']:
-                results.append('✓ Added unload_skill tool')
-                logger.info(f'Added unload_skill to agent {agent_id[:8]}')
-            else:
-                results.append('Failed to add unload_skill')
-                logger.warning(f'Failed to add unload_skill to agent {agent_id[:8]}')
+            if skills_after >= MAX_LOADED_SKILLS:
+                logger.info(
+                    f'Agent {agent_id[:8]} at skill capacity ({MAX_LOADED_SKILLS}), detaching load_skill'
+                )
+                detach_result = letta_service.detach_tools_from_agent(
+                    agent_id=agent_id, tool_names=['load_skill']
+                )
+                if detach_result['detached']:
+                    logger.info(f'Detached load_skill from agent {agent_id[:8]}')
 
-            results.append(
-                '\nWhen you are done with this skill, use unload_skill to unload it and restore load_skill capability.'
-            )
-            results.append('--- END SKILL TOOL SWAP ---\n')
-
-            # Track loaded skills for this agent
-            if agent_id not in _AGENT_LOADED_SKILLS:
-                _AGENT_LOADED_SKILLS[agent_id] = []
-            _AGENT_LOADED_SKILLS[agent_id].extend(skill_ids[:loaded_count])
-            logger.info(
-                f'Agent {agent_id[:8]} now has skills loaded: {_AGENT_LOADED_SKILLS[agent_id]}'
-            )
+            # Memory status banner
+            all_loaded = await _get_loaded_skills(postgres, agent_id)
+            memory_banner = f'\n**Skill Memory: {len(all_loaded)}/{MAX_LOADED_SKILLS} slots used**\n'
+            if all_loaded:
+                memory_banner += '\nCurrently loaded:\n'
+                memory_banner += '\n'.join(
+                    f'  {i + 1}. {sid}' for i, sid in enumerate(all_loaded)
+                )
+            if len(all_loaded) >= MAX_LOADED_SKILLS:
+                memory_banner += (
+                    '\n\nSkill memory full. Use unload_skill to free a slot.'
+                )
+            elif all_loaded:
+                memory_banner += (
+                    '\n\nUse unload_skill to free slots when done with a skill.'
+                )
 
             # Summary
             summary = [
@@ -396,10 +448,17 @@ class LoadSkillMCPTool(MCPTool):
 
             if failed_count > 0:
                 summary.append(
-                    '\nNote: Some skills failed to load. Use list_skills to see available skill IDs.'
+                    '\nSome skills failed to load. Use list_skills to see available skill IDs.'
                 )
 
-            all_text = '\n'.join(results + summary)
+            if len(skill_ids) < len(arguments.get('skill_ids', [])):
+                skipped = arguments['skill_ids'][slots_available:]
+                summary.append(f'\nSkipped (no capacity): {", ".join(skipped)}')
+
+            all_text = '\n'.join(results + summary) + '\n' + memory_banner
+
+            # Add terminal tool notice
+            all_text += '\n\n**Note**: Your new tools are now attached and will be available when you resume. This turn ends automatically.'
 
             return MCPToolCallResult(
                 content=[{'type': 'text', 'text': all_text}],
@@ -412,7 +471,7 @@ class LoadSkillMCPTool(MCPTool):
 
 
 class UnloadSkillMCPTool(MCPTool):
-    """Unload skills from agent context and optionally detach tools."""
+    """Unload skills from agent context and detach their tools."""
 
     @property
     def name(self) -> str:
@@ -421,10 +480,11 @@ class UnloadSkillMCPTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            'Unload one or more skills from your context and restore the load_skill capability. '
-            'This detaches skill-specific tools and swaps back the load_skill tool. '
-            'IMPORTANT: You must call this when you are done with a skill to be able to load new skills. '
-            'Pass your agent_id to complete the unload process.'
+            'Unload one or more skills from your working memory to free skill slots. '
+            'Use this when you are done with a skill and need to load a different one. '
+            'Maximum 3 skills can be loaded at a time. '
+            'When you unload from 3 to 2 skills, load_skill becomes available again. '
+            'IMPORTANT: Pass your agent_id and the skill IDs to unload.'
         )
 
     @property
@@ -447,12 +507,11 @@ class UnloadSkillMCPTool(MCPTool):
         }
 
     async def execute(self, arguments: dict[str, Any]) -> MCPToolCallResult:
-        """
-        Unload skills from context, detach tools, and restore load_skill.
-        """
+        """Unload skills from context and detach their tools."""
         try:
             skill_service = SkillService()
             letta_service = LettaService()
+            postgres = self.service_manager.postgres
 
             skill_ids = arguments.get('skill_ids', [])
             agent_id = arguments.get('agent_id')
@@ -468,63 +527,70 @@ class UnloadSkillMCPTool(MCPTool):
                     content=[
                         {
                             'type': 'text',
-                            'text': 'Error: agent_id is required to unload skills and restore load_skill capability.',
+                            'text': 'Error: agent_id is required to unload skills.',
                         }
                     ],
                     isError=True,
                 )
 
-            # Check if this agent has any skills loaded
-            if (
-                agent_id not in _AGENT_LOADED_SKILLS
-                or not _AGENT_LOADED_SKILLS[agent_id]
-            ):
+            currently_loaded = await _get_loaded_skills(postgres, agent_id)
+
+            if not currently_loaded:
                 return MCPToolCallResult(
                     content=[
                         {
                             'type': 'text',
-                            'text': 'No skills are currently loaded for this agent. Nothing to unload.',
+                            'text': 'No skills are currently loaded. Nothing to unload.',
                         }
                     ],
                     isError=False,
                 )
 
-            # Verify the skill_ids match what's loaded
-            currently_loaded = set(_AGENT_LOADED_SKILLS[agent_id])
+            # Verify the requested skills are actually loaded
+            currently_loaded_set = set(currently_loaded)
             requested_unload = set(skill_ids)
 
-            if not requested_unload.issubset(currently_loaded):
-                unrecognized = requested_unload - currently_loaded
+            if not requested_unload.issubset(currently_loaded_set):
+                unrecognized = requested_unload - currently_loaded_set
                 return MCPToolCallResult(
                     content=[
                         {
                             'type': 'text',
                             'text': f'Error: Skills {unrecognized} are not currently loaded.\n'
                             f'Currently loaded: {", ".join(currently_loaded)}\n'
-                            f'Please unload only the skills that are currently loaded.',
+                            f'Unload only skills that are currently loaded.',
                         }
                     ],
                     isError=True,
                 )
 
+            skills_before = len(currently_loaded)
+
+            # Figure out which tools to detach. Keep tools that are
+            # shared with skills that will remain loaded.
+            remaining_skill_ids = currently_loaded_set - requested_unload
+            remaining_tools: set[str] = set()
+            for sid in remaining_skill_ids:
+                remaining_tools.update(skill_service.get_skill_tools(sid))
+
             results = []
             all_tools_to_detach = []
 
-            # Collect tools to detach from all skills being unloaded
             for skill_id in skill_ids:
                 results.append(f"Unloading '{skill_id}'")
                 required_tools = skill_service.get_skill_tools(skill_id)
                 all_tools_to_detach.extend(required_tools)
 
-            # Detach skill tools
-            if all_tools_to_detach:
-                unique_tools = list(dict.fromkeys(all_tools_to_detach))
+            # Only detach tools that aren't needed by remaining skills
+            unique_tools = list(dict.fromkeys(all_tools_to_detach))
+            safe_to_detach = [t for t in unique_tools if t not in remaining_tools]
 
+            if safe_to_detach:
                 logger.info(
-                    f'Detaching {len(unique_tools)} tools from agent {agent_id[:8]}...'
+                    f'Detaching {len(safe_to_detach)} tools from agent {agent_id[:8]}...'
                 )
                 detach_result = letta_service.detach_tools_from_agent(
-                    agent_id=agent_id, tool_names=unique_tools
+                    agent_id=agent_id, tool_names=safe_to_detach
                 )
 
                 results.append('\n--- TOOL DETACHMENT ---')
@@ -532,60 +598,63 @@ class UnloadSkillMCPTool(MCPTool):
                     results.append(f'Detached: {", ".join(detach_result["detached"])}')
                 if detach_result['not_attached']:
                     results.append(
-                        f'✓ Already removed: {", ".join(detach_result["not_attached"])}'
+                        f'Already removed: {", ".join(detach_result["not_attached"])}'
                     )
                 results.append('--- END TOOL DETACHMENT ---\n')
 
-            # SWAP TOOLS: Remove unload_skill, add load_skill
-            results.append('\n--- SKILL TOOL SWAP ---')
-            logger.info(
-                f'Swapping skill tools for agent {agent_id[:8]}: removing unload_skill, adding load_skill'
-            )
-
-            # Detach unload_skill
-            detach_result = letta_service.detach_tools_from_agent(
-                agent_id=agent_id, tool_names=['unload_skill']
-            )
-            if detach_result['detached']:
-                results.append('✓ Removed unload_skill tool')
-                logger.info(f'Removed unload_skill from agent {agent_id[:8]}')
-            else:
+            kept_tools = set(unique_tools) & remaining_tools
+            if kept_tools:
                 results.append(
-                    'Failed to remove unload_skill (may not have been attached)'
-                )
-                logger.warning(
-                    f'Failed to remove unload_skill from agent {agent_id[:8]}'
+                    f'Kept tools shared with other loaded skills: {", ".join(kept_tools)}'
                 )
 
-            # Attach load_skill
-            attach_result = letta_service.attach_tools_to_agent(
-                agent_id=agent_id, tool_names=['load_skill']
-            )
-            if attach_result['attached'] or attach_result['already_attached']:
-                results.append('✓ Added load_skill tool back')
-                logger.info(f'Added load_skill back to agent {agent_id[:8]}')
-            else:
-                results.append('Failed to add load_skill back')
-                logger.warning(f'Failed to add load_skill back to agent {agent_id[:8]}')
-
-            results.append('\nYou can now use load_skill to load a new skill.')
-            results.append('--- END SKILL TOOL SWAP ---\n')
-
-            # Clear loaded skills for this agent
+            # Remove skills from the database
             for skill_id in skill_ids:
-                if skill_id in _AGENT_LOADED_SKILLS[agent_id]:
-                    _AGENT_LOADED_SKILLS[agent_id].remove(skill_id)
+                await _remove_loaded_skill(postgres, agent_id, skill_id)
 
-            if not _AGENT_LOADED_SKILLS[agent_id]:
-                del _AGENT_LOADED_SKILLS[agent_id]
-                logger.info(f'Agent {agent_id[:8]} has no skills loaded')
+            skills_after = skills_before - len(skill_ids)
+
+            # Dynamic tool management based on count thresholds
+            if skills_after < MAX_LOADED_SKILLS:
+                logger.info(f'Ensuring load_skill is attached for agent {agent_id[:8]}')
+                attach_result = letta_service.attach_tools_to_agent(
+                    agent_id=agent_id, tool_names=['load_skill']
+                )
+                if attach_result['attached']:
+                    logger.info(f'Re-attached load_skill to agent {agent_id[:8]}')
+
+            if skills_after == 0:
+                logger.info(
+                    f'All skills unloaded for agent {agent_id[:8]}, detaching unload_skill'
+                )
+                detach_result = letta_service.detach_tools_from_agent(
+                    agent_id=agent_id, tool_names=['unload_skill']
+                )
+                if detach_result['detached']:
+                    logger.info(f'Detached unload_skill from agent {agent_id[:8]}')
             else:
                 logger.info(
-                    f'Agent {agent_id[:8]} still has skills loaded: {_AGENT_LOADED_SKILLS[agent_id]}'
+                    f'Agent {agent_id[:8]} has {skills_after} skill(s) remaining'
                 )
 
+            # Memory status banner
+            all_loaded = await _get_loaded_skills(postgres, agent_id)
+            memory_banner = (
+                f'\n**Skill Memory: {len(all_loaded)}/{MAX_LOADED_SKILLS} slots used**'
+            )
+            if all_loaded:
+                memory_banner += '\n\nCurrently loaded:\n'
+                memory_banner += '\n'.join(
+                    f'  {i + 1}. {sid}' for i, sid in enumerate(all_loaded)
+                )
+                memory_banner += '\n\nYou can load more skills or unload others.'
+            else:
+                memory_banner += '\n\nAll skill slots are free.'
+
+            results.append(f'\nUnloaded {len(skill_ids)} skill(s).')
+            results.append(memory_banner)
             results.append(
-                f'\nSuccessfully unloaded {len(skill_ids)} skill(s) and restored load_skill capability.'
+                '\n**Note**: Tools detached. Your updated tool set will be reflected when you resume. This turn ends automatically.'
             )
 
             return MCPToolCallResult(

@@ -82,6 +82,11 @@ Always check `list_skills` if unsure which skill to use for a task.
                 'load_skill',  # Swapped to unload_skill when a skill is loaded
                 'search_articles',
             ],
+            'tool_rules': [
+                # Terminal tools - end agent execution after skill loading/unloading
+                {'tool_name': 'load_skill', 'type': 'exit_loop'},
+                {'tool_name': 'unload_skill', 'type': 'exit_loop'},
+            ],
             'memory_blocks': [
                 {
                     'label': 'persona',
@@ -167,6 +172,11 @@ You have direct access to analysis tools. Use them to:
                 # Skill loading for additional capabilities
                 'list_skills',
                 'load_skill',
+            ],
+            'tool_rules': [
+                # Terminal tools - end agent execution after skill loading/unloading
+                {'tool_name': 'load_skill', 'type': 'exit_loop'},
+                {'tool_name': 'unload_skill', 'type': 'exit_loop'},
             ],
             'memory_blocks': [
                 {
@@ -359,6 +369,10 @@ Comparison Aspects:
         if agent_config.get('memory_blocks'):
             payload['memory_blocks'] = agent_config['memory_blocks']
 
+        # Add tool rules if defined
+        if agent_config.get('tool_rules'):
+            payload['tool_rules'] = agent_config['tool_rules']
+
         try:
             response = await client.post(
                 f'{self.letta_base_url}/v1/agents/', headers=self.headers, json=payload
@@ -404,12 +418,16 @@ Comparison Aspects:
         updated_system = agent_config['description'].replace('{{AGENT_ID}}', agent_id)
 
         try:
-            # Build PATCH payload: system prompt + optional model override
+            # Build PATCH payload: system prompt + optional model override + tool rules
             patch_payload: dict = {'system': updated_system}
             if self.agent_model:
                 patch_payload['llm_config'] = {'model': self.agent_model}
 
-            # Update agent system prompt and model (tools field not supported via PATCH)
+            # Add tool rules if defined in config
+            if agent_config.get('tool_rules'):
+                patch_payload['tool_rules'] = agent_config['tool_rules']
+
+            # Update agent system prompt, model, and tool rules
             await client.patch(
                 f'{self.letta_base_url}/v1/agents/{agent_id}',
                 headers=self.headers,
