@@ -22,9 +22,10 @@ Manage the Retrieval-Augmented Generation (RAG) system that powers knowledge bas
 The RAG system consists of:
 1. **Hybrid Search** - Semantic (pgvector) + BM25 (tsvector) with Reciprocal Rank Fusion
 2. **Reranking** - LLM-based (zero-cost) or Cohere API for precision re-scoring
-3. **Vector Store** - Stores embeddings for semantic search (PostgreSQL + pgvector)
-4. **Indexes** - Organized collections of embeddings
-5. **Settings** - Configuration for chunking, embedding models, search, and reranking
+3. **Agentic Retrieval** - Self-correcting multi-step pipeline with query expansion, document grading, and hallucination checking (optional, runs on top of hybrid search)
+4. **Vector Store** - Stores embeddings for semantic search (PostgreSQL + pgvector)
+5. **Indexes** - Organized collections of embeddings
+6. **Settings** - Configuration for chunking, embedding models, search, reranking, and agentic retrieval
 
 ## Core Capabilities
 
@@ -190,6 +191,17 @@ search_custom_index(
     "qa": {
       "model": "anthropic/claude-3-5-sonnet",
       "temperature": 0.1
+    },
+    "agenticRetrieval": {
+      "enabled": false,
+      "maxRetries": 2,
+      "documentGradingEnabled": true,
+      "queryExpansionEnabled": true,
+      "queryDecompositionEnabled": true,
+      "hallucinationCheckEnabled": true,
+      "strictHallucinationCheck": false,
+      "webSearchFallbackEnabled": false,
+      "confidenceThreshold": 0.5
     }
   }
 }
@@ -205,6 +217,19 @@ search_custom_index(
 | `rerankerProvider` | `auto` (Cohere if key, else LLM), `cohere`, or `llm` | Auto recommended |
 | `contextualEnrichmentEnabled` | Add LLM context per chunk at index time | Expensive, disabled by default |
 | `adaptiveRoutingEnabled` | Classify queries for routing | Experimental, disabled by default |
+
+### Agentic Retrieval Settings
+
+| Setting | Purpose | Notes |
+|---------|---------|-------|
+| `agenticRetrieval.enabled` | Master switch for agentic retrieval | Standard RAG still works when off |
+| `agenticRetrieval.maxRetries` | Max retry loops on low confidence | 2 is a good default, higher costs more |
+| `agenticRetrieval.documentGradingEnabled` | LLM grades each doc for relevance | Filters out noise from retrieval |
+| `agenticRetrieval.queryExpansionEnabled` | Generate semantic query variations | Helps find papers with different terminology |
+| `agenticRetrieval.queryDecompositionEnabled` | Break complex queries into sub-questions | Useful for multi-hop questions |
+| `agenticRetrieval.hallucinationCheckEnabled` | Verify answer is grounded in sources | Catches unsupported claims |
+| `agenticRetrieval.strictHallucinationCheck` | Strict = every claim directly stated in sources | Lenient mode allows reasonable inferences |
+| `agenticRetrieval.confidenceThreshold` | Minimum relevance score for document grading | Lower = more documents pass, higher = stricter |
 
 ### Changing Embedding Models
 
@@ -317,6 +342,66 @@ reindex_collection(force=true)
 
    This will give faster, more focused results for RL queries."
 ```
+
+## Agentic Retrieval Management
+
+### Enabling/Disabling
+
+```
+# Enable agentic retrieval
+update_settings(
+  section="rag",
+  updates={
+    "agenticRetrieval": {"enabled": true}
+  }
+)
+
+# Disable just hallucination checking (if it's too aggressive)
+update_settings(
+  section="rag",
+  updates={
+    "agenticRetrieval": {"hallucinationCheckEnabled": false}
+  }
+)
+```
+
+### Tuning Agentic Retrieval
+
+If agentic retrieval answers are slow but accurate, reduce retries:
+```
+update_settings(
+  section="rag",
+  updates={"agenticRetrieval": {"maxRetries": 1}}
+)
+```
+
+If too many irrelevant documents are getting through grading, raise the threshold:
+```
+update_settings(
+  section="rag",
+  updates={"agenticRetrieval": {"confidenceThreshold": 0.7}}
+)
+```
+
+If query expansion is pulling in off-topic papers, disable it:
+```
+update_settings(
+  section="rag",
+  updates={"agenticRetrieval": {"queryExpansionEnabled": false}}
+)
+```
+
+### When to Recommend Agentic Retrieval
+
+Suggest enabling it when users:
+- Ask complex synthesis questions and get shallow answers
+- Complain about missing relevant papers in results
+- Need multi-hop reasoning across their collection
+
+Suggest disabling or tweaking it when users:
+- Report answers are too slow for their workflow
+- Notice the hallucination checker is flagging reasonable inferences
+- Have a small collection where standard RAG already works well
 
 ## Best Practices
 

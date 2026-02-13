@@ -17,7 +17,7 @@ This guide covers the configuration, registration, and troubleshooting of the Th
 
 ## Overview
 
-The Thoth Research Tools MCP server provides 68+ research tools to Letta agents via the Model Context Protocol. These tools include:
+The Thoth Research Tools MCP server provides 60 research tools to Letta agents via the Model Context Protocol. These tools include:
 
 - Article search across multiple sources (arXiv, bioRxiv, CrossRef, OpenAlex, PubMed)
 - Citation extraction and analysis
@@ -54,7 +54,7 @@ The Thoth Research Tools MCP server provides 68+ research tools to Letta agents 
 ┌─────────────────────┐
 │ Thoth MCP Server    │
 │ (Port 8000/8082)    │
-│ 68+ Research Tools  │
+│ 60 Research Tools   │
 └─────────────────────┘
 ```
 
@@ -188,7 +188,7 @@ Results:
 2. **Create/Edit Agent**: Click on an agent or create a new one
 3. **MCP Servers Section**: Look for MCP servers configuration
 4. **Select Server**: Add "thoth-research-tools" to the agent
-5. **Save**: The 68 tools will now be available
+5. **Save**: The 60 tools will now be available
 
 ### Using the Letta API
 
@@ -255,7 +255,7 @@ curl -s http://localhost:8082/mcp -X POST \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | jq '.result.tools | length'
 
-# Expected output: 68+ tools
+# Expected output: 60 tools
 ```
 
 ### Check Agent Attachment
@@ -280,7 +280,7 @@ Once attached via the ADE, verify tools are available:
 curl -s "http://localhost:8283/v1/agents/{agent_id}/tools" \
   -H "Authorization: Bearer letta_dev_password" | jq '[.[] | select(.source_type == "mcp")] | length'
 
-# Expected output: 68 (number of MCP tools)
+# Expected output: 60 (number of MCP tools)
 ```
 
 ---
@@ -412,7 +412,7 @@ curl -s http://localhost:8082/mcp -X POST \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
   | jq '.result.tools | length'
 
-# Should return: 68+
+# Should return: 60
 ```
 
 ---

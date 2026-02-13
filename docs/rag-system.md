@@ -1,10 +1,10 @@
 # RAG System Architecture
 
-## Executive Summary
+## Overview
 
-Thoth's RAG (Retrieval-Augmented Generation) system provides **hybrid search** over research papers, combining semantic vector search (pgvector) with lexical full-text search (PostgreSQL tsvector/BM25) and an optional reranking layer for maximum retrieval quality. The system uses PostgreSQL as a unified backend, LangChain for orchestration, and OpenRouter for embeddings and LLM inference.
+Thoth's RAG system provides **hybrid search** over research papers, combining semantic vector search (pgvector) with lexical full-text search (PostgreSQL tsvector/BM25) and an optional reranking layer. PostgreSQL is the unified backend, LangChain handles orchestration, and OpenRouter provides embeddings and LLM inference.
 
-**Key Design Characteristics:**
+**Key characteristics:**
 - **Hybrid retrieval**: Semantic (vector) + lexical (BM25) search fused with Reciprocal Rank Fusion (RRF)
 - **Reranking pipeline**: LLM-based (zero-cost) or Cohere API for precision re-scoring
 - **Document-aware chunking**: Two-stage markdown header + recursive splitting
@@ -639,23 +639,168 @@ LLM reranking adds 100-300ms per query. For latency-sensitive applications, disa
 
 ---
 
+## Agentic Retrieval
+
+Standard RAG works fine for straightforward questions—"what dataset did GPT-4 use?" hits the hybrid search, pulls relevant chunks, generates an answer. But research questions are rarely that simple. Multi-hop reasoning ("how does X compare to Y across these three dimensions?"), questions with ambiguous phrasing, or queries that need information scattered across many papers—these fall apart with a single retrieval pass.
+
+Agentic retrieval adds a self-correcting loop on top of the existing hybrid search pipeline. Instead of one shot at retrieval, it classifies the query, decides on a strategy, retrieves documents, checks whether the results are actually good, and retries with a rewritten query if they aren't. It also verifies that the final answer is grounded in the retrieved sources before returning it.
+
+The whole thing is orchestrated with LangGraph (a state machine framework), but exposed to Letta agents as a single MCP tool call. From the agent's perspective, it's just calling `agentic_research_question` instead of `answer_research_question`. The orchestrator handles the complexity internally.
+
+### When to Use It
+
+Agentic retrieval is **not** a replacement for standard RAG. It's slower and uses more LLM calls. Use it when the question actually needs it:
+
+| Question Type | Standard RAG | Agentic RAG |
+|--------------|-------------|-------------|
+| "What dataset did paper X use?" | Good | Overkill |
+| "Summarize the key findings of paper Y" | Good | Overkill |
+| "Compare attention mechanisms across transformer variants" | Mediocre | Good |
+| "What are the trade-offs between RLHF and DPO approaches?" | Mediocre | Good |
+| "How has the field's understanding of scaling laws evolved?" | Poor | Good |
+
+The sweet spot is multi-hop questions, synthesis across many papers, and anything where the first retrieval pass is unlikely to surface everything relevant.
+
+### How It Works
+
+The pipeline runs as a LangGraph `StateGraph` with conditional routing between steps:
+
+```
+User Query
+    ↓
+[Classify Query]
+    ├── DIRECT_ANSWER → skip retrieval, answer from LLM knowledge
+    ├── STANDARD_RAG → single retrieval pass (existing pipeline)
+    └── MULTI_HOP_RAG → full agentic loop ↓
+            ↓
+[Expand Query] → generate 2-3 semantic variations
+    ↓
+[Decompose Query] → break into sub-questions (if complex)
+    ↓
+[Extract Filters] → pull out metadata (year, author, topic)
+    ↓
+[Retrieve Documents] → hybrid search (same pgvector + BM25 pipeline)
+    ↓
+[Grade Documents] → LLM scores each doc for relevance
+    ├── Enough relevant docs → continue
+    └── Too few relevant docs → [Rewrite Query] → loop back to Retrieve
+            (max 2 retries)
+    ↓
+[Rerank Documents] → LLM or Cohere reranking (same as standard)
+    ↓
+[Generate Answer] → synthesize from graded, reranked sources
+    ↓
+[Check Hallucination] → verify answer is grounded in sources
+    ├── Grounded → return answer
+    └── Not grounded → loop back to Retrieve with rewritten query
+            (max 2 retries)
+    ↓
+Final Answer + Sources + Confidence Score
+```
+
+Each step pushes a progress update to the Obsidian UI via WebSocket, so the user can see what's happening ("Expanding search terms...", "Evaluating relevance...", "Verifying accuracy...") rather than staring at a spinner.
+
+### Components
+
+**Query Expansion** (`query_router.py`): Takes the original query and generates 2-3 semantically different phrasings. If you ask "how does RLHF work?", it might also search for "reinforcement learning from human feedback training process" and "preference-based reward model optimization". This catches papers that use different terminology for the same concept.
+
+**Query Decomposition**: For multi-hop questions, the LLM breaks the query into independent sub-questions. "Compare X and Y" becomes "What are the key properties of X?" and "What are the key properties of Y?" Each sub-query gets its own retrieval pass.
+
+**Document Grading** (`document_grader.py`): After retrieval, each document gets a binary relevance grade from the LLM. This catches the noise that inevitably comes through hybrid search—documents that match keywords but aren't actually relevant. Grading runs in parallel batches for speed.
+
+**Query Rewriting**: If too few documents pass grading, the orchestrator rewrites the query using context from what *was* retrieved (even the irrelevant stuff tells you something about what the index contains). This is the self-correcting part—the system adapts its search strategy based on what it finds.
+
+**Hallucination Checking** (`hallucination_checker.py`): After generating an answer, a separate LLM call verifies that every claim in the answer is supported by the retrieved documents. If the answer contains unsupported claims, the system can retry with stricter retrieval. There's a "strict" mode (every claim must be directly stated in sources) and a "lenient" mode (reasonable inferences are okay).
+
+### Configuration
+
+All features are individually toggleable in `settings.json`:
+
+```json
+{
+  "rag": {
+    "agenticRetrieval": {
+      "enabled": false,
+      "maxRetries": 2,
+      "documentGradingEnabled": true,
+      "queryExpansionEnabled": true,
+      "queryDecompositionEnabled": true,
+      "hallucinationCheckEnabled": true,
+      "strictHallucinationCheck": false,
+      "webSearchFallbackEnabled": false,
+      "confidenceThreshold": 0.5
+    }
+  }
+}
+```
+
+| Setting | Default | What It Does |
+|---------|---------|-------------|
+| `enabled` | `false` | Master switch. Standard RAG still works when off |
+| `maxRetries` | `2` | How many times to retry on low confidence or hallucination |
+| `documentGradingEnabled` | `true` | LLM grades each retrieved doc for relevance |
+| `queryExpansionEnabled` | `true` | Generate semantic query variations |
+| `queryDecompositionEnabled` | `true` | Break complex queries into sub-questions |
+| `hallucinationCheckEnabled` | `true` | Verify answer is grounded in sources |
+| `strictHallucinationCheck` | `false` | Strict = every claim must be directly stated |
+| `webSearchFallbackEnabled` | `false` | Fall back to web search if local retrieval fails |
+| `confidenceThreshold` | `0.5` | Minimum confidence for document relevance grading |
+
+### Performance Impact
+
+Agentic retrieval is slower than standard RAG because it makes multiple LLM calls per query. Rough numbers:
+
+| Pipeline | Latency | LLM Calls | Best For |
+|---------|---------|-----------|----------|
+| Standard RAG | <5s | 1 (answer generation) | Simple questions |
+| Agentic (no retries) | 8-15s | 4-6 (classify + expand + grade + generate + check) | Complex questions |
+| Agentic (with retries) | 15-30s | 8-12 (above + rewrite + re-retrieve + re-grade) | Hard questions where first pass misses |
+
+The extra latency is worth it when the alternative is a mediocre answer that misses half the relevant sources.
+
+### MCP Tools
+
+Two tools are available for agents:
+
+| Tool | Purpose | When Agents Use It |
+|------|---------|-------------------|
+| `answer_research_question` | Standard hybrid RAG | Quick factual lookups, simple questions |
+| `agentic_research_question` | Full agentic pipeline | Complex multi-hop questions, synthesis tasks |
+
+If agentic retrieval is disabled in settings, `agentic_research_question` automatically falls back to `answer_research_question`.
+
+### Evaluation Metrics
+
+The evaluation system (`rag/evaluation/metrics.py`) includes agentic-specific metrics for measuring how well the adaptive behaviors are working:
+
+- **Retry rate**: How often queries need hallucination retries
+- **Query rewrite rate**: How often the initial retrieval pass fails and needs rewriting
+- **Query expansion rate**: Percentage of queries that get expanded
+- **Hallucination detection rate**: How often generated answers get flagged
+- **Average retrieval rounds**: Mean number of retrieve-grade cycles per query
+- **Average relevant graded ratio**: What fraction of retrieved docs actually pass grading
+
+These help you understand whether the extra cost of agentic retrieval is paying off for your collection and question types.
+
+---
+
 ## Future Enhancements
 
 ### 1. Contextual Enrichment (Schema Ready)
 
 LLM-generated context prepended to each chunk during indexing. Improves retrieval by adding document-level context to individual chunks. Currently in schema but disabled by default due to indexing cost.
 
-### 2. Adaptive Query Routing (Schema Ready)
-
-Dynamic query classification to route different query types (factual, analytical, exploratory) through optimized retrieval strategies. Currently in schema but disabled by default.
-
-### 3. Multi-Index Support
+### 2. Multi-Index Support
 
 Separate indexes per research domain/project for faster, more focused searches.
 
-### 4. Cross-Encoder Reranking
+### 3. Cross-Encoder Reranking
 
 Local cross-encoder models (e.g., ms-marco-MiniLM) for offline reranking without API calls.
+
+### 4. Web Search Fallback
+
+When the local knowledge base doesn't have relevant papers, fall back to web search APIs to find information. Plumbing exists in the agentic retrieval config (`webSearchFallbackEnabled`), but the web search integration isn't wired up yet.
 
 ---
 
@@ -665,16 +810,19 @@ Thoth's RAG system provides production-ready **hybrid search** over research pap
 
 - **Hybrid retrieval**: Semantic + BM25 with Reciprocal Rank Fusion
 - **Reranking pipeline**: LLM-based (zero-cost) or Cohere API
+- **Agentic retrieval**: Self-correcting pipeline with query expansion, document grading, and hallucination checking
 - **Document-aware chunking**: Two-stage markdown header + recursive splitting
 - **PostgreSQL + pgvector + tsvector**: Unified vector and full-text storage
 - **Automatic migrations**: Schema upgrades applied on startup, no manual steps
 - **Flexible embeddings**: Local or cloud, easy switching
-- **MCP integration**: 12 tools for agent access
+- **MCP integration**: Tools for both standard and agentic retrieval
 - **Hot-reloadable**: Config changes without restart
+- **Real-time progress**: WebSocket updates during agentic retrieval steps
 
 **Performance targets achieved:**
 - Hybrid search: <200ms (search), <500ms (with reranking)
-- Full QA pipeline: <5s
+- Standard QA pipeline: <5s
+- Agentic QA pipeline: 8-30s (depending on complexity and retries)
 - Scalability: 100K+ chunks
 
 **Last Updated**: February 2026

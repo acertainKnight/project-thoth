@@ -24,7 +24,7 @@ The auto-generated configuration in `/letta/.letta/mcp-servers.json`:
   "servers": {
     "thoth": {
       "name": "Thoth Research MCP Server",
-      "description": "Access all 68 Thoth research tools",
+      "description": "Access all 60 Thoth research tools",
       "enabled": true,
       "transport": "sse",
       "url": "http://thoth-mcp:8000/mcp",
@@ -84,7 +84,7 @@ curl -X POST http://localhost:8082/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 
-# Should return 68 tools
+# Should return 60 tools
 ```
 
 ### 4. Check Letta Logs

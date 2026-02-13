@@ -68,7 +68,7 @@ The trade-off is JSON-RPC overhead and a more complex server setup. For a resear
 
 ### Why skill-based tool loading?
 
-Loading all 64 tools into an agent's context at once tanks LLM performance. The model gets confused with too many options, and you burn tokens on tool descriptions for capabilities the agent doesn't need right now.
+Loading all 60 tools into an agent's context at once tanks LLM performance. The model gets confused with too many options, and you burn tokens on tool descriptions for capabilities the agent doesn't need right now.
 
 Skills group related tools together. When you ask the agent to find papers, it loads the paper-discovery skill and gets the 5-6 tools it needs. When you're done, it unloads them. Token usage drops significantly, and the LLM makes better tool choices with a smaller set.
 
