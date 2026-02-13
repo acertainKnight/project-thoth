@@ -2721,7 +2721,45 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                       const msg = JSON.parse(jsonStr);
                       const messageType = msg.message_type;
 
-                      if (messageType === 'assistant_message') {
+                      // Handle error_message
+                      if (messageType === 'error_message') {
+                        const errorDetail = msg.detail || msg.message || 'Unknown agent error';
+                        console.error('[MultiChatModal] Follow-up agent error:', errorDetail);
+                        throw new Error(errorDetail);
+                      }
+
+                      // Handle stop_reason
+                      if (messageType === 'stop_reason' && msg.stop_reason === 'llm_api_error') {
+                        console.error('[MultiChatModal] Follow-up LLM API error');
+                      }
+
+                      // Handle reasoning_message
+                      if (messageType === 'reasoning_message') {
+                        if (!followUpRemoved) {
+                          const phrase = getRandomThinkingPhrase('thinking');
+                          this.updateStatusIndicator(activationMsg, `${phrase}...`, '💭');
+                        }
+                      }
+
+                      // Handle tool_call_message
+                      else if (messageType === 'tool_call_message') {
+                        if (!followUpRemoved) {
+                          const toolName = msg.tool_call?.name || 'tool';
+                          const statusMsg = getToolStatusMessage(toolName);
+                          this.updateStatusIndicator(activationMsg, `${statusMsg}...`, '🔧');
+                        }
+                      }
+
+                      // Handle tool_return_message
+                      else if (messageType === 'tool_return_message') {
+                        if (!followUpRemoved) {
+                          const phrase = getRandomThinkingPhrase('processing');
+                          this.updateStatusIndicator(activationMsg, `${phrase} results...`, '⚙️');
+                        }
+                      }
+
+                      // Handle assistant_message
+                      else if (messageType === 'assistant_message') {
                         const delta = msg.content || msg.text || '';
 
                         if (delta && msg.id) {
