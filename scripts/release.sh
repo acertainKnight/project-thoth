@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# release.sh - Generate changelog and release commands from conventional commits
+# release.sh - Generate changelog, bump version, and optionally run release commands
 #
 # Parses commits since the last git tag, groups them by type (feat, fix, refactor, etc.),
-# bumps the version in pyproject.toml, and prints the git commands to finalize the release.
+# bumps the version in pyproject.toml, then walks through each release step interactively.
 #
 # Usage:
 #   ./scripts/release.sh [new_version]
@@ -24,7 +24,7 @@ CURRENT_VERSION=$(grep -oP "^version\s*=\s*['\"]?\K[^'\"]*" pyproject.toml)
 LAST_TAG=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo "")
 
 if [ -z "$LAST_TAG" ]; then
-    echo -e "${RED}No tags found. Cannot generate changelog without a starting tag.${NC}"
+    echo -e "${RED}No semver tags found. Cannot generate changelog without a starting tag.${NC}"
     echo "Create an initial tag first: git tag v0.0.0"
     exit 1
 fi
@@ -124,7 +124,6 @@ echo "-------------------------------------------"
 NEW_VERSION="${1:-}"
 
 if [ -z "$NEW_VERSION" ]; then
-    # Suggest a version bump based on commit types
     if [ ${#FEATURES[@]} -gt 0 ]; then
         SUGGESTION="minor bump (has features)"
     elif [ ${#FIXES[@]} -gt 0 ]; then
@@ -153,19 +152,20 @@ if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
     exit 1
 fi
 
-# --- Build commit message body from changelog ---
+# --- Build changelog body for commit/tag messages ---
 
-COMMIT_BODY=""
+CHANGELOG_BODY=""
 
 build_body_section() {
     local title="$1"
     shift
     local items=("$@")
     if [ ${#items[@]} -gt 0 ]; then
-        COMMIT_BODY+=$'\n'"${title}:"
+        CHANGELOG_BODY+="${title}:"$'\n'
         for item in "${items[@]}"; do
-            COMMIT_BODY+=$'\n'"- ${item}"
+            CHANGELOG_BODY+="- ${item}"$'\n'
         done
+        CHANGELOG_BODY+=$'\n'
     fi
 }
 
@@ -178,40 +178,114 @@ build_body_section "Styles" "${STYLES[@]+"${STYLES[@]}"}"
 build_body_section "Chores" "${CHORES[@]+"${CHORES[@]}"}"
 build_body_section "Other" "${OTHER[@]+"${OTHER[@]}"}"
 
-# --- Update pyproject.toml ---
+# --- Step runner ---
+# Presents each step, asks the user, and runs it if approved.
+
+AUTORUN=""  # tracks "all" mode
+
+ask_and_run() {
+    local step_num="$1"
+    local description="$2"
+    shift 2
+    # remaining args are the command(s) to run
+
+    echo ""
+    echo -e "${BOLD}Step ${step_num}: ${description}${NC}"
+    echo -e "${CYAN}  > $*${NC}"
+
+    if [ "$AUTORUN" = "all" ]; then
+        echo -e "  ${YELLOW}(auto-running)${NC}"
+    else
+        read -r -p "  Run this step? [y]es / [n]o / [a]ll remaining / [q]uit: " choice
+        case "$choice" in
+            a|A|all)
+                AUTORUN="all"
+                ;;
+            n|N|no)
+                echo -e "  ${YELLOW}Skipped.${NC}"
+                return 0
+                ;;
+            q|Q|quit)
+                echo -e "  ${RED}Aborted. Remaining steps skipped.${NC}"
+                exit 0
+                ;;
+            *)
+                # default: yes
+                ;;
+        esac
+    fi
+
+    if eval "$@"; then
+        echo -e "  ${GREEN}Done.${NC}"
+    else
+        echo -e "  ${RED}Command failed (exit $?). Stopping.${NC}"
+        exit 1
+    fi
+}
+
+# --- Update pyproject.toml (always runs, not optional) ---
 
 echo ""
 echo -e "${CYAN}Updating pyproject.toml version: ${CURRENT_VERSION} -> ${NEW_VERSION}${NC}"
 sed -i "s/^version\s*=\s*['\"].*['\"]$/version = '${NEW_VERSION}'/" pyproject.toml
-
 echo -e "${GREEN}Done.${NC}"
 
-# --- Print the release commands ---
+# --- Present release steps ---
 
 echo ""
-echo -e "${BOLD}Run these commands to finalize the release:${NC}"
+echo -e "${BOLD}Release steps for ${TAG_NAME}${NC}"
 echo "============================================="
 echo ""
-echo -e "${CYAN}# 1. Stage and commit the version bump${NC}"
-echo "git add pyproject.toml"
-echo "git commit -m \"chore: bump version to ${NEW_VERSION}"
-echo "${COMMIT_BODY}"
-echo "\""
+echo "  1. Stage and commit the version bump"
+echo "  2. Tag the release"
+echo "  3. Push commit to origin"
+echo "  4. Push tag to origin"
+echo "  5. Create GitHub release (requires gh CLI)"
 echo ""
-echo -e "${CYAN}# 2. Tag the release${NC}"
-echo "git tag -a ${TAG_NAME} -m \"Release ${TAG_NAME}"
-echo "${COMMIT_BODY}"
-echo "\""
-echo ""
-echo -e "${CYAN}# 3. Push commit and tag${NC}"
-echo "git push origin main"
-echo "git push origin ${TAG_NAME}"
-echo ""
-echo -e "${CYAN}# 4. (Optional) Create a GitHub release${NC}"
-echo "gh release create ${TAG_NAME} --title \"${TAG_NAME}\" --notes-file - <<'EOF'"
-echo "## ${TAG_NAME}"
-echo "${COMMIT_BODY}"
-echo "EOF"
+echo -e "${YELLOW}For each step you can choose: [y]es, [n]o, [a]ll remaining, [q]uit${NC}"
+
+# Step 1: commit
+COMMIT_MSG="chore: bump version to ${NEW_VERSION}
+
+${CHANGELOG_BODY}"
+
+ask_and_run 1 "Stage and commit version bump" \
+    "git add pyproject.toml && git commit -m \"\$(cat <<'COMMITMSG'
+${COMMIT_MSG}
+COMMITMSG
+)\""
+
+# Step 2: tag
+TAG_MSG="Release ${TAG_NAME}
+
+${CHANGELOG_BODY}"
+
+ask_and_run 2 "Tag the release as ${TAG_NAME}" \
+    "git tag -a '${TAG_NAME}' -m \"\$(cat <<'TAGMSG'
+${TAG_MSG}
+TAGMSG
+)\""
+
+# Step 3: push commit
+BRANCH=$(git branch --show-current)
+ask_and_run 3 "Push commit to origin/${BRANCH}" \
+    "git push origin '${BRANCH}'"
+
+# Step 4: push tag
+ask_and_run 4 "Push tag ${TAG_NAME} to origin" \
+    "git push origin '${TAG_NAME}'"
+
+# Step 5: GitHub release
+GH_NOTES="## ${TAG_NAME}
+
+${CHANGELOG_BODY}"
+
+ask_and_run 5 "Create GitHub release for ${TAG_NAME}" \
+    "gh release create '${TAG_NAME}' --title '${TAG_NAME}' --notes \"\$(cat <<'GHNOTES'
+${GH_NOTES}
+GHNOTES
+)\""
+
 echo ""
 echo "============================================="
-echo -e "${GREEN}Version bumped in pyproject.toml. Commands above are ready to copy-paste.${NC}"
+echo -e "${GREEN}Release ${TAG_NAME} complete.${NC}"
