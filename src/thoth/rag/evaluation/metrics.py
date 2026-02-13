@@ -1,7 +1,8 @@
 """Metrics calculation for RAG pipeline evaluation."""
 
-from dataclasses import dataclass  # noqa: I001
-from typing import List, Dict, Optional, Tuple  # noqa: F401, UP035
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple  # noqa: F401, UP035
+
 import numpy as np
 from loguru import logger  # noqa: F401
 
@@ -56,6 +57,27 @@ class PerformanceMetrics:
 
 
 @dataclass
+class AgenticRetrievalMetrics:
+    """
+    Metrics specific to agentic retrieval pipeline.
+
+    Tracks adaptive behaviors: query expansion, decomposition, rewriting,
+    document grading, hallucination detection, and retry attempts.
+    """
+
+    retry_rate: float  # Percentage of queries that required retry (0.0-1.0)
+    query_rewrite_rate: float  # Percentage of queries that were rewritten (0.0-1.0)
+    query_expansion_rate: float  # Percentage of queries expanded (0.0-1.0)
+    query_decomposition_rate: float  # Percentage decomposed (0.0-1.0)
+    hallucination_detection_rate: float  # Initially flagged hallucinations (0.0-1.0)
+    avg_retrieval_rounds: float  # Average retrieval attempts per query
+    avg_graded_docs: float  # Average documents graded per query
+    avg_relevant_graded_ratio: float  # Ratio of graded docs marked relevant (0.0-1.0)
+    avg_rerank_delta: float  # Average change in doc ranking after rerank
+    total_queries: int
+
+
+@dataclass
 class RAGMetrics:
     """
     Comprehensive RAG evaluation metrics.
@@ -64,6 +86,7 @@ class RAGMetrics:
     retrieval: RetrievalMetrics
     answer_quality: AnswerQualityMetrics
     performance: PerformanceMetrics
+    agentic: AgenticRetrievalMetrics | None  # Agentic-specific metrics (if enabled)
     by_difficulty: dict[str, 'RAGMetrics']  # Metrics stratified by difficulty
     by_question_type: Dict[str, 'RAGMetrics']  # Metrics by question type  # noqa: UP006
 
@@ -330,11 +353,109 @@ def calculate_exact_match(
     return pred == ref
 
 
+def calculate_agentic_metrics(
+    agentic_metadata_list: list[dict[str, Any]],
+) -> AgenticRetrievalMetrics:
+    """
+    Calculate metrics specific to agentic retrieval pipeline.
+
+    Args:
+        agentic_metadata_list: List of metadata dicts from agentic retrieval runs.
+            Each dict should contain keys like:
+            - 'retry_count': Number of retries (int)
+            - 'query_rewritten': Whether query was rewritten (bool)
+            - 'query_expanded': Whether query was expanded (bool)
+            - 'query_decomposed': Whether query was decomposed (bool)
+            - 'hallucination_detected': Whether hallucination was flagged (bool)
+            - 'retrieval_rounds': Number of retrieval attempts (int)
+            - 'graded_doc_count': Number of docs graded (int)
+            - 'relevant_graded_count': Number of docs marked relevant (int)
+            - 'rerank_delta': Change in doc ranking (float, optional)
+
+    Returns:
+        AgenticRetrievalMetrics with aggregated statistics
+
+    Example:
+        >>> metadata = [
+        ...     {
+        ...         'retry_count': 1,
+        ...         'query_rewritten': True,
+        ...         'hallucination_detected': True,
+        ...         'retrieval_rounds': 2,
+        ...         'graded_doc_count': 10,
+        ...         'relevant_graded_count': 7,
+        ...     }
+        ... ]
+        >>> metrics = calculate_agentic_metrics(metadata)
+        >>> print(f'Retry rate: {metrics.retry_rate:.2%}')
+    """
+    if not agentic_metadata_list:
+        return AgenticRetrievalMetrics(
+            retry_rate=0.0,
+            query_rewrite_rate=0.0,
+            query_expansion_rate=0.0,
+            query_decomposition_rate=0.0,
+            hallucination_detection_rate=0.0,
+            avg_retrieval_rounds=0.0,
+            avg_graded_docs=0.0,
+            avg_relevant_graded_ratio=0.0,
+            avg_rerank_delta=0.0,
+            total_queries=0,
+        )
+
+    n = len(agentic_metadata_list)
+
+    # Calculate rates
+    retry_count = sum(1 for m in agentic_metadata_list if m.get('retry_count', 0) > 0)
+    rewrite_count = sum(1 for m in agentic_metadata_list if m.get('query_rewritten'))
+    expansion_count = sum(1 for m in agentic_metadata_list if m.get('query_expanded'))
+    decomposition_count = sum(
+        1 for m in agentic_metadata_list if m.get('query_decomposed')
+    )
+    hallucination_count = sum(
+        1 for m in agentic_metadata_list if m.get('hallucination_detected')
+    )
+
+    # Calculate averages
+    total_retrieval_rounds = sum(
+        m.get('retrieval_rounds', 1) for m in agentic_metadata_list
+    )
+    total_graded_docs = sum(m.get('graded_doc_count', 0) for m in agentic_metadata_list)
+    total_relevant_graded = sum(
+        m.get('relevant_graded_count', 0) for m in agentic_metadata_list
+    )
+
+    # Calculate rerank delta
+    rerank_deltas = [
+        m.get('rerank_delta', 0.0) for m in agentic_metadata_list if 'rerank_delta' in m
+    ]
+    avg_rerank_delta = np.mean(rerank_deltas) if rerank_deltas else 0.0
+
+    # Calculate relevant ratio (avoiding division by zero)
+    avg_relevant_ratio = (
+        total_relevant_graded / total_graded_docs if total_graded_docs > 0 else 0.0
+    )
+
+    return AgenticRetrievalMetrics(
+        retry_rate=retry_count / n,
+        query_rewrite_rate=rewrite_count / n,
+        query_expansion_rate=expansion_count / n,
+        query_decomposition_rate=decomposition_count / n,
+        hallucination_detection_rate=hallucination_count / n,
+        avg_retrieval_rounds=total_retrieval_rounds / n,
+        avg_graded_docs=total_graded_docs / n,
+        avg_relevant_graded_ratio=avg_relevant_ratio,
+        avg_rerank_delta=float(avg_rerank_delta),
+        total_queries=n,
+    )
+
+
 def calculate_rag_metrics(
     ground_truth_list,
     retrieval_results_list,  # noqa: ARG001
     answer_results_list,  # noqa: ARG001
     latency_data: List[Dict[str, float]] | None = None,  # noqa: ARG001, UP006
+    agentic_metadata_list: list[dict[str, Any]] | None = None,
 ) -> RAGMetrics:
     """
     Calculate comprehensive RAG metrics from evaluation results.
@@ -344,9 +465,32 @@ def calculate_rag_metrics(
         retrieval_results_list: List of retrieval results (doc IDs and scores)
         answer_results_list: List of generated answers
         latency_data: Optional latency measurements per query
+        agentic_metadata_list: Optional metadata from agentic retrieval runs
 
     Returns:
         RAGMetrics object with all metrics
+
+    Example:
+        >>> # Standard RAG evaluation
+        >>> metrics = calculate_rag_metrics(
+        ...     ground_truth_list=ground_truth_data,
+        ...     retrieval_results_list=retrieval_results,
+        ...     answer_results_list=generated_answers,
+        ... )
+        >>>
+        >>> # With agentic metadata
+        >>> metrics_with_agentic = calculate_rag_metrics(
+        ...     ground_truth_list=ground_truth_data,
+        ...     retrieval_results_list=retrieval_results,
+        ...     answer_results_list=generated_answers,
+        ...     agentic_metadata_list=[
+        ...         {
+        ...             'retry_count': 1,
+        ...             'query_rewritten': True,
+        ...             'retrieval_rounds': 2,
+        ...         }
+        ...     ],
+        ... )
     """
     # TODO: Implement full metrics calculation
     # This is a placeholder structure
@@ -381,10 +525,16 @@ def calculate_rag_metrics(
         total_queries=len(ground_truth_list),
     )
 
+    # Calculate agentic metrics if metadata provided
+    agentic_metrics = None
+    if agentic_metadata_list:
+        agentic_metrics = calculate_agentic_metrics(agentic_metadata_list)
+
     return RAGMetrics(
         retrieval=retrieval_metrics,
         answer_quality=answer_quality_metrics,
         performance=performance_metrics,
+        agentic=agentic_metrics,
         by_difficulty={},
         by_question_type={},
     )
