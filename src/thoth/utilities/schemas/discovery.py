@@ -9,7 +9,7 @@ class DiscoverySource(BaseModel):
     """Schema for a discovery source configuration."""
 
     name: str = Field(description='Unique name for this discovery source')
-    source_type: Literal['api', 'scraper', 'emulator'] = Field(
+    source_type: Literal['api', 'scraper', 'emulator', 'browser_workflow'] = Field(
         description='Type of source'
     )
     description: str = Field(description='Human-readable description of the source')

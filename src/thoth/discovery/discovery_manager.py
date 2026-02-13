@@ -200,9 +200,41 @@ class DiscoveryManager:
                     return None
 
                 # Map database record to DiscoverySource model
+                db_source_type = source_record.get('source_type', 'api')
+
+                # capabilities and config can come back as JSON strings from asyncpg
+                raw_caps = source_record.get('capabilities') or {}
+                if isinstance(raw_caps, str):
+                    raw_caps = json.loads(raw_caps)
+                raw_config = source_record.get('config') or {}
+                if isinstance(raw_config, str):
+                    raw_config = json.loads(raw_config)
+
+                # Browser workflow sources need workflow_id from capabilities
+                if db_source_type == 'browser_workflow':
+                    return DiscoverySource(
+                        name=source_record['name'],
+                        source_type='browser_workflow',
+                        description=source_record.get('description', ''),
+                        is_active=source_record['is_active'],
+                        schedule_config={
+                            'interval_minutes': 1440,
+                            'max_articles_per_run': 50,
+                            'enabled': True,
+                        },
+                        api_config={
+                            'source': 'browser_workflow',
+                            'workflow_id': str(raw_caps.get('workflow_id', '')),
+                            **raw_config,
+                        },
+                        scraper_config=None,
+                        browser_recording=None,
+                        query_filters=[],
+                    )
+
                 return DiscoverySource(
                     name=source_record['name'],
-                    source_type='api',  # All current sources are API-based
+                    source_type='api',
                     description=source_record.get('description', ''),
                     is_active=source_record['is_active'],
                     schedule_config={
@@ -211,10 +243,8 @@ class DiscoveryManager:
                         'enabled': True,
                     },
                     api_config={
-                        'source': source_record[
-                            'name'
-                        ],  # CRITICAL: Add source identifier
-                        **source_record.get('config', {}),
+                        'source': source_record['name'],
+                        **raw_config,
                     },
                     scraper_config=None,
                     browser_recording=None,
@@ -644,6 +674,13 @@ class DiscoveryManager:
             if source.source_type == 'api' and source.api_config:
                 articles = self._discover_from_api(
                     source.api_config, max_articles, question
+                )
+            elif source.source_type == 'browser_workflow' and source.api_config:
+                # Browser workflows require async execution via the orchestrator.
+                # If we got here through a sync path, log and skip gracefully.
+                logger.warning(
+                    f'Browser workflow source {source.name} requires async execution. '
+                    'Use DiscoveryOrchestrator for browser workflow discovery.'
                 )
             elif source.source_type == 'scraper' and source.scraper_config:
                 articles = self._discover_from_scraper(

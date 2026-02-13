@@ -363,6 +363,13 @@ class DiscoveryOrchestrator(BaseService):
                 )
                 return []
 
+            # Browser workflows need async execution -- handle them here
+            # instead of delegating to the sync _discover_from_source path.
+            if source.source_type == 'browser_workflow':
+                return await self._execute_browser_workflow(
+                    source, max_articles, question
+                )
+
             # Prepare question data with date filters
             # Convert publication_date_range to date_filter_start/end if present
             question_data = dict(question)
@@ -393,6 +400,93 @@ class DiscoveryOrchestrator(BaseService):
                 f"Failed to query source '{source_name}': {e}", exc_info=True
             )
             raise
+
+    async def _execute_browser_workflow(
+        self,
+        source,
+        max_articles: int,
+        question: dict[str, Any],
+    ) -> list[ScrapedArticleMetadata]:
+        """
+        Execute a browser workflow source asynchronously.
+
+        Browser workflows can't go through the sync _discover_from_source path
+        because they need async Playwright execution and a postgres_service reference
+        that the DiscoveryManager doesn't carry.
+
+        Args:
+            source: DiscoverySource with source_type='browser_workflow'
+            max_articles: Maximum articles to retrieve
+            question: Research question data
+
+        Returns:
+            List of discovered articles, empty on failure
+        """
+        from thoth.discovery.plugins import get_browser_workflow_plugin_class
+
+        plugin_cls = get_browser_workflow_plugin_class()
+        if plugin_cls is None:
+            self.logger.warning(
+                f'Browser workflow plugin not available (playwright not installed). '
+                f'Skipping source {source.name}.'
+            )
+            return []
+
+        if not self.postgres_service:
+            self.logger.error(
+                f'Cannot execute browser workflow {source.name}: '
+                'postgres_service not configured on orchestrator'
+            )
+            return []
+
+        plugin = None
+        try:
+            plugin = plugin_cls(
+                postgres_service=self.postgres_service,
+                config=source.api_config,
+            )
+            await plugin.initialize()
+
+            # Build a ResearchQuery from the question data
+            from thoth.utilities.schemas import ResearchQuery
+
+            research_query = ResearchQuery(
+                name=source.api_config.get('name', source.name),
+                description=source.api_config.get(
+                    'description', f'Browser workflow: {source.name}'
+                ),
+                research_question=question.get('question', ''),
+                keywords=question.get('keywords', []),
+                required_topics=question.get('topics', []),
+                preferred_topics=question.get('preferred_topics', []),
+                excluded_topics=question.get('excluded_topics', []),
+            )
+
+            query_id = question.get('id')
+            articles = await plugin.discover_async(
+                query=research_query,
+                max_results=max_articles,
+                query_id=query_id,
+            )
+
+            self.logger.info(
+                f'Browser workflow {source.name} returned {len(articles)} articles'
+            )
+            return articles
+
+        except Exception as e:
+            self.logger.error(
+                f'Browser workflow execution failed for {source.name}: {e}',
+                exc_info=True,
+            )
+            return []
+
+        finally:
+            if plugin is not None:
+                try:
+                    await plugin.shutdown()
+                except Exception:
+                    pass
 
     # ==================== Article Processing & Matching ====================
 
