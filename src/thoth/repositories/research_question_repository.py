@@ -460,3 +460,14 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
             bool: True if successful
         """
         return await self.update_question(question_id, is_active=True)
+
+    async def delete(self, record_id: int | UUID) -> bool:
+        """Delete a research question and invalidate name/user cache entries."""
+        record = await self.get_by_id(record_id)
+        result = await super().delete(record_id)
+        if result and record:
+            if record.get('name'):
+                self._invalidate_cache(record['name'])
+            if record.get('user_id'):
+                self._invalidate_cache(str(record['user_id']))
+        return result
