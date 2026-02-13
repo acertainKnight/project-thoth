@@ -100,6 +100,7 @@ from .research_question_tools import (
     UpdateResearchQuestionMCPTool,
 )
 from .research_qa_tools import (
+    AgenticResearchQuestionMCPTool,
     AnswerResearchQuestionMCPTool,
     CompareArticlesMCPTool,
     ExploreCitationNetworkMCPTool,
@@ -309,6 +310,7 @@ __all__ = [  # noqa: RUF022
     'MCPToolCallResult',
     'MCPToolRegistry',
     # Active tools (alphabetical)
+    'AgenticResearchQuestionMCPTool',
     'AnalyzeSourceUrlMCPTool',
     'AnswerResearchQuestionMCPTool',
     'ReadFullArticleMCPTool',
