@@ -518,6 +518,12 @@
   resize: vertical;
 }
 
+.chat-input.agent-working {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--background-secondary);
+}
+
 .thoth-chat-input:focus {
   outline: none;
   border-color: var(--color-accent);

@@ -2467,9 +2467,11 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       // Clear attachments after adding to UI
       this.clearAttachments();
 
-      // Disable send button
+      // Disable send button and input while agent is working
       sendBtn.disabled = true;
       sendBtn.textContent = 'Sending...';
+      inputEl.disabled = true;
+      inputEl.classList.add('agent-working');
 
       // Add thinking indicator
       const thinkingMsg = this.addThinkingIndicator(messagesContainer);
@@ -2520,6 +2522,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           let thinkingRemoved = false; // Track if we've removed the thinking indicator
           let accumulatedContent = ''; // Accumulate raw markdown for copy button
           let skillToolDetected = false; // Track if load_skill or unload_skill was called
+          let activeStatusEl: HTMLElement = thinkingMsg; // Current thinking/status indicator element
 
           // Read SSE stream
           const reader = response.body.getReader();
@@ -2565,36 +2568,42 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
                 // Handle reasoning_message
                 if (messageType === 'reasoning_message') {
-                  // Update status indicator - don't create reasoning block during streaming
-                  if (!thinkingRemoved) {
-                    const phrase = getRandomThinkingPhrase('thinking');
-                    this.updateStatusIndicator(thinkingMsg, `${phrase}...`, '💭');
+                  // Re-show status indicator if it was removed by a prior assistant message
+                  if (thinkingRemoved) {
+                    activeStatusEl = this.addThinkingIndicator(messagesContainer);
+                    thinkingRemoved = false;
                   }
+                  const phrase = getRandomThinkingPhrase('thinking');
+                  this.updateStatusIndicator(activeStatusEl, `${phrase}...`, '💭');
                 }
 
                 // Handle tool_call_message
                 else if (messageType === 'tool_call_message') {
-                  // Update status indicator - don't create tool call card during streaming
-                  if (!thinkingRemoved) {
-                    const toolName = msg.tool_call?.name || 'tool';
+                  const toolName = msg.tool_call?.name || 'tool';
 
-                    // Detect skill loading/unloading tools
-                    if (toolName === 'load_skill' || toolName === 'unload_skill') {
-                      skillToolDetected = true;
-                    }
-
-                    const statusMsg = getToolStatusMessage(toolName);
-                    this.updateStatusIndicator(thinkingMsg, `${statusMsg}...`, '🔧');
+                  // Detect skill loading/unloading tools
+                  if (toolName === 'load_skill' || toolName === 'unload_skill') {
+                    skillToolDetected = true;
                   }
+
+                  // Re-show status indicator if it was removed by a prior assistant message
+                  if (thinkingRemoved) {
+                    activeStatusEl = this.addThinkingIndicator(messagesContainer);
+                    thinkingRemoved = false;
+                  }
+                  const statusMsg = getToolStatusMessage(toolName);
+                  this.updateStatusIndicator(activeStatusEl, `${statusMsg}...`, '🔧');
                 }
 
                 // Handle tool_return_message
                 else if (messageType === 'tool_return_message') {
-                  // Update status indicator - don't create tool return card during streaming
-                  if (!thinkingRemoved) {
-                    const phrase = getRandomThinkingPhrase('processing');
-                    this.updateStatusIndicator(thinkingMsg, `${phrase} results...`, '⚙️');
+                  // Re-show status indicator if it was removed by a prior assistant message
+                  if (thinkingRemoved) {
+                    activeStatusEl = this.addThinkingIndicator(messagesContainer);
+                    thinkingRemoved = false;
                   }
+                  const phrase = getRandomThinkingPhrase('processing');
+                  this.updateStatusIndicator(activeStatusEl, `${phrase} results...`, '⚙️');
                 }
 
                 // Handle assistant_message (with streaming)
@@ -2604,8 +2613,24 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                   if (delta && messageId) {
                     // Remove thinking indicator on first content token
                     if (!thinkingRemoved) {
-                      thinkingMsg.remove();
+                      activeStatusEl.remove();
                       thinkingRemoved = true;
+                    }
+
+                    // Finalize previous assistant message if this is a new one
+                    if (assistantMessageEl && messageId !== assistantMessageEl.dataset.messageId) {
+                      if (streamingRenderer) {
+                        streamingRenderer.end();
+                        if (contentEl && accumulatedContent) {
+                          await this.renderMessageContent(accumulatedContent, contentEl);
+                        }
+                        this.addMessageActions(assistantMessageEl, accumulatedContent);
+                      }
+                      // Reset for the new message
+                      assistantMessageEl = null;
+                      contentEl = null;
+                      streamingRenderer = null;
+                      accumulatedContent = '';
                     }
 
                     // Create assistant message element on first chunk
@@ -2613,6 +2638,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                       assistantMessageEl = messagesContainer.createEl('div', {
                         cls: 'chat-message assistant'
                       });
+                      assistantMessageEl.dataset.messageId = messageId;
                       assistantMessageEl.createEl('div', {
                         text: 'Assistant',
                         cls: 'message-role'
@@ -2647,7 +2673,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
           // Ensure thinking indicator is removed if stream completed without content
           if (!thinkingRemoved) {
-            thinkingMsg.remove();
+            activeStatusEl.remove();
             thinkingRemoved = true;
           }
 
@@ -2675,8 +2701,8 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
             // Show/update status indicator for skill activation
             const activationMsg = thinkingRemoved
               ? this.addThinkingIndicator(messagesContainer)
-              : thinkingMsg;
-            this.updateStatusIndicator(activationMsg, 'Activating skill tools...', '⚡');
+              : activeStatusEl;
+            this.updateStatusIndicator(activationMsg, 'Activating skill tools...', '⚡', true);
 
             try {
               // Send invisible follow-up message
@@ -2842,6 +2868,8 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       } finally {
         sendBtn.disabled = false;
         sendBtn.textContent = 'Send';
+        inputEl.disabled = false;
+        inputEl.classList.remove('agent-working');
         inputEl.focus();
       }
     };
@@ -4211,12 +4239,13 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     indicator.createEl('span', { cls: 'dot' });
     indicator.createEl('span', { cls: 'dot' });
     const statusText = content.createEl('span', {
-      text: 'Starting...',
+      text: 'Thinking...',
       cls: 'status-text'
     });
 
     // Store reference to status text for updates
     (msg as any).__statusText = statusText;
+    (msg as any).__lastStatusUpdate = 0;
 
     // Scroll to bottom
     container.scrollTop = container.scrollHeight;
@@ -4224,16 +4253,24 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     return msg;
   }
 
-  // Helper: Update status indicator
-  updateStatusIndicator(indicator: HTMLElement, status: string, icon?: string) {
+  // Helper: Update status indicator (throttled to prevent rapid flickering)
+  updateStatusIndicator(indicator: HTMLElement, status: string, icon?: string, force = false) {
     const statusText = (indicator as any).__statusText;
-    if (statusText) {
-      let displayText = status;
-      if (icon) {
-        displayText = `${icon} ${status}`;
-      }
-      statusText.textContent = displayText;
+    if (!statusText) return;
+
+    const now = Date.now();
+    const lastUpdate = (indicator as any).__lastStatusUpdate || 0;
+    const MIN_INTERVAL_MS = 1000;
+
+    // Skip update if we changed the phrase too recently (unless forced)
+    if (!force && now - lastUpdate < MIN_INTERVAL_MS) return;
+
+    let displayText = status;
+    if (icon) {
+      displayText = `${icon} ${status}`;
     }
+    statusText.textContent = displayText;
+    (indicator as any).__lastStatusUpdate = now;
   }
 
   // Helper: Show toast notification
