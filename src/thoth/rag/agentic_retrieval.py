@@ -26,6 +26,21 @@ from thoth.rag.query_router import QueryRouter, QueryType
 from thoth.rag.reranker import BaseReranker
 from thoth.rag.vector_store import VectorStoreManager
 
+# Step progress mapping for UI display
+STEP_PROGRESS = {
+    'classify': 10.0,
+    'expand': 20.0,
+    'decompose': 20.0,
+    'extract_filters': 25.0,
+    'retrieve': 40.0,
+    'grade': 55.0,
+    'rewrite': 60.0,
+    'rerank': 70.0,
+    'generate': 85.0,
+    'hallucination_check': 95.0,
+    'complete': 100.0,
+}
+
 
 class AgenticRAGState(TypedDict):
     """State for the agentic RAG graph."""
@@ -187,7 +202,7 @@ class AgenticRAGOrchestrator:
         query: str,
         k: int = 5,
         max_retries: int = 2,
-        progress_callback: Callable[[str, str], Any] | None = None,
+        progress_callback: Callable[[str, str, float], Any] | None = None,
     ) -> dict[str, Any]:
         """
         Answer question using agentic retrieval (async).
@@ -196,7 +211,8 @@ class AgenticRAGOrchestrator:
             query: User question
             k: Number of documents to retrieve
             max_retries: Maximum number of retrieval retries
-            progress_callback: Optional callback for progress updates (step, message)
+            progress_callback: Optional callback for progress updates
+                (step, message, progress)
 
         Returns:
             Dict with answer, sources, confidence, and metadata
@@ -204,7 +220,7 @@ class AgenticRAGOrchestrator:
         Example:
             >>> result = await orchestrator.answer_question_async(
             ...     'Compare transformer and RNN architectures',
-            ...     progress_callback=lambda step, msg: print(f'{step}: {msg}'),
+            ...     progress_callback=lambda s, m, p: print(f'{s}: {m} ({p}%)'),
             ... )
             >>> print(result['answer'])
         """
@@ -261,7 +277,9 @@ class AgenticRAGOrchestrator:
     def _classify_query(self, state: AgenticRAGState) -> dict[str, Any]:
         """Classify query type and route to appropriate strategy."""
         if callback := state.get('progress_callback'):
-            callback('classify', 'Analyzing your question...')
+            callback(
+                'classify', 'Analyzing your question...', STEP_PROGRESS['classify']
+            )
 
         query_type = self.query_router.classify_query(state['query'])
         logger.debug(f'Query classified as: {query_type.value}')
@@ -271,7 +289,7 @@ class AgenticRAGOrchestrator:
     def _expand_query(self, state: AgenticRAGState) -> dict[str, Any]:
         """Expand query with semantic variations."""
         if callback := state.get('progress_callback'):
-            callback('expand', 'Expanding search terms...')
+            callback('expand', 'Expanding search terms...', STEP_PROGRESS['expand'])
 
         # Check if expansion is enabled
         if not state['config'].get('query_expansion_enabled', True):
@@ -304,7 +322,11 @@ class AgenticRAGOrchestrator:
     def _decompose_query(self, state: AgenticRAGState) -> dict[str, Any]:
         """Decompose complex query into sub-queries."""
         if callback := state.get('progress_callback'):
-            callback('decompose', 'Breaking down into sub-questions...')
+            callback(
+                'decompose',
+                'Breaking down into sub-questions...',
+                STEP_PROGRESS['decompose'],
+            )
 
         # Run decomposition
         try:
@@ -359,7 +381,11 @@ class AgenticRAGOrchestrator:
     def _retrieve_documents(self, state: AgenticRAGState) -> dict[str, Any]:
         """Retrieve documents using expanded queries."""
         if callback := state.get('progress_callback'):
-            callback('retrieve', 'Searching your knowledge base...')
+            callback(
+                'retrieve',
+                'Searching your knowledge base...',
+                STEP_PROGRESS['retrieve'],
+            )
 
         queries = state['expanded_queries'] or [state['query']]
         filters = state['extracted_filters']
@@ -394,7 +420,7 @@ class AgenticRAGOrchestrator:
     def _grade_documents(self, state: AgenticRAGState) -> dict[str, Any]:
         """Grade documents for relevance."""
         if callback := state.get('progress_callback'):
-            callback('grade', 'Evaluating relevance...')
+            callback('grade', 'Evaluating relevance...', STEP_PROGRESS['grade'])
 
         # Check if grading is enabled
         if not state['config'].get('document_grading_enabled', True):
@@ -434,7 +460,7 @@ class AgenticRAGOrchestrator:
     def _rewrite_query(self, state: AgenticRAGState) -> dict[str, Any]:
         """Rewrite query based on retrieved documents."""
         if callback := state.get('progress_callback'):
-            callback('rewrite', 'Refining search strategy...')
+            callback('rewrite', 'Refining search strategy...', STEP_PROGRESS['rewrite'])
 
         # Get snippet of retrieved documents for context
         doc_summaries = []
@@ -476,7 +502,7 @@ Rewritten Query:"""
     def _rerank_documents(self, state: AgenticRAGState) -> dict[str, Any]:
         """Rerank documents for final result set."""
         if callback := state.get('progress_callback'):
-            callback('rerank', 'Ranking best results...')
+            callback('rerank', 'Ranking best results...', STEP_PROGRESS['rerank'])
 
         docs = state['graded_documents']
         k = state['retrieval_k']
@@ -495,7 +521,7 @@ Rewritten Query:"""
     def _generate_answer(self, state: AgenticRAGState) -> dict[str, Any]:
         """Generate answer from retrieved documents."""
         if callback := state.get('progress_callback'):
-            callback('generate', 'Composing answer...')
+            callback('generate', 'Composing answer...', STEP_PROGRESS['generate'])
 
         # For direct answer (no retrieval), generate without context
         if state['query_type'] == QueryType.DIRECT_ANSWER.value:
@@ -561,7 +587,11 @@ Answer:"""
     def _check_hallucination(self, state: AgenticRAGState) -> dict[str, Any]:
         """Check if answer is grounded in retrieved documents."""
         if callback := state.get('progress_callback'):
-            callback('hallucination_check', 'Verifying accuracy...')
+            callback(
+                'hallucination_check',
+                'Verifying accuracy...',
+                STEP_PROGRESS['hallucination_check'],
+            )
 
         # Check if hallucination checking is enabled
         if not state['config'].get('hallucination_check_enabled', True):

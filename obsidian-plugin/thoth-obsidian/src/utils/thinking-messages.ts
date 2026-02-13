@@ -191,6 +191,8 @@ const TOOL_NAME_MAP: Record<string, string> = {
   'get_references': 'references',
   'find_related_papers': 'related papers',
   'discover_articles': 'new articles',
+  'agentic_research_question': 'your research library (agentic)',
+  'answer_research_question': 'your research library',
 
   // Analysis
   'analyze_document': 'a document',
@@ -239,4 +241,52 @@ export function getToolStatusMessage(toolName: string): string {
   const verb = getRandomThinkingPhrase('tool');
   const target = getHumanReadableToolName(toolName);
   return `${verb} ${target}`;
+}
+
+/**
+ * Agentic retrieval step icons for UI display.
+ * Maps retrieval step names to emoji icons.
+ */
+export const RETRIEVAL_STEP_ICONS: Record<string, string> = {
+  classify: '🔍',
+  expand: '🔎',
+  decompose: '✂️',
+  extract_filters: '🏷️',
+  retrieve: '📚',
+  grade: '📊',
+  rewrite: '✏️',
+  rerank: '🏆',
+  generate: '💡',
+  hallucination_check: '✅',
+};
+
+/**
+ * Human-readable messages for agentic retrieval steps.
+ * These are displayed to users during the retrieval process.
+ */
+export const RETRIEVAL_STEP_MESSAGES: Record<string, string> = {
+  classify: 'Analyzing your question',
+  expand: 'Expanding search terms',
+  decompose: 'Breaking down into sub-questions',
+  extract_filters: 'Extracting search filters',
+  retrieve: 'Searching your knowledge base',
+  grade: 'Evaluating relevance',
+  rewrite: 'Refining search strategy',
+  rerank: 'Ranking best results',
+  generate: 'Composing answer',
+  hallucination_check: 'Verifying accuracy',
+};
+
+/**
+ * Get icon for a retrieval step.
+ */
+export function getRetrievalStepIcon(step: string): string {
+  return RETRIEVAL_STEP_ICONS[step] || '⚙️';
+}
+
+/**
+ * Get message for a retrieval step.
+ */
+export function getRetrievalStepMessage(step: string): string {
+  return RETRIEVAL_STEP_MESSAGES[step] || step.replace(/_/g, ' ');
 }

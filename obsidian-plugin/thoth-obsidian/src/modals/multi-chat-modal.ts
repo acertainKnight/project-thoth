@@ -69,9 +69,110 @@ export class MultiChatModal extends Modal {
   private pendingAttachments: ImageAttachment[] = [];
   private attachmentPreviewContainer: HTMLElement | null = null;
 
+  // Progress WebSocket for agentic retrieval steps
+  private progressWs: WebSocket | null = null;
+  private agenticProgressListener: ((event: MessageEvent) => void) | null = null;
+
   constructor(app: App, plugin: ThothPlugin) {
     super(app);
     this.plugin = plugin;
+  }
+
+  /**
+   * Connect to the progress WebSocket endpoint for agentic retrieval updates.
+   */
+  private connectProgressWebSocket(): void {
+    if (this.progressWs && this.progressWs.readyState === WebSocket.OPEN) {
+      return; // Already connected
+    }
+
+    const wsUrl = this.plugin.getEndpointUrl().replace(/^http/, 'ws') + '/ws/progress';
+    this.progressWs = new WebSocket(wsUrl);
+
+    this.progressWs.onopen = () => {
+      console.log('[MultiChatModal] Progress WebSocket connected');
+    };
+
+    this.progressWs.onerror = (error) => {
+      console.error('[MultiChatModal] Progress WebSocket error:', error);
+    };
+
+    this.progressWs.onclose = () => {
+      console.log('[MultiChatModal] Progress WebSocket closed');
+      this.progressWs = null;
+    };
+  }
+
+  /**
+   * Disconnect the progress WebSocket.
+   */
+  private disconnectProgressWebSocket(): void {
+    if (this.progressWs) {
+      this.progressWs.close();
+      this.progressWs = null;
+    }
+  }
+
+  /**
+   * Start listening for agentic retrieval progress events.
+   * Updates the status indicator as retrieval steps progress.
+   *
+   * Args:
+   *     statusEl: The status indicator element to update
+   */
+  private startAgenticProgressListener(statusEl: HTMLElement): void {
+    this.connectProgressWebSocket();
+
+    if (!this.progressWs) {
+      return;
+    }
+
+    // Remove any existing listener
+    if (this.agenticProgressListener) {
+      this.progressWs.removeEventListener('message', this.agenticProgressListener);
+    }
+
+    // Create new listener
+    this.agenticProgressListener = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        // Only handle agentic_retrieval operations
+        if (data.operation_id && data.operation_id.startsWith('agentic_rag_')) {
+          const step = data.message || '';
+          const progress = data.progress || 0;
+
+          // Import step icons and messages
+          import { getRetrievalStepIcon, getRetrievalStepMessage } from '../utils/thinking-messages';
+
+          // Try to extract the step name from the message or use default
+          let stepName = '';
+          const stepMatch = step.match(/^([a-z_]+):/);
+          if (stepMatch) {
+            stepName = stepMatch[1];
+          }
+
+          const icon = stepName ? getRetrievalStepIcon(stepName) : '⚙️';
+          const message = step || 'Processing';
+
+          this.updateStatusIndicator(statusEl, `${message}...`, icon);
+        }
+      } catch (error) {
+        console.error('[MultiChatModal] Error parsing progress event:', error);
+      }
+    };
+
+    this.progressWs.addEventListener('message', this.agenticProgressListener);
+  }
+
+  /**
+   * Stop listening for agentic retrieval progress events.
+   */
+  private stopAgenticProgressListener(): void {
+    if (this.agenticProgressListener && this.progressWs) {
+      this.progressWs.removeEventListener('message', this.agenticProgressListener);
+      this.agenticProgressListener = null;
+    }
   }
 
   /**
@@ -399,6 +500,10 @@ export class MultiChatModal extends Modal {
     if (this.keyboardCleanup) {
       this.keyboardCleanup();
     }
+
+    // Clean up progress WebSocket
+    this.stopAgenticProgressListener();
+    this.disconnectProgressWebSocket();
   }
 
   // Store cleanup function for keyboard listeners
@@ -2591,12 +2696,21 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                     activeStatusEl = this.addThinkingIndicator(messagesContainer);
                     thinkingRemoved = false;
                   }
+
+                  // Start progress listener for agentic retrieval
+                  if (toolName === 'agentic_research_question') {
+                    this.startAgenticProgressListener(activeStatusEl);
+                  }
+
                   const statusMsg = getToolStatusMessage(toolName);
                   this.updateStatusIndicator(activeStatusEl, `${statusMsg}...`, '🔧');
                 }
 
                 // Handle tool_return_message
                 else if (messageType === 'tool_return_message') {
+                  // Stop progress listener for agentic retrieval
+                  this.stopAgenticProgressListener();
+
                   // Re-show status indicator if it was removed by a prior assistant message
                   if (thinkingRemoved) {
                     activeStatusEl = this.addThinkingIndicator(messagesContainer);
@@ -2778,6 +2892,9 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
                       // Handle tool_return_message
                       else if (messageType === 'tool_return_message') {
+                        // Stop progress listener for agentic retrieval
+                        this.stopAgenticProgressListener();
+
                         if (!followUpRemoved) {
                           const phrase = getRandomThinkingPhrase('processing');
                           this.updateStatusIndicator(activationMsg, `${phrase} results...`, '⚙️');

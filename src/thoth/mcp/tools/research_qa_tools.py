@@ -1160,11 +1160,46 @@ class AgenticResearchQuestionMCPTool(MCPTool):
                     }
                 )
 
-            # Use agentic retrieval
+            # Create progress callback that broadcasts to WebSocket
+            import uuid
+
+            operation_id = f'agentic_rag_{uuid.uuid4().hex[:8]}'
+
+            def progress_callback(_step: str, message: str, progress: float) -> None:
+                """Broadcast retrieval step progress to WebSocket clients."""
+                try:
+                    from thoth.server.routers.websocket import update_operation_progress
+
+                    update_operation_progress(
+                        operation_id=operation_id,
+                        status='in_progress',
+                        progress=progress,
+                        message=message,
+                    )
+                except Exception as e:
+                    # Don't fail the entire operation if progress reporting fails
+                    import logging
+
+                    logging.getLogger(__name__).warning(
+                        f'Failed to update progress: {e}'
+                    )
+
+            # Use agentic retrieval with progress callback
             result = await rag_service.agentic_ask_question_async(
                 question=question,
                 k=max_sources,
                 max_retries=max_retries,
+                progress_callback=progress_callback,
+            )
+
+            # Mark operation complete
+            from thoth.server.routers.websocket import update_operation_progress
+
+            update_operation_progress(
+                operation_id=operation_id,
+                status='completed',
+                progress=100.0,
+                message='Answer generated',
             )
 
             # Build comprehensive response
