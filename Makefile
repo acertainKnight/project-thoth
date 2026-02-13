@@ -93,7 +93,11 @@ help: ## Show available commands
 	@echo "  $(GREEN)agent$(NC)                Start interactive research agent"
 	@echo "  $(GREEN)watch$(NC)                Start PDF directory watcher"
 	@echo ""
-	@echo "$(YELLOW)🔍 Diagnostics:$(NC)"
+	@echo "$(YELLOW)Release:$(NC)"
+	@echo "  $(GREEN)release$(NC)              Generate changelog and release commands"
+	@echo "  $(GREEN)release VERSION=x.y.z$(NC) Release with explicit version"
+	@echo ""
+	@echo "$(YELLOW)Diagnostics:$(NC)"
 	@echo "  $(GREEN)check-vault$(NC)          Check vault integration status"
 	@echo "  $(GREEN)check-deps$(NC)           Check required dependencies"
 	@echo ""
@@ -910,6 +914,14 @@ _setup-vault-integration:
 	else \
 		echo "$(GREEN)✅ Environment template preserved$(NC)"; \
 	fi
+
+# =============================================================================
+# RELEASE
+# =============================================================================
+
+.PHONY: release
+release: ## Generate changelog from commits and version bump commands
+	@bash scripts/release.sh $(VERSION)
 
 # Set default target
 .DEFAULT_GOAL := help
