@@ -395,6 +395,53 @@ class RAGQAConfig(BaseModel):
         populate_by_name = True
 
 
+class AgenticRetrievalConfig(BaseModel):
+    """Agentic retrieval configuration."""
+
+    enabled: bool = Field(
+        default=False,
+        description='Enable agentic retrieval orchestrator',
+    )
+    max_retries: int = Field(
+        default=2,
+        alias='maxRetries',
+        description='Maximum query rewrite retries on low confidence',
+    )
+    document_grading_enabled: bool = Field(
+        default=True,
+        alias='documentGradingEnabled',
+        description='Enable LLM-based document relevance grading',
+    )
+    query_expansion_enabled: bool = Field(
+        default=True,
+        alias='queryExpansionEnabled',
+        description='Enable query expansion for better coverage',
+    )
+    hallucination_check_enabled: bool = Field(
+        default=True,
+        alias='hallucinationCheckEnabled',
+        description='Enable hallucination detection and correction',
+    )
+    strict_hallucination_check: bool = Field(
+        default=False,
+        alias='strictHallucinationCheck',
+        description='Use strict mode for hallucination checking',
+    )
+    web_search_fallback_enabled: bool = Field(
+        default=False,
+        alias='webSearchFallbackEnabled',
+        description='Enable web search fallback when retrieval fails',
+    )
+    confidence_threshold: float = Field(
+        default=0.5,
+        alias='confidenceThreshold',
+        description='Minimum confidence threshold for accepting results (0-1)',
+    )
+
+    class Config:
+        populate_by_name = True
+
+
 class RAGConfig(BaseModel):
     """RAG system configuration."""
 
@@ -483,6 +530,13 @@ class RAGConfig(BaseModel):
         default=0.6,
         alias='cragConfidenceThreshold',
         description='Confidence threshold for CRAG fallback (0-1, lower = more aggressive)',
+    )
+
+    # Agentic retrieval configuration
+    agentic_retrieval: AgenticRetrievalConfig = Field(
+        default_factory=AgenticRetrievalConfig,
+        alias='agenticRetrieval',
+        description='Agentic retrieval settings for adaptive, self-correcting RAG',
     )
 
     class Config:
