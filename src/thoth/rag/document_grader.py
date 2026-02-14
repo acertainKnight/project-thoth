@@ -6,10 +6,24 @@ before generation, improving answer quality and reducing hallucination risk.
 """
 
 import asyncio
+from enum import Enum
 from typing import Any
 
 from langchain_core.documents import Document
 from loguru import logger
+
+
+class RetrievalConfidence(Enum):
+    """
+    Tri-level retrieval confidence assessment (CRAG).
+
+    Based on the CRAG paper: uses two thresholds to classify retrieval
+    quality into three levels that determine corrective actions.
+    """
+
+    CORRECT = 'correct'  # High confidence, use local retrieval
+    AMBIGUOUS = 'ambiguous'  # Mixed results, supplement with web search
+    INCORRECT = 'incorrect'  # Low confidence, use web search instead
 
 
 class DocumentGrader:
@@ -220,3 +234,37 @@ Relevant (yes/no):"""
         )
 
         return filtered
+
+    def evaluate_retrieval_confidence(
+        self,
+        confidence: float,
+        upper_threshold: float = 0.7,
+        lower_threshold: float = 0.4,
+    ) -> RetrievalConfidence:
+        """
+        Evaluate retrieval quality using tri-level CRAG assessment.
+
+        Uses two thresholds to classify retrieval into three levels:
+        - CORRECT: confidence >= upper_threshold (strong coverage)
+        - AMBIGUOUS: lower_threshold <= confidence < upper_threshold (partial coverage)
+        - INCORRECT: confidence < lower_threshold (weak coverage)
+
+        Args:
+            confidence: Document grading confidence score (0-1)
+            upper_threshold: Threshold for CORRECT assessment (default 0.7)
+            lower_threshold: Threshold for INCORRECT assessment (default 0.4)
+
+        Returns:
+            RetrievalConfidence level (CORRECT/AMBIGUOUS/INCORRECT)
+
+        Example:
+            >>> assessment = grader.evaluate_retrieval_confidence(0.52)
+            >>> if assessment == RetrievalConfidence.AMBIGUOUS:
+            ...     # Supplement with web search
+        """
+        if confidence >= upper_threshold:
+            return RetrievalConfidence.CORRECT
+        elif confidence >= lower_threshold:
+            return RetrievalConfidence.AMBIGUOUS
+        else:
+            return RetrievalConfidence.INCORRECT

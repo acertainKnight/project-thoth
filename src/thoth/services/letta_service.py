@@ -50,7 +50,7 @@ class LettaService(BaseService):
             return
 
         try:
-            # Use high limit to get all tools including MCP tools (default is 50)
+            # Fetch regular Python tools
             resp = requests.get(
                 f'{self.letta_url}/v1/tools/?limit=500',
                 headers=self._get_headers(),
@@ -59,9 +59,44 @@ class LettaService(BaseService):
             if resp.status_code == 200:
                 tools = resp.json()
                 self._tool_cache = {t['name']: t['id'] for t in tools}
-                self.logger.info(
-                    f'Cached {len(self._tool_cache)} tools from Letta (including {sum(1 for t in tools if "mcp:" in str(t.get("tags", [])))} MCP tools)'
+                python_tool_count = len(self._tool_cache)
+            else:
+                python_tool_count = 0
+
+            # Fetch MCP tools from registered MCP servers
+            mcp_tool_count = 0
+            try:
+                mcp_resp = requests.get(
+                    f'{self.letta_url}/v1/tools/mcp/servers',
+                    headers=self._get_headers(),
+                    timeout=30,
                 )
+                if mcp_resp.status_code == 200:
+                    mcp_servers = mcp_resp.json()
+                    for server_name in mcp_servers.keys():
+                        # Fetch tools from each MCP server
+                        tools_resp = requests.get(
+                            f'{self.letta_url}/v1/tools/mcp/servers/{server_name}/tools',
+                            headers=self._get_headers(),
+                            timeout=30,
+                        )
+                        if tools_resp.status_code == 200:
+                            server_tools = tools_resp.json()
+                            for tool in server_tools:
+                                # Use MCP-qualified name as key, tool dict as value
+                                # Letta expects MCP tools to be attached using their ID
+                                tool_name = tool.get('name')
+                                tool_id = tool.get('id')  # MCP tools have IDs too
+                                if tool_name and tool_id:
+                                    self._tool_cache[tool_name] = tool_id
+                                    mcp_tool_count += 1
+            except Exception as mcp_error:
+                self.logger.warning(f'Failed to fetch MCP tools: {mcp_error}')
+
+            self.logger.info(
+                f'Cached {len(self._tool_cache)} total tools from Letta '
+                f'({python_tool_count} Python, {mcp_tool_count} MCP)'
+            )
         except Exception as e:
             self.logger.error(f'Failed to fetch tools from Letta: {e}')
 

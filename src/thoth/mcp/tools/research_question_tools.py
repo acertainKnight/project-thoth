@@ -9,8 +9,6 @@ that drive the discovery system. Research questions define WHAT to search for
 from typing import Any
 from uuid import UUID
 
-from loguru import logger
-
 from ..base_tools import MCPTool, MCPToolCallResult, NoInputTool
 
 
@@ -26,70 +24,55 @@ class ListAvailableSourcesMCPTool(NoInputTool):
         return 'List all available discovery sources including built-in APIs and custom workflows'
 
     async def execute(self, _arguments: dict[str, Any]) -> MCPToolCallResult:
-        """List available sources."""
+        """List available sources from the database registry.
+
+        Queries the available_sources table, which is the same source of truth
+        the discovery orchestrator validates against.
+        """
         try:
-            from thoth.discovery.plugins import plugin_registry
+            postgres_service = self.service_manager.postgres
+
+            # Query all active sources from the database
+            rows = await postgres_service.fetch(
+                """
+                SELECT name, display_name, source_type, description,
+                       health_status, total_queries, total_articles_found
+                FROM available_sources
+                WHERE is_active = true
+                ORDER BY source_type, name
+                """
+            )
 
             content_parts = []
 
-            # Get all registered plugins dynamically
-            registered_plugins = plugin_registry.list_plugins()
+            # Group by source type for readability
+            by_type: dict[str, list] = {}
+            for row in rows:
+                st = row['source_type']
+                by_type.setdefault(st, []).append(row)
 
-            if registered_plugins:
-                content_parts.append(
-                    {
-                        'type': 'text',
-                        'text': '**Built-in API Sources:**\n',
-                    }
-                )
+            type_labels = {
+                'api': 'API Sources',
+                'browser_workflow': 'Browser Workflow Sources',
+                'web_scraper': 'Web Scraper Sources',
+            }
 
-                for source_id in sorted(registered_plugins):
-                    # Get plugin description if available
-                    plugin_cls = plugin_registry.get(source_id)
-                    if (
-                        plugin_cls
-                        and hasattr(plugin_cls, '__doc__')
-                        and plugin_cls.__doc__
-                    ):
-                        description = plugin_cls.__doc__.strip().split('\n')[0]
-                    else:
-                        description = f'{source_id.replace("_", " ").title()} source'
-
+            for source_type, sources in by_type.items():
+                label = type_labels.get(source_type, source_type.title())
+                content_parts.append({'type': 'text', 'text': f'**{label}:**\n'})
+                for src in sources:
+                    desc = src.get('description') or src['display_name']
+                    # Truncate long descriptions
+                    if len(desc) > 80:
+                        desc = desc[:77] + '...'
+                    health = src.get('health_status', 'unknown')
                     content_parts.append(
                         {
                             'type': 'text',
-                            'text': f'  - `{source_id}`: {description}\n',
+                            'text': f'  - `{src["name"]}`: {desc} (health: {health})\n',
                         }
                     )
 
-            # Query custom sources (browser workflows)
-            try:
-                from thoth.repositories.browser_workflow_repository import (
-                    BrowserWorkflowRepository,
-                )
-
-                postgres_service = self.service_manager.postgres
-                workflow_repo = BrowserWorkflowRepository(postgres_service)
-                workflows = await workflow_repo.get_active_workflows()
-
-                if workflows:
-                    content_parts.append(
-                        {
-                            'type': 'text',
-                            'text': '\n**Custom Sources (Browser Workflows):**\n',
-                        }
-                    )
-                    for workflow in workflows:
-                        content_parts.append(
-                            {
-                                'type': 'text',
-                                'text': f'  - `{workflow["name"]}`: {workflow.get("description", "Custom workflow")}\n',
-                            }
-                        )
-            except Exception as e:
-                logger.warning(f'Could not load browser workflows: {e}')
-
-            # Add special options
             content_parts.append(
                 {
                     'type': 'text',
@@ -863,21 +846,23 @@ class RunDiscoveryForQuestionMCPTool(MCPTool):
 
             if result.get('success'):
                 articles_found = result.get('articles_found', 0)
-                articles_downloaded = result.get('articles_downloaded', 0)
-                sources_used = result.get('sources_used', [])
+                articles_processed = result.get('articles_processed', 0)
+                articles_matched = result.get('articles_matched', 0)
+                sources_queried = result.get('sources_queried', [])
+                exec_time = result.get('execution_time_seconds', 0)
 
                 return MCPToolCallResult(
                     content=[
                         {
                             'type': 'text',
-                            'text': f"""✓ Discovery completed for question {question_id}
+                            'text': f"""Discovery completed for question {question_id}
 
 **Results:**
+  - Sources queried: {', '.join(sources_queried)}
   - Articles found: {articles_found}
-  - Articles downloaded: {articles_downloaded}
-  - Sources queried: {', '.join(sources_used)}
-
-{'Errors encountered:' + chr(10) + chr(10).join(result.get('errors', [])) if result.get('errors') else ''}
+  - Articles scored: {articles_processed}
+  - Articles matched (above relevance threshold): {articles_matched}
+  - Execution time: {exec_time:.1f}s
 """,
                         }
                     ]

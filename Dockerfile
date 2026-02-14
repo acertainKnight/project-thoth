@@ -40,6 +40,7 @@ FROM python:3.12-slim AS production
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
+    git \
     # Playwright Chromium system dependencies
     libnss3 \
     libnspr4 \

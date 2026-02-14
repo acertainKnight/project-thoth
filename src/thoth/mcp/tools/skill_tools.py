@@ -457,8 +457,10 @@ class LoadSkillMCPTool(MCPTool):
 
             all_text = '\n'.join(results + summary) + '\n' + memory_banner
 
-            # Add terminal tool notice
-            all_text += '\n\n**Note**: Your new tools are now attached and will be available when you resume. This turn ends automatically.'
+            # Tell the agent that tools are attached and it should wrap up this turn.
+            # The client sends an automatic follow-up to start a new turn where
+            # the agent can use the newly attached tools with the original request.
+            all_text += '\n\nYour new tools are now attached. Finish this turn with a brief acknowledgment -- the user will be prompted to continue automatically.'
 
             return MCPToolCallResult(
                 content=[{'type': 'text', 'text': all_text}],
@@ -654,7 +656,7 @@ class UnloadSkillMCPTool(MCPTool):
             results.append(f'\nUnloaded {len(skill_ids)} skill(s).')
             results.append(memory_banner)
             results.append(
-                '\n**Note**: Tools detached. Your updated tool set will be reflected when you resume. This turn ends automatically.'
+                '\nTools detached. Finish this turn with a brief acknowledgment -- the user will be prompted to continue automatically.'
             )
 
             return MCPToolCallResult(

@@ -20,8 +20,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import END, StateGraph
 from loguru import logger
 
-from thoth.rag.document_grader import DocumentGrader
+from thoth.rag.document_grader import DocumentGrader, RetrievalConfidence
 from thoth.rag.hallucination_checker import HallucinationChecker
+from thoth.rag.knowledge_refiner import KnowledgeRefiner
 from thoth.rag.query_router import QueryRouter, QueryType
 from thoth.rag.reranker import BaseReranker
 from thoth.rag.vector_store import VectorStoreManager
@@ -58,6 +59,7 @@ class AgenticRAGState(TypedDict):
     documents: list[Document]  # Retrieved documents
     graded_documents: list[Document]  # Documents that passed grading
     retrieval_k: int  # Number of documents to retrieve
+    retrieval_assessment: str  # CRAG tri-level assessment (CORRECT/AMBIGUOUS/INCORRECT)
 
     # Retry/fallback state
     retry_count: int  # Number of retrieval retries
@@ -93,6 +95,7 @@ class AgenticRAGOrchestrator:
         hallucination_checker: HallucinationChecker,
         reranker: BaseReranker,
         llm_client: Any,
+        knowledge_refiner: KnowledgeRefiner | None = None,
         config: dict[str, Any] | None = None,
     ):
         """
@@ -105,6 +108,7 @@ class AgenticRAGOrchestrator:
             hallucination_checker: Hallucination checker for answer verification
             reranker: Reranker for result refinement
             llm_client: LLM client for generation
+            knowledge_refiner: Knowledge refiner for strip decomposition (optional)
             config: Configuration dict with agentic retrieval settings
         """
         self.vector_store = vector_store
@@ -113,6 +117,7 @@ class AgenticRAGOrchestrator:
         self.hallucination_checker = hallucination_checker
         self.reranker = reranker
         self.llm_client = llm_client
+        self.knowledge_refiner = knowledge_refiner
         self.config = config or {}
 
         # Build the graph
@@ -135,6 +140,7 @@ class AgenticRAGOrchestrator:
         workflow.add_node('extract_filters', self._extract_filters)
         workflow.add_node('retrieve_documents', self._retrieve_documents)
         workflow.add_node('grade_documents', self._grade_documents)
+        workflow.add_node('refine_knowledge', self._refine_knowledge)
         workflow.add_node('rewrite_query', self._rewrite_query)
         workflow.add_node('rerank_documents', self._rerank_documents)
         workflow.add_node('generate_answer', self._generate_answer)
@@ -169,6 +175,7 @@ class AgenticRAGOrchestrator:
             'grade_documents',
             self._route_after_grading,
             {
+                'refine': 'refine_knowledge',
                 'rerank': 'rerank_documents',
                 'rewrite': 'rewrite_query',
                 'end': END,
@@ -177,6 +184,9 @@ class AgenticRAGOrchestrator:
 
         # Query rewrite -> retrieval (retry loop)
         workflow.add_edge('rewrite_query', 'retrieve_documents')
+
+        # Knowledge refinement -> reranking
+        workflow.add_edge('refine_knowledge', 'rerank_documents')
 
         # Reranking -> generation
         workflow.add_edge('rerank_documents', 'generate_answer')
@@ -234,6 +244,7 @@ class AgenticRAGOrchestrator:
             'documents': [],
             'graded_documents': [],
             'retrieval_k': k,
+            'retrieval_assessment': '',
             'retry_count': 0,
             'max_retries': max_retries,
             'rewrite_reason': '',
@@ -259,6 +270,7 @@ class AgenticRAGOrchestrator:
                 'query_type': final_state['query_type'],
                 'retry_count': final_state['retry_count'],
                 'num_documents': len(final_state['graded_documents']),
+                'retrieval_assessment': final_state.get('retrieval_assessment', ''),
             }
 
             logger.info(
@@ -499,6 +511,35 @@ Rewritten Query:"""
             'rewrite_reason': 'Low relevance confidence',
         }
 
+    def _refine_knowledge(self, state: AgenticRAGState) -> dict[str, Any]:
+        """Refine documents using knowledge strip decomposition."""
+        if callback := state.get('progress_callback'):
+            callback(
+                'refine', 'Refining knowledge strips...', STEP_PROGRESS['grade'] + 5
+            )
+
+        # Check if refinement is enabled and refiner is available
+        if not self.knowledge_refiner or not state['config'].get(
+            'knowledge_refinement_enabled', True
+        ):
+            logger.debug('Knowledge refinement disabled, skipping')
+            return {}
+
+        docs = state['graded_documents']
+        if not docs:
+            return {}
+
+        try:
+            refined = asyncio.run(
+                self.knowledge_refiner.refine_documents_async(state['query'], docs)
+            )
+            logger.debug(f'Refined {len(docs)} documents to {len(refined)} results')
+            return {'graded_documents': refined}
+        except Exception as e:
+            logger.error(f'Knowledge refinement failed: {e}')
+            # On failure, proceed with original documents
+            return {}
+
     def _rerank_documents(self, state: AgenticRAGState) -> dict[str, Any]:
         """Rerank documents for final result set."""
         if callback := state.get('progress_callback'):
@@ -643,30 +684,58 @@ Answer:"""
 
     def _route_after_grading(
         self, state: AgenticRAGState
-    ) -> Literal['rerank', 'rewrite', 'end']:
-        """Route after document grading."""
+    ) -> Literal['refine', 'rerank', 'rewrite', 'end']:
+        """Route after document grading using CRAG tri-level evaluation."""
         confidence = state['confidence']
         retry_count = state['retry_count']
         max_retries = state['max_retries']
         threshold = state['config'].get('confidence_threshold', 0.5)
 
-        # If no documents at all, end (avoid infinite loop)
+        # Get CRAG thresholds
+        upper_threshold = state['config'].get('crag_upper_threshold', 0.7)
+        lower_threshold = state['config'].get('crag_lower_threshold', 0.4)
+
+        # If no documents at all, handle retry logic
         if not state['graded_documents']:
             if retry_count >= max_retries:
                 logger.warning('No relevant documents found after max retries')
+                # Store INCORRECT assessment
+                state['retrieval_assessment'] = RetrievalConfidence.INCORRECT.value
                 return 'end'
             else:
                 return 'rewrite'
 
-        # If confidence too low and retries remaining, rewrite
-        if confidence < threshold and retry_count < max_retries:
-            logger.info(
-                f'Low confidence ({confidence:.2f} < {threshold}), rewriting query'
-            )
-            return 'rewrite'
+        # Compute CRAG tri-level assessment
+        assessment = self.document_grader.evaluate_retrieval_confidence(
+            confidence, upper_threshold, lower_threshold
+        )
 
-        # Otherwise proceed to reranking
-        return 'rerank'
+        # Store assessment in state for later use
+        state['retrieval_assessment'] = assessment.value
+
+        logger.info(
+            f'CRAG assessment: {assessment.value} (confidence={confidence:.2f}, '
+            f'thresholds=[{lower_threshold}, {upper_threshold}])'
+        )
+
+        # Route based on assessment
+        if (
+            assessment == RetrievalConfidence.CORRECT
+            or assessment == RetrievalConfidence.AMBIGUOUS
+        ):
+            # CORRECT or AMBIGUOUS: proceed to knowledge refinement
+            return 'refine'
+        else:
+            # INCORRECT: retry if attempts left, else proceed with what we have
+            if confidence < threshold and retry_count < max_retries:
+                logger.info(
+                    f'Low confidence, rewriting query (retry {retry_count + 1}/{max_retries})'
+                )
+                return 'rewrite'
+            else:
+                # No retries left or threshold met - skip refinement, go to rerank
+                logger.info('Proceeding to reranking despite INCORRECT assessment')
+                return 'rerank'
 
     def _route_after_hallucination_check(
         self, state: AgenticRAGState

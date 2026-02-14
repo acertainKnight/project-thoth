@@ -16,7 +16,6 @@ from .context_analyzer import (
 from .discovery_manager import DiscoveryManager
 from .emulator_scraper import EmulatorScraper
 from .plugins import ArxivPlugin, plugin_registry
-from .scheduler import DiscoveryScheduler
 from .web_scraper import WebScraper
 
 __all__ = [
@@ -26,7 +25,6 @@ __all__ = [
     'AutoDiscoveryManager',
     'ChatContextAnalyzer',
     'DiscoveryManager',
-    'DiscoveryScheduler',
     'DiscoverySourceSuggestion',
     'EmulatorScraper',
     'PubMedAPISource',

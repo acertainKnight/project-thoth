@@ -284,18 +284,34 @@ Comparison Aspects:
         return agent_ids
 
     async def _get_all_tools(self, client: httpx.AsyncClient) -> set[str]:
-        """Get all available tool names from Letta."""
+        """Get all available tool names from Letta (base + MCP tools)."""
+        tools = set()
         try:
+            # Fetch base/Python tools
             response = await client.get(
                 f'{self.letta_base_url}/v1/tools/', headers=self.headers
             )
             response.raise_for_status()
+            tools = {tool['name'] for tool in response.json()}
 
-            # Return set of tool names (Letta API accepts names, not IDs)
-            return {tool['name'] for tool in response.json()}
+            # Fetch MCP tools from all registered MCP servers
+            mcp_resp = await client.get(
+                f'{self.letta_base_url}/v1/tools/mcp/servers', headers=self.headers
+            )
+            if mcp_resp.status_code == 200:
+                for server_name in mcp_resp.json().keys():
+                    tools_resp = await client.get(
+                        f'{self.letta_base_url}/v1/tools/mcp/servers/{server_name}/tools',
+                        headers=self.headers,
+                    )
+                    if tools_resp.status_code == 200:
+                        mcp_tools = {t['name'] for t in tools_resp.json()}
+                        tools.update(mcp_tools)
+
+            return tools
         except Exception as e:
             logger.warning(f'Could not fetch tools: {e}')
-            return set()
+            return tools
 
     async def _ensure_agent_exists(
         self,
@@ -441,11 +457,26 @@ Comparison Aspects:
             agent_data = response.json()
             current_tools = {t['name']: t['id'] for t in agent_data.get('tools', [])}
 
-            # Get tool name to ID mapping for tools we want to attach
+            # Get tool name to ID mapping (base + MCP tools)
             response = await client.get(
                 f'{self.letta_base_url}/v1/tools/', headers=self.headers
             )
             all_tools = {t['name']: t['id'] for t in response.json()}
+
+            # Also index MCP tools
+            mcp_resp = await client.get(
+                f'{self.letta_base_url}/v1/tools/mcp/servers', headers=self.headers
+            )
+            if mcp_resp.status_code == 200:
+                for server_name in mcp_resp.json().keys():
+                    tools_resp = await client.get(
+                        f'{self.letta_base_url}/v1/tools/mcp/servers/{server_name}/tools',
+                        headers=self.headers,
+                    )
+                    if tools_resp.status_code == 200:
+                        for t in tools_resp.json():
+                            if t.get('name') and t.get('id'):
+                                all_tools[t['name']] = t['id']
 
             # Attach missing tools
             tools_to_attach = desired_tools - set(current_tools.keys())

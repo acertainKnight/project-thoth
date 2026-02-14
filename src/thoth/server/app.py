@@ -73,7 +73,6 @@ except ImportError as e:
     browser_workflows = None
     BROWSER_WORKFLOWS_AVAILABLE = False
 from thoth.config import config
-from thoth.discovery.scheduler import DiscoveryScheduler
 from thoth.services.llm_router import LLMRouter
 
 # Module-level variables to store configuration
@@ -91,9 +90,6 @@ _schema_watcher: SettingsFileWatcher | None = None
 
 # Global watcher for custom prompts hot-reload (kept global for lifecycle)
 _prompts_watcher: SettingsFileWatcher | None = None
-
-# Global discovery scheduler instance (kept global for lifecycle management)
-discovery_scheduler: DiscoveryScheduler | None = None
 
 # Global workflow execution service (kept global for lifecycle management)
 workflow_execution_service = None
@@ -330,7 +326,6 @@ async def lifespan(app: FastAPI):
         _settings_watcher, \
         _schema_watcher, \
         _prompts_watcher, \
-        discovery_scheduler, \
         workflow_execution_service
 
     # Startup
@@ -580,65 +575,6 @@ async def lifespan(app: FastAPI):
     if workflow_execution_service is not None:
         app.state.workflow_execution_service = workflow_execution_service
 
-    # Initialize discovery scheduler after PostgreSQL is ready
-    if service_manager:
-        try:
-            from thoth.discovery.discovery_manager import DiscoveryManager
-
-            logger.info('Initializing discovery scheduler...')
-            discovery_manager = DiscoveryManager()
-
-            # Get required services for research question scheduling
-            research_question_service = None
-            discovery_orchestrator = None
-
-            try:
-                research_question_service = service_manager.get_service(
-                    'research_question'
-                )
-            except Exception as e:
-                logger.warning(f'Research question service not available: {e}')
-
-            try:
-                discovery_orchestrator = service_manager.get_service(
-                    'discovery_orchestrator'
-                )
-            except Exception as e:
-                logger.warning(f'Discovery orchestrator service not available: {e}')
-
-            # Get the current running event loop
-            event_loop = asyncio.get_running_loop()
-            logger.info(f'Passing event loop to scheduler: {event_loop}')
-
-            # Initialize scheduler with optional research question support and event loop  # noqa: W505
-            discovery_scheduler = DiscoveryScheduler(
-                discovery_manager=discovery_manager,
-                research_question_service=research_question_service,
-                discovery_orchestrator=discovery_orchestrator,
-                event_loop=event_loop,  # Pass event loop for async operations from sync thread
-            )
-
-            # Sync scheduler with existing discovery sources
-            discovery_scheduler.sync_with_discovery_manager()
-
-            # Start the scheduler
-            discovery_scheduler.start()
-            logger.success('Discovery scheduler started successfully')
-
-            if research_question_service and discovery_orchestrator:
-                logger.info('Research question scheduling enabled')
-            else:
-                logger.info(
-                    'Research question scheduling disabled (services not available)'
-                )
-
-        except Exception as e:
-            logger.error(f'Failed to initialize discovery scheduler: {e}')
-            logger.warning(
-                'Continuing without discovery scheduler (scheduled discovery will not work)'
-            )
-            discovery_scheduler = None
-
     logger.success('API server startup complete')
 
     try:
@@ -658,15 +594,6 @@ async def lifespan(app: FastAPI):
                 logger.success('Workflow execution service shutdown complete')
             except Exception as e:
                 logger.error(f'Error shutting down workflow execution service: {e}')
-
-        # Stop discovery scheduler
-        if discovery_scheduler is not None:
-            try:
-                logger.info('Stopping discovery scheduler...')
-                discovery_scheduler.stop()
-                logger.success('Discovery scheduler stopped')
-            except Exception as e:
-                logger.error(f'Error stopping discovery scheduler: {e}')
 
         # Stop MCP Servers Manager file watcher
         if service_manager and 'mcp_servers_manager' in service_manager._services:

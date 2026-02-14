@@ -437,6 +437,26 @@ class AgenticRetrievalConfig(BaseModel):
         alias='confidenceThreshold',
         description='Minimum confidence threshold for accepting results (0-1)',
     )
+    crag_upper_threshold: float = Field(
+        default=0.7,
+        alias='cragUpperThreshold',
+        description='Upper threshold for CRAG CORRECT assessment (0-1)',
+    )
+    crag_lower_threshold: float = Field(
+        default=0.4,
+        alias='cragLowerThreshold',
+        description='Lower threshold for CRAG INCORRECT assessment (0-1)',
+    )
+    knowledge_refinement_enabled: bool = Field(
+        default=True,
+        alias='knowledgeRefinementEnabled',
+        description='Enable knowledge strip decomposition and filtering',
+    )
+    max_strips_per_document: int = Field(
+        default=20,
+        alias='maxStripsPerDocument',
+        description='Maximum knowledge strips per document (controls LLM cost)',
+    )
 
     class Config:
         populate_by_name = True

@@ -1,11 +1,12 @@
 """ACL Anthology discovery plugin for NLP research papers.
 
-This plugin uses the acl-anthology Python package to access papers from
+Uses the acl-anthology v1.0+ Python package to access papers from
 ACL, EMNLP, NAACL, CoNLL, and 50+ other NLP conferences and journals.
 """
 
 from __future__ import annotations
 
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -18,6 +19,7 @@ class ACLAnthologyPlugin(BaseDiscoveryPlugin):
     """Discovery plugin for ACL Anthology.
 
     Requires acl-anthology package: pip install acl-anthology
+    The first run clones the ACL Anthology git repo (~2GB) and caches it locally.
     """
 
     def __init__(self, config: dict | None = None) -> None:
@@ -25,24 +27,27 @@ class ACLAnthologyPlugin(BaseDiscoveryPlugin):
 
         Args:
             config: Configuration dictionary with optional keys:
-                - venues: List of venue codes to search (e.g., ['acl', 'emnlp', 'naacl'])
-                - years: List of years to search (e.g., [2024, 2023])
-                - anthology_dir: Path to anthology XML data (auto-downloads if not set)
+                - venues: Venue codes to search (e.g. acl, emnlp, naacl)
+                - years: Years to search (e.g. 2024, 2023)
+                - data_dir: Path to cached anthology repo (auto-clones if not set)
         """
         super().__init__(config)
+        self.anthology = None
 
         try:
-            from anthology import Anthology
+            from acl_anthology import Anthology
 
-            self.anthology_cls = Anthology
+            self._anthology_cls = Anthology
 
-            # Initialize anthology (downloads data if needed)
-            anthology_dir = self.config.get('anthology_dir')
-            if anthology_dir:
-                self.anthology = Anthology(importdir=Path(anthology_dir))
+            data_dir = self.config.get('data_dir') or self.config.get('anthology_dir')
+            if data_dir and Path(data_dir).exists():
+                self.anthology = Anthology(datadir=Path(data_dir))
             else:
-                # Will auto-download to default location
-                self.anthology = Anthology()
+                # Clone the ACL Anthology repo. Cached after first run if
+                # the container volume persists.
+                default_cache = Path(tempfile.gettempdir()) / 'acl-anthology-data'
+                cache_path = Path(self.config.get('data_dir', default_cache))
+                self.anthology = Anthology.from_repo(path=cache_path)
 
         except ImportError as e:
             raise ImportError(
@@ -52,7 +57,7 @@ class ACLAnthologyPlugin(BaseDiscoveryPlugin):
         except Exception as e:
             self.logger.warning(
                 f'Could not initialize ACL Anthology: {e}. '
-                'Will attempt lazy initialization.'
+                'Will attempt lazy initialization on first query.'
             )
             self.anthology = None
 
@@ -84,31 +89,27 @@ class ACLAnthologyPlugin(BaseDiscoveryPlugin):
         results: list[ScrapedArticleMetadata] = []
 
         try:
-            # Iterate through all papers in the anthology
-            for paper_id, paper in self.anthology.papers.items():
+            for paper in self.anthology.papers():
                 try:
-                    # Filter by venue if specified
+                    paper_id = str(paper.full_id)
+
                     if venues:
                         venue_from_id = self._extract_venue_from_id(paper_id)
                         if venue_from_id not in venues:
                             continue
 
-                    # Filter by year if specified
                     if years:
                         year_from_id = self._extract_year_from_id(paper_id)
                         if year_from_id and int(year_from_id) not in years:
                             continue
 
-                    # Filter by keywords if provided
                     if keywords and not self._matches_keywords(paper, keywords):
                         continue
 
-                    # Convert to metadata
                     metadata = self._paper_to_metadata(paper)
                     if metadata:
                         results.append(metadata)
 
-                    # Stop if we have enough results
                     if len(results) >= max_results:
                         break
 
@@ -138,7 +139,6 @@ class ACLAnthologyPlugin(BaseDiscoveryPlugin):
                 parts = paper_id.split('.')
                 if len(parts) >= 2:
                     venue_part = parts[1]
-                    # Extract venue before track suffix (e.g., 'acl-long' -> 'acl')
                     return venue_part.split('-')[0].lower()
 
             # Legacy format: P19-1234 (P=ACL, D=EMNLP, N=NAACL, etc.)
@@ -168,16 +168,13 @@ class ACLAnthologyPlugin(BaseDiscoveryPlugin):
             Year as string (e.g., '2023') or None.
         """
         try:
-            # Modern format: 2023.acl-long.123
             if paper_id and paper_id[0].isdigit():
                 year = paper_id.split('.')[0]
                 if year.isdigit() and len(year) == 4:
                     return year
 
-            # Legacy format: P19-1234
             if len(paper_id) >= 3 and paper_id[1:3].isdigit():
                 year_short = paper_id[1:3]
-                # Convert to full year (assume 2000s for now)
                 full_year = (
                     f'20{year_short}' if int(year_short) < 50 else f'19{year_short}'
                 )
@@ -191,15 +188,20 @@ class ACLAnthologyPlugin(BaseDiscoveryPlugin):
         """Check if paper matches any of the provided keywords.
 
         Args:
-            paper: ACL Anthology paper object.
+            paper: acl_anthology Paper object.
             keywords: List of keywords to match.
 
         Returns:
             True if paper matches any keyword, False otherwise.
         """
         try:
-            title = paper.get_title('text').lower()
-            abstract = paper.get_abstract('text', '').lower()
+            title = ''
+            if paper.title:
+                title = paper.title.as_text().lower()
+
+            abstract = ''
+            if paper.abstract:
+                abstract = paper.abstract.as_text().lower()
 
             for keyword in keywords:
                 keyword_lower = keyword.lower()
@@ -211,59 +213,59 @@ class ACLAnthologyPlugin(BaseDiscoveryPlugin):
             return False
 
     def _paper_to_metadata(self, paper) -> ScrapedArticleMetadata | None:
-        """Convert ACL Anthology paper to ScrapedArticleMetadata.
+        """Convert acl_anthology Paper to ScrapedArticleMetadata.
 
         Args:
-            paper: ACL Anthology paper object.
+            paper: acl_anthology Paper object.
 
         Returns:
             ScrapedArticleMetadata or None if conversion fails.
         """
         try:
-            # Extract title
-            title = paper.get_title('text')
+            title = paper.title.as_text() if paper.title else None
             if not title:
                 return None
 
-            # Extract authors
+            # Authors are NameSpecification objects with first/last attributes
             authors = []
-            for author in paper.get_authors():
-                name = author.get_full_name()
-                if name:
-                    authors.append(name)
+            if paper.authors:
+                for author_spec in paper.authors:
+                    name = f'{author_spec.first or ""} {author_spec.last or ""}'.strip()
+                    if name:
+                        authors.append(name)
 
-            # Extract abstract
-            abstract = paper.get_abstract('text', None)
+            abstract = None
+            if paper.abstract:
+                abstract = paper.abstract.as_text()
 
-            # Extract publication year
-            year = paper.get_year()
+            year = paper.year
             pub_date = str(year) if year else None
 
-            # Extract venue
-            venue_name = paper.get_venue()
+            doi = paper.doi if paper.doi else None
 
-            # Extract DOI
-            doi = paper.get_doi()
-
-            # Extract URLs
-            paper_url = paper.get_url()
-            pdf_url = paper.get_pdf_url()
-
-            # Extract paper ID
-            paper_id = paper.full_id
-
-            # Build additional metadata
-            additional_metadata = {
-                'acl_id': paper_id,
-                'venue_full': venue_name,
-            }
-
-            # Try to extract citation count if available
+            paper_url = None
             try:
-                if hasattr(paper, 'citation_count'):
-                    additional_metadata['citation_count'] = paper.citation_count
+                paper_url = paper.web_url
             except Exception:
                 pass
+
+            pdf_url = None
+            if paper.pdf:
+                try:
+                    pdf_url = paper.pdf.url
+                except Exception:
+                    pass
+
+            paper_id = str(paper.full_id)
+            venue_name = None
+            if paper.venue_ids:
+                venue_name = ', '.join(str(v) for v in paper.venue_ids)
+
+            additional_metadata = {
+                'acl_id': paper_id,
+            }
+            if venue_name:
+                additional_metadata['venue_full'] = venue_name
 
             return ScrapedArticleMetadata(
                 title=title,
@@ -274,7 +276,7 @@ class ACLAnthologyPlugin(BaseDiscoveryPlugin):
                 doi=doi,
                 url=paper_url,
                 pdf_url=pdf_url,
-                keywords=[],  # ACL Anthology doesn't provide keywords
+                keywords=[],
                 source='acl_anthology',
                 scrape_timestamp=datetime.now().isoformat(),
                 additional_metadata=additional_metadata,
@@ -284,16 +286,15 @@ class ACLAnthologyPlugin(BaseDiscoveryPlugin):
             self.logger.error(f'Error converting ACL Anthology paper: {e}')
             return None
 
-    def validate_config(self, config: dict) -> bool:
+    def validate_config(self, _config: dict) -> bool:
         """Validate the configuration.
 
         Args:
-            config: Configuration dictionary to validate.
+            _config: Configuration dictionary to validate.
 
         Returns:
             True if valid, False otherwise.
         """
-        # No required fields
         return True
 
     def get_name(self) -> str:

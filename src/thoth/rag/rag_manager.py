@@ -25,6 +25,7 @@ from thoth.rag.query_router import QueryRouter
 from thoth.rag.agentic_retrieval import AgenticRAGOrchestrator
 from thoth.rag.document_grader import DocumentGrader
 from thoth.rag.hallucination_checker import HallucinationChecker
+from thoth.rag.knowledge_refiner import KnowledgeRefiner
 from thoth.utilities import OpenRouterClient
 from thoth.config import config
 
@@ -188,6 +189,15 @@ class RAGManager:
                 strict_mode=agentic_config.strict_hallucination_check,
             )
 
+            # Initialize knowledge refiner (for CRAG strip decomposition)
+            self.knowledge_refiner = None
+            if agentic_config.knowledge_refinement_enabled:
+                self.knowledge_refiner = KnowledgeRefiner(
+                    llm_client=self.llm,
+                    max_strips_per_document=agentic_config.max_strips_per_document,
+                )
+                logger.info('Knowledge refiner initialized for CRAG')
+
             # Convert pydantic config to dict for orchestrator
             agentic_config_dict = {
                 'enabled': agentic_config.enabled,
@@ -197,6 +207,9 @@ class RAGManager:
                 'hallucination_check_enabled': agentic_config.hallucination_check_enabled,
                 'confidence_threshold': agentic_config.confidence_threshold,
                 'web_search_fallback_enabled': agentic_config.web_search_fallback_enabled,
+                'crag_upper_threshold': agentic_config.crag_upper_threshold,
+                'crag_lower_threshold': agentic_config.crag_lower_threshold,
+                'knowledge_refinement_enabled': agentic_config.knowledge_refinement_enabled,
             }
 
             # Initialize agentic orchestrator
@@ -207,6 +220,7 @@ class RAGManager:
                 hallucination_checker=self.hallucination_checker,
                 reranker=self.reranker,
                 llm_client=self.llm,
+                knowledge_refiner=self.knowledge_refiner,
                 config=agentic_config_dict,
             )
             logger.info('Agentic RAG orchestrator initialized')

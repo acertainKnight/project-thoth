@@ -61,12 +61,6 @@ class TestDiscoveryWorkflowStructure:
 
         assert discovery_orchestrator is not None
 
-    def test_discovery_scheduler_exists(self):
-        """Test discovery scheduler exists."""
-        from thoth.discovery import DiscoveryScheduler
-
-        assert DiscoveryScheduler is not None
-
     def test_discovery_service_exists(self):
         """Test discovery service exists in ServiceManager."""
         from thoth.services.service_manager import ServiceManager

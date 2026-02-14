@@ -8,6 +8,13 @@ import * as smd from 'streaming-markdown';
 import { getRandomThinkingPhrase, getToolStatusMessage, getRetrievalStepIcon, getRetrievalStepMessage } from '../utils/thinking-messages';
 
 /**
+ * Prefix used for auto-follow-up messages after skill loading/unloading.
+ * These messages are sent automatically to prompt the agent to continue
+ * with newly attached tools, and should be hidden from rendered chat history.
+ */
+const SKILL_ACTIVATION_PREFIX = '[skill-tools-ready]';
+
+/**
  * Wrapper for streaming-markdown library to work with Obsidian's DOM
  */
 class StreamingMarkdownRenderer {
@@ -2404,23 +2411,29 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       return content || '';
     };
 
-    // Filter messages to show only user and assistant messages
-    // Exclude system, reasoning, tool_call, and tool_return messages
+    // Filter messages to show only user and assistant messages.
+    // Exclude system, reasoning, tool_call, tool_return, and auto-generated
+    // skill activation follow-ups (which are internal plumbing, not real user input).
     const chatMessages = messages.filter(msg => {
-      // Check message_type field (Letta's primary message type)
       const messageType = msg.message_type || msg.type;
-      if (messageType === 'user_message' ||
-          messageType === 'assistant_message') {
-        return true;
+      const isUserOrAssistant =
+        messageType === 'user_message' ||
+        messageType === 'assistant_message' ||
+        msg.role === 'user' ||
+        msg.role === 'assistant';
+
+      if (!isUserOrAssistant) return false;
+
+      // Hide auto-follow-up messages sent after skill loading/unloading.
+      // These are internal continuation prompts, not real user messages.
+      if (messageType === 'user_message' || msg.role === 'user') {
+        const content = extractContent(msg);
+        if (content.startsWith(SKILL_ACTIVATION_PREFIX)) {
+          return false;
+        }
       }
 
-      // Fallback to role field for backward compatibility
-      const role = msg.role;
-      if (role === 'user' || role === 'assistant') {
-        return true;
-      }
-
-      return false;
+      return true;
     })
     // Sort by date to ensure chronological order (oldest first)
     // This provides a fallback in case the API order changes
@@ -2816,12 +2829,21 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
             this.updateStatusIndicator(activationMsg, 'Activating skill tools...', '⚡', true);
 
             try {
-              // Send invisible follow-up message
+              // Build a follow-up that carries the original request context so the
+              // agent knows what to do with the newly attached tools. The
+              // SKILL_ACTIVATION_PREFIX marker lets us filter this message out of
+              // rendered chat history (see renderChatInterface).
+              const truncatedRequest = message.length > 300
+                ? message.slice(0, 300) + '...'
+                : message;
+              const followUpInput =
+                `${SKILL_ACTIVATION_PREFIX} Tools ready. Continue with my request: ${truncatedRequest}`;
+
               const followUpResponse = await fetch(`${endpoint}/v1/conversations/${sessionId}/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  input: 'Continue. Your skill tools are now active.',
+                  input: followUpInput,
                   streaming: true,
                   stream_tokens: true
                 })

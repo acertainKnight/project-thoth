@@ -204,60 +204,6 @@ def run_discovery_delete(args, pipeline: ThothPipeline):
         return 1
 
 
-def run_discovery_scheduler(args, pipeline: ThothPipeline):
-    """
-    Handle discovery scheduler commands.
-    """
-    import time
-
-    try:
-        if args.scheduler_command == 'start':
-            pipeline.services.discovery.start_scheduler()
-            logger.info('Discovery scheduler started. Press Ctrl+C to stop.')
-            try:
-                while True:
-                    time.sleep(1)
-            except KeyboardInterrupt:
-                pipeline.services.discovery.stop_scheduler()
-                logger.info('Discovery scheduler stopped.')
-            return 0
-        elif args.scheduler_command == 'status':
-            status = pipeline.services.discovery.get_schedule_status()
-            logger.info(f'Scheduler running: {status["running"]}')
-            logger.info(f'Total sources: {status["total_sources"]}')
-            logger.info(f'Enabled sources: {status["enabled_sources"]}')
-            logger.info('')
-            if status['sources']:
-                logger.info('Sources:')
-                for source in status['sources']:
-                    logger.info(f'  {source["name"]}:')
-                    logger.info(f'    Enabled: {source["enabled"]}')
-                    logger.info(f'    Type: {source["source_type"]}')
-                    logger.info(f'    Last run: {source["last_run"] or "Never"}')
-                    logger.info(
-                        f'    Next run: {source["next_run"] or "Not scheduled"}'
-                    )
-                    logger.info('')
-            return 0
-        else:
-            logger.error(f'Unknown scheduler command: {args.scheduler_command}')
-            return 1
-    except Exception as e:
-        logger.error(f'Error with scheduler command: {e}')
-        return 1
-
-
-def run_discovery_scheduler_stop(_args, pipeline: ThothPipeline):
-    """Stop the discovery scheduler."""
-    try:
-        pipeline.services.discovery.stop_scheduler()
-        logger.info('Discovery scheduler stopped.')
-        return 0
-    except Exception as e:
-        logger.error(f'Error stopping discovery scheduler: {e}')
-        return 1
-
-
 def run_discovery_server(args, pipeline: ThothPipeline):  # noqa: ARG001
     """Run the discovery server."""
     try:
@@ -340,8 +286,6 @@ def run_discovery_command(args, pipeline: ThothPipeline):
         return run_discovery_edit(args, pipeline)
     elif args.discovery_command == 'delete':
         return run_discovery_delete(args, pipeline)
-    elif args.discovery_command == 'scheduler':
-        return run_discovery_scheduler(args, pipeline)
     elif args.discovery_command == 'show':
         return run_discovery_show(args, pipeline)
     elif args.discovery_command == 'server':
@@ -430,25 +374,6 @@ def configure_subparser(subparsers):
         '--confirm', action='store_true', help='Confirm deletion without prompting'
     )
     delete_parser.set_defaults(func=run_discovery_delete)
-
-    scheduler_parser = subparsers.add_parser(
-        'scheduler', help='Manage discovery scheduler'
-    )
-    scheduler_subparsers = scheduler_parser.add_subparsers(
-        dest='scheduler_command', help='Scheduler command to run'
-    )
-    scheduler_start_parser = scheduler_subparsers.add_parser(
-        'start', help='Start the discovery scheduler'
-    )
-    scheduler_start_parser.set_defaults(func=run_discovery_scheduler)
-    scheduler_stop_parser = scheduler_subparsers.add_parser(
-        'stop', help='Stop the discovery scheduler'
-    )
-    scheduler_stop_parser.set_defaults(func=run_discovery_scheduler_stop)
-    scheduler_status_parser = scheduler_subparsers.add_parser(
-        'status', help='Show scheduler status'
-    )
-    scheduler_status_parser.set_defaults(func=run_discovery_scheduler)
 
     # Server command
     server_parser = subparsers.add_parser(

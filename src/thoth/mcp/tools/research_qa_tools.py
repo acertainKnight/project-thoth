@@ -1214,8 +1214,40 @@ class AgenticResearchQuestionMCPTool(MCPTool):
             )
             response_parts.append(f'**Retrieval Rounds**: {result["retry_count"] + 1}')
             response_parts.append(
-                f'**Grounded**: {"Yes" if result["is_grounded"] else "No (potential hallucination detected)"}\n'
+                f'**Grounded**: {"Yes" if result["is_grounded"] else "No (potential hallucination detected)"}'
             )
+
+            # Add CRAG retrieval assessment with action guidance
+            assessment = result.get('retrieval_assessment', '')
+            if assessment:
+                response_parts.append(f'**Retrieval Assessment**: {assessment.upper()}')
+
+                # Add self-guiding action instructions for AMBIGUOUS/INCORRECT
+                if assessment == 'ambiguous':
+                    # Generate suggested web search query from the original question
+                    # Use first expanded query if available, otherwise the original
+                    search_query = question
+                    response_parts.append(
+                        '\n**Action Required**: Your knowledge base had partial coverage of this topic. '
+                        'Use web_search to find additional sources with a query like:'
+                    )
+                    response_parts.append(f'"{search_query}"')
+                    response_parts.append(
+                        'Then combine the local answer above with what you find online.'
+                    )
+                elif assessment == 'incorrect':
+                    search_query = question
+                    response_parts.append(
+                        '\n**Action Required**: Your knowledge base does not have strong coverage of this topic. '
+                        'Use web_search to find relevant sources with a query like:'
+                    )
+                    response_parts.append(f'"{search_query}"')
+                    response_parts.append(
+                        'Base your answer primarily on the web results. '
+                        'If you find useful papers, offer to download them with download_pdf.'
+                    )
+
+            response_parts.append('')  # Blank line before answer
 
             # Add answer
             response_parts.append('## Answer\n')

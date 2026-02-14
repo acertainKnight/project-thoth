@@ -431,7 +431,6 @@ class DiscoveryDashboardService:
                 rqm.relevance_score,
                 rqm.user_sentiment,
                 rqm.sentiment_recorded_at,
-                rqm.user_rating,
                 pm.title,
                 pm.authors,
                 pm.publication_date,
@@ -445,7 +444,6 @@ class DiscoveryDashboardService:
                 AND rqm.user_sentiment IS NULL
             ORDER BY
                 rqm.relevance_score DESC,
-                COALESCE(rqm.user_rating, 0) DESC,
                 pm.publication_date DESC NULLS LAST
             LIMIT $3
         """

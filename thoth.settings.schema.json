@@ -205,6 +205,32 @@
               "maximum": 1,
               "description": "Minimum confidence threshold for accepting results",
               "default": 0.5
+            },
+            "cragUpperThreshold": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Upper threshold for CRAG CORRECT assessment (confidence >= this = CORRECT)",
+              "default": 0.7
+            },
+            "cragLowerThreshold": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Lower threshold for CRAG INCORRECT assessment (confidence < this = INCORRECT)",
+              "default": 0.4
+            },
+            "knowledgeRefinementEnabled": {
+              "type": "boolean",
+              "description": "Enable knowledge strip decomposition and filtering (CRAG)",
+              "default": true
+            },
+            "maxStripsPerDocument": {
+              "type": "integer",
+              "minimum": 5,
+              "maximum": 50,
+              "description": "Maximum knowledge strips per document (controls LLM cost)",
+              "default": 20
             }
           }
         }

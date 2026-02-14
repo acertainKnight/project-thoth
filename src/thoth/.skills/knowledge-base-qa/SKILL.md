@@ -48,6 +48,34 @@ If agentic retrieval is disabled in settings, `agentic_research_question` falls 
 
 The agentic tool takes longer (8-30 seconds vs <5 seconds) because it runs multiple retrieval rounds, grades documents, and verifies the answer. The user sees real-time progress updates in the UI ("Expanding search terms...", "Evaluating relevance...", etc.) so they know it's working.
 
+### Understanding Retrieval Assessment (CRAG)
+
+When you use `agentic_research_question`, the tool returns a **Retrieval Assessment** that tells you how well your knowledge base covered the topic:
+
+- **CORRECT** (confidence >= 0.7): Strong coverage, use the answer as-is
+- **AMBIGUOUS** (confidence 0.4-0.7): Partial coverage, supplement with web search
+- **INCORRECT** (confidence < 0.4): Weak coverage, rely primarily on web search
+
+**When you see AMBIGUOUS assessment:**
+1. The tool will provide an "Action Required" section with a suggested web search query
+2. Call `web_search` with that query (or refine it)
+3. Synthesize the local answer with web results
+4. Cite both local sources and web sources in your response
+5. If you find relevant papers online, offer to download them with `download_pdf`
+
+**When you see INCORRECT assessment:**
+1. The tool will provide an "Action Required" section with a suggested web search query
+2. Call `web_search` to find relevant sources
+3. Base your answer primarily on web results
+4. Mention that your knowledge base didn't have strong coverage
+5. Offer to download any useful papers found online to expand the knowledge base
+
+**When you see CORRECT assessment:**
+- Use the answer directly - no action required
+- The knowledge base had strong coverage
+
+This Corrective Retrieval Augmented Generation (CRAG) workflow ensures you always provide the best answer, whether from local knowledge, web search, or both.
+
 ### Article Memory Limit
 
 **IMPORTANT**: You can load a maximum of **3 articles** at a time into your working memory.

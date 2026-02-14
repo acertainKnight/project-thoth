@@ -792,18 +792,15 @@ class WorkflowEngine:
             existing_dois: set[str] = set()
             existing_titles: set[str] = set()
             try:
-                # Query previously discovered articles for this workflow
+                # Load known papers so we can skip already-seen articles
                 query = """
-                    SELECT DISTINCT doi, title
-                    FROM discovered_articles
-                    WHERE source = $1 AND (doi IS NOT NULL OR title IS NOT NULL)
-                    ORDER BY discovered_at DESC
+                    SELECT doi, title
+                    FROM paper_metadata
+                    WHERE doi IS NOT NULL OR title IS NOT NULL
+                    ORDER BY created_at DESC
                     LIMIT 5000
                 """
-                rows = await self.executions_repo.postgres.fetch(
-                    query,
-                    workflow.get('name', 'browser_workflow'),
-                )
+                rows = await self.executions_repo.postgres.fetch(query)
                 for row in rows:
                     if row.get('doi'):
                         existing_dois.add(row['doi'])

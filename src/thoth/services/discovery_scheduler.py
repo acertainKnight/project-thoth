@@ -17,6 +17,8 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from loguru import logger
+
 from thoth.config import Config
 from thoth.repositories.base import BaseRepository
 from thoth.services.base import BaseService
@@ -66,7 +68,7 @@ class DiscoveryExecutionLogRepository(BaseRepository[dict[str, Any]]):
 
             if result:
                 execution_id = result['id']
-                self.logger.debug(
+                logger.debug(
                     f'Created execution log entry {execution_id} for question {question_id}'
                 )
                 return execution_id
@@ -74,9 +76,7 @@ class DiscoveryExecutionLogRepository(BaseRepository[dict[str, Any]]):
             return None
 
         except Exception as e:
-            self.logger.error(
-                f'Failed to create execution log entry: {e}', exc_info=True
-            )
+            logger.error(f'Failed to create execution log entry: {e}', exc_info=True)
             return None
 
     async def complete_execution(
@@ -118,9 +118,7 @@ class DiscoveryExecutionLogRepository(BaseRepository[dict[str, Any]]):
             result = await self.postgres.fetchrow(query_duration, execution_id)
 
             if not result:
-                self.logger.error(
-                    f'Execution log {execution_id} not found for completion'
-                )
+                logger.error(f'Execution log {execution_id} not found for completion')
                 return False
 
             started_at = result['started_at']
@@ -159,14 +157,14 @@ class DiscoveryExecutionLogRepository(BaseRepository[dict[str, Any]]):
                 error_details,
             )
 
-            self.logger.debug(
+            logger.debug(
                 f"Completed execution log {execution_id} with status '{status}' "
                 f'in {duration_seconds:.2f}s'
             )
             return True
 
         except Exception as e:
-            self.logger.error(
+            logger.error(
                 f'Failed to complete execution log {execution_id}: {e}', exc_info=True
             )
             return False

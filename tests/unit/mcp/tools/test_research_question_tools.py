@@ -34,47 +34,73 @@ class TestListAvailableSourcesMCPTool:
 
     @pytest.mark.asyncio
     async def test_list_sources_with_builtin_only(self, mock_service_manager):
-        """Test listing sources when only built-in sources available."""
+        """Test listing sources from available_sources table."""
         tool = ListAvailableSourcesMCPTool(mock_service_manager)
 
-        # Mock repository to return empty workflows
-        with patch(
-            'thoth.repositories.browser_workflow_repository.BrowserWorkflowRepository'
-        ) as mock_repo_class:
-            mock_repo = AsyncMock()
-            mock_repo.get_active_workflows.return_value = []
-            mock_repo_class.return_value = mock_repo
+        mock_rows = [
+            {
+                'name': 'arxiv',
+                'display_name': 'ArXiv',
+                'source_type': 'api',
+                'description': 'Preprint server',
+                'health_status': 'active',
+                'total_queries': 10,
+                'total_articles_found': 100,
+            },
+            {
+                'name': 'semantic_scholar',
+                'display_name': 'Semantic Scholar',
+                'source_type': 'api',
+                'description': 'AI research papers',
+                'health_status': 'active',
+                'total_queries': 5,
+                'total_articles_found': 50,
+            },
+        ]
+        mock_service_manager.postgres.fetch = AsyncMock(return_value=mock_rows)
 
-            result = await tool.execute({})
+        result = await tool.execute({})
 
         assert result.isError is False
         assert len(result.content) > 0
-        # Check that built-in sources are listed
         content_text = ''.join([c['text'] for c in result.content])
         assert 'arxiv' in content_text
         assert 'semantic_scholar' in content_text
-        assert 'Built-in API Sources' in content_text
+        assert 'API Sources' in content_text
+        assert 'Special Options' in content_text
 
     @pytest.mark.asyncio
     async def test_list_sources_with_custom_workflows(self, mock_service_manager):
-        """Test listing sources with custom browser workflows."""
+        """Test listing sources including browser workflow type."""
         tool = ListAvailableSourcesMCPTool(mock_service_manager)
 
-        # Mock repository to return workflows
-        with patch(
-            'thoth.repositories.browser_workflow_repository.BrowserWorkflowRepository'
-        ) as mock_repo_class:
-            mock_repo = AsyncMock()
-            mock_repo.get_active_workflows.return_value = [
-                {'name': 'custom_scraper', 'description': 'Custom workflow'},
-            ]
-            mock_repo_class.return_value = mock_repo
+        mock_rows = [
+            {
+                'name': 'arxiv',
+                'display_name': 'ArXiv',
+                'source_type': 'api',
+                'description': 'Preprints',
+                'health_status': 'active',
+                'total_queries': 0,
+                'total_articles_found': 0,
+            },
+            {
+                'name': 'custom_scraper',
+                'display_name': 'Custom Scraper',
+                'source_type': 'browser_workflow',
+                'description': 'Custom workflow',
+                'health_status': 'active',
+                'total_queries': 0,
+                'total_articles_found': 0,
+            },
+        ]
+        mock_service_manager.postgres.fetch = AsyncMock(return_value=mock_rows)
 
-            result = await tool.execute({})
+        result = await tool.execute({})
 
         assert result.isError is False
         content_text = ''.join([c['text'] for c in result.content])
-        assert 'Custom Sources' in content_text
+        assert 'Browser Workflow Sources' in content_text
         assert 'custom_scraper' in content_text
 
 
@@ -427,9 +453,11 @@ class TestRunDiscoveryForQuestionMCPTool:
             AsyncMock(
                 return_value={
                     'success': True,
+                    'sources_queried': ['arxiv', 'pubmed'],
                     'articles_found': 25,
-                    'articles_downloaded': 20,
-                    'sources_used': ['arxiv', 'pubmed'],
+                    'articles_processed': 20,
+                    'articles_matched': 15,
+                    'execution_time_seconds': 10.5,
                 }
             )
         )
@@ -445,6 +473,8 @@ class TestRunDiscoveryForQuestionMCPTool:
         assert 'completed' in content_text.lower()
         assert '25' in content_text
         assert '20' in content_text
+        assert '15' in content_text
+        assert 'arxiv' in content_text
 
     @pytest.mark.asyncio
     async def test_run_discovery_orchestrator_unavailable(self, mock_service_manager):

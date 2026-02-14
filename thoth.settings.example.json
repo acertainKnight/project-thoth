@@ -51,7 +51,11 @@
       "hallucinationCheckEnabled": true,
       "strictHallucinationCheck": false,
       "webSearchFallbackEnabled": false,
-      "confidenceThreshold": 0.5
+      "confidenceThreshold": 0.5,
+      "cragUpperThreshold": 0.7,
+      "cragLowerThreshold": 0.4,
+      "knowledgeRefinementEnabled": true,
+      "maxStripsPerDocument": 20
     }
   },
   "paths": {
