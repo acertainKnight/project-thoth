@@ -21,7 +21,7 @@ The skills system enables **dynamic tool loading** for Letta agents, solving the
 
 ### The Problem
 
-- MCP server has 64 tools total
+- MCP server has 60 tools total
 - Loading all tools into one agent causes:
   - Token bloat (worse performance)
   - Confusion (LLM struggles to choose)

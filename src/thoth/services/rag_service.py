@@ -298,6 +298,102 @@ class RAGService(BaseService):
                 self.handle_error(e, f"answering question '{question}'")
             ) from e
 
+    async def agentic_ask_question_async(
+        self,
+        question: str,
+        k: int = 5,
+        max_retries: int = 2,
+        progress_callback: Any = None,
+    ) -> dict[str, Any]:
+        """
+        Ask a question using agentic retrieval (async).
+
+        Uses adaptive, self-correcting retrieval with query classification,
+        expansion, document grading, query rewriting, and hallucination detection.
+
+        Args:
+            question: The question to ask
+            k: Number of documents to retrieve
+            max_retries: Maximum number of retrieval retries
+            progress_callback: Optional callback for progress updates
+
+        Returns:
+            dict[str, Any]: Answer with sources, confidence, and metadata
+
+        Raises:
+            ServiceError: If question answering fails
+        """
+        try:
+            self.validate_input(question=question)
+
+            response = await self.rag_manager.agentic_answer_question_async(
+                question=question,
+                k=k,
+                max_retries=max_retries,
+                progress_callback=progress_callback,
+                return_sources=True,
+            )
+
+            self.log_operation(
+                'agentic_question_answered',
+                question=question,
+                sources=len(response.get('sources', [])),
+                confidence=response.get('confidence', 0.0),
+                retries=response.get('retry_count', 0),
+            )
+
+            return response
+
+        except Exception as e:
+            raise ServiceError(
+                self.handle_error(e, f"answering question (agentic) '{question}'")
+            ) from e
+
+    def agentic_ask_question(
+        self,
+        question: str,
+        k: int = 5,
+        max_retries: int = 2,
+        progress_callback: Any = None,
+    ) -> dict[str, Any]:
+        """
+        Ask a question using agentic retrieval (sync wrapper).
+
+        Args:
+            question: The question to ask
+            k: Number of documents to retrieve
+            max_retries: Maximum number of retrieval retries
+            progress_callback: Optional callback for progress updates
+
+        Returns:
+            dict[str, Any]: Answer with sources, confidence, and metadata
+
+        Raises:
+            ServiceError: If question answering fails
+        """
+        try:
+            import asyncio
+
+            asyncio.get_running_loop()
+            raise RuntimeError(
+                'agentic_ask_question() called from async context. '
+                'Use await agentic_ask_question_async() instead.'
+            )
+        except RuntimeError as e:
+            if 'no running event loop' in str(e).lower():
+                import asyncio
+
+                return asyncio.run(
+                    self.agentic_ask_question_async(
+                        question=question,
+                        k=k,
+                        max_retries=max_retries,
+                        progress_callback=progress_callback,
+                    )
+                )
+            else:
+                raise
+
     def get_statistics(self) -> dict[str, Any]:
         """
         Get statistics about the RAG system (sync version).

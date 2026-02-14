@@ -157,6 +157,56 @@
           "maximum": 1,
           "description": "Confidence threshold for CRAG fallback",
           "default": 0.6
+        },
+        "agenticRetrieval": {
+          "type": "object",
+          "description": "Agentic retrieval settings for adaptive, self-correcting RAG",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable agentic retrieval orchestrator",
+              "default": false
+            },
+            "maxRetries": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5,
+              "description": "Maximum query rewrite retries on low confidence",
+              "default": 2
+            },
+            "documentGradingEnabled": {
+              "type": "boolean",
+              "description": "Enable LLM-based document relevance grading",
+              "default": true
+            },
+            "queryExpansionEnabled": {
+              "type": "boolean",
+              "description": "Enable query expansion for better coverage",
+              "default": true
+            },
+            "hallucinationCheckEnabled": {
+              "type": "boolean",
+              "description": "Enable hallucination detection and correction",
+              "default": true
+            },
+            "strictHallucinationCheck": {
+              "type": "boolean",
+              "description": "Use strict mode for hallucination checking",
+              "default": false
+            },
+            "webSearchFallbackEnabled": {
+              "type": "boolean",
+              "description": "Enable web search fallback when retrieval fails",
+              "default": false
+            },
+            "confidenceThreshold": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Minimum confidence threshold for accepting results",
+              "default": 0.5
+            }
+          }
         }
       }
     },

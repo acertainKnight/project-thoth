@@ -293,9 +293,9 @@ class BrowserWorkflowPlugin(BaseDiscoveryPlugin):
             custom_filters['research_question'] = query.research_question
 
         return ExecutionParameters(
-            keywords=keywords if keywords else None,
+            keywords=keywords or [],
             date_range=date_range,
-            custom_filters=custom_filters if custom_filters else None,
+            custom_filters=custom_filters or {},
         )
 
     def validate_config(self, config: dict) -> bool:

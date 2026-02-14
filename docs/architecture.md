@@ -36,7 +36,7 @@ graph TD
 
     ServiceManager --> SkillService[Skill Service]
     ServiceManager --> LLMRouter[LLM Router]
-    ServiceManager --> RAGService[RAG System]
+    ServiceManager --> RAGService[RAG System + Agentic Retrieval]
     ServiceManager --> DiscoveryEngine[Discovery Engine]
     ServiceManager --> LettaIntegration[Letta Integration]
 
@@ -84,7 +84,7 @@ Central coordinator for all Thoth services implementing dependency injection pat
 - `LLMService`: Multi-provider LLM routing (Mistral, OpenRouter, OpenAI, Anthropic)
 - `ArticleService`: Article management and operations
 - `DiscoveryService`: Multi-source paper discovery
-- `RAGService`: Hybrid search (semantic + BM25) with reranking (optional, requires extras)
+- `RAGService`: Hybrid search (semantic + BM25) with reranking. Includes agentic retrieval mode with query expansion, document grading, and hallucination checking (optional, requires extras)
 - `PostgresService`: Database operations
 - `CitationService`: Citation analysis and enrichment
 - `SkillService`: Skill discovery and management
@@ -195,6 +195,7 @@ Thoth uses a specialized 2-agent architecture with persistent memory:
 
 **Tools** (analysis-focused):
 - `answer_research_question`
+- `agentic_research_question`
 - `explore_citation_network`
 - `compare_articles`
 - `evaluate_article`
@@ -236,13 +237,13 @@ Agents are auto-created/updated on startup:
 - Tools: `src/thoth/mcp/tools/` (20+ tool modules)
 - Registry: `src/thoth/mcp/tools/__init__.py`
 
-### 64 Active MCP Tools
+### 60 Active MCP Tools
 
 Organized across 16 categories:
 
 1. **Research Questions**: Create, list, update, delete, run discovery
 2. **Article Management**: Search, list, update metadata
-3. **Analysis Tools**: Answer questions, compare papers, evaluate quality
+3. **Analysis Tools**: Answer questions (standard + agentic), compare papers, evaluate quality
 4. **Citation Tools**: Format citations, export bibliography, explore networks
 5. **PDF Tools**: Download, locate PDFs
 6. **Tag Management**: Consolidate tags, manage vocabulary
@@ -526,6 +527,7 @@ class Settings:
 - **Letta**: Persistent agent memory
 - **PostgreSQL+pgvector**: Vector database
 - **LangChain**: Text processing and chunking
+- **LangGraph**: Agentic retrieval orchestration (state machine for multi-step RAG)
 - **Playwright**: Browser automation
 - **Pydantic**: Data validation
 - **NetworkX**: Citation graph analysis
@@ -562,5 +564,5 @@ class Settings:
 
 ---
 
-**Architecture Version**: 3.1 (Hybrid RAG)
+**Architecture Version**: 3.2 (Agentic RAG)
 **Last Updated**: February 2026

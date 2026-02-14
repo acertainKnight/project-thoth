@@ -9,7 +9,9 @@ This service orchestrates the complete discovery workflow:
 """
 
 import asyncio
+import re
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -28,6 +30,19 @@ from thoth.services.base import BaseService
 from thoth.services.llm_service import LLMService
 from thoth.utilities.pdf_url_converter import convert_to_pdf_url
 from thoth.utilities.schemas import ScrapedArticleMetadata
+
+
+@dataclass
+class MergedSourceQuery:
+    """Represents a consolidated query to a single source across multiple questions."""
+
+    source_name: str
+    keywords: list[str]
+    topics: list[str]
+    date_start: str | None
+    date_end: str | None
+    max_articles: int
+    question_ids: list[UUID]
 
 
 class DiscoveryOrchestrator(BaseService):
@@ -790,6 +805,609 @@ Your response (JSON only):"""
                 'matched_keywords': [],
                 'reasoning': f'Failed to parse LLM response: {e}',
             }
+
+    # ==================== Consolidated Discovery Pipeline ====================
+
+    async def run_consolidated_discovery(
+        self, questions: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """
+        Run consolidated discovery across multiple research questions.
+
+        This is the optimized pipeline that:
+        - Merges queries for shared sources
+        - Queries each source once
+        - Globally deduplicates articles before LLM scoring
+        - Scores unique articles against applicable questions only
+
+        Args:
+            questions: List of research question records
+
+        Returns:
+            Dict with overall stats and per-question results
+        """
+        start_time = time.time()
+
+        if not questions:
+            self.logger.warning('No questions provided for consolidated discovery')
+            return {
+                'success': True,
+                'questions_processed': 0,
+                'total_sources_queried': 0,
+                'total_articles_found': 0,
+                'total_unique_articles': 0,
+                'execution_time_seconds': time.time() - start_time,
+                'timestamp': datetime.now().isoformat(),
+                'question_results': {},
+            }
+
+        self.logger.info(
+            f'Starting consolidated discovery for {len(questions)} questions'
+        )
+
+        try:
+            # Step 1: Build source plan (merge queries)
+            source_plan = self._build_source_plan(questions)
+
+            # Step 2: Fetch all sources once
+            articles_with_source = await self._fetch_all_sources(source_plan)
+
+            # Step 3: Global deduplication
+            unique_articles = self._deduplicate_article_pool(articles_with_source)
+
+            # Step 4: Match articles to questions with LLM scoring
+            match_results = await self._match_articles_to_questions(
+                unique_articles, questions, source_plan
+            )
+
+            # Build overall result
+            execution_time = time.time() - start_time
+
+            # Aggregate stats
+            total_processed = sum(
+                r['articles_processed'] for r in match_results.values()
+            )
+            total_matched = sum(r['articles_matched'] for r in match_results.values())
+
+            # Build per-question results
+            question_results = {}
+            for question in questions:
+                question_id = question['id']
+                match_result = match_results.get(question_id, {})
+
+                question_results[str(question_id)] = {
+                    'question_id': str(question_id),
+                    'question_name': question['name'],
+                    'articles_processed': match_result.get('articles_processed', 0),
+                    'articles_matched': match_result.get('articles_matched', 0),
+                }
+
+            result = {
+                'success': True,
+                'questions_processed': len(questions),
+                'total_sources_queried': len(source_plan),
+                'total_articles_found': len(articles_with_source),
+                'total_unique_articles': len(unique_articles),
+                'total_articles_scored': total_processed,
+                'total_articles_matched': total_matched,
+                'execution_time_seconds': execution_time,
+                'timestamp': datetime.now().isoformat(),
+                'question_results': question_results,
+            }
+
+            self.logger.info(
+                f'Consolidated discovery completed: {len(source_plan)} sources, '
+                f'{len(articles_with_source)} articles, {len(unique_articles)} unique, '
+                f'{total_matched} matched in {execution_time:.2f}s'
+            )
+
+            return result
+
+        except Exception as e:
+            execution_time = time.time() - start_time
+            self.logger.error(f'Consolidated discovery failed: {e}', exc_info=True)
+            return {
+                'success': False,
+                'error': str(e),
+                'questions_processed': 0,
+                'execution_time_seconds': execution_time,
+                'timestamp': datetime.now().isoformat(),
+            }
+
+    def _build_source_plan(
+        self, questions: list[dict[str, Any]]
+    ) -> list[MergedSourceQuery]:
+        """
+        Build consolidated source queries by merging parameters across questions.
+
+        Groups questions by shared sources and merges their search parameters:
+        - Keywords/topics: union
+        - Date range: widest window (earliest start, latest end)
+        - Max articles: maximum across all questions
+
+        Args:
+            questions: List of research question records from database
+
+        Returns:
+            List of MergedSourceQuery objects, one per unique source
+        """
+        source_map: dict[str, MergedSourceQuery] = {}
+
+        for question in questions:
+            selected = question.get('selected_sources', [])
+
+            # Handle wildcard separately -- we'll expand it later
+            if selected == ['*']:
+                selected = ['*']
+
+            for source_name in selected:
+                if source_name not in source_map:
+                    source_map[source_name] = MergedSourceQuery(
+                        source_name=source_name,
+                        keywords=[],
+                        topics=[],
+                        date_start=None,
+                        date_end=None,
+                        max_articles=0,
+                        question_ids=[],
+                    )
+
+                merged = source_map[source_name]
+                merged.question_ids.append(question['id'])
+
+                # Merge keywords
+                keywords = question.get('keywords', [])
+                if keywords:
+                    merged.keywords.extend(keywords)
+
+                # Merge topics
+                topics = question.get('topics', [])
+                if topics:
+                    merged.topics.extend(topics)
+
+                # Expand date range to widest window
+                q_start = question.get('date_filter_start')
+                q_end = question.get('date_filter_end')
+
+                if q_start:
+                    if merged.date_start is None or q_start < merged.date_start:
+                        merged.date_start = q_start
+
+                if q_end:
+                    if merged.date_end is None or q_end > merged.date_end:
+                        merged.date_end = q_end
+
+                # Take max articles
+                q_max = question.get('max_articles_per_run', 50)
+                if q_max > merged.max_articles:
+                    merged.max_articles = q_max
+
+        # Deduplicate keywords and topics within each merged query
+        for merged in source_map.values():
+            merged.keywords = list(set(merged.keywords))
+            merged.topics = list(set(merged.topics))
+
+        queries = list(source_map.values())
+
+        self.logger.info(
+            f'Built source plan: {len(queries)} unique sources from '
+            f'{len(questions)} questions'
+        )
+
+        return queries
+
+    async def _fetch_all_sources(
+        self, source_plan: list[MergedSourceQuery]
+    ) -> list[tuple[ScrapedArticleMetadata, str]]:
+        """
+        Query each source once using merged parameters.
+
+        Args:
+            source_plan: List of consolidated source queries
+
+        Returns:
+            List of (article, source_name) tuples tracking article provenance
+        """
+        # Expand wildcard sources first
+        expanded_plan: list[MergedSourceQuery] = []
+        for merged_query in source_plan:
+            if merged_query.source_name == '*':
+                # Expand to all active sources
+                all_sources = await self.source_repo.list_all_source_names()
+                for source_name in all_sources:
+                    expanded_plan.append(
+                        MergedSourceQuery(
+                            source_name=source_name,
+                            keywords=merged_query.keywords,
+                            topics=merged_query.topics,
+                            date_start=merged_query.date_start,
+                            date_end=merged_query.date_end,
+                            max_articles=merged_query.max_articles,
+                            question_ids=merged_query.question_ids,
+                        )
+                    )
+            else:
+                expanded_plan.append(merged_query)
+
+        self.logger.info(
+            f'Fetching {len(expanded_plan)} sources with merged parameters'
+        )
+
+        # Query all sources in parallel
+        tasks = []
+        for merged_query in expanded_plan:
+            # Build a synthetic question dict with merged parameters
+            synthetic_question = {
+                'keywords': merged_query.keywords,
+                'topics': merged_query.topics,
+                'date_filter_start': merged_query.date_start,
+                'date_filter_end': merged_query.date_end,
+                'question': f'Consolidated query for {len(merged_query.question_ids)} questions',
+            }
+
+            tasks.append(
+                self._query_single_source(
+                    merged_query.source_name,
+                    merged_query.max_articles,
+                    synthetic_question,
+                )
+            )
+
+        # Execute all queries in parallel
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Combine results, tracking source provenance
+        articles_with_source: list[tuple[ScrapedArticleMetadata, str]] = []
+        for merged_query, result in zip(expanded_plan, results):  # noqa: B905
+            if isinstance(result, Exception):
+                self.logger.error(
+                    f"Source '{merged_query.source_name}' query failed: {result}"
+                )
+                await self.source_repo.increment_error_count(merged_query.source_name)
+            else:
+                for article in result:
+                    articles_with_source.append((article, merged_query.source_name))
+                self.logger.debug(
+                    f"Source '{merged_query.source_name}' returned {len(result)} articles"
+                )
+                await self.source_repo.increment_query_count(
+                    name=merged_query.source_name,
+                    articles_found=len(result),
+                )
+
+        self.logger.info(
+            f'Fetched {len(articles_with_source)} total articles from '
+            f'{len(expanded_plan)} sources'
+        )
+
+        return articles_with_source
+
+    def _deduplicate_article_pool(
+        self, articles_with_source: list[tuple[ScrapedArticleMetadata, str]]
+    ) -> list[tuple[ScrapedArticleMetadata, list[str]]]:
+        """
+        Deduplicate articles in memory before any DB or LLM calls.
+
+        Uses priority cascade:
+        1. DOI match (exact, case-insensitive)
+        2. ArXiv ID match (normalized, strip version suffix)
+        3. Normalized title + first author match
+
+        When duplicates are found, merges metadata and tracks all sources
+        that contributed this article.
+
+        Args:
+            articles_with_source: List of (article, source_name) tuples
+
+        Returns:
+            List of (article, source_names) tuples with unique articles
+        """
+        if not articles_with_source:
+            return []
+
+        # Use multiple indexes for different ID types
+        # Each maps to (article, source_set)
+        arxiv_index: dict[str, tuple[ScrapedArticleMetadata, set[str]]] = {}
+        doi_index: dict[str, tuple[ScrapedArticleMetadata, set[str]]] = {}
+        title_index: dict[str, tuple[ScrapedArticleMetadata, set[str]]] = {}
+
+        for article, source_name in articles_with_source:
+            # Generate all possible keys for this article
+            arxiv_key = None
+            doi_key = None
+            title_key = None
+
+            if article.arxiv_id:
+                # Normalize ArXiv ID (remove version)
+                arxiv_id = article.arxiv_id.strip().lower()
+                if 'v' in arxiv_id:
+                    arxiv_id = arxiv_id.split('v')[0]
+                arxiv_key = arxiv_id
+
+            if article.doi:
+                doi_key = article.doi.strip().lower()
+
+            # Always generate title key as fallback
+            title_key = self._generate_title_key(article)
+
+            # Check if we've seen this article before
+            existing_entry = None
+
+            # Priority 1: Check ArXiv ID
+            if arxiv_key and arxiv_key in arxiv_index:
+                existing_entry = arxiv_index[arxiv_key]
+
+            # Priority 2: Check DOI
+            elif doi_key and doi_key in doi_index:
+                existing_entry = doi_index[doi_key]
+                # Also add to arxiv_index if this article has ArXiv ID
+                if arxiv_key:
+                    arxiv_index[arxiv_key] = existing_entry
+
+            # Priority 3: Check title
+            elif title_key in title_index:
+                existing_entry = title_index[title_key]
+                # Update other indexes
+                if arxiv_key:
+                    arxiv_index[arxiv_key] = existing_entry
+                if doi_key:
+                    doi_index[doi_key] = existing_entry
+
+            if existing_entry:
+                # Duplicate found - merge and track source
+                existing_article, existing_sources = existing_entry
+                merged = self.discovery_manager._merge_article_metadata(
+                    existing_article, article
+                )
+                existing_sources.add(source_name)
+
+                merged_entry = (merged, existing_sources)
+
+                # Update all relevant indexes with merged version
+                if arxiv_key:
+                    arxiv_index[arxiv_key] = merged_entry
+                if doi_key:
+                    doi_index[doi_key] = merged_entry
+                title_index[title_key] = merged_entry
+            else:
+                # New article - add to all relevant indexes
+                new_entry = (article, {source_name})
+                if arxiv_key:
+                    arxiv_index[arxiv_key] = new_entry
+                if doi_key:
+                    doi_index[doi_key] = new_entry
+                title_index[title_key] = new_entry
+
+        # Return unique articles with source lists
+        seen_ids = set()
+        unique: list[tuple[ScrapedArticleMetadata, list[str]]] = []
+        for article, sources in title_index.values():
+            article_id = id(article)
+            if article_id not in seen_ids:
+                seen_ids.add(article_id)
+                unique.append((article, list(sources)))
+
+        self.logger.info(
+            f'Deduplicated {len(articles_with_source)} articles to '
+            f'{len(unique)} unique articles'
+        )
+
+        return unique
+
+    def _generate_title_key(self, article: ScrapedArticleMetadata) -> str:
+        """Generate normalized title+author key for matching."""
+        # Normalize title: lowercase, remove punctuation, collapse whitespace
+        title = article.title.lower()
+        title = re.sub(r'[^\w\s]', '', title)
+        title = ' '.join(title.split())
+
+        # Normalize first author
+        first_author = ''
+        if article.authors:
+            first_author = ' '.join(article.authors[0].lower().split())
+
+        return f'{title}:{first_author}'
+
+    async def _match_articles_to_questions(
+        self,
+        unique_articles: list[tuple[ScrapedArticleMetadata, list[str]]],
+        questions: list[dict[str, Any]],
+        source_plan: list[MergedSourceQuery],
+    ) -> dict[UUID, dict[str, Any]]:
+        """
+        Match unique articles to applicable questions with LLM scoring.
+
+        For each article:
+        1. Filter questions by source overlap
+        2. Filter by question date boundaries
+        3. Skip if already scored above threshold
+        4. LLM score and store match
+
+        Args:
+            unique_articles: List of (article, source_names) tuples
+            questions: List of research question records
+            source_plan: Source plan to map questions to sources
+
+        Returns:
+            Dict mapping question_id to result dict with counts
+        """
+        # Build question index for quick lookup
+        question_by_id = {q['id']: q for q in questions}
+
+        # Build source-to-questions mapping from source plan
+        source_to_questions: dict[str, set[UUID]] = {}
+        for merged_query in source_plan:
+            for question_id in merged_query.question_ids:
+                if merged_query.source_name not in source_to_questions:
+                    source_to_questions[merged_query.source_name] = set()
+                source_to_questions[merged_query.source_name].add(question_id)
+
+        # Initialize result counters per question
+        results: dict[UUID, dict[str, Any]] = {}
+        for question in questions:
+            results[question['id']] = {
+                'articles_processed': 0,
+                'articles_matched': 0,
+            }
+
+        self.logger.info(
+            f'Matching {len(unique_articles)} articles to {len(questions)} questions'
+        )
+
+        # Process each article
+        for article, article_sources in unique_articles:
+            # Determine applicable questions
+            applicable_question_ids = set()
+
+            for source_name in article_sources:
+                if source_name in source_to_questions:
+                    applicable_question_ids.update(source_to_questions[source_name])
+
+            if not applicable_question_ids:
+                self.logger.debug(
+                    f"Article '{article.title}' has no applicable questions"
+                )
+                continue
+
+            # Get or create paper in database
+            paper_id, _was_created = await self._get_or_create_article(article)
+            if not paper_id:
+                self.logger.error(
+                    f"Failed to get/create paper for '{article.title}', skipping"
+                )
+                continue
+
+            # Process each applicable question
+            for question_id in applicable_question_ids:
+                question = question_by_id[question_id]
+
+                # Filter by date boundaries (if specified)
+                if not self._article_within_date_range(article, question):
+                    continue
+
+                # Check if already scored above threshold
+                existing_score = await self._get_existing_match_score(
+                    paper_id, question_id
+                )
+                min_score = question.get('min_relevance_score', 0.5)
+
+                if existing_score is not None and existing_score >= min_score:
+                    self.logger.debug(
+                        f"Article '{article.title}' already scored {existing_score:.3f} "
+                        f"for question '{question['name']}', skipping"
+                    )
+                    continue
+
+                # Score with LLM
+                results[question_id]['articles_processed'] += 1
+
+                try:
+                    relevance_result = await self._calculate_relevance_score(
+                        article, question
+                    )
+
+                    if relevance_result['score'] < min_score:
+                        self.logger.debug(
+                            f"Article '{article.title}' score {relevance_result['score']:.3f} "
+                            f'below threshold {min_score}'
+                        )
+                        continue
+
+                    # Store match
+                    # Use first source as discovered_via_source
+                    discovered_via = (
+                        article_sources[0] if article_sources else 'unknown'
+                    )
+
+                    match_id = await self.match_repo.create_match(
+                        paper_id=paper_id,
+                        question_id=question_id,
+                        relevance_score=relevance_result['score'],
+                        matched_keywords=relevance_result.get('matched_keywords'),
+                        discovered_via_source=discovered_via,
+                    )
+
+                    if match_id:
+                        results[question_id]['articles_matched'] += 1
+                        self.logger.info(
+                            f"Matched article '{article.title}' to question '{question['name']}' "
+                            f'(score: {relevance_result["score"]:.3f}, source: {discovered_via})'
+                        )
+                    else:
+                        self.logger.error(f'Failed to store match for paper {paper_id}')
+
+                except Exception as e:
+                    self.logger.error(
+                        f"Error scoring article '{article.title}' for question '{question['name']}': {e}",
+                        exc_info=True,
+                    )
+
+        # Log summary
+        for question_id, result in results.items():
+            question = question_by_id[question_id]
+            self.logger.info(
+                f"Question '{question['name']}': processed {result['articles_processed']}, "
+                f'matched {result["articles_matched"]}'
+            )
+
+        return results
+
+    def _article_within_date_range(
+        self, article: ScrapedArticleMetadata, question: dict[str, Any]
+    ) -> bool:
+        """Check if article publication date falls within question's date range."""
+        if not article.publication_date:
+            # No date available - allow through (better to score than miss)
+            return True
+
+        pub_date = article.publication_date
+        if isinstance(pub_date, str):
+            try:
+                from dateutil import parser as dateutil_parser
+
+                pub_date = dateutil_parser.parse(pub_date).date()
+            except Exception:
+                return True  # Can't parse, allow through
+
+        # Check start boundary
+        date_start = question.get('date_filter_start')
+        if date_start:
+            try:
+                if isinstance(date_start, str):
+                    from dateutil import parser as dateutil_parser
+
+                    date_start = dateutil_parser.parse(date_start).date()
+                if pub_date < date_start:
+                    return False
+            except Exception:
+                pass
+
+        # Check end boundary
+        date_end = question.get('date_filter_end')
+        if date_end:
+            try:
+                if isinstance(date_end, str):
+                    from dateutil import parser as dateutil_parser
+
+                    date_end = dateutil_parser.parse(date_end).date()
+                if pub_date > date_end:
+                    return False
+            except Exception:
+                pass
+
+        return True
+
+    async def _get_existing_match_score(
+        self, paper_id: UUID, question_id: UUID
+    ) -> float | None:
+        """Get existing match score if it exists."""
+        query = """
+            SELECT relevance_score
+            FROM research_question_matches
+            WHERE paper_id = $1 AND question_id = $2
+        """
+        score = await self.postgres_service.fetchval(query, paper_id, question_id)
+        return score
 
     # ==================== Result Helpers ====================
 

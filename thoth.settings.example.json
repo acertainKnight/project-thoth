@@ -41,7 +41,18 @@
     "contextualEnrichmentModel": "google/gemini-2.0-flash-lite",
     "adaptiveRoutingEnabled": false,
     "useSemanticRouter": false,
-    "cragConfidenceThreshold": 0.6
+    "cragConfidenceThreshold": 0.6,
+    "agenticRetrieval": {
+      "enabled": false,
+      "maxRetries": 2,
+      "documentGradingEnabled": true,
+      "queryExpansionEnabled": true,
+      "queryDecompositionEnabled": true,
+      "hallucinationCheckEnabled": true,
+      "strictHallucinationCheck": false,
+      "webSearchFallbackEnabled": false,
+      "confidenceThreshold": 0.5
+    }
   },
   "paths": {
     "workspace": "thoth/_thoth",

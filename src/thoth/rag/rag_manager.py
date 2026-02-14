@@ -22,6 +22,9 @@ from thoth.rag.vector_store import VectorStoreManager
 from thoth.rag.reranker import create_reranker, BaseReranker
 from thoth.rag.contextual_enrichment import ContextualEnricher
 from thoth.rag.query_router import QueryRouter
+from thoth.rag.agentic_retrieval import AgenticRAGOrchestrator
+from thoth.rag.document_grader import DocumentGrader
+from thoth.rag.hallucination_checker import HallucinationChecker
 from thoth.utilities import OpenRouterClient
 from thoth.config import config
 
@@ -167,6 +170,51 @@ class RAGManager:
             use_semantic_router=use_semantic_router,
         )
         logger.debug(f'Adaptive routing: {routing_enabled}')
+
+        # Initialize agentic RAG components (if enabled)
+        agentic_config = self.config.rag_config.agentic_retrieval
+        agentic_enabled = agentic_config.enabled
+
+        if agentic_enabled:
+            # Initialize document grader
+            self.document_grader = DocumentGrader(
+                llm_client=self.llm,
+                threshold=agentic_config.confidence_threshold,
+            )
+
+            # Initialize hallucination checker
+            self.hallucination_checker = HallucinationChecker(
+                llm_client=self.llm,
+                strict_mode=agentic_config.strict_hallucination_check,
+            )
+
+            # Convert pydantic config to dict for orchestrator
+            agentic_config_dict = {
+                'enabled': agentic_config.enabled,
+                'max_retries': agentic_config.max_retries,
+                'document_grading_enabled': agentic_config.document_grading_enabled,
+                'query_expansion_enabled': agentic_config.query_expansion_enabled,
+                'hallucination_check_enabled': agentic_config.hallucination_check_enabled,
+                'confidence_threshold': agentic_config.confidence_threshold,
+                'web_search_fallback_enabled': agentic_config.web_search_fallback_enabled,
+            }
+
+            # Initialize agentic orchestrator
+            self.agentic_orchestrator = AgenticRAGOrchestrator(
+                vector_store=self.vector_store_manager,
+                query_router=self.query_router,
+                document_grader=self.document_grader,
+                hallucination_checker=self.hallucination_checker,
+                reranker=self.reranker,
+                llm_client=self.llm,
+                config=agentic_config_dict,
+            )
+            logger.info('Agentic RAG orchestrator initialized')
+        else:
+            self.document_grader = None
+            self.hallucination_checker = None
+            self.agentic_orchestrator = None
+            logger.debug('Agentic RAG disabled')
 
         logger.debug('All RAG components initialized')
 
@@ -749,6 +797,127 @@ Answer:"""
         except Exception as e:
             logger.error(f'Error answering question: {e}')
             raise
+
+    async def agentic_answer_question_async(
+        self,
+        question: str,
+        k: int = 5,
+        max_retries: int = 2,
+        progress_callback: Any = None,
+        return_sources: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Answer question using agentic retrieval (async).
+
+        Uses the AgenticRAGOrchestrator for adaptive, self-correcting retrieval
+        with query classification, expansion, document grading, query rewriting,
+        and hallucination detection.
+
+        Args:
+            question: The question to answer
+            k: Number of documents to retrieve
+            max_retries: Maximum number of retrieval retries on low confidence
+            progress_callback: Optional callback for progress updates (step, message)
+            return_sources: Whether to return source documents
+
+        Returns:
+            Dictionary containing answer, sources, and metadata
+
+        Example:
+            >>> result = await rag_manager.agentic_answer_question_async(
+            ...     'Compare transformers and RNNs for sequence modeling'
+            ... )
+            >>> print(result['answer'])
+        """
+        if not self.agentic_orchestrator:
+            logger.warning(
+                'Agentic RAG not enabled, falling back to standard answer_question'
+            )
+            # Fall back to standard RAG
+            return self.answer_question(
+                question=question,
+                k=k,
+                return_sources=return_sources,
+            )
+
+        try:
+            logger.info(f'Answering question with agentic RAG: {question}')
+
+            # Use agentic orchestrator
+            result = await self.agentic_orchestrator.answer_question_async(
+                query=question,
+                k=k,
+                max_retries=max_retries,
+                progress_callback=progress_callback,
+            )
+
+            # Format response
+            response = {
+                'question': question,
+                'answer': result['answer'],
+                'confidence': result['confidence'],
+                'is_grounded': result['is_grounded'],
+                'query_type': result['query_type'],
+                'retry_count': result['retry_count'],
+            }
+
+            if return_sources:
+                response['sources'] = result['sources']
+
+            logger.info(
+                f'Agentic RAG completed: confidence={result["confidence"]:.2f}, '
+                f'retries={result["retry_count"]}'
+            )
+            return response
+
+        except Exception as e:
+            logger.error(f'Error in agentic answer: {e}')
+            raise
+
+    def agentic_answer_question(
+        self,
+        question: str,
+        k: int = 5,
+        max_retries: int = 2,
+        progress_callback: Any = None,
+        return_sources: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Answer question using agentic retrieval (sync wrapper).
+
+        Args:
+            question: The question to answer
+            k: Number of documents to retrieve
+            max_retries: Maximum number of retrieval retries
+            progress_callback: Optional callback for progress updates
+            return_sources: Whether to return source documents
+
+        Returns:
+            Dictionary containing answer, sources, and metadata
+        """
+        try:
+            import asyncio
+
+            asyncio.get_running_loop()
+            raise RuntimeError(
+                'agentic_answer_question() called from async context. '
+                'Use await agentic_answer_question_async() instead.'
+            )
+        except RuntimeError as e:
+            if 'no running event loop' in str(e).lower():
+                import asyncio
+
+                return asyncio.run(
+                    self.agentic_answer_question_async(
+                        question=question,
+                        k=k,
+                        max_retries=max_retries,
+                        progress_callback=progress_callback,
+                        return_sources=return_sources,
+                    )
+                )
+            else:
+                raise
 
     def get_stats(self) -> dict[str, Any]:
         """

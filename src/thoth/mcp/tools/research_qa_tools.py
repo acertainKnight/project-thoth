@@ -108,7 +108,8 @@ class AnswerResearchQuestionMCPTool(MCPTool):
                 f'Based on {len(search_results)} relevant source(s):\n'
             )
 
-            # Adjusted thresholds for typical embedding similarity scores
+            # Group findings by relevance
+            # (adjusted thresholds for typical embedding similarity scores)
             high_relevance = [r for r in search_results if r.get('score', 0) >= 0.6]
             medium_relevance = [
                 r for r in search_results if 0.5 <= r.get('score', 0) < 0.6
@@ -656,6 +657,9 @@ class SearchByTopicMCPTool(MCPTool):
             year_from = arguments.get('year_from')
             year_to = arguments.get('year_to')
             limit = arguments.get('limit', 20)
+            # Note: sort_by parameter is not currently used in the implementation
+            arguments.get('sort_by', 'relevance')
+
             rag_service = self.service_manager.rag
             if not rag_service:
                 return MCPToolCallResult(
@@ -1067,6 +1071,173 @@ class GetCitationContextMCPTool(MCPTool):
 
                 response_parts.append(f'\n## Occurrence {i} ({section})\n')
                 response_parts.append(f'{text}\n')
+
+            return MCPToolCallResult(
+                content=[{'type': 'text', 'text': '\n'.join(response_parts)}]
+            )
+
+        except Exception as e:
+            return self.handle_error(e)
+
+
+class AgenticResearchQuestionMCPTool(MCPTool):
+    """
+    Advanced research question answering with agentic retrieval.
+
+    Uses adaptive, self-correcting retrieval with query classification,
+    expansion, document grading, query rewriting, and hallucination detection
+    for higher accuracy on complex questions.
+    """
+
+    @property
+    def name(self) -> str:
+        return 'agentic_research_question'
+
+    @property
+    def description(self) -> str:
+        return (
+            'Answer complex research questions using agentic retrieval. '
+            'Automatically classifies query type, expands search terms, '
+            'grades document relevance, rewrites queries on low confidence, '
+            'and verifies answer groundedness. Best for complex multi-hop '
+            'questions requiring deep analysis across multiple sources.'
+        )
+
+    @property
+    def input_schema(self) -> dict[str, Any]:
+        return {
+            'type': 'object',
+            'properties': {
+                'question': {
+                    'type': 'string',
+                    'description': 'Complex research question to answer',
+                },
+                'max_sources': {
+                    'type': 'integer',
+                    'description': 'Maximum number of source articles to use',
+                    'default': 5,
+                    'minimum': 1,
+                    'maximum': 20,
+                },
+                'max_retries': {
+                    'type': 'integer',
+                    'description': 'Maximum number of retrieval retries on low confidence',
+                    'default': 2,
+                    'minimum': 0,
+                    'maximum': 5,
+                },
+            },
+            'required': ['question'],
+        }
+
+    async def execute(self, arguments: dict[str, Any]) -> MCPToolCallResult:
+        """Answer research question using agentic retrieval."""
+        try:
+            question = arguments['question']
+            max_sources = arguments.get('max_sources', 5)
+            max_retries = arguments.get('max_retries', 2)
+
+            # Get RAG service
+            rag_service = self.service_manager.rag
+            if not rag_service:
+                return MCPToolCallResult(
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': 'RAG service not available (requires embeddings extras)',
+                        }
+                    ],
+                    isError=True,
+                )
+
+            # Check if agentic retrieval is enabled
+            if not rag_service.rag_manager.agentic_orchestrator:
+                # Fall back to standard answer_research_question
+                return await AnswerResearchQuestionMCPTool(
+                    self.service_manager
+                ).execute(
+                    {
+                        'question': question,
+                        'max_sources': max_sources,
+                        'include_citations': True,
+                    }
+                )
+
+            # Create progress callback that broadcasts to WebSocket
+            import uuid
+
+            operation_id = f'agentic_rag_{uuid.uuid4().hex[:8]}'
+
+            def progress_callback(_step: str, message: str, progress: float) -> None:
+                """Broadcast retrieval step progress to WebSocket clients."""
+                try:
+                    from thoth.server.routers.websocket import update_operation_progress
+
+                    update_operation_progress(
+                        operation_id=operation_id,
+                        status='in_progress',
+                        progress=progress,
+                        message=message,
+                    )
+                except Exception as e:
+                    # Don't fail the entire operation if progress reporting fails
+                    import logging
+
+                    logging.getLogger(__name__).warning(
+                        f'Failed to update progress: {e}'
+                    )
+
+            # Use agentic retrieval with progress callback
+            result = await rag_service.agentic_ask_question_async(
+                question=question,
+                k=max_sources,
+                max_retries=max_retries,
+                progress_callback=progress_callback,
+            )
+
+            # Mark operation complete
+            from thoth.server.routers.websocket import update_operation_progress
+
+            update_operation_progress(
+                operation_id=operation_id,
+                status='completed',
+                progress=100.0,
+                message='Answer generated',
+            )
+
+            # Build comprehensive response
+            response_parts = []
+            response_parts.append(f'# Answer to: {question}\n')
+            response_parts.append(f'**Confidence**: {result["confidence"]:.2f}')
+            response_parts.append(
+                f'**Query Type**: {result["query_type"].replace("_", " ").title()}'
+            )
+            response_parts.append(f'**Retrieval Rounds**: {result["retry_count"] + 1}')
+            response_parts.append(
+                f'**Grounded**: {"Yes" if result["is_grounded"] else "No (potential hallucination detected)"}\n'
+            )
+
+            # Add answer
+            response_parts.append('## Answer\n')
+            response_parts.append(result['answer'])
+
+            # Add sources
+            sources = result.get('sources', [])
+            if sources:
+                response_parts.append('\n## Sources\n')
+                for i, source in enumerate(sources, 1):
+                    title = source.get('title', 'Unknown')
+                    authors = source.get('authors', [])
+                    relevance = source.get('relevance_score', 0.0)
+
+                    author_str = ', '.join(authors[:3]) if authors else 'Unknown'
+                    if len(authors) > 3:
+                        author_str += ' et al.'
+
+                    response_parts.append(
+                        f'{i}. **{title}** (Relevance: {relevance:.2f})'
+                    )
+                    response_parts.append(f'   {author_str}')
 
             return MCPToolCallResult(
                 content=[{'type': 'text', 'text': '\n'.join(response_parts)}]

@@ -396,6 +396,61 @@ python -m thoth rag search "neural networks" \
     --year 2024
 ```
 
+### Agentic Retrieval
+
+For complex research questions that span multiple papers or need deeper reasoning, Thoth has an agentic retrieval mode. It runs a multi-step pipeline that expands your query, grades documents for relevance, and verifies the answer is grounded in actual sources.
+
+You don't need to think about which mode to use—the agent picks the right tool based on your question. Simple lookups go through standard RAG. Multi-hop synthesis questions go through the agentic pipeline.
+
+**Enable it** in settings (disabled by default since it uses more LLM calls):
+```
+You: "Enable agentic retrieval"
+Agent: [Updates agenticRetrieval.enabled to true in settings]
+```
+
+Or edit `settings.json` directly:
+```json
+{
+  "rag": {
+    "agenticRetrieval": {
+      "enabled": true
+    }
+  }
+}
+```
+
+**What it looks like in practice:**
+```
+You: "How has the understanding of scaling laws in LLMs evolved over the past two years?"
+
+Agent: [Uses agentic_research_question tool]
+       UI shows: "Analyzing your question..."
+       UI shows: "Expanding search terms..."
+       UI shows: "Searching your knowledge base..."
+       UI shows: "Evaluating relevance..."
+       UI shows: "Ranking best results..."
+       UI shows: "Composing answer..."
+       UI shows: "Verifying accuracy..."
+
+Agent: "Based on 8 papers in your collection, the understanding of scaling laws has
+        shifted in several ways: [detailed synthesis with citations]"
+```
+
+The Obsidian UI shows what step the pipeline is on in real time, so you're not staring at a blank screen wondering if something broke.
+
+**When to use it:**
+- Comparison questions ("how does X compare to Y?")
+- Synthesis across many papers ("what are the main approaches to Z?")
+- Questions where you know the answer requires multiple sources
+- Anything where a quick single-pass search gives shallow results
+
+**When not to bother:**
+- "What dataset did paper X use?" — standard RAG handles this fine
+- Quick factual lookups with obvious keywords
+- Questions about a single specific paper
+
+See [RAG System](rag-system.md#agentic-retrieval) for the full technical details.
+
 ### Custom Indexes
 
 Create domain-specific search indexes:

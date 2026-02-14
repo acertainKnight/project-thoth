@@ -64,7 +64,7 @@ wsl --install  # if needed
 curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/main/install.sh | bash
 ```
 
-The installer detects/installs Docker, runs a setup wizard, and puts the `thoth` command on your PATH. Takes about 5 minutes.
+The installer checks for Docker, runs a setup wizard, and puts the `thoth` command on your PATH. Requires Docker to be installed already (see [Docker install docs](https://docs.docker.com/get-docker/) if you don't have it). Takes about 5 minutes once Docker is available.
 
 ### Development Setup
 
@@ -110,7 +110,7 @@ graph TD
 
     ServiceManager --> SkillService[Skill Service]
     ServiceManager --> LLMService[LLM Router]
-    ServiceManager --> RAGService[RAG System]
+    ServiceManager --> RAGService[RAG System + Agentic Retrieval]
     ServiceManager --> DiscoveryService[Discovery Engine]
     ServiceManager --> LettaService[Letta Integration]
 
@@ -145,7 +145,7 @@ graph TD
 
 ## Features
 
-**Agent System** — 2 specialized agents (orchestrator + analyst) with 64 MCP tools across 16 categories. 6 memory blocks per agent (persona, preferences, research context, loaded skills, planning, scratchpad). Conversations and knowledge persist across sessions via Letta.
+**Agent System** — 2 specialized agents (orchestrator + analyst) with 60 MCP tools across 16 categories. 6 memory blocks per agent (persona, preferences, research context, loaded skills, planning, scratchpad). Conversations and knowledge persist across sessions via Letta.
 
 **Skill System** — 10 bundled skills (paper-discovery, deep-research, knowledge-base-qa, online-research, rag-administration, and more). Users can create custom skills in their vault. Skills hot-reload without restarting services.
 
@@ -153,7 +153,7 @@ graph TD
 
 **Document Processing** — 8-stage pipeline: text extraction, metadata, citations, enrichment, chunking, tags, Obsidian notes, and hybrid index building. Citation resolution runs through a 6-stage chain (Crossref, OpenAlex, ArXiv, fuzzy matcher, validator, decision engine).
 
-**RAG & Hybrid Search** — Semantic search (pgvector) + BM25 (tsvector) with Reciprocal Rank Fusion. Optional LLM-based or Cohere reranking. Document-aware chunking preserves paper structure.
+**RAG & Hybrid Search** — Semantic search (pgvector) + BM25 (tsvector) with Reciprocal Rank Fusion. Optional LLM-based or Cohere reranking. Document-aware chunking preserves paper structure. Agentic retrieval mode adds a self-correcting loop with query expansion, document grading, and hallucination checking for complex multi-hop questions.
 
 **Configuration** — Single `settings.json` file, hot-reloadable in dev mode (~2 seconds). Everything lives in your Obsidian vault under `_thoth/`. Change settings through chat or by editing files directly.
 
@@ -182,7 +182,7 @@ Thoth uses [Letta](https://www.letta.com/) for agent memory. You can either use 
 project-thoth/
 ├── src/thoth/                    # Python source
 │   ├── cli/                      # CLI (14 command modules + setup wizard)
-│   ├── mcp/                      # MCP server + 64 tools
+│   ├── mcp/                      # MCP server + 60 tools
 │   ├── services/                 # Business logic layer
 │   ├── discovery/                # Multi-source discovery + browser auto-scraper
 │   ├── server/                   # FastAPI REST API (13 routers)

@@ -285,3 +285,200 @@ Sub-Questions (one per line):"""
                 return asyncio.run(self.decompose_query_async(query, llm_client))
             else:
                 raise
+
+    async def expand_query_async(
+        self, query: str, llm_client: Any, num_expansions: int = 2
+    ) -> list[str]:
+        """
+        Expand query with semantically related reformulations.
+
+        Generates alternative phrasings of the query to improve retrieval
+        coverage. Used in multi-query retrieval to catch documents that
+        might be missed by a single query formulation.
+
+        Args:
+            query: Original query to expand
+            llm_client: LLM client for expansion
+            num_expansions: Number of expansions to generate (default 2)
+
+        Returns:
+            List of expanded queries (includes original query first)
+
+        Example:
+            >>> queries = await router.expand_query_async(
+            ...     'How do transformers work?', llm_client
+            ... )
+            >>> # Returns: [
+            ...     "How do transformers work?",
+            ...     "What is the mechanism behind transformer models?",
+            ...     "Explain the architecture of transformer neural networks"
+            ... ]
+        """
+        prompt = f"""Generate {num_expansions} alternative phrasings of this research question.
+Each rephrasing should use different terminology while preserving the core intent.
+
+Original Question: {query}
+
+Alternative Phrasings (one per line):"""
+
+        try:
+            response = await asyncio.to_thread(llm_client.invoke, prompt)
+
+            # Parse expansions (one per line)
+            expansions = [
+                line.strip()
+                for line in response.content.strip().split('\n')
+                if line.strip() and not line.strip().startswith('#')
+            ]
+
+            # Remove numbering if present (1., 2., etc.)
+            import re
+
+            expansions = [re.sub(r'^\d+[\.)]\s*', '', q) for q in expansions]
+
+            # Limit to requested number and prepend original query
+            expansions = expansions[:num_expansions]
+            all_queries = [query, *expansions]
+
+            logger.debug(f'Expanded query into {len(all_queries)} variations')
+            return all_queries
+
+        except Exception as e:
+            logger.error(f'Query expansion failed: {e}')
+            # Fallback: return original query only
+            return [query]
+
+    def expand_query(
+        self, query: str, llm_client: Any, num_expansions: int = 2
+    ) -> list[str]:
+        """
+        Expand query (sync wrapper).
+
+        Args:
+            query: Original query
+            llm_client: LLM client
+            num_expansions: Number of expansions
+
+        Returns:
+            List of expanded queries
+        """
+        try:
+            asyncio.get_running_loop()
+            raise RuntimeError(
+                'expand_query() called from async context. '
+                'Use await expand_query_async() instead.'
+            )
+        except RuntimeError as e:
+            if 'no running event loop' in str(e).lower():
+                return asyncio.run(
+                    self.expand_query_async(query, llm_client, num_expansions)
+                )
+            else:
+                raise
+
+    async def extract_filters_async(
+        self, query: str, llm_client: Any
+    ) -> dict[str, Any]:
+        """
+        Extract metadata filters from natural language query.
+
+        Parses the query to identify filtering criteria (year, author, topic,
+        journal, etc.) that should be applied to retrieval.
+
+        Args:
+            query: Natural language query with potential filter terms
+            llm_client: LLM client for filter extraction
+
+        Returns:
+            Dictionary of filter field -> value mappings
+
+        Example:
+            >>> filters = await router.extract_filters_async(
+            ...     'papers from 2024 about transformers by Vaswani', llm_client
+            ... )
+            >>> # Returns: {
+            ...     "year": 2024,
+            ...     "topic": "transformers",
+            ...     "author": "Vaswani"
+            ... }
+        """
+        prompt = f"""Extract search filters from this research query. Identify:
+- year: publication year (as integer)
+- author: author name (as string)
+- topic: main topic/keyword (as string)
+- journal: journal/conference name (as string)
+- document_type: paper type (as string)
+
+If a filter is not mentioned, omit it. Output ONLY valid JSON with the extracted filters.
+
+Query: {query}
+
+Filters (JSON):"""
+
+        try:
+            response = await asyncio.to_thread(llm_client.invoke, prompt)
+
+            # Try to parse JSON response
+            import json
+            import re
+
+            content = response.content.strip()
+
+            # Extract JSON if wrapped in markdown code blocks
+            json_match = re.search(
+                r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL
+            )
+            if json_match:
+                content = json_match.group(1)
+
+            # Parse filters
+            filters = json.loads(content)
+
+            # Validate and clean filter values
+            validated_filters = {}
+
+            # Year must be integer
+            if 'year' in filters:
+                try:
+                    validated_filters['year'] = int(filters['year'])
+                except (ValueError, TypeError):
+                    logger.warning(f'Invalid year value: {filters["year"]}')
+
+            # String fields - clean and validate
+            string_fields = ['author', 'topic', 'journal', 'document_type']
+            for field in string_fields:
+                if filters.get(field):
+                    value = str(filters[field]).strip()
+                    if value and value.lower() != 'none':
+                        validated_filters[field] = value
+
+            logger.debug(f'Extracted filters: {validated_filters}')
+            return validated_filters
+
+        except Exception as e:
+            logger.error(f'Filter extraction failed: {e}')
+            # Fallback: return empty filters
+            return {}
+
+    def extract_filters(self, query: str, llm_client: Any) -> dict[str, Any]:
+        """
+        Extract filters (sync wrapper).
+
+        Args:
+            query: Natural language query
+            llm_client: LLM client
+
+        Returns:
+            Dictionary of filters
+        """
+        try:
+            asyncio.get_running_loop()
+            raise RuntimeError(
+                'extract_filters() called from async context. '
+                'Use await extract_filters_async() instead.'
+            )
+        except RuntimeError as e:
+            if 'no running event loop' in str(e).lower():
+                return asyncio.run(self.extract_filters_async(query, llm_client))
+            else:
+                raise

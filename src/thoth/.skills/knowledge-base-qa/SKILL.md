@@ -5,6 +5,7 @@ description: Answer questions using your existing research collection. Use when 
   knowledge base.
 tools:
 - answer_research_question
+- agentic_research_question
 - read_full_article
 - unload_article
 - search_articles
@@ -22,12 +23,30 @@ For knowledge base queries, use these tools:
 
 | Tool | Purpose |
 |------|---------|
-| `answer_research_question` | Primary Q&A with synthesis |
+| `answer_research_question` | Quick Q&A — single-pass hybrid search |
+| `agentic_research_question` | Deep Q&A — multi-step pipeline with query expansion, document grading, hallucination checking |
 | `read_full_article` | Read complete article content for deep understanding |
 | `unload_article` | Free article memory slot (max 3 articles) |
 | `search_articles` | Find specific papers (supports topic filtering) |
 | `get_article_details` | Get paper metadata and preview |
 | `collection_stats` | Check what's in the collection |
+
+### Choosing Between Standard and Agentic Q&A
+
+Use `answer_research_question` for:
+- Factual lookups ("What dataset did paper X use?")
+- Simple questions with obvious keywords
+- Quick answers where speed matters
+
+Use `agentic_research_question` for:
+- Comparison questions ("How does X compare to Y?")
+- Synthesis across many papers ("What are the main approaches to Z?")
+- Multi-hop reasoning ("How has the field's view on X changed over time?")
+- Questions where a quick search might miss relevant papers
+
+If agentic retrieval is disabled in settings, `agentic_research_question` falls back to standard RAG automatically—so it's safe to call either way.
+
+The agentic tool takes longer (8-30 seconds vs <5 seconds) because it runs multiple retrieval rounds, grades documents, and verifies the answer. The user sees real-time progress updates in the UI ("Expanding search terms...", "Evaluating relevance...", etc.) so they know it's working.
 
 ### Article Memory Limit
 
@@ -86,6 +105,26 @@ get_article_details(article_id="[specific paper]")
 
 Step 3: Synthesize and cite properly
 ```
+
+## Deep Answer Workflow (Agentic)
+
+```
+Step 1: Ask the agentic pipeline
+agentic_research_question(
+  question="User's complex question",
+  max_sources=10,
+  max_retries=2
+)
+→ Pipeline automatically expands query, grades docs, checks hallucination
+→ Returns answer with confidence score and source list
+
+Step 2: If the user wants more depth on specific papers
+read_full_article(article_identifier="paper from results")
+
+Step 3: Synthesize additional context and cite
+```
+
+The agentic pipeline handles query expansion and document grading internally, so you don't need to manually search with multiple phrasings. It also returns a confidence score and flags if any claims couldn't be verified against sources.
 
 ## Question Types & Approaches
 
