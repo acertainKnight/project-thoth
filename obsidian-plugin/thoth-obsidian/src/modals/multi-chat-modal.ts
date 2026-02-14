@@ -5,7 +5,7 @@ import { ResearchTabComponent } from '../components/research-tab';
 import { SettingsTabComponent } from '../components/settings-tab';
 import { MCPServersTabComponent } from '../components/mcp-servers-tab';
 import * as smd from 'streaming-markdown';
-import { getRandomThinkingPhrase, getToolStatusMessage } from '../utils/thinking-messages';
+import { getRandomThinkingPhrase, getToolStatusMessage, getRetrievalStepIcon, getRetrievalStepMessage } from '../utils/thinking-messages';
 
 /**
  * Wrapper for streaming-markdown library to work with Obsidian's DOM
@@ -141,9 +141,6 @@ export class MultiChatModal extends Modal {
         if (data.operation_id && data.operation_id.startsWith('agentic_rag_')) {
           const step = data.message || '';
           const progress = data.progress || 0;
-
-          // Import step icons and messages
-          import { getRetrievalStepIcon, getRetrievalStepMessage } from '../utils/thinking-messages';
 
           // Try to extract the step name from the message or use default
           let stepName = '';
