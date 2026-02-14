@@ -22,7 +22,7 @@ from typing import Any
 
 from loguru import logger
 
-from ..base_tools import MCPTool, MCPToolCallResult
+from ..base_tools import MCPTool, MCPToolCallResult, normalize_authors
 
 # Global registry to track which articles are loaded per agent
 # Key: agent_id, Value: list of dicts with article metadata
@@ -221,13 +221,13 @@ class ReadFullArticleMCPTool(MCPTool):
 
             # Build response with metadata header
             title = paper.get('title', 'Unknown')
-            authors = paper.get('authors', [])
-            if isinstance(authors, list):
+            authors = normalize_authors(paper.get('authors'))
+            if authors:
                 authors_str = ', '.join(authors[:5])
                 if len(authors) > 5:
                     authors_str += f' (+{len(authors) - 5} more)'
             else:
-                authors_str = str(authors) if authors else 'Unknown'
+                authors_str = 'Unknown'
 
             response_text = f'# {title}\n\n'
             response_text += f'**Authors:** {authors_str}\n'

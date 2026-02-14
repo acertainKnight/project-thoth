@@ -4,6 +4,7 @@ MCP Tool Implementation
 This module provides MCP-compliant tool definitions and registry.
 """
 
+import json
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -12,6 +13,46 @@ from loguru import logger
 from thoth.services.service_manager import ServiceManager
 
 from .protocol import MCPToolCallResult, MCPToolSchema
+
+
+def normalize_authors(authors: Any) -> list[str]:
+    """Coerce an authors value from the database into a clean list of strings.
+
+    Authors arrive in several forms depending on how they were stored:
+    a real list, a JSON-encoded string like '["A", "B"]', a comma-separated
+    string, None, or occasionally a list of single characters from a
+    prior serialization bug. This normalizes all of those into ``list[str]``.
+
+    Args:
+        authors: Raw authors value -- list, string, or None.
+
+    Returns:
+        list[str]: Cleaned author names.
+    """
+    if isinstance(authors, list):
+        # A list where every element is a single character is almost certainly
+        # a string that was iterated into a list by accident (e.g. the JSON
+        # string '["Author"]' stored character-by-character).
+        if authors and all(isinstance(a, str) and len(a) == 1 for a in authors[:20]):
+            reconstructed = ''.join(authors)
+            return normalize_authors(reconstructed)
+        return authors
+
+    if not authors:
+        return []
+
+    if isinstance(authors, str):
+        stripped = authors.strip()
+        if stripped.startswith('['):
+            try:
+                parsed = json.loads(stripped)
+                if isinstance(parsed, list):
+                    return [str(a) for a in parsed]
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return [a.strip() for a in stripped.split(',') if a.strip()]
+
+    return []
 
 
 class MCPTool(ABC):

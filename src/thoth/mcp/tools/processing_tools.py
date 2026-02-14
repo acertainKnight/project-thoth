@@ -5,7 +5,7 @@ from typing import Any
 
 from loguru import logger
 
-from ..base_tools import MCPTool, MCPToolCallResult, NoInputTool
+from ..base_tools import MCPTool, MCPToolCallResult, NoInputTool, normalize_authors
 
 
 class ProcessPdfMCPTool(MCPTool):
@@ -297,12 +297,9 @@ class GetArticleDetailsMCPTool(MCPTool):
 
             # Add metadata if available
             metadata = article.get('metadata', {})
-            if metadata.get('authors'):
-                authors = metadata['authors']
-                if isinstance(authors, list):
-                    response_text += f'**Authors:** {", ".join(authors)}\n'
-                else:
-                    response_text += f'**Authors:** {authors}\n'
+            authors = normalize_authors(metadata.get('authors'))
+            if authors:
+                response_text += f'**Authors:** {", ".join(authors)}\n'
 
             if metadata.get('publication_date'):
                 response_text += (
@@ -467,14 +464,11 @@ class ListArticlesMCPTool(MCPTool):
 
                 # Add metadata if available
                 metadata = article.get('metadata', {})
-                if metadata.get('authors'):
-                    authors = metadata['authors']
-                    if isinstance(authors, list):
-                        authors_str = ', '.join(authors[:3])  # First 3 authors
-                        if len(authors) > 3:
-                            authors_str += f' (+{len(authors) - 3} more)'
-                    else:
-                        authors_str = str(authors)
+                authors = normalize_authors(metadata.get('authors'))
+                if authors:
+                    authors_str = ', '.join(authors[:3])
+                    if len(authors) > 3:
+                        authors_str += f' (+{len(authors) - 3} more)'
                     response_text += f'   Authors: {authors_str}\n'
 
                 if metadata.get('publication_date'):

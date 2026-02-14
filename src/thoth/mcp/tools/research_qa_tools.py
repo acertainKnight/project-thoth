@@ -8,7 +8,7 @@ network exploration, and multi-article comparison.
 
 from typing import Any
 
-from ..base_tools import MCPTool, MCPToolCallResult
+from ..base_tools import MCPTool, MCPToolCallResult, normalize_authors
 
 
 class AnswerResearchQuestionMCPTool(MCPTool):
@@ -108,7 +108,7 @@ class AnswerResearchQuestionMCPTool(MCPTool):
                 f'Based on {len(search_results)} relevant source(s):\n'
             )
 
-            # Group findings by relevance (adjusted thresholds for typical embedding similarity scores)
+            # Adjusted thresholds for typical embedding similarity scores
             high_relevance = [r for r in search_results if r.get('score', 0) >= 0.6]
             medium_relevance = [
                 r for r in search_results if 0.5 <= r.get('score', 0) < 0.6
@@ -118,7 +118,9 @@ class AnswerResearchQuestionMCPTool(MCPTool):
                 response_parts.append('\n## Primary Findings (High Relevance)\n')
                 for result in high_relevance:
                     title = result.get('metadata', {}).get('title', 'Unknown')
-                    authors = result.get('metadata', {}).get('authors', [])
+                    authors = normalize_authors(
+                        result.get('metadata', {}).get('authors')
+                    )
                     year = result.get('metadata', {}).get('year', 'N/A')
                     content = result.get('content', '')[:500]
                     score = result.get('score', 0)
@@ -148,7 +150,7 @@ class AnswerResearchQuestionMCPTool(MCPTool):
                 for i, result in enumerate(search_results, 1):
                     metadata = result.get('metadata', {})
                     title = metadata.get('title', 'Unknown')
-                    authors = metadata.get('authors', [])
+                    authors = normalize_authors(metadata.get('authors'))
                     year = metadata.get('year', 'N/A')
                     doi = metadata.get('doi', '')
 
@@ -253,7 +255,7 @@ class ExploreCitationNetworkMCPTool(MCPTool):
                 for paper in forward[:10]:  # Limit to 10
                     title = paper.get('title', 'Unknown')
                     year = paper.get('year', 'N/A')
-                    authors = paper.get('authors', [])
+                    authors = normalize_authors(paper.get('authors'))
                     author_str = ', '.join(authors[:2]) if authors else 'Unknown'
                     response_parts.append(f'- {author_str} ({year}). {title}')
 
@@ -266,7 +268,7 @@ class ExploreCitationNetworkMCPTool(MCPTool):
                 for paper in backward[:10]:
                     title = paper.get('title', 'Unknown')
                     year = paper.get('year', 'N/A')
-                    authors = paper.get('authors', [])
+                    authors = normalize_authors(paper.get('authors'))
                     author_str = ', '.join(authors[:2]) if authors else 'Unknown'
                     response_parts.append(f'- {author_str} ({year}). {title}')
 
@@ -405,8 +407,9 @@ class CompareArticlesMCPTool(MCPTool):
             response_parts.append('|---------|---------|------|-------|')
             for article in articles:
                 title = article.get('title', 'Unknown')[:50]
-                authors = ', '.join(article.get('authors', [])[:2])
-                if len(article.get('authors', [])) > 2:
+                author_list = normalize_authors(article.get('authors'))
+                authors = ', '.join(author_list[:2])
+                if len(author_list) > 2:
                     authors += ' et al.'
                 year = article.get('year', 'N/A')
                 venue = article.get('journal', article.get('venue', 'N/A'))[:30]
@@ -535,7 +538,7 @@ class ExtractArticleInsightsMCPTool(MCPTool):
             response_parts.append(f'# Insights: {title}\n')
 
             # Basic metadata
-            authors = ', '.join(article.get('authors', []))
+            authors = ', '.join(normalize_authors(article.get('authors')))
             year = article.get('year', 'N/A')
             venue = article.get('journal', article.get('venue', 'N/A'))
             response_parts.append(f'**Authors**: {authors}')
@@ -653,8 +656,6 @@ class SearchByTopicMCPTool(MCPTool):
             year_from = arguments.get('year_from')
             year_to = arguments.get('year_to')
             limit = arguments.get('limit', 20)
-            sort_by = arguments.get('sort_by', 'relevance')
-
             rag_service = self.service_manager.rag
             if not rag_service:
                 return MCPToolCallResult(
@@ -699,7 +700,7 @@ class SearchByTopicMCPTool(MCPTool):
             for i, result in enumerate(results, 1):
                 metadata = result.get('metadata', {})
                 title = metadata.get('title', 'Unknown')
-                authors = metadata.get('authors', [])
+                authors = normalize_authors(metadata.get('authors'))
                 year = metadata.get('year', 'N/A')
                 score = result.get('score', 0)
 
@@ -805,7 +806,7 @@ class GetArticleFullContentMCPTool(MCPTool):
             title = article.get('title', 'Unknown')
             response_parts.append(f'# {title}\n')
 
-            authors = ', '.join(article.get('authors', []))
+            authors = ', '.join(normalize_authors(article.get('authors')))
             year = article.get('year', 'N/A')
             venue = article.get('journal', article.get('venue', 'N/A'))
             doi = article.get('doi', '')
@@ -964,7 +965,7 @@ class FindArticlesByAuthorsMCPTool(MCPTool):
                 response_parts.append(f'\n## {year}\n')
                 for article in by_year[year]:
                     title = article.get('title', 'Unknown')
-                    all_authors = ', '.join(article.get('authors', []))
+                    all_authors = ', '.join(normalize_authors(article.get('authors')))
                     venue = article.get('journal', article.get('venue', 'N/A'))
                     citations = article.get('citation_count', 0)
 

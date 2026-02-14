@@ -7,7 +7,7 @@ and managing citation data in various academic formats.
 
 from typing import Any
 
-from ..base_tools import MCPTool, MCPToolCallResult
+from ..base_tools import MCPTool, MCPToolCallResult, normalize_authors
 
 
 class FormatCitationsMCPTool(MCPTool):
@@ -107,11 +107,8 @@ class FormatCitationsMCPTool(MCPTool):
                 metadata = article.get('metadata', {})
 
                 # Extract citation information
-                authors = metadata.get('authors', [])
-                if isinstance(authors, list):
-                    authors_str = ', '.join(authors) if authors else 'Unknown Author'
-                else:
-                    authors_str = str(authors) if authors else 'Unknown Author'
+                authors = normalize_authors(metadata.get('authors'))
+                authors_str = ', '.join(authors) if authors else 'Unknown Author'
 
                 pub_date = metadata.get('publication_date', 'n.d.')
                 journal = metadata.get('journal', '')
@@ -369,20 +366,15 @@ class ExportBibliographyMCPTool(MCPTool):
 
             # Generate BibTeX key
             first_author = ''
-            authors = metadata.get('authors', [])
-            if authors and isinstance(authors, list):
+            authors = normalize_authors(metadata.get('authors'))
+            if authors:
                 first_author = authors[0].split()[-1] if authors[0] else ''
-            elif authors:
-                first_author = str(authors).split()[-1] if authors else ''
 
             year = metadata.get('publication_date', 'unknown').split('-')[0]
             key = f'{first_author.lower()}{year}_{i}'
 
             # Format authors for BibTeX
-            if authors and isinstance(authors, list):
-                author_str = ' and '.join(authors)
-            else:
-                author_str = str(authors) if authors else 'Unknown Author'
+            author_str = ' and '.join(authors) if authors else 'Unknown Author'
 
             entry = f'@article{{{key},\n'
             entry += f'  title={{{title}}},\n'
@@ -413,12 +405,9 @@ class ExportBibliographyMCPTool(MCPTool):
             entry = 'TY  - JOUR\n'  # Journal article
             entry += f'TI  - {title}\n'
 
-            authors = metadata.get('authors', [])
-            if authors and isinstance(authors, list):
-                for author in authors:
-                    entry += f'AU  - {author}\n'
-            elif authors:
-                entry += f'AU  - {authors}\n'
+            authors = normalize_authors(metadata.get('authors'))
+            for author in authors:
+                entry += f'AU  - {author}\n'
 
             if metadata.get('journal'):
                 entry += f'JO  - {metadata["journal"]}\n'
@@ -445,12 +434,9 @@ class ExportBibliographyMCPTool(MCPTool):
             entry = '%0 Journal Article\n'
             entry += f'%T {title}\n'
 
-            authors = metadata.get('authors', [])
-            if authors and isinstance(authors, list):
-                for author in authors:
-                    entry += f'%A {author}\n'
-            elif authors:
-                entry += f'%A {authors}\n'
+            authors = normalize_authors(metadata.get('authors'))
+            for author in authors:
+                entry += f'%A {author}\n'
 
             if metadata.get('journal'):
                 entry += f'%J {metadata["journal"]}\n'
@@ -474,7 +460,9 @@ class ExportBibliographyMCPTool(MCPTool):
         for article in articles:
             entry = {
                 'title': article.get('title', 'Unknown Title'),
-                'authors': article.get('metadata', {}).get('authors', []),
+                'authors': normalize_authors(
+                    article.get('metadata', {}).get('authors')
+                ),
                 'journal': article.get('metadata', {}).get('journal', ''),
                 'publication_date': article.get('metadata', {}).get(
                     'publication_date', ''
@@ -505,11 +493,8 @@ class ExportBibliographyMCPTool(MCPTool):
             title = article.get('title', 'Unknown Title')
             metadata = article.get('metadata', {})
 
-            authors = metadata.get('authors', [])
-            if isinstance(authors, list):
-                authors_str = '; '.join(authors)
-            else:
-                authors_str = str(authors) if authors else ''
+            authors = normalize_authors(metadata.get('authors'))
+            authors_str = '; '.join(authors)
 
             year = (
                 metadata.get('publication_date', '').split('-')[0]

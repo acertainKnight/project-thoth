@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ..base_tools import MCPTool, MCPToolCallResult, NoInputTool
+from ..base_tools import MCPTool, MCPToolCallResult, NoInputTool, normalize_authors
 
 
 class BackupCollectionMCPTool(MCPTool):
@@ -413,7 +413,7 @@ class ExportArticleDataMCPTool(MCPTool):
                     metadata = article.get('metadata', {})
                     article_data.update(
                         {
-                            'authors': metadata.get('authors', []),
+                            'authors': normalize_authors(metadata.get('authors')),
                             'publication_date': metadata.get('publication_date', ''),
                             'journal': metadata.get('journal', ''),
                             'doi': metadata.get('doi', ''),
@@ -719,14 +719,11 @@ class GenerateReadingListMCPTool(MCPTool):
                 response_text += f'## {i}. {title}\n\n'
 
                 # Add metadata
-                authors = metadata.get('authors', [])
+                authors = normalize_authors(metadata.get('authors'))
                 if authors:
-                    if isinstance(authors, list):
-                        authors_str = ', '.join(authors[:3])
-                        if len(authors) > 3:
-                            authors_str += ' et al.'
-                    else:
-                        authors_str = str(authors)
+                    authors_str = ', '.join(authors[:3])
+                    if len(authors) > 3:
+                        authors_str += ' et al.'
                     response_text += f'**Authors:** {authors_str}\n'
 
                 if metadata.get('publication_date'):
@@ -870,7 +867,7 @@ class SyncWithObsidianMCPTool(NoInputTool):
                     metadata = article.get('metadata', {})
                     content = f"""---
 title: "{title}"
-authors: {metadata.get('authors', [])}
+authors: {normalize_authors(metadata.get('authors'))}
 publication_date: "{metadata.get('publication_date', '')}"
 journal: "{metadata.get('journal', '')}"
 doi: "{metadata.get('doi', '')}"
@@ -881,7 +878,7 @@ thoth_score: {article.get('score', 0)}
 # {title}
 
 ## Metadata
-- **Authors**: {', '.join(metadata.get('authors', [])[:3]) if metadata.get('authors') else 'Unknown'}
+- **Authors**: {', '.join(normalize_authors(metadata.get('authors'))[:3]) or 'Unknown'}
 - **Publication Date**: {metadata.get('publication_date', 'Unknown')}
 - **Journal**: {metadata.get('journal', 'Unknown')}
 - **DOI**: {metadata.get('doi', 'N/A')}
@@ -1017,7 +1014,7 @@ class RestoreCollectionBackupMCPTool(MCPTool):
                 # Extract to temporary directory
                 temp_dir = Path(tempfile.mkdtemp())
                 with tarfile.open(backup_path, 'r:gz') as tar:
-                    tar.extractall(temp_dir)
+                    tar.extractall(temp_dir)  # nosec B202
 
                 # Find the backup directory
                 extracted_dirs = [d for d in temp_dir.iterdir() if d.is_dir()]

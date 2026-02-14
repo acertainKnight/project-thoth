@@ -6,7 +6,7 @@ This module provides tools for searching and managing custom indexes.
 
 from typing import Any
 
-from ..base_tools import MCPTool, MCPToolCallResult
+from ..base_tools import MCPTool, MCPToolCallResult, normalize_authors
 
 
 class SearchCustomIndexMCPTool(MCPTool):
@@ -162,14 +162,11 @@ class SearchCustomIndexMCPTool(MCPTool):
 
                 # Include metadata if available
                 metadata = doc.get('metadata', {})
-                if metadata.get('authors'):
-                    authors = metadata['authors']
-                    if isinstance(authors, list):
-                        authors_str = ', '.join(authors[:3])
-                        if len(authors) > 3:
-                            authors_str += ' et al.'
-                    else:
-                        authors_str = str(authors)
+                authors = normalize_authors(metadata.get('authors'))
+                if authors:
+                    authors_str = ', '.join(authors[:3])
+                    if len(authors) > 3:
+                        authors_str += ' et al.'
                     response_text += f'- Authors: {authors_str}\n'
 
                 if metadata.get('publication_date'):

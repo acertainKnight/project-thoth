@@ -9,7 +9,7 @@ from typing import Any
 
 from loguru import logger
 
-from ..base_tools import MCPTool, MCPToolCallResult
+from ..base_tools import MCPTool, MCPToolCallResult, normalize_authors
 
 
 class SearchArticlesMCPTool(MCPTool):
@@ -147,11 +147,8 @@ class SearchArticlesMCPTool(MCPTool):
 
                 # Author filtering (if not handled by RAG filter)
                 if arguments.get('author') and search_filter.get('authors') is None:
-                    authors = metadata.get('authors', [])
-                    if isinstance(authors, list):
-                        author_text = ' '.join(authors).lower()
-                    else:
-                        author_text = str(authors).lower()
+                    authors = normalize_authors(metadata.get('authors'))
+                    author_text = ' '.join(authors).lower()
 
                     if arguments['author'].lower() not in author_text:
                         continue
@@ -217,14 +214,11 @@ class SearchArticlesMCPTool(MCPTool):
                 response_text += f'**{i}. {title}**\n'
 
                 # Add metadata
-                if metadata.get('authors'):
-                    authors = metadata['authors']
-                    if isinstance(authors, list):
-                        authors_str = ', '.join(authors[:2])
-                        if len(authors) > 2:
-                            authors_str += f' (+{len(authors) - 2} more)'
-                    else:
-                        authors_str = str(authors)
+                authors = normalize_authors(metadata.get('authors'))
+                if authors:
+                    authors_str = ', '.join(authors[:2])
+                    if len(authors) > 2:
+                        authors_str += f' (+{len(authors) - 2} more)'
                     response_text += f'   Authors: {authors_str}\n'
 
                 if metadata.get('publication_date'):

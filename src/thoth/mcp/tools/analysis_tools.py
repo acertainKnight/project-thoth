@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from ..base_tools import MCPTool, MCPToolCallResult
+from ..base_tools import MCPTool, MCPToolCallResult, normalize_authors
 
 
 class EvaluateArticleMCPTool(MCPTool):
@@ -251,11 +251,8 @@ class AnalyzeTopicMCPTool(MCPTool):
                 metadata = result.get('metadata', {})
 
                 # Collect authors
-                paper_authors = metadata.get('authors', [])
-                if isinstance(paper_authors, list):
-                    authors.update(paper_authors[:3])  # Top 3 authors per paper
-                elif paper_authors:
-                    authors.add(str(paper_authors))
+                paper_authors = normalize_authors(metadata.get('authors'))
+                authors.update(paper_authors[:3])
 
                 # Collect journals
                 journal = metadata.get('journal')
@@ -452,14 +449,11 @@ class FindRelatedPapersMCPTool(MCPTool):
                 response_text += f'   Similarity: {score:.3f}\n'
 
                 # Add metadata if available
-                authors = metadata.get('authors', [])
+                authors = normalize_authors(metadata.get('authors'))
                 if authors:
-                    if isinstance(authors, list):
-                        authors_str = ', '.join(authors[:2])
-                        if len(authors) > 2:
-                            authors_str += f' (+{len(authors) - 2} more)'
-                    else:
-                        authors_str = str(authors)
+                    authors_str = ', '.join(authors[:2])
+                    if len(authors) > 2:
+                        authors_str += f' (+{len(authors) - 2} more)'
                     response_text += f'   Authors: {authors_str}\n'
 
                 if metadata.get('publication_date'):
@@ -604,11 +598,8 @@ class GenerateResearchSummaryMCPTool(MCPTool):
                         pass
 
                 # Authors
-                paper_authors = metadata.get('authors', [])
-                if isinstance(paper_authors, list):
-                    authors.update(paper_authors)
-                elif paper_authors:
-                    authors.add(str(paper_authors))
+                paper_authors = normalize_authors(metadata.get('authors'))
+                authors.update(paper_authors)
 
                 # Journals
                 journal = metadata.get('journal')
@@ -671,14 +662,11 @@ class GenerateResearchSummaryMCPTool(MCPTool):
                     response_text += f'{i}. **{title}**\n'
 
                     # Add authors
-                    authors_list = metadata.get('authors', [])
+                    authors_list = normalize_authors(metadata.get('authors'))
                     if authors_list:
-                        if isinstance(authors_list, list):
-                            authors_str = ', '.join(authors_list[:3])
-                            if len(authors_list) > 3:
-                                authors_str += ' et al.'
-                        else:
-                            authors_str = str(authors_list)
+                        authors_str = ', '.join(authors_list[:3])
+                        if len(authors_list) > 3:
+                            authors_str += ' et al.'
                         response_text += f'   Authors: {authors_str}\n'
 
                     # Add publication info
