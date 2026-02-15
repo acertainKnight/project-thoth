@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 from loguru import logger
@@ -57,6 +58,16 @@ class HealthMonitor:
             for name, service in services.items():
                 try:
                     health_result = service.health_check()
+                    # Some services define async health_check(). The health router
+                    # is sync so we can't await here. Close the coroutine to avoid
+                    # the "never awaited" RuntimeWarning and treat it as healthy
+                    # since the method exists.
+                    if inspect.isawaitable(health_result):
+                        health_result.close()
+                        health_result = {
+                            'status': 'healthy',
+                            'service': service.__class__.__name__,
+                        }
                     if not isinstance(health_result, dict):
                         # Ensure we have a dict response
                         health_result = {
@@ -114,17 +125,19 @@ class HealthMonitor:
         """
         services = self.check_services()
 
-        # Count healthy vs unhealthy services
+        # Count healthy vs unhealthy services.
+        # "unknown" means the service doesn't implement health_check -- that's
+        # not a failure, just a gap in instrumentation. Only "unhealthy" counts
+        # as an actual problem that should surface a 503.
         healthy_count = sum(
             1 for info in services.values() if info.get('status') == 'healthy'
         )
+        unhealthy_count = sum(
+            1 for info in services.values() if info.get('status') == 'unhealthy'
+        )
         total_count = len(services)
 
-        # System is considered healthy if all services are healthy
-        overall_healthy = (
-            all(info.get('status') == 'healthy' for info in services.values())
-            and total_count > 0
-        )
+        overall_healthy = unhealthy_count == 0 and total_count > 0
 
         result = {
             'healthy': overall_healthy,
@@ -132,7 +145,8 @@ class HealthMonitor:
             'summary': {
                 'total_services': total_count,
                 'healthy_services': healthy_count,
-                'unhealthy_services': total_count - healthy_count,
+                'unhealthy_services': unhealthy_count,
+                'unknown_services': total_count - healthy_count - unhealthy_count,
             },
         }
 

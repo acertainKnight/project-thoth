@@ -1877,6 +1877,117 @@
   gap: 0.5rem;
 }
 
+/* ===== EXPANDABLE STEP PILLS ===== */
+
+.agent-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 6px 0 8px 0;
+}
+
+/* Hide empty step containers */
+.agent-steps:empty {
+  display: none;
+}
+
+.step-pill {
+  border-radius: 8px;
+  background: var(--background-secondary);
+  overflow: hidden;
+  font-size: 12px;
+  border: 1px solid transparent;
+  transition: border-color 0.15s ease;
+}
+
+.step-pill:hover {
+  border-color: var(--background-modifier-border);
+}
+
+.pill-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  color: var(--text-muted);
+  user-select: none;
+  min-height: 24px;
+}
+
+.pill-header:hover {
+  color: var(--text-normal);
+}
+
+.pill-icon {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.pill-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.pill-chevron {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--text-faint);
+  transition: transform 0.15s ease;
+}
+
+.step-pill.expanded .pill-chevron {
+  transform: rotate(90deg);
+}
+
+.pill-detail {
+  display: none;
+  padding: 4px 10px 8px;
+  border-top: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.step-pill.expanded .pill-detail {
+  display: block;
+}
+
+.pill-detail-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-monospace);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* Dark theme adjustments */
+.theme-dark .step-pill {
+  background: var(--background-secondary-alt, var(--background-secondary));
+}
+
+/* Mobile tweaks */
+@media (max-width: 768px) {
+  .pill-header {
+    padding: 5px 10px;
+    min-height: 28px;
+  }
+
+  .pill-label {
+    font-size: 12px;
+  }
+
+  .pill-detail {
+    max-height: 150px;
+  }
+}
+
 /* Toast Notifications - Enhanced */
 .thoth-toast {
   position: fixed;
@@ -2347,6 +2458,84 @@
 .chat-input-area.drag-over {
   border: 2px dashed var(--color-accent);
   background: var(--background-modifier-hover);
+}
+
+/* ===== FILE ATTACHMENTS ===== */
+
+/* File attachment chip in preview strip */
+.chat-attachment-file {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--background-primary);
+  border: 2px solid var(--background-modifier-border);
+  border-radius: 6px;
+  max-width: 200px;
+  transition: border-color 0.2s ease;
+}
+
+.chat-attachment-file:hover {
+  border-color: var(--color-accent);
+}
+
+.chat-attachment-file-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.chat-attachment-file-name {
+  font-size: 0.85rem;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.chat-attachment-file:hover .chat-attachment-remove {
+  opacity: 1;
+}
+
+/* File badges in sent messages */
+.message-files {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.message-file-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--text-normal);
+  transition: all 0.2s ease;
+  cursor: default;
+}
+
+.message-file-badge:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--color-accent);
+}
+
+.message-file-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.message-file-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
 }
 
 /* Image display in sent messages */

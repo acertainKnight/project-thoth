@@ -10,12 +10,22 @@ export interface ImageAttachment {
   name: string;
 }
 
+export interface FileAttachment {
+  name: string;
+  content: string;
+  file_type: string;
+  size: number;
+}
+
+export type ChatAttachment = ImageAttachment | FileAttachment;
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
   id?: string;
   attachments?: ImageAttachment[];
+  fileAttachments?: FileAttachment[];
 }
 
 export interface ChatSession {

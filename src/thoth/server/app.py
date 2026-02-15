@@ -45,6 +45,7 @@ from thoth.server.routers import (  # noqa: I001
     agent,
     chat,
     config as config_router,
+    files,
     health,
     mcp_servers,
     models,
@@ -697,6 +698,7 @@ def create_app() -> FastAPI:
     app.include_router(skills.router, tags=['skills'])
     app.include_router(mcp_servers.router, tags=['mcp-servers'])
     app.include_router(tools.router, prefix='/tools', tags=['tools'])
+    app.include_router(files.router, prefix='/api/files', tags=['files'])
 
     # Add hot-reload health check endpoint
     @app.get('/health/hot-reload')

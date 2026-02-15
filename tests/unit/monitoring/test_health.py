@@ -284,10 +284,9 @@ class TestHealthMonitorOverallStatus:
 
         assert status['healthy'] is False  # Not all services healthy
         assert status['summary']['total_services'] == 6
-        assert (
-            status['summary']['healthy_services'] == 2
-        )  # Only the two HealthyService instances
-        assert status['summary']['unhealthy_services'] == 4
+        assert status['summary']['healthy_services'] == 2
+        # unhealthy1, unhealthy2, exception; no_check is "unknown"
+        assert status['summary']['unhealthy_services'] == 3
 
     def test_overall_status_all_unhealthy(
         self, mock_service_manager_all_unhealthy: Mock
@@ -322,9 +321,11 @@ class TestHealthMonitorOverallStatus:
         summary = status['summary']
         assert summary['total_services'] == 6
         assert summary['healthy_services'] == 2
-        assert summary['unhealthy_services'] == 4
+        assert summary['unhealthy_services'] == 3
         assert (
-            summary['healthy_services'] + summary['unhealthy_services']
+            summary['healthy_services']
+            + summary['unhealthy_services']
+            + summary['unknown_services']
             == summary['total_services']
         )
 

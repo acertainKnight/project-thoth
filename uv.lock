@@ -3283,6 +3283,15 @@ wheels = [
 ]
 
 [[package]]
+name = "python-multipart"
+version = "0.0.22"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/94/01/979e98d542a70714b0cb2b6728ed0b7c46792b695e3eaec3e20711271ca3/python_multipart-0.0.22.tar.gz", hash = "sha256:7340bef99a7e0032613f56dc36027b959fd3b30a787ed62d310e951f7c3a3a58", size = 37612, upload-time = "2026-01-25T10:15:56.219Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1b/d0/397f9626e711ff749a95d96b7af99b9c566a9bb5129b8e4c10fc4d100304/python_multipart-0.0.22-py3-none-any.whl", hash = "sha256:2b2cd894c83d21bf49d702499531c7bafd057d730c201782048f7945d82de155", size = 24579, upload-time = "2026-01-25T10:15:54.811Z" },
+]
+
+[[package]]
 name = "python-slugify"
 version = "8.0.4"
 source = { registry = "https://pypi.org/simple" }
@@ -4221,6 +4230,7 @@ all = [
     { name = "pytest-cov" },
     { name = "pytest-mock" },
     { name = "pytest-timeout" },
+    { name = "python-multipart" },
     { name = "requests" },
     { name = "respx" },
     { name = "roman-numerals-py" },
@@ -4244,6 +4254,7 @@ api = [
     { name = "jinja2" },
     { name = "json-repair" },
     { name = "psycopg2-binary" },
+    { name = "python-multipart" },
     { name = "requests" },
     { name = "sqlalchemy" },
     { name = "uvicorn" },
@@ -4361,6 +4372,7 @@ service-all = [
     { name = "playwright" },
     { name = "psycopg2-binary" },
     { name = "pypdf" },
+    { name = "python-multipart" },
     { name = "requests" },
     { name = "roman-numerals-py" },
     { name = "scholarly" },
@@ -4409,6 +4421,7 @@ service-api = [
     { name = "playwright" },
     { name = "psycopg2-binary" },
     { name = "pypdf" },
+    { name = "python-multipart" },
     { name = "requests" },
     { name = "roman-numerals-py" },
     { name = "scholarly" },
@@ -4456,6 +4469,7 @@ service-dashboard = [
     { name = "playwright" },
     { name = "psycopg2-binary" },
     { name = "pypdf" },
+    { name = "python-multipart" },
     { name = "requests" },
     { name = "roman-numerals-py" },
     { name = "scholarly" },
@@ -4503,6 +4517,7 @@ service-discovery = [
     { name = "playwright" },
     { name = "psycopg2-binary" },
     { name = "pypdf" },
+    { name = "python-multipart" },
     { name = "requests" },
     { name = "roman-numerals-py" },
     { name = "scholarly" },
@@ -4552,6 +4567,7 @@ service-heavy = [
     { name = "playwright" },
     { name = "psycopg2-binary" },
     { name = "pypdf" },
+    { name = "python-multipart" },
     { name = "requests" },
     { name = "roman-numerals-py" },
     { name = "scholarly" },
@@ -4601,6 +4617,7 @@ service-mcp = [
     { name = "playwright" },
     { name = "psycopg2-binary" },
     { name = "pypdf" },
+    { name = "python-multipart" },
     { name = "requests" },
     { name = "roman-numerals-py" },
     { name = "scholarly" },
@@ -4648,6 +4665,7 @@ service-monitor = [
     { name = "playwright" },
     { name = "psycopg2-binary" },
     { name = "pypdf" },
+    { name = "python-multipart" },
     { name = "requests" },
     { name = "roman-numerals-py" },
     { name = "scholarly" },
@@ -4778,6 +4796,7 @@ requires-dist = [
     { name = "pytest-timeout", marker = "extra == 'test'", specifier = ">=2.1.0" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "python-levenshtein", specifier = ">=0.27.3" },
+    { name = "python-multipart", marker = "extra == 'api'", specifier = ">=0.0.9" },
     { name = "requests", marker = "extra == 'api'", specifier = ">=2.32.3" },
     { name = "requests", marker = "extra == 'setup'", specifier = ">=2.32.3" },
     { name = "respx", marker = "extra == 'test'", specifier = ">=0.22.0" },

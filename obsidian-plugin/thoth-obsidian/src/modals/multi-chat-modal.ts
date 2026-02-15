@@ -1,5 +1,5 @@
 import { App, Modal, Notice, Menu, SuggestModal, MarkdownRenderer, MarkdownView } from 'obsidian';
-import { ChatSession, ChatMessage, ImageAttachment } from '../types';
+import { ChatSession, ChatMessage, ImageAttachment, FileAttachment } from '../types';
 import type ThothPlugin from '../../main';
 import { ResearchTabComponent } from '../components/research-tab';
 import { SettingsTabComponent } from '../components/settings-tab';
@@ -76,6 +76,9 @@ export class MultiChatModal extends Modal {
   private pendingAttachments: ImageAttachment[] = [];
   private attachmentPreviewContainer: HTMLElement | null = null;
 
+  // File attachments
+  private pendingFileAttachments: FileAttachment[] = [];
+
   // Progress WebSocket for agentic retrieval steps
   private progressWs: WebSocket | null = null;
   private agenticProgressListener: ((event: MessageEvent) => void) | null = null;
@@ -127,7 +130,7 @@ export class MultiChatModal extends Modal {
    * Args:
    *     statusEl: The status indicator element to update
    */
-  private startAgenticProgressListener(statusEl: HTMLElement): void {
+  private startAgenticProgressListener(pillOrStatusEl: HTMLElement): void {
     this.connectProgressWebSocket();
 
     if (!this.progressWs) {
@@ -139,17 +142,14 @@ export class MultiChatModal extends Modal {
       this.progressWs.removeEventListener('message', this.agenticProgressListener);
     }
 
-    // Create new listener
+    // Create new listener that updates either a step pill or legacy status indicator
     this.agenticProgressListener = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
 
-        // Only handle agentic_retrieval operations
         if (data.operation_id && data.operation_id.startsWith('agentic_rag_')) {
           const step = data.message || '';
-          const progress = data.progress || 0;
 
-          // Try to extract the step name from the message or use default
           let stepName = '';
           const stepMatch = step.match(/^([a-z_]+):/);
           if (stepMatch) {
@@ -159,7 +159,13 @@ export class MultiChatModal extends Modal {
           const icon = stepName ? getRetrievalStepIcon(stepName) : '⚙️';
           const message = step || 'Processing';
 
-          this.updateStatusIndicator(statusEl, `${message}...`, icon);
+          // Update pill label if this is a step pill, otherwise fall back
+          // to the legacy status indicator path
+          if (pillOrStatusEl.hasClass('step-pill')) {
+            this.updateStepPillLabel(pillOrStatusEl, `${icon} ${message}...`);
+          } else {
+            this.updateStatusIndicator(pillOrStatusEl, `${message}...`, icon);
+          }
         }
       } catch (error) {
         console.error('[MultiChatModal] Error parsing progress event:', error);
@@ -258,6 +264,98 @@ export class MultiChatModal extends Modal {
 
       reader.readAsDataURL(file);
     });
+  }
+
+  /**
+   * Read a text-based file as UTF-8 text.
+   *
+   * Args:
+   *     file: The file to read
+   *
+   * Returns:
+   *     FileAttachment object with text content
+   *
+   * Example:
+   *     >>> const result = await this.readFileAsText(textFile);
+   *     >>> console.log(result.content);
+   */
+  private async readFileAsText(file: File): Promise<FileAttachment> {
+    const MAX_SIZE = 20 * 1024 * 1024; // 20MB limit
+    const MAX_CONTENT_SIZE = 200 * 1024; // 200KB content limit
+
+    if (file.size > MAX_SIZE) {
+      throw new Error(`File too large: ${(file.size / 1024 / 1024).toFixed(1)}MB (max 20MB)`);
+    }
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        let content = reader.result as string;
+
+        // Truncate if content is too large
+        if (content.length > MAX_CONTENT_SIZE) {
+          content = content.substring(0, MAX_CONTENT_SIZE) + '\n\n[Content truncated at 200KB]';
+        }
+
+        resolve({
+          name: file.name,
+          content: content,
+          file_type: file.type || 'text/plain',
+          size: file.size
+        });
+      };
+
+      reader.onerror = () => {
+        reject(new Error('Failed to read file'));
+      };
+
+      reader.readAsText(file, 'UTF-8');
+    });
+  }
+
+  /**
+   * Extract text from a PDF file by sending it to the Thoth backend.
+   *
+   * Args:
+   *     file: The PDF file to extract text from
+   *
+   * Returns:
+   *     FileAttachment object with extracted text
+   *
+   * Example:
+   *     >>> const result = await this.extractPdfText(pdfFile);
+   *     >>> console.log(result.content);
+   */
+  private async extractPdfText(file: File): Promise<FileAttachment> {
+    const MAX_SIZE = 20 * 1024 * 1024; // 20MB limit
+
+    if (file.size > MAX_SIZE) {
+      throw new Error(`PDF too large: ${(file.size / 1024 / 1024).toFixed(1)}MB (max 20MB)`);
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const endpoint = this.plugin.settings.remoteEndpointUrl || 'http://localhost:8000';
+    const response = await fetch(`${endpoint}/api/files/extract`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`PDF extraction failed: ${errorText}`);
+    }
+
+    const result = await response.json();
+
+    return {
+      name: file.name,
+      content: result.text,
+      file_type: 'application/pdf',
+      size: file.size
+    };
   }
 
   async onOpen() {
@@ -2392,61 +2490,72 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       });
     }
 
-    /**
-     * Helper function to extract content from message.
-     * Handles both string content and array of content parts (per Letta API).
-     *
-     * @param msg - The message object
-     * @returns The extracted text content
-     */
+    // Extract text from a message payload (handles string and array formats)
     const extractContent = (msg: any): string => {
       const content = msg.text || msg.content;
       if (Array.isArray(content)) {
-        // Handle array of content parts (e.g., [{type: 'text', text: '...'}])
         return content
-          .filter(part => part.type === 'text' || part.text)
-          .map(part => part.text)
+          .filter((part: any) => part.type === 'text' || part.text)
+          .map((part: any) => part.text)
           .join('');
       }
       return content || '';
     };
 
-    // Filter messages to show only user and assistant messages.
-    // Exclude system, reasoning, tool_call, tool_return, and auto-generated
-    // skill activation follow-ups (which are internal plumbing, not real user input).
-    const chatMessages = messages.filter(msg => {
-      const messageType = msg.message_type || msg.type;
-      const isUserOrAssistant =
-        messageType === 'user_message' ||
-        messageType === 'assistant_message' ||
-        msg.role === 'user' ||
-        msg.role === 'assistant';
-
-      if (!isUserOrAssistant) return false;
-
-      // Hide auto-follow-up messages sent after skill loading/unloading.
-      // These are internal continuation prompts, not real user messages.
-      if (messageType === 'user_message' || msg.role === 'user') {
-        const content = extractContent(msg);
-        if (content.startsWith(SKILL_ACTIVATION_PREFIX)) {
-          return false;
-        }
-      }
-
-      return true;
-    })
-    // Sort by date to ensure chronological order (oldest first)
-    // This provides a fallback in case the API order changes
-    .sort((a, b) => {
+    // Sort all messages chronologically, then group them into "turns."
+    // A turn is either a single user message OR a sequence of agent messages
+    // (reasoning, tool calls, tool returns, assistant responses) that belong
+    // to the same agent execution. This lets us render a single combined
+    // assistant bubble with expandable step pills.
+    const sorted = [...messages].sort((a, b) => {
       const dateA = new Date(a.date || a.created_at || 0).getTime();
       const dateB = new Date(b.date || b.created_at || 0).getTime();
       return dateA - dateB;
     });
 
-    console.log(`[MultiChatModal] Rendering ${chatMessages.length} chat messages from ${messages.length} total messages`);
+    interface MessageGroup {
+      type: 'user' | 'assistant';
+      messages: any[];
+    }
 
-    // Load existing messages or show empty state
-    if (chatMessages.length === 0) {
+    const groups: MessageGroup[] = [];
+    let currentGroup: MessageGroup | null = null;
+
+    for (const msg of sorted) {
+      const mt = msg.message_type || msg.type;
+
+      // Skip system messages entirely
+      if (mt === 'system_message') continue;
+
+      const isUser = mt === 'user_message' || msg.role === 'user';
+
+      // Hide auto-follow-up messages from skill activation
+      if (isUser) {
+        const text = extractContent(msg);
+        if (text.startsWith(SKILL_ACTIVATION_PREFIX)) continue;
+      }
+
+      if (isUser) {
+        currentGroup = { type: 'user', messages: [msg] };
+        groups.push(currentGroup);
+      } else {
+        // All non-user messages (reasoning, tool_call, tool_return,
+        // assistant_message) go into the current assistant group.
+        if (!currentGroup || currentGroup.type === 'user') {
+          currentGroup = { type: 'assistant', messages: [msg] };
+          groups.push(currentGroup);
+        } else {
+          currentGroup.messages.push(msg);
+        }
+      }
+    }
+
+    // Count visible messages for logging
+    const visibleCount = groups.reduce((n, g) => n + g.messages.length, 0);
+    console.log(`[MultiChatModal] Rendering ${visibleCount} messages (${groups.length} groups) from ${messages.length} total`);
+
+    // Render
+    if (groups.length === 0) {
       this.createEmptyState(
         messagesContainer,
         '💬',
@@ -2455,19 +2564,14 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         'Try: "Find recent papers on transformers"'
       );
     } else {
-      // Render all messages with markdown support (only user and assistant)
-      await Promise.all(
-        chatMessages.map(async (msg) => {
-          const messageType = msg.message_type || msg.type;
-
-          // Only render user and assistant messages
-          const role = messageType === 'user_message' ? 'user'
-                     : messageType === 'assistant_message' ? 'assistant'
-                     : msg.role;
-          const content = extractContent(msg);
-          await this.addMessageToChat(messagesContainer, role, content);
-        })
-      );
+      for (const group of groups) {
+        if (group.type === 'user') {
+          const content = extractContent(group.messages[0]);
+          await this.addMessageToChat(messagesContainer, 'user', content);
+        } else {
+          await this.renderAssistantTurn(messagesContainer, group.messages, extractContent);
+        }
+      }
     }
 
     // Input area
@@ -2521,21 +2625,18 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       inputArea.removeClass('drag-over');
 
       const files = Array.from(e.dataTransfer?.files || []);
-      const imageFiles = files.filter(f => f.type.startsWith('image/'));
 
-      if (imageFiles.length === 0) {
-        new Notice('No image files found in drop');
+      if (files.length === 0) {
+        new Notice('No files found in drop');
         return;
       }
 
-      for (const file of imageFiles) {
+      for (const file of files) {
         try {
-          const attachment = await this.readFileAsBase64(file);
-          await this.addAttachment(attachment);
-          new Notice(`Added image: ${file.name}`);
+          await this.processFileAttachment(file);
         } catch (error) {
-          new Notice(`Failed to add image: ${error.message}`, 5000);
-          console.error('Image drop error:', error);
+          new Notice(`Failed to add file: ${error.message}`, 5000);
+          console.error('File drop error:', error);
         }
       }
     });
@@ -2571,9 +2672,20 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
       // Capture pending attachments for this message
       const messageAttachments = [...this.pendingAttachments];
+      const messageFileAttachments = [...this.pendingFileAttachments];
+
+      // Build augmented message with file content injected
+      let augmentedMessage = message;
+
+      // Inject file content with delimiters
+      if (messageFileAttachments.length > 0) {
+        for (const fileAttachment of messageFileAttachments) {
+          augmentedMessage += `\n\n--- Attached: ${fileAttachment.name} ---\n${fileAttachment.content}\n--- End: ${fileAttachment.name} ---`;
+        }
+      }
 
       // Add user message to UI (with attachments if present)
-      await this.addMessageToChat(messagesContainer, 'user', message, messageAttachments);
+      await this.addMessageToChat(messagesContainer, 'user', message, messageAttachments, messageFileAttachments);
       inputEl.value = '';
 
       // Auto-resize input back to minimum height
@@ -2592,15 +2704,15 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       const thinkingMsg = this.addThinkingIndicator(messagesContainer);
 
       try {
-        // Build input payload: use array format if attachments present, string otherwise
+        // Build input payload: use array format if image attachments present, string otherwise
         let inputPayload: string | any[];
 
         if (messageAttachments.length > 0) {
-          // Multimodal format: array of content parts
+          // Multimodal format: array of content parts with images
           inputPayload = [
             {
               type: 'text',
-              text: message
+              text: augmentedMessage  // Use augmented message with file content
             },
             ...messageAttachments.map(att => ({
               type: 'image',
@@ -2613,7 +2725,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           ];
         } else {
           // Text-only format: plain string (backward compatible)
-          inputPayload = message;
+          inputPayload = augmentedMessage;  // Use augmented message with file content
         }
 
         // Send to Letta conversation with streaming enabled
@@ -2629,210 +2741,263 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         });
 
         if (response.ok && response.body) {
-          // Don't remove thinking indicator yet - wait for first content token
-
+          // Shared state across the primary stream and the optional
+          // skill-activation follow-up. Both streams append into the same
+          // assistant message container so the UI reads as one turn.
           let assistantMessageEl: HTMLElement | null = null;
+          let stepsContainer: HTMLElement | null = null;
           let contentEl: HTMLElement | null = null;
           let streamingRenderer: StreamingMarkdownRenderer | null = null;
-          let thinkingRemoved = false; // Track if we've removed the thinking indicator
-          let accumulatedContent = ''; // Accumulate raw markdown for copy button
-          let skillToolDetected = false; // Track if load_skill or unload_skill was called
-          let activeStatusEl: HTMLElement = thinkingMsg; // Current thinking/status indicator element
+          let accumulatedContent = '';
+          let skillToolDetected = false;
+          let currentAssistantMsgId: string | null = null;
+          let currentReasoningPill: HTMLElement | null = null;
+          let accumulatedReasoning = '';
+          let currentToolPill: HTMLElement | null = null;
 
-          // Read SSE stream
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = '';
+          // Ensure the assistant message container + steps section exist.
+          // Called on the first SSE event of any kind so pills appear
+          // immediately rather than waiting for the first content token.
+          const ensureContainer = (): void => {
+            if (assistantMessageEl) return;
+            thinkingMsg.remove();
+            assistantMessageEl = messagesContainer.createEl('div', {
+              cls: 'chat-message assistant'
+            });
+            assistantMessageEl.createEl('div', {
+              text: 'Assistant',
+              cls: 'message-role'
+            });
+            stepsContainer = assistantMessageEl.createEl('div', {
+              cls: 'agent-steps'
+            });
+          };
 
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+          // --- Helper: process one SSE stream into the shared container ---
+          const processStream = async (body: ReadableStream<Uint8Array>): Promise<void> => {
+            const reader = body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let lastPaintYield = 0;
 
-            // Decode chunk and add to buffer
-            buffer += decoder.decode(value, { stream: true });
+            // Reset per-stream pill tracking (a new stream = new group of steps)
+            currentReasoningPill = null;
+            accumulatedReasoning = '';
+            currentToolPill = null;
 
-            // Process complete SSE messages (ending with \n\n)
-            const lines = buffer.split('\n\n');
-            buffer = lines.pop() || ''; // Keep incomplete message in buffer
+            // Each stream may produce a new content section below the steps
+            let streamContentEl: HTMLElement | null = null;
+            let streamRenderer: StreamingMarkdownRenderer | null = null;
+            let streamAccumulated = '';
+            let streamMsgId: string | null = null;
 
-            for (const block of lines) {
-              // Extract the data line from SSE blocks (may have event: prefix)
-              const dataLine = block.split('\n').find(l => l.trim().startsWith('data:'));
-              if (!dataLine) continue;
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
 
-              const jsonStr = dataLine.replace(/^data:\s*/, '').trim();
-              if (!jsonStr || jsonStr === '[DONE]') continue;
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n\n');
+              buffer = lines.pop() || '';
 
-              try {
-                const msg = JSON.parse(jsonStr);
-                const messageType = msg.message_type;
-                const messageId = msg.id;
+              let wroteContent = false;
 
-                // Handle error_message from Letta (e.g. LLM errors)
-                if (messageType === 'error_message') {
-                  const errorDetail = msg.detail || msg.message || 'Unknown agent error';
-                  console.error('[MultiChatModal] Agent error:', errorDetail);
-                  throw new Error(errorDetail);
-                }
+              for (const block of lines) {
+                const dataLine = block.split('\n').find(l => l.trim().startsWith('data:'));
+                if (!dataLine) continue;
 
-                // Handle stop_reason (may indicate errors)
-                if (messageType === 'stop_reason' && msg.stop_reason === 'llm_api_error') {
-                  console.error('[MultiChatModal] LLM API error reported');
-                  // Don't throw yet - wait for the error_message with details
-                }
+                const jsonStr = dataLine.replace(/^data:\s*/, '').trim();
+                if (!jsonStr || jsonStr === '[DONE]') continue;
 
-                // Handle reasoning_message
-                if (messageType === 'reasoning_message') {
-                  // Re-show status indicator if it was removed by a prior assistant message
-                  if (thinkingRemoved) {
-                    activeStatusEl = this.addThinkingIndicator(messagesContainer);
-                    thinkingRemoved = false;
+                try {
+                  const msg = JSON.parse(jsonStr);
+                  const messageType = msg.message_type;
+
+                  // --- errors ---
+                  if (messageType === 'error_message') {
+                    const detail = msg.detail || msg.message || 'Unknown agent error';
+                    console.error('[MultiChatModal] Agent error:', detail);
+                    throw new Error(detail);
                   }
-                  const phrase = getRandomThinkingPhrase('thinking');
-                  this.updateStatusIndicator(activeStatusEl, `${phrase}...`, '💭');
-                }
-
-                // Handle tool_call_message
-                else if (messageType === 'tool_call_message') {
-                  const toolName = msg.tool_call?.name || 'tool';
-
-                  // Detect skill loading/unloading tools
-                  if (toolName === 'load_skill' || toolName === 'unload_skill') {
-                    skillToolDetected = true;
-                  }
-
-                  // Re-show status indicator if it was removed by a prior assistant message
-                  if (thinkingRemoved) {
-                    activeStatusEl = this.addThinkingIndicator(messagesContainer);
-                    thinkingRemoved = false;
-                  }
-
-                  // Start progress listener for agentic retrieval
-                  if (toolName === 'agentic_research_question') {
-                    this.startAgenticProgressListener(activeStatusEl);
+                  if (messageType === 'stop_reason' && msg.stop_reason === 'llm_api_error') {
+                    console.error('[MultiChatModal] LLM API error reported');
                   }
 
-                  const statusMsg = getToolStatusMessage(toolName);
-                  this.updateStatusIndicator(activeStatusEl, `${statusMsg}...`, '🔧');
-                }
+                  // --- reasoning ---
+                  if (messageType === 'reasoning_message') {
+                    ensureContainer();
+                    const reasoning = msg.reasoning || msg.content || msg.text || '';
 
-                // Handle tool_return_message
-                else if (messageType === 'tool_return_message') {
-                  // Stop progress listener for agentic retrieval
-                  this.stopAgenticProgressListener();
-
-                  // Re-show status indicator if it was removed by a prior assistant message
-                  if (thinkingRemoved) {
-                    activeStatusEl = this.addThinkingIndicator(messagesContainer);
-                    thinkingRemoved = false;
-                  }
-                  const phrase = getRandomThinkingPhrase('processing');
-                  this.updateStatusIndicator(activeStatusEl, `${phrase} results...`, '⚙️');
-                }
-
-                // Handle assistant_message (with streaming)
-                else if (messageType === 'assistant_message') {
-                  const delta = msg.content || msg.text || '';
-
-                  if (delta && messageId) {
-                    // Remove thinking indicator on first content token
-                    if (!thinkingRemoved) {
-                      activeStatusEl.remove();
-                      thinkingRemoved = true;
+                    if (!currentReasoningPill) {
+                      const phrase = getRandomThinkingPhrase('thinking');
+                      currentReasoningPill = this.createStepPill(
+                        stepsContainer!, '💭', `${phrase}...`
+                      );
                     }
 
-                    // Finalize previous assistant message if this is a new one
-                    if (assistantMessageEl && messageId !== assistantMessageEl.dataset.messageId) {
-                      if (streamingRenderer) {
-                        streamingRenderer.end();
-                        if (contentEl && accumulatedContent) {
-                          await this.renderMessageContent(accumulatedContent, contentEl);
-                        }
-                        this.addMessageActions(assistantMessageEl, accumulatedContent);
+                    if (reasoning) {
+                      accumulatedReasoning += reasoning + '\n';
+                      this.updateStepPillDetail(
+                        currentReasoningPill, accumulatedReasoning.trim()
+                      );
+                    }
+                    this.scrollToBottom(messagesContainer, true);
+                  }
+
+                  // --- tool call ---
+                  else if (messageType === 'tool_call_message') {
+                    ensureContainer();
+                    const toolName = msg.tool_call?.name || 'tool';
+
+                    if (toolName === 'load_skill' || toolName === 'unload_skill') {
+                      skillToolDetected = true;
+                    }
+
+                    // Close any open reasoning pill before a tool step
+                    currentReasoningPill = null;
+                    accumulatedReasoning = '';
+
+                    const statusMsg = getToolStatusMessage(toolName);
+                    let toolDetail = '';
+                    try {
+                      if (msg.tool_call?.arguments) {
+                        const parsed = JSON.parse(msg.tool_call.arguments);
+                        toolDetail = JSON.stringify(parsed, null, 2);
                       }
-                      // Reset for the new message
-                      assistantMessageEl = null;
-                      contentEl = null;
-                      streamingRenderer = null;
-                      accumulatedContent = '';
+                    } catch { /* keep empty */ }
+
+                    currentToolPill = this.createStepPill(
+                      stepsContainer!, '🔧', `${statusMsg}...`, toolDetail
+                    );
+
+                    if (toolName === 'agentic_research_question') {
+                      this.startAgenticProgressListener(currentToolPill);
                     }
 
-                    // Create assistant message element on first chunk
-                    if (!assistantMessageEl) {
-                      assistantMessageEl = messagesContainer.createEl('div', {
-                        cls: 'chat-message assistant'
-                      });
-                      assistantMessageEl.dataset.messageId = messageId;
-                      assistantMessageEl.createEl('div', {
-                        text: 'Assistant',
-                        cls: 'message-role'
-                      });
-                      contentEl = assistantMessageEl.createEl('div', {
-                        cls: 'message-content'
-                      });
+                    this.scrollToBottom(messagesContainer, true);
+                  }
 
-                      // Initialize streaming markdown renderer
-                      streamingRenderer = new StreamingMarkdownRenderer(contentEl);
+                  // --- tool return ---
+                  else if (messageType === 'tool_return_message') {
+                    this.stopAgenticProgressListener();
+                    ensureContainer();
+
+                    if (currentToolPill) {
+                      // Mark the tool pill as complete
+                      const label = (currentToolPill as any).__labelEl;
+                      if (label) {
+                        label.textContent = label.textContent.replace('...', '');
+                      }
                     }
 
-                    // Accumulate raw content for copy button
-                    accumulatedContent += delta;
+                    currentToolPill = null;
+                    this.scrollToBottom(messagesContainer, true);
+                  }
 
-                    // Write delta directly to streaming renderer
-                    if (streamingRenderer) {
-                      streamingRenderer.write(delta);
-                      this.scrollToBottom(messagesContainer, true);
+                  // --- assistant content ---
+                  else if (messageType === 'assistant_message') {
+                    const delta = msg.content || msg.text || '';
+
+                    if (msg.id) {
+                      streamMsgId = msg.id;
+                    } else if (!streamMsgId) {
+                      streamMsgId = `stream-${Date.now()}`;
+                    }
+
+                    if (delta) {
+                      ensureContainer();
+
+                      // Close any open reasoning pill
+                      currentReasoningPill = null;
+                      accumulatedReasoning = '';
+
+                      // Create content section on first token
+                      if (!streamContentEl) {
+                        if (!assistantMessageEl!.dataset.messageId && streamMsgId) {
+                          assistantMessageEl!.dataset.messageId = streamMsgId;
+                        }
+                        streamContentEl = assistantMessageEl!.createEl('div', {
+                          cls: 'message-content'
+                        });
+                        streamRenderer = new StreamingMarkdownRenderer(streamContentEl);
+                      }
+
+                      streamAccumulated += delta;
+
+                      if (streamRenderer) {
+                        streamRenderer.write(delta);
+                        wroteContent = true;
+                      }
                     }
                   }
+                } catch (e) {
+                  if (e.message && !e.message.includes('Failed to parse')) {
+                    throw e;
+                  }
+                  console.warn('[MultiChatModal] Failed to parse SSE:', jsonStr.substring(0, 100));
                 }
-              } catch (e) {
-                // Re-throw agent errors so they display to the user
-                if (e.message && !e.message.includes('Failed to parse')) {
-                  throw e;
+              }
+
+              // Yield to browser for repaint between chunk batches
+              if (wroteContent) {
+                const now = Date.now();
+                if (now - lastPaintYield > 40) {
+                  lastPaintYield = now;
+                  await new Promise<void>(r => requestAnimationFrame(() => r()));
                 }
-                console.warn('[MultiChatModal] Failed to parse SSE message:', jsonStr.substring(0, 100));
+                this.scrollToBottom(messagesContainer, true);
               }
             }
-          }
 
-          // Ensure thinking indicator is removed if stream completed without content
-          if (!thinkingRemoved) {
-            activeStatusEl.remove();
-            thinkingRemoved = true;
-          }
-
-          // End streaming and re-render with Obsidian's native markdown
-          if (streamingRenderer) {
-            streamingRenderer.end();
-
-            // Re-render accumulated content with Obsidian's native MarkdownRenderer
-            // which properly handles tables, callouts, and other complex markdown
-            // that streaming-markdown doesn't fully support
-            if (contentEl && accumulatedContent) {
-              await this.renderMessageContent(accumulatedContent, contentEl);
+            // Finalize: re-render streamed content with Obsidian markdown
+            if (streamRenderer) {
+              streamRenderer.end();
+              if (streamContentEl && streamAccumulated) {
+                await this.renderMessageContent(streamAccumulated, streamContentEl);
+              }
             }
 
-            // Add message actions (copy button) with accumulated content
-            if (assistantMessageEl && accumulatedContent) {
-              this.addMessageActions(assistantMessageEl, accumulatedContent);
+            // Merge this stream's content into the overall accumulated content
+            if (streamAccumulated) {
+              accumulatedContent += (accumulatedContent ? '\n\n' : '') + streamAccumulated;
             }
+
+            // Update references for the next stream (follow-up) to reuse
+            contentEl = streamContentEl;
+            streamingRenderer = streamRenderer;
+            currentAssistantMsgId = streamMsgId;
 
             this.scrollToBottom(messagesContainer, true);
+          };
+
+          // --- Run the primary stream ---
+          await processStream(response.body);
+
+          // Remove the initial thinking indicator if nothing rendered at all
+          // (e.g. the stream ended with no events)
+          if (!assistantMessageEl) {
+            thinkingMsg.remove();
           }
 
-          // Auto-follow-up for skill loading/unloading
+          // Hide the steps container if it ended up empty
+          if (stepsContainer) {
+            const steps = stepsContainer as HTMLElement;
+            if (steps.childElementCount === 0) {
+              steps.style.display = 'none';
+            }
+          }
+
+          // --- Auto-follow-up for skill loading/unloading ---
           if (skillToolDetected) {
-            // Show/update status indicator for skill activation
-            const activationMsg = thinkingRemoved
-              ? this.addThinkingIndicator(messagesContainer)
-              : activeStatusEl;
-            this.updateStatusIndicator(activationMsg, 'Activating skill tools...', '⚡', true);
+            console.log('[MultiChatModal] Skill tool detected, sending follow-up...');
+
+            // Add an activation pill inside the same assistant container
+            ensureContainer();
+            const activationPill = this.createStepPill(
+              stepsContainer!, '⚡', 'Activating skill tools...'
+            );
+            this.scrollToBottom(messagesContainer, true);
 
             try {
-              // Build a follow-up that carries the original request context so the
-              // agent knows what to do with the newly attached tools. The
-              // SKILL_ACTIVATION_PREFIX marker lets us filter this message out of
-              // rendered chat history (see renderChatInterface).
               const truncatedRequest = message.length > 300
                 ? message.slice(0, 300) + '...'
                 : message;
@@ -2849,141 +3014,49 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                 })
               });
 
-              if (followUpResponse.ok && followUpResponse.body) {
-                // Process follow-up stream (same logic as original stream)
-                let followUpAssistantEl: HTMLElement | null = null;
-                let followUpContentEl: HTMLElement | null = null;
-                let followUpRenderer: StreamingMarkdownRenderer | null = null;
-                let followUpRemoved = false;
-                let followUpContent = '';
+              if (!followUpResponse.ok) {
+                const errorBody = await followUpResponse.text();
+                console.error(`[MultiChatModal] Follow-up failed: ${followUpResponse.status}`, errorBody);
+                this.updateStepPillLabel(activationPill, 'Follow-up failed');
+                await this.addMessageToChat(messagesContainer, 'assistant',
+                  'Skill tools loaded, but the follow-up request failed. Try sending your message again.');
+              } else if (followUpResponse.body) {
+                console.log('[MultiChatModal] Follow-up stream started...');
 
-                const followUpReader = followUpResponse.body.getReader();
-                const followUpDecoder = new TextDecoder();
-                let followUpBuffer = '';
+                // Mark activation complete
+                this.updateStepPillLabel(activationPill, 'Skill tools activated');
 
-                while (true) {
-                  const { done, value } = await followUpReader.read();
-                  if (done) break;
+                // Create a new steps section for the follow-up's reasoning/tools
+                stepsContainer = assistantMessageEl!.createEl('div', {
+                  cls: 'agent-steps'
+                });
 
-                  followUpBuffer += followUpDecoder.decode(value, { stream: true });
-                  const lines = followUpBuffer.split('\n\n');
-                  followUpBuffer = lines.pop() || '';
+                // Process the follow-up into the same assistant container
+                await processStream(followUpResponse.body);
 
-                  for (const block of lines) {
-                    const dataLine = block.split('\n').find(l => l.trim().startsWith('data:'));
-                    if (!dataLine) continue;
-
-                    const jsonStr = dataLine.replace(/^data:\s*/, '').trim();
-                    if (!jsonStr || jsonStr === '[DONE]') continue;
-
-                    try {
-                      const msg = JSON.parse(jsonStr);
-                      const messageType = msg.message_type;
-
-                      // Handle error_message
-                      if (messageType === 'error_message') {
-                        const errorDetail = msg.detail || msg.message || 'Unknown agent error';
-                        console.error('[MultiChatModal] Follow-up agent error:', errorDetail);
-                        throw new Error(errorDetail);
-                      }
-
-                      // Handle stop_reason
-                      if (messageType === 'stop_reason' && msg.stop_reason === 'llm_api_error') {
-                        console.error('[MultiChatModal] Follow-up LLM API error');
-                      }
-
-                      // Handle reasoning_message
-                      if (messageType === 'reasoning_message') {
-                        if (!followUpRemoved) {
-                          const phrase = getRandomThinkingPhrase('thinking');
-                          this.updateStatusIndicator(activationMsg, `${phrase}...`, '💭');
-                        }
-                      }
-
-                      // Handle tool_call_message
-                      else if (messageType === 'tool_call_message') {
-                        if (!followUpRemoved) {
-                          const toolName = msg.tool_call?.name || 'tool';
-                          const statusMsg = getToolStatusMessage(toolName);
-                          this.updateStatusIndicator(activationMsg, `${statusMsg}...`, '🔧');
-                        }
-                      }
-
-                      // Handle tool_return_message
-                      else if (messageType === 'tool_return_message') {
-                        // Stop progress listener for agentic retrieval
-                        this.stopAgenticProgressListener();
-
-                        if (!followUpRemoved) {
-                          const phrase = getRandomThinkingPhrase('processing');
-                          this.updateStatusIndicator(activationMsg, `${phrase} results...`, '⚙️');
-                        }
-                      }
-
-                      // Handle assistant_message
-                      else if (messageType === 'assistant_message') {
-                        const delta = msg.content || msg.text || '';
-
-                        if (delta && msg.id) {
-                          // Remove thinking indicator on first content
-                          if (!followUpRemoved) {
-                            activationMsg.remove();
-                            followUpRemoved = true;
-                          }
-
-                          // Create assistant message element
-                          if (!followUpAssistantEl) {
-                            followUpAssistantEl = messagesContainer.createEl('div', {
-                              cls: 'chat-message assistant'
-                            });
-                            followUpAssistantEl.createEl('div', {
-                              text: 'Assistant',
-                              cls: 'message-role'
-                            });
-                            followUpContentEl = followUpAssistantEl.createEl('div', {
-                              cls: 'message-content'
-                            });
-                            followUpRenderer = new StreamingMarkdownRenderer(followUpContentEl);
-                          }
-
-                          followUpContent += delta;
-
-                          if (followUpRenderer) {
-                            followUpRenderer.write(delta);
-                            this.scrollToBottom(messagesContainer, true);
-                          }
-                        }
-                      }
-                    } catch (e) {
-                      if (e.message && !e.message.includes('Failed to parse')) {
-                        throw e;
-                      }
-                    }
+                // Hide empty follow-up steps section
+                if (stepsContainer) {
+                  const steps = stepsContainer as HTMLElement;
+                  if (steps.childElementCount === 0) {
+                    steps.style.display = 'none';
                   }
-                }
-
-                // Ensure indicator removed
-                if (!followUpRemoved) {
-                  activationMsg.remove();
-                }
-
-                // End streaming and re-render
-                if (followUpRenderer && followUpContentEl && followUpContent) {
-                  followUpRenderer.end();
-                  await this.renderMessageContent(followUpContent, followUpContentEl);
-
-                  if (followUpAssistantEl) {
-                    this.addMessageActions(followUpAssistantEl, followUpContent);
-                  }
-
-                  this.scrollToBottom(messagesContainer, true);
                 }
               }
             } catch (followUpError) {
               console.error('[MultiChatModal] Auto-follow-up error:', followUpError);
-              activationMsg.remove();
-              // Don't throw - just log and continue
+              this.updateStepPillLabel(activationPill, 'Follow-up error');
+              messagesContainer.querySelectorAll('.message.thinking').forEach(el => el.remove());
+              await this.addMessageToChat(messagesContainer, 'assistant',
+                'Skill tools loaded, but an error occurred while processing. Try sending your message again.');
             }
+          }
+
+          // Add copy button covering ALL accumulated content from both streams
+          if (assistantMessageEl && accumulatedContent) {
+            const msgEl = assistantMessageEl as HTMLElement;
+            // Remove any existing actions (processStream doesn't add them)
+            msgEl.querySelectorAll('.message-actions').forEach(el => el.remove());
+            this.addMessageActions(msgEl, accumulatedContent);
           }
 
           // Update session list to reflect new message
@@ -3091,7 +3164,8 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     container: HTMLElement,
     role: string,
     content: string,
-    attachments?: ImageAttachment[]
+    attachments?: ImageAttachment[],
+    fileAttachments?: FileAttachment[]
   ) {
     const messageEl = container.createEl('div', {
       cls: `chat-message ${role}`
@@ -3105,6 +3179,32 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     const contentEl = messageEl.createEl('div', {
       cls: 'message-content'
     });
+
+    // Render file attachment badges if present (for user messages)
+    if (fileAttachments && fileAttachments.length > 0) {
+      const filesContainer = contentEl.createEl('div', {
+        cls: 'message-files'
+      });
+
+      fileAttachments.forEach(fileAttachment => {
+        const fileBadge = filesContainer.createEl('div', {
+          cls: 'message-file-badge',
+          attr: {
+            title: `${fileAttachment.name} (${(fileAttachment.size / 1024).toFixed(1)}KB)`
+          }
+        });
+
+        const fileIcon = fileBadge.createEl('span', {
+          cls: 'message-file-icon',
+          text: this.getFileIcon(fileAttachment.name)
+        });
+
+        fileBadge.createEl('span', {
+          cls: 'message-file-name',
+          text: fileAttachment.name
+        });
+      });
+    }
 
     // Render image attachments if present (for user messages)
     if (attachments && attachments.length > 0) {
@@ -3153,6 +3253,97 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     setTimeout(() => {
       this.scrollToBottom(container);
     }, 100);
+  }
+
+  /**
+   * Render a grouped assistant turn (reasoning + tools + content) as a single
+   * message bubble with expandable step pills.
+   */
+  private async renderAssistantTurn(
+    container: HTMLElement,
+    messages: any[],
+    extractContent: (msg: any) => string
+  ): Promise<void> {
+    const messageEl = container.createEl('div', { cls: 'chat-message assistant' });
+    messageEl.createEl('div', { text: 'Assistant', cls: 'message-role' });
+
+    const stepsEl = messageEl.createEl('div', { cls: 'agent-steps' });
+    let hasSteps = false;
+    let combinedContent = '';
+
+    for (const msg of messages) {
+      const mt = msg.message_type || msg.type;
+
+      if (mt === 'reasoning_message') {
+        hasSteps = true;
+        const reasoning = msg.reasoning || extractContent(msg);
+        if (reasoning) {
+          const phrase = getRandomThinkingPhrase('thinking');
+          this.createStepPill(stepsEl, '💭', phrase, reasoning);
+        }
+      } else if (mt === 'tool_call_message') {
+        hasSteps = true;
+        const toolName = msg.tool_call?.name || 'tool';
+        const statusMsg = getToolStatusMessage(toolName);
+        let detail = '';
+        try {
+          if (msg.tool_call?.arguments) {
+            const parsed = JSON.parse(msg.tool_call.arguments);
+            detail = JSON.stringify(parsed, null, 2);
+          }
+        } catch { /* keep empty */ }
+        this.createStepPill(stepsEl, '🔧', statusMsg, detail);
+      } else if (mt === 'tool_return_message') {
+        // Skip tool returns in history pills to reduce noise --
+        // the tool call pill already conveys what happened.
+        continue;
+      } else if (mt === 'assistant_message') {
+        const text = extractContent(msg);
+        if (text) {
+          combinedContent += (combinedContent ? '\n\n' : '') + text;
+        }
+      }
+    }
+
+    // Hide steps section if nothing was added
+    if (!hasSteps) {
+      stepsEl.style.display = 'none';
+    }
+
+    // Render combined assistant content
+    if (combinedContent) {
+      const contentEl = messageEl.createEl('div', { cls: 'message-content' });
+      await this.renderMessageContent(combinedContent, contentEl);
+      this.addMessageActions(messageEl, combinedContent);
+    }
+
+    this.scrollToBottom(container);
+  }
+
+  /**
+   * Get file icon emoji based on file extension.
+   */
+  private getFileIcon(filename: string): string {
+    const ext = filename.toLowerCase().split('.').pop();
+    const iconMap: Record<string, string> = {
+      'pdf': '📄',
+      'txt': '📝',
+      'md': '📝',
+      'json': '📊',
+      'csv': '📊',
+      'py': '🐍',
+      'js': '🟨',
+      'ts': '🔷',
+      'html': '🌐',
+      'xml': '📋',
+      'yaml': '⚙️',
+      'yml': '⚙️',
+      'toml': '⚙️',
+      'rst': '📝',
+      'tex': '📐',
+      'log': '📋'
+    };
+    return iconMap[ext || ''] || '📎';
   }
 
   async addReasoningMessage(container: HTMLElement, msg: any) {
@@ -3323,13 +3514,18 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
   }
 
   private scrollToBottom(container: HTMLElement, smooth: boolean = true) {
-    if (smooth) {
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: 'smooth'
-      });
+    // Reading scrollHeight forces a layout reflow, which is necessary on
+    // mobile WebViews where DOM mutations from streaming-markdown can get
+    // batched without a paint until something triggers layout.
+    const target = container.scrollHeight;
+
+    if (smooth && !(this.app as any).isMobile) {
+      container.scrollTo({ top: target, behavior: 'smooth' });
     } else {
-      container.scrollTop = container.scrollHeight;
+      // Instant scroll on mobile (smooth scroll + animation queueing
+      // causes the viewport to lag behind new content) and whenever
+      // the caller explicitly asks for instant.
+      container.scrollTop = target;
     }
   }
 
@@ -4409,6 +4605,52 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     (indicator as any).__lastStatusUpdate = now;
   }
 
+  /**
+   * Create a collapsible step pill inside a container.
+   * Pills show a compact header row that expands on click to reveal detail.
+   */
+  private createStepPill(
+    container: HTMLElement,
+    icon: string,
+    label: string,
+    detail?: string
+  ): HTMLElement {
+    const pill = container.createEl('div', { cls: 'step-pill' });
+
+    const header = pill.createEl('div', { cls: 'pill-header' });
+    header.createEl('span', { cls: 'pill-icon', text: icon });
+    const labelEl = header.createEl('span', { cls: 'pill-label', text: label });
+    header.createEl('span', { cls: 'pill-chevron', text: '\u203A' });
+
+    const detailEl = pill.createEl('div', { cls: 'pill-detail' });
+    if (detail) {
+      detailEl.createEl('pre', { text: detail, cls: 'pill-detail-text' });
+    }
+
+    header.addEventListener('click', () => {
+      pill.toggleClass('expanded', !pill.hasClass('expanded'));
+    });
+
+    (pill as any).__labelEl = labelEl;
+    (pill as any).__detailEl = detailEl;
+
+    return pill;
+  }
+
+  private updateStepPillLabel(pill: HTMLElement, label: string): void {
+    const labelEl = (pill as any).__labelEl as HTMLElement;
+    if (labelEl) labelEl.textContent = label;
+  }
+
+  private updateStepPillDetail(pill: HTMLElement, detail: string): void {
+    const detailEl = (pill as any).__detailEl as HTMLElement;
+    if (!detailEl) return;
+    detailEl.empty();
+    if (detail) {
+      detailEl.createEl('pre', { text: detail, cls: 'pill-detail-text' });
+    }
+  }
+
   // Helper: Show toast notification
   showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
     const toast = document.body.createEl('div', {
@@ -4558,26 +4800,49 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     // Create a hidden file input
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'image/png,image/jpeg,image/gif,image/webp';
-    input.multiple = true; // Allow multiple image selection
+    input.accept = 'image/png,image/jpeg,image/gif,image/webp,.pdf,.txt,.md,.json,.csv,.py,.ts,.js,.html,.xml,.yaml,.yml,.toml,.rst,.tex,.log';
+    input.multiple = true;
 
     input.onchange = async () => {
       if (!input.files || input.files.length === 0) return;
 
       for (const file of Array.from(input.files)) {
         try {
-          const attachment = await this.readFileAsBase64(file);
-          await this.addAttachment(attachment);
-          new Notice(`Added image: ${file.name}`);
+          await this.processFileAttachment(file);
         } catch (error) {
-          new Notice(`Failed to add image: ${error.message}`, 5000);
-          console.error('Image upload error:', error);
+          new Notice(`Failed to add file: ${error.message}`, 5000);
+          console.error('File upload error:', error);
         }
       }
     };
 
     // Trigger the file picker
     input.click();
+  }
+
+  /**
+   * Process a file attachment (image or document).
+   *
+   * Args:
+   *     file: The file to process
+   *
+   * Example:
+   *     >>> await this.processFileAttachment(file);
+   */
+  private async processFileAttachment(file: File): Promise<void> {
+    if (file.type.startsWith('image/')) {
+      const attachment = await this.readFileAsBase64(file);
+      await this.addAttachment(attachment);
+      new Notice(`Added image: ${file.name}`);
+    } else if (file.name.toLowerCase().endsWith('.pdf')) {
+      const attachment = await this.extractPdfText(file);
+      await this.addFileAttachment(attachment);
+      new Notice(`Added PDF: ${file.name}`);
+    } else {
+      const attachment = await this.readFileAsText(file);
+      await this.addFileAttachment(attachment);
+      new Notice(`Added file: ${file.name}`);
+    }
   }
 
   /**
@@ -4591,6 +4856,20 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
    */
   private async addAttachment(attachment: ImageAttachment): Promise<void> {
     this.pendingAttachments.push(attachment);
+    this.updateAttachmentPreview();
+  }
+
+  /**
+   * Add a file attachment to the pending list and update preview.
+   *
+   * Args:
+   *     attachment: The file attachment to add.
+   *
+   * Example:
+   *     >>> await this.addFileAttachment(fileAttachment);
+   */
+  private async addFileAttachment(attachment: FileAttachment): Promise<void> {
+    this.pendingFileAttachments.push(attachment);
     this.updateAttachmentPreview();
   }
 
@@ -4609,6 +4888,20 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
   }
 
   /**
+   * Remove a file attachment from the pending list.
+   *
+   * Args:
+   *     index: The index of the attachment to remove.
+   *
+   * Example:
+   *     >>> this.removeFileAttachment(0);
+   */
+  private removeFileAttachment(index: number): void {
+    this.pendingFileAttachments.splice(index, 1);
+    this.updateAttachmentPreview();
+  }
+
+  /**
    * Update the attachment preview strip UI.
    *
    * Example:
@@ -4619,13 +4912,16 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
     this.attachmentPreviewContainer.empty();
 
-    if (this.pendingAttachments.length === 0) {
+    const hasAttachments = this.pendingAttachments.length > 0 || this.pendingFileAttachments.length > 0;
+
+    if (!hasAttachments) {
       this.attachmentPreviewContainer.style.display = 'none';
       return;
     }
 
     this.attachmentPreviewContainer.style.display = 'flex';
 
+    // Render image attachments
     this.pendingAttachments.forEach((attachment, index) => {
       const thumbContainer = this.attachmentPreviewContainer!.createEl('div', {
         cls: 'chat-attachment-thumb'
@@ -4655,6 +4951,41 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         this.removeAttachment(index);
       };
     });
+
+    // Render file attachments
+    this.pendingFileAttachments.forEach((attachment, index) => {
+      const fileContainer = this.attachmentPreviewContainer!.createEl('div', {
+        cls: 'chat-attachment-file'
+      });
+
+      const fileIcon = fileContainer.createEl('span', {
+        cls: 'chat-attachment-file-icon',
+        text: this.getFileIcon(attachment.name)
+      });
+
+      const fileName = fileContainer.createEl('span', {
+        cls: 'chat-attachment-file-name',
+        text: attachment.name,
+        attr: {
+          title: `${attachment.name} (${(attachment.size / 1024).toFixed(1)}KB)`
+        }
+      });
+
+      // Create remove button
+      const removeBtn = fileContainer.createEl('button', {
+        cls: 'chat-attachment-remove',
+        text: '×',
+        attr: {
+          'aria-label': 'Remove file',
+          title: 'Remove file'
+        }
+      });
+
+      removeBtn.onclick = (e) => {
+        e.preventDefault();
+        this.removeFileAttachment(index);
+      };
+    });
   }
 
   /**
@@ -4665,6 +4996,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
    */
   private clearAttachments(): void {
     this.pendingAttachments = [];
+    this.pendingFileAttachments = [];
     this.updateAttachmentPreview();
   }
 
