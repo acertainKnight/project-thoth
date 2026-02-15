@@ -119,6 +119,16 @@ TOOL_CATEGORIES = {
         'set_schema_preset',
         'get_preset_details',
         'validate_schema_file',
+        'update_schema_field',
+        'update_schema_instructions',
+        'reset_schema_to_default',
+    ],
+    # Prompt template management
+    'prompts': [
+        'list_prompt_templates',
+        'read_prompt_template',
+        'update_prompt_template',
+        'reset_prompt_template',
     ],
     # Settings management (loaded via skill only)
     'settings': [
@@ -161,6 +171,8 @@ ROLE_TOOL_CATEGORIES = {
         'processing',  # Download PDFs
         'tagging',  # Tag management
         'data',  # Reading lists, obsidian sync
+        'schema',  # Analysis schema management
+        'prompts',  # Prompt template management
         'mcp_management',  # MCP server management
     ],
     # Research Analyst: Deep analysis, synthesis, quality assessment
