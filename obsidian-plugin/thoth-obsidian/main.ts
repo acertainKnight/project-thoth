@@ -29,6 +29,7 @@ function initDesktopUtils() {
 import { ThothSettings, ChatMessage, ChatSession, ChatWindowState, NotificationProgress, DEFAULT_SETTINGS } from './src/types';
 import { MultiChatModal, CommandsModal, InputModal, ConfirmModal } from './src/modals';
 import { APIUtilities } from './src/utils/api';
+import { UpdateChecker } from './src/services/update-checker';
 
 // Types and interfaces are now imported from ./src/types/
 
@@ -40,6 +41,7 @@ export default class ThothPlugin extends Plugin {
   isRestarting: boolean = false;
   socket: WebSocket | null = null;
   wsResolvers: Map<string, { resolve: (v: string) => void; reject: (e: Error) => void }> = new Map();
+  updateChecker: UpdateChecker;
 
   // Performance and caching
   private requestCache: Map<string, { data: any; timestamp: number; expires: number }> = new Map();
@@ -153,6 +155,10 @@ export default class ThothPlugin extends Plugin {
         this.startAgent();
       }, 2000); // Wait 2 seconds for Obsidian to fully load
     }
+
+    // Initialize and schedule update checker
+    this.updateChecker = new UpdateChecker(this);
+    this.updateChecker.scheduleCheck();
   }
 
   async loadSettings() {
@@ -2136,6 +2142,51 @@ class ThothSettingTab extends PluginSettingTab {
         .onChange(async (value) => {
           this.plugin.settings.showRibbonIcon = value;
           await this.plugin.saveSettings();
+        }));
+
+    // Update checking settings
+    new Setting(containerEl)
+      .setName('Check for Updates')
+      .setDesc('Automatically check for new stable releases daily')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.checkForUpdates)
+        .onChange(async (value) => {
+          this.plugin.settings.checkForUpdates = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Release Channel')
+      .setDesc('Update checks only run for stable channel')
+      .addDropdown(dropdown => dropdown
+        .addOption('stable', 'stable')
+        .addOption('alpha', 'alpha')
+        .addOption('nightly', 'nightly')
+        .setValue(this.plugin.settings.releaseChannel)
+        .onChange(async (value) => {
+          this.plugin.settings.releaseChannel = value as 'stable' | 'alpha' | 'nightly';
+          await this.plugin.saveSettings();
+        }));
+
+    // Check for updates now button
+    new Setting(containerEl)
+      .setName('Check for Updates Now')
+      .setDesc('Force an immediate update check')
+      .addButton(button => button
+        .setButtonText('Check Now')
+        .onClick(async () => {
+          button.setDisabled(true);
+          button.setButtonText('Checking...');
+          try {
+            await this.plugin.updateChecker.checkForUpdate(true);
+            new Notice('Update check complete');
+          } catch (error) {
+            console.error('Update check failed:', error);
+            new Notice('Update check failed');
+          } finally {
+            button.setDisabled(false);
+            button.setButtonText('Check Now');
+          }
         }));
 
     // Link to modal settings

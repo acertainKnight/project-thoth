@@ -125,10 +125,6 @@ class HealthMonitor:
         """
         services = self.check_services()
 
-        # Count healthy vs unhealthy services.
-        # "unknown" means the service doesn't implement health_check -- that's
-        # not a failure, just a gap in instrumentation. Only "unhealthy" counts
-        # as an actual problem that should surface a 503.
         healthy_count = sum(
             1 for info in services.values() if info.get('status') == 'healthy'
         )
@@ -137,7 +133,9 @@ class HealthMonitor:
         )
         total_count = len(services)
 
-        overall_healthy = unhealthy_count == 0 and total_count > 0
+        # System is healthy only when every service explicitly reports healthy.
+        # Unknown, degraded, or any other non-healthy status counts against it.
+        overall_healthy = healthy_count == total_count and total_count > 0
 
         result = {
             'healthy': overall_healthy,

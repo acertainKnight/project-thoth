@@ -441,6 +441,63 @@ export class SettingsTabComponent {
     notificationsToggle.onchange = () => {
       this.settings.enableNotifications = notificationsToggle.checked;
     };
+
+    // Check for updates
+    const updatesRow = section.createDiv({ cls: 'thoth-setting-row' });
+    updatesRow.createEl('label', { text: 'Check for Updates' });
+    const updatesToggle = updatesRow.createEl('input', { type: 'checkbox' });
+    updatesToggle.checked = this.settings.checkForUpdates;
+    updatesToggle.onchange = () => {
+      this.settings.checkForUpdates = updatesToggle.checked;
+    };
+    updatesRow.createEl('span', {
+      text: 'Automatically check for new stable releases daily',
+      cls: 'thoth-setting-description'
+    });
+
+    // Release channel
+    const channelRow = section.createDiv({ cls: 'thoth-setting-row' });
+    channelRow.createEl('label', { text: 'Release Channel' });
+    const channelSelect = channelRow.createEl('select');
+    ['stable', 'alpha', 'nightly'].forEach(channel => {
+      const option = channelSelect.createEl('option', { value: channel, text: channel });
+      if (channel === this.settings.releaseChannel) {
+        option.selected = true;
+      }
+    });
+    channelSelect.onchange = () => {
+      this.settings.releaseChannel = channelSelect.value as any;
+    };
+    channelRow.createEl('span', {
+      text: 'Update checks only run for stable channel',
+      cls: 'thoth-setting-description'
+    });
+
+    // Check now button
+    const checkNowBtn = section.createEl('button', {
+      text: 'Check for Updates Now',
+      cls: 'thoth-check-update-btn'
+    });
+    checkNowBtn.style.marginTop = '10px';
+    checkNowBtn.onclick = async () => {
+      checkNowBtn.disabled = true;
+      checkNowBtn.textContent = 'Checking...';
+      try {
+        await this.plugin.updateChecker.checkForUpdate(true);
+        checkNowBtn.textContent = 'Check Complete';
+        setTimeout(() => {
+          checkNowBtn.disabled = false;
+          checkNowBtn.textContent = 'Check for Updates Now';
+        }, 2000);
+      } catch (error) {
+        console.error('Update check failed:', error);
+        checkNowBtn.textContent = 'Check Failed';
+        setTimeout(() => {
+          checkNowBtn.disabled = false;
+          checkNowBtn.textContent = 'Check for Updates Now';
+        }, 2000);
+      }
+    };
   }
 
   private async saveSettings() {

@@ -44,6 +44,12 @@ export interface ThothSettings {
   showAdvancedSettings: boolean;
   enableNotifications: boolean;
   notificationDuration: number;     // milliseconds
+
+  // === UPDATE CHECKING ===
+  checkForUpdates: boolean;                          // User-facing toggle
+  releaseChannel: 'stable' | 'alpha' | 'nightly';   // Which channel the user installed from
+  lastUpdateCheck: number;                           // Epoch ms of last successful check (internal)
+  dismissedVersion: string | null;                   // Version the user dismissed (internal)
 }
 
 export const DEFAULT_SETTINGS: ThothSettings = {
@@ -77,4 +83,10 @@ export const DEFAULT_SETTINGS: ThothSettings = {
   showAdvancedSettings: false,
   enableNotifications: true,
   notificationDuration: 5000,
+
+  // Update Checking
+  checkForUpdates: true,
+  releaseChannel: 'stable',
+  lastUpdateCheck: 0,
+  dismissedVersion: null,
 };
