@@ -104,6 +104,14 @@ TOOL_CATEGORIES = {
         # DEPRECATED: "backup_collection" - admin task
         # DEPRECATED: "export_article_data" - admin task
     ],
+    # External knowledge (textbooks, background material)
+    'external_knowledge': [
+        'create_knowledge_collection',
+        'list_knowledge_collections',
+        'delete_knowledge_collection',
+        'upload_external_knowledge',
+        'search_external_knowledge',
+    ],
     # Advanced RAG (loaded via skill only)
     'rag': [
         'reindex_collection',
@@ -171,6 +179,7 @@ ROLE_TOOL_CATEGORIES = {
         'processing',  # Download PDFs
         'tagging',  # Tag management
         'data',  # Reading lists, obsidian sync
+        'external_knowledge',  # External knowledge management
         'schema',  # Analysis schema management
         'prompts',  # Prompt template management
         'mcp_management',  # MCP server management

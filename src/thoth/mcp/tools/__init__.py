@@ -68,6 +68,13 @@ from .data_management_tools import (
 from .download_pdf_tool import (
     DownloadPdfMCPTool,
 )
+from .external_knowledge_tools import (
+    CreateKnowledgeCollectionMCPTool,
+    DeleteKnowledgeCollectionMCPTool,
+    ListKnowledgeCollectionsMCPTool,
+    SearchExternalKnowledgeMCPTool,
+    UploadExternalKnowledgeMCPTool,
+)
 from .mcp_server_tools import (
     AddMCPServerMCPTool,
     ListMCPServersMCPTool,
@@ -220,6 +227,12 @@ MCP_TOOL_CLASSES = [
     # Data management
     GenerateReadingListMCPTool,
     SyncWithObsidianMCPTool,
+    # External knowledge management
+    CreateKnowledgeCollectionMCPTool,
+    ListKnowledgeCollectionsMCPTool,
+    DeleteKnowledgeCollectionMCPTool,
+    UploadExternalKnowledgeMCPTool,
+    SearchExternalKnowledgeMCPTool,
     # Advanced RAG tools (loaded via skill)
     ReindexCollectionMCPTool,
     OptimizeSearchMCPTool,

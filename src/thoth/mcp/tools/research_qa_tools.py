@@ -11,6 +11,29 @@ from typing import Any
 from ..base_tools import MCPTool, MCPToolCallResult, normalize_authors
 
 
+def _build_scope_filter(scope: str) -> dict[str, Any] | None:
+    """
+    Build filter dictionary from scope parameter.
+
+    Args:
+        scope: One of 'all', 'papers_only', 'external', or 'collection:<name>'
+
+    Returns:
+        Filter dictionary or None for 'all'
+    """
+    if scope == 'all':
+        return None
+    elif scope == 'papers_only':
+        return {'document_category': 'research_paper'}
+    elif scope == 'external':
+        return {'document_category': 'external'}
+    elif scope.startswith('collection:'):
+        collection_name = scope.split(':', 1)[1]
+        return {'document_category': 'external', 'collection_name': collection_name}
+    else:
+        return None
+
+
 class AnswerResearchQuestionMCPTool(MCPTool):
     """Comprehensive research question answering with citations and context."""
 
@@ -55,6 +78,11 @@ class AnswerResearchQuestionMCPTool(MCPTool):
                     'description': 'Include full citation details in response',
                     'default': True,
                 },
+                'scope': {
+                    'type': 'string',
+                    'description': 'Search scope: "all" (default), "papers_only", "external", or "collection:<name>"',
+                    'default': 'all',
+                },
             },
             'required': ['question'],
         }
@@ -66,6 +94,7 @@ class AnswerResearchQuestionMCPTool(MCPTool):
             max_sources = arguments.get('max_sources', 10)
             min_relevance = arguments.get('min_relevance', 0.4)
             include_citations = arguments.get('include_citations', True)
+            scope = arguments.get('scope', 'all')
 
             # Perform semantic search
             rag_service = self.service_manager.rag
@@ -80,9 +109,13 @@ class AnswerResearchQuestionMCPTool(MCPTool):
                     isError=True,
                 )
 
+            # Build filter based on scope
+            search_filter = _build_scope_filter(scope)
+
             search_results = await rag_service.search_async(
                 query=question,
                 k=max_sources,
+                filter=search_filter,
             )
 
             # Filter by minimum relevance score
@@ -1126,6 +1159,11 @@ class AgenticResearchQuestionMCPTool(MCPTool):
                     'minimum': 0,
                     'maximum': 5,
                 },
+                'scope': {
+                    'type': 'string',
+                    'description': 'Search scope: "all" (default), "papers_only", "external", or "collection:<name>"',
+                    'default': 'all',
+                },
             },
             'required': ['question'],
         }
@@ -1136,6 +1174,7 @@ class AgenticResearchQuestionMCPTool(MCPTool):
             question = arguments['question']
             max_sources = arguments.get('max_sources', 5)
             max_retries = arguments.get('max_retries', 2)
+            scope = arguments.get('scope', 'all')
 
             # Get RAG service
             rag_service = self.service_manager.rag
@@ -1149,6 +1188,9 @@ class AgenticResearchQuestionMCPTool(MCPTool):
                     ],
                     isError=True,
                 )
+
+            # Build filter based on scope
+            search_filter = _build_scope_filter(scope)
 
             # Check if agentic retrieval is enabled
             if not rag_service.rag_manager.agentic_orchestrator:
@@ -1193,6 +1235,7 @@ class AgenticResearchQuestionMCPTool(MCPTool):
                 k=max_sources,
                 max_retries=max_retries,
                 progress_callback=progress_callback,
+                filter=search_filter,
             )
 
             # Mark operation complete
