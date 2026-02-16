@@ -50,7 +50,7 @@ def main() -> int:
         # Initialize Thoth with optimized pipeline
         logger.info('Calling initialize_thoth()...')
         print('MONITOR: Calling initialize_thoth()...', flush=True)
-        _services, document_pipeline, _citation_tracker = initialize_thoth()
+        service_manager, document_pipeline, _citation_tracker = initialize_thoth()
         print('MONITOR: initialize_thoth() returned successfully!', flush=True)
         logger.info('Thoth initialized successfully')
         print('MONITOR:  Thoth initialized successfully', flush=True)
@@ -108,6 +108,38 @@ def main() -> int:
         )
         print('MONITOR: PDFMonitor instance created successfully!', flush=True)
         logger.info('PDFMonitor created successfully')
+
+        # Start knowledge folder watcher (non-blocking)
+        print('MONITOR: Checking for knowledge service...', flush=True)
+        knowledge_service = service_manager.knowledge
+        postgres_service = service_manager.postgres
+
+        if knowledge_service and postgres_service:
+            print('MONITOR: Starting knowledge folder watcher...', flush=True)
+            logger.info('Starting knowledge folder watcher...')
+
+            from thoth.server.knowledge_monitor import KnowledgeMonitor
+
+            knowledge_monitor = KnowledgeMonitor(
+                knowledge_service=knowledge_service,
+                postgres_service=postgres_service,
+                polling_interval=30.0,
+            )
+
+            # Process existing files first
+            print('MONITOR: Processing existing knowledge files...', flush=True)
+            knowledge_monitor.process_existing_files()
+
+            # Start watching (non-blocking)
+            print('MONITOR: Starting knowledge file observer...', flush=True)
+            knowledge_monitor.start_watching()
+            logger.success('Knowledge folder watcher started successfully')
+            print('MONITOR: Knowledge folder watcher running', flush=True)
+        else:
+            print('MONITOR: Knowledge service not available, skipping', flush=True)
+            logger.info(
+                'Knowledge service not available, skipping knowledge folder watcher'
+            )
 
         # Start monitoring
         print(
