@@ -122,6 +122,13 @@ routing = [
     "semantic-router>=0.1.0",
 ]
 
+# External knowledge processing (convert various formats to markdown)
+knowledge = [
+    "mammoth>=1.0.0",      # DOCX to HTML conversion
+    "ebooklib>=0.18",      # EPUB parsing and extraction
+    "markdownify>=0.11.6", # HTML to Markdown conversion
+]
+
 # Letta client SDK for communicating with the Letta server container
 # Only the lightweight client - the full letta server runs in its own container
 memory = [
@@ -153,7 +160,7 @@ service-discovery = [
 # thoth-mcp: MCP protocol interface (~1.5GB)
 # Provides MCP protocol interface to Thoth research tools
 service-mcp = [
-    "thoth[api,pdf,mcp,discovery,langchain,memory]",
+    "thoth[api,pdf,mcp,discovery,langchain,memory,knowledge]",
 ]
 
 # thoth-monitor: PDF processing (~2GB)
@@ -164,7 +171,7 @@ service-monitor = [
 ]
 
 service-all = [
-    "thoth[api,pdf,mcp,discovery,langchain,memory]",
+    "thoth[api,pdf,mcp,discovery,langchain,memory,knowledge]",
 ]
 
 # Optional heavy dependencies (only install if you need local models)
