@@ -84,6 +84,7 @@ def main() -> None:
     from . import (
         database,
         discovery,
+        knowledge,
         letta,
         mcp,
         notes,
@@ -102,6 +103,7 @@ def main() -> None:
     # agent.configure_subparser(subparsers)  # DEPRECATED: Use Letta REST API (port 8283)  # noqa: W505
     database.configure_subparser(subparsers)
     discovery.configure_subparser(subparsers)
+    knowledge.configure_subparser(subparsers)
     letta.configure_subparser(subparsers)
     mcp.configure_subparser(subparsers)
     # memory.configure_subparser(subparsers)  # DEPRECATED: Use Letta REST API (port 8283)  # noqa: W505
