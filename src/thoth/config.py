@@ -753,9 +753,7 @@ class PathsConfig(BaseModel):
     prompts: str = 'thoth/_thoth/prompts'
     templates: str = 'thoth/_thoth/templates'
     output: str = 'thoth/_thoth/data/output'
-    knowledge_base: str = Field(
-        default='thoth/_thoth/data/knowledge', alias='knowledgeBase'
-    )
+    knowledge_base: str = Field(default='thoth/knowledge', alias='knowledgeBase')
     graph_storage: str = Field(
         default='thoth/_thoth/data/graph/citations.graphml', alias='graphStorage'
     )
@@ -1177,7 +1175,7 @@ class Settings(BaseModel):
                     'prompts': 'thoth/_thoth/prompts',
                     'templates': 'thoth/_thoth/templates',
                     'output': 'thoth/_thoth/data/output',
-                    'knowledgeBase': 'thoth/_thoth/data/knowledge',
+                    'knowledgeBase': 'thoth/knowledge',
                     'queries': 'thoth/_thoth/data/queries',
                     'agentStorage': 'thoth/_thoth/data/agent',
                     'logs': 'thoth/_thoth/logs',
