@@ -14,6 +14,7 @@ import networkx as nx
 from loguru import logger
 
 if TYPE_CHECKING:
+    from thoth.config import Config
     from thoth.services.service_manager import ServiceManager
 
 from thoth.utilities.schemas import AnalysisResponse, Citation
@@ -51,10 +52,10 @@ class CitationGraph:
 
     def __init__(
         self,
-        knowledge_base_dir: str
+        knowledge_base_dir: str  # noqa: ARG002
         | Path
         | None = None,  # Deprecated, kept for compatibility
-        graph_storage_path: str
+        graph_storage_path: str  # noqa: ARG002
         | Path
         | None = None,  # Deprecated, kept for compatibility
         note_generator: Any | None = None,  # Deprecated
@@ -62,7 +63,7 @@ class CitationGraph:
         markdown_dir: Path | None = None,
         notes_dir: Path | None = None,
         service_manager: 'ServiceManager | None' = None,
-        config: 'Config | None' = None,  # CRITICAL FIX: Accept config to avoid creating new instance
+        config: 'Config | None' = None,  # Accept config to avoid creating new instance
     ) -> None:
         """
         Initialize the CitationGraph (database-only, no file system dependencies).
@@ -115,7 +116,7 @@ class CitationGraph:
 
         try:
             # Try to get the running loop
-            loop = asyncio.get_running_loop()
+            _ = asyncio.get_running_loop()
             # We're in an async context - need to handle this carefully
             # We can't use run_until_complete on a running loop, so we'll
             # need to use a different approach
@@ -127,7 +128,7 @@ class CitationGraph:
 
             def run_in_thread():
                 try:
-                    # Create a fresh event loop for this thread (threads don't share loops)
+                    # Fresh event loop for this thread (threads don't share loops)
                     new_loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(new_loop)
                     try:
@@ -319,10 +320,10 @@ class CitationGraph:
                             except Exception:
                                 pass
 
-                        # Get analysis data - stored as 'analysis' in graph, save as 'analysis_data' in DB
+                        # Get analysis data: graph 'analysis' -> DB 'analysis_data'
                         analysis_data = data.get('analysis', {})
 
-                        # Extract tags from analysis_data to also store in keywords field
+                        # Extract tags from analysis_data for keywords field
                         keywords = (
                             analysis_data.get('tags', [])
                             if isinstance(analysis_data, dict)
@@ -336,7 +337,7 @@ class CitationGraph:
                         )
                         keywords_json = json_lib.dumps(keywords) if keywords else None
 
-                        # Handle multiple unique constraints (doi, arxiv_id, title) by checking for existing paper first
+                        # Check for existing paper (doi, arxiv_id, title)
                         doi = metadata.get('doi')
                         arxiv_id = metadata.get('arxiv_id')
                         title = metadata.get('title')
@@ -346,7 +347,7 @@ class CitationGraph:
                         if year and (year < 1900 or year > 2100):
                             year = None  # Set to NULL if outside valid range
 
-                        # Try to find existing paper by any identifier (check all unique constraints)
+                        # Find existing paper by any identifier
                         existing = await conn.fetchrow(
                             """
                             SELECT id FROM papers
@@ -413,7 +414,7 @@ class CitationGraph:
                             )
                             nodes_updated += 1
                         else:
-                            # Try to insert new paper - may still fail due to unique constraints
+                            # Insert new paper (may fail on unique constraint)
                             try:
                                 # Extract schema metadata from analysis_data if present
                                 schema_name = 'default'
@@ -449,7 +450,7 @@ class CitationGraph:
                                 )
                                 nodes_inserted += 1
                             except asyncpg.exceptions.UniqueViolationError:
-                                # If insert fails due to unique constraint, find and update the conflicting paper
+                                # On unique violation, find and update conflicting paper
                                 existing = await conn.fetchrow(
                                     """
                                     SELECT id FROM papers
@@ -551,10 +552,10 @@ class CitationGraph:
                         target_metadata = target_node_data.get('metadata', {})
 
                         # Extract identifiers with priority: DOI > ArXiv > Title
-                        # Strip version suffixes from arxiv IDs (e.g., 1802.04223v2 -> 1802.04223)
+                        # Strip arxiv version suffix (e.g. 1802.04223v2 -> 1802.04223)
                         import re
 
-                        def get_identifiers(node_id, metadata):
+                        def get_identifiers(_node_id, metadata):
                             """Extract all available identifiers from node metadata."""
                             identifiers = {}
 
@@ -580,7 +581,7 @@ class CitationGraph:
                         target_ids = get_identifiers(target, target_metadata)
 
                         # Build SQL query that tries DOI > ArXiv > Title for each node
-                        # This ensures we find papers even if they were indexed by title but now have DOI
+                        # Find papers by DOI, ArXiv, or title
                         source_query = """(
                             SELECT id FROM papers
                             WHERE ($1::text IS NOT NULL AND doi = $1)
@@ -689,7 +690,7 @@ class CitationGraph:
         async def save():
             conn = await asyncpg.connect(db_url)
             try:
-                # Extract identifier from article_id (format: "doi:10.1234" or "arxiv:1234.5678" or "title:xxx")
+                # Parse article_id (doi:..., arxiv:..., or title:...)
                 id_type, id_value = (
                     article_id.split(':', 1)
                     if ':' in article_id
@@ -718,7 +719,7 @@ class CitationGraph:
                     return
 
                 # Update or insert into processed_papers
-                result = await conn.execute(
+                await conn.execute(
                     """
                     INSERT INTO processed_papers (paper_id, markdown_content, markdown_path, created_at, updated_at)
                     VALUES ($1, $2, $3, NOW(), NOW())
@@ -754,7 +755,7 @@ class CitationGraph:
             citation: Citation object containing article metadata
 
         Returns:
-            str: The generated article ID (e.g., 'doi:10.1234/example', 'arxiv:2301.12345', 'title:Paper Title')
+            str: Article ID (doi:..., arxiv:..., or title:...)
         """
         # Priority 1: DOI (most reliable, globally unique)
         if citation.doi:
@@ -865,7 +866,7 @@ class CitationGraph:
             pdf_path: Path to the article's PDF file
             markdown_path: Path to the article's markdown file
             analysis: AnalysisResponse object or dictionary containing analysis data
-            llm_model: Name of the LLM model used for analysis (e.g., "google/gemini-2.5-flash")
+            llm_model: LLM model name used for analysis
 
         Returns:
             None
@@ -1114,7 +1115,7 @@ class CitationGraph:
                 'extracted_venue': citation.venue or citation.journal,
                 'is_influential': citation.influential_citation_count
                 and citation.influential_citation_count > 0,
-                # Note: citation_context, section, and citation_order would need to come from text analysis
+                # citation_context, section, citation_order from text analysis
                 # These are not available in the Citation object itself
             }
             self.add_citation(article_id, target_id, citation_data, batch_mode=True)
@@ -1645,6 +1646,37 @@ class CitationGraph:
 
         if updated_paths:
             self._save_graph()
+
+    def set_paper_collection(self, paper_id: str, collection_id: str) -> None:
+        """
+        Set the collection_id for a paper in paper_metadata table.
+
+        Args:
+            paper_id: The UUID of the paper in paper_metadata
+            collection_id: The UUID of the collection
+        """
+        try:
+            import psycopg2
+
+            conn = psycopg2.connect(self.db_url)
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """
+                UPDATE paper_metadata
+                SET collection_id = %s, updated_at = NOW()
+                WHERE id = %s
+                """,
+                (collection_id, paper_id),
+            )
+
+            conn.commit()
+            cursor.close()
+            conn.close()
+
+            logger.info(f'Set collection {collection_id} for paper {paper_id}')
+        except Exception as e:
+            logger.error(f'Failed to set collection for paper {paper_id}: {e}')
 
     def regenerate_all_notes(self) -> list[tuple[Path, Path]]:
         """

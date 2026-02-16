@@ -11,6 +11,8 @@ from uuid import UUID
 
 from loguru import logger
 
+from thoth.config import config
+
 from ..base_tools import MCPTool, MCPToolCallResult
 
 
@@ -379,6 +381,178 @@ class SearchExternalKnowledgeMCPTool(MCPTool):
                     response += f'- Relevance: {metadata["similarity"]:.3f}\n'
                 response += f'\n{content}\n\n'
                 response += '---\n\n'
+
+            return MCPToolCallResult(content=[{'type': 'text', 'text': response}])
+
+        except Exception as e:
+            return self.handle_error(e)
+
+
+class MovePaperToProjectMCPTool(MCPTool):
+    """Move a research paper and its linked files to a project."""
+
+    @property
+    def name(self) -> str:
+        return 'move_paper_to_project'
+
+    @property
+    def description(self) -> str:
+        return (
+            'Move a research paper and its linked files (PDF, markdown, note) to a project folder. '
+            'Creates the project collection if it does not exist and updates all file paths.'
+        )
+
+    @property
+    def input_schema(self) -> dict[str, Any]:
+        return {
+            'type': 'object',
+            'properties': {
+                'paper_id': {
+                    'type': 'string',
+                    'description': 'UUID of the paper to move',
+                },
+                'project_name': {
+                    'type': 'string',
+                    'description': 'Target project name',
+                },
+            },
+            'required': ['paper_id', 'project_name'],
+        }
+
+    async def execute(self, arguments: dict[str, Any]) -> MCPToolCallResult:
+        """Move a paper to a project."""
+        try:
+            import shutil
+
+            from thoth.repositories.knowledge_collection_repository import (
+                KnowledgeCollectionRepository,
+            )
+            from thoth.utilities.vault_path_resolver import VaultPathResolver
+
+            paper_id = arguments['paper_id']
+            project_name = arguments['project_name']
+
+            postgres_service = self.service_manager.postgres
+            knowledge_repo = KnowledgeCollectionRepository(postgres_service)
+            vault_resolver = VaultPathResolver(config.vault_root)
+
+            # Get or create collection
+            collection = await knowledge_repo.get_by_name(project_name)
+            if not collection:
+                collection = await knowledge_repo.create(
+                    name=project_name, description=f'Project: {project_name}'
+                )
+            collection_id = collection['id']
+
+            # Get paper paths
+            async with postgres_service.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT pp.pdf_path, pp.markdown_path, pp.note_path, pm.title
+                    FROM processed_papers pp
+                    JOIN paper_metadata pm ON pp.paper_id = pm.id
+                    WHERE pp.paper_id = $1
+                    """,
+                    paper_id,
+                )
+
+            if not row:
+                return MCPToolCallResult(
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': f'Paper {paper_id} not found in database',
+                        }
+                    ],
+                    isError=True,
+                )
+
+            title = row['title']
+
+            # Get current paths
+            pdf_path = (
+                vault_resolver.resolve(row['pdf_path']) if row['pdf_path'] else None
+            )
+            markdown_path = (
+                vault_resolver.resolve(row['markdown_path'])
+                if row['markdown_path']
+                else None
+            )
+            note_path = (
+                vault_resolver.resolve(row['note_path']) if row['note_path'] else None
+            )
+
+            # Create project directories
+            pdf_project_dir = config.pdf_dir / project_name
+            markdown_project_dir = config.markdown_dir / project_name
+            notes_project_dir = config.notes_dir / project_name
+
+            pdf_project_dir.mkdir(parents=True, exist_ok=True)
+            markdown_project_dir.mkdir(parents=True, exist_ok=True)
+            notes_project_dir.mkdir(parents=True, exist_ok=True)
+
+            # Compute new paths
+            new_pdf_path = pdf_project_dir / pdf_path.name if pdf_path else None
+            new_markdown_path = (
+                markdown_project_dir / markdown_path.name if markdown_path else None
+            )
+            new_note_path = notes_project_dir / note_path.name if note_path else None
+
+            # Move files
+            moved_files = []
+            if pdf_path and pdf_path.exists():
+                shutil.move(str(pdf_path), str(new_pdf_path))
+                moved_files.append('PDF')
+
+            if markdown_path and markdown_path.exists():
+                shutil.move(str(markdown_path), str(new_markdown_path))
+                moved_files.append('Markdown')
+
+            if note_path and note_path.exists():
+                shutil.move(str(note_path), str(new_note_path))
+                moved_files.append('Note')
+
+            # Update database
+            new_pdf_rel = (
+                vault_resolver.make_relative(new_pdf_path) if new_pdf_path else None
+            )
+            new_markdown_rel = (
+                vault_resolver.make_relative(new_markdown_path)
+                if new_markdown_path
+                else None
+            )
+            new_note_rel = (
+                vault_resolver.make_relative(new_note_path) if new_note_path else None
+            )
+
+            async with postgres_service.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE processed_papers
+                    SET pdf_path = $1, markdown_path = $2, note_path = $3, updated_at = NOW()
+                    WHERE paper_id = $4
+                    """,
+                    new_pdf_rel,
+                    new_markdown_rel,
+                    new_note_rel,
+                    paper_id,
+                )
+
+                await conn.execute(
+                    """
+                    UPDATE paper_metadata
+                    SET collection_id = $1, updated_at = NOW()
+                    WHERE id = $2
+                    """,
+                    collection_id,
+                    paper_id,
+                )
+
+            response = '**Paper Moved Successfully**\n\n'
+            response += f'- Title: {title}\n'
+            response += f'- Project: {project_name}\n'
+            response += f'- Files moved: {", ".join(moved_files)}\n\n'
+            response += f'All linked files have been moved to the {project_name} project folder.'
 
             return MCPToolCallResult(content=[{'type': 'text', 'text': response}])
 

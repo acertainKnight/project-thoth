@@ -69,6 +69,38 @@ def configure_subparser(subparsers):
     )
     upload_parser.set_defaults(func=upload_cmd)
 
+    # Project commands
+    projects_parser = knowledge_subparsers.add_parser(
+        'projects', help='List all research projects'
+    )
+    projects_parser.set_defaults(func=list_projects_cmd)
+
+    organize_parser = knowledge_subparsers.add_parser(
+        'organize', help='Auto-organize papers into projects'
+    )
+    organize_parser.add_argument(
+        '--dry-run', action='store_true', help='Show proposed organization only'
+    )
+    organize_parser.add_argument(
+        '--min-cluster-size', type=int, default=5, help='Minimum papers per cluster'
+    )
+    organize_parser.add_argument(
+        '--max-clusters', type=int, default=15, help='Maximum number of clusters'
+    )
+    organize_parser.add_argument(
+        '--categories',
+        type=str,
+        help='Comma-separated seed categories (e.g., "Reinforcement Learning,Computer Vision,NLP")',
+    )
+    organize_parser.set_defaults(func=organize_projects_cmd)
+
+    move_parser = knowledge_subparsers.add_parser(
+        'move', help='Move a paper to a project'
+    )
+    move_parser.add_argument('paper_id', help='Paper ID (UUID)')
+    move_parser.add_argument('project_name', help='Target project name')
+    move_parser.set_defaults(func=move_paper_cmd)
+
 
 def _get_knowledge_service() -> KnowledgeService:
     """Get initialized knowledge service."""
@@ -227,6 +259,89 @@ async def upload_cmd(args):
     except ValueError as e:
         logger.error(f'Upload failed: {e}')
         raise
+
+
+# Project management commands
+def list_projects_cmd(_args, _pipeline=None):
+    """List all research projects."""
+    import asyncio
+
+    from thoth.cli.projects import list_projects_cmd as list_cmd
+
+    asyncio.run(list_cmd())
+
+
+async def organize_projects_cmd(args, _pipeline=None):
+    """Auto-organize papers into projects."""
+    from thoth.repositories.knowledge_collection_repository import (
+        KnowledgeCollectionRepository,
+    )
+    from thoth.services.llm_service import LLMService
+    from thoth.services.postgres_service import PostgresService
+    from thoth.services.project_organizer import ProjectOrganizer
+
+    try:
+        logger.info('Initializing services...')
+        db = PostgresService(config)
+        llm_service = LLMService()
+        knowledge_repo = KnowledgeCollectionRepository(db)
+
+        organizer = ProjectOrganizer(db, llm_service, knowledge_repo)
+
+        # Step 1: Analyze papers
+        seed_categories = None
+        if args.categories:
+            seed_categories = [cat.strip() for cat in args.categories.split(',')]
+            logger.info(f'Using seed categories: {seed_categories}')
+
+        logger.info('Step 1: Analyzing papers by tags...')
+        clusters = await organizer.analyze_papers(
+            args.min_cluster_size, args.max_clusters, seed_categories
+        )
+
+        if not clusters or (len(clusters) == 1 and 'Uncategorized' in clusters):
+            logger.info('No papers to organize or insufficient clustering data')
+            return
+
+        # Step 2: Use tag-based names (LLM refinement can be added later)
+        logger.info('Step 2: Using tag-based project names...')
+        projects = {
+            name: [str(p['id']) for p in papers] for name, papers in clusters.items()
+        }
+
+        # Show proposed organization
+        logger.info('\nProposed Organization:')
+        logger.info('=' * 60)
+        for project_name, paper_ids in projects.items():
+            logger.info(f'{project_name}: {len(paper_ids)} papers')
+        logger.info('=' * 60)
+
+        if args.dry_run:
+            logger.info('[DRY RUN] No files were moved')
+        else:
+            # Step 3: Execute
+            logger.info('\nStep 3: Moving files and updating database...')
+            summary = await organizer.execute_organization(projects, dry_run=False)
+
+            logger.info('\nOrganization Summary:')
+            logger.info(f'  Projects created: {summary["projects_created"]}')
+            logger.info(f'  Papers moved: {summary["papers_moved"]}')
+            logger.info(f'  Errors: {summary["errors"]}')
+
+            if summary['error_details']:
+                logger.warning('Errors encountered:')
+                for error in summary['error_details'][:10]:
+                    logger.warning(f'  {error}')
+
     except Exception as e:
-        logger.error(f'Upload failed: {e}')
+        logger.error(f'Failed to organize papers: {e}')
         raise
+
+
+def move_paper_cmd(args, _pipeline=None):
+    """Move a paper to a project."""
+    import asyncio
+
+    from thoth.cli.projects import move_paper_cmd as move_cmd
+
+    asyncio.run(move_cmd(args.paper_id, args.project_name))

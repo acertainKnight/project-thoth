@@ -208,7 +208,14 @@ class OptimizedDocumentPipeline(BasePipeline):
             )
 
         # OCR conversion (potentially cached)
-        markdown_path, no_images_markdown_path = self._ocr_convert_optimized(pdf_path)
+        # Detect project folder from PDF path for organized output
+        project_name = self._get_project_name(pdf_path)
+        output_dir = (
+            self.markdown_dir / project_name if project_name else self.markdown_dir
+        )
+        markdown_path, no_images_markdown_path = self._ocr_convert_optimized(
+            pdf_path, output_dir=output_dir
+        )
         self.logger.info(f'OCR conversion completed: {markdown_path}')
 
         # Read no_images markdown content for embedding generation
@@ -231,6 +238,7 @@ class OptimizedDocumentPipeline(BasePipeline):
             analysis=analysis,
             citations=citations,
             no_images_markdown=no_images_markdown_content,
+            project_name=project_name,
         )
         self.logger.info('Waiting for note generation to complete...')
         note_path, new_pdf_path, new_markdown_path = note_future.result()
@@ -251,18 +259,21 @@ class OptimizedDocumentPipeline(BasePipeline):
 
         return Path(note_path), Path(new_pdf_path), Path(new_markdown_path)
 
-    def _ocr_convert_optimized(self, pdf_path: Path) -> tuple[Path, Path]:
+    def _ocr_convert_optimized(
+        self, pdf_path: Path, output_dir: Path | None = None
+    ) -> tuple[Path, Path]:
         """OCR conversion with caching and optimized error handling."""
+        target_dir = output_dir or self.markdown_dir
         try:
             return self.services.processing.ocr_convert(
-                pdf_path=pdf_path, output_dir=self.markdown_dir
+                pdf_path=pdf_path, output_dir=target_dir
             )
         except Exception as e:
             self.logger.error(f'OCR conversion failed for {pdf_path}: {e}')
             # Fallback to local processing if API fails
             try:
                 return self.services.processing._local_pdf_to_markdown(
-                    pdf_path, self.markdown_dir
+                    pdf_path, target_dir
                 )
             except Exception as fallback_error:
                 raise RuntimeError(
@@ -485,6 +496,7 @@ class OptimizedDocumentPipeline(BasePipeline):
         analysis,
         citations: list[Citation],
         no_images_markdown: str | None = None,
+        project_name: str | None = None,
     ) -> tuple[str, str, str]:
         """Generate note using the note service."""
         note_path, new_pdf_path, new_markdown_path = self.services.note.create_note(
@@ -492,6 +504,7 @@ class OptimizedDocumentPipeline(BasePipeline):
             markdown_path=markdown_path,
             analysis=analysis,
             citations=citations,
+            project_name=project_name,
         )
 
         # Get LLM model and schema info from config for tracking
@@ -525,6 +538,10 @@ class OptimizedDocumentPipeline(BasePipeline):
                 new_pdf_path=new_pdf_path,
                 new_markdown_path=new_markdown_path,
             )
+            # Set collection_id if this is in a project folder
+            if project_name:
+                collection_id = self._ensure_collection(project_name)
+                self.citation_tracker.set_paper_collection(article_id, collection_id)
         else:
             logger.warning('Could not obtain article_id from process_citations.')
 
@@ -538,6 +555,61 @@ class OptimizedDocumentPipeline(BasePipeline):
                 self.logger.debug(f'Indexed {file_path} to RAG system')
         except Exception as e:
             self.logger.debug(f'Failed to index {file_path} to RAG: {e}')
+
+    def _get_project_name(self, pdf_path: Path) -> str | None:
+        """
+        Extract project folder name from PDF path.
+
+        Args:
+            pdf_path: Path to the PDF file
+
+        Returns:
+            Project name if PDF is in a subfolder, None if at root
+        """
+        try:
+            relative = pdf_path.relative_to(self.pdf_dir)
+            if len(relative.parts) > 1:
+                return relative.parts[0]
+        except ValueError:
+            pass
+        return None
+
+    def _ensure_collection(self, project_name: str) -> str:
+        """
+        Ensure a collection exists for the project, creating if needed.
+
+        Args:
+            project_name: Name of the project/collection
+
+        Returns:
+            Collection UUID as string
+        """
+        from thoth.repositories.knowledge_collection_repository import (
+            KnowledgeCollectionRepository,
+        )
+
+        repo = KnowledgeCollectionRepository(self.services.postgres)
+
+        # Try to get existing collection
+        import asyncio
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            collection = loop.run_until_complete(repo.get_by_name(project_name))
+            if collection:
+                return str(collection['id'])
+
+            # Create new collection
+            new_collection = loop.run_until_complete(
+                repo.create(
+                    name=project_name,
+                    description=f'Auto-created project: {project_name}',
+                )
+            )
+            return str(new_collection['id'])
+        finally:
+            loop.close()
 
     async def cleanup(self) -> None:
         """Clean up resources."""

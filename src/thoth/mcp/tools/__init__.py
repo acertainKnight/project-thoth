@@ -72,6 +72,7 @@ from .external_knowledge_tools import (
     CreateKnowledgeCollectionMCPTool,
     DeleteKnowledgeCollectionMCPTool,
     ListKnowledgeCollectionsMCPTool,
+    MovePaperToProjectMCPTool,
     SearchExternalKnowledgeMCPTool,
     UploadExternalKnowledgeMCPTool,
 )
@@ -232,6 +233,7 @@ MCP_TOOL_CLASSES = [
     ListKnowledgeCollectionsMCPTool,
     DeleteKnowledgeCollectionMCPTool,
     UploadExternalKnowledgeMCPTool,
+    MovePaperToProjectMCPTool,
     SearchExternalKnowledgeMCPTool,
     # Advanced RAG tools (loaded via skill)
     ReindexCollectionMCPTool,

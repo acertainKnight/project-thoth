@@ -97,6 +97,8 @@ thoth_backups/
 memory/
 coordination/
 knowledge/
+!src/thoth/knowledge/
+
 
 # MCP and Claude Code config (user-specific)
 .mcp.json

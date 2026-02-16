@@ -141,6 +141,26 @@ def main() -> int:
                 'Knowledge service not available, skipping knowledge folder watcher'
             )
 
+        # Start project sync service (non-blocking)
+        if postgres_service:
+            print('MONITOR: Starting project sync service...', flush=True)
+            logger.info('Starting project sync service...')
+
+            from thoth.server.project_sync_service import ProjectSyncService
+
+            project_sync = ProjectSyncService(
+                postgres_service=postgres_service, polling_interval=10.0
+            )
+            project_sync.start_watching()
+            logger.success('Project sync service started successfully')
+            print('MONITOR: Project sync service running', flush=True)
+        else:
+            print(
+                'MONITOR: PostgreSQL service not available, skipping project sync',
+                flush=True,
+            )
+            logger.info('PostgreSQL service not available, skipping project sync')
+
         # Start monitoring
         print(
             'MONITOR: ═══════════════════════════════════════════════════', flush=True

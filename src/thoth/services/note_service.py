@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from thoth.services.base import BaseService, ServiceError
 from thoth.utilities.schemas import AnalysisResponse, Citation
@@ -62,9 +62,10 @@ class NoteService(BaseService):
         self.pdf_dir.mkdir(parents=True, exist_ok=True)
         self.markdown_dir.mkdir(parents=True, exist_ok=True)
 
-        # Initialize Jinja environment
+        # Initialize Jinja environment (autoescape for XSS safety)
         self.jinja_env = Environment(
             loader=FileSystemLoader(self.templates_dir),
+            autoescape=select_autoescape(),
             trim_blocks=True,
             lstrip_blocks=True,
         )
@@ -123,7 +124,7 @@ class NoteService(BaseService):
         markdown_content: str,
         pdf_path: str,
         note_path: str,
-        markdown_path: str = None,
+        markdown_path: str | None = None,
     ) -> None:
         """Update markdown content and file paths in PostgreSQL.
 
@@ -219,6 +220,7 @@ class NoteService(BaseService):
         analysis: AnalysisResponse,
         citations: list[Citation],
         template_name: str = 'obsidian_note.md',
+        project_name: str | None = None,
     ) -> tuple[Path, Path, Path]:
         """
         Create a formatted note from analysis and citations.
@@ -254,7 +256,13 @@ class NoteService(BaseService):
 
             # Generate note filename
             note_filename = self._generate_note_filename(content)
-            note_path = self.notes_dir / note_filename
+
+            # Route to project subfolder if specified
+            target_notes_dir = (
+                self.notes_dir / project_name if project_name else self.notes_dir
+            )
+            target_notes_dir.mkdir(parents=True, exist_ok=True)
+            note_path = target_notes_dir / note_filename
             note_stem = note_path.stem
 
             # Rename PDF and Markdown files to match note title (keep in same directory)

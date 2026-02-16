@@ -340,6 +340,7 @@ skips = [
     "B404",  # subprocess import (CLI runs docker/compose)
     "B603", "B607",  # subprocess without shell / partial path (docker CLI)
     "B110",  # try/except pass (intentional in TUI/setup paths)
+    "B608",  # graph.py citation INSERT uses fixed subquery templates, params bound
 ]
 
 ### MyPy Configuration ###########################################################
