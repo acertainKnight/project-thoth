@@ -93,6 +93,13 @@ class DiscoveryManager:
             f'Discovery manager initialized with sources dir: {self.sources_config_dir}'
         )
 
+    def health_check(self) -> dict[str, str]:
+        """Return basic health status."""
+        return {
+            'status': 'healthy',
+            'service': self.__class__.__name__,
+        }
+
     def create_source(self, source: DiscoverySource) -> None:
         """
         Create a new discovery source configuration.

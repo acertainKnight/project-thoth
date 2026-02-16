@@ -327,6 +327,13 @@ class LettaFilesystemWatcherService:
         self.logger = logger.bind(service='letta_filesystem_watcher_service')
         self.logger.info('LettaFilesystemWatcherService initialized')
 
+    def health_check(self) -> dict[str, str]:
+        """Return basic health status."""
+        return {
+            'status': 'healthy',
+            'service': self.__class__.__name__,
+        }
+
     def start(self) -> None:
         """Start the watcher."""
         letta_config = (

@@ -50,6 +50,15 @@ except ImportError:
     RAGWatcherService = None  # type: ignore
     RAG_AVAILABLE = False
 
+# Optional: Knowledge service (requires knowledge extras for file conversion)
+try:
+    from thoth.services.knowledge_service import KnowledgeService
+
+    KNOWLEDGE_AVAILABLE = True
+except ImportError:
+    KnowledgeService = None  # type: ignore
+    KNOWLEDGE_AVAILABLE = False
+
 from thoth.services.note_service import NoteService  # noqa: I001
 from thoth.services.pdf_locator_service import PdfLocatorService
 from thoth.services.query_service import QueryService
@@ -121,6 +130,7 @@ class ServiceManager:
         processing: ProcessingService | None  # Requires 'pdf' extras
         rag: RAGService | None  # Requires 'embeddings' extras
         rag_watcher: RAGWatcherService | None  # Requires 'embeddings' extras
+        knowledge: KnowledgeService | None  # Requires 'knowledge' extras
         cache: CacheService | None  # Requires optimization extras
         async_processing: AsyncProcessingService | None  # Requires optimization extras
 
@@ -275,6 +285,25 @@ class ServiceManager:
         logger.info('SkillService created, calling initialize()...')
         self._services['skill'].initialize()
         logger.info('SkillService initialized successfully')
+
+        # Initialize knowledge service (optional - requires knowledge extras)
+        if KNOWLEDGE_AVAILABLE and RAG_AVAILABLE:
+            self._services['knowledge'] = KnowledgeService(
+                postgres_service=self._services['postgres'],
+                rag_service=self._services['rag'],
+                config=self.config,
+            )
+            self.logger.debug('Knowledge service initialized')
+        else:
+            self._services['knowledge'] = None
+            if not RAG_AVAILABLE:
+                self.logger.debug(
+                    'Knowledge service not available (requires RAG service)'
+                )
+            else:
+                self.logger.debug(
+                    'Knowledge service not available (requires knowledge extras)'
+                )
 
         # Initialize Letta filesystem service (optional - requires memory extras)
         if LETTA_FILESYSTEM_AVAILABLE:
