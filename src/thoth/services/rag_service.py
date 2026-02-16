@@ -304,6 +304,7 @@ class RAGService(BaseService):
         k: int = 5,
         max_retries: int = 2,
         progress_callback: Any = None,
+        filter: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Ask a question using agentic retrieval (async).
@@ -316,6 +317,7 @@ class RAGService(BaseService):
             k: Number of documents to retrieve
             max_retries: Maximum number of retrieval retries
             progress_callback: Optional callback for progress updates
+            filter: Optional metadata filter
 
         Returns:
             dict[str, Any]: Answer with sources, confidence, and metadata
@@ -332,6 +334,7 @@ class RAGService(BaseService):
                 max_retries=max_retries,
                 progress_callback=progress_callback,
                 return_sources=True,
+                filter=filter,
             )
 
             self.log_operation(
@@ -558,6 +561,38 @@ class RAGService(BaseService):
             )
             self.log_operation(
                 'paper_indexed_by_id',
+                paper_id=paper_id,
+                chunks=len(doc_ids),
+            )
+            return doc_ids
+        except Exception as e:
+            raise ServiceError(
+                self.handle_error(e, f'indexing paper {paper_id}')
+            ) from e
+
+    async def index_paper_by_id_async(
+        self, paper_id: str, markdown_content: str | None = None
+    ) -> list[str]:
+        """
+        Async version of index_paper_by_id. Indexes a paper by UUID from the database.
+
+        Args:
+            paper_id: UUID of the paper in paper_metadata table.
+            markdown_content: Optional markdown content (fetched if omitted).
+
+        Returns:
+            list[str]: List of document chunk IDs created.
+
+        Raises:
+            ServiceError: If indexing fails.
+        """
+        try:
+            self.validate_input(paper_id=paper_id)
+            doc_ids = await self.rag_manager.index_paper_by_id_async(
+                paper_id, markdown_content=markdown_content
+            )
+            self.log_operation(
+                'paper_indexed_by_id_async',
                 paper_id=paper_id,
                 chunks=len(doc_ids),
             )

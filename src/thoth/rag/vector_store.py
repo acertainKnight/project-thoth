@@ -313,9 +313,9 @@ class VectorStoreManager:
         self,
         query: str,
         k: int,
-        filter: dict[str, Any] | None = None,  # noqa: ARG002
+        filter: dict[str, Any] | None = None,
     ) -> list[Document]:
-        """Pure vector similarity search (original implementation)."""
+        """Pure vector similarity search with optional metadata filtering."""
         # Generate query embedding
         query_embedding = self.embedding_function.embed_query(query)
 
@@ -324,9 +324,24 @@ class VectorStoreManager:
 
         pool = await self._get_pool()
         async with pool.acquire() as conn:
+            # Build WHERE clause with filters
+            where_clauses = ['dc.embedding IS NOT NULL']
+            params = [embedding_str, k]
+            param_idx = 3
+
+            if filter:
+                filter_clause, filter_params, param_idx = self._build_filter_clause(
+                    filter, param_idx
+                )
+                if filter_clause:
+                    where_clauses.append(filter_clause)
+                    params.extend(filter_params)
+
+            where_sql = ' AND '.join(where_clauses)
+
             # Use pgvector cosine similarity search with HNSW index
             rows = await conn.fetch(
-                """
+                f"""
                 SELECT
                     dc.id,
                     dc.content,
@@ -338,12 +353,11 @@ class VectorStoreManager:
                     1 - (dc.embedding <=> $1::vector) as similarity
                 FROM document_chunks dc
                 JOIN papers p ON dc.paper_id = p.id
-                WHERE dc.embedding IS NOT NULL
+                WHERE {where_sql}
                 ORDER BY dc.embedding <=> $1::vector
                 LIMIT $2
-            """,
-                embedding_str,
-                k,
+            """,  # nosec B608
+                *params,
             )
 
             documents = self._rows_to_documents(rows)
@@ -386,8 +400,10 @@ class VectorStoreManager:
         async with pool.acquire() as conn:
             # Execute both searches in parallel using asyncio.gather
             vector_results, text_results = await asyncio.gather(
-                self._get_vector_candidates(conn, embedding_str, candidates_per_method),
-                self._get_text_candidates(conn, query, candidates_per_method),
+                self._get_vector_candidates(
+                    conn, embedding_str, candidates_per_method, filter
+                ),
+                self._get_text_candidates(conn, query, candidates_per_method, filter),
                 return_exceptions=True,
             )
 
@@ -421,22 +437,40 @@ class VectorStoreManager:
             return documents
 
     async def _get_vector_candidates(
-        self, conn: asyncpg.Connection, embedding_str: str, k: int
+        self,
+        conn: asyncpg.Connection,
+        embedding_str: str,
+        k: int,
+        filter: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        """Get top-k vector similarity candidates."""
+        """Get top-k vector similarity candidates with optional filtering."""
+        # Build WHERE clause with filters
+        where_clauses = ['dc.embedding IS NOT NULL']
+        params = [embedding_str, k]
+        param_idx = 3
+
+        if filter:
+            filter_clause, filter_params, param_idx = self._build_filter_clause(
+                filter, param_idx
+            )
+            if filter_clause:
+                where_clauses.append(filter_clause)
+                params.extend(filter_params)
+
+        where_sql = ' AND '.join(where_clauses)
+
         rows = await conn.fetch(
-            """
+            f"""
             SELECT
                 dc.id,
                 dc.paper_id,
                 1 - (dc.embedding <=> $1::vector) as score
             FROM document_chunks dc
-            WHERE dc.embedding IS NOT NULL
+            WHERE {where_sql}
             ORDER BY dc.embedding <=> $1::vector
             LIMIT $2
-        """,
-            embedding_str,
-            k,
+        """,  # nosec B608
+            *params,
         )
 
         return [
@@ -445,10 +479,27 @@ class VectorStoreManager:
         ]
 
     async def _get_text_candidates(
-        self, conn: asyncpg.Connection, query: str, k: int
+        self,
+        conn: asyncpg.Connection,
+        query: str,
+        k: int,
+        filter: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        """Get top-k BM25/full-text candidates using configured backend."""
-        results = await self._ft_backend.search(conn, query, k)
+        """
+        Get top-k BM25/full-text candidates using backend with optional filtering.
+        """
+        # Build filter clause if needed
+        filter_clause = ''
+        filter_params = []
+
+        if filter:
+            filter_clause, filter_params, _ = self._build_filter_clause(
+                filter, start_param_idx=1
+            )
+
+        results = await self._ft_backend.search(
+            conn, query, k, filter_clause, filter_params
+        )
         return [
             {'id': r['id'], 'paper_id': r['paper_id'], 'score': r['score']}
             for r in results
@@ -545,6 +596,52 @@ class VectorStoreManager:
         )
 
         return self._rows_to_documents(rows)
+
+    def _build_filter_clause(
+        self, filter: dict[str, Any], start_param_idx: int = 3
+    ) -> tuple[str, list[Any], int]:
+        """
+        Build SQL WHERE clause from filter dictionary.
+
+        Supports:
+        - collection_id: filter by metadata->>'collection_id'
+        - document_category: filter by metadata->>'document_category'
+        - paper_id: filter by dc.paper_id
+        - collection_name: filter by metadata->>'collection_name'
+
+        Args:
+            filter: Filter dictionary
+            start_param_idx: Starting parameter index for SQL placeholders
+
+        Returns:
+            Tuple of (where_clause, params, next_param_idx)
+        """
+        clauses = []
+        params = []
+        param_idx = start_param_idx
+
+        if 'paper_id' in filter:
+            clauses.append(f'dc.paper_id = ${param_idx}::uuid')
+            params.append(filter['paper_id'])
+            param_idx += 1
+
+        if 'document_category' in filter:
+            clauses.append(f"dc.metadata->>'document_category' = ${param_idx}")
+            params.append(filter['document_category'])
+            param_idx += 1
+
+        if 'collection_id' in filter:
+            clauses.append(f"dc.metadata->>'collection_id' = ${param_idx}")
+            params.append(str(filter['collection_id']))
+            param_idx += 1
+
+        if 'collection_name' in filter:
+            clauses.append(f"dc.metadata->>'collection_name' = ${param_idx}")
+            params.append(filter['collection_name'])
+            param_idx += 1
+
+        where_clause = ' AND '.join(clauses) if clauses else ''
+        return where_clause, params, param_idx
 
     def _rows_to_documents(self, rows: list[asyncpg.Record]) -> list[Document]:
         """Convert database rows to LangChain Documents."""

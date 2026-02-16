@@ -407,12 +407,21 @@ class RAGManager:
             async def fetch_and_index():
                 conn = await asyncpg.connect(db_url)
                 try:
-                    # Fetch paper details and markdown content
+                    # Fetch paper details and markdown content including collection info
                     row = await conn.fetchrow(
                         """
-                        SELECT pm.id, pm.title, pm.doi, pm.authors, pp.markdown_content
+                        SELECT
+                            pm.id,
+                            pm.title,
+                            pm.doi,
+                            pm.authors,
+                            pm.collection_id,
+                            pm.document_category,
+                            kc.name as collection_name,
+                            pp.markdown_content
                         FROM paper_metadata pm
                         LEFT JOIN processed_papers pp ON pp.paper_id = pm.id
+                        LEFT JOIN knowledge_collections kc ON kc.id = pm.collection_id
                         WHERE pm.id = $1
                         """,
                         paper_uuid,
@@ -444,7 +453,7 @@ class RAGManager:
                             )
                             return []
 
-                    # Prepare metadata
+                    # Prepare metadata including collection info
                     metadata = {
                         'paper_id': str(row['id']),
                         'title': row['title'] or 'Unknown',
@@ -452,7 +461,14 @@ class RAGManager:
                         'authors': row['authors'],
                         'document_type': 'article',
                         'source': f'database:paper:{paper_id}',
+                        'document_category': row['document_category']
+                        or 'research_paper',
                     }
+
+                    # Add collection metadata if present
+                    if row['collection_id']:
+                        metadata['collection_id'] = str(row['collection_id'])
+                        metadata['collection_name'] = row['collection_name']
 
                     # Split into chunks using two-stage strategy
                     documents = self._split_markdown_content(content, metadata)
@@ -494,6 +510,108 @@ class RAGManager:
 
         except Exception as e:
             logger.error(f'Error indexing paper {paper_id}: {e}')
+            raise
+
+    async def index_paper_by_id_async(
+        self, paper_id: str, markdown_content: str | None = None
+    ) -> list[str]:
+        """
+        Index a paper from the database by its ID (async version).
+
+        Args:
+            paper_id: UUID of the paper to index.
+            markdown_content: Optional markdown content (if not provided,
+                fetched from DB).
+
+        Returns:
+            List of document IDs that were indexed.
+        """
+        from uuid import UUID
+
+        import asyncpg
+
+        try:
+            logger.info(f'Indexing paper by ID (async): {paper_id}')
+            paper_uuid = UUID(paper_id)
+
+            db_url = getattr(self.config.secrets, 'database_url', None)
+            if not db_url:
+                raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
+
+            conn = await asyncpg.connect(db_url)
+            try:
+                row = await conn.fetchrow(
+                    """
+                    SELECT
+                        pm.id,
+                        pm.title,
+                        pm.doi,
+                        pm.authors,
+                        pm.collection_id,
+                        pm.document_category,
+                        kc.name as collection_name,
+                        pp.markdown_content
+                    FROM paper_metadata pm
+                    LEFT JOIN processed_papers pp ON pp.paper_id = pm.id
+                    LEFT JOIN knowledge_collections kc ON kc.id = pm.collection_id
+                    WHERE pm.id = $1
+                    """,
+                    paper_uuid,
+                )
+
+                if not row:
+                    raise ValueError(f'Paper not found: {paper_id}')
+
+                content = markdown_content or row['markdown_content']
+                if not content:
+                    logger.warning(f'No markdown content for paper {paper_id}')
+                    return []
+
+                if self.config.rag_config.skip_files_with_images and self._has_images(
+                    content
+                ):
+                    content = self._strip_images(content)
+                    if len(content.strip()) < 100:
+                        logger.warning(
+                            f'Paper {paper_id} has insufficient content after image removal'
+                        )
+                        return []
+
+                metadata = {
+                    'paper_id': str(row['id']),
+                    'title': row['title'] or 'Unknown',
+                    'doi': row['doi'],
+                    'authors': row['authors'],
+                    'document_type': 'article',
+                    'source': f'database:paper:{paper_id}',
+                    'document_category': row['document_category'] or 'research_paper',
+                }
+
+                if row['collection_id']:
+                    metadata['collection_id'] = str(row['collection_id'])
+                    metadata['collection_name'] = row['collection_name']
+
+                documents = self._split_markdown_content(content, metadata)
+
+                if self.contextual_enricher.enabled:
+                    documents = await self.contextual_enricher.enrich_chunks_async(
+                        chunks=documents,
+                        document_text=content,
+                        document_title=row['title'],
+                    )
+
+                doc_ids = await self.vector_store_manager.add_documents_async(
+                    documents, paper_id=paper_uuid
+                )
+                logger.info(
+                    f'Successfully indexed {len(doc_ids)} chunks for paper {paper_id}'
+                )
+                return doc_ids
+            finally:
+                await conn.close()
+
+        except Exception as e:
+            logger.error(f'Error indexing paper {paper_id} (async): {e}')
             raise
 
     def index_markdown_file(
