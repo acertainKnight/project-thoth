@@ -1,6 +1,6 @@
 ---
 name: knowledge-base-qa
-description: Answer questions using your existing research collection. Use when user
+description: Answer questions using your existing research collection and external knowledge. Use when user
   asks questions about papers they have, wants summaries, or seeks insights from their
   knowledge base.
 tools:
@@ -11,11 +11,21 @@ tools:
 - search_articles
 - get_article_details
 - collection_stats
+- search_external_knowledge
+- list_knowledge_collections
 ---
 
 # Knowledge Base Q&A
 
-Answer research questions using articles already in your collection. Synthesize information across papers with proper citations.
+Answer research questions using articles in your collection and external knowledge sources (textbooks, lecture notes, background material). Synthesize information across papers with proper citations.
+
+## Knowledge Sources
+
+Your knowledge base includes:
+1. **Research papers** - Papers you've processed and analyzed
+2. **External knowledge** - Textbooks, lecture notes, background material organized in collections
+
+Use the `scope` parameter in Q&A tools to control which sources are searched.
 
 ## Tools to Use
 
@@ -23,13 +33,45 @@ For knowledge base queries, use these tools:
 
 | Tool | Purpose |
 |------|---------|
-| `answer_research_question` | Quick Q&A — single-pass hybrid search |
-| `agentic_research_question` | Deep Q&A — multi-step pipeline with query expansion, document grading, hallucination checking |
+| `answer_research_question` | Quick Q&A — single-pass hybrid search (supports scope filtering) |
+| `agentic_research_question` | Deep Q&A — multi-step pipeline with query expansion, document grading, hallucination checking (supports scope filtering) |
 | `read_full_article` | Read complete article content for deep understanding |
 | `unload_article` | Free article memory slot (max 3 articles) |
 | `search_articles` | Find specific papers (supports topic filtering) |
 | `get_article_details` | Get paper metadata and preview |
 | `collection_stats` | Check what's in the collection |
+| `search_external_knowledge` | Search textbooks and background material |
+| `list_knowledge_collections` | Show available external knowledge collections |
+
+## Scope Filtering
+
+Both Q&A tools now support a `scope` parameter to control which knowledge sources are searched:
+
+- `scope="all"` (default) - Search both research papers and external knowledge
+- `scope="papers_only"` - Only search research papers
+- `scope="external"` - Only search external knowledge (textbooks, notes)
+- `scope="collection:Name"` - Search specific external knowledge collection
+
+**Example**:
+```
+# Get foundational understanding from textbooks
+answer_research_question(
+  question="What are Markov Decision Processes?",
+  scope="collection:RL Textbooks"
+)
+
+# Get latest research findings
+answer_research_question(
+  question="Recent advances in MDPs",
+  scope="papers_only"
+)
+
+# Search everything for comprehensive answer
+answer_research_question(
+  question="How are MDPs used in modern RL?",
+  scope="all"
+)
+```
 
 ### Choosing Between Standard and Agentic Q&A
 
@@ -120,18 +162,27 @@ unload_article(
 ## Quick Answer Workflow
 
 ```
-Step 1: Search for relevant papers
+Step 1: Determine which knowledge source to use
+- Foundational concepts → scope="external"
+- Recent research → scope="papers_only"
+- Comprehensive answer → scope="all"
+
+Step 2: Search for relevant information
 answer_research_question(
   question="User's question",
   max_sources=10,
   min_relevance=0.7,
-  include_citations=true
+  include_citations=true,
+  scope="all"  # or papers_only/external/collection:Name
 )
 
-Step 2: If more context needed
-get_article_details(article_id="[specific paper]")
+Step 3: If more context needed from external sources
+search_external_knowledge(
+  query="specific concept",
+  collection_name="Relevant Collection"
+)
 
-Step 3: Synthesize and cite properly
+Step 4: Synthesize and cite properly
 ```
 
 ## Deep Answer Workflow (Agentic)

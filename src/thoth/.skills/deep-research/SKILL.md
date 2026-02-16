@@ -14,11 +14,13 @@ tools:
 - get_citation_context
 - search_articles
 - get_article_details
+- search_external_knowledge
+- list_knowledge_collections
 ---
 
 # Deep Research & Literature Synthesis
 
-Conduct thorough analysis of research papers, synthesize findings across multiple sources, and generate comprehensive literature reviews.
+Conduct thorough analysis of research papers, synthesize findings across multiple sources, and generate comprehensive literature reviews. Leverage both research papers and external knowledge (textbooks, background material) for complete understanding.
 
 ## Tools to Use
 
@@ -28,7 +30,7 @@ For deep research, use these analysis tools:
 |------|---------|
 | `read_full_article` | **Read complete article content for deep learning** |
 | `unload_article` | **Free article memory slot (max 3 articles)** |
-| `answer_research_question` | Multi-source synthesis with citations |
+| `answer_research_question` | Multi-source synthesis with citations (supports scope filtering) |
 | `explore_citation_network` | Citation graph analysis |
 | `compare_articles` | Side-by-side comparison |
 | `find_related_papers` | Semantic similarity |
@@ -36,6 +38,8 @@ For deep research, use these analysis tools:
 | `get_citation_context` | Citation relationship context |
 | `search_articles` | Find papers in knowledge base |
 | `get_article_details` | Get article metadata and preview |
+| `search_external_knowledge` | Search textbooks and background material |
+| `list_knowledge_collections` | Show available external knowledge collections |
 
 **Note**: These are analysis-heavy tools. For simpler queries, use the `knowledge-base-qa` skill instead.
 
@@ -57,11 +61,19 @@ For deep research, use these analysis tools:
 
 ## Iterative Learning Pattern
 
-**Key Principle**: You can read, learn from an article, and keep reading to build deep understanding. With the 3-article memory limit, manage your loaded articles strategically.
+**Key Principle**: You can read, learn from an article, and keep reading to build deep understanding. With the 3-article memory limit, manage your loaded articles strategically. Start with foundational knowledge from textbooks before diving into research papers.
 
 ### The Learning Loop
 
 ```
+0. FOUNDATION (if needed): Get background understanding
+   list_knowledge_collections()
+   search_external_knowledge(
+     query="foundational concept",
+     collection_name="Relevant Textbook Collection"
+   )
+   → Build theoretical foundation first
+
 1. DISCOVER: Search for relevant papers
    search_articles(query="topic")
 
@@ -79,8 +91,8 @@ For deep research, use these analysis tools:
    - What are the limitations?
 
 4. IDENTIFY GAPS: What questions remain?
-   - What concepts need clarification?
-   - What related work should you read?
+   - What concepts need clarification? → search_external_knowledge
+   - What related work should you read? → find_related_papers
 
 5. MANAGE MEMORY: Free slots if needed
    If you've loaded 3 articles and need to read another:
@@ -97,7 +109,10 @@ For deep research, use these analysis tools:
    )
 
 7. SYNTHESIZE: Combine insights across papers
-   answer_research_question(question="synthesis query")
+   answer_research_question(
+     question="synthesis query",
+     scope="all"  # Include both papers and external knowledge
+   )
 ```
 
 ### When to Read Full Articles
