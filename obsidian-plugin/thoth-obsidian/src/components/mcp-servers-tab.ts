@@ -116,9 +116,7 @@ export class MCPServersTabComponent {
 
   async loadServers(): Promise<void> {
     try {
-      const endpoint = this.plugin.settings.remoteMode
-        ? `${this.plugin.settings.remoteEndpointUrl}/api/mcp-servers`
-        : `http://localhost:8282/api/mcp-servers`;
+      const endpoint = `${this.plugin.getEndpointUrl()}/api/mcp-servers`;
 
       const response = await fetch(endpoint);
       if (response.ok) {
@@ -135,7 +133,7 @@ export class MCPServersTabComponent {
 
   async loadAgents(): Promise<void> {
     try {
-      const lettaEndpoint = this.plugin.settings.lettaEndpointUrl || 'http://localhost:8283';
+      const lettaEndpoint = this.plugin.getLettaEndpointUrl();
       const response = await fetch(`${lettaEndpoint}/v1/agents/`);
       if (response.ok) {
         this.agents = await response.json();
@@ -151,9 +149,7 @@ export class MCPServersTabComponent {
 
   async loadServerTools(serverId: string): Promise<MCPServerTool[]> {
     try {
-      const endpoint = this.plugin.settings.remoteMode
-        ? `${this.plugin.settings.remoteEndpointUrl}/api/mcp-servers/${serverId}/tools`
-        : `http://localhost:8282/api/mcp-servers/${serverId}/tools`;
+      const endpoint = `${this.plugin.getEndpointUrl()}/api/mcp-servers/${serverId}/tools`;
 
       const url = this.selectedAgent
         ? `${endpoint}?agent_id=${this.selectedAgent}`
@@ -263,9 +259,7 @@ export class MCPServersTabComponent {
 
   async toggleServer(serverId: string, enabled: boolean): Promise<void> {
     try {
-      const endpoint = this.plugin.settings.remoteMode
-        ? `${this.plugin.settings.remoteEndpointUrl}/api/mcp-servers/${serverId}/toggle`
-        : `http://localhost:8282/api/mcp-servers/${serverId}/toggle`;
+      const endpoint = `${this.plugin.getEndpointUrl()}/api/mcp-servers/${serverId}/toggle`;
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -288,9 +282,7 @@ export class MCPServersTabComponent {
 
   async testServer(serverId: string): Promise<void> {
     try {
-      const endpoint = this.plugin.settings.remoteMode
-        ? `${this.plugin.settings.remoteEndpointUrl}/api/mcp-servers/${serverId}/test`
-        : `http://localhost:8282/api/mcp-servers/${serverId}/test`;
+      const endpoint = `${this.plugin.getEndpointUrl()}/api/mcp-servers/${serverId}/test`;
 
       const response = await fetch(endpoint, { method: 'POST' });
 
@@ -316,9 +308,7 @@ export class MCPServersTabComponent {
     }
 
     try {
-      const endpoint = this.plugin.settings.remoteMode
-        ? `${this.plugin.settings.remoteEndpointUrl}/api/mcp-servers/${serverId}`
-        : `http://localhost:8282/api/mcp-servers/${serverId}`;
+      const endpoint = `${this.plugin.getEndpointUrl()}/api/mcp-servers/${serverId}`;
 
       const response = await fetch(endpoint, { method: 'DELETE' });
 
@@ -566,9 +556,7 @@ export class MCPServersTabComponent {
     }
 
     try {
-      const endpoint = this.plugin.settings.remoteMode
-        ? `${this.plugin.settings.remoteEndpointUrl}/api/mcp-servers/${serverId}/tools/attach`
-        : `http://localhost:8282/api/mcp-servers/${serverId}/tools/attach`;
+      const endpoint = `${this.plugin.getEndpointUrl()}/api/mcp-servers/${serverId}/tools/attach`;
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -608,9 +596,7 @@ export class MCPServersTabComponent {
     }
 
     try {
-      const endpoint = this.plugin.settings.remoteMode
-        ? `${this.plugin.settings.remoteEndpointUrl}/api/mcp-servers/${serverId}/tools/detach`
-        : `http://localhost:8282/api/mcp-servers/${serverId}/tools/detach`;
+      const endpoint = `${this.plugin.getEndpointUrl()}/api/mcp-servers/${serverId}/tools/detach`;
 
       const response = await fetch(endpoint, {
         method: 'POST',

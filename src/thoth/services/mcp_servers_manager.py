@@ -132,6 +132,7 @@ class MCPServersManager(BaseService):
 
             config_obj = MCPServersConfig(**data)
             self._last_mtime = self.config_path.stat().st_mtime
+            self.current_config = config_obj
             self.logger.info(
                 f'Loaded MCP servers config: {len(config_obj.mcp_servers)} servers'
             )
@@ -540,6 +541,9 @@ class MCPServersManager(BaseService):
         """
         Test connectivity to an MCP server.
 
+        For HTTP/SSE servers, sends an MCP initialize handshake directly.
+        For stdio servers, falls back to Letta's tool listing if available.
+
         Args:
             server_id: Server identifier
 
@@ -554,38 +558,97 @@ class MCPServersManager(BaseService):
         server_entry = config_obj.mcp_servers[server_id]
 
         try:
-            # Try to connect temporarily
-            from langchain_mcp_adapters.client import load_mcp_tools
-            from langchain_mcp_adapters.sessions import create_session
-
-            if server_entry.transport == 'stdio':
-                connection_config = {
-                    'transport': 'stdio',
-                    'command': server_entry.command,
-                    'args': server_entry.args,
-                }
-            else:
-                connection_config = {
-                    'transport': server_entry.transport,
-                    'url': server_entry.url,
-                }
-
-            # Test connection with timeout
-            async with create_session(connection_config) as session:
-                tools = await asyncio.wait_for(
-                    load_mcp_tools(session),
-                    timeout=server_entry.timeout,
+            if server_entry.transport in ['http', 'sse'] and server_entry.url:
+                return await self._test_http_mcp_server(
+                    server_entry.url, server_entry.timeout
                 )
+
+            # stdio or no URL: check via Letta if the server is registered
+            if self._letta_service:
+                tools = self._letta_service.list_mcp_tools_by_server(
+                    self._letta_id_map.get(server_id, server_id),
+                    server_name=server_id,
+                )
+                if tools:
+                    return {
+                        'success': True,
+                        'message': f'Server reachable via Letta, found {len(tools)} tools',
+                        'tool_count': len(tools),
+                    }
                 return {
-                    'success': True,
-                    'message': f'Connected successfully, found {len(tools)} tools',
-                    'tool_count': len(tools),
+                    'success': False,
+                    'message': 'Server registered but no tools discovered via Letta',
                 }
+
+            return {
+                'success': False,
+                'message': 'Cannot test stdio server without Letta service',
+            }
 
         except TimeoutError:
             return {'success': False, 'message': 'Connection timeout'}
         except Exception as e:
             return {'success': False, 'message': str(e)}
+
+    async def _test_http_mcp_server(
+        self, url: str, timeout: int = 30
+    ) -> dict[str, Any]:
+        """Send an MCP initialize handshake to verify connectivity.
+
+        We only test the initialize step because tools/list requires a session
+        ID that varies across MCP server implementations. Tool count comes from
+        the Letta tool sync instead.
+        """
+        import httpx
+
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json, text/event-stream',
+        }
+
+        init_payload = {
+            'jsonrpc': '2.0',
+            'id': 1,
+            'method': 'initialize',
+            'params': {
+                'protocolVersion': '2025-03-26',
+                'capabilities': {},
+                'clientInfo': {'name': 'thoth-test', 'version': '1.0'},
+            },
+        }
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(url, json=init_payload, headers=headers)
+            if resp.status_code not in (200, 201):
+                return {
+                    'success': False,
+                    'message': f'Server returned HTTP {resp.status_code}',
+                }
+
+            # Parse server info from the response (may be SSE or plain JSON)
+            server_name = 'unknown'
+            body = resp.text
+            for line in body.splitlines():
+                payload = (
+                    line.removeprefix('data:').strip()
+                    if line.startswith('data:')
+                    else line.strip()
+                )
+                if not payload:
+                    continue
+                try:
+                    data = json.loads(payload)
+                    info = data.get('result', {}).get('serverInfo', {})
+                    server_name = info.get('name', server_name)
+                    break
+                except (ValueError, AttributeError):
+                    continue
+
+            return {
+                'success': True,
+                'message': f'Connected to {server_name}',
+                'tool_count': None,
+            }
 
     async def get_server_status(self) -> dict[str, Any]:
         """
@@ -728,7 +791,9 @@ class MCPServersManager(BaseService):
 
         for attempt in range(1, max_retries + 1):
             try:
-                letta_tools = self._letta_service.list_mcp_tools_by_server(query_id)
+                letta_tools = self._letta_service.list_mcp_tools_by_server(
+                    query_id, server_name=server_id
+                )
 
                 if letta_tools:
                     tool_details = []

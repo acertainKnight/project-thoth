@@ -508,8 +508,9 @@ async def lifespan(app: FastAPI):
 
             mcp_manager.set_dependencies(None, letta_service)
 
-            # Load config and start watching
+            # Load config, connect to enabled servers, and start watching for changes
             await mcp_manager.load_config()
+            await mcp_manager._connect_all_enabled_servers()
             await mcp_manager.start_watching()
 
             logger.success('MCP Servers Manager initialized in API server')

@@ -373,17 +373,25 @@ class LettaService(BaseService):
             self.logger.error(f'Error looking up MCP server {server_name}: {e}')
         return None
 
-    def list_mcp_tools_by_server(self, mcp_server_id: str) -> list[dict[str, Any]]:
+    def list_mcp_tools_by_server(
+        self, mcp_server_id: str, server_name: str | None = None
+    ) -> list[dict[str, Any]]:
         """
         List tools available from a registered MCP server.
 
+        Tries the UUID-based endpoint first, then falls back to the name-based
+        tools/mcp/servers endpoint which handles tool discovery differently in
+        some Letta versions.
+
         Args:
             mcp_server_id: Letta's UUID for the MCP server (e.g. 'mcp_server-abc123...')
+            server_name: Optional server name for fallback lookup (e.g. 'cursor-agent')
 
         Returns:
             list: Tools available from this server
         """
         try:
+            # Primary: UUID-based endpoint
             resp = requests.get(
                 f'{self.letta_url}/v1/mcp-servers/{mcp_server_id}/tools/',
                 headers=self._get_headers(),
@@ -391,12 +399,30 @@ class LettaService(BaseService):
             )
 
             if resp.status_code == 200:
-                return resp.json()
-            else:
-                self.logger.error(
-                    f'Failed to list tools from MCP server {mcp_server_id}: {resp.status_code}'
+                tools = resp.json()
+                if tools:
+                    return tools
+
+            # Fallback: name-based endpoint returns tool schemas directly
+            if server_name:
+                resp = requests.get(
+                    f'{self.letta_url}/v1/tools/mcp/servers/{server_name}/tools',
+                    headers=self._get_headers(),
+                    timeout=30,
                 )
-                return []
+                if resp.status_code == 200:
+                    raw_tools = resp.json()
+                    # This endpoint returns MCP tool schemas, normalize to dicts
+                    if isinstance(raw_tools, list):
+                        return [
+                            {
+                                'name': t.get('name', ''),
+                                'description': t.get('description', ''),
+                            }
+                            for t in raw_tools
+                        ]
+
+            return []
 
         except Exception as e:
             self.logger.error(f'Error listing MCP tools from {mcp_server_id}: {e}')
