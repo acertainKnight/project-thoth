@@ -46,6 +46,7 @@ class MigrationManager:
                 'add_discovered_articles_table',
                 MIGRATION_005_ADD_DISCOVERED_ARTICLES_TABLE,
             ),
+            (6, 'add_knowledge_collections', MIGRATION_006_ADD_KNOWLEDGE_COLLECTIONS),
         ]
         return sorted(migrations, key=lambda x: x[0])
 
@@ -831,6 +832,14 @@ CREATE INDEX IF NOT EXISTS idx_discovered_articles_paper
 -- Migration 001 created this table with (title, source, is_processed) but the
 -- ArticleRepository writes (article_id, source_id, discovery_query, ...).
 -- Drop and recreate with the real columns.
+--
+-- available_sources may have been created without a UUID id column (PK on name).
+-- Add one if missing so the FK below works.
+
+ALTER TABLE available_sources
+    ADD COLUMN IF NOT EXISTS id UUID DEFAULT gen_random_uuid();
+UPDATE available_sources SET id = gen_random_uuid() WHERE id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_available_sources_id ON available_sources(id);
 
 DROP TABLE IF EXISTS article_discoveries CASCADE;
 
@@ -866,6 +875,14 @@ CREATE INDEX IF NOT EXISTS idx_article_discoveries_processed
 -- =============================================================================
 -- 3. Database functions
 -- =============================================================================
+
+-- Drop existing functions first to handle parameter name changes cleanly
+DROP FUNCTION IF EXISTS normalize_title(TEXT);
+DROP FUNCTION IF EXISTS find_duplicate_article(TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS find_duplicate_paper(TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS has_article_been_processed(UUID, UUID);
+DROP FUNCTION IF EXISTS mark_article_as_processed(UUID, UUID);
+DROP FUNCTION IF EXISTS get_new_articles_since(UUID, TIMESTAMP WITH TIME ZONE);
 
 -- normalize_title(text) -> text
 -- Lowercase, strip punctuation, collapse whitespace. Used by dedup logic
@@ -1067,4 +1084,70 @@ JOIN (
     HAVING COUNT(DISTINCT source_id) >= 2
 ) agg ON agg.article_id = da.id
 ORDER BY agg.source_count DESC, da.discovered_at DESC;
+"""
+
+MIGRATION_006_ADD_KNOWLEDGE_COLLECTIONS = """
+-- Migration 006: Knowledge Collections
+-- Adds support for external knowledge documents organized into collections
+
+-- =============================================================================
+-- 1. knowledge_collections table
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS knowledge_collections (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_collections_name
+    ON knowledge_collections(name);
+
+-- =============================================================================
+-- 2. Alter paper_metadata for external knowledge support
+-- =============================================================================
+
+-- Add collection_id (nullable FK to knowledge_collections)
+ALTER TABLE paper_metadata
+    ADD COLUMN IF NOT EXISTS collection_id UUID REFERENCES knowledge_collections(id) ON DELETE SET NULL;
+
+-- Add document_category (research_paper or external)
+ALTER TABLE paper_metadata
+    ADD COLUMN IF NOT EXISTS document_category VARCHAR(32) NOT NULL DEFAULT 'research_paper';
+
+-- Index for filtering by category and collection
+CREATE INDEX IF NOT EXISTS idx_paper_metadata_category
+    ON paper_metadata(document_category);
+
+CREATE INDEX IF NOT EXISTS idx_paper_metadata_collection
+    ON paper_metadata(collection_id) WHERE collection_id IS NOT NULL;
+
+-- =============================================================================
+-- 3. Update papers view to include new columns
+-- =============================================================================
+
+-- The papers view is a LEFT JOIN of paper_metadata + processed_papers.
+-- Migration 001 created this view with explicit column names that differ from
+-- pm.*, so CREATE OR REPLACE fails. Drop first, then recreate.
+DROP VIEW IF EXISTS papers CASCADE;
+
+CREATE VIEW papers AS
+SELECT
+    pm.*,
+    pp.pdf_path,
+    pp.markdown_path,
+    pp.note_path,
+    pp.markdown_content,
+    pp.obsidian_uri,
+    pp.processing_status,
+    pp.processed_at,
+    pp.last_accessed,
+    pp.user_notes,
+    pp.user_rating,
+    pp.user_tags,
+    pp.analysis_schema_name,
+    pp.analysis_schema_version
+FROM paper_metadata pm
+LEFT JOIN processed_papers pp ON pm.id = pp.paper_id;
 """
