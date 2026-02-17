@@ -411,13 +411,36 @@ if command_exists docker && docker info >/dev/null 2>&1; then
     install_cli_to_path "$PROJECT_ROOT"
 
     # Run setup wizard in Docker
+    # When run via `curl | bash`, stdin is the pipe — not the user's terminal.
+    # Re-attach /dev/tty so the interactive wizard can read user input.
     echo -e "\n${GREEN}Starting interactive setup wizard...${NC}\n"
-    docker run -it --rm \
-        -v ~/.config/thoth:/root/.config/thoth \
-        -v ~/Documents:/documents \
-        -v /var/run/docker.sock:/var/run/docker.sock \
-        -e OBSIDIAN_VAULT_PATH="${OBSIDIAN_VAULT_PATH:-}" \
-        "$SETUP_IMAGE"
+    if [ -t 0 ]; then
+        # stdin is already a terminal (script was run directly, not piped)
+        docker run -it --rm \
+            -v ~/.config/thoth:/root/.config/thoth \
+            -v ~/Documents:/documents \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -e OBSIDIAN_VAULT_PATH="${OBSIDIAN_VAULT_PATH:-}" \
+            "$SETUP_IMAGE"
+    elif [ -e /dev/tty ]; then
+        # Piped execution (curl | bash) — reconnect to the real terminal
+        docker run -it --rm \
+            -v ~/.config/thoth:/root/.config/thoth \
+            -v ~/Documents:/documents \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -e OBSIDIAN_VAULT_PATH="${OBSIDIAN_VAULT_PATH:-}" \
+            "$SETUP_IMAGE" < /dev/tty
+    else
+        # No TTY available at all (CI, headless) — run non-interactively
+        echo -e "${YELLOW}No interactive terminal detected. Running setup in non-interactive mode.${NC}"
+        echo -e "${YELLOW}You can run the setup wizard later with: thoth setup${NC}\n"
+        docker run --rm \
+            -v ~/.config/thoth:/root/.config/thoth \
+            -v ~/Documents:/documents \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -e OBSIDIAN_VAULT_PATH="${OBSIDIAN_VAULT_PATH:-}" \
+            "$SETUP_IMAGE"
+    fi
 
     echo -e "\n${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${GREEN}✓ Thoth installation complete!${NC}"
