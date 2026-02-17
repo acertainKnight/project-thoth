@@ -88,19 +88,20 @@ check_python_version() {
 install_cli_to_path() {
     local project_root="$1"
 
-    # Determine install location
-    if [ -d "$HOME/.local/bin" ]; then
-        INSTALL_DIR="$HOME/.local/bin"
-    else
-        mkdir -p "$HOME/.local/bin"
-        INSTALL_DIR="$HOME/.local/bin"
+    INSTALL_DIR="$HOME/.local/bin"
+    mkdir -p "$INSTALL_DIR"
 
-        # Add to PATH if not already there
-        for rc in ~/.bashrc ~/.zshrc ~/.profile; do
-            if [ -f "$rc" ] && ! grep -q ".local/bin" "$rc"; then
-                echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$rc"
-            fi
-        done
+    # Add to PATH via shell rc files if not already there
+    for rc in ~/.bashrc ~/.zshrc ~/.profile; do
+        if [ -f "$rc" ] && ! grep -q '.local/bin' "$rc"; then
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$rc"
+        fi
+    done
+
+    # On macOS the default shell is zsh; create ~/.zshrc if it doesn't exist
+    # so the PATH export is picked up by new terminals
+    if [ "$(uname)" = "Darwin" ] && [ ! -f "$HOME/.zshrc" ]; then
+        echo 'export PATH="$HOME/.local/bin:$PATH"' > "$HOME/.zshrc"
     fi
 
     # Create thoth CLI wrapper
@@ -122,6 +123,14 @@ case "$1" in
         echo "🚀 Starting Thoth services..."
         cd "$PROJECT_ROOT"
 
+        # Verify .env exists with OBSIDIAN_VAULT_PATH
+        if [ ! -f ".env" ] || ! grep -q 'OBSIDIAN_VAULT_PATH' .env 2>/dev/null; then
+            echo "❌ .env file missing or OBSIDIAN_VAULT_PATH not set."
+            echo "   Run the setup wizard first, or create .env from .env.example:"
+            echo "   cp .env.example .env && edit .env"
+            exit 1
+        fi
+
         # Check Letta mode
         if [ -f "$HOME/.config/thoth/settings.json" ]; then
             LETTA_MODE=$(grep -o '"mode": *"[^"]*"' "$HOME/.config/thoth/settings.json" 2>/dev/null | cut -d'"' -f4 || echo "self-hosted")
@@ -136,8 +145,14 @@ case "$1" in
             sleep 3
         fi
 
-        # Start Thoth services
-        docker compose up -d
+        # Start Thoth services (pull first, build if pull fails)
+        echo "  Starting Thoth containers..."
+        if ! docker compose pull 2>/dev/null; then
+            echo "  Pre-built images not available, building locally..."
+            docker compose up -d --build
+        else
+            docker compose up -d
+        fi
 
         echo "✅ Thoth is running!"
         [ "$LETTA_MODE" = "cloud" ] && echo "   Letta: Cloud" || echo "   Letta: localhost:8283"
@@ -217,10 +232,16 @@ EOFCLI
 
     echo -e "${GREEN}✓ Installed 'thoth' command to $INSTALL_DIR${NC}"
 
-    # Check if in PATH
+    # Check if in PATH and tell user how to activate
     if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
+        # Detect the user's shell for the correct rc file
+        case "${SHELL:-/bin/bash}" in
+            */zsh)  RC_FILE="~/.zshrc" ;;
+            */bash) RC_FILE="~/.bashrc" ;;
+            *)      RC_FILE="~/.profile" ;;
+        esac
         echo -e "${YELLOW}Note: Please restart your terminal or run:${NC}"
-        echo -e "  ${BLUE}source ~/.bashrc${NC}  # or ~/.zshrc"
+        echo -e "  ${BLUE}source ${RC_FILE}${NC}"
     fi
 }
 

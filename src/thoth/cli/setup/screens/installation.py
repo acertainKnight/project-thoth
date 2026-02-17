@@ -473,8 +473,14 @@ class InstallationScreen(BaseScreen):
             return
 
         # --- Update .env (Thoth services) ---
+        # OBSIDIAN_VAULT_PATH is required by docker-compose.yml volume mounts.
+        # Use the host path so it resolves correctly on the host machine.
+        wizard_data = self.app.wizard_data if hasattr(self.app, 'wizard_data') else {}
+        vault_path_host = str(wizard_data.get('vault_path_host', self.vault_path or ''))
+
         env_path = project_root / '.env'
         thoth_env_keys = {
+            'OBSIDIAN_VAULT_PATH': vault_path_host,
             'OPENAI_API_KEY': openai_key,
             'API_OPENAI_KEY': openai_key,
             'ANTHROPIC_API_KEY': anthropic_key,
@@ -483,7 +489,7 @@ class InstallationScreen(BaseScreen):
             'GOOGLE_API_KEY': google_key,
         }
         self._update_env_file(env_path, thoth_env_keys)
-        logger.info(f'Updated API keys in {env_path}')
+        logger.info(f'Updated .env at {env_path}')
 
         # --- Update .env.letta (Letta server) - only for self-hosted ---
         if letta_mode == 'self-hosted':

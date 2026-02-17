@@ -261,6 +261,22 @@ class CompletionScreen(BaseScreen):
             self.show_warning(f'Could not install plugin: {e}')
             return False
 
+    def _find_project_root(self) -> Path | None:
+        """Find the project root (where docker-compose.yml lives).
+
+        Returns:
+            Path to project root, or None if not found.
+        """
+        candidates = [
+            Path.cwd(),
+            Path.home() / 'thoth',
+            Path(__file__).resolve().parent.parent.parent.parent.parent,
+        ]
+        for candidate in candidates:
+            if (candidate / 'docker-compose.yml').exists():
+                return candidate
+        return None
+
     def _find_plugin_source(self, vault_root: Path) -> Path | None:
         """Find plugin source directory by searching common locations.
 
@@ -345,23 +361,14 @@ class CompletionScreen(BaseScreen):
         self.show_info('[bold]Starting Thoth services...[/bold]')
 
         try:
-            # Get project root (parent of vault/_thoth)
-            vault_path = getattr(self.app, 'wizard_data', {}).get('vault_path', '')
-            if not vault_path:
+            # Find the project root where docker-compose.yml lives
+            project_root = self._find_project_root()
+            if not project_root:
                 self.show_error(
-                    'Vault path not found. Please start services manually with: thoth start'
+                    'Could not find project root. '
+                    'Start services manually with: thoth start'
                 )
                 return
-
-            vault_root = Path(vault_path).resolve()
-            project_root = (
-                vault_root.parent if vault_root.name == '_thoth' else vault_root
-            )
-            while (
-                project_root.name != 'project-thoth'
-                and project_root != project_root.parent
-            ):
-                project_root = project_root.parent
 
             # Check Letta mode
             letta_mode = getattr(self.app, 'wizard_data', {}).get(
@@ -389,14 +396,16 @@ class CompletionScreen(BaseScreen):
 
                 time.sleep(3)
 
-            # Start Thoth services
-            self.show_info('Starting Thoth services...')
+            # Start Thoth services (--build on first run to create images)
+            self.show_info(
+                'Starting Thoth services (first build may take a few minutes)...'
+            )
             result = subprocess.run(  # nosec B603  # Safe: command from trusted source
-                ['docker', 'compose', 'up', '-d'],
+                ['docker', 'compose', 'up', '-d', '--build'],
                 cwd=project_root,
                 capture_output=True,
                 text=True,
-                timeout=60,
+                timeout=300,
             )
 
             if result.returncode == 0:
