@@ -51,7 +51,8 @@ class CompletionScreen(BaseScreen):
         deployment_mode = 'local'
 
         if hasattr(self.app, 'wizard_data'):
-            vault_path = str(getattr(self.app, 'wizard_data', {}).get('vault_path', ''))
+            wd = getattr(self.app, 'wizard_data', {})
+            vault_path = str(wd.get('vault_path_host', wd.get('vault_path', '')))
             letta_mode = getattr(self.app, 'wizard_data', {}).get(
                 'letta_mode', 'self-hosted'
             )

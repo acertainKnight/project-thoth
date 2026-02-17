@@ -8,6 +8,7 @@ directory paths (PDFs, notes, markdown, workspace).
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,53 @@ from textual.widgets import Collapsible, Input, Label, RadioButton, RadioSet, St
 
 from ..detectors.obsidian import ObsidianDetector, ObsidianStatus, ObsidianVault
 from .base import BaseScreen
+
+
+def _is_docker_setup() -> bool:
+    """Check if running inside the Docker setup container."""
+    return os.environ.get('THOTH_DOCKER_SETUP') == '1'
+
+
+def _host_to_container_path(host_path: Path) -> Path:
+    """Translate a host filesystem path to the equivalent container path.
+
+    Inside the Docker setup container, the host's home directory is mounted
+    at /root (e.g. /Users/alice/Documents -> /root/Documents).
+
+    Args:
+        host_path: Absolute path on the host filesystem.
+
+    Returns:
+        Equivalent path inside the container, or the original path unchanged.
+    """
+    host_home = os.environ.get('THOTH_HOST_HOME', '')
+    if not host_home:
+        return host_path
+    container_home = str(Path.home())
+    path_str = str(host_path)
+    if path_str.startswith(host_home):
+        return Path(container_home + path_str[len(host_home) :])
+    return host_path
+
+
+def _container_to_host_path(container_path: Path) -> Path:
+    """Translate a container path back to the host filesystem path.
+
+    Args:
+        container_path: Absolute path inside the container.
+
+    Returns:
+        Equivalent path on the host, or the original path unchanged.
+    """
+    host_home = os.environ.get('THOTH_HOST_HOME', '')
+    if not host_home:
+        return container_path
+    container_home = str(Path.home())
+    path_str = str(container_path)
+    if path_str.startswith(container_home):
+        return Path(host_home + path_str[len(container_home) :])
+    return container_path
+
 
 # Default paths relative to vault root
 DEFAULT_PATHS = {
@@ -128,8 +176,12 @@ class VaultSelectionScreen(BaseScreen):
                         status = ''
                         if vault.has_thoth_workspace:
                             status = ' [cyan](Thoth installed)[/cyan]'
+                        # Show the host path when running in Docker
+                        display_path = vault.path
+                        if _is_docker_setup():
+                            display_path = _container_to_host_path(vault.path)
                         yield RadioButton(
-                            f'{vault.name} - {vault.path}{status}',
+                            f'{vault.name} - {display_path}{status}',
                             value=str(vault.path),  # type: ignore[arg-type]
                         )
 
@@ -156,12 +208,19 @@ class VaultSelectionScreen(BaseScreen):
 
         # Help text
         if not self.vaults:
-            yield Static(
-                '\n[cyan]For Docker/test environments:[/cyan]\n'
-                '[dim]If running in Docker, the vault is typically at: [bold]/vault[/bold][/dim]\n'
-                '[dim]You can also set OBSIDIAN_VAULT_PATH environment variable[/dim]',
-                classes='help-text',
-            )
+            if _is_docker_setup():
+                yield Static(
+                    '\n[dim]Enter the path as it appears on your computer '
+                    '(e.g., ~/Documents/My Vault).\n'
+                    'The installer will translate it automatically.[/dim]',
+                    classes='help-text',
+                )
+            else:
+                yield Static(
+                    '\n[dim]You can also set the OBSIDIAN_VAULT_PATH '
+                    'environment variable.[/dim]',
+                    classes='help-text',
+                )
 
         # Advanced: directory path configuration
         with Collapsible(title='Advanced: Customize Directory Paths', collapsed=True):
@@ -228,6 +287,7 @@ class VaultSelectionScreen(BaseScreen):
                 logger.debug(f'Radio set might not exist if no vaults: {e}')
 
         if selected_value:
+            # Radio value is already a container path (from auto-detection)
             self.selected_vault = Path(str(selected_value.value))
         else:
             # Check custom path
@@ -236,6 +296,18 @@ class VaultSelectionScreen(BaseScreen):
 
             if custom_path_str:
                 self.selected_vault = Path(custom_path_str).expanduser().resolve()
+
+                # In Docker, the user likely entered a host path (e.g.
+                # /Users/alice/Documents/MyVault). Translate to the container
+                # path for validation since host paths don't exist here.
+                if _is_docker_setup() and not self.selected_vault.exists():
+                    translated = _host_to_container_path(self.selected_vault)
+                    if translated != self.selected_vault and translated.exists():
+                        logger.info(
+                            f'Translated host path {self.selected_vault} '
+                            f'-> container path {translated}'
+                        )
+                        self.selected_vault = translated
             else:
                 if self.vaults:
                     self.show_error('Please select a vault or enter a custom path')
@@ -243,9 +315,17 @@ class VaultSelectionScreen(BaseScreen):
                     self.show_error('Please enter your Obsidian vault path')
                 return None
 
-        # Validate vault path
+        # Validate vault path (against the container filesystem when in Docker)
         if not self.selected_vault.exists():
-            self.show_error(f'Vault path does not exist: {self.selected_vault}')
+            display_path = self.selected_vault
+            hint = ''
+            if _is_docker_setup():
+                display_path = _container_to_host_path(self.selected_vault)
+                hint = (
+                    '\nMake sure the vault is inside ~/Documents '
+                    '(or ~/Obsidian) so the installer can access it.'
+                )
+            self.show_error(f'Vault path does not exist: {display_path}{hint}')
             return None
 
         if not self.selected_vault.is_dir():
@@ -282,9 +362,20 @@ class VaultSelectionScreen(BaseScreen):
                 )
                 return None
 
+        # vault_path = path for file ops (container); vault_path_host = for config(host)
+        vault_path_host = self.selected_vault
+        if _is_docker_setup():
+            vault_path_host = _container_to_host_path(self.selected_vault)
+
         logger.info(f'Selected vault: {self.selected_vault}')
+        if _is_docker_setup():
+            logger.info(f'Host vault path (for config): {vault_path_host}')
         logger.info(f'Paths config: {paths_config}')
-        return {'vault_path': self.selected_vault, 'paths_config': paths_config}
+        return {
+            'vault_path': self.selected_vault,
+            'vault_path_host': vault_path_host,
+            'paths_config': paths_config,
+        }
 
     async def on_next_screen(self) -> None:
         """Navigate to deployment mode selection screen."""

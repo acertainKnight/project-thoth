@@ -55,8 +55,10 @@ class ReviewScreen(BaseScreen):
             thoth_api_url = wizard_data.get('thoth_api_url', 'http://localhost:8000')
             yield Static(f'  [cyan]Thoth Server:[/cyan]   {thoth_api_url}')
 
-        # Vault Configuration
-        vault_path = wizard_data.get('vault_path', '[dim]Not set[/dim]')
+        # Vault Configuration (show host path when running in Docker)
+        vault_path = wizard_data.get(
+            'vault_path_host', wizard_data.get('vault_path', '[dim]Not set[/dim]')
+        )
         yield Static(f'  [cyan]Obsidian Vault:[/cyan] {vault_path}')
 
         # API Keys Configuration

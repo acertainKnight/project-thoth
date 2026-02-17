@@ -293,10 +293,12 @@ class InstallationScreen(BaseScreen):
         mcp_parsed = urlparse(thoth_mcp_url)
 
         # Build configuration dict that matches settings.json schema
+        # Use the host path for config so it works outside Docker
+        vault_path_host = wizard_data.get('vault_path_host', self.vault_path)
         workspace_path = paths_config.get('workspace', 'thoth/_thoth')
         settings: dict[str, Any] = {
             'version': '1.0.0',
-            'vault_path': str(self.vault_path),
+            'vault_path': str(vault_path_host),
             'paths': {
                 'workspace': workspace_path,
                 'pdf': paths_config.get('pdf', 'thoth/papers/pdfs'),
