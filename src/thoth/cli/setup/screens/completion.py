@@ -425,10 +425,18 @@ class CompletionScreen(BaseScreen):
 
                 time.sleep(3)
 
-            # Start Thoth services
+            # Start Thoth microservices
             self.show_info('Starting Thoth services...')
             result = subprocess.run(  # nosec B603
-                ['docker', 'compose', 'up', '-d', '--build'],
+                [
+                    'docker',
+                    'compose',
+                    '--profile',
+                    'microservices',
+                    'up',
+                    '-d',
+                    '--build',
+                ],
                 cwd=project_root,
                 capture_output=True,
                 text=True,
@@ -440,8 +448,8 @@ class CompletionScreen(BaseScreen):
                 self.show_success(
                     '\n[bold green]Thoth is now running![/bold green]\n\n'
                     '[bold]Access points:[/bold]\n'
-                    '  API Server: [cyan]http://localhost:8000[/cyan]\n'
-                    '  MCP Server: [cyan]http://localhost:8001[/cyan]\n'
+                    '  API Server: [cyan]http://localhost:8080[/cyan]\n'
+                    '  MCP Server: [cyan]http://localhost:8082[/cyan]\n'
                     f'  Letta: [cyan]{"Cloud" if letta_mode == "cloud" else "http://localhost:8283"}[/cyan]\n\n'
                     '[bold]Quick commands:[/bold]\n'
                     '  [cyan]thoth status[/cyan]  - Check running services\n'
