@@ -234,14 +234,14 @@ resolve_version() {
             echo -e "${BLUE}Available Thoth releases:${NC}\n"
             echo -e "${GREEN}Stable releases:${NC}"
             curl -fsSL "${api_url}" 2>/dev/null \
-                | grep -oP '"tag_name":\s*"\K[^"]+' \
+                | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' \
                 | grep -v 'nightly\|alpha\|beta\|rc' \
                 | head -5 \
                 | while read -r tag; do echo "  $tag"; done
             echo ""
             echo -e "${YELLOW}Pre-releases (alpha/beta):${NC}"
             curl -fsSL "${api_url}" 2>/dev/null \
-                | grep -oP '"tag_name":\s*"\K[^"]+' \
+                | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' \
                 | grep -E 'alpha|beta|rc' \
                 | head -5 \
                 | while read -r tag; do echo "  $tag"; done
@@ -261,7 +261,7 @@ resolve_version() {
         stable)
             echo -e "${BLUE}Resolving latest stable release...${NC}"
             RESOLVED_TAG=$(curl -fsSL "${api_url}/latest" 2>/dev/null \
-                | grep -oP '"tag_name":\s*"\K[^"]+' \
+                | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' \
                 | head -1)
             if [ -z "$RESOLVED_TAG" ]; then
                 echo -e "${YELLOW}No stable release found. Falling back to main branch.${NC}"
@@ -276,7 +276,7 @@ resolve_version() {
         alpha)
             echo -e "${BLUE}Resolving latest alpha/pre-release...${NC}"
             RESOLVED_TAG=$(curl -fsSL "${api_url}" 2>/dev/null \
-                | grep -oP '"tag_name":\s*"\K[^"]+' \
+                | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' \
                 | grep -v 'nightly' \
                 | head -1)
             if [ -z "$RESOLVED_TAG" ]; then
@@ -345,8 +345,9 @@ echo ""
 echo -e "${BLUE}Detecting best installation method...${NC}\n"
 
 # Check for Docker first (preferred for non-developers)
-if command_exists docker; then
-    echo -e "${GREEN}✓ Docker detected${NC}"
+# Verify both the CLI exists AND the daemon is running
+if command_exists docker && docker info >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ Docker detected and running${NC}"
     echo -e "${YELLOW}Installing via Docker (no Python required)...${NC}\n"
 
     # Determine current directory or clone repo
@@ -360,17 +361,28 @@ if command_exists docker; then
             git checkout "$RESOLVED_REF" 2>/dev/null || echo -e "${YELLOW}Could not checkout ${RESOLVED_REF}, using current branch${NC}"
         fi
     else
-        echo "Cloning Thoth repository..."
         CLONE_DIR="${HOME}/thoth"
-        if [ -n "$RESOLVED_REF" ] && [ "$RESOLVED_REF" != "main" ]; then
-            git clone --branch "$RESOLVED_REF" https://github.com/${GITHUB_REPO}.git "$CLONE_DIR" 2>/dev/null \
-                || git clone https://github.com/${GITHUB_REPO}.git "$CLONE_DIR"
+        if [ -d "$CLONE_DIR" ]; then
+            echo -e "${YELLOW}Directory $CLONE_DIR already exists. Updating...${NC}"
+            cd "$CLONE_DIR"
+            git fetch --all --tags 2>/dev/null || true
+            if [ -n "$RESOLVED_REF" ] && [ "$RESOLVED_REF" != "main" ]; then
+                git checkout "$RESOLVED_REF" 2>/dev/null || echo -e "${YELLOW}Could not checkout ${RESOLVED_REF}${NC}"
+            else
+                git pull origin main 2>/dev/null || true
+            fi
         else
-            git clone https://github.com/${GITHUB_REPO}.git "$CLONE_DIR"
+            echo "Cloning Thoth repository..."
+            if [ -n "$RESOLVED_REF" ] && [ "$RESOLVED_REF" != "main" ]; then
+                git clone --branch "$RESOLVED_REF" https://github.com/${GITHUB_REPO}.git "$CLONE_DIR" 2>/dev/null \
+                    || git clone https://github.com/${GITHUB_REPO}.git "$CLONE_DIR"
+            else
+                git clone https://github.com/${GITHUB_REPO}.git "$CLONE_DIR"
+            fi
+            cd "$CLONE_DIR"
+            echo -e "${GREEN}✓ Repository cloned to $CLONE_DIR${NC}"
         fi
         PROJECT_ROOT="$CLONE_DIR"
-        cd "$PROJECT_ROOT"
-        echo -e "${GREEN}✓ Repository cloned to $PROJECT_ROOT${NC}"
     fi
 
     echo -e "${CYAN}Channel: ${INSTALL_CHANNEL}${NC}"
@@ -380,7 +392,12 @@ if command_exists docker; then
     SETUP_IMAGE=""
     echo -e "\n${BLUE}Preparing setup environment...${NC}"
 
-    if timeout 300 docker pull "ghcr.io/acertainknight/project-thoth:${DOCKER_IMAGE_TAG}" 2>/dev/null; then
+    # Use timeout if available (GNU/Linux), otherwise pull without timeout (macOS)
+    pull_cmd="docker pull ghcr.io/acertainknight/project-thoth:${DOCKER_IMAGE_TAG}"
+    if command_exists timeout; then
+        pull_cmd="timeout 300 ${pull_cmd}"
+    fi
+    if $pull_cmd 2>/dev/null; then
         echo -e "${GREEN}✓ Pre-built image downloaded (${DOCKER_IMAGE_TAG})${NC}"
         SETUP_IMAGE="ghcr.io/acertainknight/project-thoth:${DOCKER_IMAGE_TAG}"
     else
@@ -413,8 +430,14 @@ if command_exists docker; then
 
     exit 0
 
-# No Docker — fall back to git clone + local Python setup
+# No Docker (or daemon not running) — fall back to git clone + local Python setup
 elif python_version=$(check_python_version); then
+    # Warn if Docker CLI exists but daemon isn't running
+    if command_exists docker && ! docker info >/dev/null 2>&1; then
+        echo -e "${YELLOW}⚠ Docker CLI found but the Docker daemon is not running.${NC}"
+        echo -e "${YELLOW}  Start Docker Desktop and re-run for the recommended experience.${NC}"
+        echo -e "${YELLOW}  Falling back to local Python installation...${NC}\n"
+    fi
     echo -e "${GREEN}✓ Python $python_version detected (no Docker)${NC}"
     echo -e "${YELLOW}Installing via git clone + local Python environment...${NC}\n"
 
@@ -473,6 +496,13 @@ elif python_version=$(check_python_version); then
 else
     # No suitable method found
     echo -e "${RED}✗ No suitable installation method found${NC}\n"
+
+    # Specific hint if Docker CLI exists but daemon is not running
+    if command_exists docker && ! docker info >/dev/null 2>&1; then
+        echo -e "${YELLOW}Docker is installed but not running!${NC}"
+        echo -e "${YELLOW}Please open Docker Desktop and re-run this installer.${NC}\n"
+    fi
+
     echo "Please install one of the following:"
     echo ""
     echo "1. Docker (Recommended - no Python required):"
