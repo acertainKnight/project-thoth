@@ -440,7 +440,6 @@ if command_exists docker && docker info >/dev/null 2>&1; then
         -v "$HOME/.config/thoth:/root/.config/thoth"
         -v "$HOME/Documents:/root/Documents"
         -v "$PROJECT_ROOT:/thoth-project"
-        -v /var/run/docker.sock:/var/run/docker.sock
         -e "THOTH_DOCKER_SETUP=1"
         -e "THOTH_HOST_HOME=$HOME"
         -e "THOTH_PROJECT_ROOT=/thoth-project"
@@ -471,9 +470,52 @@ if command_exists docker && docker info >/dev/null 2>&1; then
     fi
 
     echo -e "\n${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}✓ Thoth installation complete!${NC}"
+    echo -e "${GREEN}✓ Thoth setup complete!${NC}"
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
-    echo -e "Quick start:"
+
+    # Ensure .env.letta exists (Letta compose requires it)
+    if [ ! -f "$PROJECT_ROOT/.env.letta" ]; then
+        touch "$PROJECT_ROOT/.env.letta"
+    fi
+
+    # Offer to start services now
+    echo -e "${BLUE}Would you like to start Thoth services now? (y/n)${NC}"
+    if [ -t 0 ]; then
+        read -r START_NOW
+    elif [ -e /dev/tty ]; then
+        read -r START_NOW < /dev/tty
+    else
+        START_NOW="n"
+    fi
+
+    if [ "$START_NOW" = "y" ] || [ "$START_NOW" = "Y" ]; then
+        echo -e "\n${BLUE}Starting services (this may take a few minutes on first run)...${NC}\n"
+        cd "$PROJECT_ROOT"
+
+        # Start Letta infrastructure first
+        echo -e "  Starting Letta services..."
+        docker compose -f docker-compose.letta.yml up -d 2>/dev/null || true
+        sleep 3
+
+        # Start Thoth (pull or build)
+        echo -e "  Starting Thoth..."
+        if ! docker compose pull 2>/dev/null; then
+            echo -e "  ${YELLOW}Pre-built images not available, building locally...${NC}"
+            docker compose up -d --build
+        else
+            docker compose up -d
+        fi
+
+        echo -e "\n${GREEN}✓ Thoth is running!${NC}"
+        echo -e "  API: http://localhost:8000"
+        echo -e "  MCP: http://localhost:8001"
+        echo -e "  Letta: http://localhost:8283\n"
+    else
+        echo -e "\nStart services any time with:"
+        echo -e "  ${BLUE}thoth start${NC}\n"
+    fi
+
+    echo -e "Commands:"
     echo -e "  ${BLUE}thoth start${NC}   - Start services (~1-1.5GB RAM)"
     echo -e "  ${BLUE}thoth status${NC}  - Check what's running"
     echo -e "  ${BLUE}thoth stop${NC}    - Stop services (free RAM)"

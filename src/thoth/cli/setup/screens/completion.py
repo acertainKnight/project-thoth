@@ -363,6 +363,8 @@ class CompletionScreen(BaseScreen):
 
     async def start_services(self) -> None:
         """Start Docker Compose services (local deployment only)."""
+        import os
+
         # Check deployment mode - skip if remote
         deployment_mode = getattr(self.app, 'wizard_data', {}).get(
             'deployment_mode', 'local'
@@ -374,10 +376,23 @@ class CompletionScreen(BaseScreen):
             )
             return
 
+        # Inside the Docker setup container, we can't start compose services
+        # because the Docker daemon runs on the host and volume mount paths
+        # from the compose file would resolve to container paths, not host
+        # paths. Defer to install.sh which runs on the host after the wizard.
+        if os.environ.get('THOTH_DOCKER_SETUP') == '1':
+            self.services_started = True
+            self.show_success(
+                '\n[bold green]Configuration saved successfully![/bold green]\n\n'
+                'Services will start automatically after the wizard exits.\n'
+                'Or start them manually any time with:\n\n'
+                '  [cyan]thoth start[/cyan]\n'
+            )
+            return
+
         self.show_info('[bold]Starting Thoth services...[/bold]')
 
         try:
-            # Find the project root where docker-compose.yml lives
             project_root = self._find_project_root()
             if not project_root:
                 self.show_error(
@@ -386,7 +401,6 @@ class CompletionScreen(BaseScreen):
                 )
                 return
 
-            # Check Letta mode
             letta_mode = getattr(self.app, 'wizard_data', {}).get(
                 'letta_mode', 'self-hosted'
             )
@@ -394,7 +408,7 @@ class CompletionScreen(BaseScreen):
             # Start Letta if self-hosted
             if letta_mode == 'self-hosted':
                 self.show_info('Starting Letta (self-hosted mode)...')
-                result = subprocess.run(  # nosec B603  # Safe: command from trusted source
+                result = subprocess.run(  # nosec B603
                     ['docker', 'compose', '-f', 'docker-compose.letta.yml', 'up', '-d'],
                     cwd=project_root,
                     capture_output=True,
@@ -405,18 +419,15 @@ class CompletionScreen(BaseScreen):
                     logger.warning(f'Letta start had issues: {result.stderr}')
                     self.show_warning('Letta containers may need manual start')
                 else:
-                    self.show_success('✓ Letta started')
+                    self.show_success('Letta started')
 
-                # Wait for Letta to be ready
                 import time
 
                 time.sleep(3)
 
-            # Start Thoth services (--build on first run to create images)
-            self.show_info(
-                'Starting Thoth services (first build may take a few minutes)...'
-            )
-            result = subprocess.run(  # nosec B603  # Safe: command from trusted source
+            # Start Thoth services
+            self.show_info('Starting Thoth services...')
+            result = subprocess.run(  # nosec B603
                 ['docker', 'compose', 'up', '-d', '--build'],
                 cwd=project_root,
                 capture_output=True,
@@ -427,15 +438,15 @@ class CompletionScreen(BaseScreen):
             if result.returncode == 0:
                 self.services_started = True
                 self.show_success(
-                    '\n[bold green]✓ Thoth is now running![/bold green]\n\n'
+                    '\n[bold green]Thoth is now running![/bold green]\n\n'
                     '[bold]Access points:[/bold]\n'
-                    '  • API Server: [cyan]http://localhost:8000[/cyan]\n'
-                    '  • MCP Server: [cyan]http://localhost:8001[/cyan]\n'
-                    f'  • Letta: [cyan]{"Cloud" if letta_mode == "cloud" else "http://localhost:8283"}[/cyan]\n\n'
+                    '  API Server: [cyan]http://localhost:8000[/cyan]\n'
+                    '  MCP Server: [cyan]http://localhost:8001[/cyan]\n'
+                    f'  Letta: [cyan]{"Cloud" if letta_mode == "cloud" else "http://localhost:8283"}[/cyan]\n\n'
                     '[bold]Quick commands:[/bold]\n'
-                    '  • [cyan]thoth status[/cyan]  - Check running services\n'
-                    '  • [cyan]thoth logs[/cyan]    - View logs\n'
-                    '  • [cyan]thoth stop[/cyan]    - Stop services (save RAM)\n'
+                    '  [cyan]thoth status[/cyan]  - Check running services\n'
+                    '  [cyan]thoth logs[/cyan]    - View logs\n'
+                    '  [cyan]thoth stop[/cyan]    - Stop services (save RAM)\n'
                 )
             else:
                 self.show_error(
