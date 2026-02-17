@@ -2383,9 +2383,11 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     try {
       const endpoint = this.plugin.getLettaEndpointUrl();
 
-      // Build URL with pagination support
-      // Use desc order to get NEWEST messages first (most recent 50)
-      let url = `${endpoint}/v1/conversations/${sessionId}/messages?limit=50&order=desc`;
+      // Build URL with pagination support.
+      // use_assistant_message converts send_message tool calls into
+      // assistant_message entries in the response, which is the format
+      // the rendering code expects for user-visible agent replies.
+      let url = `${endpoint}/v1/conversations/${sessionId}/messages?limit=50&order=desc&use_assistant_message=true`;
 
       // If loading earlier messages, use cursor-based pagination
       if (loadEarlier && this.oldestMessageId.has(sessionId)) {
@@ -2402,6 +2404,39 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           loadEarlier,
           messageTypes: newMessages.map((m: any) => m.message_type || m.type).filter((t: any, i: number, arr: any[]) => arr.indexOf(t) === i)
         });
+
+        // Summarise ALL messages by type so we can verify nothing is
+        // missing from the API response. Remove once messaging is stable.
+        const typeCounts: Record<string, number> = {};
+        for (const m of newMessages) {
+          const t = m.message_type || m.type || 'unknown';
+          typeCounts[t] = (typeCounts[t] || 0) + 1;
+        }
+        console.log('[MSG_DUMP] type counts:', typeCounts);
+
+        // Show details of send_message tool calls and assistant_messages
+        // in the response since those are the ones we need for rendering.
+        for (const sm of newMessages) {
+          const mt = sm.message_type || sm.type;
+          if (mt === 'tool_call_message') {
+            const tc = sm.tool_call || sm.tool_calls?.[0];
+            console.log('[MSG_DUMP] tool_call:', tc?.name, {
+              argsType: typeof tc?.arguments,
+              argsPreview: typeof tc?.arguments === 'string'
+                ? tc.arguments.substring(0, 120)
+                : JSON.stringify(tc?.arguments)?.substring(0, 120),
+            });
+          } else if (mt === 'assistant_message') {
+            console.log('[MSG_DUMP] assistant_message:', {
+              contentType: typeof sm.content,
+              preview: typeof sm.content === 'string'
+                ? sm.content.substring(0, 120)
+                : Array.isArray(sm.content)
+                  ? JSON.stringify(sm.content[0])?.substring(0, 120)
+                  : 'n/a',
+            });
+          }
+        }
 
         // Get or initialize cached messages
         let allMessages = this.messageCache.get(sessionId) || [];
@@ -2755,6 +2790,18 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           let accumulatedReasoning = '';
           let currentToolPill: HTMLElement | null = null;
 
+          // Delta tracking: with stream_tokens enabled, Letta sends
+          // ToolCallDelta objects -- multiple tool_call_message events per
+          // tool call, each carrying an argument fragment.
+          let activeToolCallId: string | null = null;
+          let activeToolName: string | null = null;
+          // Progressive send_message streaming state. We accumulate the
+          // raw JSON argument fragments and, once we see the
+          // "message": " prefix, stream content directly to the renderer.
+          let sendMsgArgBuf = '';
+          let sendMsgPrefixIdx = -1; // char index right after the opening "
+          let sendMsgRenderedLen = 0;
+
           // Ensure the assistant message container + steps section exist.
           // Called on the first SSE event of any kind so pills appear
           // immediately rather than waiting for the first content token.
@@ -2784,6 +2831,11 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
             currentReasoningPill = null;
             accumulatedReasoning = '';
             currentToolPill = null;
+            activeToolCallId = null;
+            activeToolName = null;
+            sendMsgArgBuf = '';
+            sendMsgPrefixIdx = -1;
+            sendMsgRenderedLen = 0;
 
             // Each stream may produce a new content section below the steps
             let streamContentEl: HTMLElement | null = null;
@@ -2811,6 +2863,25 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                 try {
                   const msg = JSON.parse(jsonStr);
                   const messageType = msg.message_type;
+
+                  // Diagnostic: log every SSE event type and key fields
+                  if (messageType === 'tool_call_message') {
+                    console.log('[SSE] tool_call_message:', {
+                      name: msg.tool_call?.name,
+                      tool_call_id: msg.tool_call?.tool_call_id,
+                      argsPreview: (msg.tool_call?.arguments || '').substring(0, 120),
+                    });
+                  } else if (messageType === 'assistant_message') {
+                    const c = msg.content;
+                    console.log('[SSE] assistant_message:', {
+                      contentType: typeof c,
+                      isArray: Array.isArray(c),
+                      preview: typeof c === 'string' ? c.substring(0, 120) : JSON.stringify(c)?.substring(0, 120),
+                      text: msg.text?.substring?.(0, 80),
+                    });
+                  } else {
+                    console.log('[SSE] event:', messageType);
+                  }
 
                   // --- errors ---
                   if (messageType === 'error_message') {
@@ -2843,13 +2914,79 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                     this.scrollToBottom(messagesContainer, true);
                   }
 
-                  // --- tool call ---
+                  // --- tool call (handles both full ToolCall and streamed ToolCallDelta) ---
                   else if (messageType === 'tool_call_message') {
                     ensureContainer();
-                    const toolName = msg.tool_call?.name || 'tool';
+
+                    // Letta may use `tool_call` (singular) or `tool_calls` (array)
+                    const tc = msg.tool_call || msg.tool_calls?.[0];
+                    const deltaName = tc?.name || null;
+                    const deltaId = tc?.tool_call_id || null;
+                    const deltaArgs = tc?.arguments || '';
+
+                    // Detect whether this is a continuation (delta) of an
+                    // in-progress tool call or the start of a new one.
+                    // Letta repeats the tool name on every delta, so we
+                    // can't rely on it being absent -- use tool_call_id
+                    // matching as the primary indicator instead.
+                    const isDelta = activeToolCallId != null && (
+                      (deltaId != null && deltaId === activeToolCallId) ||
+                      (deltaId == null && deltaName === activeToolName)
+                    );
+
+                    if (isDelta) {
+                      if (activeToolName === 'send_message') {
+                        // Accumulate the argument fragment and try to
+                        // progressively stream the message text.
+                        sendMsgArgBuf += deltaArgs;
+                        this.streamSendMessageDelta(
+                          sendMsgArgBuf, sendMsgPrefixIdx, sendMsgRenderedLen,
+                          () => { ensureContainer(); return assistantMessageEl!; },
+                          streamContentEl, streamRenderer,
+                          (el, r, pre, len) => {
+                            streamContentEl = el;
+                            streamRenderer = r;
+                            sendMsgPrefixIdx = pre;
+                            sendMsgRenderedLen = len;
+                          }
+                        );
+                        if (streamRenderer) wroteContent = true;
+                      }
+                      continue;
+                    }
+
+                    // --- New tool call ---
+                    activeToolCallId = deltaId;
+                    activeToolName = deltaName;
+                    const toolName = deltaName || 'tool';
 
                     if (toolName === 'load_skill' || toolName === 'unload_skill') {
                       skillToolDetected = true;
+                    }
+
+                    // send_message is how Letta agents deliver their response
+                    // to the user. We stream the content progressively as
+                    // argument deltas arrive rather than creating a pill.
+                    if (toolName === 'send_message') {
+                      sendMsgArgBuf = deltaArgs;
+                      sendMsgPrefixIdx = -1;
+                      sendMsgRenderedLen = 0;
+                      currentToolPill = null;
+                      // Kick off progressive streaming from the first delta
+                      this.streamSendMessageDelta(
+                        sendMsgArgBuf, sendMsgPrefixIdx, sendMsgRenderedLen,
+                        () => { ensureContainer(); return assistantMessageEl!; },
+                        streamContentEl, streamRenderer,
+                        (el, r, pre, len) => {
+                          streamContentEl = el;
+                          streamRenderer = r;
+                          sendMsgPrefixIdx = pre;
+                          sendMsgRenderedLen = len;
+                        }
+                      );
+                      if (streamRenderer) wroteContent = true;
+                      this.scrollToBottom(messagesContainer, true);
+                      continue;
                     }
 
                     // Close any open reasoning pill before a tool step
@@ -2859,11 +2996,11 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                     const statusMsg = getToolStatusMessage(toolName);
                     let toolDetail = '';
                     try {
-                      if (msg.tool_call?.arguments) {
-                        const parsed = JSON.parse(msg.tool_call.arguments);
+                      if (deltaArgs) {
+                        const parsed = JSON.parse(deltaArgs);
                         toolDetail = JSON.stringify(parsed, null, 2);
                       }
-                    } catch { /* keep empty */ }
+                    } catch { /* keep empty -- likely a delta fragment */ }
 
                     currentToolPill = this.createStepPill(
                       stepsContainer!, '🔧', `${statusMsg}...`, toolDetail
@@ -2881,6 +3018,37 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                     this.stopAgenticProgressListener();
                     ensureContainer();
 
+                    // If we just finished a send_message call, do a final
+                    // clean parse so streamAccumulated has the properly
+                    // unescaped text for the Obsidian markdown re-render.
+                    if (activeToolName === 'send_message') {
+                      let sendText = '';
+                      try {
+                        const parsed = JSON.parse(sendMsgArgBuf);
+                        sendText = parsed?.message || '';
+                      } catch {
+                        const m = sendMsgArgBuf.match(/"message"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+                        if (m) {
+                          sendText = m[1]
+                            .replace(/\\n/g, '\n')
+                            .replace(/\\"/g, '"')
+                            .replace(/\\\\/g, '\\');
+                        }
+                      }
+
+                      if (sendText) {
+                        streamAccumulated += (streamAccumulated ? '\n\n' : '') + sendText;
+                      }
+
+                      sendMsgArgBuf = '';
+                      sendMsgPrefixIdx = -1;
+                      sendMsgRenderedLen = 0;
+                      activeToolCallId = null;
+                      activeToolName = null;
+                      this.scrollToBottom(messagesContainer, true);
+                      continue;
+                    }
+
                     if (currentToolPill) {
                       // Mark the tool pill as complete
                       const label = (currentToolPill as any).__labelEl;
@@ -2890,12 +3058,25 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                     }
 
                     currentToolPill = null;
+                    activeToolCallId = null;
+                    activeToolName = null;
                     this.scrollToBottom(messagesContainer, true);
                   }
 
                   // --- assistant content ---
                   else if (messageType === 'assistant_message') {
-                    const delta = msg.content || msg.text || '';
+                    // Letta can send content as a plain string or as an
+                    // array of content parts [{type:"text", text:"..."}].
+                    const raw = msg.content ?? msg.text ?? '';
+                    let delta: string;
+                    if (Array.isArray(raw)) {
+                      delta = raw
+                        .filter((p: any) => p.type === 'text' || p.text)
+                        .map((p: any) => p.text)
+                        .join('');
+                    } else {
+                      delta = String(raw);
+                    }
 
                     if (msg.id) {
                       streamMsgId = msg.id;
@@ -3271,6 +3452,14 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     let hasSteps = false;
     let combinedContent = '';
 
+    // Flat log so message types are visible without expanding objects
+    const groupTypes = messages.map(m => {
+      const mt = m.message_type || m.type;
+      const tc = m.tool_call || m.tool_calls?.[0];
+      return tc?.name ? `${mt}(${tc.name})` : mt;
+    }).join(', ');
+    console.log(`[renderAssistantTurn] ${messages.length} msgs: ${groupTypes}`);
+
     for (const msg of messages) {
       const mt = msg.message_type || msg.type;
 
@@ -3282,13 +3471,40 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           this.createStepPill(stepsEl, '💭', phrase, reasoning);
         }
       } else if (mt === 'tool_call_message') {
+        // Letta can put the tool call in either `tool_call` (singular)
+        // or `tool_calls` (array). Normalise to a single object.
+        const tc = msg.tool_call || msg.tool_calls?.[0];
+        const toolName = tc?.name || 'tool';
+
+        // send_message is the agent talking to the user -- treat its
+        // payload as assistant content rather than a tool step pill.
+        if (toolName === 'send_message') {
+          let sendText = '';
+          try {
+            const rawArgs = tc?.arguments;
+            // Arguments may be a JSON string (streaming) or
+            // an already-parsed object (history API).
+            const parsed = typeof rawArgs === 'string'
+              ? JSON.parse(rawArgs)
+              : rawArgs;
+            sendText = parsed?.message || '';
+          } catch { /* ignore malformed args */ }
+
+          if (sendText) {
+            combinedContent += (combinedContent ? '\n\n' : '') + sendText;
+          }
+          continue;
+        }
+
         hasSteps = true;
-        const toolName = msg.tool_call?.name || 'tool';
         const statusMsg = getToolStatusMessage(toolName);
         let detail = '';
         try {
-          if (msg.tool_call?.arguments) {
-            const parsed = JSON.parse(msg.tool_call.arguments);
+          const rawArgs = tc?.arguments;
+          const parsed = typeof rawArgs === 'string'
+            ? JSON.parse(rawArgs)
+            : rawArgs;
+          if (parsed) {
             detail = JSON.stringify(parsed, null, 2);
           }
         } catch { /* keep empty */ }
@@ -3305,12 +3521,44 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       }
     }
 
-    // Hide steps section if nothing was added
+    // Fallback: if no content was extracted from typed handlers,
+    // try extractContent on every message. This catches cases where
+    // message types don't match expected values or when assistant
+    // content arrives in an unexpected format.
+    if (!combinedContent) {
+      for (const msg of messages) {
+        const text = extractContent(msg);
+        if (text) {
+          combinedContent += (combinedContent ? '\n\n' : '') + text;
+        }
+      }
+    }
+
+    if (!combinedContent) {
+      // Log full detail when a group produces no visible content
+      // so we can diagnose missing messages.
+      console.warn('[renderAssistantTurn] EMPTY group:', messages.map(m => ({
+        mt: m.message_type || m.type,
+        tc: (m.tool_call || m.tool_calls?.[0])?.name,
+        content: (m.content || m.text || m.reasoning || '').substring(0, 200),
+        keys: Object.keys(m).join(','),
+      })));
+    } else {
+      console.log(`[renderAssistantTurn] content: ${combinedContent.length} chars`);
+    }
+
+    // If a group has only internal steps and no user-visible content,
+    // still show the pills (so the user can see the agent was active)
+    // but skip the content area and action buttons.
+    if (!hasSteps && !combinedContent) {
+      messageEl.style.display = 'none';
+      return;
+    }
+
     if (!hasSteps) {
       stepsEl.style.display = 'none';
     }
 
-    // Render combined assistant content
     if (combinedContent) {
       const contentEl = messageEl.createEl('div', { cls: 'message-content' });
       await this.renderMessageContent(combinedContent, contentEl);
@@ -4603,6 +4851,69 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     }
     statusText.textContent = displayText;
     (indicator as any).__lastStatusUpdate = now;
+  }
+
+  /**
+   * Progressively extract and stream text from accumulating send_message
+   * JSON arguments. Once the "message": " prefix is found in the buffer,
+   * every subsequent character (minus JSON framing) is message text that
+   * gets written directly to the StreamingMarkdownRenderer.
+   */
+  private streamSendMessageDelta(
+    buf: string,
+    prefixIdx: number,
+    renderedLen: number,
+    getContainer: () => HTMLElement,
+    contentEl: HTMLElement | null,
+    renderer: StreamingMarkdownRenderer | null,
+    setState: (
+      el: HTMLElement | null,
+      r: StreamingMarkdownRenderer | null,
+      pre: number,
+      len: number,
+    ) => void,
+  ): void {
+    // Try to locate the opening quote of the message value
+    if (prefixIdx < 0) {
+      const m = buf.match(/"message"\s*:\s*"/);
+      if (m) {
+        prefixIdx = m.index! + m[0].length;
+      }
+    }
+
+    if (prefixIdx < 0) {
+      setState(contentEl, renderer, prefixIdx, renderedLen);
+      return;
+    }
+
+    // Everything after the prefix is message content (with possible
+    // trailing "}  that we strip).
+    let raw = buf.substring(prefixIdx);
+    // Remove trailing closing quote + brace if present
+    raw = raw.replace(/"\s*\}?\s*$/, '');
+    // Basic JSON unescape for common sequences
+    const text = raw
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\');
+
+    if (text.length > renderedLen) {
+      const newChunk = text.substring(renderedLen);
+      renderedLen = text.length;
+
+      const container = getContainer();
+      if (!contentEl) {
+        contentEl = container.createEl('div', { cls: 'message-content' });
+        renderer = new StreamingMarkdownRenderer(contentEl);
+      }
+
+      if (renderer) {
+        renderer.write(newChunk);
+      }
+    }
+
+    setState(contentEl, renderer, prefixIdx, renderedLen);
   }
 
   /**
