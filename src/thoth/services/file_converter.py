@@ -99,7 +99,10 @@ class FileConverter:
             try:
                 from mistralai import Mistral
 
-                api_key = self.config.secrets.mistral_api_key
+                api_key = (
+                    self.config.api_keys.mistral_key
+                    or self.config.secrets.mistral_api_key
+                )
                 if not api_key:
                     raise ValueError('MISTRAL_API_KEY not configured')
                 self._mistral_client = Mistral(api_key=api_key)
@@ -110,40 +113,47 @@ class FileConverter:
                 ) from e
 
         try:
-            with open(file_path, 'rb') as f:
-                pdf_data = f.read()
+            logger.info(f'Uploading PDF for OCR: {file_path.name}')
 
-            logger.info(f'Converting PDF with Mistral OCR: {file_path.name}')
-
-            response = self._mistral_client.chat.complete(
-                model='pixtral-large-latest',
-                messages=[
-                    {
-                        'role': 'user',
-                        'content': [
-                            {
-                                'type': 'text',
-                                'text': 'Convert this PDF to markdown. Preserve structure, headings, and formatting.',
-                            },
-                            {
-                                'type': 'file',
-                                'data': pdf_data,
-                                'mime_type': 'application/pdf',
-                            },
-                        ],
-                    }
-                ],
+            uploaded_file = self._mistral_client.files.upload(
+                file={
+                    'file_name': file_path.stem,
+                    'content': open(file_path, 'rb'),
+                },
+                purpose='ocr',
+            )
+            signed_url = self._mistral_client.files.get_signed_url(
+                file_id=uploaded_file.id
             )
 
-            markdown = response.choices[0].message.content
+            logger.info(f'Running Mistral OCR: {file_path.name}')
+
+            from mistralai import DocumentURLChunk
+
+            ocr_response = self._mistral_client.ocr.process(
+                document=DocumentURLChunk(document_url=signed_url.url),
+                model='mistral-ocr-latest',
+                include_image_base64=False,
+            )
+
+            # Combine page-level markdown from OCR response
+            pages = ocr_response.pages if hasattr(ocr_response, 'pages') else []
+            markdown = '\n\n'.join(
+                page.markdown for page in pages if hasattr(page, 'markdown')
+            )
+
+            if not markdown:
+                markdown = str(ocr_response)
 
             metadata = {
-                'ocr_model': 'pixtral-large-latest',
+                'ocr_model': 'mistral-ocr-latest',
                 'conversion_method': 'mistral_ocr',
+                'page_count': len(pages),
             }
 
             logger.success(
-                f'PDF converted to markdown: {file_path.name} ({len(markdown)} chars)'
+                f'PDF converted: {file_path.name} '
+                f'({len(pages)} pages, {len(markdown)} chars)'
             )
 
             return markdown, metadata

@@ -167,7 +167,7 @@ service-mcp = [
 # Watches for PDFs and processes them
 # embeddings are OPTIONAL - add if you want local embeddings
 service-monitor = [
-    "thoth[api,pdf,discovery,mcp,langchain]",
+    "thoth[api,pdf,discovery,mcp,langchain,knowledge]",
 ]
 
 service-all = [

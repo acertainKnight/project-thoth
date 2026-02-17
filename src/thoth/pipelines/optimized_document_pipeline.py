@@ -567,7 +567,9 @@ class OptimizedDocumentPipeline(BasePipeline):
             Project name if PDF is in a subfolder, None if at root
         """
         try:
-            relative = pdf_path.relative_to(self.pdf_dir)
+            from thoth.config import config
+
+            relative = pdf_path.relative_to(config.pdf_dir)
             if len(relative.parts) > 1:
                 return relative.parts[0]
         except ValueError:

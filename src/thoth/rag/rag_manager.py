@@ -116,11 +116,14 @@ class RAGManager:
         )
 
         # Stage 2: Split large sections into smaller chunks (token-based)
+        # disallowed_special=() lets text like <|endoftext|> pass through
+        # without raising -- common in ML textbooks and technical docs
         self.text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
             encoding_name=self.chunk_encoding,
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
             separators=['\n\n', '\n', ' ', ''],
+            disallowed_special=(),
         )
 
         # Initialize LLM for QA
@@ -1166,7 +1169,7 @@ Answer:"""
 
             try:
                 enc = tiktoken.get_encoding(self.chunk_encoding)
-                token_count = len(enc.encode(section_text))
+                token_count = len(enc.encode(section_text, disallowed_special=()))
             except Exception:
                 # Fallback: estimate tokens as words * 1.3
                 token_count = len(section_text.split()) * 1.3
