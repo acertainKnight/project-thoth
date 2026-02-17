@@ -19,9 +19,11 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y docker-ce-cli docker-compose-plugin \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy only setup-related code
+# Copy setup-related code, templates, and data
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
+COPY templates/ ./templates/
+COPY data/ ./data/
 
 # Install Thoth with setup dependencies only
 # Setup wizard should not need runtime dependencies

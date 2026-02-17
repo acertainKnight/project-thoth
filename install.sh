@@ -439,9 +439,11 @@ if command_exists docker && docker info >/dev/null 2>&1; then
     DOCKER_ARGS=(
         -v "$HOME/.config/thoth:/root/.config/thoth"
         -v "$HOME/Documents:/root/Documents"
+        -v "$PROJECT_ROOT:/thoth-project"
         -v /var/run/docker.sock:/var/run/docker.sock
         -e "THOTH_DOCKER_SETUP=1"
         -e "THOTH_HOST_HOME=$HOME"
+        -e "THOTH_PROJECT_ROOT=/thoth-project"
         -e "OBSIDIAN_VAULT_PATH=${OBSIDIAN_VAULT_PATH:-}"
     )
 

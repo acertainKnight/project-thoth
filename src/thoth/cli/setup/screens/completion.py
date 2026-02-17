@@ -267,14 +267,30 @@ class CompletionScreen(BaseScreen):
         Returns:
             Path to project root, or None if not found.
         """
-        candidates = [
+        import os
+
+        env_root = os.environ.get('THOTH_PROJECT_ROOT')
+        if env_root:
+            p = Path(env_root)
+            if p.is_dir():
+                return p
+
+        for candidate in [
             Path.cwd(),
             Path.home() / 'thoth',
-            Path(__file__).resolve().parent.parent.parent.parent.parent,
-        ]
-        for candidate in candidates:
-            if (candidate / 'docker-compose.yml').exists():
+        ]:
+            if candidate.is_dir() and (candidate / 'docker-compose.yml').exists():
                 return candidate
+
+        # Walk up from this file
+        current = Path(__file__).resolve().parent
+        for _ in range(10):
+            if (current / 'pyproject.toml').exists():
+                return current
+            if current == current.parent:
+                break
+            current = current.parent
+
         return None
 
     def _find_plugin_source(self, vault_root: Path) -> Path | None:

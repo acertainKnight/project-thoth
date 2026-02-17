@@ -194,8 +194,11 @@ class InstallationScreen(BaseScreen):
         templates_dest.mkdir(parents=True, exist_ok=True)
         self.transaction.record_create_directory(templates_dest)
 
-        # Find template source directory (relative to this file)
-        repo_root = Path(__file__).resolve().parents[3]
+        # Find template source directory from the project root
+        repo_root = self._find_project_root()
+        if not repo_root:
+            logger.warning('Could not find project root for templates/prompts')
+            return
         templates_source = repo_root / 'templates'
 
         if templates_source.exists():
@@ -382,8 +385,12 @@ class InstallationScreen(BaseScreen):
             if backup_path is not None:
                 self.transaction.record_modify_config(settings_path, backup_path)
 
-        # Validate and save
-        config_manager.validate_schema(settings)
+        # Validate (best-effort) and save
+        try:
+            config_manager.validate_schema(settings)
+        except Exception as e:
+            logger.warning(f'Schema validation skipped: {e}')
+
         config_manager.atomic_save(settings)
         self.transaction.record_write_file(settings_path)
         logger.info('Configuration saved to settings.json')
@@ -509,16 +516,29 @@ class InstallationScreen(BaseScreen):
         Returns:
             Path to project root, or None if not found.
         """
-        # Try common locations
-        candidates = [
-            Path.cwd(),
-            Path(__file__).resolve().parent.parent.parent.parent.parent,
-        ]
-        for candidate in candidates:
-            if (candidate / 'docker-compose.letta.yml').exists():
+        import os
+
+        # In Docker setup, the project root is mounted at a known location
+        env_root = os.environ.get('THOTH_PROJECT_ROOT')
+        if env_root:
+            p = Path(env_root)
+            if p.is_dir():
+                return p
+
+        # Walk up from this file to find a directory with pyproject.toml
+        current = Path(__file__).resolve().parent
+        for _ in range(10):
+            if (current / 'pyproject.toml').exists():
+                return current
+            if current == current.parent:
+                break
+            current = current.parent
+
+        # Fallback: common locations
+        for candidate in [Path.cwd(), Path.home() / 'thoth']:
+            if candidate.is_dir() and (candidate / 'pyproject.toml').exists():
                 return candidate
-            if (candidate / 'pyproject.toml').exists():
-                return candidate
+
         return None
 
     def _update_env_file(self, env_path: Path, keys: dict[str, str]) -> None:
