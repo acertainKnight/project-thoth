@@ -47,6 +47,7 @@ class MigrationManager:
                 MIGRATION_005_ADD_DISCOVERED_ARTICLES_TABLE,
             ),
             (6, 'add_knowledge_collections', MIGRATION_006_ADD_KNOWLEDGE_COLLECTIONS),
+            (7, 'add_multi_user_support', MIGRATION_007_ADD_MULTI_USER_SUPPORT),
         ]
         return sorted(migrations, key=lambda x: x[0])
 
@@ -1150,4 +1151,121 @@ SELECT
     pp.analysis_schema_version
 FROM paper_metadata pm
 LEFT JOIN processed_papers pp ON pm.id = pp.paper_id;
+"""
+
+
+MIGRATION_007_ADD_MULTI_USER_SUPPORT = """
+-- Migration 007: Multi-User Support
+-- Adds users table and user_id columns for tenant isolation
+
+-- 1. Create users table
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    username TEXT NOT NULL UNIQUE,
+    email TEXT,
+    api_token TEXT NOT NULL UNIQUE,
+    vault_path TEXT NOT NULL,
+    orchestrator_agent_id TEXT,
+    analyst_agent_id TEXT,
+    is_admin BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_token ON users(api_token);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active) WHERE is_active = TRUE;
+
+-- 2. Add user_id columns to tenant-scoped tables
+-- Paper tables
+ALTER TABLE paper_metadata ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_paper_metadata_user_id ON paper_metadata(user_id);
+
+ALTER TABLE processed_papers ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_processed_papers_user_id ON processed_papers(user_id);
+
+ALTER TABLE citations ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_citations_user_id ON citations(user_id);
+
+-- Research questions (ensure index exists)
+CREATE INDEX IF NOT EXISTS idx_research_questions_user_id ON research_questions(user_id);
+
+ALTER TABLE research_question_matches ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_research_question_matches_user_id ON research_question_matches(user_id);
+
+ALTER TABLE research_question_sources ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_research_question_sources_user_id ON research_question_sources(user_id);
+
+-- Discovery tables
+ALTER TABLE discovered_papers ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_discovered_papers_user_id ON discovered_papers(user_id);
+
+ALTER TABLE paper_discoveries ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_paper_discoveries_user_id ON paper_discoveries(user_id);
+
+ALTER TABLE discovered_articles ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_discovered_articles_user_id ON discovered_articles(user_id);
+
+ALTER TABLE article_discoveries ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_article_discoveries_user_id ON article_discoveries(user_id);
+
+ALTER TABLE discovery_sources ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_discovery_sources_user_id ON discovery_sources(user_id);
+
+ALTER TABLE discovery_schedule ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_discovery_schedule_user_id ON discovery_schedule(user_id);
+
+ALTER TABLE discovery_execution_log ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_discovery_execution_log_user_id ON discovery_execution_log(user_id);
+
+-- Processing tables
+ALTER TABLE processing_queue ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_processing_queue_user_id ON processing_queue(user_id);
+
+ALTER TABLE processing_jobs ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_processing_jobs_user_id ON processing_jobs(user_id);
+
+ALTER TABLE processed_pdfs ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_processed_pdfs_user_id ON processed_pdfs(user_id);
+
+-- Tags
+ALTER TABLE tags ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_tags_user_id ON tags(user_id);
+
+ALTER TABLE paper_tags ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_paper_tags_user_id ON paper_tags(user_id);
+
+-- Workflows
+ALTER TABLE browser_workflows ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_browser_workflows_user_id ON browser_workflows(user_id);
+
+ALTER TABLE workflow_executions ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_workflow_executions_user_id ON workflow_executions(user_id);
+
+ALTER TABLE workflow_actions ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_workflow_actions_user_id ON workflow_actions(user_id);
+
+ALTER TABLE workflow_credentials ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_workflow_credentials_user_id ON workflow_credentials(user_id);
+
+-- RAG and search
+ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_document_chunks_user_id ON document_chunks(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_memory_user_id ON memory(user_id);
+
+ALTER TABLE search_history ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_search_history_user_id ON search_history(user_id);
+
+-- Agent and knowledge
+ALTER TABLE agent_loaded_skills ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_agent_loaded_skills_user_id ON agent_loaded_skills(user_id);
+
+ALTER TABLE knowledge_collections ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_knowledge_collections_user_id ON knowledge_collections(user_id);
+
+-- Usage tracking
+ALTER TABLE token_usage ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_token_usage_user_id ON token_usage(user_id);
 """
