@@ -7,7 +7,7 @@ name = "thoth"
 description = "Thoth AI Research Agent - An autonomous system for academic research paper processing and knowledge management"
 readme = "README.md"
 requires-python = ">=3.12, <3.13"
-version = '0.4.1-alpha'
+version = '0.4.1-alpha.1'
 authors = [{name="Nick Hallmark", email="NHALLMARK3@BLOOMBERG.NET"}]
 
 dependencies = [
