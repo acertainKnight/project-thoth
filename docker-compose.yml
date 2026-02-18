@@ -2,28 +2,16 @@
 # Thoth AI Research Assistant - Production Configuration
 #
 # IMPORTANT: Letta services are now INDEPENDENT!
-# Start Letta first: letta-start (or docker compose -f docker-compose.letta.yml up -d)
-# Then start Thoth: thoth-start (or docker compose up -d)
+# Start Letta first: docker compose -f docker-compose.letta.yml up -d
+# Then start Thoth: docker compose up -d
 #
-# Two deployment modes available:
-#
-# 1. LOCAL MODE (default):
-#    docker compose up
-#    - Runs thoth-all-in-one container (API, MCP, Discovery, PDF Monitor, Dashboard)
-#    - 1 container (connects to external Letta services)
-#    - Optimized for small self-hosted deployments
-#    - Lower resource usage (~3.5GB RAM)
-#
-# 2. MICROSERVICES MODE (advanced):
-#    docker compose --profile microservices up
+# MICROSERVICES ARCHITECTURE:
 #    - Runs each service in separate containers
-#    - 5 containers (api, mcp, monitor, dashboard, discovery)
-#    - Better for scaling individual services
-#    - Higher resource usage (~4GB RAM)
+#    - 5 containers: api, mcp, monitor, dashboard, discovery
+#    - Connects to external Letta services
+#    - Resource usage: ~4GB RAM
 #
 # ==============================================================================
-
-version: '3.8'
 
 # ==============================================================================
 # Shared Configuration
@@ -85,47 +73,10 @@ x-thoth-common: &thoth-common
 
 services:
   # ==============================================================================
-  # Thoth All-in-One Container (DEFAULT - Local Mode)
-  # ==============================================================================
-  thoth-all-in-one:
-    <<: *thoth-common
-    image: ghcr.io/acertainknight/project-thoth:latest
-    build:
-      context: .
-      dockerfile: docker/all-in-one/Dockerfile
-      target: production
-    pull_policy: always
-    container_name: thoth-all-in-one
-    command: []  # Uses entrypoint.sh which starts supervisor
-    ports:
-      - "8080:8000"  # API
-      - "8082:8000"  # MCP (HTTP transport includes /mcp POST and /sse streaming)
-    # NO DEPENDENCIES ON LETTA - it runs independently
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
-    deploy:
-      resources:
-        limits:
-          memory: 3G
-          cpus: '2.0'
-        reservations:
-          memory: 1G
-          cpus: '0.5'
-
-  # ==============================================================================
-  # Microservices Mode (use --profile microservices)
-  # ==============================================================================
-
-  # ==============================================================================
   # Thoth API Server
   # Main REST API for frontend and external integrations
   # ==============================================================================
   thoth-api:
-    profiles: ["microservices"]
     <<: *thoth-common
     image: ghcr.io/acertainknight/project-thoth/api:latest
     build:
@@ -158,7 +109,6 @@ services:
   # Model Context Protocol server for Claude integration
   # ==============================================================================
   thoth-mcp:
-    profiles: ["microservices"]
     <<: *thoth-common
     image: ghcr.io/acertainknight/project-thoth/mcp:latest
     build:
@@ -209,7 +159,6 @@ services:
   # Watches vault directory for new PDFs and processes them automatically
   # ==============================================================================
   thoth-monitor:
-    profiles: ["microservices"]
     <<: *thoth-common
     image: ghcr.io/acertainknight/project-thoth/pdf-monitor:latest
     build:
@@ -242,7 +191,6 @@ services:
   # Automatically exports new discovery results and imports sentiment changes
   # ==============================================================================
   thoth-dashboard:
-    profiles: ["microservices"]
     <<: *thoth-common
     build:
       context: .
@@ -280,7 +228,6 @@ services:
   # Runs automated daily paper discovery searches for research questions
   # ==============================================================================
   thoth-discovery:
-    profiles: ["microservices"]
     <<: *thoth-common
     image: ghcr.io/acertainknight/project-thoth/discovery:latest
     build:

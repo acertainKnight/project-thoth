@@ -41,22 +41,22 @@ help: ## Show available commands
 	@echo "=============================================="
 	@echo ""
 	@echo "$(YELLOW)🚀 Quick Start:$(NC)"
-	@echo "  $(GREEN)dev$(NC)                  Start development environment (hot-reload)"
-	@echo "  $(GREEN)prod$(NC)                 Start production server (optimized)"
+	@echo "  $(GREEN)dev$(NC)                  Start development environment (microservices)"
+	@echo "  $(GREEN)prod$(NC)                 Start production server (microservices)"
 	@echo "  $(GREEN)health$(NC)               Check health of all services"
 	@echo "  $(GREEN)deploy-and-start$(NC)     Deploy plugin + start ecosystem"
 	@echo ""
 	@echo "$(YELLOW)🔧 Development Mode:$(NC)"
-	@echo "  $(GREEN)dev$(NC)                  Start dev environment - local mode (3 containers)"
-	@echo "  $(GREEN)microservices$(NC)        Start dev in microservices mode (6 containers)"
+	@echo "  $(GREEN)dev$(NC)                  Start dev environment (5 containers)"
+	@echo "  $(GREEN)microservices$(NC)        Alias for 'make dev'"
 	@echo "  $(GREEN)dev-status$(NC)           Check dev environment status"
 	@echo "  $(GREEN)dev-logs$(NC)             View development logs (follow)"
 	@echo "  $(GREEN)dev-stop$(NC)             Stop development environment"
 	@echo "  $(GREEN)test-config$(NC)          Test configuration loading"
 	@echo ""
 	@echo "$(YELLOW)🚀 Production Mode:$(NC)"
-	@echo "  $(GREEN)prod$(NC)                 Start production - local mode (3 containers)"
-	@echo "  $(GREEN)prod-microservices$(NC)   Start production in microservices mode (7 containers)"
+	@echo "  $(GREEN)prod$(NC)                 Start production server (5 containers)"
+	@echo "  $(GREEN)prod-microservices$(NC)   Alias for 'make prod'"
 	@echo "  $(GREEN)prod-status$(NC)          Check production server status"
 	@echo "  $(GREEN)prod-logs$(NC)            View production logs (follow)"
 	@echo "  $(GREEN)prod-stop$(NC)            Stop production server"
@@ -168,9 +168,9 @@ deploy-plugin: _check-vault _build-plugin ## Deploy Obsidian plugin with complet
 # =============================================================================
 
 .PHONY: dev
-dev: ## Start development environment with hot-reload (local mode)
-	@echo "$(YELLOW)Starting Thoth development environment (local mode)...$(NC)"
-	@echo "$(CYAN)Using unified all-in-one container (3 total containers)$(NC)"
+dev: ## Start development environment with hot-reload (microservices mode)
+	@echo "$(YELLOW)Starting Thoth development environment (microservices mode)...$(NC)"
+	@echo "$(CYAN)Using separate containers for each service (5 containers)$(NC)"
 	@echo ""
 	@# Check if Letta is running, start if needed
 	@bash scripts/check-letta.sh || exit 1
@@ -192,42 +192,15 @@ dev: ## Start development environment with hot-reload (local mode)
 	fi; \
 	VAULT_PATH="$${OBSIDIAN_VAULT_PATH:-$(OBSIDIAN_VAULT_PATH)}"; \
 	echo "$(CYAN)Using vault: $$VAULT_PATH$(NC)"; \
-	OBSIDIAN_VAULT_PATH="$$VAULT_PATH" docker compose -f docker-compose.dev.yml --profile standalone up -d
+	OBSIDIAN_VAULT_PATH="$$VAULT_PATH" docker compose -f docker-compose.dev.yml --profile microservices up -d
 	@echo ""
 	@echo "$(GREEN)✅ Development environment started$(NC)"
 	@echo ""
 	@make dev-status
 
 .PHONY: microservices
-microservices: ## Start development in microservices mode (6 containers)
-	@echo "$(YELLOW)Starting Thoth in microservices mode...$(NC)"
-	@echo "$(CYAN)Using separate containers for each service (6 total containers)$(NC)"
-	@echo ""
-	@# Check if Letta is running, start if needed
-	@bash scripts/check-letta.sh || exit 1
-	@echo ""
-	@if [ -z "$(OBSIDIAN_VAULT_PATH)" ]; then \
-		if [ -f .env.vault ]; then \
-			echo "$(CYAN)Loading vault path from .env.vault...$(NC)"; \
-			export $$(cat .env.vault | grep -v '^#' | xargs); \
-		fi; \
-	fi; \
-	if [ -z "$(OBSIDIAN_VAULT_PATH)" ] && [ -z "$$OBSIDIAN_VAULT_PATH" ]; then \
-		echo "$(RED)ERROR: OBSIDIAN_VAULT_PATH not set$(NC)"; \
-		echo ""; \
-		echo "$(YELLOW)Set it in one of these ways:$(NC)"; \
-		echo "  1. Export: export OBSIDIAN_VAULT_PATH=/path/to/vault"; \
-		echo "  2. .env.vault: echo 'OBSIDIAN_VAULT_PATH=/path/to/vault' > .env.vault"; \
-		echo "  3. Command: make microservices OBSIDIAN_VAULT_PATH=/path/to/vault"; \
-		exit 1; \
-	fi; \
-	VAULT_PATH="$${OBSIDIAN_VAULT_PATH:-$(OBSIDIAN_VAULT_PATH)}"; \
-	echo "$(CYAN)Using vault: $$VAULT_PATH$(NC)"; \
-	OBSIDIAN_VAULT_PATH="$$VAULT_PATH" docker compose -f docker-compose.dev.yml --profile microservices up -d
-	@echo ""
-	@echo "$(GREEN)✅ Microservices mode started$(NC)"
-	@echo ""
-	@make dev-status
+microservices: ## Alias for 'make dev' (microservices is now the default)
+	@make dev
 
 .PHONY: dev-status
 dev-status: ## Check development environment status
@@ -427,7 +400,7 @@ thoth-restart: ## Restart Thoth services (does NOT restart Letta)
 
 .PHONY: thoth-logs
 thoth-logs: ## View Thoth logs
-	@docker logs -f thoth-all-in-one
+	@docker logs -f thoth-api
 
 	@make dev
 
@@ -479,10 +452,10 @@ stop: ## Stop all Thoth services (both dev and prod)
 # =============================================================================
 
 .PHONY: prod
-prod: ## Start production server (local mode with 3 containers)
-	@echo "$(GREEN)🚀 Starting Thoth Production Server (Local Mode)$(NC)"
+prod: ## Start production server (microservices mode)
+	@echo "$(GREEN)🚀 Starting Thoth Production Server$(NC)"
 	@echo "=========================================================="
-	@echo "$(CYAN)Using unified all-in-one container (3 total containers)$(NC)"
+	@echo "$(CYAN)Using separate containers for each service (5 containers)$(NC)"
 	@echo ""
 	@bash -c ' \
 		if [ -z "$(OBSIDIAN_VAULT_PATH)" ]; then \
@@ -524,7 +497,7 @@ prod: ## Start production server (local mode with 3 containers)
 		echo "$(CYAN)Using: docker-compose.yml (optimized, no hot-reload)$(NC)"; \
 		export THOTH_DATA_MOUNT; \
 		export OBSIDIAN_VAULT_PATH="$$VAULT_PATH"; \
-		USER_ID=$$(id -u) GROUP_ID=$$(id -g) docker compose -f docker-compose.yml up -d --build; \
+		USER_ID=$$(id -u) GROUP_ID=$$(id -g) docker compose up -d --build; \
 		echo ""; \
 		echo "$(YELLOW)Waiting for services to initialize...$(NC)"; \
 		sleep 15; \
@@ -535,43 +508,13 @@ prod: ## Start production server (local mode with 3 containers)
 	'
 
 .PHONY: prod-microservices
-prod-microservices: ## Start production in microservices mode (7 containers)
-	@echo "$(GREEN)🚀 Starting Thoth Production (Microservices Mode)$(NC)"
-	@echo "====================================================="
-	@echo "$(CYAN)Using separate containers for each service (7 containers)$(NC)"
-	@echo ""
-	@bash -c ' \
-		if [ -z "$(OBSIDIAN_VAULT_PATH)" ]; then \
-			if [ -f .env.vault ]; then \
-				echo "$(CYAN)Loading vault path from .env.vault...$(NC)"; \
-				source .env.vault; \
-			fi; \
-		fi; \
-		if [ -f .env.production ]; then \
-			echo "$(CYAN)Loading production config from .env.production...$(NC)"; \
-			source .env.production; \
-		fi; \
-		VAULT_PATH="$${OBSIDIAN_VAULT_PATH:-$(OBSIDIAN_VAULT_PATH)}"; \
-		if [ -z "$$VAULT_PATH" ] && [ -z "$$THOTH_DATA_MOUNT" ]; then \
-			echo "$(RED)ERROR: OBSIDIAN_VAULT_PATH not set$(NC)"; \
-			exit 1; \
-		fi; \
-		if [ -z "$$THOTH_DATA_MOUNT" ] && [ -n "$$VAULT_PATH" ]; then \
-			export THOTH_DATA_MOUNT="$$VAULT_PATH/thoth/_thoth"; \
-		fi; \
-		echo "$(CYAN)Vault: $$VAULT_PATH$(NC)"; \
-		export THOTH_DATA_MOUNT; \
-		export OBSIDIAN_VAULT_PATH="$$VAULT_PATH"; \
-		USER_ID=$$(id -u) GROUP_ID=$$(id -g) docker compose -f docker-compose.yml --profile microservices up -d --build; \
-		echo ""; \
-		echo "$(GREEN)✅ Production Microservices Started!$(NC)"; \
-		make prod-status; \
-	'
+prod-microservices: ## Alias for 'make prod' (microservices is now the default)
+	@make prod
 
 .PHONY: prod-stop
-prod-stop: ## Stop production server (both modes)
+prod-stop: ## Stop production server
 	@echo "$(YELLOW)Stopping production services...$(NC)"
-	@docker compose -f docker-compose.yml --profile microservices down
+	@docker compose stop
 	@echo "$(GREEN)✅ Production services stopped$(NC)"
 
 .PHONY: prod-restart

@@ -2,7 +2,7 @@
 set -e
 
 # Thoth Easy Installer
-# No Python knowledge required - automatically chooses best installation method
+# Docker-based installation for the Thoth AI Research Assistant
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/main/install.sh | bash
@@ -13,6 +13,10 @@ set -e
 #   --nightly         Install the latest nightly build (from main)
 #   --list            List available releases and exit
 #   (no flags)        Install the latest stable release
+#
+# Prerequisites:
+#   - Docker installed and running
+#   - Obsidian installed (will be prompted to download if missing)
 
 BLUE='\033[0;34m'
 GREEN='\033[0;32m'
@@ -68,20 +72,6 @@ echo -e "${GREEN}Starting Thoth installation...${NC}\n"
 # Function to check if command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
-}
-
-# Function to check Python version (3.12 required)
-check_python_version() {
-    if command_exists python3; then
-        version=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
-        major=$(echo "$version" | cut -d. -f1)
-        minor=$(echo "$version" | cut -d. -f2)
-        if [ "$major" -eq 3 ] && [ "$minor" -eq 12 ]; then
-            echo "$version"
-            return 0
-        fi
-    fi
-    return 1
 }
 
 # Function to install thoth CLI to PATH
@@ -145,20 +135,20 @@ case "$1" in
             sleep 3
         fi
 
-        # Start Thoth dev microservices
+        # Start Thoth microservices
         echo "  Starting Thoth containers..."
-        docker compose -f docker-compose.dev.yml --profile microservices up -d --build
+        docker compose up -d --build
 
         echo "✅ Thoth is running!"
         [ "$LETTA_MODE" = "cloud" ] && echo "   Letta: Cloud" || echo "   Letta: localhost:8283"
-        echo "   API: http://localhost:8000"
+        echo "   API: http://localhost:8080"
         echo "   MCP: http://localhost:8082"
         ;;
 
     stop)
         echo "🛑 Stopping Thoth services..."
         cd "$PROJECT_ROOT"
-        docker compose -f docker-compose.dev.yml --profile microservices stop
+        docker compose stop
 
         echo "✅ Thoth stopped (RAM freed)"
         echo ""
@@ -175,7 +165,7 @@ case "$1" in
     status)
         cd "$PROJECT_ROOT"
         echo "📊 Thoth Service Status:"
-        docker compose -f docker-compose.dev.yml --profile microservices ps
+        docker compose ps
         echo ""
         echo "Letta Status:"
         docker compose -f docker-compose.letta.yml ps 2>/dev/null || echo "  (Not using self-hosted Letta)"
@@ -183,14 +173,14 @@ case "$1" in
 
     logs)
         cd "$PROJECT_ROOT"
-        docker compose -f docker-compose.dev.yml --profile microservices logs -f "${@:2}"
+        docker compose logs -f "${@:2}"
         ;;
 
     update)
         echo "⬆️  Updating Thoth..."
         cd "$PROJECT_ROOT"
         git pull origin main
-        docker compose -f docker-compose.dev.yml --profile microservices pull
+        docker compose pull
         "$0" restart
         echo "✅ Updated to latest version"
         ;;
@@ -357,14 +347,32 @@ DOCKER_IMAGE_TAG=$(get_docker_image_tag)
 
 echo ""
 
-# Detect best installation method
-echo -e "${BLUE}Detecting best installation method...${NC}\n"
+# ── Installation ────────────────────────────────────────────────────────────
 
-# Check for Docker first (preferred for non-developers)
-# Verify both the CLI exists AND the daemon is running
-if command_exists docker && docker info >/dev/null 2>&1; then
-    echo -e "${GREEN}✓ Docker detected and running${NC}"
-    echo -e "${YELLOW}Installing via Docker (no Python required)...${NC}\n"
+echo -e "${BLUE}Checking prerequisites...${NC}\n"
+
+# Docker is required - check both CLI and daemon
+if ! command_exists docker; then
+    echo -e "${RED}✗ Docker not found${NC}\n"
+    echo "Thoth requires Docker to run. Please install Docker:"
+    echo ""
+    echo "  macOS:   https://docs.docker.com/desktop/install/mac-install/"
+    echo "  Linux:   https://docs.docker.com/engine/install/"
+    echo "  Windows: https://docs.docker.com/desktop/install/windows-install/"
+    echo ""
+    exit 1
+fi
+
+if ! docker info >/dev/null 2>&1; then
+    echo -e "${RED}✗ Docker daemon not running${NC}\n"
+    echo "Docker is installed but not running."
+    echo "Please start Docker Desktop and try again."
+    echo ""
+    exit 1
+fi
+
+echo -e "${GREEN}✓ Docker detected and running${NC}"
+echo -e "${YELLOW}Installing via Docker...${NC}\n"
 
     # Determine current directory or clone repo
     if [ -f "Dockerfile.setup" ]; then
@@ -492,12 +500,12 @@ if command_exists docker && docker info >/dev/null 2>&1; then
         docker compose -f docker-compose.letta.yml up -d 2>/dev/null || true
         sleep 3
 
-        # Start Thoth dev microservices
+        # Start Thoth microservices
         echo -e "  Starting Thoth..."
-        docker compose -f docker-compose.dev.yml --profile microservices up -d --build
+        docker compose up -d --build
 
         echo -e "\n${GREEN}✓ Thoth is running!${NC}"
-        echo -e "  API: http://localhost:8000"
+        echo -e "  API: http://localhost:8080"
         echo -e "  MCP: http://localhost:8082"
         echo -e "  Letta: http://localhost:8283\n"
     else
@@ -506,95 +514,9 @@ if command_exists docker && docker info >/dev/null 2>&1; then
     fi
 
     echo -e "Commands:"
-    echo -e "  ${BLUE}thoth start${NC}   - Start services (~1-1.5GB RAM)"
+    echo -e "  ${BLUE}thoth start${NC}   - Start services (~4GB RAM)"
     echo -e "  ${BLUE}thoth status${NC}  - Check what's running"
     echo -e "  ${BLUE}thoth stop${NC}    - Stop services (free RAM)"
     echo -e "  ${BLUE}thoth --help${NC}  - See all commands\n"
 
     exit 0
-
-# No Docker (or daemon not running) — fall back to git clone + local Python setup
-elif python_version=$(check_python_version); then
-    # Warn if Docker CLI exists but daemon isn't running
-    if command_exists docker && ! docker info >/dev/null 2>&1; then
-        echo -e "${YELLOW}⚠ Docker CLI found but the Docker daemon is not running.${NC}"
-        echo -e "${YELLOW}  Start Docker Desktop and re-run for the recommended experience.${NC}"
-        echo -e "${YELLOW}  Falling back to local Python installation...${NC}\n"
-    fi
-    echo -e "${GREEN}✓ Python $python_version detected (no Docker)${NC}"
-    echo -e "${YELLOW}Installing via git clone + local Python environment...${NC}\n"
-
-    # Clone repo at the resolved ref
-    CLONE_DIR="${HOME}/thoth"
-    if [ -d "$CLONE_DIR" ]; then
-        echo -e "${YELLOW}Directory $CLONE_DIR already exists. Updating...${NC}"
-        cd "$CLONE_DIR"
-        git fetch --all --tags 2>/dev/null || true
-        if [ -n "$RESOLVED_REF" ] && [ "$RESOLVED_REF" != "main" ]; then
-            git checkout "$RESOLVED_REF" 2>/dev/null || echo -e "${YELLOW}Could not checkout ${RESOLVED_REF}${NC}"
-        else
-            git pull origin main 2>/dev/null || true
-        fi
-    else
-        if [ -n "$RESOLVED_REF" ] && [ "$RESOLVED_REF" != "main" ]; then
-            git clone --branch "$RESOLVED_REF" "https://github.com/${GITHUB_REPO}.git" "$CLONE_DIR" 2>/dev/null \
-                || git clone "https://github.com/${GITHUB_REPO}.git" "$CLONE_DIR"
-        else
-            git clone "https://github.com/${GITHUB_REPO}.git" "$CLONE_DIR"
-        fi
-        cd "$CLONE_DIR"
-    fi
-    PROJECT_ROOT="$CLONE_DIR"
-
-    echo -e "${CYAN}Channel: ${INSTALL_CHANNEL}${NC}"
-    [ -n "$RESOLVED_TAG" ] && echo -e "${CYAN}Version: ${RESOLVED_TAG}${NC}"
-
-    # Set up Python environment with uv (preferred) or pip
-    if command_exists uv; then
-        echo -e "${GREEN}✓ uv detected — using uv for dependency management${NC}"
-        uv venv
-        uv sync
-    else
-        echo -e "${YELLOW}uv not found — using pip (slower)${NC}"
-        python3 -m venv .venv
-        source .venv/bin/activate
-        pip install --upgrade pip
-        pip install -e .
-    fi
-
-    # Install CLI wrapper
-    install_cli_to_path "$PROJECT_ROOT"
-
-    echo -e "\n${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}✓ Thoth installation complete!${NC}"
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
-    echo -e "${YELLOW}Note: Docker is recommended for the full experience.${NC}"
-    echo -e "${YELLOW}Install Docker: https://docs.docker.com/engine/install/${NC}\n"
-    echo -e "Quick start:"
-    echo -e "  ${BLUE}thoth start${NC}   - Start services (requires Docker)"
-    echo -e "  ${BLUE}thoth status${NC}  - Check what's running"
-    echo -e "  ${BLUE}thoth --help${NC}  - See all commands\n"
-    exit 0
-
-else
-    # No suitable method found
-    echo -e "${RED}✗ No suitable installation method found${NC}\n"
-
-    # Specific hint if Docker CLI exists but daemon is not running
-    if command_exists docker && ! docker info >/dev/null 2>&1; then
-        echo -e "${YELLOW}Docker is installed but not running!${NC}"
-        echo -e "${YELLOW}Please open Docker Desktop and re-run this installer.${NC}\n"
-    fi
-
-    echo "Please install one of the following:"
-    echo ""
-    echo "1. Docker (Recommended - no Python required):"
-    echo "   Linux: https://docs.docker.com/engine/install/"
-    echo "   Mac: https://docs.docker.com/desktop/install/mac-install/"
-    echo "   Windows: https://docs.docker.com/desktop/install/windows-install/"
-    echo ""
-    echo "2. Python 3.12 + Git (for local development):"
-    echo "   https://www.python.org/downloads/"
-    echo ""
-    exit 1
-fi

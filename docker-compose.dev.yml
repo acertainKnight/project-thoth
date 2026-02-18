@@ -1,25 +1,15 @@
 # ==============================================================================
 # Thoth AI Research Assistant - Development Configuration
 #
-# Two deployment modes available:
-#
-# 1. LOCAL MODE (default):
-#    docker compose up
-#    - Runs thoth-all-in-one container (API, MCP, Discovery, PDF Monitor)
-#    - 3 containers total (thoth-all-in-one, letta, postgres)
-#    - Lower resource usage (~3.5GB RAM)
-#    - Faster startup (~30s)
-#
-# 2. MICROSERVICES MODE (advanced):
-#    docker compose --profile microservices up
+# MICROSERVICES ARCHITECTURE (use --profile microservices):
 #    - Runs each service in separate containers
-#    - 6 containers total (api, mcp, discovery, pdf-monitor, letta, postgres)
-#    - Better for debugging individual services
-#    - Higher resource usage (~4.5GB RAM)
+#    - Hot-reload enabled via source mounting
+#    - Debug logging and development tools
+#    - 5 containers: api, mcp, monitor, dashboard, discovery
+#
+# Example: docker compose -f docker-compose.dev.yml --profile microservices up -d
 #
 # ==============================================================================
-
-version: '3.8'
 
 services:
   # ==============================================================================
@@ -31,156 +21,6 @@ services:
   # ==============================================================================
 
   # PostgreSQL Database for Letta Memory System - EXTERNAL (optional fallback)
-  # This service is commented out by default. Use standalone Letta instead.
-  # Only uncomment if you need a separate dev Letta for testing.
-  #
-  # letta-postgres:
-  #   profiles: ["dev-letta"]  # Only start with --profile dev-letta
-  #   image: ankane/pgvector:latest
-  #   container_name: thoth-dev-letta-postgres
-  #   environment:
-  #     - POSTGRES_DB=letta
-  #     - POSTGRES_USER=letta
-  #     - POSTGRES_PASSWORD=letta_dev_password
-  #     - POSTGRES_INITDB_ARGS=--encoding=UTF-8
-  #   volumes:
-  #     - thoth-dev-letta-postgres:/var/lib/postgresql/data
-  #     - ./docker/init-pgvector.sh:/docker-entrypoint-initdb.d/init-pgvector.sh:ro
-  #   ports:
-  #     - "5433:5432"  # Different port to avoid conflict with standalone
-  #   networks:
-  #     - thoth-dev-network
-  #     - letta-network  # Connect to standalone Letta network
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "pg_isready -U letta -d letta"]
-  #     interval: 15s
-  #     timeout: 5s
-  #     retries: 3
-  #     start_period: 30s
-
-
-
-  # ==============================================================================
-  # Thoth Services
-  # ==============================================================================
-  # By default, runs thoth-all-in-one (local mode)
-  # Use --profile microservices for separate services
-  # ==============================================================================
-
-  # ==============================================================================
-  # Thoth All-in-One Container (DEFAULT - Local Mode)
-  # ==============================================================================
-  thoth-all-in-one:
-    profiles: ["standalone"]  # Only start without microservices profile
-    build:
-      context: .
-      dockerfile: docker/all-in-one/Dockerfile
-      # target: development  # Not using multi-stage build
-    container_name: thoth-dev-all-in-one
-    user: "1000:1000"
-    env_file:
-      - .env
-    environment:
-      # Vault configuration
-      - OBSIDIAN_VAULT_PATH=/vault
-      - THOTH_SETTINGS_FILE=/vault/thoth/_thoth/settings.json
-
-      # Service discovery - Use EXTERNAL Letta (standalone)
-      - THOTH_LETTA_URL=http://letta-server:8283
-      - DATABASE_URL=postgresql://thoth:thoth_password@letta-postgres:5432/thoth
-
-      # Development settings
-      - THOTH_LOG_LEVEL=DEBUG
-      - THOTH_HOT_RELOAD=1
-      - DOCKER_ENV=true
-
-      # Playwright browser path (fixed location, independent of HOME)
-      - PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
-
-      # API Keys
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - API_MISTRAL_KEY=${API_MISTRAL_KEY:-}
-      - API_OPENROUTER_KEY=${API_OPENROUTER_KEY:-}
-      - API_SEMANTIC_SCHOLAR_KEY=${API_SEMANTIC_SCHOLAR_KEY:-}
-      - API_WEB_SEARCH_KEY=${API_WEB_SEARCH_KEY:-}
-    volumes:
-      - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw
-      - ./src:/app/src:ro
-    ports:
-      - "8000:8000"  # API
-      - "8082:8000"  # MCP (HTTP transport includes /mcp and /sse endpoints)
-    networks:
-      - thoth-dev-network
-      - letta-network  # Connect to external Letta network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  # ==============================================================================
-  # Infrastructure Services
-  # ==============================================================================
-  # NOTE: Letta Memory Service is now EXTERNAL (docker-compose.letta.yml)
-  # This service is commented out by default. Use standalone Letta instead.
-  # Only uncomment if you need a separate dev Letta for testing.
-  # ==============================================================================
-
-  # Letta Memory Service - EXTERNAL (optional fallback)
-  # letta:
-  #   profiles: ["dev-letta"]  # Only start with --profile dev-letta
-  #   image: letta/letta:latest
-  #   container_name: thoth-dev-letta
-  #   environment:
-  #     - LETTA_SERVER_HOST=0.0.0.0
-  #     - LETTA_SERVER_PORT=8283
-  #     - LETTA_PG_URI=postgresql://letta:letta_dev_password@thoth-dev-letta-postgres:5432/letta
-  #
-  #     # LLM Provider Configuration
-  #     - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-  #     - API_MISTRAL_KEY=${API_MISTRAL_KEY:-}
-  #     - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
-  #
-  #     # Security Configuration
-  #     - SECURE=${LETTA_SECURE:-false}
-  #     - LETTA_SERVER_PASSWORD=${LETTA_SERVER_PASSWORD:-}
-  #
-  #     # Tool Execution & Sandboxing
-  #     - E2B_API_KEY=${E2B_API_KEY:-}
-  #     - E2B_SANDBOX_TEMPLATE_ID=${E2B_SANDBOX_TEMPLATE_ID:-}
-  #     - TOOL_EXEC_DIR=/workspace/tools
-  #
-  #     # Logging
-  #     - LETTA_LOG_LEVEL=DEBUG
-  #   volumes:
-  #     - thoth-dev-letta-data:/var/lib/postgresql/data
-  #     - ./workspace:/workspace  # For tool execution and shared data
-  #   ports:
-  #     - "8284:8283"  # Different port to avoid conflict
-  #   networks:
-  #     - thoth-dev-network
-  #     - letta-network  # Connect to standalone Letta network
-  #   depends_on:
-  #     letta-postgres:
-  #       condition: service_healthy
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8283/v1/health"]
-  #     interval: 15s
-  #     timeout: 5s
-  #     retries: 3
-  #     start_period: 60s
-
-  # ==============================================================================
-  # Microservices Mode (use --profile microservices)
-  # ==============================================================================
-
-  # Main API Server
   thoth-api:
     profiles: ["microservices"]
     build:

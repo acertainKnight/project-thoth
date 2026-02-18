@@ -42,15 +42,16 @@ to help you discover, analyze, and manage academic papers and research.
 
   • [cyan]✓[/cyan] Selecting your Obsidian vault
   • [cyan]✓[/cyan] Configuring AI models and API keys
-  • [cyan]✓[/cyan] Setting up dependencies (Docker, PostgreSQL, Letta)
+  • [cyan]✓[/cyan] Setting up Letta memory service
   • [cyan]✓[/cyan] Installing the Obsidian plugin
   • [cyan]✓[/cyan] Testing your configuration
 
 [bold]Prerequisites:[/bold]
 
+  • [bold]Docker installed and running[/bold] (required)
   • Obsidian installed (we'll help you download it if needed)
   • API keys for at least one LLM provider (OpenAI, Anthropic, or Google)
-  • ~3 GB free disk space (lightweight) or ~10 GB with local ML models
+  • ~5 GB free disk space
   • Internet connection
 
 [bold cyan]Navigation:[/bold cyan]

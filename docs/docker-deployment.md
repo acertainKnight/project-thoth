@@ -1,74 +1,36 @@
 # Thoth Docker Deployment Guide
 
-Complete guide to deploying Thoth using Docker with both local and microservices architectures.
+Complete guide to deploying Thoth using Docker with microservices architecture.
 
 ## Table of Contents
 
 - [Overview](#overview)
-- [Deployment Modes](#deployment-modes)
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
 - [Configuration](#configuration)
 - [Common Workflows](#common-workflows)
 - [Troubleshooting](#troubleshooting)
-- [Migration Guide](#migration-guide)
 - [Advanced Topics](#advanced-topics)
 
 ## Overview
 
-Thoth offers two deployment architectures to suit different use cases:
-
-### Local Mode (Default)
-**Best for:** Personal use, laptops, small self-hosted deployments
+Thoth uses a microservices architecture with each service running in its own container:
 
 > **Letta Setup**: Letta runs as a standalone service. See [LETTA_SETUP.md](./LETTA_SETUP.md) for details.
 
-- **Containers:** 5 (thoth-all-in-one, letta-server, letta-postgres, letta-redis, letta-nginx)
-- **Resource Usage:** ~3.5GB RAM
-- **Startup Time:** ~30 seconds (Letta auto-starts if needed)
-- **Management:** Simple, one unified Thoth container + standalone Letta
-- **Services:** API, MCP, Discovery, PDF Monitor (all in one container)
+- **Containers:** 5 Thoth services + 4 Letta services (9 total)
+- **Thoth Services:** thoth-api, thoth-mcp, thoth-discovery, thoth-monitor, thoth-dashboard
+- **Letta Services:** letta-server, letta-postgres, letta-redis, letta-nginx
+- **Resource Usage:** ~4GB RAM
+- **Startup Time:** ~60 seconds (Letta auto-starts if needed)
+- **Management:** Independent service control and scaling
 
-### Microservices Mode
-**Best for:** Debugging, development, service isolation
+### Architecture Benefits
 
-- **Containers:** 6-7 (separate for each service)
-- **Resource Usage:** ~4.5-5GB RAM
-- **Startup Time:** ~60 seconds
-- **Management:** Independent service control
-- **Services:** Each service in its own container
-
-## Deployment Modes
-
-### Architecture Comparison
-
-| Feature | Local Mode | Microservices Mode |
-|---------|-----------|-------------------|
-| **Total Containers** | 3 | 6-7 |
-| **Thoth Services** | All-in-one | Separate containers |
-| **Memory Usage** | ~3.5GB | ~4.5-5GB |
-| **Startup Time** | ~30s | ~60s |
-| **Service Restart** | Restart all | Restart individual |
-| **Debugging** | View supervisor logs | View per-service logs |
-| **Resource Efficiency** | Excellent | Good |
-| **Scalability** | Limited | Excellent |
-| **Simplicity** | Excellent | Good |
-
-### When to Use Each Mode
-
-**Use Local Mode when:**
-- Running on a personal laptop
-- Limited resources (< 8GB RAM)
-- Simple deployment preferred
-- Don't need to debug individual services
-- Small self-hosted setup
-
-**Use Microservices Mode when:**
-- Debugging specific service issues
-- Need to scale individual services
-- Want independent service control
-- Have resources to spare (8GB+ RAM)
-- Production deployment with multiple replicas
+- **Service Isolation**: Each service runs independently
+- **Easy Debugging**: View per-service logs
+- **Scalability**: Scale individual services as needed
+- **Hot Reload**: Development mode supports source code mounting
 
 ## Prerequisites
 
@@ -107,33 +69,32 @@ export OBSIDIAN_VAULT_PATH="/path/to/your/vault"
 # OR create .env.vault file:
 echo "OBSIDIAN_VAULT_PATH=/path/to/your/vault" > .env.vault
 
-# 2. Start Thoth (local mode is default)
+# 2. Start Thoth services
 make dev
 
 # 3. Check health
 make health
 
 # 4. View logs
-docker logs -f thoth-dev-all-in-one
+docker logs -f thoth-api
 
 # 5. Stop when done
 make dev-stop
 ```
 
 **Services Available:**
-- API Server: http://localhost:8080
+- API Server: http://localhost:8000
 - MCP Server (HTTP): http://localhost:8082
-- MCP Server (SSE): http://localhost:8081
 - Letta Memory: http://localhost:8283
 
-### Microservices Mode
+### Production Deployment
 
 ```bash
 # 1. Set your vault path (same as above)
 export OBSIDIAN_VAULT_PATH="/path/to/your/vault"
 
-# 2. Start in microservices mode
-make microservices
+# 2. Start in production mode
+make prod
 
 # 3. Check health
 make health

@@ -48,20 +48,17 @@ curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/main/i
 
 ### Required
 
-- **Python 3.12** (3.13 not yet supported)
-  - Check: `python3 --version`
-  - Install: [python.org](https://python.org)
-
-- **Docker & Docker Compose**
+- **Docker** installed and running
   - Check: `docker --version && docker compose version`
   - Install: [docs.docker.com](https://docs.docker.com/get-docker/)
+  - **Important**: The Docker daemon must be running (open Docker Desktop)
 
-- **Obsidian** (optional, for plugin integration)
+- **Obsidian** (for plugin integration)
   - Download: [obsidian.md](https://obsidian.md/)
 
 ### Recommended
 
-- **UV Package Manager**: Fast Python package installer
+- **UV Package Manager**: Fast Python package installer (for development)
   ```bash
   curl -LsSf https://astral.sh/uv/install.sh | sh
   ```
@@ -77,7 +74,7 @@ curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/main/i
 
 ## Installation
 
-### Method 1: Automated Install (Recommended)
+### Automated Install (Recommended)
 
 The install script handles everything:
 
@@ -100,28 +97,14 @@ bash install.sh --nightly
 bash install.sh --list
 ```
 
-### Method 2: Manual Install
+**What happens:**
+1. Verifies Docker is installed and running
+2. Clones repository and builds setup container
+3. Runs interactive setup wizard
+4. Installs `thoth` CLI command to PATH
+5. Optionally starts services immediately
 
-For developers or custom setups:
-
-```bash
-# Clone repository
-git clone https://github.com/acertainKnight/project-thoth.git
-cd project-thoth
-
-# Install dependencies
-uv sync  # or: pip install -e ".[dev]"
-
-# Install Playwright browsers (for discovery)
-source .venv/bin/activate
-python -m playwright install chromium
-
-# Set vault path
-export OBSIDIAN_VAULT_PATH="/path/to/your/vault"
-
-# Run setup wizard
-python -m thoth setup
-```
+**Time**: ~5 minutes (first run includes Docker image builds)
 
 ---
 
@@ -135,18 +118,12 @@ The interactive setup wizard guides you through configuration.
 - Introduction and prerequisites check
 - Navigation instructions
 
-**2. Dependency Check**
-- Verifies Docker installation
-- Checks PostgreSQL (optional)
-- Detects Letta service status
-- Offers to install missing dependencies
-
-**3. Vault Selection**
+**2. Vault Selection**
 - Select your Obsidian vault directory
 - Validates vault path
 - Creates `_thoth/` directory if needed
 
-**4. Letta Mode Selection**
+**3. Letta Mode Selection**
 
 Choose how to run agent memory:
 
@@ -171,7 +148,7 @@ Enter keys for LLM providers:
 - **Cohere** (optional — dedicated reranking API): [dashboard.cohere.com](https://dashboard.cohere.com/api-keys)
 - **Semantic Scholar** (optional): [semanticscholar.org/product/api](https://www.semanticscholar.org/product/api)
 
-**6. Model Selection**
+**4. Model Selection**
 
 Choose default models:
 - **Analysis**: For research analysis (default: Claude 3.5 Sonnet via OpenRouter)
@@ -204,7 +181,7 @@ Review all settings before installation:
 - Models
 - Optional features
 
-**10. Installation**
+**6. Installation**
 
 Wizard performs installation:
 - Creates `settings.json`
@@ -213,7 +190,7 @@ Wizard performs installation:
 - Initializes database
 - Deploys Obsidian plugin
 
-**11. Completion**
+**7. Completion**
 
 - Success summary
 - Next steps

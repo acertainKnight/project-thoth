@@ -53,6 +53,11 @@ It's the tool I needed but couldn't find—so I built it.
 
 ## Quick Start
 
+### Prerequisites
+
+- **Docker** installed and running ([Get Docker](https://docs.docker.com/get-docker/))
+- **Obsidian** installed ([Download Obsidian](https://obsidian.md/download))
+
 ### One-Command Install
 
 ```bash
@@ -64,7 +69,7 @@ wsl --install  # if needed
 curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/main/install.sh | bash
 ```
 
-The installer checks for Docker, runs a setup wizard, and puts the `thoth` command on your PATH. Requires Docker to be installed already (see [Docker install docs](https://docs.docker.com/get-docker/) if you don't have it). Takes about 5 minutes once Docker is available.
+The installer verifies Docker is running, launches a setup wizard in a container, and installs the `thoth` CLI command. Takes about 5 minutes.
 
 ### Development Setup
 
@@ -80,9 +85,9 @@ make dev
 ### Day-to-Day Commands
 
 ```bash
-thoth start       # start services
+thoth start       # start services (~4GB RAM)
 thoth status      # check what's running
-thoth stop        # shut it down
+thoth stop        # shut it down (free RAM)
 thoth logs        # view logs
 thoth update      # pull latest version
 ```
