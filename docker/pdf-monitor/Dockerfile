@@ -7,7 +7,7 @@
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim as builder
 
 # Set environment variables for build optimization
-ENV UV_COMPILE_BYTECODE=1 \
+ENV UV_COMPILE_BYTECODE=0 \
     UV_LINK_MODE=copy \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1

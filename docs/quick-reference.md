@@ -358,7 +358,7 @@ export API_SEMANTIC_SCHOLAR_KEY="your_key"
 
 | Service | Port | Access |
 |---------|------|--------|
-| API | 8080 | http://localhost:8080 |
+| API | 8000 | http://localhost:8000 |
 | MCP | 8082 | http://localhost:8082 |
 | Letta | 8283 | http://localhost:8283 |
 | Letta SSE | 8284 | http://localhost:8284 |

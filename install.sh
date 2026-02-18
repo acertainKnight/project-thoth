@@ -135,20 +135,20 @@ case "$1" in
             sleep 3
         fi
 
-        # Start Thoth microservices
+        # Start Thoth microservices (dev compose — fast builds, source-mounted)
         echo "  Starting Thoth containers..."
-        docker compose up -d --build
+        docker compose -f docker-compose.dev.yml --profile microservices up -d --build
 
         echo "✅ Thoth is running!"
         [ "$LETTA_MODE" = "cloud" ] && echo "   Letta: Cloud" || echo "   Letta: localhost:8283"
-        echo "   API: http://localhost:8080"
+        echo "   API: http://localhost:8000"
         echo "   MCP: http://localhost:8082"
         ;;
 
     stop)
         echo "🛑 Stopping Thoth services..."
         cd "$PROJECT_ROOT"
-        docker compose stop
+        docker compose -f docker-compose.dev.yml --profile microservices stop
 
         echo "✅ Thoth stopped (RAM freed)"
         echo ""
@@ -165,7 +165,7 @@ case "$1" in
     status)
         cd "$PROJECT_ROOT"
         echo "📊 Thoth Service Status:"
-        docker compose ps
+        docker compose -f docker-compose.dev.yml --profile microservices ps
         echo ""
         echo "Letta Status:"
         docker compose -f docker-compose.letta.yml ps 2>/dev/null || echo "  (Not using self-hosted Letta)"
@@ -173,14 +173,14 @@ case "$1" in
 
     logs)
         cd "$PROJECT_ROOT"
-        docker compose logs -f "${@:2}"
+        docker compose -f docker-compose.dev.yml --profile microservices logs -f "${@:2}"
         ;;
 
     update)
         echo "⬆️  Updating Thoth..."
         cd "$PROJECT_ROOT"
         git pull origin main
-        docker compose pull
+        docker compose -f docker-compose.dev.yml --profile microservices build
         "$0" restart
         echo "✅ Updated to latest version"
         ;;
@@ -500,12 +500,12 @@ echo -e "${YELLOW}Installing via Docker...${NC}\n"
         docker compose -f docker-compose.letta.yml up -d 2>/dev/null || true
         sleep 3
 
-        # Start Thoth microservices
+        # Start Thoth microservices (dev compose — fast builds, source-mounted)
         echo -e "  Starting Thoth..."
-        docker compose up -d --build
+        docker compose -f docker-compose.dev.yml --profile microservices up -d --build
 
         echo -e "\n${GREEN}✓ Thoth is running!${NC}"
-        echo -e "  API: http://localhost:8080"
+        echo -e "  API: http://localhost:8000"
         echo -e "  MCP: http://localhost:8082"
         echo -e "  Letta: http://localhost:8283\n"
     else
