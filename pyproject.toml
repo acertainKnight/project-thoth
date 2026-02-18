@@ -274,6 +274,7 @@ extend-unsafe-fixes = ["UP034"]
 
 [tool.ruff.lint.per-file-ignores]
 # FastAPI Depends() in argument defaults is intentional
+"src/thoth/server/routers/auth.py" = ["B008"]
 "src/thoth/server/routers/browser_workflows.py" = ["B008"]
 "src/thoth/server/routers/mcp_servers.py" = ["B008"]
 "src/thoth/server/routers/operations.py" = ["B008"]

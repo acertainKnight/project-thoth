@@ -43,6 +43,7 @@ except ImportError:
 # Import routers - browser_workflows is optional (requires playwright)
 from thoth.server.routers import (  # noqa: I001
     agent,
+    auth,
     chat,
     config as config_router,
     files,
@@ -668,6 +669,7 @@ def create_app() -> FastAPI:
 
     # Include routers with proper prefixes
     app.include_router(health.router, tags=['health'])
+    app.include_router(auth.router, tags=['authentication'])
 
     # Include MCP health router if available (requires mcp extras)
     if MCP_HEALTH_AVAILABLE:
