@@ -422,7 +422,7 @@ class InstallationScreen(BaseScreen):
 
         import json
 
-        plugins_dir = self.vault_path / '.obsidian' / 'plugins' / 'thoth'
+        plugins_dir = self.vault_path / '.obsidian' / 'plugins' / 'thoth-obsidian'
         data_json_path = plugins_dir / 'data.json'
 
         # Read existing data.json if present
@@ -650,7 +650,7 @@ class InstallationScreen(BaseScreen):
         if not self.vault_path:
             raise ValueError('No vault path specified')
 
-        plugins_dir = self.vault_path / '.obsidian' / 'plugins' / 'thoth'
+        plugins_dir = self.vault_path / '.obsidian' / 'plugins' / 'thoth-obsidian'
         plugins_dir.mkdir(parents=True, exist_ok=True)
 
         # Copy plugin files from package to vault
@@ -659,36 +659,57 @@ class InstallationScreen(BaseScreen):
             import shutil
             from pathlib import Path
 
-            # Look for plugin source directory
-            plugin_src = Path(__file__).parent.parent.parent.parent / 'obsidian-plugin'
+            # Look for plugin source directory (built output lives in dist/)
+            plugin_src = (
+                Path(__file__).parent.parent.parent.parent
+                / 'obsidian-plugin'
+                / 'thoth-obsidian'
+            )
+            dist_dir = plugin_src / 'dist'
 
-            if plugin_src.exists():
-                logger.info(f'Copying plugin files from {plugin_src}')
-                # Copy all plugin files
-                for item in plugin_src.iterdir():
+            if dist_dir.exists():
+                logger.info(f'Copying built plugin files from {dist_dir}')
+                for item in dist_dir.iterdir():
                     if item.is_file() and item.suffix in {'.js', '.json', '.css'}:
                         dest = plugins_dir / item.name
                         shutil.copy2(item, dest)
                         logger.info(f'Copied {item.name}')
+                # manifest.json and styles.css live in the source root, not dist/
+                for name in ('manifest.json', 'styles.css'):
+                    src_file = plugin_src / name
+                    if src_file.exists() and not (plugins_dir / name).exists():
+                        shutil.copy2(src_file, plugins_dir / name)
+                        logger.info(f'Copied {name}')
+            elif plugin_src.exists():
+                # dist/ not built yet — copy manifest + styles so the dir is valid
+                logger.info(
+                    f'Plugin dist/ not found, copying source assets from {plugin_src}'
+                )
+                for name in ('manifest.json', 'styles.css'):
+                    src_file = plugin_src / name
+                    if src_file.exists():
+                        shutil.copy2(src_file, plugins_dir / name)
+                        logger.info(f'Copied {name}')
             else:
-                # Plugin source not found, create minimal manifest
-                logger.warning('Plugin source not found, creating minimal manifest')
+                # Plugin source not found, create minimal manifest so Obsidian
+                # recognises the directory. The completion screen will try to
+                # download or build the real plugin.
+                logger.warning('Plugin source not found, creating placeholder manifest')
                 manifest_path = plugins_dir / 'manifest.json'
                 if not manifest_path.exists():
                     manifest = {
-                        'id': 'thoth',
+                        'id': 'thoth-obsidian',
                         'name': 'Thoth Research Assistant',
                         'version': '1.0.0',
                         'minAppVersion': '0.15.0',
                         'description': 'AI-powered research assistant for academic papers',
-                        'author': 'Thoth Team',
-                        'authorUrl': 'https://github.com/yourusername/project-thoth',
+                        'author': 'Thoth Project',
+                        'authorUrl': 'https://github.com/acertainKnight/project-thoth',
                     }
 
                     with open(manifest_path, 'w', encoding='utf-8') as f:
                         json.dump(manifest, f, indent=2)
 
-                logger.info("Note: You'll need to install the Obsidian plugin manually")
                 logger.info(f'Plugin directory: {plugins_dir}')
 
         except Exception as e:
@@ -718,7 +739,7 @@ class InstallationScreen(BaseScreen):
             raise RuntimeError('Configuration file not created')
 
         # Check plugin directory
-        plugins_dir = self.vault_path / '.obsidian' / 'plugins' / 'thoth'
+        plugins_dir = self.vault_path / '.obsidian' / 'plugins' / 'thoth-obsidian'
         if not plugins_dir.exists():
             raise RuntimeError('Plugin directory not created')
 

@@ -237,11 +237,18 @@ class CompletionScreen(BaseScreen):
                     if result.returncode == 0:
                         import shutil
 
-                        for file in ['main.js', 'manifest.json', 'styles.css']:
+                        # esbuild outputs to dist/main.js; manifest and
+                        # styles live in the source root
+                        dist_dir = plugin_src / 'dist'
+                        for file in ['main.js']:
+                            src = dist_dir / file
+                            if src.exists():
+                                shutil.copy(src, plugin_dir / file)
+                        for file in ['manifest.json', 'styles.css']:
                             src = plugin_src / file
                             if src.exists():
                                 shutil.copy(src, plugin_dir / file)
-                        self.show_success('✓ Plugin built and installed')
+                        self.show_success('Plugin built and installed')
                         return True
                 except Exception as e:
                     logger.debug(f'Local build failed: {e}')
