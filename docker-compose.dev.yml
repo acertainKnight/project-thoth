@@ -23,12 +23,12 @@ services:
   # PostgreSQL Database for Letta Memory System - EXTERNAL (optional fallback)
   thoth-api:
     profiles: ["microservices"]
+    image: ghcr.io/acertainknight/project-thoth/dev-api:${THOTH_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
-      # target: development  # Not using multi-stage build
       args:
-        SERVICE_EXTRAS: "service-api"  # Includes api,discovery,pdf,langchain,vectordb,memory
+        SERVICE_EXTRAS: "service-api"
     container_name: thoth-dev-api
     user: "1000:1000"  # Run as host user for proper file permissions
     env_file:
@@ -93,6 +93,7 @@ services:
   # MCP Server (Model Context Protocol)
   thoth-mcp:
     profiles: ["microservices"]
+    image: ghcr.io/acertainknight/project-thoth/dev-mcp:${THOTH_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: docker/mcp/Dockerfile
@@ -159,12 +160,12 @@ services:
   # Discovery Service - Research Question Scheduler
   thoth-discovery:
     profiles: ["microservices"]
+    image: ghcr.io/acertainknight/project-thoth/dev-discovery:${THOTH_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
-      # target: development  # Not using multi-stage build
       args:
-        SERVICE_EXTRAS: "service-discovery"  # Includes api,discovery,pdf,langchain,vectordb
+        SERVICE_EXTRAS: "service-discovery"
     container_name: thoth-dev-discovery
     user: "1000:1000"  # Run as host user for proper file permissions
     command: ["python", "-m", "thoth", "research", "scheduler"]
@@ -217,12 +218,12 @@ services:
   # Monitor Service (optimized PDF processing)
   thoth-monitor:
     profiles: ["microservices"]
+    image: ghcr.io/acertainknight/project-thoth/dev-monitor:${THOTH_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
-      # target: development  # Not using multi-stage build
       args:
-        SERVICE_EXTRAS: "service-monitor"  # Includes api,pdf,discovery,mcp,langchain,vectordb,embeddings
+        SERVICE_EXTRAS: "service-monitor"
     container_name: thoth-dev-pdf-monitor
     user: "1000:1000"  # Run as host user for proper file permissions
     command: ["python", "-m", "thoth.run_monitor_standalone"]
@@ -274,6 +275,7 @@ services:
   # Dashboard Service
   thoth-dashboard:
     profiles: ["microservices"]
+    image: ghcr.io/acertainknight/project-thoth/dev-dashboard:${THOTH_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile

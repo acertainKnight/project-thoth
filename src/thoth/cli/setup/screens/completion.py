@@ -425,7 +425,24 @@ class CompletionScreen(BaseScreen):
 
                 time.sleep(3)
 
-            # Start Thoth microservices (dev compose — fast builds)
+            # Pull pre-built images then start
+            self.show_info('Pulling Thoth images...')
+            subprocess.run(  # nosec B603
+                [
+                    'docker',
+                    'compose',
+                    '-f',
+                    'docker-compose.dev.yml',
+                    '--profile',
+                    'microservices',
+                    'pull',
+                ],
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+
             self.show_info('Starting Thoth services...')
             result = subprocess.run(  # nosec B603
                 [
@@ -437,7 +454,6 @@ class CompletionScreen(BaseScreen):
                     'microservices',
                     'up',
                     '-d',
-                    '--build',
                 ],
                 cwd=project_root,
                 capture_output=True,

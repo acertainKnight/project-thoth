@@ -107,13 +107,14 @@ if [ -f "$THOTH_CONFIG" ]; then
 fi
 
 PROJECT_ROOT="${THOTH_PROJECT_ROOT:-$(pwd)}"
+export THOTH_IMAGE_TAG="${THOTH_IMAGE_TAG:-latest}"
 
 case "$1" in
     start)
         echo "🚀 Starting Thoth services..."
+        echo "   Image tag: ${THOTH_IMAGE_TAG}"
         cd "$PROJECT_ROOT"
 
-        # Verify .env exists with OBSIDIAN_VAULT_PATH
         if [ ! -f ".env" ] || ! grep -q 'OBSIDIAN_VAULT_PATH' .env 2>/dev/null; then
             echo "❌ .env file missing or OBSIDIAN_VAULT_PATH not set."
             echo "   Run the setup wizard first, or create .env from .env.example:"
@@ -121,23 +122,25 @@ case "$1" in
             exit 1
         fi
 
-        # Check Letta mode
         if [ -f "$HOME/.config/thoth/settings.json" ]; then
             LETTA_MODE=$(grep -o '"mode": *"[^"]*"' "$HOME/.config/thoth/settings.json" 2>/dev/null | cut -d'"' -f4 || echo "self-hosted")
         else
             LETTA_MODE="self-hosted"
         fi
 
-        # Start Letta if self-hosted
         if [ "$LETTA_MODE" = "self-hosted" ]; then
             echo "  Starting Letta (self-hosted mode)..."
             docker compose -f docker-compose.letta.yml up -d 2>/dev/null || true
             sleep 3
         fi
 
-        # Start Thoth microservices (dev compose — fast builds, source-mounted)
+        echo "  Pulling Thoth images (${THOTH_IMAGE_TAG})..."
+        docker compose -f docker-compose.dev.yml --profile microservices pull 2>/dev/null || {
+            echo "  (Pre-built images not available, building locally...)"
+        }
+
         echo "  Starting Thoth containers..."
-        docker compose -f docker-compose.dev.yml --profile microservices up -d --build
+        docker compose -f docker-compose.dev.yml --profile microservices up -d
 
         echo "✅ Thoth is running!"
         [ "$LETTA_MODE" = "cloud" ] && echo "   Letta: Cloud" || echo "   Letta: localhost:8283"
@@ -152,7 +155,7 @@ case "$1" in
 
         echo "✅ Thoth stopped (RAM freed)"
         echo ""
-        echo "💡 Tip: Letta containers still running (if self-hosted)"
+        echo "   Tip: Letta containers still running (if self-hosted)"
         echo "   To stop Letta: docker compose -f docker-compose.letta.yml stop"
         ;;
 
@@ -164,7 +167,7 @@ case "$1" in
 
     status)
         cd "$PROJECT_ROOT"
-        echo "📊 Thoth Service Status:"
+        echo "📊 Thoth Service Status (image tag: ${THOTH_IMAGE_TAG}):"
         docker compose -f docker-compose.dev.yml --profile microservices ps
         echo ""
         echo "Letta Status:"
@@ -177,16 +180,77 @@ case "$1" in
         ;;
 
     update)
-        echo "⬆️  Updating Thoth..."
         cd "$PROJECT_ROOT"
-        git pull origin main
-        docker compose -f docker-compose.dev.yml --profile microservices build
+        CHANNEL="stable"
+        NEW_TAG=""
+        shift
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --nightly)  CHANNEL="nightly"; NEW_TAG="nightly"; shift ;;
+                --alpha)    CHANNEL="alpha"; NEW_TAG="alpha"; shift ;;
+                --version)  CHANNEL="specific"; NEW_TAG="${2#v}"; shift 2 ;;
+                --stable)   CHANNEL="stable"; NEW_TAG="latest"; shift ;;
+                *)          shift ;;
+            esac
+        done
+
+        if [ -z "$NEW_TAG" ]; then
+            NEW_TAG="latest"
+        fi
+
+        echo "⬆️  Updating Thoth (${CHANNEL}: ${NEW_TAG})..."
+
+        case "$CHANNEL" in
+            nightly)
+                git fetch origin main
+                git checkout main 2>/dev/null || true
+                git pull origin main
+                ;;
+            specific)
+                git fetch --tags
+                local_tag="v${NEW_TAG}"
+                git checkout "$local_tag" 2>/dev/null || {
+                    echo "❌ Version ${local_tag} not found"; exit 1
+                }
+                ;;
+            alpha)
+                git fetch --tags
+                ALPHA_TAG=$(git tag -l '*alpha*' --sort=-v:refname | head -1)
+                if [ -n "$ALPHA_TAG" ]; then
+                    git checkout "$ALPHA_TAG"
+                    NEW_TAG="${ALPHA_TAG#v}"
+                else
+                    echo "❌ No alpha release found"; exit 1
+                fi
+                ;;
+            *)
+                git pull origin main
+                ;;
+        esac
+
+        export THOTH_IMAGE_TAG="$NEW_TAG"
+        sed -i.bak "s/^THOTH_IMAGE_TAG=.*/THOTH_IMAGE_TAG=\"${NEW_TAG}\"/" "$HOME/.config/thoth/cli.conf" 2>/dev/null \
+            || echo "THOTH_IMAGE_TAG=\"${NEW_TAG}\"" >> "$HOME/.config/thoth/cli.conf"
+        rm -f "$HOME/.config/thoth/cli.conf.bak"
+
+        echo "  Pulling images (${NEW_TAG})..."
+        docker compose -f docker-compose.dev.yml --profile microservices pull 2>/dev/null || true
         "$0" restart
-        echo "✅ Updated to latest version"
+        echo "✅ Updated to ${CHANNEL} (${NEW_TAG})"
+        ;;
+
+    version)
+        echo "Thoth version info:"
+        echo "  Image tag: ${THOTH_IMAGE_TAG}"
+        cd "$PROJECT_ROOT"
+        if git describe --tags --exact-match HEAD 2>/dev/null; then
+            echo "  Git tag:   $(git describe --tags --exact-match HEAD)"
+        else
+            echo "  Git ref:   $(git rev-parse --short HEAD) ($(git rev-parse --abbrev-ref HEAD))"
+        fi
         ;;
 
     *)
-        # Forward to Python CLI if it exists, otherwise show help
         if [ -f "$PROJECT_ROOT/src/thoth/__main__.py" ]; then
             cd "$PROJECT_ROOT"
             python3 -m thoth "$@"
@@ -196,12 +260,20 @@ case "$1" in
             echo "Usage: thoth <command> [options]"
             echo ""
             echo "Commands:"
-            echo "  start     Start Thoth services"
-            echo "  stop      Stop Thoth services"
-            echo "  restart   Restart all services"
-            echo "  status    Show service status"
-            echo "  logs      View service logs"
-            echo "  update    Update to latest version"
+            echo "  start      Start Thoth services"
+            echo "  stop       Stop Thoth services"
+            echo "  restart    Restart all services"
+            echo "  status     Show service status"
+            echo "  logs       View service logs"
+            echo "  update     Update to latest stable version"
+            echo "  version    Show installed version info"
+            echo ""
+            echo "Update options:"
+            echo "  thoth update              Update to latest stable"
+            echo "  thoth update --nightly    Switch to nightly builds"
+            echo "  thoth update --alpha      Switch to latest alpha"
+            echo "  thoth update --version X  Switch to specific version"
+            echo "  thoth update --stable     Switch back to stable"
             echo ""
             echo "Run 'thoth setup' to configure Thoth"
         fi
@@ -211,9 +283,12 @@ EOFCLI
 
     chmod +x "$INSTALL_DIR/thoth"
 
-    # Save project root
+    # Save project root and image tag
     mkdir -p "$HOME/.config/thoth"
-    echo "THOTH_PROJECT_ROOT=\"$project_root\"" > "$HOME/.config/thoth/cli.conf"
+    cat > "$HOME/.config/thoth/cli.conf" << EOFCONF
+THOTH_PROJECT_ROOT="$project_root"
+THOTH_IMAGE_TAG="${THOTH_IMAGE_TAG:-latest}"
+EOFCONF
 
     echo -e "${GREEN}✓ Installed 'thoth' command to $INSTALL_DIR${NC}"
 
@@ -324,27 +399,34 @@ resolve_version() {
 
 resolve_version
 
-# Determine Docker image tag based on channel
+# Determine Docker image tag for the setup container
 get_docker_image_tag() {
     case "$INSTALL_CHANNEL" in
-        stable)
-            echo "setup"
-            ;;
-        alpha)
-            echo "setup"
-            ;;
-        nightly)
-            echo "setup-nightly"
-            ;;
+        nightly)  echo "setup-nightly" ;;
+        *)        echo "setup" ;;
+    esac
+}
+
+# Determine image tag for the dev microservice images
+get_dev_image_tag() {
+    case "$INSTALL_CHANNEL" in
+        nightly)   echo "nightly" ;;
+        alpha)     echo "alpha" ;;
         specific)
-            # For specific versions, try version-specific tag, fall back to setup
-            echo "setup"
+            local tag="${RESOLVED_TAG#v}"
+            echo "$tag"
             ;;
+        *)         echo "latest" ;;
     esac
 }
 
 DOCKER_IMAGE_TAG=$(get_docker_image_tag)
+THOTH_IMAGE_TAG=$(get_dev_image_tag)
+export THOTH_IMAGE_TAG
 
+echo -e "${CYAN}Channel: ${INSTALL_CHANNEL}${NC}"
+[ -n "$RESOLVED_TAG" ] && echo -e "${CYAN}Version: ${RESOLVED_TAG}${NC}"
+echo -e "${CYAN}Image tag: ${THOTH_IMAGE_TAG}${NC}"
 echo ""
 
 # ── Installation ────────────────────────────────────────────────────────────
@@ -408,9 +490,6 @@ echo -e "${YELLOW}Installing via Docker...${NC}\n"
         fi
         PROJECT_ROOT="$CLONE_DIR"
     fi
-
-    echo -e "${CYAN}Channel: ${INSTALL_CHANNEL}${NC}"
-    [ -n "$RESOLVED_TAG" ] && echo -e "${CYAN}Version: ${RESOLVED_TAG}${NC}"
 
     # Try to pull pre-built image, fall back to local build
     SETUP_IMAGE=""
@@ -494,15 +573,17 @@ echo -e "${YELLOW}Installing via Docker...${NC}\n"
     if [ "$START_NOW" = "y" ] || [ "$START_NOW" = "Y" ]; then
         echo -e "\n${BLUE}Starting services (this may take a few minutes on first run)...${NC}\n"
         cd "$PROJECT_ROOT"
+        export THOTH_IMAGE_TAG="${THOTH_IMAGE_TAG:-latest}"
 
-        # Start Letta infrastructure first
         echo -e "  Starting Letta services..."
         docker compose -f docker-compose.letta.yml up -d 2>/dev/null || true
         sleep 3
 
-        # Start Thoth microservices (dev compose — fast builds, source-mounted)
+        echo -e "  Pulling Thoth images (${THOTH_IMAGE_TAG})..."
+        docker compose -f docker-compose.dev.yml --profile microservices pull 2>/dev/null || true
+
         echo -e "  Starting Thoth..."
-        docker compose -f docker-compose.dev.yml --profile microservices up -d --build
+        docker compose -f docker-compose.dev.yml --profile microservices up -d
 
         echo -e "\n${GREEN}✓ Thoth is running!${NC}"
         echo -e "  API: http://localhost:8000"
