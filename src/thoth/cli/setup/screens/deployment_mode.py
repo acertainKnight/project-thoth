@@ -7,6 +7,7 @@ Allows users to choose between local (Docker on this machine) or remote
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -16,14 +17,19 @@ from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Button, Input, Label, RadioButton, RadioSet, Static
 
+from ..config_manager import ConfigManager
 from .base import BaseScreen
 
 
 class DeploymentModeScreen(BaseScreen):
     """Screen for selecting deployment mode: local or remote."""
 
-    def __init__(self) -> None:
-        """Initialize deployment mode selection screen."""
+    def __init__(self, vault_path: Path | None = None) -> None:
+        """Initialize deployment mode selection screen.
+
+        Args:
+            vault_path: Path to Obsidian vault for loading existing config.
+        """
         super().__init__(
             title='Select Deployment Mode',
             subtitle='Choose where Thoth will run',
@@ -31,35 +37,44 @@ class DeploymentModeScreen(BaseScreen):
         self.selected_mode: str = ''  # 'local' or 'remote'
         self.thoth_api_url: str = 'http://localhost:8000'
         self.detected_version: str | None = None
+        self.existing_config: dict[str, Any] = {}
+
+        if vault_path:
+            try:
+                cm = ConfigManager(vault_path)
+                self.existing_config = cm.load_existing() or {}
+            except Exception as e:
+                logger.debug(f'Could not load existing config: {e}')
 
     def compose_content(self) -> ComposeResult:
-        """
-        Compose deployment mode selection content.
+        """Compose deployment mode selection content.
 
         Returns:
             Content widgets
         """
+        # Determine defaults from existing config
+        existing_mode = self._get_existing_deployment_mode()
+        is_remote = existing_mode == 'remote'
+
         yield Static(
             "Choose whether you're setting up Thoth locally or "
             'connecting to an existing remote installation.',
             classes='help-text',
         )
 
-        # Mode selection with RadioSet
-        # Use Tab / arrow keys to switch between options
         with RadioSet(id='mode-selection'):
             yield RadioButton(
                 'Local (This Machine) - Recommended',
                 id='mode-local',
-                value=True,
+                value=not is_remote,
             )
             yield RadioButton(
                 'Remote (Another Server)',
                 id='mode-remote',
+                value=is_remote,
             )
 
-        # Local mode description
-        with Vertical(id='local-section'):
+        with Vertical(id='local-section', classes='hidden' if is_remote else ''):
             yield Static(
                 '  [green]✓[/green] Docker on this machine  '
                 '[green]✓[/green] Full control  '
@@ -67,8 +82,7 @@ class DeploymentModeScreen(BaseScreen):
                 '  [yellow]○[/yellow] Requires Docker (~3-5GB disk, ~1.5GB RAM)',
             )
 
-        # Remote mode section (hidden by default)
-        with Vertical(id='remote-section', classes='hidden'):
+        with Vertical(id='remote-section', classes='' if is_remote else 'hidden'):
             yield Static(
                 '  [green]✓[/green] No Docker needed locally  '
                 '[green]✓[/green] Lightweight  '
@@ -88,7 +102,7 @@ class DeploymentModeScreen(BaseScreen):
             yield Label('[cyan]Thoth Server URL:[/cyan]')
             yield Input(
                 placeholder='http://your-server:8000',
-                value='http://localhost:8000',
+                value=self._get_existing_api_url(),
                 id='thoth-api-url',
             )
 
@@ -101,7 +115,30 @@ class DeploymentModeScreen(BaseScreen):
 
     def on_mount(self) -> None:
         """Run when screen is mounted."""
-        pass  # Nothing to auto-detect yet
+
+    def _get_existing_deployment_mode(self) -> str:
+        """Infer deployment mode from existing settings.json.
+
+        Returns:
+            'local' or 'remote' based on existing API base URL.
+        """
+        servers = self.existing_config.get('servers', {})
+        api = servers.get('api', {})
+        base_url = api.get('baseUrl', 'http://localhost:8000')
+        parsed = urlparse(base_url)
+        if parsed.hostname and parsed.hostname not in ('localhost', '127.0.0.1'):
+            return 'remote'
+        return 'local'
+
+    def _get_existing_api_url(self) -> str:
+        """Get existing API URL from settings.json, or the default.
+
+        Returns:
+            API URL string.
+        """
+        servers = self.existing_config.get('servers', {})
+        api = servers.get('api', {})
+        return api.get('baseUrl', 'http://localhost:8000')
 
     def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
         """Handle mode selection changes."""
@@ -290,12 +327,17 @@ class DeploymentModeScreen(BaseScreen):
         from .letta_mode_selection import LettaModeSelectionScreen
 
         deployment_mode = 'local'
+        vault_path = None
         if hasattr(self.app, 'wizard_data'):
             deployment_mode = self.app.wizard_data.get('deployment_mode', 'local')
+            vault_path = self.app.wizard_data.get('vault_path')
 
         logger.info(
             f'Proceeding to Letta mode selection (deployment={deployment_mode})'
         )
         await self.app.push_screen(
-            LettaModeSelectionScreen(deployment_mode=deployment_mode)
+            LettaModeSelectionScreen(
+                deployment_mode=deployment_mode,
+                vault_path=vault_path,
+            )
         )

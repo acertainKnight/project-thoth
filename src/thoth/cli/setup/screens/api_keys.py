@@ -47,29 +47,26 @@ class APIKeysScreen(BaseScreen):
         """Initialize API keys screen.
 
         Args:
-            vault_path: Path to Obsidian vault for loading existing config
+            vault_path: Path to Obsidian vault for loading existing config.
         """
         super().__init__(
             title='Configure API Keys',
             subtitle='Enter your LLM provider API keys',
         )
         self.vault_path = vault_path
-        self.config_manager = (
-            ConfigManager(vault_path) if vault_path else ConfigManager()
-        )
         self.existing_config: dict[str, Any] = {}
         self._prefetch_task: asyncio.Task[None] | None = None
 
-    def on_mount(self) -> None:
-        """Run when screen is mounted."""
-        # Load existing config
-        try:
-            existing = self.config_manager.load_existing()
-            if existing:
-                self.existing_config = existing
-                logger.info('Loaded existing API key configuration')
-        except Exception as e:
-            logger.error(f'Error loading configuration: {e}')
+        # Load existing config in __init__ so values are available in compose_content
+        if vault_path:
+            try:
+                cm = ConfigManager(vault_path)
+                existing = cm.load_existing()
+                if existing:
+                    self.existing_config = existing
+                    logger.info('Loaded existing API key configuration')
+            except Exception as e:
+                logger.error(f'Error loading configuration: {e}')
 
     def compose_content(self) -> ComposeResult:
         """Compose API keys content.
@@ -195,22 +192,29 @@ class APIKeysScreen(BaseScreen):
                 value=self._get_existing_api_key('cohere'),
             )
 
+    # Mapping from wizard provider IDs to settings.json apiKeys field names
+    _KEY_FIELD_MAP: ClassVar[dict[str, str]] = {
+        'openai': 'openaiKey',
+        'openrouter': 'openrouterKey',
+        'anthropic': 'anthropicKey',
+        'google': 'googleApiKey',
+        'mistral': 'mistralKey',
+        'cohere': 'cohereKey',
+    }
+
     def _is_provider_enabled(self, provider_id: str) -> bool:
-        """Check if provider is enabled in existing config.
+        """Check if provider has a key stored in existing config.
 
         Args:
             provider_id: Provider identifier
 
         Returns:
-            True if provider is enabled
+            True if provider has a non-empty API key
         """
-        llm_settings = self.existing_config.get('llm_settings', {})
-        providers = llm_settings.get('providers', {})
-        provider_config = providers.get(provider_id, {})
-        return bool(provider_config.get('enabled', False))
+        return bool(self._get_existing_api_key(provider_id))
 
     def _get_existing_api_key(self, provider_id: str) -> str:
-        """Get existing API key for provider.
+        """Get existing API key for provider from settings.json apiKeys section.
 
         Args:
             provider_id: Provider identifier
@@ -218,10 +222,9 @@ class APIKeysScreen(BaseScreen):
         Returns:
             API key or empty string
         """
-        llm_settings = self.existing_config.get('llm_settings', {})
-        providers = llm_settings.get('providers', {})
-        provider_config = providers.get(provider_id, {})
-        return str(provider_config.get('api_key') or '')
+        api_keys = self.existing_config.get('apiKeys', {})
+        field_name = self._KEY_FIELD_MAP.get(provider_id, '')
+        return str(api_keys.get(field_name) or '')
 
     async def validate_and_proceed(self) -> dict[str, Any] | None:
         """Validate API keys.

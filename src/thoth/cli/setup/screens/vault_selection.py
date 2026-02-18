@@ -381,5 +381,9 @@ class VaultSelectionScreen(BaseScreen):
         """Navigate to deployment mode selection screen."""
         from .deployment_mode import DeploymentModeScreen
 
+        vault_path = None
+        if hasattr(self.app, 'wizard_data'):
+            vault_path = self.app.wizard_data.get('vault_path')
+
         logger.info('Proceeding to deployment mode selection')
-        await self.app.push_screen(DeploymentModeScreen())
+        await self.app.push_screen(DeploymentModeScreen(vault_path=vault_path))

@@ -255,7 +255,9 @@ class InstallationScreen(BaseScreen):
         logger.info(f'Copied prompts to {prompts_dest}')
 
     async def save_configuration(self) -> None:
-        """Save configuration to settings.json, .env, and .env.letta."""
+        """
+        Save configuration to settings.json, .env (vault path only), and .env.letta.
+        """
         if not self.vault_path:
             raise ValueError('No vault path specified')
 
@@ -458,48 +460,36 @@ class InstallationScreen(BaseScreen):
         api_keys: dict[str, str],
         letta_mode: str,
     ) -> None:
-        """Write API keys to .env (Thoth) and .env.letta (Letta server).
+        """Write OBSIDIAN_VAULT_PATH to .env and API keys to .env.letta.
 
-        Reads existing files, updates only the key lines, preserves everything else.
+        API keys are stored in settings.json (the canonical source for Thoth
+        services). Only OBSIDIAN_VAULT_PATH goes in .env because Docker
+        Compose needs it for volume mounts. The Letta container reads its
+        own env vars from .env.letta since it doesn't use settings.json.
 
         Args:
             api_keys: Dict of provider -> API key
             letta_mode: 'self-hosted', 'cloud', or 'remote'
         """
-        # Extract keys
-        openai_key = api_keys.get('openai', '')
-        anthropic_key = api_keys.get('anthropic', '')
-        google_key = api_keys.get('google', '')
-        mistral_key = api_keys.get('mistral', '')
-        openrouter_key = api_keys.get('openrouter', '')
-
-        # Find project root (where .env files live)
         project_root = self._find_project_root()
         if not project_root:
             logger.warning('Could not find project root, skipping .env file writes')
             return
 
-        # --- Update .env (Thoth services) ---
-        # OBSIDIAN_VAULT_PATH is required by docker-compose.yml volume mounts.
-        # Use the host path so it resolves correctly on the host machine.
+        # --- .env: only OBSIDIAN_VAULT_PATH (for Docker volume mounts) ---
         wizard_data = self.app.wizard_data if hasattr(self.app, 'wizard_data') else {}
         vault_path_host = str(wizard_data.get('vault_path_host', self.vault_path or ''))
 
         env_path = project_root / '.env'
-        thoth_env_keys = {
-            'OBSIDIAN_VAULT_PATH': vault_path_host,
-            'OPENAI_API_KEY': openai_key,
-            'API_OPENAI_KEY': openai_key,
-            'ANTHROPIC_API_KEY': anthropic_key,
-            'API_MISTRAL_KEY': mistral_key,
-            'API_OPENROUTER_KEY': openrouter_key,
-            'GOOGLE_API_KEY': google_key,
-        }
-        self._update_env_file(env_path, thoth_env_keys)
-        logger.info(f'Updated .env at {env_path}')
+        self._update_env_file(env_path, {'OBSIDIAN_VAULT_PATH': vault_path_host})
+        logger.info(f'Updated OBSIDIAN_VAULT_PATH in {env_path}')
 
-        # --- Update .env.letta (Letta server) - only for self-hosted ---
+        # --- .env.letta: Letta container needs API keys as env vars ---
         if letta_mode == 'self-hosted':
+            openai_key = api_keys.get('openai', '')
+            anthropic_key = api_keys.get('anthropic', '')
+            google_key = api_keys.get('google', '')
+
             letta_env_path = project_root / '.env.letta'
             letta_env_keys = {
                 'OPENAI_API_KEY': openai_key,

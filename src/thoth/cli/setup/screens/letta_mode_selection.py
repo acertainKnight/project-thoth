@@ -9,6 +9,7 @@ available models from its /v1/models/ endpoint.
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
@@ -16,6 +17,7 @@ from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Input, Label, RadioButton, RadioSet, Static
 
+from ..config_manager import ConfigManager
 from ..detectors.letta import LettaDetector
 from .base import BaseScreen
 
@@ -23,12 +25,16 @@ from .base import BaseScreen
 class LettaModeSelectionScreen(BaseScreen):
     """Screen for selecting Letta mode: self-hosted or cloud."""
 
-    def __init__(self, deployment_mode: str = 'local') -> None:
-        """
-        Initialize Letta mode selection screen.
+    def __init__(
+        self,
+        deployment_mode: str = 'local',
+        vault_path: Path | None = None,
+    ) -> None:
+        """Initialize Letta mode selection screen.
 
         Args:
-            deployment_mode: 'local' or 'remote', passed from DeploymentModeScreen
+            deployment_mode: 'local' or 'remote', passed from DeploymentModeScreen.
+            vault_path: Path to Obsidian vault for loading existing config.
         """
         super().__init__(
             title='Select Letta Mode',
@@ -39,14 +45,26 @@ class LettaModeSelectionScreen(BaseScreen):
         self.letta_url: str = ''
         self.letta_live_models: list[str] = []
         self.deployment_mode: str = deployment_mode
+        self.existing_config: dict[str, Any] = {}
+
+        if vault_path:
+            try:
+                cm = ConfigManager(vault_path)
+                self.existing_config = cm.load_existing() or {}
+            except Exception as e:
+                logger.debug(f'Could not load existing config: {e}')
 
     def compose_content(self) -> ComposeResult:
-        """
-        Compose Letta mode selection content.
+        """Compose Letta mode selection content.
 
         Returns:
             Content widgets
         """
+        # Load defaults from existing config
+        existing_mode = self._get_existing_letta_mode()
+        existing_url = self._get_existing_letta_url()
+        existing_cloud_key = self._get_existing_letta_cloud_key()
+
         if self.deployment_mode == 'local':
             yield Static(
                 'Letta provides persistent memory for AI agents.',
@@ -60,34 +78,38 @@ class LettaModeSelectionScreen(BaseScreen):
                 classes='help-text',
             )
 
-        # Mode selection with RadioSet - different options based on deployment mode
         with RadioSet(id='mode-selection'):
             if self.deployment_mode == 'local':
                 yield RadioButton(
                     'Self-Hosted (via Docker) - Recommended',
                     id='mode-self-hosted',
-                    value=True,
+                    value=(existing_mode != 'cloud'),
                 )
                 yield RadioButton(
                     'Letta Cloud (API-based)',
                     id='mode-cloud',
+                    value=(existing_mode == 'cloud'),
                 )
             else:
-                # Remote deployment - show remote Letta option
                 yield RadioButton(
                     'Remote Server (Connect to existing Letta)',
                     id='mode-remote',
-                    value=True,
+                    value=(existing_mode != 'cloud'),
                 )
                 yield RadioButton(
                     'Letta Cloud (API-based)',
                     id='mode-cloud',
+                    value=(existing_mode == 'cloud'),
                 )
 
-        # Self-hosted section (shown by default for local deployment)
+        # Determine initial section visibility
+        show_cloud = existing_mode == 'cloud'
+        show_self_hosted = self.deployment_mode == 'local' and not show_cloud
+        show_remote = self.deployment_mode == 'remote' and not show_cloud
+
         with Vertical(
             id='self-hosted-section',
-            classes='hidden' if self.deployment_mode == 'remote' else '',
+            classes='' if show_self_hosted else 'hidden',
         ):
             yield Static(
                 '  [green]✓[/green] Full control  [green]✓[/green] Offline  '
@@ -97,14 +119,13 @@ class LettaModeSelectionScreen(BaseScreen):
             yield Label('[cyan]Letta Server URL:[/cyan]')
             yield Input(
                 placeholder='http://localhost:8283',
-                value='http://localhost:8283',
+                value=existing_url,
                 id='self-hosted-url',
             )
 
-        # Remote section (shown by default for remote deployment)
         with Vertical(
             id='remote-section',
-            classes='' if self.deployment_mode == 'remote' else 'hidden',
+            classes='' if show_remote else 'hidden',
         ):
             yield Static(
                 '  [green]✓[/green] No local Docker  [green]✓[/green] Centralized  '
@@ -114,12 +135,14 @@ class LettaModeSelectionScreen(BaseScreen):
             yield Label('[cyan]Letta Server URL:[/cyan]')
             yield Input(
                 placeholder='http://your-server:8283',
-                value='http://localhost:8283',
+                value=existing_url,
                 id='remote-url',
             )
 
-        # Cloud section (hidden by default)
-        with Vertical(id='cloud-section', classes='hidden'):
+        with Vertical(
+            id='cloud-section',
+            classes='' if show_cloud else 'hidden',
+        ):
             yield Static(
                 '  [green]✓[/green] Instant setup  [green]✓[/green] No infra  '
                 '[yellow]○[/yellow] Needs internet',
@@ -133,6 +156,7 @@ class LettaModeSelectionScreen(BaseScreen):
                 placeholder='Enter your Letta Cloud API key',
                 password=True,
                 id='cloud-api-key',
+                value=existing_cloud_key,
             )
 
         yield Static(
@@ -141,12 +165,11 @@ class LettaModeSelectionScreen(BaseScreen):
         )
 
     def on_mount(self) -> None:
-        """Run when screen is mounted. Auto-detect running Letta instance."""
+        """Auto-detect running Letta instance."""
         # For remote deployment, pre-fill remote Letta URL from Thoth API URL
         if self.deployment_mode == 'remote' and hasattr(self.app, 'wizard_data'):
             thoth_api_url = self.app.wizard_data.get('thoth_api_url', '')
             if thoth_api_url:
-                # Derive Letta URL: same host, port 8283
                 from urllib.parse import urlparse
 
                 parsed = urlparse(thoth_api_url)
@@ -158,6 +181,33 @@ class LettaModeSelectionScreen(BaseScreen):
                     pass
 
         self._detect_task = asyncio.create_task(self._detect_letta())
+
+    def _get_existing_letta_mode(self) -> str:
+        """Get Letta mode from existing settings.json.
+
+        Returns:
+            'self-hosted', 'cloud', or 'remote'.
+        """
+        letta = self.existing_config.get('letta', {})
+        return letta.get('mode', 'self-hosted')
+
+    def _get_existing_letta_url(self) -> str:
+        """Get Letta URL from existing settings.json.
+
+        Returns:
+            Letta server URL string.
+        """
+        letta = self.existing_config.get('letta', {})
+        return letta.get('url', 'http://localhost:8283')
+
+    def _get_existing_letta_cloud_key(self) -> str:
+        """Get Letta cloud API key from existing settings.json.
+
+        Returns:
+            Letta cloud API key or empty string.
+        """
+        api_keys = self.existing_config.get('apiKeys', {})
+        return str(api_keys.get('lettaApiKey') or '')
 
     async def _detect_letta(self) -> None:
         """Auto-detect a running Letta instance and update the UI."""
