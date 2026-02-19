@@ -118,6 +118,10 @@ def main() -> None:
     service.configure_subparser(subparsers)
     system.configure_subparser(subparsers)
 
+    from . import users
+
+    users.configure_subparser(subparsers)
+
     # Re-parse now that all subparsers are registered
     args = parser.parse_args()
 
