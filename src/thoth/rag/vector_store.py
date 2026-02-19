@@ -152,9 +152,23 @@ class VectorStoreManager:
                 raise
 
     async def _add_documents_async(
-        self, documents: list[Document], paper_id: UUID | None = None, **kwargs: Any
+        self,
+        documents: list[Document],
+        paper_id: UUID | None = None,
+        user_id: str | None = None,
+        **kwargs: Any,
     ) -> list[str]:
-        """Add documents asynchronously."""
+        """Add documents asynchronously.
+
+        Args:
+            documents: List of documents to add
+            paper_id: Paper UUID
+            user_id: User ID for multi-tenant isolation
+            **kwargs: Additional metadata
+
+        Returns:
+            List of document chunk IDs
+        """
         import json
 
         if not paper_id:
@@ -192,27 +206,53 @@ class VectorStoreManager:
                 # pgvector expects format like '[0.1, 0.2, 0.3]'
                 embedding_str = '[' + ','.join(str(x) for x in embedding) + ']'
 
-                result = await conn.fetchrow(
-                    """
-                    INSERT INTO document_chunks
-                    (paper_id, content, chunk_index, chunk_type, metadata, embedding, token_count)
-                    VALUES ($1, $2, $3, $4, $5::jsonb, $6::vector, $7)
-                    ON CONFLICT (paper_id, chunk_index)
-                    DO UPDATE SET
-                        content = EXCLUDED.content,
-                        embedding = EXCLUDED.embedding,
-                        metadata = EXCLUDED.metadata,
-                        updated_at = CURRENT_TIMESTAMP
-                    RETURNING id
-                """,
-                    paper_id,
-                    doc.page_content,
-                    idx,
-                    clean_metadata.get('chunk_type', 'content'),
-                    clean_metadata,
-                    embedding_str,
-                    len(doc.page_content.split()),  # Rough token count
-                )
+                # Include user_id if provided
+                if user_id:
+                    result = await conn.fetchrow(
+                        """
+                        INSERT INTO document_chunks
+                        (paper_id, content, chunk_index, chunk_type, metadata, embedding, token_count, user_id)
+                        VALUES ($1, $2, $3, $4, $5::jsonb, $6::vector, $7, $8)
+                        ON CONFLICT (paper_id, chunk_index)
+                        DO UPDATE SET
+                            content = EXCLUDED.content,
+                            embedding = EXCLUDED.embedding,
+                            metadata = EXCLUDED.metadata,
+                            user_id = EXCLUDED.user_id,
+                            updated_at = CURRENT_TIMESTAMP
+                        RETURNING id
+                    """,
+                        paper_id,
+                        doc.page_content,
+                        idx,
+                        clean_metadata.get('chunk_type', 'content'),
+                        clean_metadata,
+                        embedding_str,
+                        len(doc.page_content.split()),  # Rough token count
+                        user_id,
+                    )
+                else:
+                    result = await conn.fetchrow(
+                        """
+                        INSERT INTO document_chunks
+                        (paper_id, content, chunk_index, chunk_type, metadata, embedding, token_count)
+                        VALUES ($1, $2, $3, $4, $5::jsonb, $6::vector, $7)
+                        ON CONFLICT (paper_id, chunk_index)
+                        DO UPDATE SET
+                            content = EXCLUDED.content,
+                            embedding = EXCLUDED.embedding,
+                            metadata = EXCLUDED.metadata,
+                            updated_at = CURRENT_TIMESTAMP
+                        RETURNING id
+                    """,
+                        paper_id,
+                        doc.page_content,
+                        idx,
+                        clean_metadata.get('chunk_type', 'content'),
+                        clean_metadata,
+                        embedding_str,
+                        len(doc.page_content.split()),  # Rough token count
+                    )
 
                 ids.append(str(result['id']))
 
@@ -604,6 +644,7 @@ class VectorStoreManager:
         Build SQL WHERE clause from filter dictionary.
 
         Supports:
+        - user_id: filter by dc.user_id (multi-tenant isolation)
         - collection_id: filter by metadata->>'collection_id'
         - document_category: filter by metadata->>'document_category'
         - paper_id: filter by dc.paper_id
@@ -619,6 +660,11 @@ class VectorStoreManager:
         clauses = []
         params = []
         param_idx = start_param_idx
+
+        if 'user_id' in filter:
+            clauses.append(f'dc.user_id = ${param_idx}')
+            params.append(filter['user_id'])
+            param_idx += 1
 
         if 'paper_id' in filter:
             clauses.append(f'dc.paper_id = ${param_idx}::uuid')
