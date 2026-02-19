@@ -1257,7 +1257,18 @@ CREATE INDEX IF NOT EXISTS idx_workflow_search_config_user_id ON workflow_search
 ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
 CREATE INDEX IF NOT EXISTS idx_document_chunks_user_id ON document_chunks(user_id);
 
-CREATE INDEX IF NOT EXISTS idx_memory_user_id ON memory(user_id);
+-- Note: memory table is optional (created by RAG extras). Skip if not present.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'memory') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_indexes WHERE tablename = 'memory' AND indexname = 'idx_memory_user_id'
+    ) THEN
+      EXECUTE 'ALTER TABLE memory ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT ''default_user''';
+      EXECUTE 'CREATE INDEX IF NOT EXISTS idx_memory_user_id ON memory(user_id)';
+    END IF;
+  END IF;
+END $$;
 
 ALTER TABLE search_history ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
 CREATE INDEX IF NOT EXISTS idx_search_history_user_id ON search_history(user_id);
