@@ -25,7 +25,11 @@ class BaseRepository(Generic[T]):
     - In-memory LRU cache with TTL
     - Error handling and logging
     - Feature flag support for A/B testing
+    - Multi-tenant user_id filtering with enforcement
     """
+
+    # Set TENANT_SCOPED = False in subclasses for global tables (e.g. available_sources)
+    TENANT_SCOPED: bool = True
 
     def __init__(
         self,
@@ -52,6 +56,41 @@ class BaseRepository(Generic[T]):
 
         if use_cache:
             self._cache = TTLCache(maxsize=cache_size, ttl=cache_ttl)
+
+    def _enforce_tenant_scoping(
+        self, user_id: str | None, operation: str
+    ) -> str | None:
+        """
+        Enforce tenant scoping in multi-user mode.
+
+        In multi-user mode with TENANT_SCOPED=True, warns if user_id is missing
+        and returns 'default_user' as a fallback (which will return empty results
+        for properly scoped data).
+
+        Args:
+            user_id: User ID or None
+            operation: Operation name for logging
+
+        Returns:
+            User ID (original or fallback 'default_user' in multi-user mode)
+        """
+        import os
+
+        if not self.TENANT_SCOPED:
+            # Global table, no enforcement
+            return user_id
+
+        multi_user = os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true'
+
+        if multi_user and user_id is None:
+            logger.warning(
+                f'{operation} on {self.table_name} called without user_id in multi-user mode. '
+                f'This may indicate a data leak. Returning empty results.'
+            )
+            # Return a sentinel value that won't match any real user's data
+            return 'default_user'
+
+        return user_id
 
     def _cache_key(self, *args, **kwargs) -> str:
         """Generate cache key from arguments."""
@@ -171,6 +210,9 @@ class BaseRepository(Generic[T]):
         Returns:
             Optional[Dict[str, Any]]: Record data or None
         """
+        # Enforce tenant scoping
+        user_id = self._enforce_tenant_scoping(user_id, 'get_by_id')
+
         cache_key = self._cache_key('id', record_id, user_id=user_id)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
@@ -303,6 +345,9 @@ class BaseRepository(Generic[T]):
         Returns:
             List[Dict[str, Any]]: List of records
         """
+        # Enforce tenant scoping
+        user_id = self._enforce_tenant_scoping(user_id, 'list_all')
+
         try:
             query = f'SELECT * FROM {self.table_name}'
             params = []
@@ -336,6 +381,9 @@ class BaseRepository(Generic[T]):
         Returns:
             int: Total number of records
         """
+        # Enforce tenant scoping
+        user_id = self._enforce_tenant_scoping(user_id, 'count')
+
         try:
             if user_id is not None:
                 query = f'SELECT COUNT(*) FROM {self.table_name} WHERE user_id = $1'
