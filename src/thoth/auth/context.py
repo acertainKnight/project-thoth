@@ -9,6 +9,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from thoth.config import Settings
 
 
 @dataclass
@@ -16,14 +20,15 @@ class UserContext:
     """
     User context for request-scoped operations.
 
-    Carries user identity and vault information through the request
-    lifecycle from middleware -> routes -> services -> repositories.
+    Carries user identity, vault information, and user-specific settings
+    through the request lifecycle from middleware -> routes -> services -> repositories.
 
     Args:
         user_id: Unique user identifier (UUID string)
         username: Human-readable username
         vault_path: Absolute path to this user's vault directory on server
         is_admin: Whether the user has admin privileges
+        settings: User-specific Settings object (multi-user mode only)
 
     Example:
         >>> ctx = UserContext(
@@ -31,6 +36,7 @@ class UserContext:
         ...     username='alice',
         ...     vault_path=Path('/vaults/alice'),
         ...     is_admin=False,
+        ...     settings=user_settings,
         ... )
     """
 
@@ -38,6 +44,7 @@ class UserContext:
     username: str
     vault_path: Path
     is_admin: bool = False
+    settings: Settings | None = None  # Per-user settings in multi-user mode
 
     def to_dict(self) -> dict[str, str | bool]:
         """
@@ -45,6 +52,9 @@ class UserContext:
 
         Returns:
             Dict with user_id, username, vault_path (as string), is_admin
+
+        Note:
+            settings is intentionally excluded from serialization
         """
         return {
             'user_id': self.user_id,

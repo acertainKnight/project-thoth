@@ -183,6 +183,21 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
             logger.warning(f'Invalid token for {request.url.path}')
             return JSONResponse(status_code=401, content={'error': 'Invalid token'})
 
+        # Load user-specific settings in multi-user mode
+        from thoth.config import config
+
+        if config.multi_user and config.user_config_manager:
+            try:
+                user_context.settings = config.user_config_manager.get_settings(
+                    user_context.username
+                )
+            except FileNotFoundError:
+                logger.warning(
+                    f"Settings not found for user '{user_context.username}', "
+                    f'using server defaults'
+                )
+                # Continue with None settings - services will fall back to server config
+
         request.state.user_context = user_context
         logger.debug(f'Authenticated as {user_context.username}')
 

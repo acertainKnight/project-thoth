@@ -1250,6 +1250,112 @@ class Secrets(BaseSettings):
     brave_api_key: str = Field(default='', alias='BRAVE_API_KEY')
 
 
+# --- User Config Manager (Multi-User) ---
+
+
+class UserConfigManager:
+    """Manages per-user settings in multi-user mode.
+
+    In multi-user deployments, each user has their own settings.json file
+    in their vault. This manager loads and caches per-user Settings objects,
+    reloading when files change.
+
+    In single-user mode, this class is not used -- the Config singleton
+    loads settings directly from the single vault.
+    """
+
+    def __init__(self, vaults_root: Path):
+        """Initialize the user config manager.
+
+        Args:
+            vaults_root: Root directory containing all user vaults (e.g. /vaults/)
+        """
+        self._vaults_root = vaults_root
+        # Cache: username -> (Settings, mtime)
+        self._cache: dict[str, tuple[Settings, float]] = {}
+        self._cache_lock = threading.Lock()
+
+    def get_settings(self, username: str) -> Settings:
+        """Load settings for a user, using cache when file hasn't changed.
+
+        Args:
+            username: The user's username
+
+        Returns:
+            Settings object for this user
+
+        Raises:
+            FileNotFoundError: If the user's settings.json doesn't exist
+        """
+        settings_path = (
+            self._vaults_root / username / 'thoth' / '_thoth' / 'settings.json'
+        )
+
+        if not settings_path.exists():
+            # Try legacy location
+            legacy_path = self._vaults_root / username / '_thoth' / 'settings.json'
+            if legacy_path.exists():
+                settings_path = legacy_path
+            else:
+                raise FileNotFoundError(
+                    f"Settings file not found for user '{username}' at {settings_path}"
+                )
+
+        # Get current mtime
+        current_mtime = settings_path.stat().st_mtime
+
+        with self._cache_lock:
+            # Check cache
+            if username in self._cache:
+                cached_settings, cached_mtime = self._cache[username]
+                # If file hasn't changed, return cached version
+                if cached_mtime == current_mtime:
+                    return cached_settings
+
+            # Load fresh settings
+            settings = Settings.from_json_file(settings_path)
+
+            # Update cache
+            self._cache[username] = (settings, current_mtime)
+
+            logger.debug(f"Loaded settings for user '{username}' from {settings_path}")
+            return settings
+
+    def get_settings_or_default(self, username: str) -> Settings:
+        """Return user settings, falling back to a default Settings instance.
+
+        This is useful for background services that process data for users who
+        may not have fully initialized settings yet.
+
+        Args:
+            username: The user's username
+
+        Returns:
+            Settings object (loaded or default)
+        """
+        try:
+            return self.get_settings(username)
+        except FileNotFoundError:
+            logger.warning(
+                f"Settings not found for user '{username}', using default settings"
+            )
+            return Settings()
+
+    def invalidate_cache(self, username: str | None = None) -> None:
+        """Invalidate the settings cache for a user or all users.
+
+        Args:
+            username: User to invalidate, or None to invalidate all
+        """
+        with self._cache_lock:
+            if username is None:
+                self._cache.clear()
+                logger.debug('Invalidated all user settings cache')
+            elif username in self._cache:
+                del self._cache[username]
+                logger.debug(f"Invalidated settings cache for user '{username}'")
+
+
 # --- Config Object ---
 
 
@@ -1317,6 +1423,8 @@ class Config:
         # 7. Multi-user mode detection
         self.multi_user: bool = os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true'
         self.vaults_root: Path | None = None
+        self.user_config_manager: UserConfigManager | None = None
+
         if self.multi_user:
             vaults_root_str = os.getenv('THOTH_VAULTS_ROOT')
             if not vaults_root_str:
@@ -1326,6 +1434,10 @@ class Config:
                 )
                 vaults_root_str = '/vaults'
             self.vaults_root = Path(vaults_root_str).resolve()
+
+            # Initialize UserConfigManager for per-user settings
+            self.user_config_manager = UserConfigManager(self.vaults_root)
+
             logger.info(f'Multi-user mode enabled. Vaults root: {self.vaults_root}')
 
         self._initialized = True

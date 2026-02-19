@@ -410,6 +410,10 @@ user-info: ## Show user details: make user-info USERNAME=alice
 	@if [ -z "$(USERNAME)" ]; then echo "Usage: make user-info USERNAME=alice"; exit 1; fi
 	@uv run thoth users info $(USERNAME)
 
+.PHONY: user-sync-agents
+user-sync-agents: ## Create/update Letta agents for all users (run after updates)
+	@uv run thoth users sync-agents $(if $(USERNAME),--username $(USERNAME),)
+
 .PHONY: multi-user-enable
 multi-user-enable: ## Enable multi-user mode: sets THOTH_MULTI_USER=true in .env
 	@grep -q 'THOTH_MULTI_USER' .env && \

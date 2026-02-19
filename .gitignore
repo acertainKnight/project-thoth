@@ -119,6 +119,9 @@ htmlcov/
 # Workspace files
 workspace/
 
+# Multi-user vault root (user data lives outside the repo)
+vaults/
+
 # Analysis, reports, and status files (should NEVER be committed)
 docs/*SUMMARY*.md
 docs/*STATUS*.md

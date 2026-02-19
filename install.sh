@@ -235,6 +235,17 @@ case "$1" in
 
         echo "  Pulling images (${NEW_TAG})..."
         docker compose -f docker-compose.dev.yml --profile microservices pull 2>/dev/null || true
+
+        echo "  Running database migrations..."
+        docker compose -f docker-compose.dev.yml --profile microservices run --rm thoth-api python -m thoth db migrate 2>/dev/null || {
+            echo "  (Migrations skipped — run manually if needed)"
+        }
+
+        echo "  Syncing Letta agents..."
+        docker compose -f docker-compose.dev.yml --profile microservices run --rm thoth-api python -m thoth users sync-agents 2>/dev/null || {
+            echo "  (Agent sync skipped — run 'thoth users sync-agents' manually if needed)"
+        }
+
         "$0" restart
         echo "✅ Updated to ${CHANNEL} (${NEW_TAG})"
         ;;

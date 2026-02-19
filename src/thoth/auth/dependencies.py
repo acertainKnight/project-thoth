@@ -9,11 +9,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Request, status
 
 if TYPE_CHECKING:
-    from fastapi import Request
-
     from thoth.auth.context import UserContext
 
 

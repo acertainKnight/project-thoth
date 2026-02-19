@@ -3,14 +3,15 @@ User management CLI commands for multi-user Thoth deployments.
 
 Provides admin commands to create, list, deactivate, and reset tokens
 for users in multi-user mode. These commands connect directly to the
-database and do not require the server to be running.
+database. Agent initialization requires the Letta server to be running.
 
 Usage:
-    thoth users create <username> [--email EMAIL] [--admin]
+    thoth users create <username> [--email EMAIL] [--admin] [--skip-agents]
     thoth users list
     thoth users reset-token <username>
     thoth users deactivate <username>
     thoth users info <username>
+    thoth users sync-agents [--username USERNAME]
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+from pathlib import Path
 
 
 def _get_database_url() -> str:
@@ -65,12 +67,61 @@ async def _get_auth_service():
     return AuthService(postgres=postgres), conn
 
 
-async def create_command(args) -> None:
+async def _initialize_user_agents(
+    username: str,
+    user_id: str,
+    vault_path: Path,
+    auth_service,
+    existing_agent_ids: dict[str, str] | None = None,
+) -> None:
     """
-    Create a new user and print their API token.
+    Create or update Letta agents for a user and store their IDs in the DB.
+
+    When ``existing_agent_ids`` is provided (from the DB), those agents are
+    updated in-place preserving memory and conversation history.  New agents
+    are only created when the user has none.
 
     Args:
-        args: Parsed CLI args with username, email, admin
+        username: The user's username (used as agent name suffix for new agents).
+        user_id: UUID string for the user record.
+        vault_path: Absolute path to the user's vault directory.
+        auth_service: AuthService instance for updating agent IDs.
+        existing_agent_ids: Optional dict with 'orchestrator' and/or 'analyst'
+            keys mapped to Letta agent IDs already assigned to this user.
+    """
+    from thoth.auth.context import UserContext
+    from thoth.services.agent_initialization_service import AgentInitializationService
+
+    svc = AgentInitializationService()
+    ctx = UserContext(
+        user_id=user_id,
+        username=username,
+        vault_path=vault_path,
+        is_admin=False,
+    )
+
+    agent_ids = await svc.initialize_agents_for_user(
+        ctx, existing_agent_ids=existing_agent_ids
+    )
+    if agent_ids:
+        await auth_service.update_agent_ids(
+            user_id,
+            orchestrator_agent_id=agent_ids.get('orchestrator'),
+            analyst_agent_id=agent_ids.get('analyst'),
+        )
+        action = 'Updated' if existing_agent_ids else 'Created'
+        print(f'  Orchestrator : {agent_ids.get("orchestrator", "failed")} ({action})')
+        print(f'  Analyst      : {agent_ids.get("analyst", "failed")} ({action})')
+    else:
+        print('  Warning: Agent creation returned no IDs')
+
+
+async def create_command(args) -> None:
+    """
+    Create a new user, provision their vault, and initialize Letta agents.
+
+    Args:
+        args: Parsed CLI args with username, email, admin, skip_agents
     """
     if os.getenv('THOTH_MULTI_USER', 'false').lower() != 'true':
         print(
@@ -106,11 +157,9 @@ async def create_command(args) -> None:
         print('  under Settings → Thoth → API Token.')
         print()
 
-        # Provision vault if in multi-user mode
-        vaults_root_str = os.getenv('THOTH_VAULTS_ROOT', '/vaults')
-        from pathlib import Path
+        vaults_root = Path(os.getenv('THOTH_VAULTS_ROOT', '/vaults'))
 
-        vaults_root = Path(vaults_root_str)
+        # Provision vault
         if vaults_root.exists() or os.getenv('THOTH_MULTI_USER', '') == 'true':
             try:
                 from thoth.services.vault_provisioner import VaultProvisioner
@@ -120,6 +169,25 @@ async def create_command(args) -> None:
                 print(f'  Vault provisioned at: {vaults_root / user.username}')
             except Exception as e:
                 print(f'  Warning: Could not provision vault: {e}')
+
+        # Initialize Letta agents (unless --skip-agents)
+        if not getattr(args, 'skip_agents', False):
+            print()
+            print('  Initializing Letta agents...')
+            try:
+                await _initialize_user_agents(
+                    username=user.username,
+                    user_id=str(user.id),
+                    vault_path=vaults_root / user.username,
+                    auth_service=auth_service,
+                )
+                print('  ✓ Agents created')
+            except Exception as e:
+                print(f'  Warning: Could not create agents: {e}')
+                print('  Run `thoth users sync-agents` later when Letta is available.')
+        else:
+            print('  Skipped agent creation (--skip-agents)')
+        print()
 
     finally:
         await conn.close()
@@ -239,6 +307,74 @@ async def info_command(args) -> None:
         await conn.close()
 
 
+async def sync_agents_command(args) -> None:
+    """
+    Create or update Letta agents for all (or a specific) active user.
+
+    If a user already has agents assigned, those agents are updated in-place
+    (tools, system prompt, memory blocks) preserving their conversation
+    history.  New agents are only created for users who have none.
+
+    Useful after software updates (to apply new tool configs) or for users
+    created with ``--skip-agents``.  Requires Letta to be running.
+
+    Args:
+        args: Parsed CLI args with optional username filter.
+    """
+    auth_service, conn = await _get_auth_service()
+    try:
+        target_username = getattr(args, 'username', None)
+
+        query = (
+            'SELECT id, username, vault_path, '
+            '       orchestrator_agent_id, analyst_agent_id '
+            'FROM users WHERE is_active = TRUE'
+        )
+        if target_username:
+            query += ' AND username = $1'
+            rows = await auth_service.postgres.fetch(query, target_username)
+        else:
+            query += ' ORDER BY created_at'
+            rows = await auth_service.postgres.fetch(query)
+
+        if not rows:
+            print('No matching active users found.')
+            return
+
+        vaults_root = Path(os.getenv('THOTH_VAULTS_ROOT', '/vaults'))
+
+        synced = 0
+        for row in rows:
+            username = row['username']
+
+            # Build existing IDs dict from the DB so we update, not recreate
+            existing: dict[str, str] = {}
+            if row['orchestrator_agent_id']:
+                existing['orchestrator'] = row['orchestrator_agent_id']
+            if row['analyst_agent_id']:
+                existing['analyst'] = row['analyst_agent_id']
+
+            label = 'updating' if existing else 'creating'
+            print(f'  {username}: {label} agents...')
+            try:
+                await _initialize_user_agents(
+                    username=username,
+                    user_id=str(row['id']),
+                    vault_path=vaults_root / row['vault_path'],
+                    auth_service=auth_service,
+                    existing_agent_ids=existing or None,
+                )
+                synced += 1
+            except Exception as e:
+                print(f'  {username}: failed — {e}')
+
+        print()
+        print(f'✓ Synced agents for {synced}/{len(rows)} user(s)')
+
+    finally:
+        await conn.close()
+
+
 def configure_subparser(subparsers: argparse._SubParsersAction) -> None:
     """
     Register the 'users' command group with the CLI.
@@ -258,18 +394,27 @@ def configure_subparser(subparsers: argparse._SubParsersAction) -> None:
     create_parser.add_argument(
         '--admin', action='store_true', help='Grant admin privileges'
     )
-    create_parser.set_defaults(func=lambda args: asyncio.run(create_command(args)))
+    create_parser.add_argument(
+        '--skip-agents',
+        action='store_true',
+        help='Skip Letta agent creation (use if Letta is not running)',
+    )
+    create_parser.set_defaults(
+        func=lambda args, _p=None: asyncio.run(create_command(args))
+    )
 
     # users list
     list_parser = users_subparsers.add_parser('list', help='List all users')
-    list_parser.set_defaults(func=lambda args: asyncio.run(list_command(args)))
+    list_parser.set_defaults(func=lambda args, _p=None: asyncio.run(list_command(args)))
 
     # users reset-token
     reset_parser = users_subparsers.add_parser(
         'reset-token', help='Reset API token for a user'
     )
     reset_parser.add_argument('username', help='Username')
-    reset_parser.set_defaults(func=lambda args: asyncio.run(reset_token_command(args)))
+    reset_parser.set_defaults(
+        func=lambda args, _p=None: asyncio.run(reset_token_command(args))
+    )
 
     # users deactivate
     deactivate_parser = users_subparsers.add_parser(
@@ -277,13 +422,25 @@ def configure_subparser(subparsers: argparse._SubParsersAction) -> None:
     )
     deactivate_parser.add_argument('username', help='Username')
     deactivate_parser.set_defaults(
-        func=lambda args: asyncio.run(deactivate_command(args))
+        func=lambda args, _p=None: asyncio.run(deactivate_command(args))
     )
 
     # users info
     info_parser = users_subparsers.add_parser('info', help='Show user details')
     info_parser.add_argument('username', help='Username')
-    info_parser.set_defaults(func=lambda args: asyncio.run(info_command(args)))
+    info_parser.set_defaults(func=lambda args, _p=None: asyncio.run(info_command(args)))
+
+    # users sync-agents
+    sync_parser = users_subparsers.add_parser(
+        'sync-agents',
+        help='Create/update Letta agents for users (run after software updates)',
+    )
+    sync_parser.add_argument(
+        '--username', help='Sync agents for a specific user only (default: all users)'
+    )
+    sync_parser.set_defaults(
+        func=lambda args, _p=None: asyncio.run(sync_agents_command(args))
+    )
 
     # Dispatch from the top-level 'users' parser to the sub-command
     users_parser.set_defaults(func=lambda _args: users_parser.print_help())

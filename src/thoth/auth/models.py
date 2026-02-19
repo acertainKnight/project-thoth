@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 class User(BaseModel):
@@ -48,7 +48,7 @@ class User(BaseModel):
 
     id: UUID
     username: str = Field(min_length=3, max_length=50)
-    email: EmailStr | None = None
+    email: str | None = None
     api_token: str
     vault_path: str
     orchestrator_agent_id: str | None = None
@@ -77,7 +77,7 @@ class UserCreate(BaseModel):
     """
 
     username: str = Field(min_length=3, max_length=50)
-    email: EmailStr | None = None
+    email: str | None = None
 
 
 class UserResponse(BaseModel):
