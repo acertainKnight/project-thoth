@@ -160,11 +160,108 @@ make user-deactivate USERNAME=alice
 
 ---
 
+## Testing the Multi-User Implementation
+
+### Unit tests
+
+The unit test suite covers: token generation, user lookup, inactive user
+rejection, middleware in single-user mode, 401 on missing token, valid
+token resolution, and `resolve_user_vault_path()`.
+
+```bash
+uv run pytest tests/unit/server/test_multi_user_auth.py -v
+```
+
+All 14 tests should pass with no database required.
+
+### Smoke test migration against the live DB (single-user mode, safe)
+
+Before enabling multi-user mode you can verify migration 007 runs cleanly
+on the live database while the server is still in single-user mode:
+
+```bash
+docker exec thoth-dev-api python -m thoth db migrate
+```
+
+Migration 007 is **additive only** — it adds `user_id TEXT NOT NULL DEFAULT 'default_user'`
+columns to all tenant tables and creates the `users` table. No existing
+rows are modified and the server keeps running throughout.
+
+Verify the new tables and columns exist:
+
+```bash
+docker exec letta-postgres psql -U thoth -d thoth -c "\dt users"
+docker exec letta-postgres psql -U thoth -d thoth \
+  -c "SELECT column_name FROM information_schema.columns \
+      WHERE table_name = 'research_questions' AND column_name = 'user_id';"
+```
+
+### Smoke test the API endpoints
+
+```bash
+# Health check (always exempt from auth)
+curl http://localhost:8080/health
+
+# In single-user mode — no token needed, returns default_user context
+curl http://localhost:8080/auth/me
+
+# After enabling multi-user mode and creating a user:
+curl http://localhost:8080/auth/me \
+  -H "Authorization: Bearer thoth_your_token_here"
+```
+
+---
+
 ## Upgrading a Single-User Installation
 
 Existing single-user installations can be upgraded without data loss.
+The upgrade is safe to run with containers live — the migration is additive only.
 
-### CLI path
+### CLI path (Docker-based deployment)
+
+```bash
+# 1. Pull latest code and rebuild images
+git pull
+docker compose build thoth-api thoth-mcp
+
+# 2. Run migration 007 while the existing containers are still running.
+#    This is additive-only (adds columns, creates users table) — no downtime.
+docker compose run --rm thoth-api python -m thoth db migrate
+
+# 3. Verify migration succeeded
+docker exec letta-postgres psql -U thoth -d thoth \
+  -c "SELECT version, name FROM _migrations ORDER BY version;"
+# Should show version 7 - add_multi_user_support
+
+# 4. Restart with new images (still single-user mode — nothing changes yet)
+docker compose up -d
+
+# 5. Confirm existing behaviour is unchanged
+curl http://localhost:8080/health      # → 200 OK
+curl http://localhost:8080/auth/me     # → {"username": "default_user", ...}
+
+# 6. Enable multi-user mode when ready
+echo "THOTH_MULTI_USER=true" >> .env
+echo "THOTH_VAULTS_ROOT=/vaults" >> .env
+mkdir -p /vaults
+
+# 7. Create the first admin account (DB-direct, no server restart needed)
+uv run thoth users create admin --admin
+# ← Token is printed once — save it securely
+
+# 8. Restart services with multi-user mode enabled
+docker compose up -d
+
+# 9. Verify multi-user mode is active
+curl http://localhost:8080/auth/me
+# → 401 Unauthorized  (token now required)
+
+curl http://localhost:8080/auth/me \
+  -H "Authorization: Bearer thoth_your_admin_token"
+# → {"username": "admin", "vault_path": "/vaults/admin", ...}
+```
+
+### CLI path (local/dev deployment)
 
 ```bash
 # 1. Pull latest code
