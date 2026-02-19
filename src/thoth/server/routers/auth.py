@@ -126,27 +126,46 @@ async def register(
 @router.get('/me', response_model=UserInfo)
 async def get_current_user_info(
     user_context: UserContext = Depends(get_user_context),
+    service_manager: ServiceManager = Depends(get_service_manager),
 ) -> UserInfo:
     """
     Get current authenticated user's information.
 
+    Fetches full user record from database, including Letta agent IDs
+    needed by the Obsidian plugin for agent resolution.
+
     Args:
         user_context: Injected user context from token
+        service_manager: Service manager dependency
 
     Returns:
-        UserInfo with public user data
+        UserInfo with public user data and agent IDs
 
     Example:
         >>> GET / auth / me
         >>> Headers: Authorization: Bearer thoth_abc123...
         >>> Response: {"id": "...", "username": "alice", ...}
     """
+    auth_service = service_manager.auth
+    user = await auth_service.get_user_by_username(user_context.username)
+
+    if user:
+        return UserInfo(
+            id=str(user.id),
+            username=user.username,
+            email=user.email,
+            vault_path=str(user_context.vault_path),
+            orchestrator_agent_id=user.orchestrator_agent_id,
+            analyst_agent_id=user.analyst_agent_id,
+            is_admin=user.is_admin,
+            is_active=user.is_active,
+            created_at=user.created_at,
+        )
+
     return UserInfo(
         id=user_context.user_id,
         username=user_context.username,
-        email=None,
         vault_path=str(user_context.vault_path),
         is_admin=user_context.is_admin,
         is_active=True,
-        created_at=None,
     )

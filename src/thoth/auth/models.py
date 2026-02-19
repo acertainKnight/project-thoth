@@ -113,6 +113,8 @@ class UserInfo(BaseModel):
         username: Username
         email: Email address if provided
         vault_path: Relative vault path
+        orchestrator_agent_id: Letta orchestrator agent ID (for plugin agent resolution)
+        analyst_agent_id: Letta analyst agent ID
         is_admin: Admin status
         is_active: Active status
         created_at: Creation timestamp
@@ -120,8 +122,10 @@ class UserInfo(BaseModel):
 
     id: str
     username: str
-    email: str | None
+    email: str | None = None
     vault_path: str
+    orchestrator_agent_id: str | None = None
+    analyst_agent_id: str | None = None
     is_admin: bool
     is_active: bool
-    created_at: datetime
+    created_at: datetime | None = None

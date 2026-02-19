@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, ClassVar
 from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from thoth.auth.context import UserContext
 from thoth.auth.service import AuthService
@@ -51,7 +52,7 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
         ... )
     """
 
-    EXEMPT_PATHS: ClassVar[set[str]] = {'/health', '/auth/register', '/auth/me'}
+    EXEMPT_PATHS: ClassVar[set[str]] = {'/health', '/auth/register'}
 
     def __init__(
         self,
@@ -116,8 +117,6 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
             logger.warning(
                 f'Missing or invalid Authorization header for {request.url.path}'
             )
-            from starlette.responses import JSONResponse
-
             return JSONResponse(
                 status_code=401,
                 content={'error': 'Missing or invalid authorization header'},
@@ -127,8 +126,6 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
 
         if not self.vaults_root:
             logger.error('THOTH_VAULTS_ROOT not configured in multi-user mode')
-            from starlette.responses import JSONResponse
-
             return JSONResponse(
                 status_code=500,
                 content={'error': 'Server configuration error'},
@@ -137,8 +134,6 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
         auth_service = self.auth_service
         if auth_service is None:
             logger.error('AuthService not initialized')
-            from starlette.responses import JSONResponse
-
             return JSONResponse(
                 status_code=500,
                 content={'error': 'Authentication service not available'},
@@ -150,8 +145,6 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
 
         if not user_context:
             logger.warning(f'Invalid token for {request.url.path}')
-            from starlette.responses import JSONResponse
-
             return JSONResponse(status_code=401, content={'error': 'Invalid token'})
 
         request.state.user_context = user_context

@@ -1160,7 +1160,7 @@ MIGRATION_007_ADD_MULTI_USER_SUPPORT = """
 
 -- 1. Create users table
 CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username TEXT NOT NULL UNIQUE,
     email TEXT,
     api_token TEXT NOT NULL UNIQUE,
@@ -1188,7 +1188,8 @@ CREATE INDEX IF NOT EXISTS idx_processed_papers_user_id ON processed_papers(user
 ALTER TABLE citations ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
 CREATE INDEX IF NOT EXISTS idx_citations_user_id ON citations(user_id);
 
--- Research questions (ensure index exists)
+-- Research questions
+ALTER TABLE research_questions ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
 CREATE INDEX IF NOT EXISTS idx_research_questions_user_id ON research_questions(user_id);
 
 ALTER TABLE research_question_matches ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
@@ -1248,6 +1249,9 @@ CREATE INDEX IF NOT EXISTS idx_workflow_actions_user_id ON workflow_actions(user
 
 ALTER TABLE workflow_credentials ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
 CREATE INDEX IF NOT EXISTS idx_workflow_credentials_user_id ON workflow_credentials(user_id);
+
+ALTER TABLE workflow_search_config ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
+CREATE INDEX IF NOT EXISTS idx_workflow_search_config_user_id ON workflow_search_config(user_id);
 
 -- RAG and search
 ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
