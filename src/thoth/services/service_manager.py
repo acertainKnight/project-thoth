@@ -67,6 +67,8 @@ from thoth.services.skill_service import SkillService
 from thoth.services.tag_service import TagService
 from thoth.services.web_search_service import WebSearchService
 from thoth.services.postgres_service import PostgresService
+from thoth.auth.service import AuthService
+from thoth.services.vault_provisioner import VaultProvisioner
 # CRITICAL FIX: Don't import config at module level - triggers circular import deadlock
 # Config will be imported in __init__() when needed (line 129)
 # from thoth.config import Config  # REMOVED - was causing circular import
@@ -121,6 +123,8 @@ class ServiceManager:
         research_question: ResearchQuestionService
         tag: TagService
         skill: SkillService
+        auth: AuthService
+        vault_provisioner: VaultProvisioner
 
         # Optional services (may be None if extras not installed)
         letta_filesystem: LettaFilesystemService | None  # Requires 'memory' extras
@@ -218,6 +222,12 @@ class ServiceManager:
 
         # Initialize postgres service for database operations
         self._services['postgres'] = PostgresService(config=self.config)
+
+        # Initialize auth service (always available; no-op in single-user mode)
+        self._services['auth'] = AuthService(postgres=self._services['postgres'])
+
+        # Initialize vault provisioner for multi-user vault creation
+        self._services['vault_provisioner'] = VaultProvisioner()
 
         # Initialize research question service with postgres
         self._services['research_question'] = ResearchQuestionService(
