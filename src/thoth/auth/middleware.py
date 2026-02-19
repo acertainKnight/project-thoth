@@ -60,6 +60,7 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
         auth_service: AuthService | None = None,
         vaults_root: Path | None = None,
         vault_root: Path | None = None,
+        multi_user: bool | None = None,
     ):
         """
         Initialize middleware.
@@ -73,12 +74,15 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
             auth_service: Auth service for token validation (optional at init)
             vaults_root: Root directory for user vaults (multi-user)
             vault_root: Single vault directory (single-user)
+            multi_user: Override for multi-user mode (uses THOTH_MULTI_USER env
+                var at dispatch time when None)
         """
         super().__init__(app)
         self._auth_service = auth_service
         self.vaults_root = vaults_root
         self.vault_root = vault_root
-        self.multi_user = os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true'
+        # None = read from THOTH_MULTI_USER env var lazily at dispatch time
+        self._multi_user_override: bool | None = multi_user
 
     def _resolve_auth_service(self, request) -> AuthService | None:
         """
@@ -120,17 +124,28 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
         Returns:
             Response from downstream handlers
         """
-        if not self.multi_user:
+        if self._multi_user_override is not None:
+            multi_user = self._multi_user_override
+        else:
+            multi_user = os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true'
+        if not multi_user:
             request.state.user_context = UserContext(
                 user_id='default_user',
-                username='default',
+                username='default_user',
                 vault_path=self.vault_root or Path('/vault'),
                 is_admin=True,
             )
             return await call_next(request)
 
         if self._is_exempt(request.url.path):
-            request.state.user_context = None
+            # Exempt endpoints (health, register) get default_user context
+            # so route handlers always have a valid context object.
+            request.state.user_context = UserContext(
+                user_id='default_user',
+                username='default_user',
+                vault_path=self.vault_root or Path('/vault'),
+                is_admin=True,
+            )
             return await call_next(request)
 
         auth_header = request.headers.get('Authorization', '')
