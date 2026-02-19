@@ -1,365 +1,405 @@
 # Multi-User Mode
 
-Thoth supports running on a shared server where multiple users each have:
+By default Thoth runs in single-user mode — one vault, one set of agents, one
+database. Multi-user mode lets you run a single shared server where each person
+has fully isolated data: their own Obsidian vault, their own Letta agents, and
+their own rows in every database table. Everything is controlled by a simple
+API token that each user puts in their Obsidian plugin settings.
 
-- Their own isolated Obsidian vault directory (`/vaults/{username}/`)
-- Their own Letta agents (`thoth_main_orchestrator_{username}`, etc.)
-- Their own scoped database rows (all tables have a `user_id` column)
-- A unique API token for authentication
-
-Single-user installations are **completely unaffected** — multi-user mode is opt-in.
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────┐
-│               Thoth Server (shared)                 │
-│                                                     │
-│  ┌───────────────┐    ┌───────────────────────────┐ │
-│  │ TokenAuth     │    │ ServiceManager            │ │
-│  │ Middleware    │───▶│  auth: AuthService        │ │
-│  │               │    │  vault_provisioner:       │ │
-│  │ Bearer token  │    │    VaultProvisioner       │ │
-│  │ → UserContext │    └───────────────────────────┘ │
-│  └───────────────┘                                  │
-│                                                     │
-│  /vaults/alice/thoth/  ← Alice's vault              │
-│  /vaults/bob/thoth/    ← Bob's vault                │
-│                                                     │
-│  PostgreSQL:                                        │
-│    users table (one row per user)                   │
-│    research_questions.user_id                       │
-│    discovery_schedule.user_id                       │
-│    workflow_search_config.user_id                   │
-│    (etc — all tenant tables have user_id)           │
-│                                                     │
-│  Letta:                                             │
-│    thoth_main_orchestrator_alice                    │
-│    thoth_research_analyst_alice                     │
-│    thoth_main_orchestrator_bob                      │
-└─────────────────────────────────────────────────────┘
-```
+If you are a single-user deployment, nothing in this document applies to you
+and you don't need to do anything. Multi-user mode is completely opt-in.
 
 ---
 
-## Server Setup
+## How it works
 
-### 1. Enable multi-user mode in `.env`
+When multi-user mode is enabled, every incoming API request must carry a
+`Authorization: Bearer <token>` header. The server looks that token up in the
+database, finds the matching user account, and builds a `UserContext` object
+that flows through the entire request — middleware → routes → services →
+database queries. Every database table that holds user data has a `user_id`
+column, so Alice's papers and Bob's papers never mix.
 
-```bash
-THOTH_MULTI_USER=true
-THOTH_VAULTS_ROOT=/vaults          # Host path for all user vaults
-THOTH_ALLOW_REGISTRATION=false     # true = self-registration allowed
+Each user also gets their own pair of Letta agents named after them
+(`thoth_main_orchestrator_alice`, `thoth_research_analyst_alice`, etc.), so
+their conversation history and agent memory are completely separate.
+
+```
+Shared server
+
+  Request comes in with:  Authorization: Bearer thoth_abc123
+                                    │
+                          TokenAuthMiddleware
+                          looks up token → user: alice
+                          builds UserContext(username="alice", vault="/vaults/alice")
+                                    │
+                          Route handler runs
+                          all DB queries filtered by user_id = alice
+                          agent calls go to alice's named agents
 ```
 
-Or use the Makefile helper:
+In single-user mode, the middleware just stamps every request with a
+`default_user` identity and moves on. The `users` table is created but
+never queried. Your existing setup stays exactly the same.
 
-```bash
-make multi-user-enable
-```
+---
 
-### 2. Create the vaults directory
+## Setting up a new multi-user server
+
+This section is for someone starting fresh. If you have an existing server
+you want to convert, skip ahead to [Upgrading an existing server](#upgrading-an-existing-server).
+
+### 1. Decide where vaults will live
+
+Each user gets a subdirectory under a shared root, for example `/vaults/alice`,
+`/vaults/bob`. Pick a path on the host machine and create it:
 
 ```bash
 mkdir -p /vaults
 ```
 
+You can put this anywhere — it just needs to be writable by the Docker containers.
+
+### 2. Configure environment variables
+
+Add these to your `.env` file:
+
+```bash
+# Turn on multi-user mode
+THOTH_MULTI_USER=true
+
+# The directory that will hold all user vault subdirectories
+THOTH_VAULTS_ROOT=/vaults
+
+# Whether users can register themselves (false = admin creates all accounts)
+THOTH_ALLOW_REGISTRATION=false
+```
+
+Or run `make multi-user-enable` which writes these for you.
+
 ### 3. Run database migrations
 
 ```bash
 make db-migrate
-# or: uv run thoth db migrate
+# or directly: uv run thoth db migrate
 ```
 
-Migration 007 creates the `users` table and adds `user_id` to all
-tenant-scoped tables.
+This creates the `users` table and adds a `user_id` column to every
+tenant-scoped table. The migration is safe to run on a running server — it
+only adds things, never changes or removes existing data.
 
-### 4. Create the first admin user
+### 4. Create the first admin account
 
 ```bash
 make user-create USERNAME=admin ADMIN=true
 # or: uv run thoth users create admin --admin
 ```
 
-The command prints a one-time API token. **Save it immediately** — it
-cannot be retrieved again (use `user-reset-token` to regenerate).
+The token is printed once and only once. Copy it somewhere safe — a password
+manager is ideal. If you lose it, run `make user-reset-token USERNAME=admin`
+to generate a new one.
 
-### 5. Start the server
+### 5. Start (or restart) the server
 
 ```bash
 docker compose up -d
 ```
 
+At this point the server requires a valid token for all non-exempt endpoints.
+The `/health` endpoint is always open, and `/auth/register` is open if you've
+enabled self-registration.
+
 ---
 
-## User Onboarding
+## Adding users
 
-### Option A: Admin creates the account (recommended)
+### Admin creates the account (recommended)
 
 ```bash
-# On the server:
-make user-create USERNAME=alice EMAIL=alice@lab.com
+make user-create USERNAME=alice
+# With email:
+make user-create USERNAME=alice EMAIL=alice@example.com
 ```
 
-Copy the token and share it securely with the user (e.g. via Signal,
-password manager, or encrypted email).
+Copy the printed token and send it to the user through a secure channel — a
+password manager share, Signal, or encrypted email. Do not send tokens over
+plain email or Slack.
 
-### Option B: Self-registration (if enabled)
+### Self-registration (if you've enabled it)
+
+If `THOTH_ALLOW_REGISTRATION=true`, users can register themselves:
 
 ```bash
-curl -X POST https://thoth.yourlab.com:8080/auth/register \
+curl -X POST https://your-server.example.com/auth/register \
   -H 'Content-Type: application/json' \
-  -d '{"username": "alice", "email": "alice@lab.com"}'
+  -d '{"username": "alice", "email": "alice@example.com"}'
 ```
 
-Requires `THOTH_ALLOW_REGISTRATION=true`.
+The response includes the token. Consider only turning this on for a short
+onboarding window and then setting it back to `false`.
 
 ---
 
-## User Setup (Obsidian Plugin)
+## User setup (Obsidian plugin)
 
-Each user configures the plugin once:
+Once a user has their token, they configure the plugin once on their local
+Obsidian:
 
-1. Open Obsidian → Settings → Thoth
-2. Set **Thoth API URL** to the server address (e.g. `https://thoth.yourlab.com:8080`)
-3. Set **API Token** to the token provided by the admin (`thoth_…`)
-4. Click **Verify Token & Connection** — the plugin confirms your username
-5. Save settings
+1. Open **Settings → Thoth**
+2. Set **Thoth API URL** to the server address, for example `https://thoth.yourlab.com`
+3. Paste the token into the **API Token** field (starts with `thoth_`)
+4. Click **Verify Token & Connection** — the plugin will show your username on success
+5. Save
 
-The plugin automatically:
-- Resolves your personal Letta agent via `/auth/me` (no manual agent ID needed)
-- Includes `Authorization: Bearer <token>` in all API requests
-- Adds `?token=<token>` to WebSocket connections
+After that, everything is automatic. The plugin sends the token with every
+request, resolves your personal Letta agent IDs from `/auth/me`, and attaches
+the token to WebSocket connections. You don't need to know or configure any
+agent IDs manually.
 
 ---
 
-## CLI Commands
+## Managing users
 
-All user management commands connect directly to the database and do not
-require the server to be running.
-
-| Command | Description |
-|---------|-------------|
-| `thoth users create <username> [--email EMAIL] [--admin]` | Create user + print token |
-| `thoth users list` | List all users |
-| `thoth users info <username>` | Show user details + agent IDs |
-| `thoth users reset-token <username>` | Generate new token (old one stops working) |
-| `thoth users deactivate <username>` | Deactivate account |
-
-### Makefile shortcuts
+All of these commands talk directly to the database and don't require the
+server to be running.
 
 ```bash
-make user-create USERNAME=alice EMAIL=alice@lab.com
+# See all users
 make user-list
+
+# Get full details for one user (including their agent IDs)
 make user-info USERNAME=alice
+
+# Generate a new token (the old one stops working immediately)
 make user-reset-token USERNAME=alice
+
+# Deactivate an account (prompts for confirmation)
 make user-deactivate USERNAME=alice
 ```
 
+The equivalent `thoth users` CLI commands work the same way:
+
+```bash
+uv run thoth users list
+uv run thoth users info alice
+uv run thoth users reset-token alice
+uv run thoth users deactivate alice
+```
+
 ---
 
-## Testing the Multi-User Implementation
+## Upgrading an existing server
 
-### Unit tests
+If you have Thoth already running in single-user mode and want to add
+multi-user support, the good news is you can do it without any downtime and
+without touching existing data. The database migration only adds new columns
+and tables — nothing is modified or removed, and all existing rows are
+automatically assigned to a `default_user` identity.
 
-The unit test suite covers: token generation, user lookup, inactive user
-rejection, middleware in single-user mode, 401 on missing token, valid
-token resolution, and `resolve_user_vault_path()`.
+### Step 1: Update your code
+
+Pull the latest code and rebuild your images:
 
 ```bash
-uv run pytest tests/unit/server/test_multi_user_auth.py -v
+git pull
+docker compose build
 ```
 
-All 14 tests should pass with no database required.
+### Step 2: Run the migration
 
-### Smoke test migration against the live DB (single-user mode, safe)
-
-Before enabling multi-user mode you can verify migration 007 runs cleanly
-on the live database while the server is still in single-user mode:
+You can run this while your existing containers are still up. It's safe:
 
 ```bash
-docker exec thoth-dev-api python -m thoth db migrate
+docker compose run --rm thoth-api python -m thoth db migrate
 ```
 
-Migration 007 is **additive only** — it adds `user_id TEXT NOT NULL DEFAULT 'default_user'`
-columns to all tenant tables and creates the `users` table. No existing
-rows are modified and the server keeps running throughout.
-
-Verify the new tables and columns exist:
+You should see confirmation that migration 007 (`add_multi_user_support`)
+applied successfully. If you want to double-check, connect to your database
+and verify:
 
 ```bash
-docker exec letta-postgres psql -U thoth -d thoth -c "\dt users"
-docker exec letta-postgres psql -U thoth -d thoth \
-  -c "SELECT column_name FROM information_schema.columns \
-      WHERE table_name = 'research_questions' AND column_name = 'user_id';"
+# Substitute your actual postgres container name and credentials
+docker exec <your-postgres-container> psql -U <user> -d <database> \
+  -c "SELECT version, name FROM _migrations ORDER BY version;"
 ```
 
-### Smoke test the API endpoints
+Version 7 should appear in the list.
+
+### Step 3: Restart with the new images (still single-user)
 
 ```bash
-# Health check (always exempt from auth)
-curl http://localhost:8080/health
+docker compose up -d
+```
 
-# In single-user mode — no token needed, returns default_user context
+At this point your server is running the new code but still in single-user
+mode. Verify everything works exactly as it did before:
+
+```bash
+curl http://localhost:8080/health       # should return 200
+curl http://localhost:8080/auth/me      # should return a default_user context
+```
+
+Take your time here. There is no rush to enable multi-user mode and no risk
+in waiting.
+
+### Step 4: Enable multi-user mode
+
+When you're ready, add these to your `.env`:
+
+```bash
+THOTH_MULTI_USER=true
+THOTH_VAULTS_ROOT=/vaults      # or wherever you want user vaults to live
+```
+
+Create the vaults directory if it doesn't exist:
+
+```bash
+mkdir -p /vaults
+```
+
+Create your admin account before restarting — this command talks directly to
+the database so the server doesn't need to be running yet:
+
+```bash
+uv run thoth users create admin --admin
+```
+
+Save the token it prints. Then restart:
+
+```bash
+docker compose up -d
+```
+
+### Step 5: Verify
+
+```bash
+# Without a token, you should now get a 401
 curl http://localhost:8080/auth/me
 
-# After enabling multi-user mode and creating a user:
+# With your token, you should get your user info back
 curl http://localhost:8080/auth/me \
   -H "Authorization: Bearer thoth_your_token_here"
 ```
 
 ---
 
-## Upgrading a Single-User Installation
+## Testing
 
-Existing single-user installations can be upgraded without data loss.
-The upgrade is safe to run with containers live — the migration is additive only.
+### Running the unit tests
 
-### CLI path (Docker-based deployment)
+The unit test suite covers auth token generation, user lookup, inactive user
+rejection, the middleware in single-user mode, 401 responses on missing tokens,
+and vault path resolution. No database required:
 
 ```bash
-# 1. Pull latest code and rebuild images
-git pull
-docker compose build thoth-api thoth-mcp
+uv run pytest tests/unit/server/test_multi_user_auth.py -v
+```
 
-# 2. Run migration 007 while the existing containers are still running.
-#    This is additive-only (adds columns, creates users table) — no downtime.
-docker compose run --rm thoth-api python -m thoth db migrate
+All 14 tests should pass.
 
-# 3. Verify migration succeeded
-docker exec letta-postgres psql -U thoth -d thoth \
-  -c "SELECT version, name FROM _migrations ORDER BY version;"
-# Should show version 7 - add_multi_user_support
+### Checking the migration manually
 
-# 4. Restart with new images (still single-user mode — nothing changes yet)
-docker compose up -d
+If you want to verify the migration ran correctly without writing SQL yourself,
+these two queries tell you everything:
 
-# 5. Confirm existing behaviour is unchanged
-curl http://localhost:8080/health      # → 200 OK
-curl http://localhost:8080/auth/me     # → {"username": "default_user", ...}
+```sql
+-- Should show version 7
+SELECT version, name FROM _migrations ORDER BY version;
 
-# 6. Enable multi-user mode when ready
-echo "THOTH_MULTI_USER=true" >> .env
-echo "THOTH_VAULTS_ROOT=/vaults" >> .env
-mkdir -p /vaults
+-- Should show 'user_id' in the list
+SELECT column_name FROM information_schema.columns
+WHERE table_name = 'research_questions' AND column_name = 'user_id';
+```
 
-# 7. Create the first admin account (DB-direct, no server restart needed)
-uv run thoth users create admin --admin
-# ← Token is printed once — save it securely
+### Testing endpoints with curl
 
-# 8. Restart services with multi-user mode enabled
-docker compose up -d
+```bash
+# Always works regardless of auth mode
+curl http://localhost:8080/health
 
-# 9. Verify multi-user mode is active
+# Single-user mode: returns default_user with no token
 curl http://localhost:8080/auth/me
-# → 401 Unauthorized  (token now required)
 
+# Multi-user mode: returns your user info with a valid token
 curl http://localhost:8080/auth/me \
-  -H "Authorization: Bearer thoth_your_admin_token"
-# → {"username": "admin", "vault_path": "/vaults/admin", ...}
+  -H "Authorization: Bearer thoth_your_token_here"
+
+# Multi-user mode: returns 401 with no token or a bad token
+curl http://localhost:8080/auth/me \
+  -H "Authorization: Bearer thoth_invalid"
 ```
-
-### CLI path (local/dev deployment)
-
-```bash
-# 1. Pull latest code
-git pull
-
-# 2. Enable multi-user mode
-echo "THOTH_MULTI_USER=true" >> .env
-echo "THOTH_VAULTS_ROOT=/vaults" >> .env
-
-# 3. Run migrations (adds user_id columns, creates users table)
-uv run thoth db migrate
-
-# 4. Migrate existing data to 'default_user' (already the default)
-# All existing rows were inserted with DEFAULT 'default_user'
-# so no data migration SQL is needed.
-
-# 5. Create an admin account
-uv run thoth users create admin --admin
-
-# 6. Restart services
-docker compose up -d
-```
-
-### Setup wizard path
-
-Run `thoth setup` and choose **Multi-User Server** when prompted for
-deployment type. The wizard handles migrations and creates the first
-admin account.
 
 ---
 
-## Authentication Flow
+## Authentication flow
+
+For reference, here's what actually happens when a request comes in:
 
 ```
-Obsidian Plugin               Thoth API Server
-      │                              │
-      │  GET /auth/me                │
-      │  Authorization: Bearer thoth_xxx  │
-      │─────────────────────────────▶│
-      │                              │ TokenAuthMiddleware:
-      │                              │  1. Extract Bearer token
-      │                              │  2. Look up in users table
-      │                              │  3. Build UserContext
-      │                              │    (user_id, username,
-      │                              │     vault_path, is_admin)
-      │                              │  4. Set request.state.user_context
-      │  200 OK UserInfo             │
-      │  (orchestrator_agent_id,     │
-      │   analyst_agent_id, …)       │
-      │◀─────────────────────────────│
-      │                              │
-      │  POST /chat (with Bearer)    │
-      │─────────────────────────────▶│
-      │                              │ Route handler:
-      │                              │  get_user_context() → UserContext
-      │                              │  All DB queries scoped to user_id
+Plugin                        Server
+  │                             │
+  │  GET /auth/me               │
+  │  Authorization: Bearer ...  │
+  ├────────────────────────────▶│
+  │                             │  1. Middleware extracts the Bearer token
+  │                             │  2. Looks it up in the users table
+  │                             │  3. Builds a UserContext (user ID, username,
+  │                             │     vault path, admin status)
+  │                             │  4. Attaches context to the request
+  │                             │  5. Route handler returns user info
+  │◀────────────────────────────┤
+  │  200 OK                     │
+  │  { username, vault_path,    │
+  │    orchestrator_agent_id,   │
+  │    analyst_agent_id }       │
+  │                             │
+  │  POST /chat                 │
+  ├────────────────────────────▶│
+  │                             │  All DB queries automatically scoped
+  │                             │  to this user's ID — other users'
+  │                             │  data is never touched
 ```
-
-**Single-user mode:** If `THOTH_MULTI_USER=false` (the default), the
-middleware always sets `user_context = default_user` regardless of
-whether a token is present. The `users` table is unused.
 
 ---
 
-## Security Notes
+## Security notes
 
-- Tokens are long-lived (`thoth_` + 32 random bytes). Treat them like
-  passwords — share via secure channel, not email/Slack.
-- Tokens are stored **hashed** in the database (SHA-256). Even if the DB
-  is compromised, raw tokens are not exposed.
-- Deactivating a user immediately invalidates their token — no TTL to wait
-  for.
-- There is no token expiry by default. Use `make user-reset-token` to
-  rotate tokens periodically.
-- `THOTH_ALLOW_REGISTRATION=false` is the safe default. Only enable it
-  during an onboarding window, then disable again.
+Tokens are long-lived by design — there's no expiry and no refresh flow.
+This keeps the setup simple, but it means you should treat tokens like
+passwords:
+
+- Share tokens through a secure channel (password manager, Signal), not plain email or Slack
+- Tokens are stored hashed in the database (SHA-256), so a database breach does not expose raw tokens
+- Revoking a token is instant — deactivating a user or resetting their token takes effect on the very next request
+- Consider rotating tokens periodically with `make user-reset-token USERNAME=alice`
+- Keep `THOTH_ALLOW_REGISTRATION=false` unless you're actively onboarding users
 
 ---
 
-## Vault Management
+## Vault structure
 
-Each user's vault lives at `{THOTH_VAULTS_ROOT}/{username}/`. The
-`VaultProvisioner` creates the directory structure automatically:
+When a user account is created, Thoth provisions their vault directory
+automatically. Under your `THOTH_VAULTS_ROOT`, it looks like this:
 
 ```
-/vaults/alice/
-  thoth/
-    _thoth/
-      settings.json        ← pre-filled with sensible defaults
-      logs/
-    papers/
-      pdfs/
-      markdown/
-    notes/
-    discovery/
-    queries/
+/vaults/
+  alice/
+    thoth/
+      _thoth/
+        settings.json     ← sensible defaults pre-filled
+        logs/
+      papers/
+        pdfs/
+        markdown/
+      notes/
+      discovery/
+      queries/
+  bob/
+    thoth/
+      ...
 ```
 
-Users sync this directory to their local machine via **Obsidian Sync**,
-**Syncthing**, or any other sync tool. The server is the source of truth
-for all data; local copies are for reading/editing notes in Obsidian.
+Users keep a local copy of their vault using Obsidian Sync, Syncthing, or
+any other file sync tool. The server is the authoritative source of truth —
+local copies exist so people can read and edit their notes in Obsidian, but
+all processing, discovery, and agent work happens server-side.
