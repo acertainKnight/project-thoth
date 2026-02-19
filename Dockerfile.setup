@@ -1,5 +1,13 @@
 # Dockerfile for Thoth setup wizard (config only — no Docker-in-Docker)
 
+# --- Stage 1: Build the Obsidian plugin so users don't need Node/npm ---
+FROM node:20-slim AS plugin-builder
+
+WORKDIR /plugin
+COPY obsidian-plugin/thoth-obsidian/ ./
+RUN npm ci --ignore-scripts && npm run build
+
+# --- Stage 2: Setup wizard image ---
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -16,6 +24,11 @@ COPY pyproject.toml README.md ./
 COPY src/ ./src/
 COPY templates/ ./templates/
 COPY data/ ./data/
+
+# Copy pre-built plugin artifacts from the Node build stage
+COPY --from=plugin-builder /plugin/dist/ ./obsidian-plugin/thoth-obsidian/dist/
+COPY obsidian-plugin/thoth-obsidian/manifest.json ./obsidian-plugin/thoth-obsidian/manifest.json
+COPY obsidian-plugin/thoth-obsidian/styles.css ./obsidian-plugin/thoth-obsidian/styles.css
 
 # Install Thoth with setup dependencies only
 RUN pip install --no-cache-dir -e ".[setup]"

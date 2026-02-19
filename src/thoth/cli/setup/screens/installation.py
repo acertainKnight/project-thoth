@@ -29,6 +29,7 @@ class InstallationScreen(BaseScreen):
         )
         self.vault_path: Path | None = None
         self.installation_complete = False
+        self.update_only = False
         self.installation_steps = [
             'Creating workspace directory',
             'Saving configuration',
@@ -44,6 +45,11 @@ class InstallationScreen(BaseScreen):
         # Get vault path from wizard
         if hasattr(self.app, 'wizard_data'):
             self.vault_path = self.app.wizard_data.get('vault_path')
+            self.update_only = self.app.wizard_data.get('update_only', False)
+
+            # Update step labels for update-only mode
+            if self.update_only:
+                self.installation_steps[1] = 'Keeping existing configuration'
 
         # Start installation automatically
         self._install_task = asyncio.create_task(self.run_installation())
@@ -87,12 +93,16 @@ class InstallationScreen(BaseScreen):
             self._update_step(1, 'done')
             await asyncio.sleep(0.3)
 
-            # Step 2: Save configuration
+            # Step 2: Save configuration (skip if update_only)
             self.current_step = 2
             self._update_step(2, 'active')
             status_text.update(f'[cyan]{self.installation_steps[1]}...[/cyan]')
             progress_bar.update(progress=40)
-            await self.save_configuration()
+            if self.update_only:
+                logger.info('Update-only mode: skipping configuration save')
+                await asyncio.sleep(0.3)  # Brief pause for UI consistency
+            else:
+                await self.save_configuration()
             self._update_step(2, 'done')
             await asyncio.sleep(0.3)
 
@@ -126,12 +136,16 @@ class InstallationScreen(BaseScreen):
             # Complete - commit transaction
             self.transaction.commit()
             progress_bar.update(progress=100)
-            status_text.update('[bold green]✓ Installation complete![/bold green]')
+
+            completion_msg = (
+                'Thoth updated successfully!'
+                if self.update_only
+                else 'Thoth installed successfully!'
+            )
+            status_text.update(f'[bold green]✓ {completion_msg}[/bold green]')
             self.installation_complete = True
             self.clear_messages()
-            self.show_success(
-                'Thoth installed successfully! Press Next → to finish setup.'
-            )
+            self.show_success(f'{completion_msg} Press Next → to finish setup.')
 
             # Show the Next button now
             self._show_next_button()
