@@ -229,6 +229,67 @@ Comparison Aspects:
         },
     }
 
+    async def initialize_agents_for_user(self, user_context) -> dict[str, str]:
+        """
+        Initialize per-user Letta agents for a newly registered user.
+
+        Creates namespaced agents (e.g., thoth_main_orchestrator_alice) so each
+        user has isolated agents with their own memory and conversation history.
+        Agent names use the username suffix to avoid global collisions.
+
+        Args:
+            user_context: UserContext with user_id, username, vault_path
+
+        Returns:
+            Dict with 'orchestrator' and 'analyst' keys mapped to agent IDs.
+            Empty dict if initialization fails.
+
+        Example:
+            >>> ids = await svc.initialize_agents_for_user(user_context)
+            >>> ids == {'orchestrator': 'agent-xxx', 'analyst': 'agent-yyy'}
+        """
+        username = user_context.username
+        logger.info(f'Initializing Letta agents for user: {username}')
+
+        # Build per-user configs by renaming agents with a username suffix
+        user_agent_configs = {}
+        for agent_key, base_config in self.AGENT_CONFIGS.items():
+            user_config = dict(base_config)
+            user_config['name'] = f'{base_config["name"]}_{username}'
+            user_agent_configs[agent_key] = user_config
+
+        agent_ids: dict[str, str] = {}
+
+        try:
+            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+                available_tools = await self._get_all_tools(client)
+
+                for agent_key, agent_config in user_agent_configs.items():
+                    try:
+                        agent_id = await self._ensure_agent_exists(
+                            client, agent_config['name'], agent_config, available_tools
+                        )
+                        if agent_id:
+                            if agent_key == 'thoth_main_orchestrator':
+                                agent_ids['orchestrator'] = agent_id
+                                await self._attach_filesystem(client, agent_id)
+                            elif agent_key == 'thoth_research_analyst':
+                                agent_ids['analyst'] = agent_id
+                            logger.info(f'  {agent_config["name"]}: {agent_id[:16]}...')
+                    except Exception as e:
+                        logger.error(
+                            f'Failed to create agent {agent_config["name"]} '
+                            f'for user {username}: {e}'
+                        )
+        except Exception as e:
+            logger.error(f'Agent initialization failed for user {username}: {e}')
+
+        logger.info(
+            f'Initialized {len(agent_ids)}/{len(self.AGENT_CONFIGS)} agents '
+            f'for user {username}'
+        )
+        return agent_ids
+
     async def initialize_all_agents(self, service_manager=None) -> dict[str, str]:
         """
         Initialize all required agents on startup.
