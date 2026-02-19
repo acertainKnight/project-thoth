@@ -582,6 +582,26 @@ async def lifespan(app: FastAPI):
     if workflow_execution_service is not None:
         app.state.workflow_execution_service = workflow_execution_service
 
+    # In multi-user mode, start the RAG watcher across all user vaults
+    if os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true' and service_manager:
+        try:
+            vaults_root = Path(os.getenv('THOTH_VAULTS_ROOT', '/vaults'))
+            if hasattr(
+                service_manager, 'rag_watcher'
+            ) and service_manager._services.get('rag_watcher'):
+                postgres_svc = service_manager.postgres
+                rows = await postgres_svc.fetch(
+                    'SELECT username FROM users WHERE is_active = TRUE'
+                )
+                usernames = [row['username'] for row in rows] if rows else []
+                if usernames:
+                    service_manager.rag_watcher.start_multi_user(vaults_root, usernames)
+                    logger.info(
+                        f'Multi-user RAG watcher started for {len(usernames)} users'
+                    )
+        except Exception as e:
+            logger.warning(f'Could not start multi-user RAG watcher: {e}')
+
     logger.success('API server startup complete')
 
     try:

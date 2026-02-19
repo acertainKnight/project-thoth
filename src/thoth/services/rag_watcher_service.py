@@ -195,6 +195,41 @@ class RAGWatcherService(BaseService):
         """Initialize the watcher service."""
         self.logger.info('RAG watcher service initialized')
 
+    def start_multi_user(self, vaults_root: Path, users: list[str]) -> None:
+        """
+        Start watching vault directories for all registered users.
+
+        In multi-user mode, each user has their own vault under vaults_root.
+        This method collects all per-user pdf/markdown/notes directories and
+        starts a single shared watcher that monitors all of them.
+
+        Args:
+            vaults_root: Root directory containing all user vaults (THOTH_VAULTS_ROOT)
+            users: List of usernames to watch (from the users table)
+
+        Example:
+            >>> watcher.start_multi_user(Path('/vaults'), ['alice', 'bob'])
+        """
+        watch_dirs = []
+        for username in users:
+            user_vault = vaults_root / username / 'thoth'
+            for sub in ('papers/pdfs', 'papers/markdown', 'notes'):
+                candidate = user_vault / sub
+                if candidate.exists():
+                    watch_dirs.append(candidate)
+
+        if not watch_dirs:
+            self.logger.warning(
+                f'No vault directories found under {vaults_root} for users {users}'
+            )
+            return
+
+        self.logger.info(
+            f'Multi-user RAG watcher: watching {len(watch_dirs)} directories '
+            f'across {len(users)} users'
+        )
+        self.start(watch_dirs=watch_dirs)
+
     def start(self, watch_dirs: list[Path] | None = None) -> None:
         """
         Start watching directories for new files.
