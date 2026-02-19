@@ -1314,6 +1314,20 @@ class Config:
         # 6. Configure logging
         self._configure_logging()
 
+        # 7. Multi-user mode detection
+        self.multi_user: bool = os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true'
+        self.vaults_root: Path | None = None
+        if self.multi_user:
+            vaults_root_str = os.getenv('THOTH_VAULTS_ROOT')
+            if not vaults_root_str:
+                logger.warning(
+                    'THOTH_MULTI_USER=true but THOTH_VAULTS_ROOT not set. '
+                    'Defaulting to /vaults'
+                )
+                vaults_root_str = '/vaults'
+            self.vaults_root = Path(vaults_root_str).resolve()
+            logger.info(f'Multi-user mode enabled. Vaults root: {self.vaults_root}')
+
         self._initialized = True
         logger.success('Configuration loaded successfully with ALL settings preserved')
 
@@ -1632,9 +1646,31 @@ class Config:
     def mcp_port(self) -> int:
         return int(os.getenv('THOTH_MCP_PORT', '8001'))
 
+    def resolve_user_vault_path(self, username: str) -> Path:
+        """
+        Resolve the absolute vault path for a specific user.
+
+        In multi-user mode, each user has an isolated vault under THOTH_VAULTS_ROOT.
+        In single-user mode, always returns the global vault_root.
+
+        Args:
+            username: The user's username
+
+        Returns:
+            Absolute path to the user's vault directory
+
+        Example:
+            >>> config.resolve_user_vault_path('alice')
+            PosixPath('/vaults/alice')
+        """
+        if self.multi_user and self.vaults_root:
+            return self.vaults_root / username
+        return self.vault_root
+
     def __repr__(self) -> str:
         return (
             f'Config(vault_root={self.vault_root}, '
+            f'multi_user={self.multi_user}, '
             f'model={self.llm_config.default.model}, '
             f'log_level={self.logging_config.level})'
         )
