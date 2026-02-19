@@ -18,6 +18,8 @@ from fastapi import FastAPI
 from loguru import logger
 from starlette.middleware.cors import CORSMiddleware
 
+from thoth.auth.middleware import TokenAuthMiddleware
+
 # Optional: MCP monitoring (requires mcp extras)
 try:
     from thoth.mcp.monitoring import mcp_health_router
@@ -530,6 +532,8 @@ async def lifespan(app: FastAPI):
         )
 
         agent_init = AgentInitializationService()
+        # Store on service_manager so /auth/register can call initialize_agents_for_user
+        service_manager._services['agent_initialization'] = agent_init
         agent_ids = await agent_init.initialize_all_agents(
             service_manager=service_manager
         )
@@ -665,6 +669,17 @@ def create_app() -> FastAPI:
             'PATCH',
         ],  # Include OPTIONS and PATCH
         allow_headers=['*'],
+    )
+
+    # Add token auth middleware (no-op in single-user mode; enforces Bearer tokens
+    # in multi-user mode). AuthService is resolved lazily from request.app.state
+    # so it always references the live service after lifespan initialization.
+    _multi_user = os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true'
+    app.add_middleware(
+        TokenAuthMiddleware,
+        vaults_root=Path(os.getenv('THOTH_VAULTS_ROOT', '/vaults'))
+        if _multi_user
+        else None,
     )
 
     # Include routers with proper prefixes

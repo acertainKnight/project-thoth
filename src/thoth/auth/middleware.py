@@ -57,24 +57,45 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app: ASGIApp,
-        auth_service: AuthService,
+        auth_service: AuthService | None = None,
         vaults_root: Path | None = None,
         vault_root: Path | None = None,
     ):
         """
         Initialize middleware.
 
+        auth_service may be None at creation time (before lifespan runs).
+        The middleware lazily resolves it from request.app.state.service_manager
+        on first dispatch so it always uses the live service.
+
         Args:
             app: ASGI application
-            auth_service: Auth service for token validation
+            auth_service: Auth service for token validation (optional at init)
             vaults_root: Root directory for user vaults (multi-user)
             vault_root: Single vault directory (single-user)
         """
         super().__init__(app)
-        self.auth_service = auth_service
+        self._auth_service = auth_service
         self.vaults_root = vaults_root
         self.vault_root = vault_root
         self.multi_user = os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true'
+
+    def _resolve_auth_service(self, request) -> AuthService | None:
+        """
+        Resolve AuthService, preferring live service from app state.
+
+        Args:
+            request: Incoming request (has access to app.state)
+
+        Returns:
+            AuthService instance or None
+        """
+        service_manager = getattr(getattr(request, 'app', None), 'state', None)
+        if service_manager:
+            sm = getattr(service_manager, 'service_manager', None)
+            if sm and hasattr(sm, 'auth'):
+                return sm.auth
+        return self._auth_service
 
     def _is_exempt(self, path: str) -> bool:
         """
@@ -131,7 +152,7 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
                 content={'error': 'Server configuration error'},
             )
 
-        auth_service = self.auth_service
+        auth_service = self._resolve_auth_service(request)
         if auth_service is None:
             logger.error('AuthService not initialized')
             return JSONResponse(
