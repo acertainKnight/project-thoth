@@ -345,9 +345,20 @@ resolve_version() {
                 | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' \
                 | head -1)
             if [ -z "$RESOLVED_TAG" ]; then
-                echo -e "${YELLOW}No stable release found. Falling back to main branch.${NC}"
-                RESOLVED_TAG=""
-                RESOLVED_REF="main"
+                # No stable release found, fall back to latest non-nightly pre-release
+                echo -e "${YELLOW}No stable release found. Using latest alpha release...${NC}"
+                RESOLVED_TAG=$(curl -fsSL "${api_url}" 2>/dev/null \
+                    | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' \
+                    | grep -v 'nightly' \
+                    | head -1)
+                if [ -z "$RESOLVED_TAG" ]; then
+                    echo -e "${YELLOW}No releases found. Falling back to main branch.${NC}"
+                    RESOLVED_TAG=""
+                    RESOLVED_REF="main"
+                else
+                    echo -e "${GREEN}Found latest release: ${RESOLVED_TAG}${NC}"
+                    RESOLVED_REF="$RESOLVED_TAG"
+                fi
             else
                 echo -e "${GREEN}Found stable release: ${RESOLVED_TAG}${NC}"
                 RESOLVED_REF="$RESOLVED_TAG"
