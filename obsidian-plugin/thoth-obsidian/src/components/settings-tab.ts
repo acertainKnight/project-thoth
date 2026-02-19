@@ -103,6 +103,66 @@ export class SettingsTabComponent {
         text: 'Letta backend server for AI agent chats (e.g., http://localhost:8284 or Tailscale URL)',
         cls: 'thoth-setting-description'
       });
+
+      // API Token (multi-user mode only — leave blank for single-user)
+      const tokenSection = section.createDiv({ cls: 'thoth-setting-row' });
+      tokenSection.createEl('label', { text: 'API Token (Multi-User)' });
+      const tokenInput = tokenSection.createEl('input', { type: 'password' });
+      tokenInput.value = (this.settings as any).apiToken ?? '';
+      tokenInput.placeholder = 'thoth_… (leave blank for single-user mode)';
+      tokenInput.style.width = '100%';
+      tokenInput.style.maxWidth = '500px';
+      tokenInput.oninput = () => {
+        (this.settings as any).apiToken = tokenInput.value.trim();
+      };
+      tokenSection.createEl('span', {
+        text: 'Token from your Thoth server admin. Required when connecting to a shared server.',
+        cls: 'thoth-setting-description'
+      });
+
+      // Verify token button
+      const verifyRow = section.createDiv({ cls: 'thoth-setting-row' });
+      const verifyBtn = verifyRow.createEl('button', { text: 'Verify Token & Connection' });
+      const verifyStatus = verifyRow.createEl('span', { cls: 'thoth-setting-description' });
+
+      verifyBtn.onclick = async () => {
+        const token: string = tokenInput.value.trim();
+        const thothUrl = this.settings.remoteEndpointUrl.replace(/\/$/, '');
+
+        if (!token) {
+          verifyStatus.textContent = '⚠ No token entered — running in single-user mode';
+          verifyStatus.style.color = 'var(--color-orange)';
+          return;
+        }
+
+        verifyBtn.disabled = true;
+        verifyStatus.textContent = 'Checking…';
+        verifyStatus.style.color = 'var(--text-muted)';
+
+        try {
+          const response = await fetch(`${thothUrl}/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (response.ok) {
+            const info = await response.json();
+            verifyStatus.textContent = `✓ Connected as ${info.username}`;
+            verifyStatus.style.color = 'var(--color-green)';
+            (this.settings as any).apiToken = token;
+            await this.saveSettings();
+          } else if (response.status === 401) {
+            verifyStatus.textContent = '✗ Invalid token';
+            verifyStatus.style.color = 'var(--color-red)';
+          } else {
+            verifyStatus.textContent = `✗ Server returned ${response.status}`;
+            verifyStatus.style.color = 'var(--color-red)';
+          }
+        } catch {
+          verifyStatus.textContent = '✗ Cannot reach server';
+          verifyStatus.style.color = 'var(--color-red)';
+        } finally {
+          verifyBtn.disabled = false;
+        }
+      };
     }
   }
 

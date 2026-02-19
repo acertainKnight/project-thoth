@@ -424,7 +424,12 @@ export default class ThothPlugin extends Plugin {
   }
 
   async connectWebSocket(retries = 3): Promise<void> {
-    const wsUrl = this.getEndpointUrl().replace(/^http/, 'ws') + '/ws/chat';
+    const baseWsUrl = this.getEndpointUrl().replace(/^http/, 'ws') + '/ws/chat';
+    // Attach token as query param for WebSocket auth (headers not supported in browser WS API)
+    const apiToken: string = (this.settings as any).apiToken ?? '';
+    const wsUrl = apiToken
+      ? `${baseWsUrl}?token=${encodeURIComponent(apiToken)}`
+      : baseWsUrl;
 
     for (let attempt = 0; attempt < retries; attempt++) {
       try {

@@ -9,6 +9,61 @@ export class APIUtilities {
   constructor() {}
 
   /**
+   * Build Authorization headers for multi-user mode.
+   *
+   * Returns an Authorization header when apiToken is set (multi-user mode).
+   * Returns an empty object in single-user mode so existing requests are unaffected.
+   *
+   * @param apiToken - The user's API token from settings (empty string = single-user)
+   * @returns Header object to spread into fetch options
+   */
+  static buildAuthHeaders(apiToken: string): Record<string, string> {
+    if (!apiToken) return {};
+    return { Authorization: `Bearer ${apiToken}` };
+  }
+
+  /**
+   * Resolve the current user's Letta agent IDs via GET /auth/me.
+   *
+   * In multi-user mode, each user has their own namespaced agents
+   * (e.g. thoth_main_orchestrator_alice). The /auth/me endpoint returns
+   * the orchestrator_agent_id directly so we don't need to scan all agents.
+   *
+   * Falls back to null in single-user mode (no apiToken set).
+   *
+   * @param thothBaseUrl - Thoth API base URL
+   * @param apiToken - Bearer token (empty = single-user mode)
+   * @returns Object with orchestratorId and analystId, or null values if unavailable
+   */
+  async resolveUserAgentIds(
+    thothBaseUrl: string,
+    apiToken: string
+  ): Promise<{ orchestratorId: string | null; analystId: string | null }> {
+    if (!apiToken) {
+      return { orchestratorId: null, analystId: null };
+    }
+
+    try {
+      const url = this.buildEndpointUrl(thothBaseUrl, '/auth/me');
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${apiToken}` },
+      });
+
+      if (response.ok) {
+        const userInfo = await response.json();
+        return {
+          orchestratorId: userInfo.orchestrator_agent_id ?? null,
+          analystId: userInfo.analyst_agent_id ?? null,
+        };
+      }
+    } catch (e) {
+      console.warn('[APIUtilities] Could not resolve agent IDs from /auth/me:', e);
+    }
+
+    return { orchestratorId: null, analystId: null };
+  }
+
+  /**
    * Cache management utilities
    */
   getCachedRequest(key: string): any {

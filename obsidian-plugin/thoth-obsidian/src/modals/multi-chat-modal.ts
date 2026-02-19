@@ -2084,8 +2084,32 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
     try {
       const endpoint = this.plugin.getLettaEndpointUrl();
-      // Get the main Thoth orchestrator agent (auto-created by backend on startup)
-      // Note: Letta API requires trailing slash on collection endpoints
+      const apiToken: string = (this.plugin.settings as any).apiToken ?? '';
+
+      // Multi-user mode: resolve agent ID via /auth/me (returns per-user agent ID)
+      if (apiToken) {
+        const thothUrl = this.plugin.settings.remoteEndpointUrl;
+        const meUrl = `${thothUrl.replace(/\/$/, '')}/auth/me`;
+        try {
+          const meResponse = await this.fetchWithTimeout(meUrl, {
+            headers: { Authorization: `Bearer ${apiToken}` },
+          });
+          if (meResponse.ok) {
+            const userInfo = await meResponse.json();
+            const orchestratorId = userInfo.orchestrator_agent_id;
+            if (orchestratorId) {
+              this.plugin.settings.lettaAgentId = orchestratorId;
+              await this.plugin.saveSettings();
+              console.log('[MultiChatModal] Resolved agent ID from /auth/me:', orchestratorId);
+              return orchestratorId;
+            }
+          }
+        } catch (meError) {
+          console.warn('[MultiChatModal] /auth/me lookup failed, falling back to agent list:', meError);
+        }
+      }
+
+      // Single-user mode (or /auth/me fallback): scan Letta agent list by name
       // Use view=basic to avoid fetching full memory blocks (30MB+ with all agents!)
       const listResponse = await this.fetchWithTimeout(`${endpoint}/v1/agents/?view=basic`);
       if (listResponse.ok) {
