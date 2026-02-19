@@ -380,6 +380,45 @@ letta-restart: ## Restart Letta services (WARNING: affects ALL projects)
 letta-logs: ## View Letta server logs
 	@docker logs -f letta-server
 
+# ==============================================================================
+# Multi-User Management
+# ==============================================================================
+
+.PHONY: user-create
+user-create: ## Create a user: make user-create USERNAME=alice [EMAIL=a@b.com] [ADMIN=true]
+	@if [ -z "$(USERNAME)" ]; then echo "Usage: make user-create USERNAME=alice"; exit 1; fi
+	@uv run thoth users create $(USERNAME) \
+		$(if $(EMAIL),--email $(EMAIL),) \
+		$(if $(filter true,$(ADMIN)),--admin,)
+
+.PHONY: user-list
+user-list: ## List all users
+	@uv run thoth users list
+
+.PHONY: user-reset-token
+user-reset-token: ## Reset a user's API token: make user-reset-token USERNAME=alice
+	@if [ -z "$(USERNAME)" ]; then echo "Usage: make user-reset-token USERNAME=alice"; exit 1; fi
+	@uv run thoth users reset-token $(USERNAME)
+
+.PHONY: user-deactivate
+user-deactivate: ## Deactivate a user: make user-deactivate USERNAME=alice
+	@if [ -z "$(USERNAME)" ]; then echo "Usage: make user-deactivate USERNAME=alice"; exit 1; fi
+	@uv run thoth users deactivate $(USERNAME)
+
+.PHONY: user-info
+user-info: ## Show user details: make user-info USERNAME=alice
+	@if [ -z "$(USERNAME)" ]; then echo "Usage: make user-info USERNAME=alice"; exit 1; fi
+	@uv run thoth users info $(USERNAME)
+
+.PHONY: multi-user-enable
+multi-user-enable: ## Enable multi-user mode: sets THOTH_MULTI_USER=true in .env
+	@grep -q 'THOTH_MULTI_USER' .env && \
+		sed -i 's/.*THOTH_MULTI_USER.*/THOTH_MULTI_USER=true/' .env || \
+		echo 'THOTH_MULTI_USER=true' >> .env
+	@grep -q 'THOTH_VAULTS_ROOT' .env || echo 'THOTH_VAULTS_ROOT=/vaults' >> .env
+	@echo "Multi-user mode enabled. Set THOTH_VAULTS_ROOT in .env if needed."
+	@echo "Run 'make user-create USERNAME=admin ADMIN=true' to create the first admin."
+
 .PHONY: thoth-start
 thoth-start: ## Start Thoth services (requires Letta to be running)
 	@echo "$(YELLOW)Starting Thoth services...$(NC)"
