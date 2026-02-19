@@ -111,12 +111,12 @@ export THOTH_IMAGE_TAG="${THOTH_IMAGE_TAG:-latest}"
 
 case "$1" in
     start)
-        echo "🚀 Starting Thoth services..."
+        echo "Starting Thoth services..."
         echo "   Image tag: ${THOTH_IMAGE_TAG}"
         cd "$PROJECT_ROOT"
 
         if [ ! -f ".env" ] || ! grep -q 'OBSIDIAN_VAULT_PATH' .env 2>/dev/null; then
-            echo "❌ .env file missing or OBSIDIAN_VAULT_PATH not set."
+            echo "Error: .env file missing or OBSIDIAN_VAULT_PATH not set."
             echo "   Run the setup wizard first, or create .env from .env.example:"
             echo "   cp .env.example .env && edit .env"
             exit 1
@@ -142,7 +142,7 @@ case "$1" in
         echo "  Starting Thoth containers..."
         docker compose -f docker-compose.dev.yml --profile microservices up -d
 
-        echo "✅ Thoth is running!"
+        echo "Thoth is running!"
         [ "$LETTA_MODE" = "cloud" ] && echo "   Letta: Cloud" || echo "   Letta: localhost:8283"
         echo "   API: http://localhost:8000"
         echo "   MCP: http://localhost:8082"
@@ -558,6 +558,33 @@ echo -e "${YELLOW}Installing via Docker...${NC}\n"
     # Ensure .env.letta exists (Letta compose requires it)
     if [ ! -f "$PROJECT_ROOT/.env.letta" ]; then
         touch "$PROJECT_ROOT/.env.letta"
+    fi
+
+    # Persist OBSIDIAN_VAULT_PATH into the user's shell profile so it's
+    # always available (Docker Compose volume mounts read it at runtime).
+    if [ -f "$PROJECT_ROOT/.env" ]; then
+        VAULT_PATH=$(grep '^OBSIDIAN_VAULT_PATH=' "$PROJECT_ROOT/.env" 2>/dev/null | cut -d'=' -f2-)
+        if [ -n "$VAULT_PATH" ]; then
+            EXPORT_LINE="export OBSIDIAN_VAULT_PATH=\"$VAULT_PATH\""
+
+            for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+                if [ -f "$rc" ]; then
+                    # Remove any stale export, then append the current one
+                    grep -v 'export OBSIDIAN_VAULT_PATH=' "$rc" > "${rc}.thoth_tmp" || true
+                    echo "$EXPORT_LINE" >> "${rc}.thoth_tmp"
+                    mv "${rc}.thoth_tmp" "$rc"
+                fi
+            done
+
+            # On macOS, create .zshrc if it doesn't exist (default shell is zsh)
+            if [ "$(uname)" = "Darwin" ] && [ ! -f "$HOME/.zshrc" ]; then
+                echo "$EXPORT_LINE" > "$HOME/.zshrc"
+            fi
+
+            # Export for the remainder of this script
+            export OBSIDIAN_VAULT_PATH="$VAULT_PATH"
+            echo -e "${GREEN}✓ OBSIDIAN_VAULT_PATH persisted to shell profile${NC}"
+        fi
     fi
 
     # Offer to start services now

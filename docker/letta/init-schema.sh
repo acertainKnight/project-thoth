@@ -1,85 +1,70 @@
 #!/bin/bash
 set -e
 
-echo "==> Initializing Letta database schema..."
+# Start Letta server in the background. Letta handles its own schema
+# creation and seeds the default org/user on first boot — we don't need
+# to create tables or insert rows manually.
+echo "==> Starting Letta server..."
+letta server --host 0.0.0.0 --port 8283 --ade &
+LETTA_PID=$!
 
-# Wait for PostgreSQL to be ready
-until python3 -c "import psycopg2; psycopg2.connect('$LETTA_PG_URI')" 2>/dev/null; do
-  echo "Waiting for PostgreSQL..."
-  sleep 2
+# Wait for Letta to become healthy (it creates the schema + default org
+# during startup, so the /v1/health endpoint only succeeds after that).
+echo "==> Waiting for Letta to be ready..."
+MAX_WAIT=180
+WAITED=0
+until curl -sf http://localhost:8283/v1/health > /dev/null 2>&1; do
+    if ! kill -0 "$LETTA_PID" 2>/dev/null; then
+        echo "==> ERROR: Letta process exited unexpectedly"
+        exit 1
+    fi
+    if [ "$WAITED" -ge "$MAX_WAIT" ]; then
+        echo "==> ERROR: Letta did not become healthy within ${MAX_WAIT}s"
+        exit 1
+    fi
+    sleep 3
+    WAITED=$((WAITED + 3))
+    echo "  Still waiting... (${WAITED}s)"
 done
 
-echo "PostgreSQL is ready!"
+echo "==> Letta is healthy (took ~${WAITED}s)"
 
-# Create schema using Letta ORM
-python3 << 'EOF'
-import os
-from letta.orm import Base
-from sqlalchemy import create_engine, inspect
+# Register the Thoth MCP server via the REST API. This avoids the
+# foreign-key issues that come from inserting directly into the DB
+# before Letta seeds its default organization.
+# THOTH_MCP_URL comes from docker-compose.letta.yml (default: http://thoth-mcp:8001).
+# The MCP endpoint path is /mcp under that base URL.
+THOTH_MCP_BASE="${THOTH_MCP_URL:-http://thoth-mcp:8001}"
+THOTH_MCP_ENDPOINT="${THOTH_MCP_BASE}/mcp"
 
-# Get connection string from environment
-pg_uri = os.environ.get('LETTA_PG_URI')
-print(f"Creating schema with URI: {pg_uri}")
+echo "==> Registering Thoth MCP server via API..."
 
-# Create engine and tables
-engine = create_engine(pg_uri, echo=True)
-Base.metadata.create_all(engine)
+# Check if already registered
+EXISTING=$(curl -sf http://localhost:8283/v1/tools/mcp/servers 2>/dev/null || echo "[]")
+if echo "$EXISTING" | grep -q '"thoth-research-tools"'; then
+    echo "==> Thoth MCP server already registered"
+else
+    # The /v1/tools/mcp/servers endpoint registers a new MCP server.
+    # Letta 0.16+ uses streamable_http transport.
+    RESPONSE=$(curl -sf -X POST http://localhost:8283/v1/tools/mcp/servers \
+        -H "Content-Type: application/json" \
+        -d "{
+            \"server_name\": \"thoth-research-tools\",
+            \"server_type\": \"streamable_http\",
+            \"server_url\": \"${THOTH_MCP_ENDPOINT}\"
+        }" 2>&1) || true
 
-# Verify tables were created
-inspector = inspect(engine)
-tables = inspector.get_table_names()
-print(f"\n==> Created {len(tables)} tables:")
-for table in sorted(tables):
-    print(f"  ✓ {table}")
+    if echo "$RESPONSE" | grep -q '"id"'; then
+        echo "==> Thoth MCP server registered successfully"
+    else
+        # Non-fatal: the MCP server can be registered later via the UI
+        echo "==> Warning: Could not register MCP server via API."
+        echo "    Response: ${RESPONSE}"
+        echo "    You can register it manually in the Letta ADE."
+    fi
+fi
 
-if 'organizations' in tables:
-    print("\n==> Schema initialization successful!")
-else:
-    print("\n==> ERROR: organizations table not found!")
-    exit(1)
-EOF
+echo "==> Letta initialization complete, server running (pid $LETTA_PID)"
 
-# Register Thoth MCP server in database
-echo "==> Registering Thoth MCP server in database..."
-python3 << 'EOF'
-import os
-import uuid
-from sqlalchemy import create_engine, text
-
-pg_uri = os.environ.get('LETTA_PG_URI')
-engine = create_engine(pg_uri)
-
-# Check if MCP server already registered
-with engine.connect() as conn:
-    result = conn.execute(text("SELECT COUNT(*) FROM mcp_server WHERE server_name = 'thoth-research-tools'"))
-    count = result.scalar()
-
-    if count == 0:
-        # Insert MCP server registration
-        # Note: Letta requires 'mcp_server-' prefix (underscore, not hyphen)
-        mcp_server_id = f"mcp_server-{uuid.uuid4()}"
-        conn.execute(text("""
-            INSERT INTO mcp_server (
-                id, server_name, server_type, server_url,
-                organization_id, is_deleted,
-                _created_by_id, _last_updated_by_id
-            ) VALUES (
-                :id, :name, :type, :url,
-                'org-00000000-0000-4000-8000-000000000000', false,
-                'user-00000000-0000-4000-8000-000000000000',
-                'user-00000000-0000-4000-8000-000000000000'
-            )
-        """), {
-            "id": mcp_server_id,
-            "name": "thoth-research-tools",
-            "type": "streamable_http",
-            "url": "http://thoth-mcp:8000/mcp"
-        })
-        conn.commit()
-        print(f"✓ Registered Thoth MCP server: {mcp_server_id}")
-    else:
-        print("✓ Thoth MCP server already registered")
-EOF
-
-echo "==> Starting Letta server..."
-exec letta server --host 0.0.0.0 --port 8283 --ade
+# Bring the Letta process to the foreground so Docker can track it
+wait "$LETTA_PID"

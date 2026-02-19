@@ -5,7 +5,7 @@ Shows installation summary and next steps.
 
 from __future__ import annotations
 
-import subprocess  # nosec B404  # Required for platform detection and plugin building
+import subprocess  # nosec B404  # Required for starting Docker services
 import urllib.request  # nosec B310  # Required for downloading plugin from GitHub releases
 import zipfile
 from pathlib import Path
@@ -156,6 +156,13 @@ class CompletionScreen(BaseScreen):
     async def install_obsidian_plugin(self) -> bool:
         """Install Obsidian plugin to vault.
 
+        Tries these sources in order:
+        1. Pre-built dist/ from project source (always present in the Docker
+           setup image thanks to the multi-stage build in Dockerfile.setup)
+        2. Download from the latest GitHub release
+        3. Writes a data.json with endpoint config so the user can drop in
+           plugin files later
+
         Returns:
             True if successful, False otherwise
         """
@@ -170,96 +177,30 @@ class CompletionScreen(BaseScreen):
         self.show_info('[bold]Installing Obsidian plugin...[/bold]')
 
         try:
-            # Try to download pre-built plugin from latest release
-            latest_release_url = 'https://api.github.com/repos/acertainknight/project-thoth/releases/latest'
+            # 1. Check for pre-built plugin in project source (Docker image
+            #    always has these from the Node build stage)
+            plugin_src = self._find_plugin_source(vault_root)
+            if plugin_src:
+                installed = self._copy_prebuilt_plugin(plugin_src, plugin_dir)
+                if installed:
+                    self.show_success('Plugin installed from pre-built files')
+                    return True
 
+            # 2. Try to download from latest GitHub release
             try:
-                with urllib.request.urlopen(latest_release_url, timeout=10) as response:  # nosec B310  # URL is from GitHub API
-                    import json
-
-                    release_data = json.loads(response.read().decode())
-
-                    # Find plugin zip in assets
-                    plugin_asset = None
-                    for asset in release_data.get('assets', []):
-                        if asset['name'].startswith('thoth-obsidian-') and asset[
-                            'name'
-                        ].endswith('.zip'):
-                            plugin_asset = asset
-                            break
-
-                    if plugin_asset:
-                        # Download plugin
-                        self.show_info(
-                            f'Downloading plugin v{release_data["tag_name"]}...'
-                        )
-                        zip_path = plugin_dir / 'plugin.zip'
-
-                        urllib.request.urlretrieve(  # nosec B310  # URL is from GitHub API
-                            plugin_asset['browser_download_url'], zip_path
-                        )
-
-                        # Extract
-                        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                            zip_ref.extractall(plugin_dir)
-
-                        zip_path.unlink()  # Remove zip
-                        self.show_success('✓ Plugin downloaded from release')
-                        return True
-
+                installed = self._download_plugin_from_release(plugin_dir)
+                if installed:
+                    return True
             except Exception as e:
                 logger.debug(f'Could not download plugin from release: {e}')
-                self.show_info('Release version not available, building locally...')
 
-            # Fallback: Try to find and build plugin from project source
-            plugin_src = self._find_plugin_source(vault_root)
-
-            if plugin_src and plugin_src.exists():
-                self.show_info('Building plugin from source...')
-                try:
-                    result = subprocess.run(  # nosec B603  # Safe: command from trusted source
-                        ['npm', 'install'],
-                        cwd=plugin_src,
-                        capture_output=True,
-                        text=True,
-                        timeout=120,
-                    )
-
-                    if result.returncode == 0:
-                        result = subprocess.run(  # nosec B603  # Safe: command from trusted source
-                            ['npm', 'run', 'build'],
-                            cwd=plugin_src,
-                            capture_output=True,
-                            text=True,
-                            timeout=60,
-                        )
-
-                    if result.returncode == 0:
-                        import shutil
-
-                        # esbuild outputs to dist/main.js; manifest and
-                        # styles live in the source root
-                        dist_dir = plugin_src / 'dist'
-                        for file in ['main.js']:
-                            src = dist_dir / file
-                            if src.exists():
-                                shutil.copy(src, plugin_dir / file)
-                        for file in ['manifest.json', 'styles.css']:
-                            src = plugin_src / file
-                            if src.exists():
-                                shutil.copy(src, plugin_dir / file)
-                        self.show_success('Plugin built and installed')
-                        return True
-                except Exception as e:
-                    logger.debug(f'Local build failed: {e}')
-
-            # Final fallback: Create plugin directory with data.json
-            # so the user can manually install plugin files later
+            # 3. Final fallback: write data.json so the user can install
+            #    plugin files manually
             self._write_plugin_data_json(plugin_dir)
             self.show_warning(
-                'Could not download or build plugin automatically.\n'
+                'Could not find or download pre-built plugin.\n'
                 'Plugin directory created with endpoint config.\n'
-                'Install plugin files manually from the GitHub releases page.'
+                'Install plugin files from the GitHub releases page.'
             )
             return False
 
@@ -267,6 +208,78 @@ class CompletionScreen(BaseScreen):
             logger.error(f'Plugin installation failed: {e}')
             self.show_warning(f'Could not install plugin: {e}')
             return False
+
+    def _copy_prebuilt_plugin(self, plugin_src: Path, plugin_dir: Path) -> bool:
+        """Copy pre-built plugin files from source into the vault plugin dir.
+
+        Args:
+            plugin_src: Root of the obsidian-plugin/thoth-obsidian tree
+            plugin_dir: Destination inside the vault's .obsidian/plugins/
+
+        Returns:
+            True if main.js was found and copied.
+        """
+        import shutil
+
+        dist_dir = plugin_src / 'dist'
+        copied_main = False
+
+        if dist_dir.exists():
+            for item in dist_dir.iterdir():
+                if item.is_file() and item.suffix in {'.js', '.json', '.css'}:
+                    shutil.copy2(item, plugin_dir / item.name)
+                    if item.name == 'main.js':
+                        copied_main = True
+
+        for name in ('manifest.json', 'styles.css'):
+            src_file = plugin_src / name
+            if src_file.exists():
+                shutil.copy2(src_file, plugin_dir / name)
+
+        return copied_main
+
+    def _download_plugin_from_release(self, plugin_dir: Path) -> bool:
+        """Download and extract the plugin zip from the latest GitHub release.
+
+        Args:
+            plugin_dir: Destination directory
+
+        Returns:
+            True if download succeeded.
+        """
+        import json
+
+        latest_release_url = (
+            'https://api.github.com/repos/acertainknight/project-thoth/releases/latest'
+        )
+
+        with urllib.request.urlopen(latest_release_url, timeout=10) as response:  # nosec B310
+            release_data = json.loads(response.read().decode())
+
+        plugin_asset = None
+        for asset in release_data.get('assets', []):
+            if asset['name'].startswith('thoth-obsidian-') and asset['name'].endswith(
+                '.zip'
+            ):
+                plugin_asset = asset
+                break
+
+        if not plugin_asset:
+            return False
+
+        self.show_info(f'Downloading plugin v{release_data["tag_name"]}...')
+        zip_path = plugin_dir / 'plugin.zip'
+
+        urllib.request.urlretrieve(  # nosec B310
+            plugin_asset['browser_download_url'], zip_path
+        )
+
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(plugin_dir)
+
+        zip_path.unlink()
+        self.show_success('Plugin downloaded from release')
+        return True
 
     def _find_project_root(self) -> Path | None:
         """Find the project root (where docker-compose.yml lives).

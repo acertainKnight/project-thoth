@@ -90,6 +90,10 @@ class VaultSelectionScreen(BaseScreen):
         self.selected_vault: Path | None = None
         self.custom_path: str = ''
 
+        # Pre-populate from env if already set (e.g. from a previous install
+        # that persisted it to .bashrc/.zshrc)
+        self._env_vault_path = os.environ.get('OBSIDIAN_VAULT_PATH', '').strip()
+
     def on_mount(self) -> None:
         """Run when screen is mounted."""
         # Detect Obsidian and vaults in background
@@ -200,9 +204,10 @@ class VaultSelectionScreen(BaseScreen):
                 '\n[bold cyan]Please enter your Obsidian vault path:[/bold cyan]'
             )
 
-        # Custom path input (always shown)
+        # Custom path input (always shown). Pre-fill from env if available.
         yield Input(
             placeholder='/path/to/your/obsidian/vault (e.g., ~/Documents/MyVault)',
+            value=self._env_vault_path,
             id='custom-path',
         )
 
