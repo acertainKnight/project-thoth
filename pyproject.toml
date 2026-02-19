@@ -281,6 +281,8 @@ extend-unsafe-fixes = ["UP034"]
 "src/thoth/server/routers/research.py" = ["B008"]
 "src/thoth/server/routers/tools.py" = ["B008"]
 "src/thoth/server/routers/websocket.py" = ["B008"]
+# BaseRepository uses Generic[T] for backward compatibility
+"src/thoth/repositories/base.py" = ["UP046"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"

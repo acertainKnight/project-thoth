@@ -7,7 +7,7 @@ generic CRUD methods, caching support, and error handling.
 
 import json  # noqa: I001
 from datetime import datetime, date  # noqa: F401
-from typing import Any, Dict, List, TypeVar, Generic, Union  # noqa: UP035
+from typing import Any, Dict, List, TypeVar, Generic  # noqa: UP035
 from uuid import UUID
 from loguru import logger
 from cachetools import TTLCache
@@ -95,17 +95,23 @@ class BaseRepository(Generic[T]):
         except Exception as e:
             logger.warning(f'Cache invalidation failed: {e}')
 
-    async def create(self, data: Dict[str, Any]) -> int | None:  # noqa: UP006
+    async def create(
+        self, data: dict[str, Any], user_id: str | None = None
+    ) -> int | None:
         """
         Create a new record.
 
         Args:
             data: Dictionary of column values
+            user_id: Optional user ID for multi-tenant filtering (auto-injected)
 
         Returns:
             Optional[int]: ID of created record or None
         """
         try:
+            if user_id is not None:
+                data = {**data, 'user_id': user_id}
+
             columns = list(data.keys())
             placeholders = [f'${i + 1}' for i in range(len(columns))]
 
@@ -152,24 +158,33 @@ class BaseRepository(Generic[T]):
             logger.error(f'Failed to create {self.table_name} record: {e}')
             return None
 
-    async def get_by_id(self, record_id: Union[int, UUID]) -> Dict[str, Any] | None:  # noqa: UP006, UP007
+    async def get_by_id(
+        self, record_id: int | UUID, user_id: str | None = None
+    ) -> Dict[str, Any] | None:  # noqa: UP006
         """
         Get a record by ID.
 
         Args:
             record_id: Record ID (int or UUID)
+            user_id: Optional user ID for multi-tenant filtering
 
         Returns:
             Optional[Dict[str, Any]]: Record data or None
         """
-        cache_key = self._cache_key('id', record_id)
+        cache_key = self._cache_key('id', record_id, user_id=user_id)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
 
         try:
-            query = f'SELECT * FROM {self.table_name} WHERE id = $1'
-            result = await self.postgres.fetchrow(query, record_id)
+            if user_id is not None:
+                query = (
+                    f'SELECT * FROM {self.table_name} WHERE id = $1 AND user_id = $2'
+                )
+                result = await self.postgres.fetchrow(query, record_id, user_id)
+            else:
+                query = f'SELECT * FROM {self.table_name} WHERE id = $1'
+                result = await self.postgres.fetchrow(query, record_id)
 
             if result:
                 data = dict(result)
@@ -182,13 +197,16 @@ class BaseRepository(Generic[T]):
             logger.error(f'Failed to get {self.table_name} by ID {record_id}: {e}')
             return None
 
-    async def update(self, record_id: int | UUID, data: Dict[str, Any]) -> bool:  # noqa: UP006
+    async def update(
+        self, record_id: int | UUID, data: dict[str, Any], user_id: str | None = None
+    ) -> bool:
         """
         Update a record.
 
         Args:
             record_id: Record ID
             data: Dictionary of column values to update
+            user_id: Optional user ID for multi-tenant filtering
 
         Returns:
             bool: True if successful, False otherwise
@@ -213,11 +231,19 @@ class BaseRepository(Generic[T]):
 
             values = [record_id] + serialized_values  # noqa: RUF005
 
-            query = f"""
-                UPDATE {self.table_name}
-                SET {', '.join(set_clauses)}
-                WHERE id = $1
-            """
+            if user_id is not None:
+                query = f"""
+                    UPDATE {self.table_name}
+                    SET {', '.join(set_clauses)}
+                    WHERE id = $1 AND user_id = ${len(values) + 1}
+                """
+                values.append(user_id)
+            else:
+                query = f"""
+                    UPDATE {self.table_name}
+                    SET {', '.join(set_clauses)}
+                    WHERE id = $1
+                """
 
             await self.postgres.execute(query, *values)
 
@@ -231,19 +257,24 @@ class BaseRepository(Generic[T]):
             logger.error(f'Failed to update {self.table_name} record {record_id}: {e}')
             return False
 
-    async def delete(self, record_id: int | UUID) -> bool:
+    async def delete(self, record_id: int | UUID, user_id: str | None = None) -> bool:
         """
         Delete a record.
 
         Args:
             record_id: Record ID (int or UUID)
+            user_id: Optional user ID for multi-tenant filtering
 
         Returns:
             bool: True if successful, False otherwise
         """
         try:
-            query = f'DELETE FROM {self.table_name} WHERE id = $1'
-            await self.postgres.execute(query, record_id)
+            if user_id is not None:
+                query = f'DELETE FROM {self.table_name} WHERE id = $1 AND user_id = $2'
+                await self.postgres.execute(query, record_id, user_id)
+            else:
+                query = f'DELETE FROM {self.table_name} WHERE id = $1'
+                await self.postgres.execute(query, record_id)
 
             # Invalidate cache
             self._invalidate_cache(str(record_id))
@@ -259,6 +290,7 @@ class BaseRepository(Generic[T]):
         self,
         limit: int | None = None,
         offset: int | None = None,
+        user_id: str | None = None,
     ) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         List all records with pagination.
@@ -266,6 +298,7 @@ class BaseRepository(Generic[T]):
         Args:
             limit: Maximum number of records
             offset: Number of records to skip
+            user_id: Optional user ID for multi-tenant filtering
 
         Returns:
             List[Dict[str, Any]]: List of records
@@ -273,6 +306,10 @@ class BaseRepository(Generic[T]):
         try:
             query = f'SELECT * FROM {self.table_name}'
             params = []
+
+            if user_id is not None:
+                params.append(user_id)
+                query += f' WHERE user_id = ${len(params)}'
 
             if limit is not None:
                 params.append(limit)
@@ -289,34 +326,46 @@ class BaseRepository(Generic[T]):
             logger.error(f'Failed to list {self.table_name} records: {e}')
             return []
 
-    async def count(self) -> int:
+    async def count(self, user_id: str | None = None) -> int:
         """
         Count total records.
+
+        Args:
+            user_id: Optional user ID for multi-tenant filtering
 
         Returns:
             int: Total number of records
         """
         try:
-            query = f'SELECT COUNT(*) FROM {self.table_name}'
-            return await self.postgres.fetchval(query) or 0
+            if user_id is not None:
+                query = f'SELECT COUNT(*) FROM {self.table_name} WHERE user_id = $1'
+                return await self.postgres.fetchval(query, user_id) or 0
+            else:
+                query = f'SELECT COUNT(*) FROM {self.table_name}'
+                return await self.postgres.fetchval(query) or 0
 
         except Exception as e:
             logger.error(f'Failed to count {self.table_name} records: {e}')
             return 0
 
-    async def exists(self, record_id: int | UUID) -> bool:
+    async def exists(self, record_id: int | UUID, user_id: str | None = None) -> bool:
         """
         Check if a record exists.
 
         Args:
             record_id: Record ID (int or UUID)
+            user_id: Optional user ID for multi-tenant filtering
 
         Returns:
             bool: True if exists, False otherwise
         """
         try:
-            query = f'SELECT EXISTS(SELECT 1 FROM {self.table_name} WHERE id = $1)'
-            return await self.postgres.fetchval(query, record_id) or False
+            if user_id is not None:
+                query = f'SELECT EXISTS(SELECT 1 FROM {self.table_name} WHERE id = $1 AND user_id = $2)'
+                return await self.postgres.fetchval(query, record_id, user_id) or False
+            else:
+                query = f'SELECT EXISTS(SELECT 1 FROM {self.table_name} WHERE id = $1)'
+                return await self.postgres.fetchval(query, record_id) or False
 
         except Exception as e:
             logger.error(f'Failed to check {self.table_name} existence: {e}')
