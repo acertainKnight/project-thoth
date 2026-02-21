@@ -29,7 +29,6 @@ except ImportError:
     mcp_health_router = None  # type: ignore
     MCP_HEALTH_AVAILABLE = False
 
-from thoth.server.chat_models import ChatPersistenceManager
 
 # Optional hot reload for development (requires watchdog package)
 try:
@@ -46,7 +45,6 @@ except ImportError:
 from thoth.server.routers import (  # noqa: I001
     agent,
     auth,
-    chat,
     config as config_router,
     files,
     health,
@@ -101,7 +99,6 @@ workflow_execution_service = None
 # NOTE: The following have been moved to app.state for better thread safety:
 # - service_manager (accessed via dependencies.get_service_manager)
 # - research_agent (accessed via dependencies.get_research_agent)
-# - chat_manager (accessed via dependencies.get_chat_manager)
 # - agent_adapter, llm_router (not needed in routers)
 
 
@@ -716,7 +713,6 @@ def create_app() -> FastAPI:
         logger.debug('MCP health monitoring not available (requires mcp extras)')
 
     app.include_router(websocket.router, tags=['websocket'])
-    app.include_router(chat.router, prefix='/chat', tags=['chat'])
     app.include_router(agent.router, prefix='/agents', tags=['agent'])
     app.include_router(research.router, prefix='/research', tags=['research'])
     app.include_router(
@@ -841,14 +837,7 @@ async def start_server(
         auto_start_mcp: Whether to start the MCP server automatically
         **kwargs: Additional configuration options
     """
-    global \
-        service_manager, \
-        research_agent, \
-        chat_manager, \
-        pdf_dir, \
-        notes_dir, \
-        base_url, \
-        current_config
+    global service_manager, research_agent, pdf_dir, notes_dir, base_url, current_config
 
     try:
         # Get configuration
@@ -874,16 +863,6 @@ async def start_server(
 
         # Initialize LLM router
         llm_router = LLMRouter(config)  # noqa: F841
-
-        # Initialize chat persistence manager
-        try:
-            chat_manager = ChatPersistenceManager(
-                storage_path=config.agent_storage_dir / 'chat_sessions.db'
-            )
-            logger.info('Chat persistence manager initialized')
-        except Exception as e:
-            logger.warning(f'Failed to initialize chat manager: {e}')
-            chat_manager = None
 
         # Start MCP server FIRST if requested
         if auto_start_mcp:
@@ -954,7 +933,6 @@ def start_obsidian_server(
         # Store dependencies in app.state for router access
         app.state.service_manager = service_manager
         app.state.research_agent = research_agent
-        app.state.chat_manager = chat_manager
         app.state.workflow_execution_service = workflow_execution_service
 
         logger.info('Dependencies stored in app.state for router access')
@@ -1004,7 +982,6 @@ app = create_app()
 # Initialize empty app.state for direct imports (populated by lifespan)
 app.state.service_manager = None
 app.state.research_agent = None
-app.state.chat_manager = None
 app.state.workflow_execution_service = None
 
 # Export the main functions

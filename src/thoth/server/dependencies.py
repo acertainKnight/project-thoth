@@ -48,22 +48,6 @@ def get_research_agent(request: Request):
     return getattr(request.app.state, 'research_agent', None)
 
 
-def get_chat_manager(request: Request):
-    """
-    Get chat manager from application state.
-
-    Args:
-        request: FastAPI request object
-
-    Returns:
-        Chat manager instance or None
-
-    Note:
-        Returns None if chat manager not initialized (not an error)
-    """
-    return getattr(request.app.state, 'chat_manager', None)
-
-
 def get_workflow_execution_service(request: Request):
     """
     Get workflow execution service from application state.

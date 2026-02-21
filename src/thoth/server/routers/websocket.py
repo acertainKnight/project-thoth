@@ -13,7 +13,6 @@ from loguru import logger
 from thoth.auth.context import UserContext
 from thoth.config import config
 from thoth.server.dependencies import (
-    get_chat_manager,
     get_research_agent,
 )
 
@@ -231,7 +230,6 @@ def get_operation_status(operation_id: str) -> dict[str, Any] | None:
 async def websocket_chat(
     websocket: WebSocket,
     research_agent=Depends(get_research_agent),
-    chat_manager=Depends(get_chat_manager),
 ) -> None:
     """
     WebSocket endpoint for real-time chat with the research agent.
@@ -301,20 +299,6 @@ async def websocket_chat(
                         }
                     )
                     continue
-
-                # Save to chat history if we have a chat manager
-                if chat_manager and session_id:
-                    await chat_manager.save_message(
-                        session_id=session_id,
-                        role='user',
-                        content=message,
-                    )
-
-                    await chat_manager.save_message(
-                        session_id=session_id,
-                        role='assistant',
-                        content=response.get('response', ''),
-                    )
 
                 # Send response back to client
                 response_data = {
