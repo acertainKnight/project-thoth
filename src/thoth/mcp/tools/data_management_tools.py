@@ -224,7 +224,14 @@ class BackupCollectionMCPTool(MCPTool):
             else:
                 # Implement PDF backup
                 try:
-                    pdf_dir = self.service_manager.config.pdfs_dir
+                    from thoth.mcp.auth import get_current_user_paths
+
+                    _user_paths = get_current_user_paths()
+                    pdf_dir = (
+                        _user_paths.pdf_dir
+                        if _user_paths
+                        else self.service_manager.config.pdf_dir
+                    )
                     if pdf_dir.exists():
                         pdf_backup_dir = full_backup_path / 'pdfs'
                         pdf_backup_dir.mkdir(exist_ok=True)

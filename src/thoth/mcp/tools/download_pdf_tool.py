@@ -161,10 +161,15 @@ class DownloadPdfMCPTool(MCPTool):
             if output_directory:
                 output_path = Path(output_directory)
             else:
-                # Use configured vault PDF directory from settings
-                from thoth.config import config
+                from thoth.mcp.auth import get_current_user_paths
 
-                output_path = Path(config.pdf_dir)
+                user_paths = get_current_user_paths()
+                if user_paths:
+                    output_path = user_paths.pdf_dir
+                else:
+                    from thoth.config import config
+
+                    output_path = Path(config.pdf_dir)
 
             output_path.mkdir(parents=True, exist_ok=True)
             response_text += f'**Output Directory:** {output_path}\n'
@@ -246,7 +251,7 @@ class DownloadPdfMCPTool(MCPTool):
                             if chunk:
                                 if not first_chunk:
                                     first_chunk = chunk
-                                    # Verify PDF magic bytes if content-type is ambiguous
+                                    # Verify PDF magic bytes if ambiguous
                                     if (
                                         'pdf' not in content_type
                                         and 'octet-stream' not in content_type

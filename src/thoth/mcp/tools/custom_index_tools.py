@@ -59,9 +59,15 @@ class SearchCustomIndexMCPTool(MCPTool):
 
             # Load custom index
             try:
-                custom_indexes_dir = (
-                    self.service_manager.config.data_dir / 'custom_indexes'
+                from thoth.mcp.auth import get_current_user_paths
+
+                user_paths = get_current_user_paths()
+                data_dir = (
+                    user_paths.data_dir
+                    if user_paths
+                    else self.service_manager.config.data_dir
                 )
+                custom_indexes_dir = data_dir / 'custom_indexes'
                 index_file = custom_indexes_dir / f'{index_name}.json'
 
                 if not index_file.exists():
@@ -212,7 +218,15 @@ class ListCustomIndexesMCPTool(MCPTool):
     async def execute(self, arguments: dict[str, Any]) -> MCPToolCallResult:  # noqa: ARG002
         """List custom indexes."""
         try:
-            custom_indexes_dir = self.service_manager.config.data_dir / 'custom_indexes'
+            from thoth.mcp.auth import get_current_user_paths
+
+            user_paths = get_current_user_paths()
+            data_dir = (
+                user_paths.data_dir
+                if user_paths
+                else self.service_manager.config.data_dir
+            )
+            custom_indexes_dir = data_dir / 'custom_indexes'
 
             if not custom_indexes_dir.exists():
                 return MCPToolCallResult(
