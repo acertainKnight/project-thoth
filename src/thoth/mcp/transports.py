@@ -1,26 +1,47 @@
 """
-MCP Transport implementations with proper notification handling.
+MCP Transport implementations with per-user identity resolution.
 
 This module provides transport implementations for the Model Context Protocol
 including stdio, HTTP, and Server-Sent Events transports.
+
+In multi-user mode the HTTP and SSE transports resolve bearer tokens to a
+UserContext via AuthService.  The resolved identity is propagated through
+ContextVars so all downstream services/repositories operate in the correct
+user scope.  Stdio transport relies on the THOTH_MCP_USER_ID environment
+variable per the MCP spec recommendation for local transports.
 """
+
+from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import uvicorn
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import StreamingResponse
 from loguru import logger
 
+from thoth.mcp.auth import (
+    is_multi_user_mode,
+    reset_current_user_context,
+    set_current_user_context,
+)
 from thoth.mcp.protocol import (
     JSONRPCNotification,
     JSONRPCRequest,
     JSONRPCResponse,
     MCPProtocolHandler,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from thoth.auth.context import UserContext
+    from thoth.services.service_manager import ServiceManager
 
 
 class MCPTransport:
@@ -48,24 +69,64 @@ class MCPTransport:
         raise NotImplementedError
 
 
+async def _resolve_bearer_user(
+    request: Request,
+    service_manager: ServiceManager | None,
+    vaults_root: Path | None,
+) -> UserContext | None:
+    """Resolve a bearer token from an HTTP request to a UserContext.
+
+    Args:
+        request: FastAPI request with Authorization header.
+        service_manager: ServiceManager holding AuthService.
+        vaults_root: Root directory for per-user vaults.
+
+    Returns:
+        UserContext if the token is valid, None otherwise.
+    """
+    if not service_manager or not vaults_root:
+        return None
+
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return None
+
+    token = auth_header[7:]
+    if not token:
+        return None
+
+    try:
+        auth_service = getattr(service_manager, 'auth', None)
+        if auth_service is None:
+            return None
+        return await auth_service.get_user_context_from_token(token, vaults_root)
+    except Exception as e:
+        logger.debug(f'MCP transport token resolution failed: {e}')
+        return None
+
+
 class StdioTransport(MCPTransport):
     """
     Stdio transport for MCP.
 
-    This transport uses stdin/stdout for communication,
-    suitable for CLI integration and local tools.
+    Uses stdin/stdout for communication.  In multi-user mode the user
+    identity is read from THOTH_MCP_USER_ID and THOTH_MCP_USERNAME
+    environment variables set by the spawning process.
     """
 
     def __init__(self, protocol_handler: MCPProtocolHandler):
         super().__init__(protocol_handler)
         self.reader: asyncio.StreamReader | None = None
         self.writer: asyncio.StreamWriter | None = None
+        self._ctx_tokens: list | None = None
 
     async def start(self):
         """Start the stdio transport."""
         await super().start()
 
-        # Setup stdin/stdout streams
+        if is_multi_user_mode():
+            self._set_user_from_env()
+
         self.reader = asyncio.StreamReader()
         protocol = asyncio.StreamReaderProtocol(self.reader)
         await asyncio.get_event_loop().connect_read_pipe(lambda: protocol, sys.stdin)
@@ -77,8 +138,27 @@ class StdioTransport(MCPTransport):
             transport, protocol, self.reader, asyncio.get_event_loop()
         )
 
-        # Start message loop
         self.message_loop_task = asyncio.create_task(self._message_loop())
+
+    async def stop(self):
+        """Stop the transport and clean up user context."""
+        if self._ctx_tokens:
+            reset_current_user_context(self._ctx_tokens)
+            self._ctx_tokens = None
+        await super().stop()
+
+    def _set_user_from_env(self) -> None:
+        """Populate ContextVars from environment for the stdio session."""
+        from thoth.config import config
+
+        user_id = os.environ.get('THOTH_MCP_USER_ID', '')
+        username = os.environ.get('THOTH_MCP_USERNAME', '')
+        vaults_root = getattr(config, 'vaults_root', None)
+
+        if user_id and username and vaults_root:
+            vault_path = vaults_root / username
+            self._ctx_tokens = set_current_user_context(user_id, username, vault_path)
+            logger.info(f'Stdio transport bound to user {username}')
 
     async def send_message(self, message: JSONRPCResponse):
         """Send a JSON-RPC message via stdout."""
@@ -101,14 +181,12 @@ class StdioTransport(MCPTransport):
                 if not message_str:
                     continue
 
-                # Parse and handle message
                 try:
                     message = self.protocol_handler.parse_message(message_str)
                     if isinstance(message, JSONRPCRequest) and self.message_handler:
                         response = await self.message_handler(message)
                         await self.send_message(response)
                     elif isinstance(message, JSONRPCNotification):
-                        # Handle notifications (no response expected)
                         if self.message_handler:
                             await self.message_handler(message)
 
@@ -129,8 +207,10 @@ class HTTPTransport(MCPTransport):
     """
     HTTP transport for MCP using FastAPI.
 
-    Provides traditional HTTP endpoints for MCP communication with optional
-    Bearer token authentication for secure external access.
+    Provides HTTP endpoints for MCP communication.  In multi-user mode,
+    bearer tokens are resolved to a UserContext via AuthService so that
+    every tool call runs in the correct user scope.  In single-user mode
+    a static auth_token gate is supported for backward compatibility.
     """
 
     def __init__(
@@ -139,11 +219,13 @@ class HTTPTransport(MCPTransport):
         host: str = 'localhost',
         port: int = 8000,
         auth_token: str | None = None,
+        service_manager: ServiceManager | None = None,
     ):
         super().__init__(protocol_handler)
         self.host = host
         self.port = port
-        self.auth_token = auth_token  # Bearer token for authentication
+        self.auth_token = auth_token
+        self.service_manager = service_manager
         self.app = FastAPI(
             title='Thoth MCP Server',
             description='Model Context Protocol server for Thoth research assistant',
@@ -152,26 +234,33 @@ class HTTPTransport(MCPTransport):
         self.server: uvicorn.Server | None = None
         self._setup_routes()
 
-    def _check_auth(self, request: Request) -> bool:
-        """
-        Check Bearer token authentication if auth_token is configured.
+    @property
+    def _vaults_root(self) -> Path | None:
+        from thoth.config import config
 
-        Args:
-            request: FastAPI request object
+        return getattr(config, 'vaults_root', None)
+
+    async def _authenticate(self, request: Request) -> tuple[bool, UserContext | None]:
+        """Authenticate the request and optionally resolve user identity.
 
         Returns:
-            True if authenticated or auth not required, False otherwise
+            (allowed, user_context) -- allowed is True when the request may
+            proceed.  user_context is non-None in multi-user mode when the
+            bearer token maps to a valid user.
         """
+        if is_multi_user_mode():
+            user_ctx = await _resolve_bearer_user(
+                request, self.service_manager, self._vaults_root
+            )
+            return (user_ctx is not None, user_ctx)
+
         if not self.auth_token:
-            # Auth not configured - allow all requests
-            return True
+            return (True, None)
 
         auth_header = request.headers.get('Authorization', '')
         if not auth_header.startswith('Bearer '):
-            return False
-
-        token = auth_header[7:]  # Remove 'Bearer ' prefix
-        return token == self.auth_token
+            return (False, None)
+        return (auth_header[7:] == self.auth_token, None)
 
     def _setup_routes(self):
         """Set up HTTP routes for MCP."""
@@ -179,8 +268,8 @@ class HTTPTransport(MCPTransport):
         @self.app.post('/mcp')
         async def handle_mcp_request(request: Request):
             """Handle MCP JSON-RPC requests and notifications."""
-            # Check authentication
-            if not self._check_auth(request):
+            allowed, user_ctx = await self._authenticate(request)
+            if not allowed:
                 return Response(
                     status_code=401,
                     content=json.dumps(
@@ -188,7 +277,7 @@ class HTTPTransport(MCPTransport):
                             'jsonrpc': '2.0',
                             'error': {
                                 'code': -32001,
-                                'message': 'Unauthorized - Invalid or missing Bearer token',
+                                'message': 'Unauthorized - invalid or missing bearer token',
                             },
                             'id': None,
                         }
@@ -196,18 +285,21 @@ class HTTPTransport(MCPTransport):
                     media_type='application/json',
                 )
 
+            ctx_tokens = None
+            if user_ctx:
+                ctx_tokens = set_current_user_context(
+                    user_ctx.user_id, user_ctx.username, user_ctx.vault_path
+                )
+
             try:
                 body = await request.json()
                 message = self.protocol_handler.parse_message(json.dumps(body))
 
                 if isinstance(message, JSONRPCRequest) and self.message_handler:
-                    # Handle requests - expect a response
                     response = await self.message_handler(message)
                     return json.loads(self.protocol_handler.serialize_message(response))
                 elif isinstance(message, JSONRPCNotification) and self.message_handler:
-                    # Handle notifications - no JSON-RPC response expected
                     await self._handle_notification(message)
-                    # For HTTP notifications, return 204 No Content (no body)
                     return Response(status_code=204)
                 else:
                     error_response = self.protocol_handler.create_error_response(
@@ -225,6 +317,9 @@ class HTTPTransport(MCPTransport):
                 serialized = self.protocol_handler.serialize_message(error_response)
                 logger.debug(f'MCP Exception Response: {serialized}')
                 return json.loads(serialized)
+            finally:
+                if ctx_tokens:
+                    reset_current_user_context(ctx_tokens)
 
         @self.app.get('/health')
         async def health_check():
@@ -278,10 +373,12 @@ class HTTPTransport(MCPTransport):
 
 class SSETransport(MCPTransport):
     """
-    Server-Sent Events transport for MCP.
+    Server-Sent Events transport for MCP with per-session user binding.
 
-    Provides streaming communication with real-time updates, with optional
-    Bearer token authentication for secure external access.
+    When a client opens an SSE connection with a bearer token the user
+    identity is resolved once and stored for the lifetime of that session.
+    Subsequent POST /mcp requests that arrive on behalf of the same
+    session carry the same user context automatically.
     """
 
     def __init__(
@@ -290,40 +387,44 @@ class SSETransport(MCPTransport):
         host: str = 'localhost',
         port: int = 8001,
         auth_token: str | None = None,
+        service_manager: ServiceManager | None = None,
     ):
         super().__init__(protocol_handler)
         self.host = host
         self.port = port
-        self.auth_token = auth_token  # Bearer token for authentication
+        self.auth_token = auth_token
+        self.service_manager = service_manager
         self.app = FastAPI(
             title='Thoth MCP SSE Server',
             description='MCP Server with Server-Sent Events support',
             version='1.0.0',
         )
         self.clients: dict[str, asyncio.Queue] = {}
+        self._session_users: dict[str, UserContext] = {}
         self.server: uvicorn.Server | None = None
         self._setup_routes()
 
-    def _check_auth(self, request: Request) -> bool:
-        """
-        Check Bearer token authentication if auth_token is configured.
+    @property
+    def _vaults_root(self) -> Path | None:
+        from thoth.config import config
 
-        Args:
-            request: FastAPI request object
+        return getattr(config, 'vaults_root', None)
 
-        Returns:
-            True if authenticated or auth not required, False otherwise
-        """
+    async def _authenticate(self, request: Request) -> tuple[bool, UserContext | None]:
+        """Authenticate and optionally resolve user from bearer token."""
+        if is_multi_user_mode():
+            user_ctx = await _resolve_bearer_user(
+                request, self.service_manager, self._vaults_root
+            )
+            return (user_ctx is not None, user_ctx)
+
         if not self.auth_token:
-            # Auth not configured - allow all requests
-            return True
+            return (True, None)
 
         auth_header = request.headers.get('Authorization', '')
         if not auth_header.startswith('Bearer '):
-            return False
-
-        token = auth_header[7:]  # Remove 'Bearer ' prefix
-        return token == self.auth_token
+            return (False, None)
+        return (auth_header[7:] == self.auth_token, None)
 
     def _setup_routes(self):
         """Set up SSE routes for MCP."""
@@ -331,8 +432,8 @@ class SSETransport(MCPTransport):
         @self.app.post('/mcp')
         async def handle_mcp_request(request: Request):
             """Handle MCP JSON-RPC requests."""
-            # Check authentication
-            if not self._check_auth(request):
+            allowed, user_ctx = await self._authenticate(request)
+            if not allowed:
                 return Response(
                     status_code=401,
                     content=json.dumps(
@@ -340,12 +441,18 @@ class SSETransport(MCPTransport):
                             'jsonrpc': '2.0',
                             'error': {
                                 'code': -32001,
-                                'message': 'Unauthorized - Invalid or missing Bearer token',
+                                'message': 'Unauthorized - invalid or missing bearer token',
                             },
                             'id': None,
                         }
                     ),
                     media_type='application/json',
+                )
+
+            ctx_tokens = None
+            if user_ctx:
+                ctx_tokens = set_current_user_context(
+                    user_ctx.user_id, user_ctx.username, user_ctx.vault_path
                 )
 
             try:
@@ -356,7 +463,6 @@ class SSETransport(MCPTransport):
                     response = await self.message_handler(message)
                     return json.loads(self.protocol_handler.serialize_message(response))
                 elif isinstance(message, JSONRPCNotification) and self.message_handler:
-                    # Handle notifications - no JSON-RPC response expected
                     await self._handle_notification(message)
                     return Response(status_code=204)
                 else:
@@ -375,38 +481,48 @@ class SSETransport(MCPTransport):
                 return json.loads(
                     self.protocol_handler.serialize_message(error_response)
                 )
+            finally:
+                if ctx_tokens:
+                    reset_current_user_context(ctx_tokens)
 
         @self.app.get('/sse')
         async def sse_endpoint_standard(request: Request):
-            """Standard SSE endpoint for MCP clients (Letta compatibility)."""
-            # Check authentication
-            if not self._check_auth(request):
+            """Standard SSE endpoint for MCP clients (Letta compatibility).
+
+            The bearer token is resolved to a user at connect time and
+            stored for the session lifetime so that POST /mcp calls
+            within this session inherit the same identity.
+            """
+            allowed, user_ctx = await self._authenticate(request)
+            if not allowed:
                 return Response(
                     status_code=401,
-                    content='Unauthorized - Invalid or missing Bearer token',
+                    content='Unauthorized - invalid or missing bearer token',
                     media_type='text/plain',
                 )
 
             import uuid
 
             client_id = str(uuid.uuid4())
+            if user_ctx:
+                self._session_users[client_id] = user_ctx
+                logger.info(
+                    f'SSE session {client_id} bound to user {user_ctx.username}'
+                )
 
             async def event_stream():
-                # Create client queue
-                queue = asyncio.Queue()
+                queue: asyncio.Queue = asyncio.Queue()
                 self.clients[client_id] = queue
 
                 try:
                     while True:
-                        # Wait for messages
                         message = await queue.get()
                         yield f'data: {json.dumps(message)}\n\n'
                 except asyncio.CancelledError:
                     pass
                 finally:
-                    # Clean up client
-                    if client_id in self.clients:
-                        del self.clients[client_id]
+                    self.clients.pop(client_id, None)
+                    self._session_users.pop(client_id, None)
 
             return StreamingResponse(
                 event_stream(),
@@ -415,37 +531,37 @@ class SSETransport(MCPTransport):
                     'Cache-Control': 'no-cache',
                     'Connection': 'keep-alive',
                     'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Headers': 'Cache-Control',
+                    'Access-Control-Allow-Headers': 'Cache-Control, Authorization',
                 },
             )
 
         @self.app.get('/events/{client_id}')
         async def sse_endpoint(client_id: str, request: Request):
-            """Server-Sent Events endpoint for real-time updates."""
-            # Check authentication
-            if not self._check_auth(request):
+            """Per-client SSE endpoint for real-time updates."""
+            allowed, user_ctx = await self._authenticate(request)
+            if not allowed:
                 return Response(
                     status_code=401,
-                    content='Unauthorized - Invalid or missing Bearer token',
+                    content='Unauthorized - invalid or missing bearer token',
                     media_type='text/plain',
                 )
 
+            if user_ctx:
+                self._session_users[client_id] = user_ctx
+
             async def event_stream():
-                # Create client queue
-                queue = asyncio.Queue()
+                queue: asyncio.Queue = asyncio.Queue()
                 self.clients[client_id] = queue
 
                 try:
                     while True:
-                        # Wait for messages
                         message = await queue.get()
                         yield f'data: {json.dumps(message)}\n\n'
                 except asyncio.CancelledError:
                     pass
                 finally:
-                    # Clean up client
-                    if client_id in self.clients:
-                        del self.clients[client_id]
+                    self.clients.pop(client_id, None)
+                    self._session_users.pop(client_id, None)
 
             return StreamingResponse(
                 event_stream(),
@@ -454,7 +570,7 @@ class SSETransport(MCPTransport):
                     'Cache-Control': 'no-cache',
                     'Connection': 'keep-alive',
                     'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Headers': 'Cache-Control',
+                    'Access-Control-Allow-Headers': 'Cache-Control, Authorization',
                 },
             )
 

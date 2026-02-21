@@ -92,15 +92,27 @@ class MCPServer:
     def add_http_transport(
         self, host: str = 'localhost', port: int = 8002, auth_token: str | None = None
     ) -> None:
-        """Add HTTP transport for web integration with optional Bearer token auth."""
-        transport = HTTPTransport(self.protocol_handler, host, port, auth_token)
+        """Add HTTP transport for web integration with bearer token auth."""
+        transport = HTTPTransport(
+            self.protocol_handler,
+            host,
+            port,
+            auth_token,
+            service_manager=self.service_manager,
+        )
         self.transport_manager.add_transport('http', transport)
 
     def add_sse_transport(
         self, host: str = 'localhost', port: int = 8001, auth_token: str | None = None
     ) -> None:
-        """Add SSE transport with optional Bearer token auth."""
-        transport = SSETransport(self.protocol_handler, host, port, auth_token)
+        """Add SSE transport with bearer token auth."""
+        transport = SSETransport(
+            self.protocol_handler,
+            host,
+            port,
+            auth_token,
+            service_manager=self.service_manager,
+        )
         self.transport_manager.add_transport('sse', transport)
 
     async def start(self) -> None:
