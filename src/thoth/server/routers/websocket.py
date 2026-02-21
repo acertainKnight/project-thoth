@@ -12,6 +12,7 @@ from loguru import logger
 
 from thoth.auth.context import UserContext
 from thoth.config import config
+from thoth.mcp.auth import reset_current_user_context, set_current_user_context
 from thoth.server.dependencies import (
     get_research_agent,
 )
@@ -246,6 +247,11 @@ async def websocket_chat(
 
     await chat_ws_manager.connect(websocket)
     logger.info(f'WebSocket chat connection established for {user_context.username}')
+    ctx_tokens = set_current_user_context(
+        user_context.user_id,
+        user_context.username,
+        user_context.vault_path,
+    )
 
     try:
         while True:
@@ -326,6 +332,7 @@ async def websocket_chat(
     except Exception as e:
         logger.error(f'WebSocket chat error: {e}')
     finally:
+        reset_current_user_context(ctx_tokens)
         chat_ws_manager.disconnect(websocket)
 
 
