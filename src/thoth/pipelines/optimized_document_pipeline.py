@@ -247,7 +247,7 @@ class OptimizedDocumentPipeline(BasePipeline):
             project_name=project_name,
         )
         self.logger.info('Waiting for note generation to complete...')
-        note_path, new_pdf_path, new_markdown_path = note_future.result()
+        note_path, new_pdf_path, new_markdown_path, article_id = note_future.result()
         self.logger.info(f'Note generation completed: {note_path}')
 
         # Track processing
@@ -262,7 +262,7 @@ class OptimizedDocumentPipeline(BasePipeline):
 
         # Background RAG indexing with optimized thread pool (use no_images version for embeddings)  # noqa: W505
         self._schedule_background_rag_indexing(
-            no_images_markdown_path, note_path, user_id=user_id
+            no_images_markdown_path, note_path, user_id=user_id, paper_id=article_id
         )
 
         return Path(note_path), Path(new_pdf_path), Path(new_markdown_path)
@@ -401,13 +401,16 @@ class OptimizedDocumentPipeline(BasePipeline):
         markdown_path: str | Path,
         note_path: str | Path,
         user_id: str | None = None,
+        paper_id: str | None = None,
     ) -> None:
         """Schedule background RAG indexing with optimized thread pool."""
 
         def _background_rag_indexing():
             try:
-                self._index_to_rag(Path(markdown_path), user_id=user_id)
-                self._index_to_rag(Path(note_path), user_id=user_id)
+                self._index_to_rag(
+                    Path(markdown_path), user_id=user_id, paper_id=paper_id
+                )
+                self._index_to_rag(Path(note_path), user_id=user_id, paper_id=paper_id)
                 self.logger.debug('Background RAG indexing completed')
             except Exception as e:
                 self.logger.warning(f'Failed to index documents to RAG system: {e}')
@@ -514,8 +517,12 @@ class OptimizedDocumentPipeline(BasePipeline):
         citations: list[Citation],
         no_images_markdown: str | None = None,
         project_name: str | None = None,
-    ) -> tuple[str, str, str]:
-        """Generate note using the note service."""
+    ) -> tuple[str, str, str, str | None]:
+        """Generate note using the note service.
+
+        Returns:
+            tuple of (note_path, new_pdf_path, new_markdown_path, article_id).
+        """
         note_path, new_pdf_path, new_markdown_path = self.services.note.create_note(
             pdf_path=pdf_path,
             markdown_path=markdown_path,
@@ -562,13 +569,20 @@ class OptimizedDocumentPipeline(BasePipeline):
         else:
             logger.warning('Could not obtain article_id from process_citations.')
 
-        return str(note_path), str(new_pdf_path), str(new_markdown_path)
+        return str(note_path), str(new_pdf_path), str(new_markdown_path), article_id
 
-    def _index_to_rag(self, file_path: Path, user_id: str | None = None) -> None:
+    def _index_to_rag(
+        self,
+        file_path: Path,
+        user_id: str | None = None,
+        paper_id: str | None = None,
+    ) -> None:
         """Index file to RAG system."""
         try:
             if file_path.exists() and file_path.suffix == '.md':
-                self.services.rag.index_file(file_path, user_id=user_id)
+                self.services.rag.index_file(
+                    file_path, user_id=user_id, paper_id=paper_id
+                )
                 self.logger.debug(f'Indexed {file_path} to RAG system')
         except Exception as e:
             self.logger.debug(f'Failed to index {file_path} to RAG: {e}')
