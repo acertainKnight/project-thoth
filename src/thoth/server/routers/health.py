@@ -84,7 +84,7 @@ def health_check(service_manager: ServiceManager = Depends(get_service_manager))
 @router.get('/download-pdf')
 def download_pdf_endpoint(
     url: str = Query(..., description='PDF URL to download'),
-    user_context: UserContext = Depends(get_user_context),  # noqa: B008
+    _user_context: UserContext = Depends(get_user_context),  # noqa: B008
 ):
     """
     Download a PDF from the given URL.
@@ -96,9 +96,10 @@ def download_pdf_endpoint(
         JSONResponse: Download result with file information
     """
     try:
-        target_dir = (
-            user_context.vault_path / 'pdfs' if user_context.vault_path else pdf_dir
-        )
+        from thoth.mcp.auth import get_current_user_paths
+
+        user_paths = get_current_user_paths()
+        target_dir = user_paths.pdf_dir if user_paths else pdf_dir
         pdf_path = download_pdf(url, target_dir)
 
         logger.info(f'Downloaded PDF: {pdf_path}')
@@ -138,9 +139,10 @@ def view_markdown(
         JSONResponse: File contents or error message
     """
     try:
-        user_notes_dir = (
-            user_context.vault_path / 'notes' if user_context.vault_path else notes_dir
-        )
+        from thoth.mcp.auth import get_current_user_paths
+
+        user_paths = get_current_user_paths()
+        user_notes_dir = user_paths.notes_dir if user_paths else notes_dir
         if Path(path).is_absolute():
             full_path = Path(path)
             if user_context.vault_path and not str(full_path).startswith(

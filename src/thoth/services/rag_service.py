@@ -145,6 +145,21 @@ class RAGService(BaseService):
                 self.handle_error(e, f'indexing directory {directory}')
             ) from e
 
+    def _inject_user_filter(
+        self, filter: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
+        """Inject user_id into filter if multi-user mode and not already set."""
+        from thoth.mcp.auth import get_mcp_user_id, is_multi_user_mode
+
+        if not is_multi_user_mode():
+            return filter
+
+        user_id = get_mcp_user_id()
+        if user_id and user_id != 'default_user':
+            filter = dict(filter) if filter else {}
+            filter.setdefault('user_id', user_id)
+        return filter
+
     async def search_async(
         self,
         query: str,
@@ -168,6 +183,7 @@ class RAGService(BaseService):
         """
         try:
             self.validate_input(query=query)
+            filter = self._inject_user_filter(filter)
 
             # Search with scores using async method
             results_with_scores = await self.rag_manager.search_async(
@@ -223,6 +239,7 @@ class RAGService(BaseService):
         """
         try:
             self.validate_input(query=query)
+            filter = self._inject_user_filter(filter)
 
             # Search with scores
             results_with_scores = self.rag_manager.search(
