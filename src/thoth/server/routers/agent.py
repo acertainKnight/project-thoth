@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from thoth.auth.context import UserContext
 from thoth.auth.dependencies import get_user_context
 from thoth.config import config
+from thoth.mcp.auth import get_current_user_paths
 
 router = APIRouter()
 
@@ -351,6 +352,10 @@ def get_agent_config(
     Returns sanitized configuration for agent management.
     """
     try:
+        user_paths = get_current_user_paths()
+        workspace_dir = user_paths.workspace_dir if user_paths else config.workspace_dir
+        pdf_dir = user_paths.pdf_dir if user_paths else config.pdf_dir
+        notes_dir = user_paths.notes_dir if user_paths else config.notes_dir
         sanitized_config = {
             'letta': {
                 'base_url': LETTA_BASE_URL,
@@ -358,9 +363,9 @@ def get_agent_config(
                 'platform': 'letta',
             },
             'thoth': {
-                'workspace_dir': str(config.workspace_dir),
-                'pdf_dir': str(config.pdf_dir),
-                'notes_dir': str(config.notes_dir),
+                'workspace_dir': str(workspace_dir),
+                'pdf_dir': str(pdf_dir),
+                'notes_dir': str(notes_dir),
             },
             'message': 'For advanced agent configuration, use Letta REST API directly',
             'api_docs': f'{LETTA_BASE_URL}/docs',

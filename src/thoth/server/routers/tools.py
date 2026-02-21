@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from thoth.auth.context import UserContext
 from thoth.auth.dependencies import get_user_context
+from thoth.mcp.auth import get_current_user_paths
 from thoth.server.dependencies import get_research_agent, get_service_manager
 from thoth.services.service_manager import ServiceManager
 
@@ -299,7 +300,9 @@ async def execute_download_pdf_tool(
         from thoth.config import config
 
         config  # Already imported at module level  # noqa: B018
-        pdf_path, metadata = download_pdf(url, config.pdf_dir)
+        user_paths = get_current_user_paths()
+        target_pdf_dir = user_paths.pdf_dir if user_paths else config.pdf_dir
+        pdf_path, metadata = download_pdf(url, target_pdf_dir)
 
         return DownloadPdfResult(
             tool='thoth_download_pdf',

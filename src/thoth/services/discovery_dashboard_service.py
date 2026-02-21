@@ -20,6 +20,7 @@ from watchdog.events import FileModifiedEvent, FileSystemEventHandler  # noqa: F
 from watchdog.observers.polling import PollingObserver
 
 from thoth.config import config
+from thoth.mcp.auth import get_current_user_paths
 from thoth.services.obsidian_review_service import ObsidianReviewService
 from thoth.services.postgres_service import PostgresService
 
@@ -159,7 +160,10 @@ class DiscoveryDashboardService:
         self.vaults_root = getattr(config, 'vaults_root', None)
 
         # Set up dashboard directory
-        vault_root = Path(config.vault_root)
+        user_paths = get_current_user_paths()
+        vault_root = (
+            user_paths.vault_root if user_paths is not None else Path(config.vault_root)
+        )
         if dashboard_dir is not None:
             self.dashboard_dir = dashboard_dir
             self._watch_recursive = False

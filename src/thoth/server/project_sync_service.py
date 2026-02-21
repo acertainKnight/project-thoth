@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from thoth.config import config
+from thoth.mcp.auth import get_current_user_paths
 from thoth.utilities.vault_path_resolver import VaultPathResolver
 
 if TYPE_CHECKING:
@@ -385,9 +386,20 @@ class ProjectSyncService:
             polling_interval: Polling interval in seconds
         """
         self.config = config
-        self.pdf_dir = pdf_dir or self.config.pdf_dir
-        self.markdown_dir = markdown_dir or self.config.markdown_dir
-        self.notes_dir = notes_dir or self.config.notes_dir
+        user_paths = get_current_user_paths()
+        default_pdf_dir = user_paths.pdf_dir if user_paths else self.config.pdf_dir
+        default_markdown_dir = (
+            user_paths.markdown_dir if user_paths else self.config.markdown_dir
+        )
+        default_notes_dir = (
+            user_paths.notes_dir if user_paths else self.config.notes_dir
+        )
+        default_vault_root = (
+            user_paths.vault_root if user_paths else self.config.vault_root
+        )
+        self.pdf_dir = pdf_dir or default_pdf_dir
+        self.markdown_dir = markdown_dir or default_markdown_dir
+        self.notes_dir = notes_dir or default_notes_dir
         self.postgres_service = postgres_service
         self.polling_interval = polling_interval
 
@@ -397,7 +409,7 @@ class ProjectSyncService:
         self.notes_dir.mkdir(parents=True, exist_ok=True)
 
         # Vault path resolver
-        self.vault_resolver = VaultPathResolver(self.config.vault_root)
+        self.vault_resolver = VaultPathResolver(default_vault_root)
 
         # Shared state for pending deletes
         self.pending_deletes: dict[str, PendingDelete] = {}

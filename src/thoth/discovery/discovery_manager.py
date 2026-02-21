@@ -24,6 +24,7 @@ from thoth.discovery.plugins import plugin_registry
 from thoth.discovery.emulator_scraper import EmulatorScraper
 from thoth.discovery.web_scraper import WebScraper
 from thoth.config import config
+from thoth.mcp.auth import get_current_user_paths
 from thoth.utilities.schemas import (
     DiscoveryResult,
     DiscoverySource,
@@ -63,11 +64,15 @@ class DiscoveryManager:
         """
         self.config = config
         self.source_repo = source_repo
+        user_paths = get_current_user_paths()
 
         # Set up sources configuration directory
-        self.sources_config_dir = Path(
-            sources_config_dir or self.config.discovery_sources_dir
+        default_sources_dir = (
+            user_paths.discovery_sources_dir
+            if user_paths
+            else self.config.discovery_sources_dir
         )
+        self.sources_config_dir = Path(sources_config_dir or default_sources_dir)
         self.sources_config_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize plugin registry for modern plugin-based sources
@@ -86,7 +91,11 @@ class DiscoveryManager:
         self.emulator_scraper = EmulatorScraper()
 
         # Results storage
-        self.results_dir = self.config.discovery_results_dir
+        self.results_dir = (
+            user_paths.discovery_results_dir
+            if user_paths
+            else self.config.discovery_results_dir
+        )
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info(

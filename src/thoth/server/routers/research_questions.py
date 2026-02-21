@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from thoth.auth.context import UserContext
 from thoth.auth.dependencies import get_user_context
+from thoth.mcp.auth import get_current_user_paths
 
 # Create router with prefix and tags
 router = APIRouter(
@@ -1393,7 +1394,8 @@ async def download_article_pdf(
         from thoth.config import config
         from thoth.ingestion.pdf_downloader import download_pdf
 
-        pdf_dir = config.pdf_dir
+        user_paths = get_current_user_paths()
+        pdf_dir = user_paths.pdf_dir if user_paths else config.pdf_dir
 
         # Sanitize filename from article title
         safe_filename = ''.join(
