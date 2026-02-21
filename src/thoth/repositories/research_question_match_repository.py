@@ -19,7 +19,7 @@ from thoth.repositories.base import BaseRepository
 
 
 class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
-    """Repository for research_question_matches - papers matched to research questions."""
+    """Repository for research question match records."""
 
     def __init__(self, postgres_service, **kwargs):
         """Initialize research question match repository."""
@@ -32,6 +32,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
         doi: str | None = None,
         arxiv_id: str | None = None,
         title: str = '',
+        user_id: str | None = None,
         **paper_data,
     ) -> tuple[UUID, bool]:
         """
@@ -41,7 +42,8 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
             doi: Digital Object Identifier
             arxiv_id: arXiv identifier
             title: Paper title
-            **paper_data: Additional paper metadata (authors, abstract, url, pdf_url, etc.)
+            **paper_data: Additional paper metadata
+                (authors, abstract, url, pdf_url, etc.)
 
         Returns:
             tuple[UUID, bool]: (paper_id, created) where created=True if new paper
@@ -56,7 +58,15 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
             )
 
             if existing_id:
-                return existing_id, False
+                if user_id:
+                    existing_user = await self.postgres.fetchval(
+                        'SELECT user_id FROM paper_metadata WHERE id = $1',
+                        existing_id,
+                    )
+                    if existing_user != user_id:
+                        existing_id = None
+                if existing_id:
+                    return existing_id, False
 
             # Create new paper in paper_metadata
             title_normalized = self._normalize_title_python(title)
@@ -80,6 +90,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
                 'title': title,
                 'title_normalized': title_normalized,
                 'source_of_truth': 'discovered',
+                'user_id': user_id or 'default_user',
                 'authors': authors,
                 'abstract': paper_data.get('abstract'),
                 'publication_date': publication_date,
@@ -93,8 +104,8 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
             query = """
                 INSERT INTO paper_metadata (
                     doi, arxiv_id, title, title_normalized, authors, abstract,
-                    publication_date, year, journal, url, pdf_url, source_of_truth
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                    publication_date, year, journal, url, pdf_url, source_of_truth, user_id
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 RETURNING id
             """
 
@@ -112,6 +123,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
                 insert_data['url'],
                 insert_data['pdf_url'],
                 insert_data['source_of_truth'],
+                insert_data['user_id'],
             )
 
             return paper_id, True
@@ -125,6 +137,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
         paper_id: UUID,
         question_id: UUID,
         relevance_score: float,
+        user_id: str | None = None,
         matched_keywords: list[str] | None = None,
         matched_topics: list[str] | None = None,
         matched_authors: list[str] | None = None,
@@ -147,15 +160,16 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
         """
         query = """
             INSERT INTO research_question_matches (
-                paper_id, question_id, relevance_score,
+                paper_id, question_id, relevance_score, user_id,
                 matched_keywords, matched_topics, matched_authors,
                 discovered_via_source
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (paper_id, question_id) DO UPDATE SET
                 relevance_score = GREATEST(
                     research_question_matches.relevance_score,
                     EXCLUDED.relevance_score
                 ),
+                user_id = EXCLUDED.user_id,
                 matched_keywords = EXCLUDED.matched_keywords,
                 matched_topics = EXCLUDED.matched_topics,
                 matched_authors = EXCLUDED.matched_authors,
@@ -168,6 +182,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
             paper_id,
             question_id,
             relevance_score,
+            user_id or 'default_user',
             matched_keywords or [],
             matched_topics or [],
             matched_authors or [],

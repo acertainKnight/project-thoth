@@ -38,6 +38,7 @@ class DiscoveryExecutionLogRepository(BaseRepository[dict[str, Any]]):
     async def create_execution(
         self,
         question_id: UUID,
+        user_id: str | None = None,
         triggered_by: str = 'scheduler',
     ) -> UUID | None:
         """
@@ -53,14 +54,15 @@ class DiscoveryExecutionLogRepository(BaseRepository[dict[str, Any]]):
         try:
             query = """
                 INSERT INTO discovery_execution_log (
-                    question_id, status, started_at, triggered_by
+                    question_id, user_id, status, started_at, triggered_by
                 )
-                VALUES ($1, $2, $3, $4)
+                VALUES ($1, $2, $3, $4, $5)
                 RETURNING id
             """
             result = await self.postgres.fetchrow(
                 query,
                 question_id,
+                user_id or 'default_user',
                 'running',
                 datetime.now(),
                 triggered_by,
@@ -319,6 +321,7 @@ class ResearchQuestionScheduler(BaseService):
         for question in due_questions:
             execution_id = await self.execution_log.create_execution(
                 question_id=question['id'],
+                user_id=question.get('user_id'),
                 triggered_by='scheduler',
             )
             if execution_id:
@@ -454,6 +457,7 @@ class ResearchQuestionScheduler(BaseService):
         # Create execution log entry
         execution_id = await self.execution_log.create_execution(
             question_id=question_id,
+            user_id=question.get('user_id'),
             triggered_by='scheduler',
         )
 
@@ -626,6 +630,7 @@ class ResearchQuestionScheduler(BaseService):
         # Create execution log entry
         execution_id = await self.execution_log.create_execution(
             question_id=question_id,
+            user_id=question.get('user_id'),
             triggered_by='manual',
         )
 

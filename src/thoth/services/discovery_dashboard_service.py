@@ -81,7 +81,17 @@ class DiscoveryDashboardWatcher(FileSystemEventHandler):
         """Check if file is in the dashboard directory."""
         try:
             dashboard_dir = self.service.dashboard_dir
-            return file_path.is_relative_to(dashboard_dir)
+            if not file_path.is_relative_to(dashboard_dir):
+                return False
+
+            if self.service.multi_user:
+                relative = file_path.relative_to(dashboard_dir)
+                parts = relative.parts
+                if len(parts) < 4:
+                    return False
+                return parts[1] == 'Research' and parts[2] == 'Dashboard'
+
+            return True
         except (ValueError, AttributeError):
             return False
 
@@ -145,10 +155,20 @@ class DiscoveryDashboardService:
         self.check_interval = check_interval
         self.auto_export = auto_export
         self.auto_import = auto_import
+        self.multi_user = bool(getattr(config, 'multi_user', False))
+        self.vaults_root = getattr(config, 'vaults_root', None)
 
         # Set up dashboard directory
         vault_root = Path(config.vault_root)
-        self.dashboard_dir = dashboard_dir or (vault_root / 'Research' / 'Dashboard')
+        if dashboard_dir is not None:
+            self.dashboard_dir = dashboard_dir
+            self._watch_recursive = False
+        elif self.multi_user and self.vaults_root:
+            self.dashboard_dir = Path(self.vaults_root)
+            self._watch_recursive = True
+        else:
+            self.dashboard_dir = vault_root / 'Research' / 'Dashboard'
+            self._watch_recursive = False
         self.dashboard_dir.mkdir(parents=True, exist_ok=True)
 
         # Track last export time per question
@@ -207,7 +227,9 @@ class DiscoveryDashboardService:
         self.watcher = DiscoveryDashboardWatcher(self, loop)
         self.observer = PollingObserver(timeout=1)
 
-        self.observer.schedule(self.watcher, str(self.dashboard_dir), recursive=False)
+        self.observer.schedule(
+            self.watcher, str(self.dashboard_dir), recursive=self._watch_recursive
+        )
 
         self.observer.start()
         logger.info(f'Watching dashboard directory: {self.dashboard_dir}')
@@ -243,10 +265,11 @@ class DiscoveryDashboardService:
         """
         # Get all active research questions
         query = """
-            SELECT id, name, created_at
-            FROM research_questions
-            WHERE is_active = true
-            ORDER BY created_at DESC
+            SELECT rq.id, rq.name, rq.created_at, rq.user_id, u.username
+            FROM research_questions rq
+            LEFT JOIN users u ON u.id::text = rq.user_id
+            WHERE rq.is_active = true
+            ORDER BY rq.created_at DESC
         """
 
         questions = await self.pg.fetch(query)
@@ -259,7 +282,8 @@ class DiscoveryDashboardService:
             question_name = question['name']
 
             # Check if there are new matches since last export
-            new_count = await self._count_new_matches(question_id)
+            user_id = question.get('user_id')
+            new_count = await self._count_new_matches(question_id, user_id=user_id)
 
             if new_count > 0:
                 logger.info(
@@ -268,12 +292,17 @@ class DiscoveryDashboardService:
                 )
 
                 await self.export_to_dashboard(
-                    question_id=question_id, question_name=question_name
+                    question_id=question_id,
+                    question_name=question_name,
+                    user_id=user_id,
+                    username=question.get('username'),
                 )
 
                 self.last_export_times[str(question_id)] = datetime.now()
 
-    async def _count_new_matches(self, question_id: str) -> int:
+    async def _count_new_matches(
+        self, question_id: str, user_id: str | None = None
+    ) -> int:
         """
         Count matches that are new since last export.
 
@@ -291,19 +320,28 @@ class DiscoveryDashboardService:
                 SELECT COUNT(*)
                 FROM research_question_matches
                 WHERE question_id = $1
-                    AND matched_at > $2
+                    AND user_id = $2
+                    AND matched_at > $3
                     AND user_sentiment IS NULL
             """
-            count = await self.pg.fetchval(query, question_id, last_export)
+            count = await self.pg.fetchval(
+                query,
+                question_id,
+                user_id or 'default_user',
+                last_export,
+            )
         else:
             # First export - count all matches without sentiment
             query = """
                 SELECT COUNT(*)
                 FROM research_question_matches
                 WHERE question_id = $1
+                    AND user_id = $2
                     AND user_sentiment IS NULL
             """
-            count = await self.pg.fetchval(query, question_id)
+            count = await self.pg.fetchval(
+                query, question_id, user_id or 'default_user'
+            )
 
         return count or 0
 
@@ -311,6 +349,8 @@ class DiscoveryDashboardService:
         self,
         question_id: str,
         question_name: str,
+        user_id: str | None = None,
+        username: str | None = None,
         min_relevance: float = 0.5,
         limit: int = 100,
     ) -> Path:
@@ -334,25 +374,26 @@ class DiscoveryDashboardService:
         logger.info(f"Exporting dashboard for '{question_name}'...")
 
         # Get article matches from database
-        matches = await self._fetch_matches(question_id, min_relevance, limit)
+        matches = await self._fetch_matches(
+            question_id, user_id or 'default_user', min_relevance, limit
+        )
 
         if not matches:
             logger.warning(f"No matches found for '{question_name}'")
             return None
 
         # Generate dashboard file
-        dashboard_file = (
-            self.dashboard_dir
-            / f'{self._sanitize_filename(question_name)}_Dashboard.md'
-        )
+        dashboard_file = self._resolve_dashboard_file_path(question_name, username)
 
         # Get statistics
-        stats = await self._get_statistics(question_id)
+        stats = await self._get_statistics(question_id, user_id or 'default_user')
 
         # Generate dashboard content
         content = self._generate_dashboard_content(
             question_name=question_name,
             question_id=question_id,
+            user_id=user_id or 'default_user',
+            username=username,
             matches=matches,
             stats=stats,
         )
@@ -411,6 +452,8 @@ class DiscoveryDashboardService:
                     await self.export_to_dashboard(
                         question_id=question_info['question_id'],
                         question_name=question_info['question_name'],
+                        user_id=question_info.get('user_id'),
+                        username=question_info.get('username'),
                     )
                     logger.success(f'Dashboard regenerated successfully')  # noqa: F541
 
@@ -421,7 +464,7 @@ class DiscoveryDashboardService:
             logger.error(f'Failed to import dashboard changes: {e}')
 
     async def _fetch_matches(
-        self, question_id: str, min_relevance: float, limit: int
+        self, question_id: str, user_id: str, min_relevance: float, limit: int
     ) -> list[dict]:
         """Fetch article matches for a research question (pending only)."""
         query = """
@@ -440,15 +483,16 @@ class DiscoveryDashboardService:
             FROM research_question_matches rqm
             JOIN paper_metadata pm ON rqm.paper_id = pm.id
             WHERE rqm.question_id = $1
-                AND rqm.relevance_score >= $2
+                AND rqm.user_id = $2
+                AND rqm.relevance_score >= $3
                 AND rqm.user_sentiment IS NULL
             ORDER BY
                 rqm.relevance_score DESC,
                 pm.publication_date DESC NULLS LAST
-            LIMIT $3
+            LIMIT $4
         """
 
-        matches = await self.pg.fetch(query, question_id, min_relevance, limit)
+        matches = await self.pg.fetch(query, question_id, user_id, min_relevance, limit)
         return [dict(match) for match in matches]
 
     async def _extract_dashboard_metadata(self, dashboard_file: Path) -> dict | None:
@@ -482,7 +526,12 @@ class DiscoveryDashboardService:
             question_name = frontmatter.get('question_name')
 
             if question_id and question_name:
-                return {'question_id': question_id, 'question_name': question_name}
+                return {
+                    'question_id': question_id,
+                    'question_name': question_name,
+                    'user_id': frontmatter.get('user_id'),
+                    'username': frontmatter.get('username'),
+                }
 
         except Exception as e:
             logger.warning(
@@ -491,7 +540,7 @@ class DiscoveryDashboardService:
 
         return None
 
-    async def _get_statistics(self, question_id: str) -> dict:
+    async def _get_statistics(self, question_id: str, user_id: str) -> dict:
         """Get sentiment statistics for a research question."""
         query = """
             SELECT
@@ -502,9 +551,10 @@ class DiscoveryDashboardService:
                 COUNT(*) as total
             FROM research_question_matches
             WHERE question_id = $1
+                AND user_id = $2
         """
 
-        result = await self.pg.fetchrow(query, question_id)
+        result = await self.pg.fetchrow(query, question_id, user_id)
         return (
             dict(result)
             if result
@@ -512,7 +562,13 @@ class DiscoveryDashboardService:
         )
 
     def _generate_dashboard_content(
-        self, question_name: str, question_id: str, matches: list[dict], stats: dict
+        self,
+        question_name: str,
+        question_id: str,
+        user_id: str,
+        username: str | None,
+        matches: list[dict],
+        stats: dict,
     ) -> str:
         """Generate dashboard markdown content with interactive elements."""
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -521,6 +577,8 @@ class DiscoveryDashboardService:
         frontmatter = f"""---
 question_name: {question_name}
 question_id: {question_id}
+user_id: {user_id}
+username: {username or ''}
 last_updated: {now}
 total_articles: {stats['total']}
 liked: {stats['liked']}
@@ -605,6 +663,19 @@ This dashboard automatically:
         frontmatter += footer
 
         return frontmatter
+
+    def _resolve_dashboard_file_path(
+        self, question_name: str, username: str | None
+    ) -> Path:
+        """Resolve dashboard file path with per-user directories in multi-user mode."""
+        filename = f'{self._sanitize_filename(question_name)}_Dashboard.md'
+        if self.multi_user and self.vaults_root and username:
+            user_dashboard_dir = (
+                Path(self.vaults_root) / username / 'Research' / 'Dashboard'
+            )
+            user_dashboard_dir.mkdir(parents=True, exist_ok=True)
+            return user_dashboard_dir / filename
+        return self.dashboard_dir / filename
 
     @staticmethod
     def _sanitize_filename(name: str) -> str:

@@ -529,7 +529,7 @@ class DiscoveryOrchestrator(BaseService):
             try:
                 # Step 1: Get or create paper in paper_metadata (handles deduplication)
                 article_id, _was_created = await self._get_or_create_article(
-                    article_meta
+                    article_meta, user_id=question.get('user_id')
                 )
 
                 if not article_id:
@@ -558,6 +558,7 @@ class DiscoveryOrchestrator(BaseService):
                     paper_id=article_id,  # article_id is now paper_id from paper_metadata
                     question_id=question_id,
                     relevance_score=relevance_result['score'],
+                    user_id=question.get('user_id'),
                     matched_keywords=relevance_result.get('matched_keywords'),
                     discovered_via_source=article_meta.source,
                 )
@@ -582,6 +583,7 @@ class DiscoveryOrchestrator(BaseService):
     async def _get_or_create_article(
         self,
         article_meta: ScrapedArticleMetadata,
+        user_id: str | None = None,
     ) -> tuple[UUID | None, bool]:
         """
         Get or create paper in paper_metadata with deduplication.
@@ -608,6 +610,7 @@ class DiscoveryOrchestrator(BaseService):
                 authors=article_meta.authors,
                 doi=article_meta.doi,
                 arxiv_id=article_meta.arxiv_id,
+                user_id=user_id,
                 url=article_meta.url,
                 pdf_url=pdf_url,
                 publication_date=article_meta.publication_date,
@@ -1270,7 +1273,9 @@ Your response (JSON only):"""
                 continue
 
             # Get or create paper in database
-            paper_id, _was_created = await self._get_or_create_article(article)
+            paper_id, _was_created = await self._get_or_create_article(
+                article, user_id=question.get('user_id')
+            )
             if not paper_id:
                 self.logger.error(
                     f"Failed to get/create paper for '{article.title}', skipping"
@@ -1287,7 +1292,7 @@ Your response (JSON only):"""
 
                 # Check if already scored above threshold
                 existing_score = await self._get_existing_match_score(
-                    paper_id, question_id
+                    paper_id, question_id, question.get('user_id')
                 )
                 min_score = question.get('min_relevance_score', 0.5)
 
@@ -1323,6 +1328,7 @@ Your response (JSON only):"""
                         paper_id=paper_id,
                         question_id=question_id,
                         relevance_score=relevance_result['score'],
+                        user_id=question.get('user_id'),
                         matched_keywords=relevance_result.get('matched_keywords'),
                         discovered_via_source=discovered_via,
                     )
@@ -1398,15 +1404,25 @@ Your response (JSON only):"""
         return True
 
     async def _get_existing_match_score(
-        self, paper_id: UUID, question_id: UUID
+        self, paper_id: UUID, question_id: UUID, user_id: str | None = None
     ) -> float | None:
         """Get existing match score if it exists."""
-        query = """
-            SELECT relevance_score
-            FROM research_question_matches
-            WHERE paper_id = $1 AND question_id = $2
-        """
-        score = await self.postgres_service.fetchval(query, paper_id, question_id)
+        if user_id:
+            query = """
+                SELECT relevance_score
+                FROM research_question_matches
+                WHERE paper_id = $1 AND question_id = $2 AND user_id = $3
+            """
+            score = await self.postgres_service.fetchval(
+                query, paper_id, question_id, user_id
+            )
+        else:
+            query = """
+                SELECT relevance_score
+                FROM research_question_matches
+                WHERE paper_id = $1 AND question_id = $2
+            """
+            score = await self.postgres_service.fetchval(query, paper_id, question_id)
         return score
 
     # ==================== Result Helpers ====================

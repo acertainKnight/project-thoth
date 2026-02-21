@@ -44,6 +44,67 @@ if TYPE_CHECKING:
     from thoth.pipeline import ThothPipeline
 
 
+def _resolve_user_id_from_path(
+    file_path: Path, cfg: object, cache: dict[str, str] | None = None
+) -> str | None:
+    """Resolve user_id from vault path when running in multi-user mode."""
+    multi_user = bool(getattr(cfg, 'multi_user', False))
+    vaults_root = getattr(cfg, 'vaults_root', None)
+    if not multi_user or vaults_root is None:
+        return None
+
+    try:
+        relative = file_path.resolve().relative_to(Path(vaults_root).resolve())
+    except ValueError:
+        return None
+
+    if not relative.parts:
+        return None
+
+    username = relative.parts[0]
+    if cache is not None and username in cache:
+        return cache[username]
+
+    db_url = (
+        getattr(cfg.secrets, 'database_url', None) if hasattr(cfg, 'secrets') else None
+    )
+    if not db_url:
+        return None
+
+    from urllib.parse import urlparse
+
+    import psycopg2
+
+    parsed = urlparse(db_url)
+    conn_params = {
+        'host': parsed.hostname,
+        'port': parsed.port or 5432,
+        'user': parsed.username,
+        'password': parsed.password,
+        'database': parsed.path.lstrip('/'),
+    }
+
+    conn = psycopg2.connect(**conn_params)
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT id FROM users WHERE username = %s AND is_active = TRUE',
+            (username,),
+        )
+        row = cursor.fetchone()
+        cursor.close()
+    finally:
+        conn.close()
+
+    if not row:
+        return None
+
+    user_id = str(row[0])
+    if cache is not None:
+        cache[username] = user_id
+    return user_id
+
+
 class PDFTracker:
     """
     Persistent tracker for processed PDF files.
@@ -60,6 +121,9 @@ class PDFTracker:
             track_file: Path to the JSON file for tracking. If None, a default path is used.
         """  # noqa: W505
         self.config = config
+        self.multi_user = bool(getattr(self.config, 'multi_user', False))
+        self.vaults_root = getattr(self.config, 'vaults_root', None)
+        self._user_id_cache: dict[str, str] = {}
         self.track_file = (
             track_file or Path(self.config.output_dir) / 'processed_pdfs.json'
         )
@@ -84,6 +148,25 @@ class PDFTracker:
         # Docker healthcheck verifies the process is alive instead.
 
         logger.info(f'PDF tracker initialized with tracking file: {self.track_file}')
+
+    def _storage_key(self, file_path: Path) -> str:
+        """Build storage key for processed file tracking."""
+        resolved = file_path.resolve()
+        if self.multi_user and self.vaults_root:
+            try:
+                return str(
+                    resolved.relative_to(Path(self.vaults_root).resolve())
+                ).replace('\\', '/')
+            except ValueError:
+                pass
+
+        if self.vault_resolver:
+            try:
+                return self.vault_resolver.make_relative(resolved)
+            except ValueError:
+                pass
+
+        return str(resolved)
 
     def _load_tracked_files(self):
         """
@@ -238,7 +321,7 @@ class PDFTracker:
             print('PDFTracker: Connected, fetching rows...', flush=True)
             cursor = conn.cursor()
             cursor.execute(
-                'SELECT pdf_path, new_pdf_path, note_path, file_size, file_mtime FROM processed_pdfs'
+                'SELECT pdf_path, new_pdf_path, note_path, file_size, file_mtime, user_id FROM processed_pdfs'
             )
             rows = cursor.fetchall()
             print(f'PDFTracker: Fetched {len(rows)} rows from database', flush=True)
@@ -259,6 +342,8 @@ class PDFTracker:
                     tracked_info['size'] = row[3]
                 if row[4] is not None:  # file_mtime
                     tracked_info['mtime'] = row[4]
+                if row[5] is not None:  # user_id
+                    tracked_info['user_id'] = row[5]
 
                 # Store under original path only
                 # is_processed() will check both pdf_path and new_pdf_path columns
@@ -311,24 +396,21 @@ class PDFTracker:
         try:
             cursor = conn.cursor()
             for pdf_path_key, metadata in self.processed_files.items():
-                # Ensure we're storing vault-relative paths
+                # Ensure we're storing normalized tracking keys
                 pdf_path = pdf_path_key
-                if self.vault_resolver and Path(pdf_path_key).is_absolute():
-                    try:
-                        pdf_path = self.vault_resolver.make_relative(Path(pdf_path_key))
-                    except (ValueError, Exception):
-                        # If can't normalize, store as-is
-                        pass
+                if Path(pdf_path_key).is_absolute():
+                    pdf_path = self._storage_key(Path(pdf_path_key))
 
                 cursor.execute(
                     """
-                    INSERT INTO processed_pdfs (pdf_path, new_pdf_path, note_path, file_size, file_mtime, processed_at)
-                    VALUES (%s, %s, %s, %s, %s, NOW())
+                    INSERT INTO processed_pdfs (pdf_path, new_pdf_path, note_path, file_size, file_mtime, user_id, processed_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, NOW())
                     ON CONFLICT (pdf_path) DO UPDATE SET
                         new_pdf_path = EXCLUDED.new_pdf_path,
                         note_path = EXCLUDED.note_path,
                         file_size = EXCLUDED.file_size,
-                        file_mtime = EXCLUDED.file_mtime
+                        file_mtime = EXCLUDED.file_mtime,
+                        user_id = EXCLUDED.user_id
                     """,
                     (
                         str(pdf_path),
@@ -336,6 +418,7 @@ class PDFTracker:
                         metadata.get('note_path'),
                         metadata.get('size'),
                         metadata.get('mtime'),
+                        metadata.get('user_id', 'default_user'),
                     ),
                 )
 
@@ -361,32 +444,15 @@ class PDFTracker:
         Returns:
             bool: True if the file has been processed, False otherwise.
         """
-        # Normalize to vault-relative if resolver is available
-        if self.vault_resolver:
-            resolved = file_path.resolve()
-            try:
-                relative_path = self.vault_resolver.make_relative(resolved)
+        lookup_key = self._storage_key(file_path)
+        if lookup_key in self.processed_files:
+            return True
 
-                # Check if path matches the original filename (dict keys)
-                if relative_path in self.processed_files:
-                    logger.debug(f'Found as original path: {relative_path}')
-                    return True
+        for metadata in self.processed_files.values():
+            if metadata.get('new_pdf_path') == lookup_key:
+                return True
 
-                # Check if path matches a renamed filename (new_pdf_path values)
-                for original_path, metadata in self.processed_files.items():
-                    if metadata.get('new_pdf_path') == relative_path:
-                        logger.debug(
-                            f'Found as renamed path: {relative_path} (original: {original_path})'
-                        )
-                        return True
-
-                logger.debug(f'Not processed: {file_path} -> {relative_path}')
-                return False
-            except ValueError as e:
-                logger.debug(f'Could not normalize path {file_path}: {e}')
-                pass
-
-        # Fallback to absolute path - check both keys and new_pdf_path values
+        # Fallback to absolute path checks for older tracker entries
         abs_path = str(file_path.resolve())
         if abs_path in self.processed_files:
             return True
@@ -407,34 +473,24 @@ class PDFTracker:
         Returns:
             Path | None: The path to the note, or None if not found.
         """
-        # Try vault-relative lookup first
-        if self.vault_resolver:
-            resolved = file_path.resolve()
-            if self.vault_resolver.is_vault_relative(resolved):
-                try:
-                    relative_path = self.vault_resolver.make_relative(resolved)
-                    if relative_path in self.processed_files:
-                        note_path_str = self.processed_files[relative_path].get(
-                            'note_path'
-                        )
-                        if note_path_str:
-                            # If note path is relative, resolve it to absolute
-                            note_path = Path(note_path_str)
-                            if not note_path.is_absolute():
-                                return self.vault_resolver.resolve(note_path_str)
-                            return note_path
-                except ValueError:
-                    pass
+        lookup_key = self._storage_key(file_path)
+        if lookup_key in self.processed_files:
+            note_path_str = self.processed_files[lookup_key].get('note_path')
+            if note_path_str:
+                note_path = Path(note_path_str)
+                if not note_path.is_absolute():
+                    if self.multi_user and self.vaults_root:
+                        return Path(self.vaults_root) / note_path
+                    if self.vault_resolver:
+                        return self.vault_resolver.resolve(note_path_str)
+                return note_path
 
-        # Fallback to absolute path lookup
+        # Fallback to absolute-path lookup for old records
         abs_path = str(file_path.resolve())
         if abs_path in self.processed_files:
             note_path_str = self.processed_files[abs_path].get('note_path')
             if note_path_str:
                 note_path = Path(note_path_str)
-                # If note path is relative, resolve it to absolute
-                if not note_path.is_absolute() and self.vault_resolver:
-                    return self.vault_resolver.resolve(note_path_str)
                 return note_path
         return None
 
@@ -448,18 +504,8 @@ class PDFTracker:
             metadata: Optional metadata to store with the file. Should include
                 'new_pdf_path' if renamed.
         """
-        # Determine the key to use - prefer vault-relative
-        resolved_path = file_path.resolve()
-        if self.vault_resolver:
-            try:
-                storage_key = self.vault_resolver.make_relative(resolved_path)
-                logger.debug(f'Storing with vault-relative key: {storage_key}')
-            except ValueError:
-                storage_key = str(resolved_path)
-                logger.debug(f'Storing with absolute key: {storage_key}')
-        else:
-            storage_key = str(resolved_path)
-            logger.debug(f'Storing with absolute key: {storage_key}')
+        storage_key = self._storage_key(file_path)
+        logger.debug(f'Storing with normalized key: {storage_key}')
 
         # Determine which path to use for getting file stats
         # If the file was renamed, the new path is in metadata
@@ -489,28 +535,23 @@ class PDFTracker:
             # Merge metadata, converting paths to vault-relative where possible
             processed_data.update(metadata)
 
-            # Convert new_pdf_path to vault-relative
-            if 'new_pdf_path' in processed_data and self.vault_resolver:
+            # Convert new_pdf_path to normalized storage key
+            if 'new_pdf_path' in processed_data:
                 pdf_path = Path(processed_data['new_pdf_path']).resolve()
-                try:
-                    processed_data['new_pdf_path'] = self.vault_resolver.make_relative(
-                        pdf_path
-                    )
-                except ValueError:
-                    pass  # Keep absolute if conversion fails
+                processed_data['new_pdf_path'] = self._storage_key(pdf_path)
 
-            # Convert note_path to vault-relative
+            # Convert note_path to normalized storage key
             if 'note_path' in processed_data:
                 note_path = Path(processed_data['note_path']).resolve()
-                if self.vault_resolver and self.vault_resolver.is_vault_relative(
-                    note_path
-                ):
-                    try:
-                        processed_data['note_path'] = self.vault_resolver.make_relative(
-                            note_path
-                        )
-                    except ValueError:
-                        pass  # Keep absolute if conversion fails
+                processed_data['note_path'] = self._storage_key(note_path)
+
+        user_id = _resolve_user_id_from_path(
+            path_for_stats, self.config, self._user_id_cache
+        )
+        if user_id:
+            processed_data['user_id'] = user_id
+        else:
+            processed_data.setdefault('user_id', 'default_user')
 
         # Store file with metadata, using vault-relative key when possible
         self.processed_files[storage_key] = processed_data
@@ -530,19 +571,7 @@ class PDFTracker:
         Returns:
             bool: True if the file is unchanged, False otherwise.
         """
-        # Try vault-relative lookup first
-        lookup_key = None
-        if self.vault_resolver:
-            resolved = file_path.resolve()
-            if self.vault_resolver.is_vault_relative(resolved):
-                try:
-                    lookup_key = self.vault_resolver.make_relative(resolved)
-                except ValueError:
-                    pass
-
-        # Fallback to absolute path
-        if lookup_key is None:
-            lookup_key = str(file_path.resolve())
+        lookup_key = self._storage_key(file_path)
 
         # If file isn't tracked, it's considered changed
         if lookup_key not in self.processed_files:
@@ -593,6 +622,8 @@ class PDFHandler(FileSystemEventHandler):
         """
         # Store the pipeline - could be ThothPipeline or OptimizedDocumentPipeline
         self.pipeline = pipeline
+        self.config = config
+        self._user_id_cache: dict[str, str] = {}
 
     def on_created(self, event):
         """
@@ -615,7 +646,10 @@ class PDFHandler(FileSystemEventHandler):
         try:
             # The pipeline handles tracking and reprocessing checks
             # Works with both ThothPipeline and OptimizedDocumentPipeline
-            self.pipeline.process_pdf(file_path)
+            user_id = _resolve_user_id_from_path(
+                file_path, self.config, self._user_id_cache
+            )
+            self.pipeline.process_pdf(file_path, user_id=user_id)
         except Exception as e:
             logger.error(f'Error processing {file_path}: {e!s}')
 
@@ -649,10 +683,25 @@ class PDFMonitor:
         import warnings
 
         self.config = config
+        self._user_id_cache: dict[str, str] = {}
         self.watch_dir = watch_dir or self.config.pdf_dir
+        self.multi_user = bool(getattr(self.config, 'multi_user', False))
+        self.watch_dirs: list[Path] = []
 
-        # Ensure the watch directory exists
-        self.watch_dir.mkdir(parents=True, exist_ok=True)
+        if (
+            self.multi_user
+            and watch_dir is None
+            and getattr(self.config, 'vaults_root', None)
+        ):
+            self.watch_dirs = [Path(self.config.vaults_root)]
+            self.watch_dir = self.watch_dirs[0]
+            recursive = True
+        else:
+            self.watch_dirs = [self.watch_dir]
+
+        # Ensure watch directories exist
+        for directory in self.watch_dirs:
+            directory.mkdir(parents=True, exist_ok=True)
 
         # Handle both old and new parameters for backward compatibility
         if pipeline is not None and document_pipeline is not None:
@@ -856,11 +905,10 @@ class PDFMonitor:
         """
         Process any existing PDF files in the watch directory.
         """
-        print(
-            f'MONITOR:  _process_existing_files() entered, checking {self.watch_dir}',
-            flush=True,
+        print('MONITOR:  _process_existing_files() entered', flush=True)
+        logger.info(
+            f'Checking for existing PDF files in {len(self.watch_dirs)} watch directories'
         )
-        logger.info(f'Checking for existing PDF files in {self.watch_dir}')
 
         # Use recursive glob if recursive flag is set
         glob_pattern = '**/*.pdf' if self.recursive else '*.pdf'
@@ -868,7 +916,9 @@ class PDFMonitor:
 
         # Count files first
         print('MONITOR:  Globbing for PDF files...', flush=True)
-        pdf_files = list(self.watch_dir.glob(glob_pattern))
+        pdf_files: list[Path] = []
+        for watch_dir in self.watch_dirs:
+            pdf_files.extend(list(watch_dir.glob(glob_pattern)))
         print(
             f'MONITOR:  Found {len(pdf_files)} PDF files before filtering', flush=True
         )
@@ -914,7 +964,10 @@ class PDFMonitor:
                     flush=True,
                 )
                 logger.info(f'Calling pipeline.process_pdf() for {pdf_file.name}...')
-                self.pipeline.process_pdf(pdf_file)
+                user_id = _resolve_user_id_from_path(
+                    pdf_file, self.config, self._user_id_cache
+                )
+                self.pipeline.process_pdf(pdf_file, user_id=user_id)
                 print(
                     f'MONITOR:  process_pdf() returned for {pdf_file.name}',
                     flush=True,
@@ -945,16 +998,17 @@ class PDFMonitor:
         event_handler = PDFHandler(self.pipeline)
         print('MONITOR:  PDFHandler created', flush=True)
 
-        print(f'MONITOR:  Scheduling observer for {self.watch_dir}...', flush=True)
-        self.observer.schedule(
-            event_handler, str(self.watch_dir), recursive=self.recursive
-        )
-        print('MONITOR:  Observer scheduled', flush=True)
+        for watch_dir in self.watch_dirs:
+            print(f'MONITOR:  Scheduling observer for {watch_dir}...', flush=True)
+            self.observer.schedule(
+                event_handler, str(watch_dir), recursive=self.recursive
+            )
+        print('MONITOR:  Observer scheduled for all watch dirs', flush=True)
 
         print('MONITOR:  Starting observer thread...', flush=True)
         self.observer.start()
         print('MONITOR:  Observer thread started', flush=True)
-        logger.info(f'Observer started watching {self.watch_dir}')
+        logger.info(f'Observer started watching directories: {self.watch_dirs}')
 
     def _on_config_reload(self, config: object = None) -> None:  # noqa: ARG002
         """
