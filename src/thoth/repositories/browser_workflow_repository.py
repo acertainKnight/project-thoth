@@ -47,7 +47,9 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
                     pass
         return row
 
-    async def create(self, workflow_data: dict[str, Any]) -> UUID | None:
+    async def create(
+        self, workflow_data: dict[str, Any], user_id: str | None = None
+    ) -> UUID | None:
         """
         Create a new browser workflow.
 
@@ -58,6 +60,9 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             Optional[UUID]: ID of created workflow or None
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'create')
+            if user_id is not None and 'user_id' not in workflow_data:
+                workflow_data = {**workflow_data, 'user_id': user_id}
             # Validate required fields
             required_fields = [
                 'name',
@@ -101,7 +106,9 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to create browser workflow: {e}')
             return None
 
-    async def get_by_id(self, workflow_id: UUID) -> dict[str, Any] | None:
+    async def get_by_id(
+        self, workflow_id: UUID, user_id: str | None = None
+    ) -> dict[str, Any] | None:
         """
         Get a workflow by ID.
 
@@ -111,14 +118,19 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
         Returns:
             Optional[dict[str, Any]]: Workflow data or None
         """
-        cache_key = self._cache_key('id', str(workflow_id))
+        user_id = self._resolve_user_id(user_id, 'get_by_id')
+        cache_key = self._cache_key('id', str(workflow_id), user_id=user_id)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
 
         try:
-            query = 'SELECT * FROM browser_workflows WHERE id = $1'
-            result = await self.postgres.fetchrow(query, workflow_id)
+            if user_id is not None:
+                query = 'SELECT * FROM browser_workflows WHERE id = $1 AND user_id = $2'
+                result = await self.postgres.fetchrow(query, workflow_id, user_id)
+            else:
+                query = 'SELECT * FROM browser_workflows WHERE id = $1'
+                result = await self.postgres.fetchrow(query, workflow_id)
 
             if result:
                 data = self._deserialize_row(dict(result))
@@ -161,14 +173,17 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to get workflow by name {name}: {e}')
             return None
 
-    async def get_active_workflows(self) -> list[dict[str, Any]]:
+    async def get_active_workflows(
+        self, user_id: str | None = None
+    ) -> list[dict[str, Any]]:
         """
         Get all active workflows.
 
         Returns:
             list[dict[str, Any]]: List of active workflows
         """
-        cache_key = self._cache_key('active')
+        user_id = self._resolve_user_id(user_id, 'get_active_workflows')
+        cache_key = self._cache_key('active', user_id=user_id)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
@@ -177,10 +192,16 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             query = """
                 SELECT * FROM browser_workflows
                 WHERE is_active = true
+                {user_filter}
                 ORDER BY name ASC
             """
-
-            results = await self.postgres.fetch(query)
+            if user_id is not None:
+                results = await self.postgres.fetch(
+                    query.format(user_filter='AND user_id = $1'),
+                    user_id,
+                )
+            else:
+                results = await self.postgres.fetch(query.format(user_filter=''))
             data = [self._deserialize_row(dict(row)) for row in results]
 
             self._set_in_cache(cache_key, data)

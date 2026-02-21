@@ -22,7 +22,9 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
             postgres_service, table_name='workflow_search_config', **kwargs
         )
 
-    async def create(self, config_data: dict[str, Any]) -> UUID | None:
+    async def create(
+        self, config_data: dict[str, Any], user_id: str | None = None
+    ) -> UUID | None:
         """
         Create a new workflow search configuration.
 
@@ -40,6 +42,9 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
             Optional[UUID]: ID of created config or None
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'create')
+            if user_id is not None and 'user_id' not in config_data:
+                config_data = {**config_data, 'user_id': user_id}
             columns = list(config_data.keys())
             placeholders = [f'${i + 1}' for i in range(len(columns))]
 
@@ -62,7 +67,9 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to create workflow search config: {e}')
             return None
 
-    async def get_by_workflow_id(self, workflow_id: UUID) -> dict[str, Any] | None:
+    async def get_by_workflow_id(
+        self, workflow_id: UUID, user_id: str | None = None
+    ) -> dict[str, Any] | None:
         """
         Get search configuration for a workflow.
 
@@ -74,7 +81,8 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
         Returns:
             Optional[dict[str, Any]]: Search config data or None
         """
-        cache_key = self._cache_key('workflow', str(workflow_id))
+        user_id = self._resolve_user_id(user_id, 'get_by_workflow_id')
+        cache_key = self._cache_key('workflow', str(workflow_id), user_id=user_id)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
@@ -83,8 +91,12 @@ class WorkflowSearchConfigRepository(BaseRepository[dict[str, Any]]):
             query = f"""
                 SELECT * FROM {self.table_name}
                 WHERE workflow_id = $1
+                {'AND user_id = $2' if user_id is not None else ''}
             """
-            result = await self.postgres.fetchrow(query, workflow_id)
+            if user_id is not None:
+                result = await self.postgres.fetchrow(query, workflow_id, user_id)
+            else:
+                result = await self.postgres.fetchrow(query, workflow_id)
 
             if result:
                 data = dict(result)

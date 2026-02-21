@@ -52,7 +52,11 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
         return self.cipher.decrypt(ciphertext.encode()).decode()
 
     async def create(
-        self, workflow_id: UUID, credential_type: str, credentials: dict[str, str]
+        self,
+        workflow_id: UUID,
+        credential_type: str,
+        credentials: dict[str, str],
+        user_id: str | None = None,
     ) -> UUID | None:
         """
         Create encrypted credentials for a workflow.
@@ -66,19 +70,20 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
             Optional[UUID]: ID of created credential record or None
         """  # noqa: W505
         try:
+            user_id = self._resolve_user_id(user_id, 'create')
             # Encrypt all credential values
             encrypted_credentials = {
                 key: self._encrypt(value) for key, value in credentials.items()
             }
 
             query = """
-                INSERT INTO workflow_credentials (workflow_id, credential_type, encrypted_data)
-                VALUES ($1, $2, $3)
+                INSERT INTO workflow_credentials (workflow_id, credential_type, encrypted_data, user_id)
+                VALUES ($1, $2, $3, $4)
                 RETURNING id
             """
 
             result = await self.postgres.fetchval(
-                query, workflow_id, credential_type, encrypted_credentials
+                query, workflow_id, credential_type, encrypted_credentials, user_id
             )
 
             self._invalidate_cache(str(workflow_id))
@@ -90,7 +95,9 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to create credentials: {e}')
             return None
 
-    async def get_by_workflow_id(self, workflow_id: UUID) -> dict[str, Any] | None:
+    async def get_by_workflow_id(
+        self, workflow_id: UUID, user_id: str | None = None
+    ) -> dict[str, Any] | None:
         """
         Get decrypted credentials for a workflow.
 
@@ -100,7 +107,8 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
         Returns:
             Optional[dict[str, Any]]: Decrypted credentials with type or None
         """
-        cache_key = self._cache_key('workflow', str(workflow_id))
+        user_id = self._resolve_user_id(user_id, 'get_by_workflow_id')
+        cache_key = self._cache_key('workflow', str(workflow_id), user_id=user_id)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
@@ -110,8 +118,18 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
                 SELECT id, workflow_id, credential_type, encrypted_data, created_at
                 FROM workflow_credentials
                 WHERE workflow_id = $1
+                {user_filter}
             """
-            result = await self.postgres.fetchrow(query, workflow_id)
+            if user_id is not None:
+                result = await self.postgres.fetchrow(
+                    query.format(user_filter='AND user_id = $2'),
+                    workflow_id,
+                    user_id,
+                )
+            else:
+                result = await self.postgres.fetchrow(
+                    query.format(user_filter=''), workflow_id
+                )
 
             if not result:
                 return None

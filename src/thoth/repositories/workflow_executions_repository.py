@@ -21,7 +21,9 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
         """Initialize workflow executions repository."""
         super().__init__(postgres_service, table_name='workflow_executions', **kwargs)
 
-    async def create(self, execution_data: dict[str, Any]) -> UUID | None:
+    async def create(
+        self, execution_data: dict[str, Any], user_id: str | None = None
+    ) -> UUID | None:
         """
         Create a new workflow execution record.
 
@@ -37,6 +39,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             Optional[UUID]: ID of created execution or None
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'create')
             import json as _json
 
             # Set default started_at if not provided
@@ -46,6 +49,8 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             # Set default status if not provided
             if 'status' not in execution_data:
                 execution_data['status'] = 'running'
+            if user_id is not None and 'user_id' not in execution_data:
+                execution_data['user_id'] = user_id
 
             # asyncpg requires JSONB values as JSON strings, not raw dicts
             serialized = {}
@@ -77,7 +82,9 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to create workflow execution: {e}')
             return None
 
-    async def get_by_id(self, execution_id: UUID) -> dict[str, Any] | None:
+    async def get_by_id(
+        self, execution_id: UUID, user_id: str | None = None
+    ) -> dict[str, Any] | None:
         """
         Get a workflow execution by ID.
 
@@ -87,14 +94,21 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
         Returns:
             Optional[dict[str, Any]]: Execution data or None
         """
-        cache_key = self._cache_key('id', str(execution_id))
+        user_id = self._resolve_user_id(user_id, 'get_by_id')
+        cache_key = self._cache_key('id', str(execution_id), user_id=user_id)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
 
         try:
-            query = f'SELECT * FROM {self.table_name} WHERE id = $1'  # nosec B608
-            result = await self.postgres.fetchrow(query, execution_id)
+            if user_id is not None:
+                query = (
+                    f'SELECT * FROM {self.table_name} WHERE id = $1 AND user_id = $2'  # nosec B608
+                )
+                result = await self.postgres.fetchrow(query, execution_id, user_id)
+            else:
+                query = f'SELECT * FROM {self.table_name} WHERE id = $1'  # nosec B608
+                result = await self.postgres.fetchrow(query, execution_id)
 
             if result:
                 data = dict(result)
@@ -108,7 +122,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             return None
 
     async def get_by_workflow_id(
-        self, workflow_id: UUID, limit: int = 10
+        self, workflow_id: UUID, limit: int = 10, user_id: str | None = None
     ) -> list[dict[str, Any]]:
         """
         Get recent executions for a workflow.
@@ -120,7 +134,10 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
         Returns:
             list[dict[str, Any]]: List of execution records ordered by started_at DESC
         """
-        cache_key = self._cache_key('workflow', str(workflow_id), f'limit_{limit}')
+        user_id = self._resolve_user_id(user_id, 'get_by_workflow_id')
+        cache_key = self._cache_key(
+            'workflow', str(workflow_id), f'limit_{limit}', user_id=user_id
+        )
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
@@ -129,10 +146,23 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             query = """
                 SELECT * FROM workflow_executions
                 WHERE workflow_id = $1
+                {user_filter}
                 ORDER BY started_at DESC
                 LIMIT $2
             """
-            results = await self.postgres.fetch(query, workflow_id, limit)
+            if user_id is not None:
+                results = await self.postgres.fetch(
+                    query.format(user_filter='AND user_id = $3'),
+                    workflow_id,
+                    limit,
+                    user_id,
+                )
+            else:
+                results = await self.postgres.fetch(
+                    query.format(user_filter=''),
+                    workflow_id,
+                    limit,
+                )
             executions = [dict(row) for row in results]
 
             self._set_in_cache(cache_key, executions)
