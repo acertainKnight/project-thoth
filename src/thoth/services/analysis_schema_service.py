@@ -39,12 +39,13 @@ class AnalysisSchemaService(BaseService):
 
         # Determine schema file path
         if schema_path:
-            self.schema_path = Path(schema_path)
+            self._default_schema_path = Path(schema_path)
         elif hasattr(self.config, 'analysis_schema_path'):
-            self.schema_path = Path(self.config.analysis_schema_path)
+            self._default_schema_path = Path(self.config.analysis_schema_path)
         else:
-            # Default: vault/thoth/_thoth/analysis_schema.json
-            self.schema_path = self.config.workspace_dir / 'analysis_schema.json'
+            self._default_schema_path = (
+                self.config.workspace_dir / 'analysis_schema.json'
+            )
 
         # Cache for generated models
         self._model_cache: dict[str, type[BaseModel]] = {}
@@ -59,6 +60,12 @@ class AnalysisSchemaService(BaseService):
                 'analysis_schema_service', self._on_config_reload
             )
             self.logger.debug('AnalysisSchemaService registered for hot-reload')
+
+    @property
+    def schema_path(self) -> Path:
+        """Schema path, scoped to current user when available."""
+        up = self._get_user_paths()
+        return up.analysis_schema_path if up else self._default_schema_path
 
     def initialize(self) -> None:
         """Initialize the service by loading the schema."""

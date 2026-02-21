@@ -126,7 +126,7 @@ class ProcessingService(BaseService):
             loop.close()
         else:
             # Already have a running loop
-            asyncio.create_task(save())
+            _ = asyncio.create_task(save())  # noqa: RUF006
 
     @property
     def mistral_client(self) -> Mistral:
@@ -191,7 +191,8 @@ class ProcessingService(BaseService):
                 raise ServiceError(f'PDF file not found: {pdf_path}')
 
             if output_dir is None:
-                output_dir = self.config.markdown_dir
+                up = self._get_user_paths()
+                output_dir = up.markdown_dir if up else self.config.markdown_dir
             output_dir.mkdir(parents=True, exist_ok=True)
 
             if not self.config.api_keys.mistral_key:
@@ -257,7 +258,8 @@ class ProcessingService(BaseService):
         try:
             # Set output directory
             if output_dir is None:
-                output_dir = self.config.markdown_dir
+                up = self._get_user_paths()
+                output_dir = up.markdown_dir if up else self.config.markdown_dir
             output_dir.mkdir(parents=True, exist_ok=True)
 
             # Copy PDF to output directory if needed
@@ -374,7 +376,7 @@ class ProcessingService(BaseService):
         return response
 
     def _join_markdown_pages(self, ocr_response: OCRResponse) -> str:
-        """Join the markdown pages into a single markdown document without image references."""
+        """Join markdown pages into one document, stripping image refs."""
         import re
 
         combined = '\n\n'.join(page.markdown for page in ocr_response.pages)

@@ -63,11 +63,15 @@ class DiscoveryService(BaseService):
             article_service: Optional ArticleService instance
         """
         super().__init__(config)
-        self.sources_dir = Path(sources_dir or self.config.discovery_sources_dir)
-        self.sources_dir.mkdir(parents=True, exist_ok=True)
+        self._default_sources_dir = Path(
+            sources_dir or self.config.discovery_sources_dir
+        )
+        self._default_sources_dir.mkdir(parents=True, exist_ok=True)
 
-        self.results_dir = Path(results_dir or self.config.discovery_results_dir)
-        self.results_dir.mkdir(parents=True, exist_ok=True)
+        self._default_results_dir = Path(
+            results_dir or self.config.discovery_results_dir
+        )
+        self._default_results_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize API sources and plugin registry
         self.api_sources = {
@@ -91,6 +95,18 @@ class DiscoveryService(BaseService):
         self.pdf_locator = PdfLocatorService(config=self.config)
 
         self._discovery_manager = None
+
+    @property
+    def sources_dir(self) -> Path:
+        """Discovery sources dir, scoped to current user when available."""
+        up = self._get_user_paths()
+        return up.discovery_sources_dir if up else self._default_sources_dir
+
+    @property
+    def results_dir(self) -> Path:
+        """Discovery results dir, scoped to current user when available."""
+        up = self._get_user_paths()
+        return up.discovery_results_dir if up else self._default_results_dir
 
     def initialize(self) -> None:
         """Initialize the discovery service."""
@@ -478,13 +494,15 @@ class DiscoveryService(BaseService):
                 safe_title += f'_arxiv_{metadata.arxiv_id}'
 
             pdf_filename = f'{safe_title}.pdf'
-            pdf_path = self.config.pdf_dir / pdf_filename
+            up = self._get_user_paths()
+            _pdf_dir = up.pdf_dir if up else self.config.pdf_dir
+            pdf_path = _pdf_dir / pdf_filename
 
             # Ensure unique filename
             counter = 1
             while pdf_path.exists():
                 name_part = pdf_filename.rsplit('.', 1)[0]
-                pdf_path = self.config.pdf_dir / f'{name_part}_{counter}.pdf'
+                pdf_path = _pdf_dir / f'{name_part}_{counter}.pdf'
                 counter += 1
 
             # Download the PDF using httpx streaming

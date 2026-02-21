@@ -71,14 +71,13 @@ class SkillService(BaseService):
         self.bundled_skills_dir = Path(__file__).parent.parent / '.skills'
 
         # Vault skills directory (user-specific, hot-reloadable)
-        # Use resolved workspace dir for vault skills (thoth/_thoth/skills/)
-        self.vault_skills_dir = self.config.workspace_dir / 'skills'
-        self.vault_skills_dir.mkdir(parents=True, exist_ok=True)
+        self._default_vault_skills_dir = self.config.workspace_dir / 'skills'
+        self._default_vault_skills_dir.mkdir(parents=True, exist_ok=True)
 
         # Role-based bundles directories (bundled first, vault can override)
         self.bundled_bundles_dir = self.bundled_skills_dir / 'bundles'
-        self.vault_bundles_dir = self.vault_skills_dir / 'bundles'
-        self.vault_bundles_dir.mkdir(parents=True, exist_ok=True)
+        self._default_vault_bundles_dir = self._default_vault_skills_dir / 'bundles'
+        self._default_vault_bundles_dir.mkdir(parents=True, exist_ok=True)
 
         self.logger.info(
             f'SkillService initialized:\n'
@@ -87,6 +86,17 @@ class SkillService(BaseService):
             f'  Bundled Bundles: {self.bundled_bundles_dir}\n'
             f'  Vault Bundles: {self.vault_bundles_dir}'
         )
+
+    @property
+    def vault_skills_dir(self) -> Path:
+        """Vault skills dir, scoped to current user when available."""
+        up = self._get_user_paths()
+        return (up.workspace_dir / 'skills') if up else self._default_vault_skills_dir
+
+    @property
+    def vault_bundles_dir(self) -> Path:
+        """Vault bundles dir, scoped to current user when available."""
+        return self.vault_skills_dir / 'bundles'
 
     def initialize(self) -> None:
         """Initialize the skill service."""

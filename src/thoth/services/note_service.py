@@ -49,18 +49,18 @@ class NoteService(BaseService):
         """
         super().__init__(config)
         self.templates_dir = Path(templates_dir or self.config.templates_dir)
-        self.notes_dir = Path(notes_dir or self.config.notes_dir)
-        self.pdf_dir = Path(pdf_dir or self.config.pdf_dir)
-        self.markdown_dir = Path(markdown_dir or self.config.markdown_dir)
+        self._default_notes_dir = Path(notes_dir or self.config.notes_dir)
+        self._default_pdf_dir = Path(pdf_dir or self.config.pdf_dir)
+        self._default_markdown_dir = Path(markdown_dir or self.config.markdown_dir)
         self.api_base_url = (
             api_base_url
             or f'http://{self.config.servers_config.api.host}:{self.config.servers_config.api.port}'
         )
 
         # Ensure directories exist
-        self.notes_dir.mkdir(parents=True, exist_ok=True)
-        self.pdf_dir.mkdir(parents=True, exist_ok=True)
-        self.markdown_dir.mkdir(parents=True, exist_ok=True)
+        self._default_notes_dir.mkdir(parents=True, exist_ok=True)
+        self._default_pdf_dir.mkdir(parents=True, exist_ok=True)
+        self._default_markdown_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize Jinja environment (autoescape for XSS safety)
         self.jinja_env = Environment(
@@ -75,6 +75,24 @@ class NoteService(BaseService):
         from cachetools import LRUCache
 
         self._notes_cache: LRUCache = LRUCache(maxsize=500)
+
+    @property
+    def notes_dir(self) -> Path:
+        """Notes directory, scoped to the current user when available."""
+        up = self._get_user_paths()
+        return up.notes_dir if up else self._default_notes_dir
+
+    @property
+    def pdf_dir(self) -> Path:
+        """PDF directory, scoped to the current user when available."""
+        up = self._get_user_paths()
+        return up.pdf_dir if up else self._default_pdf_dir
+
+    @property
+    def markdown_dir(self) -> Path:
+        """Markdown directory, scoped to the current user when available."""
+        up = self._get_user_paths()
+        return up.markdown_dir if up else self._default_markdown_dir
 
     def _get_markdown_content(self, title: str, markdown_path: Path) -> str:  # noqa: ARG002
         """Get markdown content from PostgreSQL."""

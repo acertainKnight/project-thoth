@@ -34,13 +34,19 @@ class QueryService(TemplateServiceMixin, BaseService):
             storage_dir: Directory for storing queries
         """
         super().__init__(config)
-        self.storage_dir = Path(storage_dir or self.config.queries_dir)
-        self.storage_dir.mkdir(parents=True, exist_ok=True)
+        self._default_storage_dir = Path(storage_dir or self.config.queries_dir)
+        self._default_storage_dir.mkdir(parents=True, exist_ok=True)
         self._llm = None  # Lazy initialization
         self._queries: dict[str, ResearchQuery] = {}
 
         # Set up template environment
         self.setup_template_environment()
+
+    @property
+    def storage_dir(self) -> Path:
+        """Queries storage dir, scoped to current user when available."""
+        up = self._get_user_paths()
+        return up.queries_dir if up else self._default_storage_dir
 
     @property
     def llm(self) -> OpenRouterClient:

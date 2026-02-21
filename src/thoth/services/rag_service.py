@@ -478,8 +478,11 @@ class RAGService(BaseService):
             ServiceError: If indexing fails
         """
         try:
-            markdown_dir = markdown_dir or self.config.markdown_dir
-            notes_dir = notes_dir or self.config.notes_dir
+            up = self._get_user_paths()
+            markdown_dir = markdown_dir or (
+                up.markdown_dir if up else self.config.markdown_dir
+            )
+            notes_dir = notes_dir or (up.notes_dir if up else self.config.notes_dir)
 
             stats = {
                 'markdown_files': 0,
