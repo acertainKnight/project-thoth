@@ -8,6 +8,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from thoth.auth.dependencies import get_user_context
 from thoth.server.dependencies import get_service_manager
 from thoth.server.routers import health
 
@@ -20,15 +21,14 @@ def mock_service_manager():
 
 
 @pytest.fixture
-def test_client(mock_service_manager):
+def test_client(mock_service_manager, mock_user_context):
     """Create FastAPI test client with health router."""
     app = FastAPI()
     app.include_router(health.router)
 
-    # Override dependency to return mock
     app.dependency_overrides[get_service_manager] = lambda: mock_service_manager
+    app.dependency_overrides[get_user_context] = lambda: mock_user_context
 
-    # Set up directories for the router
     with TemporaryDirectory() as tmpdir:
         pdf_dir = Path(tmpdir) / 'pdfs'
         notes_dir = Path(tmpdir) / 'notes'
@@ -40,7 +40,6 @@ def test_client(mock_service_manager):
         client = TestClient(app)
         yield client
 
-        # Clean up
         app.dependency_overrides.clear()
 
 
@@ -49,7 +48,10 @@ class TestHealthEndpoint:
 
     @patch('thoth.server.routers.health.HealthMonitor')
     def test_health_check_healthy(
-        self, mock_monitor_class, test_client, mock_service_manager
+        self,
+        mock_monitor_class,
+        test_client,
+        mock_service_manager,  # noqa: ARG002
     ):
         """Test health check returns 200 when services are healthy."""
         # Setup mock
@@ -73,7 +75,10 @@ class TestHealthEndpoint:
 
     @patch('thoth.server.routers.health.HealthMonitor')
     def test_health_check_unhealthy(
-        self, mock_monitor_class, test_client, mock_service_manager
+        self,
+        mock_monitor_class,
+        test_client,
+        mock_service_manager,  # noqa: ARG002
     ):
         """Test health check returns 503 when services are unhealthy."""
         # Setup mock
@@ -93,12 +98,16 @@ class TestHealthEndpoint:
         assert data['status'] == 'unhealthy'
         assert data['healthy'] is False
 
-    def test_health_check_service_manager_not_initialized(self, mock_service_manager):
+    def test_health_check_service_manager_not_initialized(
+        self,
+        mock_service_manager,  # noqa: ARG002
+        mock_user_context,
+    ):
         """Test health check handles service manager not initialized."""
-        # Create app with None service_manager override
         app = FastAPI()
         app.include_router(health.router)
         app.dependency_overrides[get_service_manager] = lambda: None
+        app.dependency_overrides[get_user_context] = lambda: mock_user_context
 
         with TemporaryDirectory() as tmpdir:
             pdf_dir = Path(tmpdir) / 'pdfs'
@@ -119,7 +128,10 @@ class TestHealthEndpoint:
 
     @patch('thoth.server.routers.health.HealthMonitor')
     def test_health_check_exception_handling(
-        self, mock_monitor_class, test_client, mock_service_manager
+        self,
+        mock_monitor_class,
+        test_client,
+        mock_service_manager,  # noqa: ARG002
     ):
         """Test health check handles exceptions gracefully."""
         # Setup mock to raise exception
@@ -210,18 +222,29 @@ class TestViewMarkdownEndpoint:
         assert data['status'] == 'error'
         assert 'File not found' in data['message']
 
-    def test_view_markdown_absolute_path(self, test_client):
-        """Test viewing markdown file with absolute path."""
-        # Create a test markdown file
+    def test_view_markdown_absolute_path(self, mock_user_context):
+        """Test viewing markdown file with absolute path inside vault."""
         with TemporaryDirectory() as tmpdir:
-            test_file = Path(tmpdir) / 'absolute.md'
+            vault_path = Path(tmpdir) / 'vault'
+            vault_path.mkdir()
+            test_file = vault_path / 'absolute.md'
             test_content = '# Absolute Path Test'
             test_file.write_text(test_content)
 
-            # Make request with absolute path
-            response = test_client.get(f'/view-markdown?path={test_file}')
+            from dataclasses import replace
 
-            # Assertions
+            ctx = replace(mock_user_context, vault_path=vault_path)
+            app = FastAPI()
+            app.include_router(health.router)
+            app.dependency_overrides[get_service_manager] = lambda: Mock()
+            app.dependency_overrides[get_user_context] = lambda: ctx
+
+            notes_dir = vault_path
+            health.set_directories(vault_path, notes_dir, 'http://localhost:8000')
+
+            with TestClient(app) as client:
+                response = client.get(f'/view-markdown?path={test_file}')
+
             assert response.status_code == 200
             data = response.json()
             assert data['status'] == 'success'

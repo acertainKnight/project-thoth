@@ -6,6 +6,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from thoth.auth.dependencies import get_user_context
 from thoth.server.dependencies import get_research_agent, get_service_manager
 from thoth.server.routers import tools
 
@@ -38,32 +39,31 @@ def mock_service_manager():
 
 
 @pytest.fixture
-def test_client(mock_research_agent, mock_service_manager):
+def test_client(mock_research_agent, mock_service_manager, mock_user_context):
     """Create FastAPI test client with tools router and dependency overrides."""
     app = FastAPI()
     app.include_router(tools.router)
 
-    # Override dependencies to return mocks
     app.dependency_overrides[get_research_agent] = lambda: mock_research_agent
     app.dependency_overrides[get_service_manager] = lambda: mock_service_manager
+    app.dependency_overrides[get_user_context] = lambda: mock_user_context
 
     client = TestClient(app)
     yield client
 
-    # Clean up
     app.dependency_overrides.clear()
 
 
 class TestExecuteToolEndpoint:
     """Tests for POST /execute endpoint."""
 
-    def test_execute_tool_without_agent(self, mock_service_manager):
+    def test_execute_tool_without_agent(self, mock_service_manager, mock_user_context):
         """Test tool execution fails when research agent not initialized."""
-        # Create app with None agent override
         app = FastAPI()
         app.include_router(tools.router)
         app.dependency_overrides[get_research_agent] = lambda: None
         app.dependency_overrides[get_service_manager] = lambda: mock_service_manager
+        app.dependency_overrides[get_user_context] = lambda: mock_user_context
 
         with TestClient(app) as client:
             request_data = {
@@ -96,7 +96,9 @@ class TestExecuteToolEndpoint:
         assert 'response' in data
 
     def test_execute_tool_bypassing_agent_tool_not_found(
-        self, test_client, mock_research_agent
+        self,
+        test_client,
+        mock_research_agent,  # noqa: ARG002
     ):
         """Test bypassing agent with non-existent tool returns error."""
 
@@ -112,7 +114,10 @@ class TestExecuteToolEndpoint:
         assert 'failed' in response.json()['detail'].lower()
 
     def test_execute_tool_bypassing_agent_success(
-        self, test_client, mock_research_agent, mock_service_manager
+        self,
+        test_client,
+        mock_research_agent,
+        mock_service_manager,  # noqa: ARG002
     ):
         """Test bypassing agent with valid tool."""
 
@@ -137,13 +142,15 @@ class TestExecuteToolEndpoint:
 class TestExecuteCommandEndpoint:
     """Tests for POST /execute/command endpoint."""
 
-    def test_execute_command_without_service_manager(self, mock_research_agent):
+    def test_execute_command_without_service_manager(
+        self, mock_research_agent, mock_user_context
+    ):
         """Test command execution fails gracefully with missing services."""
-        # When service_manager is None, command handlers fail
         app = FastAPI()
         app.include_router(tools.router)
         app.dependency_overrides[get_research_agent] = lambda: mock_research_agent
         app.dependency_overrides[get_service_manager] = lambda: None
+        app.dependency_overrides[get_user_context] = lambda: mock_user_context
 
         with TestClient(app) as client:
             request_data = {'command': 'discovery', 'args': ['list']}
@@ -167,7 +174,7 @@ class TestExecuteCommandEndpoint:
         assert data['command'] == 'discovery'
         assert 'result' in data
 
-    def test_execute_command_with_streaming(self, test_client, mock_service_manager):
+    def test_execute_command_with_streaming(self, test_client, mock_service_manager):  # noqa: ARG002
         """Test executing command with streaming enabled."""
 
         request_data = {'command': 'discovery', 'args': ['list'], 'streaming': True}
@@ -177,7 +184,7 @@ class TestExecuteCommandEndpoint:
         data = response.json()
         assert data['streaming'] is True
 
-    def test_execute_unknown_command(self, test_client, mock_service_manager):
+    def test_execute_unknown_command(self, test_client, mock_service_manager):  # noqa: ARG002
         """Test executing unknown command returns error."""
 
         request_data = {'command': 'unknown_command', 'args': []}

@@ -7,15 +7,18 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from thoth.auth.dependencies import get_user_context
 from thoth.server.routers import agent
 
 
 @pytest.fixture
-def test_client():
+def test_client(mock_user_context):
     """Create FastAPI test client with agent router."""
     app = FastAPI()
     app.include_router(agent.router)
-    return TestClient(app)
+    app.dependency_overrides[get_user_context] = lambda: mock_user_context
+    yield TestClient(app)
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
