@@ -12,6 +12,7 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from thoth.mcp.auth import get_mcp_user_id
 from thoth.services.base import BaseService, ServiceError
 from thoth.utilities.schemas import AnalysisResponse, Citation
 
@@ -161,28 +162,32 @@ class NoteService(BaseService):
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
         async def save():
+            user_id = get_mcp_user_id()
             conn = await asyncpg.connect(db_url)
             try:
                 # First get the paper_id from paper_metadata
                 # Try exact match first, then normalized match (hyphens -> spaces)
                 paper_id = await conn.fetchval(
-                    'SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1)',
+                    'SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1) AND user_id = $2',
                     title,
+                    user_id,
                 )
 
                 # If not found, try with normalized title (replace hyphens with spaces)
                 if paper_id is None:
                     normalized_title = title.replace('-', ' ').replace(',', '')
                     paper_id = await conn.fetchval(
-                        "SELECT id FROM paper_metadata WHERE LOWER(REPLACE(title, '-', ' ')) = LOWER($1)",
+                        "SELECT id FROM paper_metadata WHERE LOWER(REPLACE(title, '-', ' ')) = LOWER($1) AND user_id = $2",
                         normalized_title,
+                        user_id,
                     )
 
                 # Also try matching against title_normalized column
                 if paper_id is None:
                     paper_id = await conn.fetchval(
-                        'SELECT id FROM paper_metadata WHERE title_normalized = LOWER($1)',
+                        'SELECT id FROM paper_metadata WHERE title_normalized = LOWER($1) AND user_id = $2',
                         title.replace('-', ' ').replace(',', '').lower(),
+                        user_id,
                     )
 
                 if paper_id:
@@ -190,9 +195,9 @@ class NoteService(BaseService):
                     result = await conn.execute(
                         """
                         INSERT INTO processed_papers
-                            (paper_id, markdown_content, pdf_path, note_path, markdown_path, created_at, updated_at)
-                        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-                        ON CONFLICT (paper_id) DO UPDATE SET
+                            (paper_id, markdown_content, pdf_path, note_path, markdown_path, user_id, created_at, updated_at)
+                        VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+                        ON CONFLICT (paper_id, user_id) DO UPDATE SET
                             markdown_content = EXCLUDED.markdown_content,
                             pdf_path = EXCLUDED.pdf_path,
                             note_path = EXCLUDED.note_path,
@@ -204,6 +209,7 @@ class NoteService(BaseService):
                         pdf_path,
                         note_path,
                         markdown_path,
+                        user_id,
                     )
                     rows_affected = int(result.split()[-1]) if result else 0
                     if rows_affected > 0:

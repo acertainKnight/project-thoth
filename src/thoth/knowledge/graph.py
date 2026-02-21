@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any
 import networkx as nx
 from loguru import logger
 
+from thoth.mcp.auth import get_mcp_user_id
+
 if TYPE_CHECKING:
     from thoth.config import Config
     from thoth.services.service_manager import ServiceManager
@@ -688,6 +690,7 @@ class CitationGraph:
             return
 
         async def save():
+            user_id = get_mcp_user_id()
             conn = await asyncpg.connect(db_url)
             try:
                 # Parse article_id (doi:..., arxiv:..., or title:...)
@@ -700,16 +703,21 @@ class CitationGraph:
                 # First, find paper_id from paper_metadata
                 if id_type == 'doi':
                     paper_id = await conn.fetchval(
-                        'SELECT id FROM paper_metadata WHERE doi = $1', id_value
+                        'SELECT id FROM paper_metadata WHERE doi = $1 AND user_id = $2',
+                        id_value,
+                        user_id,
                     )
                 elif id_type == 'arxiv':
                     paper_id = await conn.fetchval(
-                        'SELECT id FROM paper_metadata WHERE arxiv_id = $1', id_value
+                        'SELECT id FROM paper_metadata WHERE arxiv_id = $1 AND user_id = $2',
+                        id_value,
+                        user_id,
                     )
                 else:  # title-based
                     paper_id = await conn.fetchval(
-                        'SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1)',
+                        'SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1) AND user_id = $2',
                         id_value,
+                        user_id,
                     )
 
                 if paper_id is None:
@@ -721,9 +729,9 @@ class CitationGraph:
                 # Update or insert into processed_papers
                 await conn.execute(
                     """
-                    INSERT INTO processed_papers (paper_id, markdown_content, markdown_path, created_at, updated_at)
-                    VALUES ($1, $2, $3, NOW(), NOW())
-                    ON CONFLICT (paper_id) DO UPDATE SET
+                    INSERT INTO processed_papers (paper_id, markdown_content, markdown_path, user_id, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, NOW(), NOW())
+                    ON CONFLICT (paper_id, user_id) DO UPDATE SET
                         markdown_content = EXCLUDED.markdown_content,
                         markdown_path = EXCLUDED.markdown_path,
                         updated_at = NOW()
@@ -731,6 +739,7 @@ class CitationGraph:
                     paper_id,
                     markdown_content,
                     markdown_path,
+                    user_id,
                 )
 
                 logger.info(

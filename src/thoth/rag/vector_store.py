@@ -14,6 +14,7 @@ from langchain_core.documents import Document
 from loguru import logger
 
 from thoth.config import Config
+from thoth.mcp.auth import get_mcp_user_id
 from thoth.rag.search_backends import FullTextSearchBackend, create_backend
 
 
@@ -819,11 +820,20 @@ class VectorStoreManager:
 
     async def _delete_documents_async(self, paper_id: UUID) -> None:
         """Delete documents asynchronously."""
+        user_id = get_mcp_user_id()
         pool = await self._get_pool()
         async with pool.acquire() as conn:
-            result = await conn.execute(
-                'DELETE FROM document_chunks WHERE paper_id = $1', paper_id
-            )
+            if user_id is not None:
+                result = await conn.execute(
+                    'DELETE FROM document_chunks WHERE paper_id = $1 AND user_id = $2',
+                    paper_id,
+                    user_id,
+                )
+            else:
+                result = await conn.execute(
+                    'DELETE FROM document_chunks WHERE paper_id = $1',
+                    paper_id,
+                )
             logger.debug(f'Deleted chunks for paper {paper_id}: {result}')
 
     async def get_stats_async(self) -> dict[str, Any]:

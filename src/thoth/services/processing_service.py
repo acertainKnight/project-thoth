@@ -14,6 +14,7 @@ from mistralai.models import OCRResponse, UploadFileOut
 from pypdf import PdfReader
 
 from thoth.analyze.llm_processor import LLMProcessor
+from thoth.mcp.auth import get_mcp_user_id
 from thoth.services.analysis_schema_service import AnalysisSchemaService
 from thoth.services.base import BaseService, ServiceError
 from thoth.services.llm_service import LLMService
@@ -72,12 +73,14 @@ class ProcessingService(BaseService):
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
         async def save():
+            user_id = get_mcp_user_id()
             conn = await asyncpg.connect(db_url)
             try:
                 # First, check if paper exists in paper_metadata by title
                 paper_id = await conn.fetchval(
-                    'SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1)',
+                    'SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1) AND user_id = $2',
                     paper_title,
+                    user_id,
                 )
 
                 if paper_id is None:
@@ -86,32 +89,35 @@ class ProcessingService(BaseService):
                     title_normalized = paper_title.lower().replace('-', ' ')
                     paper_id = await conn.fetchval(
                         """
-                        INSERT INTO paper_metadata (title, title_normalized, source_of_truth, created_at, updated_at)
-                        VALUES ($1, $2, 'processed', NOW(), NOW())
+                        INSERT INTO paper_metadata (title, title_normalized, source_of_truth, user_id, created_at, updated_at)
+                        VALUES ($1, $2, 'processed', $3, NOW(), NOW())
                         RETURNING id
                         """,
                         paper_title,
                         title_normalized,
+                        user_id,
                     )
                 else:
                     # Update existing paper_metadata timestamp
                     await conn.execute(
-                        'UPDATE paper_metadata SET updated_at = NOW() WHERE id = $1',
+                        'UPDATE paper_metadata SET updated_at = NOW() WHERE id = $1 AND user_id = $2',
                         paper_id,
+                        user_id,
                     )
 
                 if paper_id:
                     # Then insert/update processed_papers with markdown_content
                     await conn.execute(
                         """
-                        INSERT INTO processed_papers (paper_id, markdown_content, created_at, updated_at)
-                        VALUES ($1, $2, NOW(), NOW())
-                        ON CONFLICT (paper_id) DO UPDATE SET
+                        INSERT INTO processed_papers (paper_id, markdown_content, user_id, created_at, updated_at)
+                        VALUES ($1, $2, $3, NOW(), NOW())
+                        ON CONFLICT (paper_id, user_id) DO UPDATE SET
                             markdown_content = EXCLUDED.markdown_content,
                             updated_at = NOW()
                         """,
                         paper_id,
                         markdown_content,
+                        user_id,
                     )
             finally:
                 await conn.close()

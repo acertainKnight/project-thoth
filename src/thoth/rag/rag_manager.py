@@ -26,6 +26,7 @@ from thoth.rag.agentic_retrieval import AgenticRAGOrchestrator
 from thoth.rag.document_grader import DocumentGrader
 from thoth.rag.hallucination_checker import HallucinationChecker
 from thoth.rag.knowledge_refiner import KnowledgeRefiner
+from thoth.mcp.auth import get_mcp_user_id
 from thoth.utilities import OpenRouterClient
 from thoth.config import config
 
@@ -352,12 +353,14 @@ class RAGManager:
             return None
 
         async def lookup():
+            resolved_user_id = get_mcp_user_id()
             conn = await asyncpg.connect(db_url)
             try:
                 # Try exact match first, then normalized match
                 paper_id = await conn.fetchval(
-                    'SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1)',
+                    'SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1) AND user_id = $2',
                     title,
+                    resolved_user_id,
                 )
                 if paper_id:
                     return str(paper_id)
@@ -365,8 +368,9 @@ class RAGManager:
                 # Try fuzzy match with title normalization
                 normalized_title = title.replace('_', ' ').replace('-', ' ')
                 paper_id = await conn.fetchval(
-                    'SELECT id FROM paper_metadata WHERE LOWER(title_normalized) = LOWER($1)',
+                    'SELECT id FROM paper_metadata WHERE LOWER(title_normalized) = LOWER($1) AND user_id = $2',
                     normalized_title,
+                    resolved_user_id,
                 )
                 return str(paper_id) if paper_id else None
             finally:
@@ -412,6 +416,7 @@ class RAGManager:
                 raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
             async def fetch_and_index():
+                resolved_user_id = user_id or get_mcp_user_id()
                 conn = await asyncpg.connect(db_url)
                 try:
                     # Fetch paper details and markdown content including collection info
@@ -429,9 +434,10 @@ class RAGManager:
                         FROM paper_metadata pm
                         LEFT JOIN processed_papers pp ON pp.paper_id = pm.id
                         LEFT JOIN knowledge_collections kc ON kc.id = pm.collection_id
-                        WHERE pm.id = $1
+                        WHERE pm.id = $1 AND pm.user_id = $2
                         """,
                         paper_uuid,
+                        resolved_user_id,
                     )
 
                     if not row:
@@ -551,6 +557,7 @@ class RAGManager:
 
             conn = await asyncpg.connect(db_url)
             try:
+                resolved_user_id = user_id or get_mcp_user_id()
                 row = await conn.fetchrow(
                     """
                     SELECT
@@ -565,9 +572,10 @@ class RAGManager:
                     FROM paper_metadata pm
                     LEFT JOIN processed_papers pp ON pp.paper_id = pm.id
                     LEFT JOIN knowledge_collections kc ON kc.id = pm.collection_id
-                    WHERE pm.id = $1
+                    WHERE pm.id = $1 AND pm.user_id = $2
                     """,
                     paper_uuid,
+                    resolved_user_id,
                 )
 
                 if not row:

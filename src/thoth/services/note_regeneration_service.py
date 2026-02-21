@@ -16,6 +16,7 @@ from pydantic import BaseModel  # noqa: F401
 from thoth.analyze.llm_processor import AnalysisResponse
 from thoth.analyze.citations.citations import Citation
 from thoth.config import config
+from thoth.mcp.auth import get_mcp_user_id
 
 
 class NoteRegenerationService:
@@ -218,13 +219,14 @@ class NoteRegenerationService:
 
             # Update database with new paths
             # 'papers' is a VIEW; update processed_papers table
+            user_id = get_mcp_user_id()
             conn = await asyncpg.connect(self.db_url)
             try:
                 await conn.execute(
                     """
-                    INSERT INTO processed_papers (paper_id, note_path, pdf_path, created_at, updated_at)
-                    VALUES ($1, $2, $3, NOW(), NOW())
-                    ON CONFLICT (paper_id) DO UPDATE SET
+                    INSERT INTO processed_papers (paper_id, note_path, pdf_path, user_id, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, NOW(), NOW())
+                    ON CONFLICT (paper_id, user_id) DO UPDATE SET
                         note_path = EXCLUDED.note_path,
                         pdf_path = EXCLUDED.pdf_path,
                         updated_at = NOW()
@@ -232,6 +234,7 @@ class NoteRegenerationService:
                     paper_id,
                     str(note_path),
                     str(new_pdf_path),
+                    user_id,
                 )
             finally:
                 await conn.close()
