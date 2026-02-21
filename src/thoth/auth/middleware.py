@@ -18,6 +18,7 @@ from starlette.responses import JSONResponse
 
 from thoth.auth.context import UserContext
 from thoth.auth.service import AuthService
+from thoth.mcp.auth import reset_current_mcp_user_id, set_current_mcp_user_id
 
 if TYPE_CHECKING:
     from starlette.responses import Response
@@ -135,18 +136,24 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
                 vault_path=self.vault_root or Path('/vault'),
                 is_admin=True,
             )
-            return await call_next(request)
+            token = set_current_mcp_user_id('default_user')
+            try:
+                return await call_next(request)
+            finally:
+                reset_current_mcp_user_id(token)
 
         if self._is_exempt(request.url.path):
-            # Exempt endpoints (health, register) get default_user context
-            # so route handlers always have a valid context object.
             request.state.user_context = UserContext(
                 user_id='default_user',
                 username='default_user',
                 vault_path=self.vault_root or Path('/vault'),
                 is_admin=True,
             )
-            return await call_next(request)
+            token = set_current_mcp_user_id('default_user')
+            try:
+                return await call_next(request)
+            finally:
+                reset_current_mcp_user_id(token)
 
         auth_header = request.headers.get('Authorization', '')
         if not auth_header.startswith('Bearer '):
@@ -201,4 +208,8 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
         request.state.user_context = user_context
         logger.debug(f'Authenticated as {user_context.username}')
 
-        return await call_next(request)
+        ctx_token = set_current_mcp_user_id(user_context.user_id)
+        try:
+            return await call_next(request)
+        finally:
+            reset_current_mcp_user_id(ctx_token)
