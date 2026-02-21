@@ -11,6 +11,7 @@ from typing import Any
 
 from mistralai import DocumentURLChunk, Mistral
 from mistralai.models import OCRResponse, UploadFileOut
+from mistralai.utils.retries import BackoffStrategy, RetryConfig
 from pypdf import PdfReader
 
 from thoth.analyze.llm_processor import LLMProcessor
@@ -125,8 +126,8 @@ class ProcessingService(BaseService):
             loop.run_until_complete(save())
             loop.close()
         else:
-            # Already have a running loop
-            asyncio.create_task(save())
+            # Already have a running loop (keep ref so task is not GC'd)
+            _save_task = asyncio.create_task(save())  # noqa: RUF006
 
     @property
     def mistral_client(self) -> Mistral:
@@ -134,7 +135,20 @@ class ProcessingService(BaseService):
         if self._mistral_client is None:
             if not self.config.api_keys.mistral_key:
                 raise ServiceError('Mistral API key not configured')
-            self._mistral_client = Mistral(api_key=self.config.api_keys.mistral_key)
+            self._mistral_client = Mistral(
+                api_key=self.config.api_keys.mistral_key,
+                timeout_ms=120_000,
+                retry_config=RetryConfig(
+                    strategy='backoff',
+                    backoff=BackoffStrategy(
+                        initial_interval=2_000,
+                        max_interval=30_000,
+                        exponent=1.5,
+                        max_elapsed_time=180_000,
+                    ),
+                    retry_connection_errors=True,
+                ),
+            )
         return self._mistral_client
 
     @property
@@ -374,7 +388,7 @@ class ProcessingService(BaseService):
         return response
 
     def _join_markdown_pages(self, ocr_response: OCRResponse) -> str:
-        """Join the markdown pages into a single markdown document without image references."""
+        """Join markdown pages into one document, stripping image references."""
         import re
 
         combined = '\n\n'.join(page.markdown for page in ocr_response.pages)

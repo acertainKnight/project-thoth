@@ -59,12 +59,13 @@ class RAGService(BaseService):
             self.logger.info('RAGManager loaded successfully')
         return self._rag_manager
 
-    def index_file(self, file_path: Path) -> list[str]:
+    def index_file(self, file_path: Path, paper_id: str | None = None) -> list[str]:
         """
         Index a single file into the knowledge base.
 
         Args:
             file_path: Path to the file to index
+            paper_id: Optional paper ID (UUID) to skip title-based lookup
 
         Returns:
             list[str]: List of document IDs created
@@ -83,7 +84,7 @@ class RAGService(BaseService):
                     f'Only markdown files are supported, got: {file_path.suffix}'
                 )
 
-            doc_ids = self.rag_manager.index_markdown_file(file_path)
+            doc_ids = self.rag_manager.index_markdown_file(file_path, paper_id=paper_id)
 
             self.log_operation(
                 'file_indexed',
