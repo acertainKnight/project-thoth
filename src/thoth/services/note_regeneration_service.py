@@ -184,18 +184,18 @@ class NoteRegenerationService:
         citations = self._convert_citations_to_models(citations_data)
 
         # Ensure we have pdf_path and markdown_path
-        vault_root = Path(config.vault_root)
+        up = self._get_user_paths()
+        _vault_root = up.vault_root if up else Path(config.vault_root)
+        _md_dir = up.markdown_dir if up else self.config.markdown_dir
         pdf_path = Path(paper_data.get('pdf_path', ''))
         if not pdf_path.is_absolute():
-            # Assume it's relative to vault root
             pdf_path = (
-                vault_root / 'thoth' / 'papers' / 'pdfs' / pdf_path.name
+                _vault_root / 'thoth' / 'papers' / 'pdfs' / pdf_path.name
                 if pdf_path.name
                 else None
             )
 
-        # For markdown, we have the content stored, so create a temp file or use stored path  # noqa: W505
-        markdown_path = self.config.markdown_dir / f'{paper_data["title"]}.md'
+        markdown_path = _md_dir / f'{paper_data["title"]}.md'
         if paper_data.get('markdown_content'):
             markdown_path.parent.mkdir(parents=True, exist_ok=True)
             markdown_path.write_text(paper_data['markdown_content'], encoding='utf-8')
@@ -217,7 +217,7 @@ class NoteRegenerationService:
             )
 
             # Update database with new paths
-            # Note: 'papers' is a VIEW, so we update the underlying processed_papers table
+            # 'papers' is a VIEW; update processed_papers table
             conn = await asyncpg.connect(self.db_url)
             try:
                 await conn.execute(

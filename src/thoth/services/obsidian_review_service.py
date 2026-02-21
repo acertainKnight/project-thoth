@@ -462,9 +462,11 @@ class ObsidianReviewService:
             return
 
         try:
-            # Get PDF directory from config
+            from thoth.mcp.auth import get_current_user_paths
+
+            user_paths = get_current_user_paths()
             config = Config.get_instance()
-            pdf_dir = config.pdf_dir
+            pdf_dir = user_paths.pdf_dir if user_paths else config.pdf_dir
 
             # Sanitize filename from title
             safe_title = ''.join(

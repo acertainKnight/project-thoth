@@ -33,9 +33,6 @@ try:
     DOCKER_INTEGRATION_AVAILABLE = True
 except ImportError:
     DOCKER_INTEGRATION_AVAILABLE = False
-    self.logger.warning(
-        'Docker integration not available - running without container features'
-    )
 
 
 @dataclass
@@ -1094,6 +1091,27 @@ class SettingsService(BaseService):
             self.logger.error(f'Failed to load schema: {e}')
             return None
 
+    def _resolve_paths_dict(self, config) -> dict[str, str]:
+        """Build paths dict, preferring user-scoped paths when available."""
+        up = self._get_user_paths() if hasattr(self, '_get_user_paths') else None
+        return {
+            'workspace': str(up.workspace_dir if up else config.workspace_dir),
+            'pdf': str(up.pdf_dir if up else config.pdf_dir),
+            'markdown': str(up.markdown_dir if up else config.markdown_dir),
+            'notes': str(up.notes_dir if up else config.notes_dir),
+            'prompts': str(up.prompts_dir if up else config.prompts_dir),
+            'templates': str(config.templates_dir),
+            'output': str(up.output_dir if up else config.output_dir),
+            'knowledgeBase': str(
+                up.knowledge_base_dir if up else config.knowledge_base_dir
+            ),
+            'graphStorage': str(
+                up.graph_storage_path if up else config.graph_storage_path
+            ),
+            'queries': str(up.queries_dir if up else config.queries_dir),
+            'agentStorage': str(config.agent_storage_dir),
+        }
+
     def migrate_from_env(self) -> dict[str, Any]:
         """
         Migrate settings from current environment/config to JSON format.
@@ -1142,19 +1160,7 @@ class SettingsService(BaseService):
                     'retrievalK': config.rag_config.retrieval_k,
                 },
             },
-            'paths': {
-                'workspace': str(config.workspace_dir),
-                'pdf': str(config.pdf_dir),
-                'markdown': str(config.markdown_dir),
-                'notes': str(config.notes_dir),
-                'prompts': str(config.prompts_dir),
-                'templates': str(config.templates_dir),
-                'output': str(config.output_dir),
-                'knowledgeBase': str(config.knowledge_base_dir),
-                'graphStorage': str(config.graph_storage_path),
-                'queries': str(config.queries_dir),
-                'agentStorage': str(config.agent_storage_dir),
-            },
+            'paths': self._resolve_paths_dict(config),
             'logging': {
                 'level': config.logging_config.level,
                 'format': config.logging_config.logformat,

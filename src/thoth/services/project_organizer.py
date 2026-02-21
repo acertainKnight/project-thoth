@@ -262,7 +262,9 @@ Respond with ONLY the project name, nothing else."""
 
         from thoth.utilities.vault_path_resolver import VaultPathResolver
 
-        vault_resolver = VaultPathResolver(self.config.vault_root)
+        up = self._get_user_paths()
+        _vault_root = up.vault_root if up else self.config.vault_root
+        vault_resolver = VaultPathResolver(_vault_root)
 
         moved_count = 0
         error_count = 0
@@ -293,10 +295,13 @@ Respond with ONLY the project name, nothing else."""
             else:
                 collection_id = None
 
-            # Create project folders
-            pdf_project_dir = self.config.pdf_dir / project_name
-            markdown_project_dir = self.config.markdown_dir / project_name
-            notes_project_dir = self.config.notes_dir / project_name
+            # Create project folders (user-scoped)
+            _pdf_dir = up.pdf_dir if up else self.config.pdf_dir
+            _md_dir = up.markdown_dir if up else self.config.markdown_dir
+            _notes_dir = up.notes_dir if up else self.config.notes_dir
+            pdf_project_dir = _pdf_dir / project_name
+            markdown_project_dir = _md_dir / project_name
+            notes_project_dir = _notes_dir / project_name
 
             if not dry_run:
                 pdf_project_dir.mkdir(parents=True, exist_ok=True)
