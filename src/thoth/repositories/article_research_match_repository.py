@@ -38,6 +38,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         matched_authors: List[str] | None = None,  # noqa: UP006
         discovered_via_source: str | None = None,
         discovery_run_id: UUID | None = None,
+        user_id: str | None = None,
     ) -> UUID | None:
         """
         Create a new article-question match.
@@ -56,6 +57,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             Optional[UUID]: Match ID or None
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'create_match')
             data = {  # noqa: F841
                 'article_id': article_id,
                 'question_id': question_id,
@@ -67,15 +69,16 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                 'discovery_run_id': discovery_run_id,
             }
 
-            # Use ON CONFLICT to handle duplicates (after migration: paper_id, question_id)
+            # Use ON CONFLICT to handle duplicates by
+            # paper_id/question_id/user_id in the migrated schema.
             query = """
                 INSERT INTO research_question_matches (
                     paper_id, question_id, relevance_score,
-                    matched_keywords, matched_topics, matched_authors,
+                    matched_keywords, matched_topics, matched_authors, user_id,
                     discovered_via_source
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                ON CONFLICT (paper_id, question_id) DO UPDATE SET
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                ON CONFLICT (paper_id, question_id, user_id) DO UPDATE SET
                     relevance_score = GREATEST(
                         research_question_matches.relevance_score,
                         EXCLUDED.relevance_score
@@ -83,6 +86,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                     matched_keywords = EXCLUDED.matched_keywords,
                     matched_topics = EXCLUDED.matched_topics,
                     matched_authors = EXCLUDED.matched_authors,
+                    user_id = EXCLUDED.user_id,
                     discovered_via_source = EXCLUDED.discovered_via_source,
                     updated_at = NOW()
                 RETURNING id
@@ -96,6 +100,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                 matched_keywords or [],
                 matched_topics or [],
                 matched_authors or [],
+                user_id,
                 discovered_via_source,
             )
 
@@ -112,6 +117,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         self,
         article_id: str,
         question_id: str,
+        user_id: str | None = None,
     ) -> dict[str, Any] | None:
         """
         Check if a paper is already matched to a research question.
@@ -124,13 +130,26 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             Match record if exists, None otherwise
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'get_by_article_and_question')
             # After migration: use research_question_matches with paper_id
             query = """
                 SELECT * FROM research_question_matches
                 WHERE paper_id = $1 AND question_id = $2
+                {user_filter}
             """
-
-            result = await self.postgres.fetchrow(query, article_id, question_id)
+            if user_id is not None:
+                result = await self.postgres.fetchrow(
+                    query.format(user_filter='AND user_id = $3'),
+                    article_id,
+                    question_id,
+                    user_id,
+                )
+            else:
+                result = await self.postgres.fetchrow(
+                    query.format(user_filter=''),
+                    article_id,
+                    question_id,
+                )
 
             if result:
                 return dict(result)
@@ -151,6 +170,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         is_bookmarked: bool | None = None,
         limit: int | None = None,
         offset: int | None = None,
+        user_id: str | None = None,
     ) -> List[dict[str, Any]]:  # noqa: UP006
         """
         Get all article matches for a research question.
@@ -166,6 +186,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         Returns:
             List[dict[str, Any]]: List of matches with article data
         """
+        user_id = self._resolve_user_id(user_id, 'get_matches_by_question')
         cache_key = self._cache_key(
             'question',
             question_id,
@@ -174,6 +195,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             is_bookmarked,
             limit,
             offset,
+            user_id,
         )
         cached = self._get_from_cache(cache_key)
         if cached is not None:
@@ -207,8 +229,16 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                 FROM research_question_matches rqm
                 JOIN paper_metadata pm ON rqm.paper_id = pm.id
                 WHERE rqm.question_id = $1
+                  {user_filter}
             """
             params = [question_id]
+            if user_id is not None:
+                params.append(user_id)
+                query = query.format(
+                    user_filter=f'AND rqm.user_id = ${len(params)} AND pm.user_id = ${len(params)}'
+                )
+            else:
+                query = query.format(user_filter='')
 
             if min_relevance is not None:
                 query += f' AND rqm.relevance_score >= ${len(params) + 1}'
@@ -254,7 +284,9 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to get matches for question {question_id}: {e}')
             return []
 
-    async def get_matches_by_article(self, article_id: UUID) -> List[dict[str, Any]]:  # noqa: UP006
+    async def get_matches_by_article(
+        self, article_id: UUID, user_id: str | None = None
+    ) -> List[dict[str, Any]]:  # noqa: UP006
         """
         Get all question matches for an article.
 
@@ -264,7 +296,8 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         Returns:
             List[dict[str, Any]]: List of matches with question data
         """
-        cache_key = self._cache_key('article', article_id)
+        user_id = self._resolve_user_id(user_id, 'get_matches_by_article')
+        cache_key = self._cache_key('article', article_id, user_id=user_id)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
@@ -280,10 +313,21 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                 FROM research_question_matches rqm
                 JOIN research_questions rq ON rqm.question_id = rq.id
                 WHERE rqm.paper_id = $1
+                {user_filter}
                 ORDER BY rqm.relevance_score DESC
             """
-
-            results = await self.postgres.fetch(query, article_id)
+            if user_id is not None:
+                results = await self.postgres.fetch(
+                    query.format(
+                        user_filter='AND rqm.user_id = $2 AND rq.user_id = $2'
+                    ),
+                    article_id,
+                    user_id,
+                )
+            else:
+                results = await self.postgres.fetch(
+                    query.format(user_filter=''), article_id
+                )
             data = [dict(row) for row in results]
 
             self._set_in_cache(cache_key, data)
@@ -298,6 +342,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
         min_score: float = 0.7,
         is_viewed: bool = False,
         limit: int = 50,
+        user_id: str | None = None,
     ) -> List[dict[str, Any]]:  # noqa: UP006
         """
         Get high-relevance unviewed matches across all questions.
@@ -311,6 +356,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             List[dict[str, Any]]: List of high-relevance matches
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'get_high_relevance_matches')
             query = """
                 SELECT
                     rqm.id as match_id,
@@ -341,11 +387,27 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                 JOIN research_questions rq ON rqm.question_id = rq.id
                 WHERE rqm.relevance_score >= $1
                 AND rqm.is_viewed = $2
+                {user_filter}
                 ORDER BY rqm.relevance_score DESC, rqm.matched_at DESC
                 LIMIT $3
             """
-
-            results = await self.postgres.fetch(query, min_score, is_viewed, limit)
+            if user_id is not None:
+                results = await self.postgres.fetch(
+                    query.format(
+                        user_filter='AND rqm.user_id = $4 AND pm.user_id = $4 AND rq.user_id = $4'
+                    ),
+                    min_score,
+                    is_viewed,
+                    limit,
+                    user_id,
+                )
+            else:
+                results = await self.postgres.fetch(
+                    query.format(user_filter=''),
+                    min_score,
+                    is_viewed,
+                    limit,
+                )
             return [dict(row) for row in results]
 
         except Exception as e:
@@ -355,7 +417,7 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
     async def mark_as_viewed(
         self,
         match_id: UUID,
-        viewed_at: datetime | None = None,
+        _viewed_at: datetime | None = None,
     ) -> bool:
         """
         Mark a match as viewed by the user.
@@ -570,7 +632,9 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to get matches by source {source_name}: {e}')
             return []
 
-    async def delete_matches_for_question(self, question_id: UUID) -> int:
+    async def delete_matches_for_question(
+        self, question_id: UUID, user_id: str | None = None
+    ) -> int:
         """
         Delete all matches for a research question.
 
@@ -581,12 +645,22 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             int: Number of matches deleted
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'delete_matches_for_question')
             query = """
                 DELETE FROM research_question_matches
                 WHERE question_id = $1
+                {user_filter}
             """
-
-            result = await self.postgres.execute(query, question_id)
+            if user_id is not None:
+                result = await self.postgres.execute(
+                    query.format(user_filter='AND user_id = $2'),
+                    question_id,
+                    user_id,
+                )
+            else:
+                result = await self.postgres.execute(
+                    query.format(user_filter=''), question_id
+                )
 
             # Invalidate cache
             self._invalidate_cache(str(question_id))

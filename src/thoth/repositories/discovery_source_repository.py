@@ -19,7 +19,9 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
         """Initialize discovery source repository."""
         super().__init__(postgres_service, table_name='discovery_sources', **kwargs)
 
-    async def get_by_name(self, source_name: str) -> Dict[str, Any] | None:  # noqa: UP006
+    async def get_by_name(
+        self, source_name: str, user_id: str | None = None
+    ) -> Dict[str, Any] | None:  # noqa: UP006
         """
         Get a discovery source by name.
 
@@ -29,14 +31,19 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
         Returns:
             Optional[Dict[str, Any]]: Source data or None
         """
-        cache_key = self._cache_key('name', source_name)
+        user_id = self._resolve_user_id(user_id, 'get_by_name')
+        cache_key = self._cache_key('name', source_name, user_id=user_id)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
 
         try:
-            query = 'SELECT * FROM discovery_sources WHERE source_name = $1'
-            result = await self.postgres.fetchrow(query, source_name)
+            if user_id is not None:
+                query = 'SELECT * FROM discovery_sources WHERE source_name = $1 AND user_id = $2'
+                result = await self.postgres.fetchrow(query, source_name, user_id)
+            else:
+                query = 'SELECT * FROM discovery_sources WHERE source_name = $1'
+                result = await self.postgres.fetchrow(query, source_name)
 
             if result:
                 data = dict(result)
@@ -49,14 +56,17 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
             logger.error(f'Failed to get discovery source by name {source_name}: {e}')
             return None
 
-    async def get_active_sources(self) -> List[Dict[str, Any]]:  # noqa: UP006
+    async def get_active_sources(
+        self, user_id: str | None = None
+    ) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get all active discovery sources.
 
         Returns:
             List[Dict[str, Any]]: List of active sources
         """
-        cache_key = self._cache_key('active')
+        user_id = self._resolve_user_id(user_id, 'get_active_sources')
+        cache_key = self._cache_key('active', user_id=user_id)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
@@ -65,9 +75,16 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
             query = """
                 SELECT * FROM discovery_sources
                 WHERE enabled = TRUE
+                {user_filter}
                 ORDER BY source_name
             """
-            results = await self.postgres.fetch(query)
+            if user_id is not None:
+                results = await self.postgres.fetch(
+                    query.format(user_filter='AND user_id = $1'),
+                    user_id,
+                )
+            else:
+                results = await self.postgres.fetch(query.format(user_filter=''))
             data = [dict(row) for row in results]
             self._set_in_cache(cache_key, data)
             return data
@@ -76,7 +93,9 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
             logger.error(f'Failed to get active discovery sources: {e}')
             return []
 
-    async def get_sources_by_type(self, source_type: str) -> List[Dict[str, Any]]:  # noqa: UP006
+    async def get_sources_by_type(
+        self, source_type: str, user_id: str | None = None
+    ) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get discovery sources by type.
 
@@ -87,12 +106,23 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
             List[Dict[str, Any]]: List of sources of the specified type
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'get_sources_by_type')
             query = """
                 SELECT * FROM discovery_sources
                 WHERE source_type = $1
+                {user_filter}
                 ORDER BY source_name
             """
-            results = await self.postgres.fetch(query, source_type)
+            if user_id is not None:
+                results = await self.postgres.fetch(
+                    query.format(user_filter='AND user_id = $2'),
+                    source_type,
+                    user_id,
+                )
+            else:
+                results = await self.postgres.fetch(
+                    query.format(user_filter=''), source_type
+                )
             return [dict(row) for row in results]
 
         except Exception as e:
@@ -100,7 +130,7 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
             return []
 
     async def get_sources_due_for_run(
-        self, current_time: datetime | None = None
+        self, current_time: datetime | None = None, user_id: str | None = None
     ) -> List[Dict[str, Any]]:  # noqa: UP006
         """
         Get sources that are due for their scheduled run.
@@ -115,14 +145,25 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
             current_time = datetime.now()
 
         try:
+            user_id = self._resolve_user_id(user_id, 'get_sources_due_for_run')
             query = """
                 SELECT * FROM discovery_sources
                 WHERE enabled = TRUE
                 AND next_run_at IS NOT NULL
                 AND next_run_at <= $1
+                {user_filter}
                 ORDER BY next_run_at
             """
-            results = await self.postgres.fetch(query, current_time)
+            if user_id is not None:
+                results = await self.postgres.fetch(
+                    query.format(user_filter='AND user_id = $2'),
+                    current_time,
+                    user_id,
+                )
+            else:
+                results = await self.postgres.fetch(
+                    query.format(user_filter=''), current_time
+                )
             return [dict(row) for row in results]
 
         except Exception as e:
@@ -135,6 +176,7 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
         papers_discovered: int,
         last_run_at: datetime | None = None,
         next_run_at: datetime | None = None,
+        user_id: str | None = None,
     ) -> bool:
         """
         Update run statistics for a source.
@@ -152,6 +194,7 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
             last_run_at = datetime.now()
 
         try:
+            user_id = self._resolve_user_id(user_id, 'update_run_statistics')
             query = """
                 UPDATE discovery_sources
                 SET total_papers_discovered = total_papers_discovered + $1,
@@ -160,10 +203,25 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
                     next_run_at = $3,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $4
+                {user_filter}
             """
-            await self.postgres.execute(
-                query, papers_discovered, last_run_at, next_run_at, source_id
-            )
+            if user_id is not None:
+                await self.postgres.execute(
+                    query.format(user_filter='AND user_id = $5'),
+                    papers_discovered,
+                    last_run_at,
+                    next_run_at,
+                    source_id,
+                    user_id,
+                )
+            else:
+                await self.postgres.execute(
+                    query.format(user_filter=''),
+                    papers_discovered,
+                    last_run_at,
+                    next_run_at,
+                    source_id,
+                )
 
             # Invalidate cache
             self._invalidate_cache()
@@ -181,6 +239,7 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
         schedule_interval_minutes: int | None = None,
         next_run_at: datetime | None = None,
         enabled: bool | None = None,
+        user_id: str | None = None,
     ) -> bool:
         """
         Update scheduling configuration for a source.
@@ -206,13 +265,13 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
             if not updates:
                 return True
 
-            return await self.update(source_id, updates)
+            return await self.update(source_id, updates, user_id=user_id)
 
         except Exception as e:
             logger.error(f'Failed to update schedule for source {source_id}: {e}')
             return False
 
-    async def get_statistics(self) -> Dict[str, Any]:  # noqa: UP006
+    async def get_statistics(self, user_id: str | None = None) -> Dict[str, Any]:  # noqa: UP006
         """
         Get overall discovery source statistics.
 
@@ -220,6 +279,7 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
             Dict[str, Any]: Statistics including totals by type and status
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'get_statistics')
             query = """
                 SELECT
                     COUNT(*) as total_sources,
@@ -234,8 +294,15 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
                         )
                     ) as by_type
                 FROM discovery_sources
+                {user_filter}
             """
-            result = await self.postgres.fetchrow(query)
+            if user_id is not None:
+                result = await self.postgres.fetchrow(
+                    query.format(user_filter='WHERE user_id = $1'),
+                    user_id,
+                )
+            else:
+                result = await self.postgres.fetchrow(query.format(user_filter=''))
 
             if result:
                 return dict(result)
@@ -252,7 +319,7 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
             logger.error(f'Failed to get discovery source statistics: {e}')
             return {}
 
-    async def disable_source(self, source_id: str) -> bool:
+    async def disable_source(self, source_id: str, user_id: str | None = None) -> bool:
         """
         Disable a discovery source.
 
@@ -262,9 +329,9 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
         Returns:
             bool: True if successful
         """
-        return await self.update(source_id, {'enabled': False})
+        return await self.update(source_id, {'enabled': False}, user_id=user_id)
 
-    async def enable_source(self, source_id: str) -> bool:
+    async def enable_source(self, source_id: str, user_id: str | None = None) -> bool:
         """
         Enable a discovery source.
 
@@ -274,4 +341,4 @@ class DiscoverySourceRepository(BaseRepository[Dict[str, Any]]):  # noqa: UP006
         Returns:
             bool: True if successful
         """
-        return await self.update(source_id, {'enabled': True})
+        return await self.update(source_id, {'enabled': True}, user_id=user_id)
