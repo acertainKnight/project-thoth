@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from loguru import logger
 
+from thoth.auth.context import UserContext
+from thoth.auth.dependencies import get_user_context
 from thoth.ingestion.pdf_downloader import download_pdf
 from thoth.monitoring import HealthMonitor
 from thoth.server.dependencies import get_service_manager
@@ -29,7 +31,7 @@ def set_directories(pdf_directory: Path, notes_directory: Path, base_url_val: st
 
 
 @router.get('/health')
-def health_check(service_manager: ServiceManager = Depends(get_service_manager)):
+def health_check(service_manager: ServiceManager = Depends(get_service_manager)):  # noqa: B008
     """
     Health check endpoint.
 
@@ -80,7 +82,10 @@ def health_check(service_manager: ServiceManager = Depends(get_service_manager))
 
 
 @router.get('/download-pdf')
-def download_pdf_endpoint(url: str = Query(..., description='PDF URL to download')):
+def download_pdf_endpoint(
+    url: str = Query(..., description='PDF URL to download'),
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
+):
     """
     Download a PDF from the given URL.
 
@@ -91,8 +96,10 @@ def download_pdf_endpoint(url: str = Query(..., description='PDF URL to download
         JSONResponse: Download result with file information
     """
     try:
-        # Download the PDF using the existing downloader
-        pdf_path = download_pdf(url, pdf_dir)
+        target_dir = (
+            user_context.vault_path / 'pdfs' if user_context.vault_path else pdf_dir
+        )
+        pdf_path = download_pdf(url, target_dir)
 
         logger.info(f'Downloaded PDF: {pdf_path}')
 
@@ -117,7 +124,10 @@ def download_pdf_endpoint(url: str = Query(..., description='PDF URL to download
 
 
 @router.get('/view-markdown')
-def view_markdown(path: str = Query(..., description='Path to markdown file')):
+def view_markdown(
+    path: str = Query(..., description='Path to markdown file'),
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
+):
     """
     View the contents of a markdown file.
 
@@ -128,11 +138,20 @@ def view_markdown(path: str = Query(..., description='Path to markdown file')):
         JSONResponse: File contents or error message
     """
     try:
-        # Construct full path - handle both absolute and relative paths
+        user_notes_dir = (
+            user_context.vault_path / 'notes' if user_context.vault_path else notes_dir
+        )
         if Path(path).is_absolute():
             full_path = Path(path)
+            if user_context.vault_path and not str(full_path).startswith(
+                str(user_context.vault_path)
+            ):
+                return JSONResponse(
+                    content={'status': 'error', 'message': 'Access denied'},
+                    status_code=403,
+                )
         else:
-            full_path = notes_dir / path
+            full_path = user_notes_dir / path
 
         if not full_path.exists():
             return JSONResponse(

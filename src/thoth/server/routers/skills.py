@@ -9,10 +9,12 @@ the skills system.
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from thoth.auth.context import UserContext
+from thoth.auth.dependencies import get_user_context
 from thoth.services.skill_service import SkillService
 
 router = APIRouter(prefix='/api/skills', tags=['skills'])
@@ -300,7 +302,10 @@ async def get_skill(skill_id: str) -> SkillContent:
 
 
 @router.post('/', response_model=SkillMetadata, status_code=201)
-async def create_skill(skill_data: SkillCreate) -> SkillMetadata:
+async def create_skill(
+    skill_data: SkillCreate,
+    _user_context: UserContext = Depends(get_user_context),  # noqa: B008
+) -> SkillMetadata:
     """
     Create a new skill in the vault.
 
@@ -387,7 +392,11 @@ description: {skill_data.description}
 
 
 @router.put('/{skill_id:path}', response_model=SkillMetadata)
-async def update_skill(skill_id: str, skill_data: SkillUpdate) -> SkillMetadata:
+async def update_skill(
+    skill_id: str,
+    skill_data: SkillUpdate,
+    _user_context: UserContext = Depends(get_user_context),  # noqa: B008
+) -> SkillMetadata:
     """
     Update an existing skill in the vault.
 
@@ -494,7 +503,10 @@ description: {new_desc}
 
 
 @router.delete('/{skill_id:path}', status_code=204)
-async def delete_skill(skill_id: str) -> None:
+async def delete_skill(
+    skill_id: str,
+    _user_context: UserContext = Depends(get_user_context),  # noqa: B008
+) -> None:
     """
     Delete a skill from the vault.
 

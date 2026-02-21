@@ -8,6 +8,8 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from pydantic import BaseModel
 
+from thoth.auth.context import UserContext
+from thoth.auth.dependencies import get_user_context
 from thoth.server.dependencies import get_research_agent, get_service_manager
 from thoth.services.service_manager import ServiceManager
 
@@ -137,6 +139,7 @@ async def execute_tool_direct(
     request: ToolExecutionRequest,
     research_agent=Depends(get_research_agent),
     service_manager: ServiceManager = Depends(get_service_manager),
+    user_context: UserContext = Depends(get_user_context),
 ):
     """Execute a specific tool directly, optionally bypassing the agent."""
     if research_agent is None:
@@ -155,9 +158,9 @@ async def execute_tool_direct(
                     status_code=404, detail=f'Tool {request.tool_name} not found'
                 )
 
-            # Execute the tool (implementation based on tool structure)
+            params_with_user = {**request.parameters, 'user_id': user_context.user_id}
             result = await execute_tool_directly(
-                request.tool_name, request.parameters, service_manager
+                request.tool_name, params_with_user, service_manager
             )
 
             return JSONResponse(
@@ -337,6 +340,7 @@ async def execute_rag_search_tool(
 async def execute_command(
     request: CommandExecutionRequest,
     service_manager: ServiceManager = Depends(get_service_manager),
+    _user_context: UserContext = Depends(get_user_context),
 ):
     """Execute a Thoth CLI command through the API."""
     try:

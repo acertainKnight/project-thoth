@@ -7,9 +7,11 @@ Provides REST API for managing analysis schemas.
 import json
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from thoth.auth.context import UserContext
+from thoth.auth.dependencies import get_user_context
 from thoth.services.service_manager import ServiceManager
 
 router = APIRouter(prefix='/schema', tags=['schema'])
@@ -109,7 +111,9 @@ async def get_schema_info():
             schema_path=str(schema_service.schema_path),
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Failed to get schema info: {e!s}')
+        raise HTTPException(
+            status_code=500, detail=f'Failed to get schema info: {e!s}'
+        ) from e
 
 
 @router.get('/presets', response_model=PresetsListResponse)
@@ -135,11 +139,16 @@ async def list_presets():
             count=len(presets),
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Failed to list presets: {e!s}')
+        raise HTTPException(
+            status_code=500, detail=f'Failed to list presets: {e!s}'
+        ) from e
 
 
 @router.post('/preset')
-async def set_preset(request: SetPresetRequest):
+async def set_preset(
+    request: SetPresetRequest,
+    _user_context: UserContext = Depends(get_user_context),  # noqa: B008
+):
     """
     Switch to a different analysis schema preset.
 
@@ -189,7 +198,9 @@ async def set_preset(request: SetPresetRequest):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Failed to set preset: {e!s}')
+        raise HTTPException(
+            status_code=500, detail=f'Failed to set preset: {e!s}'
+        ) from e
 
 
 @router.get('/presets/{preset}', response_model=PresetDetailsResponse)
@@ -245,7 +256,7 @@ async def get_preset_details(preset: str):
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f'Failed to get preset details: {e!s}'
-        )
+        ) from e
 
 
 @router.get('/validate', response_model=ValidationResponse)
@@ -306,4 +317,6 @@ async def validate_schema():
             )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Failed to validate schema: {e!s}')
+        raise HTTPException(
+            status_code=500, detail=f'Failed to validate schema: {e!s}'
+        ) from e

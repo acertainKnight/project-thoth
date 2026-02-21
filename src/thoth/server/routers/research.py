@@ -1,16 +1,18 @@
 """Research and chat endpoints."""
 
-from datetime import datetime  # noqa: I001
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 from pydantic import BaseModel
 
+from thoth.auth.context import UserContext
+from thoth.auth.dependencies import get_user_context
+from thoth.config import config
 from thoth.server.chat_models import ChatMessage
 from thoth.server.dependencies import get_chat_manager, get_research_agent
 from thoth.services.llm_router import LLMRouter
-from thoth.config import config
 
 router = APIRouter()
 
@@ -52,6 +54,7 @@ async def research_chat(
     request: ChatRequest,
     research_agent=Depends(get_research_agent),
     chat_manager=Depends(get_chat_manager),
+    user_context: UserContext = Depends(get_user_context),
 ) -> ChatResponse:
     """
     Enhanced chat endpoint with persistence support.
@@ -91,7 +94,11 @@ async def research_chat(
                         else request.message
                     )
                     chat_manager.create_session(
-                        title=title, metadata={'source': 'obsidian'}
+                        title=title,
+                        metadata={
+                            'source': 'obsidian',
+                            'user_id': user_context.user_id,
+                        },
                     )
 
                 # Store user message
@@ -99,7 +106,11 @@ async def research_chat(
                     session_id=session_id,
                     role='user',
                     content=request.message,
-                    metadata={'source': 'obsidian', 'message_id': request.id},
+                    metadata={
+                        'source': 'obsidian',
+                        'message_id': request.id,
+                        'user_id': user_context.user_id,
+                    },
                 )
                 chat_manager.add_message(user_message)
                 user_message_id = user_message.id
@@ -146,7 +157,9 @@ async def research_chat(
 
 @router.post('/query')
 async def research_query(
-    request: ResearchRequest, research_agent=Depends(get_research_agent)
+    request: ResearchRequest,
+    research_agent=Depends(get_research_agent),
+    _user_context: UserContext = Depends(get_user_context),
 ) -> ResearchResponse:
     """
     Direct research query endpoint for quick research tasks.

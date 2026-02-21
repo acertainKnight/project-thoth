@@ -10,6 +10,8 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from pydantic import BaseModel
 
+from thoth.auth.context import UserContext
+from thoth.auth.dependencies import get_user_context
 from thoth.server.dependencies import get_service_manager
 from thoth.server.routers.websocket import (
     create_background_task,
@@ -45,6 +47,7 @@ class BatchProcessResult(BaseModel):
 @router.get('/collection/stats')
 async def get_collection_stats(
     service_manager: ServiceManager = Depends(get_service_manager),
+    _user_context: UserContext = Depends(get_user_context),
 ):
     """Get collection statistics."""
     try:
@@ -87,6 +90,7 @@ async def list_articles(
     limit: int = 10,
     offset: int = 0,
     _service_manager: ServiceManager = Depends(get_service_manager),
+    _user_context: UserContext = Depends(get_user_context),
 ) -> ArticleListResponse:
     """List articles in the collection."""
     try:
@@ -151,13 +155,16 @@ def get_operation_status_endpoint(operation_id: str):
 async def start_streaming_operation(
     request: StreamingOperationRequest,
     service_manager: ServiceManager = Depends(get_service_manager),
+    user_context: UserContext = Depends(get_user_context),
 ):
     """Start a streaming operation and return operation ID for tracking."""
     operation_id = request.operation_id or str(uuid.uuid4())
 
-    # Start the operation in background, passing service_manager
+    # Start the operation in background, passing service_manager and user context
     create_background_task(
-        execute_streaming_operation(operation_id, request, service_manager)
+        execute_streaming_operation(
+            operation_id, request, service_manager, user_context.user_id
+        )
     )
 
     return JSONResponse(
@@ -173,6 +180,7 @@ async def execute_streaming_operation(
     operation_id: str,
     request: StreamingOperationRequest,
     service_manager: ServiceManager,
+    user_id: str | None = None,
 ):
     """Execute a streaming operation with progress updates."""
     try:
@@ -182,7 +190,7 @@ async def execute_streaming_operation(
 
         if request.operation_type == 'pdf_process':
             await stream_pdf_processing(
-                operation_id, request.parameters, service_manager
+                operation_id, request.parameters, service_manager, user_id
             )
         elif request.operation_type == 'discovery_run':
             await stream_discovery_run(
@@ -190,7 +198,7 @@ async def execute_streaming_operation(
             )
         elif request.operation_type == 'batch_process':
             await stream_batch_process(
-                operation_id, request.parameters, service_manager
+                operation_id, request.parameters, service_manager, user_id
             )
         else:
             raise ValueError(f'Unknown operation type: {request.operation_type}')
@@ -207,7 +215,10 @@ async def execute_streaming_operation(
 
 
 async def stream_pdf_processing(
-    operation_id: str, parameters: dict[str, Any], service_manager: ServiceManager
+    operation_id: str,
+    parameters: dict[str, Any],
+    service_manager: ServiceManager,
+    user_id: str | None = None,
 ):
     """Stream PDF processing with progress updates."""
     pdf_paths = parameters.get('pdf_paths', [])
@@ -230,7 +241,9 @@ async def stream_pdf_processing(
 
             pipeline = DocumentPipeline(service_manager)
 
-            result = await asyncio.to_thread(pipeline.process_pdf, Path(pdf_path))
+            result = await asyncio.to_thread(
+                pipeline.process_pdf, Path(pdf_path), user_id=user_id
+            )
 
             # Store result for this PDF
             update_operation_progress(
@@ -299,7 +312,10 @@ async def stream_discovery_run(
 
 
 async def stream_batch_process(
-    operation_id: str, parameters: dict[str, Any], service_manager: ServiceManager
+    operation_id: str,
+    parameters: dict[str, Any],
+    service_manager: ServiceManager,
+    user_id: str | None = None,
 ):
     """Stream batch processing with progress updates."""
     items = parameters.get('items', [])
@@ -325,7 +341,7 @@ async def stream_batch_process(
         batch_tasks = []
         for item in batch_items:
             if process_type == 'pdf':
-                task = process_single_pdf(item, service_manager)
+                task = process_single_pdf(item, service_manager, user_id)
             elif process_type == 'discovery':
                 task = process_discovery_query(item, service_manager)
             else:
@@ -357,7 +373,9 @@ async def stream_batch_process(
 
 
 async def process_single_pdf(
-    item: dict[str, Any], service_manager: ServiceManager
+    item: dict[str, Any],
+    service_manager: ServiceManager,
+    user_id: str | None = None,
 ) -> BatchProcessResult:
     """Process a single PDF item."""
     try:
@@ -369,7 +387,9 @@ async def process_single_pdf(
         from thoth.pipelines import DocumentPipeline
 
         pipeline = DocumentPipeline(service_manager)
-        result = await asyncio.to_thread(pipeline.process_pdf, pdf_path)
+        result = await asyncio.to_thread(
+            pipeline.process_pdf, pdf_path, user_id=user_id
+        )
 
         return BatchProcessResult(status='success', path=str(pdf_path), result=result)
     except Exception as e:
@@ -405,6 +425,7 @@ async def process_discovery_query(
 async def batch_process(
     request: BatchProcessRequest,
     service_manager: ServiceManager = Depends(get_service_manager),
+    user_context: UserContext = Depends(get_user_context),
 ):
     """Start a batch processing operation."""
     operation_id = str(uuid.uuid4())
@@ -420,9 +441,11 @@ async def batch_process(
         operation_id=operation_id,
     )
 
-    # Start the operation in background, passing service_manager
+    # Start the operation in background, passing service_manager and user_id
     create_background_task(
-        execute_batch_process(operation_id, request, service_manager)
+        execute_batch_process(
+            operation_id, request, service_manager, user_context.user_id
+        )
     )
 
     return JSONResponse(
@@ -436,7 +459,10 @@ async def batch_process(
 
 
 async def execute_batch_process(
-    operation_id: str, request: BatchProcessRequest, service_manager: ServiceManager
+    operation_id: str,
+    request: BatchProcessRequest,
+    service_manager: ServiceManager,
+    user_id: str | None = None,
 ):
     """Execute batch processing operation."""
     parameters = {
@@ -444,4 +470,4 @@ async def execute_batch_process(
         'batch_size': request.batch_size,
         'process_type': request.operation_type,
     }
-    await stream_batch_process(operation_id, parameters, service_manager)
+    await stream_batch_process(operation_id, parameters, service_manager, user_id)
