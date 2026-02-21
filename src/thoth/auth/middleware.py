@@ -18,7 +18,7 @@ from starlette.responses import JSONResponse
 
 from thoth.auth.context import UserContext
 from thoth.auth.service import AuthService
-from thoth.mcp.auth import reset_current_mcp_user_id, set_current_mcp_user_id
+from thoth.mcp.auth import reset_current_user_context, set_current_user_context
 
 if TYPE_CHECKING:
     from starlette.responses import Response
@@ -129,31 +129,36 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
             multi_user = self._multi_user_override
         else:
             multi_user = os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true'
+        default_vault = self.vault_root or Path('/vault')
         if not multi_user:
             request.state.user_context = UserContext(
                 user_id='default_user',
                 username='default_user',
-                vault_path=self.vault_root or Path('/vault'),
+                vault_path=default_vault,
                 is_admin=True,
             )
-            token = set_current_mcp_user_id('default_user')
+            tokens = set_current_user_context(
+                'default_user', 'default_user', default_vault
+            )
             try:
                 return await call_next(request)
             finally:
-                reset_current_mcp_user_id(token)
+                reset_current_user_context(tokens)
 
         if self._is_exempt(request.url.path):
             request.state.user_context = UserContext(
                 user_id='default_user',
                 username='default_user',
-                vault_path=self.vault_root or Path('/vault'),
+                vault_path=default_vault,
                 is_admin=True,
             )
-            token = set_current_mcp_user_id('default_user')
+            tokens = set_current_user_context(
+                'default_user', 'default_user', default_vault
+            )
             try:
                 return await call_next(request)
             finally:
-                reset_current_mcp_user_id(token)
+                reset_current_user_context(tokens)
 
         auth_header = request.headers.get('Authorization', '')
         if not auth_header.startswith('Bearer '):
@@ -208,8 +213,12 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
         request.state.user_context = user_context
         logger.debug(f'Authenticated as {user_context.username}')
 
-        ctx_token = set_current_mcp_user_id(user_context.user_id)
+        ctx_tokens = set_current_user_context(
+            user_context.user_id,
+            user_context.username,
+            user_context.vault_path,
+        )
         try:
             return await call_next(request)
         finally:
-            reset_current_mcp_user_id(ctx_token)
+            reset_current_user_context(ctx_tokens)

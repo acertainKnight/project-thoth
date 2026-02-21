@@ -17,16 +17,53 @@ from __future__ import annotations
 
 import os
 from contextvars import ContextVar, Token
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from loguru import logger
 
 if TYPE_CHECKING:
+    from thoth.config import UserPaths
     from thoth.services.service_manager import ServiceManager
 
 _CURRENT_MCP_USER_ID: ContextVar[str | None] = ContextVar(
     'current_mcp_user_id', default=None
 )
+_CURRENT_USERNAME: ContextVar[str | None] = ContextVar('current_username', default=None)
+_CURRENT_VAULT_PATH: ContextVar[Path | None] = ContextVar(
+    'current_vault_path', default=None
+)
+
+
+def set_current_user_context(
+    user_id: str | None,
+    username: str | None = None,
+    vault_path: Path | None = None,
+) -> tuple[Token, Token, Token]:
+    """Set all user ContextVars for the current async context.
+
+    Args:
+        user_id: User's UUID string.
+        username: Human-readable username.
+        vault_path: Absolute path to the user's vault directory.
+
+    Returns:
+        Tuple of tokens for resetting all three ContextVars.
+    """
+    return (
+        _CURRENT_MCP_USER_ID.set(user_id),
+        _CURRENT_USERNAME.set(username),
+        _CURRENT_VAULT_PATH.set(vault_path),
+    )
+
+
+def reset_current_user_context(
+    tokens: tuple[Token, Token, Token],
+) -> None:
+    """Reset all user ContextVars using tokens from ``set_current_user_context``."""
+    _CURRENT_MCP_USER_ID.reset(tokens[0])
+    _CURRENT_USERNAME.reset(tokens[1])
+    _CURRENT_VAULT_PATH.reset(tokens[2])
 
 
 def set_current_mcp_user_id(user_id: str | None) -> Token:
@@ -85,6 +122,42 @@ def is_multi_user_mode() -> bool:
         True if THOTH_MULTI_USER=true
     """
     return os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true'
+
+
+def get_current_username() -> str | None:
+    """Get the username for the current async context, or None."""
+    return _CURRENT_USERNAME.get()
+
+
+def get_current_vault_path() -> Path | None:
+    """Get the vault path for the current async context, or None."""
+    return _CURRENT_VAULT_PATH.get()
+
+
+def get_current_user_paths() -> UserPaths | None:
+    """Resolve ``UserPaths`` for the current user using ContextVars.
+
+    Combines the current vault_path ContextVar with
+    ``Config.resolve_paths_for_vault`` to produce user-scoped paths.
+    Returns None if no vault_path is set in the current context
+    (e.g. single-user mode without ContextVars).
+
+    In single-user mode, falls back to global config paths wrapped in
+    a UserPaths object so callers always get the same interface.
+
+    Returns:
+        UserPaths for the current user, or None if unavailable.
+    """
+    from thoth.config import config
+
+    vault_path = _CURRENT_VAULT_PATH.get()
+    if vault_path:
+        return config.resolve_paths_for_vault(vault_path)
+
+    if not is_multi_user_mode():
+        return config.resolve_paths_for_vault(config.vault_root)
+
+    return None
 
 
 async def resolve_mcp_user_id(

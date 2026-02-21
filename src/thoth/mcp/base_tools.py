@@ -6,11 +6,16 @@ This module provides MCP-compliant tool definitions and registry.
 
 import json
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
 
-from thoth.mcp.auth import reset_current_mcp_user_id, set_current_mcp_user_id
+from thoth.mcp.auth import (
+    is_multi_user_mode,
+    reset_current_user_context,
+    set_current_user_context,
+)
 from thoth.services.service_manager import ServiceManager
 
 from .protocol import MCPToolCallResult, MCPToolSchema
@@ -336,7 +341,13 @@ class MCPToolRegistry:
         # Coerce arguments to match schema types (LLM agents often send strings)
         coerced_arguments = self._coerce_arguments(tool.input_schema, arguments)
 
-        context_token = set_current_mcp_user_id(coerced_arguments.get('user_id'))
+        user_id = coerced_arguments.get('user_id')
+        username, vault_path = None, None
+
+        if user_id and is_multi_user_mode():
+            username, vault_path = await self._resolve_user_vault(user_id)
+
+        ctx_tokens = set_current_user_context(user_id, username, vault_path)
         try:
             logger.debug(f"Executing tool '{name}' with arguments: {coerced_arguments}")
             result = await tool.execute(coerced_arguments)
@@ -346,7 +357,32 @@ class MCPToolRegistry:
             logger.exception("Tool execution failed for '%s': %s", name, e)
             return tool.handle_error(e)
         finally:
-            reset_current_mcp_user_id(context_token)
+            reset_current_user_context(ctx_tokens)
+
+    async def _resolve_user_vault(self, user_id: str) -> tuple[str | None, Path | None]:
+        """Look up username and vault_path from user_id for MCP tool context.
+
+        Args:
+            user_id: UUID string of the user.
+
+        Returns:
+            Tuple of (username, vault_path) or (None, None) on failure.
+        """
+
+        from thoth.config import config
+
+        try:
+            row = await self.service_manager.auth.postgres.fetchrow(
+                'SELECT username FROM users WHERE id = $1', user_id
+            )
+            if row:
+                uname = row['username']
+                vpath = config.resolve_user_vault_path(uname)
+                return uname, vpath
+        except Exception as e:
+            logger.debug(f'Could not resolve vault for user_id={user_id}: {e}')
+
+        return None, None
 
     def _coerce_arguments(
         self, schema: dict[str, Any], arguments: dict[str, Any]

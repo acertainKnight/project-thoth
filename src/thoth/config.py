@@ -30,6 +30,7 @@ from __future__ import annotations  # noqa: I001
 import json
 import os
 import threading
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List  # noqa: UP035
 
@@ -1356,6 +1357,38 @@ class UserConfigManager:
                 logger.debug(f"Invalidated settings cache for user '{username}'")
 
 
+# --- User Paths (multi-user path resolution) ---
+
+
+@dataclass(frozen=True)
+class UserPaths:
+    """Resolved absolute paths for a specific user's vault.
+
+    Produced by ``Config.resolve_paths_for_vault`` so that services and MCP
+    tools can work with user-scoped directories instead of the global config
+    paths.
+    """
+
+    vault_root: Path
+    workspace_dir: Path
+    pdf_dir: Path
+    markdown_dir: Path
+    notes_dir: Path
+    prompts_dir: Path
+    templates_dir: Path
+    output_dir: Path
+    knowledge_base_dir: Path
+    graph_storage_path: Path
+    queries_dir: Path
+    agent_storage_dir: Path
+    logs_dir: Path
+    analysis_schema_path: Path
+    discovery_sources_dir: Path
+    discovery_results_dir: Path
+    discovery_chrome_configs_dir: Path
+    data_dir: Path
+
+
 # --- Config Object ---
 
 
@@ -1778,6 +1811,65 @@ class Config:
         if self.multi_user and self.vaults_root:
             return self.vaults_root / username
         return self.vault_root
+
+    @property
+    def data_dir(self) -> Path:
+        """Data directory under workspace (for custom indexes, etc.)."""
+        return self.workspace_dir / 'data'
+
+    def resolve_paths_for_vault(
+        self,
+        vault_root: Path,
+        paths_config: PathsConfig | None = None,
+    ) -> UserPaths:
+        """Resolve all standard paths relative to a specific vault root.
+
+        This is the multi-user equivalent of ``_resolve_paths``. Given a
+        user's vault root directory, it returns a ``UserPaths`` with every
+        path resolved to an absolute location inside that vault.
+
+        Args:
+            vault_root: Absolute path to the user's vault directory.
+            paths_config: Optional PathsConfig; defaults to global settings.
+
+        Returns:
+            UserPaths with all directories resolved.
+
+        Example:
+            >>> paths = config.resolve_paths_for_vault(Path('/vaults/alice'))
+            >>> paths.pdf_dir
+            PosixPath('/vaults/alice/thoth/papers/pdfs')
+        """
+        paths = paths_config or self.settings.paths
+
+        def _resolve(path_str: str) -> Path:
+            p = Path(path_str)
+            if p.is_absolute():
+                return p.resolve()
+            return (vault_root / p).resolve()
+
+        workspace = _resolve(paths.workspace)
+
+        return UserPaths(
+            vault_root=vault_root,
+            workspace_dir=workspace,
+            pdf_dir=_resolve(paths.pdf),
+            markdown_dir=_resolve(paths.markdown),
+            notes_dir=_resolve(paths.notes),
+            prompts_dir=_resolve(paths.prompts),
+            templates_dir=_resolve(paths.templates),
+            output_dir=_resolve(paths.output),
+            knowledge_base_dir=_resolve(paths.knowledge_base),
+            graph_storage_path=_resolve(paths.graph_storage),
+            queries_dir=_resolve(paths.queries),
+            agent_storage_dir=_resolve(paths.agent_storage),
+            logs_dir=_resolve(paths.logs),
+            analysis_schema_path=_resolve('thoth/_thoth/analysis_schema.json'),
+            discovery_sources_dir=_resolve(paths.discovery.sources),
+            discovery_results_dir=_resolve(paths.discovery.results),
+            discovery_chrome_configs_dir=_resolve(paths.discovery.chrome_configs),
+            data_dir=workspace / 'data',
+        )
 
     def get_user_settings(self, username: str) -> Settings:
         """
