@@ -94,6 +94,21 @@ class BaseRepository(Generic[T]):
 
         return user_id
 
+    def _resolve_user_id(
+        self, user_id: str | None = None, operation: str = 'query'
+    ) -> str | None:
+        """
+        Resolve and enforce user scoping for repository operations.
+
+        Args:
+            user_id: Optional user ID supplied by caller.
+            operation: Operation label for enforcement logging.
+
+        Returns:
+            The resolved user ID, or None when scoping is not required.
+        """
+        return self._enforce_tenant_scoping(user_id, operation)
+
     def _cache_key(self, *args, **kwargs) -> str:
         """Generate cache key from arguments."""
         parts = [str(arg) for arg in args]
@@ -150,6 +165,7 @@ class BaseRepository(Generic[T]):
             Optional[int]: ID of created record or None
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'create')
             if user_id is not None:
                 data = {**data, 'user_id': user_id}
 
@@ -256,6 +272,7 @@ class BaseRepository(Generic[T]):
             bool: True if successful, False otherwise
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'update')
             if not data:
                 return True
 
@@ -313,6 +330,7 @@ class BaseRepository(Generic[T]):
             bool: True if successful, False otherwise
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'delete')
             if user_id is not None:
                 query = f'DELETE FROM {self.table_name} WHERE id = $1 AND user_id = $2'
                 await self.postgres.execute(query, record_id, user_id)
