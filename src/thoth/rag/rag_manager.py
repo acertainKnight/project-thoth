@@ -381,7 +381,10 @@ class RAGManager:
             return asyncio.run(lookup())
 
     def index_paper_by_id(
-        self, paper_id: str, markdown_content: str | None = None
+        self,
+        paper_id: str,
+        markdown_content: str | None = None,
+        user_id: str | None = None,
     ) -> list[str]:
         """
         Index a paper directly from the database by its ID.
@@ -390,6 +393,7 @@ class RAGManager:
             paper_id: UUID of the paper to index.
             markdown_content: Optional markdown content (if not provided,
                 fetched from DB).
+            user_id: Optional user ID for multi-tenant isolation.
 
         Returns:
             List of document IDs that were indexed.
@@ -490,7 +494,7 @@ class RAGManager:
 
                     # Index documents using async method
                     doc_ids = await self.vector_store_manager.add_documents_async(
-                        documents, paper_id=paper_uuid
+                        documents, paper_id=paper_uuid, user_id=user_id
                     )
                     logger.info(
                         f'Successfully indexed {len(doc_ids)} chunks for paper {paper_id}'
@@ -516,7 +520,10 @@ class RAGManager:
             raise
 
     async def index_paper_by_id_async(
-        self, paper_id: str, markdown_content: str | None = None
+        self,
+        paper_id: str,
+        markdown_content: str | None = None,
+        user_id: str | None = None,
     ) -> list[str]:
         """
         Index a paper from the database by its ID (async version).
@@ -525,6 +532,7 @@ class RAGManager:
             paper_id: UUID of the paper to index.
             markdown_content: Optional markdown content (if not provided,
                 fetched from DB).
+            user_id: Optional user ID for multi-tenant isolation.
 
         Returns:
             List of document IDs that were indexed.
@@ -604,7 +612,7 @@ class RAGManager:
                     )
 
                 doc_ids = await self.vector_store_manager.add_documents_async(
-                    documents, paper_id=paper_uuid
+                    documents, paper_id=paper_uuid, user_id=user_id
                 )
                 logger.info(
                     f'Successfully indexed {len(doc_ids)} chunks for paper {paper_id}'
@@ -618,7 +626,10 @@ class RAGManager:
             raise
 
     def index_markdown_file(
-        self, file_path: Path, paper_id: str | None = None
+        self,
+        file_path: Path,
+        paper_id: str | None = None,
+        user_id: str | None = None,
     ) -> list[str]:
         """
         Index a markdown file into the vector store.
@@ -627,6 +638,7 @@ class RAGManager:
             file_path: Path to the markdown file.
             paper_id: Optional paper ID (UUID string). If not provided,
                 attempts lookup by title.
+            user_id: Optional user ID for multi-tenant isolation.
 
         Returns:
             List of document IDs that were indexed.
@@ -666,7 +678,9 @@ class RAGManager:
                     )
 
             # If we have paper_id, use the database-backed method for consistency
-            return self.index_paper_by_id(paper_id, markdown_content=content)
+            return self.index_paper_by_id(
+                paper_id, markdown_content=content, user_id=user_id
+            )
 
         except Exception as e:
             logger.error(f'Error indexing markdown file {file_path}: {e}')

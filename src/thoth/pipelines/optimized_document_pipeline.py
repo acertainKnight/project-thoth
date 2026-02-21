@@ -88,7 +88,9 @@ class OptimizedDocumentPipeline(BasePipeline):
             _ = asyncio.create_task(self._async_processing_service.initialize())  # noqa: RUF006
         return self._async_processing_service
 
-    async def process_pdf_async(self, pdf_path: str | Path) -> tuple[Path, Path, Path]:
+    async def process_pdf_async(
+        self, pdf_path: str | Path, user_id: str | None = None
+    ) -> tuple[Path, Path, Path]:
         """
         Process a PDF through async OCR, analysis, citation extraction and note
         generation.
@@ -138,12 +140,16 @@ class OptimizedDocumentPipeline(BasePipeline):
 
             # Background RAG indexing (non-blocking)
             _ = asyncio.create_task(  # noqa: RUF006
-                self._background_rag_indexing_async(new_markdown_path, note_path)
+                self._background_rag_indexing_async(
+                    new_markdown_path, note_path, user_id=user_id
+                )
             )
 
             return Path(note_path), Path(new_pdf_path), Path(new_markdown_path)
 
-    def process_pdf(self, pdf_path: str | Path) -> tuple[Path, Path, Path]:
+    def process_pdf(
+        self, pdf_path: str | Path, user_id: str | None = None
+    ) -> tuple[Path, Path, Path]:
         """
         Process a PDF with optimized threading and improved performance.
 
@@ -255,7 +261,9 @@ class OptimizedDocumentPipeline(BasePipeline):
         )
 
         # Background RAG indexing with optimized thread pool (use no_images version for embeddings)  # noqa: W505
-        self._schedule_background_rag_indexing(no_images_markdown_path, note_path)
+        self._schedule_background_rag_indexing(
+            no_images_markdown_path, note_path, user_id=user_id
+        )
 
         return Path(note_path), Path(new_pdf_path), Path(new_markdown_path)
 
@@ -363,7 +371,7 @@ class OptimizedDocumentPipeline(BasePipeline):
         return analysis, citations
 
     async def _background_rag_indexing_async(
-        self, markdown_path: str, note_path: str
+        self, markdown_path: str, note_path: str, user_id: str | None = None
     ) -> None:
         """Background RAG indexing using async I/O."""
         try:
@@ -372,10 +380,16 @@ class OptimizedDocumentPipeline(BasePipeline):
 
             # PRIORITY 3: Use persistent background tasks executor
             await loop.run_in_executor(
-                self._background_tasks_executor, self._index_to_rag, Path(markdown_path)
+                self._background_tasks_executor,
+                self._index_to_rag,
+                Path(markdown_path),
+                user_id,
             )
             await loop.run_in_executor(
-                self._background_tasks_executor, self._index_to_rag, Path(note_path)
+                self._background_tasks_executor,
+                self._index_to_rag,
+                Path(note_path),
+                user_id,
             )
 
             self.logger.debug('Background async RAG indexing completed')
@@ -383,14 +397,17 @@ class OptimizedDocumentPipeline(BasePipeline):
             self.logger.warning(f'Failed to index documents to RAG system: {e}')
 
     def _schedule_background_rag_indexing(
-        self, markdown_path: str | Path, note_path: str | Path
+        self,
+        markdown_path: str | Path,
+        note_path: str | Path,
+        user_id: str | None = None,
     ) -> None:
         """Schedule background RAG indexing with optimized thread pool."""
 
         def _background_rag_indexing():
             try:
-                self._index_to_rag(Path(markdown_path))
-                self._index_to_rag(Path(note_path))
+                self._index_to_rag(Path(markdown_path), user_id=user_id)
+                self._index_to_rag(Path(note_path), user_id=user_id)
                 self.logger.debug('Background RAG indexing completed')
             except Exception as e:
                 self.logger.warning(f'Failed to index documents to RAG system: {e}')
@@ -547,11 +564,11 @@ class OptimizedDocumentPipeline(BasePipeline):
 
         return str(note_path), str(new_pdf_path), str(new_markdown_path)
 
-    def _index_to_rag(self, file_path: Path) -> None:
+    def _index_to_rag(self, file_path: Path, user_id: str | None = None) -> None:
         """Index file to RAG system."""
         try:
             if file_path.exists() and file_path.suffix == '.md':
-                self.services.rag.index_file(file_path)
+                self.services.rag.index_file(file_path, user_id=user_id)
                 self.logger.debug(f'Indexed {file_path} to RAG system')
         except Exception as e:
             self.logger.debug(f'Failed to index {file_path} to RAG: {e}')

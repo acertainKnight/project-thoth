@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
@@ -43,6 +44,7 @@ class RAGFileHandler(FileSystemEventHandler):
         self.config = config
         self.processing_queue: dict[str, float] = {}  # path -> timestamp
         self.debounce_seconds = 2.0  # Wait 2s before processing
+        self._user_id_cache: dict[str, str] = {}  # username -> user_id
 
     def on_created(self, event: FileSystemEvent) -> None:
         """Handle file creation events."""
@@ -133,9 +135,10 @@ class RAGFileHandler(FileSystemEventHandler):
         """
         try:
             print(f'Indexing markdown: {markdown_path.name}')
+            user_id = await self._resolve_user_id_from_path(markdown_path)
 
             # Use async version to avoid event loop conflicts
-            doc_ids = self.rag_service.index_file(markdown_path)
+            doc_ids = self.rag_service.index_file(markdown_path, user_id=user_id)
 
             print(
                 f'Indexed {len(doc_ids)} chunks from {markdown_path.name} into vector store'
@@ -143,6 +146,51 @@ class RAGFileHandler(FileSystemEventHandler):
 
         except Exception as e:
             print(f'Error indexing markdown {markdown_path}: {e}')
+
+    async def _resolve_user_id_from_path(self, file_path: Path) -> str | None:
+        """Resolve user_id from a vault file path in multi-user mode."""
+        if not getattr(self.config, 'multi_user', False):
+            return None
+
+        vaults_root = getattr(self.config, 'vaults_root', None)
+        if vaults_root is None:
+            return None
+
+        try:
+            relative = file_path.resolve().relative_to(vaults_root.resolve())
+        except ValueError:
+            return None
+
+        if not relative.parts:
+            return None
+
+        username = relative.parts[0]
+        if username in self._user_id_cache:
+            return self._user_id_cache[username]
+
+        db_url = getattr(self.config.secrets, 'database_url', None)
+        if not db_url:
+            logger.warning('Cannot resolve user_id from path: DATABASE_URL missing')
+            return None
+
+        import asyncpg
+
+        conn = await asyncpg.connect(db_url)
+        try:
+            row = await conn.fetchrow(
+                'SELECT id FROM users WHERE username = $1 AND is_active = TRUE',
+                username,
+            )
+        finally:
+            await conn.close()
+
+        if row is None:
+            logger.warning(f'No active user found for vault path username={username}')
+            return None
+
+        user_id = str(row['id'])
+        self._user_id_cache[username] = user_id
+        return user_id
 
 
 class RAGWatcherService(BaseService):

@@ -59,12 +59,13 @@ class RAGService(BaseService):
             self.logger.info('RAGManager loaded successfully')
         return self._rag_manager
 
-    def index_file(self, file_path: Path) -> list[str]:
+    def index_file(self, file_path: Path, user_id: str | None = None) -> list[str]:
         """
         Index a single file into the knowledge base.
 
         Args:
             file_path: Path to the file to index
+            user_id: Optional user ID for multi-tenant isolation
 
         Returns:
             list[str]: List of document IDs created
@@ -83,7 +84,7 @@ class RAGService(BaseService):
                     f'Only markdown files are supported, got: {file_path.suffix}'
                 )
 
-            doc_ids = self.rag_manager.index_markdown_file(file_path)
+            doc_ids = self.rag_manager.index_markdown_file(file_path, user_id=user_id)
 
             self.log_operation(
                 'file_indexed',
@@ -539,7 +540,10 @@ class RAGService(BaseService):
             raise ServiceError(self.handle_error(e, 'indexing knowledge base')) from e
 
     def index_paper_by_id(
-        self, paper_id: str, markdown_content: str | None = None
+        self,
+        paper_id: str,
+        markdown_content: str | None = None,
+        user_id: str | None = None,
     ) -> list[str]:
         """
         Index a paper by its UUID from the database.
@@ -547,6 +551,7 @@ class RAGService(BaseService):
         Args:
             paper_id: UUID of the paper in paper_metadata table
             markdown_content: Optional markdown content (fetched if omitted)
+            user_id: Optional user ID for multi-tenant isolation
 
         Returns:
             list[str]: List of document chunk IDs created
@@ -557,7 +562,9 @@ class RAGService(BaseService):
         try:
             self.validate_input(paper_id=paper_id)
             doc_ids = self.rag_manager.index_paper_by_id(
-                paper_id, markdown_content=markdown_content
+                paper_id,
+                markdown_content=markdown_content,
+                user_id=user_id,
             )
             self.log_operation(
                 'paper_indexed_by_id',
@@ -571,7 +578,10 @@ class RAGService(BaseService):
             ) from e
 
     async def index_paper_by_id_async(
-        self, paper_id: str, markdown_content: str | None = None
+        self,
+        paper_id: str,
+        markdown_content: str | None = None,
+        user_id: str | None = None,
     ) -> list[str]:
         """
         Async version of index_paper_by_id. Indexes a paper by UUID from the database.
@@ -579,6 +589,7 @@ class RAGService(BaseService):
         Args:
             paper_id: UUID of the paper in paper_metadata table.
             markdown_content: Optional markdown content (fetched if omitted).
+            user_id: Optional user ID for multi-tenant isolation.
 
         Returns:
             list[str]: List of document chunk IDs created.
@@ -589,7 +600,9 @@ class RAGService(BaseService):
         try:
             self.validate_input(paper_id=paper_id)
             doc_ids = await self.rag_manager.index_paper_by_id_async(
-                paper_id, markdown_content=markdown_content
+                paper_id,
+                markdown_content=markdown_content,
+                user_id=user_id,
             )
             self.log_operation(
                 'paper_indexed_by_id_async',
