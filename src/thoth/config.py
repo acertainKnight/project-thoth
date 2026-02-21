@@ -1779,6 +1779,17 @@ class Config:
             return self.vaults_root / username
         return self.vault_root
 
+    def get_user_settings(self, username: str) -> Settings:
+        """
+        Get effective settings for a user.
+
+        In multi-user mode this reads the user's settings file from their vault.
+        In single-user mode this returns the global settings.
+        """
+        if self.multi_user and self.user_config_manager:
+            return self.user_config_manager.get_settings_or_default(username)
+        return self.settings
+
     def __repr__(self) -> str:
         return (
             f'Config(vault_root={self.vault_root}, '

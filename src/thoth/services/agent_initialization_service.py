@@ -48,6 +48,7 @@ class AgentInitializationService:
             'description': """You are the Thoth Research Orchestrator - the user's primary research assistant.
 
 Your agent ID is: {{AGENT_ID}}
+Your user ID is: {{USER_ID}}
 
 ## Your Role
 You coordinate all research activities, loading specialized skills as needed. You start with minimal tools and dynamically load more based on user requests.
@@ -70,6 +71,10 @@ Always check `list_skills` if unsure which skill to use for a task.
 4. Follow the skill's guidance to complete the task
 5. For complex analysis, delegate to thoth_research_analyst
 6. When a task/project is complete, clear the planning block
+
+## Multi-user Safety
+- Always include `user_id: {{USER_ID}}` in MCP tool calls when the tool accepts user_id.
+- Never query, mutate, or summarize another user's data.
 
 ## Communication Style
 - Be warm, helpful, and professional
@@ -131,6 +136,7 @@ Always check `list_skills` if unsure which skill to use for a task.
             'description': """You are the Thoth Research Analyst - a specialist in deep research analysis.
 
 Your agent ID is: {{AGENT_ID}}
+Your user ID is: {{USER_ID}}
 
 ## Your Role
 You handle complex analysis tasks delegated by the Orchestrator:
@@ -152,7 +158,11 @@ You have direct access to analysis tools. Use them to:
 - Be thorough and systematic
 - Always cite sources for claims
 - Identify limitations and gaps
-- Suggest follow-up analyses if relevant""",
+- Suggest follow-up analyses if relevant
+
+## Multi-user Safety
+- Always include `user_id: {{USER_ID}}` in MCP tool calls when the tool accepts user_id.
+- Only analyze and reference data scoped to this user.""",
             'tools': [
                 # Deep analysis tools
                 'answer_research_question',
@@ -269,6 +279,8 @@ Comparison Aspects:
                 available_tools = await self._get_all_tools(client)
 
                 for agent_key, base_config in self.AGENT_CONFIGS.items():
+                    user_config = dict(base_config)
+                    user_config['user_id'] = user_context.user_id
                     role = (
                         'orchestrator'
                         if agent_key == 'thoth_main_orchestrator'
@@ -282,7 +294,7 @@ Comparison Aspects:
                             await self._update_agent(
                                 client,
                                 existing_id,
-                                base_config,
+                                user_config,
                                 available_tools,
                             )
                             agent_ids[role] = existing_id
@@ -291,7 +303,6 @@ Comparison Aspects:
                             logger.info(f'  Updated {role}: {existing_id[:16]}...')
                         else:
                             # No existing agent -- create a new namespaced one
-                            user_config = dict(base_config)
                             user_config['name'] = f'{base_config["name"]}_{username}'
 
                             agent_id = await self._ensure_agent_exists(
@@ -347,9 +358,11 @@ Comparison Aspects:
 
             # Create/update each agent
             for agent_name, config in self.AGENT_CONFIGS.items():
+                agent_config = dict(config)
+                agent_config['user_id'] = 'default_user'
                 try:
                     agent_id = await self._ensure_agent_exists(
-                        client, agent_name, config, available_tools
+                        client, agent_name, agent_config, available_tools
                     )
                     if agent_id:
                         agent_ids[agent_name] = agent_id
@@ -560,7 +573,7 @@ Comparison Aspects:
         if missing:
             logger.warning(f'Missing tools for {agent_config["name"]}: {missing}')
 
-        system_prompt = agent_config['description'].replace('{{AGENT_ID}}', 'PENDING')
+        system_prompt = self._render_system_prompt(agent_config, 'PENDING')
 
         # Resolve full embedding config from Letta (required fields: endpoint_type, dim)
         embedding_cfg = await self._resolve_embedding_config(client)
@@ -601,11 +614,8 @@ Comparison Aspects:
             agent = response.json()
             agent_id = agent['id']
 
-            # Update system prompt with actual agent_id
-            updated_system = agent_config['description'].replace(
-                '{{AGENT_ID}}',
-                agent_id,
-            )
+            # Update system prompt with actual agent_id and user_id
+            updated_system = self._render_system_prompt(agent_config, agent_id)
             await client.patch(
                 f'{self.letta_base_url}/v1/agents/{agent_id}',
                 headers=self.headers,
@@ -634,8 +644,8 @@ Comparison Aspects:
         # Filter to only tools that exist
         desired_tools = set(t for t in agent_config['tools'] if t in available_tools)
 
-        # Update system prompt with actual agent_id
-        updated_system = agent_config['description'].replace('{{AGENT_ID}}', agent_id)
+        # Update system prompt with actual agent_id and user_id
+        updated_system = self._render_system_prompt(agent_config, agent_id)
 
         try:
             # Build PATCH payload: system prompt + optional model override + tool rules
@@ -702,6 +712,15 @@ Comparison Aspects:
 
         except Exception as e:
             logger.warning(f'Could not update agent {agent_config["name"]}: {e}')
+
+    def _render_system_prompt(self, agent_config: dict, agent_id: str) -> str:
+        """Render system prompt with runtime placeholders."""
+        user_id = agent_config.get('user_id', 'default_user')
+        return (
+            agent_config['description']
+            .replace('{{AGENT_ID}}', agent_id)
+            .replace('{{USER_ID}}', user_id)
+        )
 
     async def _ensure_memory_blocks(
         self, client: httpx.AsyncClient, agent_id: str, agent_config: dict
