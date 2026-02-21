@@ -27,6 +27,14 @@ def temp_skill_dirs(tmp_path):
     return bundled, vault
 
 
+def _setup_service(mock_config, bundled, vault):
+    """Create a SkillService with overridden directories."""
+    service = SkillService(mock_config)
+    service.bundled_skills_dir = bundled
+    service._default_vault_skills_dir = vault
+    return service
+
+
 class TestSkillService:
     """Tests for SkillService."""
 
@@ -36,7 +44,6 @@ class TestSkillService:
 
         assert service.config == mock_config
         assert service.bundled_skills_dir.name == '.skills'
-        # vault_skills_dir is workspace_dir / 'skills' (workspace_dir comes from config)
         assert service.vault_skills_dir == mock_config.workspace_dir / 'skills'
 
     def test_discover_skills_empty_directories(self, mock_config, temp_skill_dirs):
@@ -45,10 +52,7 @@ class TestSkillService:
 
         with patch.object(Path, 'exists', return_value=True):
             with patch.object(Path, 'glob', return_value=[]):
-                service = SkillService(mock_config)
-                service.bundled_skills_dir = bundled
-                service.vault_skills_dir = vault
-
+                service = _setup_service(mock_config, bundled, vault)
                 skills = service.discover_skills()
 
         assert len(skills) == 0
@@ -57,7 +61,6 @@ class TestSkillService:
         """Test discovering bundled skills."""
         bundled, vault = temp_skill_dirs
 
-        # Create bundled skill directory with SKILL.md
         skill_dir = bundled / 'test-skill'
         skill_dir.mkdir()
         skill_file = skill_dir / 'SKILL.md'
@@ -70,10 +73,7 @@ description: A test skill
 """
         )
 
-        service = SkillService(mock_config)
-        service.bundled_skills_dir = bundled
-        service.vault_skills_dir = vault
-
+        service = _setup_service(mock_config, bundled, vault)
         skills = service.discover_skills()
 
         assert len(skills) == 1
@@ -86,7 +86,6 @@ description: A test skill
         """Test that vault skills override bundled skills."""
         bundled, vault = temp_skill_dirs
 
-        # Create same-named skill in both locations
         bundled_skill = bundled / 'same-skill'
         bundled_skill.mkdir()
         (bundled_skill / 'SKILL.md').write_text(
@@ -109,10 +108,7 @@ description: User override skill
 """
         )
 
-        service = SkillService(mock_config)
-        service.bundled_skills_dir = bundled
-        service.vault_skills_dir = vault
-
+        service = _setup_service(mock_config, bundled, vault)
         skills = service.discover_skills()
 
         assert len(skills) == 1
@@ -123,7 +119,6 @@ description: User override skill
         """Test discovering both bundled and vault skills."""
         bundled, vault = temp_skill_dirs
 
-        # Create bundled skill
         bundled_skill = bundled / 'bundled-skill'
         bundled_skill.mkdir()
         (bundled_skill / 'SKILL.md').write_text(
@@ -134,7 +129,6 @@ description: A bundled skill
 """
         )
 
-        # Create vault skill
         vault_skill = vault / 'vault-skill'
         vault_skill.mkdir()
         (vault_skill / 'SKILL.md').write_text(
@@ -145,10 +139,7 @@ description: A vault skill
 """
         )
 
-        service = SkillService(mock_config)
-        service.bundled_skills_dir = bundled
-        service.vault_skills_dir = vault
-
+        service = _setup_service(mock_config, bundled, vault)
         skills = service.discover_skills()
 
         assert len(skills) == 2
@@ -199,7 +190,6 @@ This is not valid YAML: [unclosed
         with patch('builtins.open', mock_open(read_data=content)):
             metadata = service._parse_skill_metadata(Path('/fake/path'))
 
-        # Should handle gracefully and return empty dict
         assert isinstance(metadata, dict)
 
     def test_get_skill_content_success(self, mock_config, temp_skill_dirs):
@@ -216,10 +206,7 @@ description: Test
 """
         (skill_dir / 'SKILL.md').write_text(skill_content)
 
-        service = SkillService(mock_config)
-        service.bundled_skills_dir = bundled
-        service.vault_skills_dir = vault
-
+        service = _setup_service(mock_config, bundled, vault)
         content = service.get_skill_content('test-skill')
 
         assert content == skill_content
@@ -228,10 +215,7 @@ description: Test
         """Test getting non-existent skill content."""
         bundled, vault = temp_skill_dirs
 
-        service = SkillService(mock_config)
-        service.bundled_skills_dir = bundled
-        service.vault_skills_dir = vault
-
+        service = _setup_service(mock_config, bundled, vault)
         content = service.get_skill_content('non-existent')
 
         assert content is None
@@ -240,10 +224,7 @@ description: Test
         """Test formatting summary with no skills."""
         bundled, vault = temp_skill_dirs
 
-        service = SkillService(mock_config)
-        service.bundled_skills_dir = bundled
-        service.vault_skills_dir = vault
-
+        service = _setup_service(mock_config, bundled, vault)
         summary = service.format_skills_summary()
 
         assert 'No skills available' in summary
@@ -252,7 +233,6 @@ description: Test
         """Test formatting summary with skills."""
         bundled, vault = temp_skill_dirs
 
-        # Create test skills
         bundled_skill = bundled / 'bundled-skill'
         bundled_skill.mkdir()
         (bundled_skill / 'SKILL.md').write_text(
@@ -273,10 +253,7 @@ description: A user vault skill
 """
         )
 
-        service = SkillService(mock_config)
-        service.bundled_skills_dir = bundled
-        service.vault_skills_dir = vault
-
+        service = _setup_service(mock_config, bundled, vault)
         summary = service.format_skills_summary()
 
         assert 'Available Skills' in summary
@@ -290,21 +267,17 @@ description: A user vault skill
         with patch.object(Path, 'mkdir'):
             service = SkillService(mock_config)
 
-            # vault_skills_dir = workspace_dir / 'skills'
             expected_path = mock_config.workspace_dir / 'skills'
-            # The mkdir call should have happened during __init__
             assert service.vault_skills_dir == expected_path
 
     def test_discover_skills_without_skill_md(self, mock_config, temp_skill_dirs):
         """Test that directories without SKILL.md are skipped."""
         bundled, vault = temp_skill_dirs
 
-        # Create directory without SKILL.md
         invalid_skill = bundled / 'invalid-skill'
         invalid_skill.mkdir()
         (invalid_skill / 'other_file.txt').write_text('Not a skill')
 
-        # Create valid skill
         valid_skill = bundled / 'valid-skill'
         valid_skill.mkdir()
         (valid_skill / 'SKILL.md').write_text(
@@ -315,10 +288,7 @@ description: Valid
 """
         )
 
-        service = SkillService(mock_config)
-        service.bundled_skills_dir = bundled
-        service.vault_skills_dir = vault
-
+        service = _setup_service(mock_config, bundled, vault)
         skills = service.discover_skills()
 
         assert len(skills) == 1
