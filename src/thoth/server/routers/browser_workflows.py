@@ -14,6 +14,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, s
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from thoth.auth.context import UserContext
+from thoth.auth.dependencies import get_user_context
 from thoth.discovery.browser.workflow_builder import WorkflowBuilder
 from thoth.discovery.browser.workflow_execution_service import (
     WorkflowExecutionService,
@@ -254,6 +256,7 @@ class CreateWorkflowResponse(BaseModel):
 )
 async def create_workflow(
     request: WorkflowCreateRequest,
+    _user_context: UserContext = Depends(get_user_context),
     repo: BrowserWorkflowRepository = Depends(get_workflow_repo),
 ):
     """Create a new browser workflow.
@@ -311,6 +314,7 @@ async def create_workflow(
 async def list_workflows(
     is_active: bool | None = Query(None, description='Filter by active status'),
     domain: str | None = Query(None, description='Filter by website domain'),
+    _user_context: UserContext = Depends(get_user_context),
     repo: BrowserWorkflowRepository = Depends(get_workflow_repo),
 ):
     """List all workflows with optional filters.
@@ -358,6 +362,7 @@ async def list_workflows(
 @router.get('/{workflow_id}', response_model=WorkflowDetailResponse)
 async def get_workflow(
     workflow_id: UUID,
+    _user_context: UserContext = Depends(get_user_context),
     workflow_repo: BrowserWorkflowRepository = Depends(get_workflow_repo),
     search_repo: WorkflowSearchConfigRepository = Depends(get_search_config_repo),
 ):
@@ -403,6 +408,7 @@ async def get_workflow(
 async def update_workflow(
     workflow_id: UUID,
     request: WorkflowUpdateRequest,
+    _user_context: UserContext = Depends(get_user_context),
     repo: BrowserWorkflowRepository = Depends(get_workflow_repo),
 ):
     """Update a workflow's configuration.
@@ -461,6 +467,7 @@ async def update_workflow(
 @router.delete('/{workflow_id}', status_code=status.HTTP_204_NO_CONTENT)
 async def delete_workflow(
     workflow_id: UUID,
+    _user_context: UserContext = Depends(get_user_context),
     repo: BrowserWorkflowRepository = Depends(get_workflow_repo),
 ):
     """Delete a workflow.
@@ -559,6 +566,7 @@ async def execute_workflow(
     workflow_id: UUID,
     request: WorkflowExecutionRequest,
     background_tasks: BackgroundTasks,
+    user_context: UserContext = Depends(get_user_context),
     workflow_repo: BrowserWorkflowRepository = Depends(get_workflow_repo),
     executions_repo: WorkflowExecutionsRepository = Depends(get_executions_repo),
     execution_service: WorkflowExecutionService = Depends(get_execution_service),
@@ -598,7 +606,10 @@ async def execute_workflow(
         execution_data = {
             'workflow_id': workflow_id,
             'status': ExecutionStatus.RUNNING.value,
-            'execution_parameters': request.model_dump(),
+            'execution_parameters': {
+                **request.model_dump(),
+                'user_id': user_context.user_id,
+            },
             'triggered_by': ExecutionTrigger.MANUAL.value,
             'started_at': datetime.utcnow(),
         }
@@ -655,6 +666,7 @@ async def execute_workflow(
 async def get_workflow_executions(
     workflow_id: UUID,
     limit: int = Query(default=10, ge=1, le=100, description='Maximum results'),
+    _user_context: UserContext = Depends(get_user_context),
     repo: WorkflowExecutionsRepository = Depends(get_executions_repo),
 ):
     """Get execution history for a workflow.
@@ -684,6 +696,7 @@ async def get_workflow_executions(
 async def add_workflow_action(
     workflow_id: UUID,
     request: WorkflowActionRequest,
+    _user_context: UserContext = Depends(get_user_context),
     workflow_repo: BrowserWorkflowRepository = Depends(get_workflow_repo),
     actions_repo: WorkflowActionsRepository = Depends(get_actions_repo),
 ):
@@ -843,6 +856,7 @@ class ConfirmWorkflowRequest(BaseModel):
 @router.post('/analyze', response_model=AnalyzeUrlResponse)
 async def analyze_url(
     request: AnalyzeUrlRequest,
+    _user_context: UserContext = Depends(get_user_context),
     builder: WorkflowBuilder = Depends(get_workflow_builder),
 ):
     """Analyze a URL to auto-detect article listing structure using LLM.
@@ -915,6 +929,7 @@ async def analyze_url(
 @router.post('/refine', response_model=AnalyzeUrlResponse)
 async def refine_selectors(
     request: RefineSelectorsRequest,
+    _user_context: UserContext = Depends(get_user_context),
     builder: WorkflowBuilder = Depends(get_workflow_builder),
 ):
     """Refine selectors based on user feedback.
@@ -991,6 +1006,7 @@ async def refine_selectors(
 )
 async def confirm_workflow(
     request: ConfirmWorkflowRequest,
+    _user_context: UserContext = Depends(get_user_context),
     repo: BrowserWorkflowRepository = Depends(get_workflow_repo),
 ):
     """Confirm and save an analyzed URL as a workflow.

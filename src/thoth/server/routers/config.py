@@ -11,13 +11,18 @@ from pydantic import BaseModel, Field
 
 from thoth.auth.context import UserContext
 from thoth.auth.dependencies import get_user_context
-from thoth.config import config
+from thoth.config import Settings, config
 
 # TODO: Re-implement SchemaGenerator and EnhancedValidator for new config system
 # from thoth.utilities.config.schema_generator import SchemaGenerator
 # from thoth.utilities.config.validation import EnhancedValidator
 
 router = APIRouter()
+
+
+def _settings_to_obsidian(settings: Settings) -> dict[str, Any]:
+    """Convert Settings model to Obsidian-friendly dict."""
+    return settings.model_dump(by_alias=True)
 
 
 class PartialValidationRequest(BaseModel):
@@ -46,16 +51,12 @@ def export_config_for_obsidian(user_context: UserContext = Depends(get_user_cont
     In single-user mode, exports the global config.
     """
     try:
-        # In multi-user mode, use the user's settings if available
-        # (export_config variable intentionally unused - for future use)
-        if user_context.settings is not None:
-            # User has their own settings loaded
-            _ = user_context.settings
-        else:
-            # Fall back to server config
-            _ = config.settings
-
-        obsidian_config = config.export_for_obsidian()
+        effective_settings = (
+            user_context.settings
+            if user_context.settings is not None
+            else config.get_user_settings(user_context.username)
+        )
+        obsidian_config = _settings_to_obsidian(effective_settings)
 
         return JSONResponse(
             {
@@ -107,7 +108,11 @@ async def import_config_from_obsidian(
         # Write the config
         import json
 
-        settings_file.write_text(json.dumps(obsidian_config, indent=2))
+        validated = Settings.model_validate(obsidian_config)
+        settings_file.write_text(
+            json.dumps(validated.model_dump(by_alias=True), indent=2),
+            encoding='utf-8',
+        )
 
         # Invalidate cache if multi-user
         if multi_user and config.user_config_manager:

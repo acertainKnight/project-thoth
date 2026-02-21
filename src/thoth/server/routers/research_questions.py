@@ -8,9 +8,12 @@ from datetime import datetime, time
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Body, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from loguru import logger
 from pydantic import BaseModel, Field, field_validator
+
+from thoth.auth.context import UserContext
+from thoth.auth.dependencies import get_user_context
 
 # Create router with prefix and tags
 router = APIRouter(
@@ -283,30 +286,6 @@ class StatisticsResponse(BaseModel):
 # ==================== Helper Functions ====================
 
 
-def _get_user_id_from_request(request: Request) -> str:
-    """
-    Extract user ID from request.
-
-    TODO: Implement proper authentication middleware.
-    For now, use query parameter or default to 'default_user'.
-
-    Args:
-        request: FastAPI request object
-
-    Returns:
-        str: User identifier
-    """
-    # Check for user_id in query params (temporary for testing)
-    user_id = request.query_params.get('user_id')
-
-    # TODO: Extract from JWT token or session once auth is implemented
-    # if hasattr(request.state, 'user'):
-    #     return request.state.user.id
-
-    # Default user for now
-    return user_id or 'default_user'
-
-
 def _get_research_question_service(request: Request):
     """
     Get the research question service from service manager via DI.
@@ -372,6 +351,7 @@ def _get_match_repository(request: Request):
 async def create_research_question(
     question: ResearchQuestionCreate,
     request: Request,
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
 ) -> ResearchQuestionResponse:
     """
     Create a new research question.
@@ -391,7 +371,7 @@ async def create_research_question(
     """
     try:
         service = _get_research_question_service(request)
-        user_id = _get_user_id_from_request(request)
+        user_id = user_context.user_id
 
         # Validate at least one keyword or topic
         if not question.keywords and not question.topics:
@@ -466,6 +446,7 @@ async def list_research_questions(
     active_only: bool = Query(True, description='Only return active questions'),
     limit: int = Query(50, ge=1, le=500, description='Maximum number of results'),
     offset: int = Query(0, ge=0, description='Number of records to skip'),
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
 ) -> ResearchQuestionList:
     """
     List all research questions for the current user.
@@ -484,7 +465,7 @@ async def list_research_questions(
     """
     try:
         service = _get_research_question_service(request)
-        user_id = _get_user_id_from_request(request)
+        user_id = user_context.user_id
 
         # Get questions from repository with pagination
         questions = await service.repository.get_by_user(
@@ -535,6 +516,7 @@ async def list_research_questions(
 async def get_research_question(
     question_id: UUID,
     request: Request,
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
 ) -> ResearchQuestionResponse:
     """
     Get a specific research question by ID.
@@ -551,7 +533,7 @@ async def get_research_question(
     """
     try:
         service = _get_research_question_service(request)
-        user_id = _get_user_id_from_request(request)
+        user_id = user_context.user_id
 
         # Get the question
         question = await service.repository.get_by_id(question_id)
@@ -593,6 +575,7 @@ async def update_research_question(
     question_id: UUID,
     updates: ResearchQuestionUpdate,
     request: Request,
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
 ) -> ResearchQuestionResponse:
     """
     Update an existing research question.
@@ -612,7 +595,7 @@ async def update_research_question(
     """
     try:
         service = _get_research_question_service(request)
-        user_id = _get_user_id_from_request(request)
+        user_id = user_context.user_id
 
         # Convert to dict and filter out None values
         update_dict = {k: v for k, v in updates.model_dump().items() if v is not None}
@@ -679,6 +662,7 @@ async def delete_research_question(
     hard_delete: bool = Query(
         False, description='Permanently delete instead of soft delete'
     ),
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
 ) -> None:
     """
     Delete or deactivate a research question.
@@ -699,7 +683,7 @@ async def delete_research_question(
     """
     try:
         service = _get_research_question_service(request)
-        user_id = _get_user_id_from_request(request)
+        user_id = user_context.user_id
 
         # Delete the question (service handles ownership check)
         success = await service.delete_research_question(
@@ -742,6 +726,7 @@ async def delete_research_question(
 async def trigger_discovery_run(
     question_id: UUID,
     request: Request,
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
 ) -> DiscoveryRunResponse:
     """
     Manually trigger a discovery run for a research question.
@@ -762,7 +747,7 @@ async def trigger_discovery_run(
     try:
         service = _get_research_question_service(request)
         orchestrator = _get_discovery_orchestrator(request)
-        user_id = _get_user_id_from_request(request)
+        user_id = user_context.user_id
 
         # Verify ownership
         question = await service.repository.get_by_id(question_id)
@@ -839,6 +824,7 @@ async def get_matched_articles(
     is_bookmarked: bool | None = Query(None, description='Filter by bookmarked status'),
     limit: int = Query(50, ge=1, le=500, description='Maximum number of results'),
     offset: int = Query(0, ge=0, description='Number of records to skip'),
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
 ) -> ArticleMatchList:
     """
     Get all articles that match this research question.
@@ -864,7 +850,7 @@ async def get_matched_articles(
     try:
         service = _get_research_question_service(request)
         match_repo = _get_match_repository(request)
-        user_id = _get_user_id_from_request(request)
+        user_id = user_context.user_id
 
         # Verify ownership
         question = await service.repository.get_by_id(question_id)
@@ -975,6 +961,7 @@ async def get_matched_articles(
 async def get_question_statistics(
     question_id: UUID,
     request: Request,
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
 ) -> StatisticsResponse:
     """
     Get comprehensive statistics for a research question.
@@ -993,7 +980,7 @@ async def get_question_statistics(
     """
     try:
         service = _get_research_question_service(request)
-        user_id = _get_user_id_from_request(request)
+        user_id = user_context.user_id
 
         # Get statistics (service handles ownership check)
         stats = await service.get_question_statistics(
@@ -1049,6 +1036,7 @@ async def update_article_sentiment(
     match_id: UUID,
     request: Request,
     sentiment: str = Body(..., embed=True, pattern='^(like|dislike|skip)$'),
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
 ) -> ArticleMatchResponse:
     """
     Update user sentiment for a matched article.
@@ -1071,7 +1059,7 @@ async def update_article_sentiment(
     try:
         service = _get_research_question_service(request)
         match_repo = _get_match_repository(request)
-        user_id = _get_user_id_from_request(request)
+        user_id = user_context.user_id
 
         # Verify question ownership first
         question = await service.repository.get_by_id(question_id)
@@ -1184,6 +1172,7 @@ async def update_article_status(
     request: Request,
     is_viewed: bool | None = Body(None, embed=True),
     is_bookmarked: bool | None = Body(None, embed=True),
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
 ) -> ArticleMatchResponse:
     """
     Update article view/bookmark status.
@@ -1204,7 +1193,7 @@ async def update_article_status(
     try:
         service = _get_research_question_service(request)
         match_repo = _get_match_repository(request)
-        user_id = _get_user_id_from_request(request)
+        user_id = user_context.user_id
 
         # Verify question ownership
         question = await service.repository.get_by_id(question_id)
@@ -1319,6 +1308,7 @@ async def download_article_pdf(
     match_id: UUID,
     request: Request,
     output_directory: str | None = Body(None, embed=True),  # noqa: ARG001
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
 ) -> dict[str, Any]:
     """
     Download PDF for a matched article.
@@ -1338,7 +1328,7 @@ async def download_article_pdf(
     try:
         service = _get_research_question_service(request)
         match_repo = _get_match_repository(request)
-        user_id = _get_user_id_from_request(request)
+        user_id = user_context.user_id
 
         # Verify question ownership
         question = await service.repository.get_by_id(question_id)

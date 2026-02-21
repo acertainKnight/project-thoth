@@ -2,9 +2,12 @@
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 from pydantic import BaseModel
+
+from thoth.auth.context import UserContext
+from thoth.auth.dependencies import get_user_context
 
 router = APIRouter()
 
@@ -16,6 +19,13 @@ def set_chat_manager(cm):
     """Set the chat manager for this router."""
     global chat_manager
     chat_manager = cm
+
+
+def _assert_session_access(session: Any, user_id: str) -> None:
+    """Ensure the authenticated user owns the chat session."""
+    session_user_id = (session.metadata or {}).get('user_id')
+    if session_user_id != user_id:
+        raise HTTPException(status_code=403, detail='Access denied for this session')
 
 
 # Request/Response Models
@@ -97,15 +107,18 @@ class SearchMessagesResponse(BaseModel):
 
 
 @router.post('/sessions')
-async def create_chat_session(request: CreateSessionRequest) -> CreateSessionResponse:
+async def create_chat_session(
+    request: CreateSessionRequest,
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
+) -> CreateSessionResponse:
     """Create a new chat session."""
     if chat_manager is None:
         raise HTTPException(status_code=503, detail='Chat manager not initialized')
 
     try:
-        session = chat_manager.create_session(
-            title=request.title, metadata=request.metadata
-        )
+        metadata = dict(request.metadata)
+        metadata['user_id'] = user_context.user_id
+        session = chat_manager.create_session(title=request.title, metadata=metadata)
 
         return CreateSessionResponse(
             status='success',
@@ -129,7 +142,9 @@ async def create_chat_session(request: CreateSessionRequest) -> CreateSessionRes
 
 @router.get('/sessions')
 async def list_chat_sessions(
-    active_only: bool = True, limit: int = 50
+    active_only: bool = True,
+    limit: int = 50,
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
 ) -> SessionListResponse:
     """List chat sessions."""
     if chat_manager is None:
@@ -137,6 +152,11 @@ async def list_chat_sessions(
 
     try:
         sessions = chat_manager.list_sessions(active_only=active_only, limit=limit)
+        sessions = [
+            session
+            for session in sessions
+            if (session.metadata or {}).get('user_id') == user_context.user_id
+        ]
 
         session_data = []
         for session in sessions:
@@ -162,7 +182,10 @@ async def list_chat_sessions(
 
 
 @router.get('/sessions/{session_id}')
-async def get_chat_session(session_id: str) -> GetSessionResponse:
+async def get_chat_session(
+    session_id: str,
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
+) -> GetSessionResponse:
     """Get a specific chat session."""
     if chat_manager is None:
         raise HTTPException(status_code=503, detail='Chat manager not initialized')
@@ -171,6 +194,7 @@ async def get_chat_session(session_id: str) -> GetSessionResponse:
         session = chat_manager.get_session(session_id)
         if not session:
             raise HTTPException(status_code=404, detail='Session not found')
+        _assert_session_access(session, user_context.user_id)
 
         return GetSessionResponse(
             status='success',
@@ -196,13 +220,20 @@ async def get_chat_session(session_id: str) -> GetSessionResponse:
 
 @router.put('/sessions/{session_id}')
 async def update_chat_session(
-    session_id: str, request: UpdateSessionRequest
+    session_id: str,
+    request: UpdateSessionRequest,
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
 ) -> UpdateSessionResponse:
     """Update a chat session."""
     if chat_manager is None:
         raise HTTPException(status_code=503, detail='Chat manager not initialized')
 
     try:
+        session = chat_manager.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail='Session not found')
+        _assert_session_access(session, user_context.user_id)
+
         success = chat_manager.update_session(
             session_id=session_id, title=request.title, metadata=request.metadata
         )
@@ -237,12 +268,20 @@ async def update_chat_session(
 
 
 @router.delete('/sessions/{session_id}')
-async def delete_chat_session(session_id: str) -> DeleteSessionResponse:
+async def delete_chat_session(
+    session_id: str,
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
+) -> DeleteSessionResponse:
     """Delete a chat session and all its messages."""
     if chat_manager is None:
         raise HTTPException(status_code=503, detail='Chat manager not initialized')
 
     try:
+        session = chat_manager.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail='Session not found')
+        _assert_session_access(session, user_context.user_id)
+
         success = chat_manager.delete_session(session_id)
 
         if not success:
@@ -261,12 +300,20 @@ async def delete_chat_session(session_id: str) -> DeleteSessionResponse:
 
 
 @router.post('/sessions/{session_id}/archive')
-async def archive_chat_session(session_id: str) -> ArchiveSessionResponse:
+async def archive_chat_session(
+    session_id: str,
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
+) -> ArchiveSessionResponse:
     """Archive a chat session (mark as inactive)."""
     if chat_manager is None:
         raise HTTPException(status_code=503, detail='Chat manager not initialized')
 
     try:
+        session = chat_manager.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail='Session not found')
+        _assert_session_access(session, user_context.user_id)
+
         success = chat_manager.archive_session(session_id)
 
         if not success:
@@ -286,7 +333,10 @@ async def archive_chat_session(session_id: str) -> ArchiveSessionResponse:
 
 @router.get('/sessions/{session_id}/messages')
 async def get_chat_history(
-    session_id: str, limit: int = 100, offset: int = 0
+    session_id: str,
+    limit: int = 100,
+    offset: int = 0,
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
 ) -> MessageHistoryResponse:
     """Get chat history for a session."""
     if chat_manager is None:
@@ -297,6 +347,7 @@ async def get_chat_history(
         session = chat_manager.get_session(session_id)
         if not session:
             raise HTTPException(status_code=404, detail='Session not found')
+        _assert_session_access(session, user_context.user_id)
 
         # Get messages
         messages = chat_manager.get_messages(session_id, limit=limit, offset=offset)
@@ -343,7 +394,10 @@ async def get_chat_history(
 
 @router.get('/search')
 async def search_chat_messages(
-    query: str, session_id: str | None = None, limit: int = 50
+    query: str,
+    session_id: str | None = None,
+    limit: int = 50,
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
 ) -> SearchMessagesResponse:
     """Search chat messages across sessions."""
     if chat_manager is None:
@@ -353,6 +407,17 @@ async def search_chat_messages(
         messages = chat_manager.search_messages(
             query=query, session_id=session_id, limit=limit
         )
+        messages = [
+            msg
+            for msg in messages
+            if (
+                chat_manager.get_session(msg.session_id)
+                and (chat_manager.get_session(msg.session_id).metadata or {}).get(
+                    'user_id'
+                )
+                == user_context.user_id
+            )
+        ]
 
         # Format messages with session info
         formatted_messages = []
