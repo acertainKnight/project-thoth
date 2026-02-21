@@ -14,7 +14,6 @@ from loguru import logger
 
 from thoth.analyze.citations.enhancer import CitationEnhancer
 from thoth.analyze.citations.extractor import ReferenceExtractor
-from thoth.mcp.auth import get_current_user_paths
 from thoth.services.pdf_locator_service import PdfLocatorService
 from thoth.utilities.schemas import (
     Citation,
@@ -58,6 +57,10 @@ class CitationProcessor:
 
         # Set up prompts directory based on model provider
         if prompts_dir is None:
+            from thoth.mcp.auth import (
+                get_current_user_paths,
+            )  # local import to avoid cycles
+
             user_paths = get_current_user_paths()
             prompts_dir = (
                 user_paths.prompts_dir

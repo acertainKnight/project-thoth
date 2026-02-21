@@ -24,7 +24,6 @@ from thoth.discovery.plugins import plugin_registry
 from thoth.discovery.emulator_scraper import EmulatorScraper
 from thoth.discovery.web_scraper import WebScraper
 from thoth.config import config
-from thoth.mcp.auth import get_current_user_paths
 from thoth.utilities.schemas import (
     DiscoveryResult,
     DiscoverySource,
@@ -64,6 +63,10 @@ class DiscoveryManager:
         """
         self.config = config
         self.source_repo = source_repo
+        from thoth.mcp.auth import (
+            get_current_user_paths,  # local import to avoid cycles
+        )
+
         user_paths = get_current_user_paths()
 
         # Set up sources configuration directory
