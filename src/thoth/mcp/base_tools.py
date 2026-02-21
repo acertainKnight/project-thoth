@@ -10,6 +10,7 @@ from typing import Any
 
 from loguru import logger
 
+from thoth.mcp.auth import reset_current_mcp_user_id, set_current_mcp_user_id
 from thoth.services.service_manager import ServiceManager
 
 from .protocol import MCPToolCallResult, MCPToolSchema
@@ -335,6 +336,7 @@ class MCPToolRegistry:
         # Coerce arguments to match schema types (LLM agents often send strings)
         coerced_arguments = self._coerce_arguments(tool.input_schema, arguments)
 
+        context_token = set_current_mcp_user_id(coerced_arguments.get('user_id'))
         try:
             logger.debug(f"Executing tool '{name}' with arguments: {coerced_arguments}")
             result = await tool.execute(coerced_arguments)
@@ -343,6 +345,8 @@ class MCPToolRegistry:
         except Exception as e:
             logger.exception("Tool execution failed for '%s': %s", name, e)
             return tool.handle_error(e)
+        finally:
+            reset_current_mcp_user_id(context_token)
 
     def _coerce_arguments(
         self, schema: dict[str, Any], arguments: dict[str, Any]

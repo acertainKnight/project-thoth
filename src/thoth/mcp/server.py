@@ -12,6 +12,7 @@ from loguru import logger
 
 from thoth.services.service_manager import ServiceManager
 
+from .auth import resolve_mcp_user_id
 from .protocol import (
     JSONRPCNotification,
     JSONRPCRequest,
@@ -98,7 +99,7 @@ class MCPServer:
     def add_sse_transport(
         self, host: str = 'localhost', port: int = 8001, auth_token: str | None = None
     ) -> None:
-        """Add SSE transport for streaming (primary transport) with optional Bearer token auth."""
+        """Add SSE transport with optional Bearer token auth."""
         transport = SSETransport(self.protocol_handler, host, port, auth_token)
         self.transport_manager.add_transport('sse', transport)
 
@@ -238,9 +239,16 @@ class MCPServer:
         """Handle tools/call request."""
         try:
             tool_params = self.protocol_handler.validate_tool_call_params(params)
-            result = await self.tool_registry.execute_tool(
-                tool_params.name, tool_params.arguments
-            )
+            arguments = dict(tool_params.arguments or {})
+
+            # Auto-inject user_id for tenant-scoped tools when omitted by caller.
+            if 'user_id' not in arguments:
+                arguments['user_id'] = await resolve_mcp_user_id(
+                    arguments=arguments,
+                    service_manager=self.service_manager,
+                )
+
+            result = await self.tool_registry.execute_tool(tool_params.name, arguments)
             return self.protocol_handler.create_response(
                 request_id, result.model_dump()
             )

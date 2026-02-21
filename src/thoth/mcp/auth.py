@@ -16,8 +16,27 @@ The agent_id can be used to look up the user if needed for stricter validation.
 from __future__ import annotations
 
 import os
+from contextvars import ContextVar, Token
+from typing import TYPE_CHECKING
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from thoth.services.service_manager import ServiceManager
+
+_CURRENT_MCP_USER_ID: ContextVar[str | None] = ContextVar(
+    'current_mcp_user_id', default=None
+)
+
+
+def set_current_mcp_user_id(user_id: str | None) -> Token:
+    """Set the MCP user_id for the current async context."""
+    return _CURRENT_MCP_USER_ID.set(user_id)
+
+
+def reset_current_mcp_user_id(token: Token) -> None:
+    """Reset MCP user_id context using a previous token."""
+    _CURRENT_MCP_USER_ID.reset(token)
 
 
 def get_mcp_user_id(explicit_user_id: str | None = None) -> str:
@@ -46,6 +65,10 @@ def get_mcp_user_id(explicit_user_id: str | None = None) -> str:
     if explicit_user_id:
         return explicit_user_id
 
+    context_user_id = _CURRENT_MCP_USER_ID.get()
+    if context_user_id:
+        return context_user_id
+
     env_user_id = os.getenv('THOTH_MCP_USER_ID')
     if env_user_id:
         logger.debug(f'MCP tool using user_id from THOTH_MCP_USER_ID: {env_user_id}')
@@ -62,3 +85,44 @@ def is_multi_user_mode() -> bool:
         True if THOTH_MULTI_USER=true
     """
     return os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true'
+
+
+async def resolve_mcp_user_id(
+    *,
+    explicit_user_id: str | None = None,
+    arguments: dict[str, object] | None = None,
+    service_manager: ServiceManager | None = None,
+) -> str:
+    """Resolve MCP user_id, including optional agent_id -> user lookup."""
+    if explicit_user_id:
+        return explicit_user_id
+
+    args = arguments or {}
+    agent_id = (
+        args.get('agent_id')
+        or args.get('letta_agent_id')
+        or args.get('caller_agent_id')
+    )
+
+    if (
+        is_multi_user_mode()
+        and isinstance(agent_id, str)
+        and agent_id
+        and service_manager is not None
+    ):
+        try:
+            row = await service_manager.auth.postgres.fetchrow(
+                """
+                SELECT id
+                FROM users
+                WHERE orchestrator_agent_id = $1 OR analyst_agent_id = $1
+                LIMIT 1
+                """,
+                agent_id,
+            )
+            if row:
+                return str(row['id'])
+        except Exception as e:
+            logger.warning(f'Failed to resolve MCP user from agent_id {agent_id}: {e}')
+
+    return get_mcp_user_id()

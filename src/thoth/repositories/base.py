@@ -83,12 +83,14 @@ class BaseRepository(Generic[T]):
         multi_user = os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true'
 
         if multi_user and user_id is None:
+            from thoth.mcp.auth import get_mcp_user_id
+
+            resolved_user_id = get_mcp_user_id()
             logger.warning(
                 f'{operation} on {self.table_name} called without user_id in multi-user mode. '
-                f'This may indicate a data leak. Returning empty results.'
+                f'Using resolved fallback user_id={resolved_user_id}.'
             )
-            # Return a sentinel value that won't match any real user's data
-            return 'default_user'
+            return resolved_user_id
 
         return user_id
 
