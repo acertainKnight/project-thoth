@@ -1,4 +1,5 @@
 import { App, TFile, Vault, Platform } from 'obsidian';
+import { APIUtilities } from '../utils/api';
 
 // Mobile-compatible path utilities
 const PathUtil = {
@@ -91,7 +92,7 @@ export class VaultDetector implements IVaultDetector {
    */
   async notifyBackendOfVaultPath(): Promise<void> {
     try {
-      const response = await fetch(`${this.baseUrl}/config/vault-path`, {
+      const response = await fetch(`${this.baseUrl}/config/vault-path`, APIUtilities.withAuthHeaders({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -99,7 +100,7 @@ export class VaultDetector implements IVaultDetector {
           settings_file_path: this.getSettingsFilePath(),
           timestamp: Date.now()
         })
-      });
+      }));
 
       if (!response.ok) {
         console.warn(`Failed to notify backend of vault path: ${response.statusText}`);

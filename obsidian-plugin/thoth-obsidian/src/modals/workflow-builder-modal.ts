@@ -224,7 +224,7 @@ export class WorkflowBuilderModal extends Modal {
 
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/api/workflows/analyze`, {
+      const response = await this.plugin.authFetch(`${endpoint}/api/workflows/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: this.url })
@@ -384,7 +384,7 @@ export class WorkflowBuilderModal extends Modal {
 
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/api/workflows/refine`, {
+      const response = await this.plugin.authFetch(`${endpoint}/api/workflows/refine`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -449,7 +449,7 @@ export class WorkflowBuilderModal extends Modal {
 
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/api/workflows/confirm`, {
+      const response = await this.plugin.authFetch(`${endpoint}/api/workflows/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

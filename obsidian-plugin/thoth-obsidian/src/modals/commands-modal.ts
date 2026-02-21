@@ -269,7 +269,7 @@ export class CommandsModal extends Modal {
   async runHealthCheck() {
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/health`);
+      const response = await this.plugin.authFetch(`${endpoint}/health`);
 
       if (response.ok) {
         const data = await response.json();
@@ -285,7 +285,7 @@ export class CommandsModal extends Modal {
   async runDiscoveryCommand(command: string) {
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/execute/command`, {
+      const response = await this.plugin.authFetch(`${endpoint}/execute/command`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -308,7 +308,7 @@ export class CommandsModal extends Modal {
   async runDataCommand(command: string) {
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/execute/command`, {
+      const response = await this.plugin.authFetch(`${endpoint}/execute/command`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -331,7 +331,7 @@ export class CommandsModal extends Modal {
   async runSystemCommand(command: string) {
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/execute/command`, {
+      const response = await this.plugin.authFetch(`${endpoint}/execute/command`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -197,7 +197,7 @@ export class MultiChatModal extends Modal {
       console.log(`[MultiChatModal] Fetching: ${url}`);
       const startTime = Date.now();
 
-      const response = await fetch(url, {
+      const response = await this.plugin.authFetch(url, {
         ...options,
         signal: controller.signal
       });
@@ -338,7 +338,7 @@ export class MultiChatModal extends Modal {
     formData.append('file', file);
 
     const endpoint = this.plugin.settings.remoteEndpointUrl || 'http://localhost:8000';
-    const response = await fetch(`${endpoint}/api/files/extract`, {
+    const response = await this.plugin.authFetch(`${endpoint}/api/files/extract`, {
       method: 'POST',
       body: formData
     });
@@ -1186,7 +1186,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       // Note: Letta API requires trailing slash on collection endpoints
       // Use view=basic to avoid fetching full memory blocks (reduces response from 30MB to ~100KB)
       const endpoint = this.plugin.getLettaEndpointUrl();
-      const response = await fetch(`${endpoint}/v1/agents/?view=basic`);
+      const response = await this.plugin.authFetch(`${endpoint}/v1/agents/?view=basic`);
 
       loadingEl.remove();
 
@@ -1304,7 +1304,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       try {
         const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat
         // Note: NO trailing slash for DELETE - Letta API returns 405 with trailing slash
-        const response = await fetch(`${endpoint}/v1/conversations/${sessionId}`, {
+        const response = await this.plugin.authFetch(`${endpoint}/v1/conversations/${sessionId}`, {
           method: 'DELETE'
         });
 
@@ -2341,7 +2341,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       const agentId = await this.getOrCreateDefaultAgent();
 
       // Note: Letta API expects agent_id as query param, with trailing slash to avoid nginx redirect
-      const response = await fetch(`${endpoint}/v1/conversations/?agent_id=${agentId}`, {
+      const response = await this.plugin.authFetch(`${endpoint}/v1/conversations/?agent_id=${agentId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
@@ -2419,7 +2419,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         url += `&before=${oldestId}`;
       }
 
-      const response = await fetch(url);
+      const response = await this.plugin.authFetch(url);
 
       if (response.ok) {
         const newMessages = await response.json();
@@ -2789,7 +2789,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
         // Send to Letta conversation with streaming enabled
         const endpoint = this.plugin.getLettaEndpointUrl();
-        const response = await fetch(`${endpoint}/v1/conversations/${sessionId}/messages`, {
+        const response = await this.plugin.authFetch(`${endpoint}/v1/conversations/${sessionId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3209,7 +3209,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
               const followUpInput =
                 `${SKILL_ACTIVATION_PREFIX} Tools ready. Continue with my request: ${truncatedRequest}`;
 
-              const followUpResponse = await fetch(`${endpoint}/v1/conversations/${sessionId}/messages`, {
+              const followUpResponse = await this.plugin.authFetch(`${endpoint}/v1/conversations/${sessionId}/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -3832,7 +3832,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     try {
       const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat
       // Note: NO trailing slash for PATCH - Letta API may have issues with trailing slashes
-      const response = await fetch(`${endpoint}/v1/conversations/${sessionId}`, {
+      const response = await this.plugin.authFetch(`${endpoint}/v1/conversations/${sessionId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ summary: newTitle })
@@ -3916,7 +3916,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     try {
       const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat
       // Note: NO trailing slash for DELETE - Letta API returns 405 with trailing slash
-      const response = await fetch(`${endpoint}/v1/conversations/${sessionId}`, {
+      const response = await this.plugin.authFetch(`${endpoint}/v1/conversations/${sessionId}`, {
         method: 'DELETE'
       });
 
@@ -4111,7 +4111,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
   async runHealthCheck() {
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/health`);
+      const response = await this.plugin.authFetch(`${endpoint}/health`);
 
       if (response.ok) {
         const data = await response.json();
@@ -4127,7 +4127,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
   async runDiscoveryCommand(command: string) {
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/execute/command`, {
+      const response = await this.plugin.authFetch(`${endpoint}/execute/command`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -4150,7 +4150,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
   async runDataCommand(command: string) {
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/execute/command`, {
+      const response = await this.plugin.authFetch(`${endpoint}/execute/command`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -4173,7 +4173,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
   async runSystemCommand(command: string) {
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/execute/command`, {
+      const response = await this.plugin.authFetch(`${endpoint}/execute/command`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -4663,7 +4663,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     try {
       const endpoint = this.plugin.getLettaEndpointUrl();
       // Sync to Letta API - NO trailing slash for PATCH
-      const response = await fetch(`${endpoint}/v1/conversations/${session.id}`, {
+      const response = await this.plugin.authFetch(`${endpoint}/v1/conversations/${session.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ summary: newTitle })

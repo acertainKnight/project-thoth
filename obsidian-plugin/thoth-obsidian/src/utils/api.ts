@@ -22,6 +22,27 @@ export class APIUtilities {
     return { Authorization: `Bearer ${apiToken}` };
   }
 
+  static setCurrentApiToken(apiToken: string): void {
+    (globalThis as Record<string, unknown>).__thothApiToken = apiToken;
+  }
+
+  static getCurrentApiToken(): string {
+    const token = (globalThis as Record<string, unknown>).__thothApiToken;
+    return typeof token === 'string' ? token : '';
+  }
+
+  static withAuthHeaders(options: RequestInit = {}, apiToken?: string): RequestInit {
+    const token = apiToken ?? APIUtilities.getCurrentApiToken();
+    const authHeaders = APIUtilities.buildAuthHeaders(token);
+    return {
+      ...options,
+      headers: {
+        ...(options.headers as Record<string, string> | undefined),
+        ...authHeaders,
+      },
+    };
+  }
+
   /**
    * Resolve the current user's Letta agent IDs via GET /auth/me.
    *
@@ -140,7 +161,7 @@ export class APIUtilities {
     }
 
     return this.queueRequest(async () => {
-      const response = await fetch(url, options);
+      const response = await fetch(url, APIUtilities.withAuthHeaders(options));
 
       if (response.ok && options.method === 'GET') {
         const data = await response.clone().json();
@@ -191,10 +212,10 @@ export class APIUtilities {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-      const response = await fetch(healthUrl, {
+      const response = await fetch(healthUrl, APIUtilities.withAuthHeaders({
         method: 'GET',
         signal: controller.signal
-      });
+      }));
 
       clearTimeout(timeoutId);
       return response.ok;

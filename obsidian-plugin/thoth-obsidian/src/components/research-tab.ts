@@ -103,7 +103,7 @@ export class ResearchTabComponent {
       const endpoint = this.plugin.getEndpointUrl();
       console.log('[ResearchTab] Loading research questions from:', `${endpoint}/api/research/questions`);
 
-      const response = await fetch(`${endpoint}/api/research/questions?limit=50&active_only=true`);
+      const response = await this.plugin.authFetch(`${endpoint}/api/research/questions?limit=50&active_only=true`);
       console.log('[ResearchTab] Response status:', response.status);
 
       if (response.ok) {
@@ -374,7 +374,7 @@ export class ResearchTabComponent {
       const endpoint = this.plugin.getEndpointUrl();
       console.log('[ResearchTab] Loading articles for question:', questionId);
 
-      const response = await fetch(
+      const response = await this.plugin.authFetch(
         `${endpoint}/api/research/questions/${questionId}/articles?limit=50`
       );
       console.log('[ResearchTab] Articles response status:', response.status);
@@ -424,7 +424,7 @@ export class ResearchTabComponent {
         articleTitle: article.title
       });
 
-      const response = await fetch(
+      const response = await this.plugin.authFetch(
         `${endpoint}/api/research/questions/${questionId}/articles/${matchId}/sentiment`,
         {
           method: 'PATCH',
@@ -467,7 +467,7 @@ export class ResearchTabComponent {
       const endpoint = this.plugin.getEndpointUrl();
       const newValue = !article.is_viewed;
 
-      const response = await fetch(
+      const response = await this.plugin.authFetch(
         `${endpoint}/api/research/questions/${this.selectedQuestion!.id}/articles/${article.match_id}/status`,
         {
           method: 'PATCH',
@@ -493,7 +493,7 @@ export class ResearchTabComponent {
       const endpoint = this.plugin.getEndpointUrl();
       const newValue = !article.is_bookmarked;
 
-      const response = await fetch(
+      const response = await this.plugin.authFetch(
         `${endpoint}/api/research/questions/${this.selectedQuestion!.id}/articles/${article.match_id}/status`,
         {
           method: 'PATCH',
@@ -523,7 +523,7 @@ export class ResearchTabComponent {
       }
 
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(
+      const response = await this.plugin.authFetch(
         `${endpoint}/api/research/questions/${this.selectedQuestion!.id}/articles/${article.match_id}/download`,
         {
           method: 'POST',
@@ -565,7 +565,7 @@ export class ResearchTabComponent {
 
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(
+      const response = await this.plugin.authFetch(
         `${endpoint}/api/research/questions/${this.selectedQuestion.id}/articles/${article.match_id}/sentiment`,
         {
           method: 'PATCH',
@@ -616,7 +616,7 @@ export class ResearchTabComponent {
   private async runDiscovery(questionId: string) {
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(
+      const response = await this.plugin.authFetch(
         `${endpoint}/api/research/questions/${questionId}/run`,
         { method: 'POST' }
       );
@@ -649,7 +649,7 @@ export class ResearchTabComponent {
 
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      const response = await fetch(`${endpoint}/api/research/questions`, {
+      const response = await this.plugin.authFetch(`${endpoint}/api/research/questions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -740,7 +740,7 @@ export class ResearchTabComponent {
 
     try {
       const endpoint = (this.plugin as any).getEndpointUrl();
-      const response = await fetch(`${endpoint}/api/workflows`);
+      const response = await this.plugin.authFetch(`${endpoint}/api/workflows`);
 
       if (response.ok) {
         const workflows = await response.json();
@@ -796,7 +796,7 @@ export class ResearchTabComponent {
     runBtn.onclick = async () => {
       try {
         const endpoint = (this.plugin as any).getEndpointUrl();
-        await fetch(`${endpoint}/api/workflows/${workflow.id}/execute`, {
+        await this.plugin.authFetch(`${endpoint}/api/workflows/${workflow.id}/execute`, {
           method: 'POST'
         });
         new Notice(`Executing workflow: ${workflow.name}`);

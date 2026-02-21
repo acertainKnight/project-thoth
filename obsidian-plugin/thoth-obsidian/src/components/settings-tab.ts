@@ -140,7 +140,7 @@ export class SettingsTabComponent {
         verifyStatus.style.color = 'var(--text-muted)';
 
         try {
-          const response = await fetch(`${thothUrl}/auth/me`, {
+          const response = await this.plugin.authFetch(`${thothUrl}/auth/me`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (response.ok) {
@@ -287,7 +287,7 @@ export class SettingsTabComponent {
 
     Promise.all([
       // Fetch models from Letta
-      fetch(`${this.settings.lettaEndpointUrl}/v1/models/`)
+      this.plugin.authFetch(`${this.settings.lettaEndpointUrl}/v1/models/`)
         .then((res) => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();
