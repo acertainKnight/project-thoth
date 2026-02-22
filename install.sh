@@ -6,9 +6,11 @@ set -e
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/acertainKnight/project-thoth/<branch>/install.sh | bash -s -- --branch <branch>
 #
 # Options (pass after `bash -s --`):
 #   --version <ver>   Install a specific version (e.g., 0.3.0, 0.3.0-alpha.2)
+#   --branch <name>   Install from a specific branch (e.g., multi-user)
 #   --alpha           Install the latest alpha/pre-release
 #   --nightly         Install the latest nightly build (from main)
 #   --list            List available releases and exit
@@ -28,6 +30,7 @@ NC='\033[0m' # No Color
 GITHUB_REPO="acertainKnight/project-thoth"
 INSTALL_CHANNEL="stable"
 INSTALL_VERSION=""
+INSTALL_BRANCH=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -35,6 +38,11 @@ while [[ $# -gt 0 ]]; do
         --version)
             INSTALL_VERSION="$2"
             INSTALL_CHANNEL="specific"
+            shift 2
+            ;;
+        --branch)
+            INSTALL_BRANCH="$2"
+            INSTALL_CHANNEL="branch"
             shift 2
             ;;
         --alpha)
@@ -183,12 +191,14 @@ case "$1" in
         cd "$PROJECT_ROOT"
         CHANNEL="stable"
         NEW_TAG=""
+        UPDATE_BRANCH=""
         shift
         while [[ $# -gt 0 ]]; do
             case "$1" in
                 --nightly)  CHANNEL="nightly"; NEW_TAG="nightly"; shift ;;
                 --alpha)    CHANNEL="alpha"; NEW_TAG="alpha"; shift ;;
                 --version)  CHANNEL="specific"; NEW_TAG="${2#v}"; shift 2 ;;
+                --branch)   CHANNEL="branch"; UPDATE_BRANCH="$2"; NEW_TAG="latest"; shift 2 ;;
                 --stable)   CHANNEL="stable"; NEW_TAG="latest"; shift ;;
                 *)          shift ;;
             esac
@@ -201,6 +211,13 @@ case "$1" in
         echo "⬆️  Updating Thoth (${CHANNEL}: ${NEW_TAG})..."
 
         case "$CHANNEL" in
+            branch)
+                git fetch origin "$UPDATE_BRANCH"
+                git checkout "$UPDATE_BRANCH" 2>/dev/null || git checkout -b "$UPDATE_BRANCH" "origin/$UPDATE_BRANCH" 2>/dev/null || {
+                    echo "❌ Branch ${UPDATE_BRANCH} not found"; exit 1
+                }
+                git pull origin "$UPDATE_BRANCH"
+                ;;
             nightly)
                 git fetch origin main
                 git checkout main 2>/dev/null || true
@@ -284,6 +301,7 @@ case "$1" in
             echo "  thoth update --nightly    Switch to nightly builds"
             echo "  thoth update --alpha      Switch to latest alpha"
             echo "  thoth update --version X  Switch to specific version"
+            echo "  thoth update --branch X   Switch to a specific branch"
             echo "  thoth update --stable     Switch back to stable"
             echo ""
             echo "Run 'thoth setup' to configure Thoth"
@@ -392,6 +410,13 @@ resolve_version() {
             fi
             ;;
 
+        branch)
+            echo -e "${BLUE}Using branch: ${INSTALL_BRANCH}${NC}"
+            RESOLVED_TAG=""
+            RESOLVED_REF="$INSTALL_BRANCH"
+            echo -e "${GREEN}Channel: branch (${INSTALL_BRANCH})${NC}"
+            ;;
+
         nightly)
             echo -e "${BLUE}Using nightly build (latest main)...${NC}"
             RESOLVED_TAG="nightly"
@@ -434,6 +459,7 @@ get_dev_image_tag() {
     case "$INSTALL_CHANNEL" in
         nightly)   echo "nightly" ;;
         alpha)     echo "alpha" ;;
+        branch)    echo "latest" ;;
         specific)
             local tag="${RESOLVED_TAG#v}"
             echo "$tag"
@@ -494,14 +520,20 @@ echo -e "${YELLOW}Installing via Docker...${NC}\n"
             echo -e "${YELLOW}Directory $CLONE_DIR already exists. Updating...${NC}"
             cd "$CLONE_DIR"
             git fetch --all --tags 2>/dev/null || true
-            if [ -n "$RESOLVED_REF" ] && [ "$RESOLVED_REF" != "main" ]; then
+            if [ "$INSTALL_CHANNEL" = "branch" ]; then
+                git checkout "$RESOLVED_REF" 2>/dev/null || git checkout -b "$RESOLVED_REF" "origin/$RESOLVED_REF" 2>/dev/null \
+                    || echo -e "${YELLOW}Could not checkout branch ${RESOLVED_REF}${NC}"
+                git pull origin "$RESOLVED_REF" 2>/dev/null || true
+            elif [ -n "$RESOLVED_REF" ] && [ "$RESOLVED_REF" != "main" ]; then
                 git checkout "$RESOLVED_REF" 2>/dev/null || echo -e "${YELLOW}Could not checkout ${RESOLVED_REF}${NC}"
             else
                 git pull origin main 2>/dev/null || true
             fi
         else
             echo "Cloning Thoth repository..."
-            if [ -n "$RESOLVED_REF" ] && [ "$RESOLVED_REF" != "main" ]; then
+            if [ "$INSTALL_CHANNEL" = "branch" ]; then
+                git clone --branch "$RESOLVED_REF" https://github.com/${GITHUB_REPO}.git "$CLONE_DIR"
+            elif [ -n "$RESOLVED_REF" ] && [ "$RESOLVED_REF" != "main" ]; then
                 git clone --branch "$RESOLVED_REF" https://github.com/${GITHUB_REPO}.git "$CLONE_DIR" 2>/dev/null \
                     || git clone https://github.com/${GITHUB_REPO}.git "$CLONE_DIR"
             else
