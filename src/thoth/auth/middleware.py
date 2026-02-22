@@ -125,6 +125,10 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
         Returns:
             Response from downstream handlers
         """
+        # Always allow CORS preflight through (no auth header on OPTIONS)
+        if request.method == 'OPTIONS':
+            return await call_next(request)
+
         if self._multi_user_override is not None:
             multi_user = self._multi_user_override
         else:

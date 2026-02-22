@@ -13,8 +13,6 @@ from typing import TYPE_CHECKING, Any
 import networkx as nx
 from loguru import logger
 
-from thoth.mcp.auth import get_mcp_user_id
-
 if TYPE_CHECKING:
     from thoth.config import Config
     from thoth.services.service_manager import ServiceManager
@@ -212,6 +210,8 @@ class CitationGraph:
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
         async def load():
+            from thoth.mcp.auth import get_mcp_user_id
+
             user_id = get_mcp_user_id()
             conn = await asyncpg.connect(db_url)
             try:
@@ -697,6 +697,8 @@ class CitationGraph:
             return
 
         async def save():
+            from thoth.mcp.auth import get_mcp_user_id
+
             user_id = get_mcp_user_id()
             conn = await asyncpg.connect(db_url)
             try:
