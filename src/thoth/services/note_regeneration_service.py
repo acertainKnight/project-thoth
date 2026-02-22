@@ -43,6 +43,7 @@ class NoteRegenerationService:
         if not paper_id and not title:
             raise ValueError('Either paper_id or title must be provided')
 
+        user_id = get_mcp_user_id()
         conn = await asyncpg.connect(self.db_url)
         try:
             if paper_id:
@@ -50,18 +51,18 @@ class NoteRegenerationService:
                     SELECT id, title, doi, arxiv_id, authors, abstract, year, venue,
                            pdf_path, note_path, markdown_content, analysis_data, llm_model
                     FROM papers
-                    WHERE id = $1
+                    WHERE id = $1 AND user_id = $2
                 """
-                row = await conn.fetchrow(query, paper_id)
+                row = await conn.fetchrow(query, paper_id, user_id)
             else:
                 query = """
                     SELECT id, title, doi, arxiv_id, authors, abstract, year, venue,
                            pdf_path, note_path, markdown_content, analysis_data, llm_model
                     FROM papers
-                    WHERE title = $1
+                    WHERE title = $1 AND user_id = $2
                     LIMIT 1
                 """
-                row = await conn.fetchrow(query, title)
+                row = await conn.fetchrow(query, title, user_id)
 
             if not row:
                 logger.warning(f'Paper not found: paper_id={paper_id}, title={title}')
@@ -259,18 +260,20 @@ class NoteRegenerationService:
         Returns:
             Dictionary with counts of success, skipped, and failed
         """
+        user_id = get_mcp_user_id()
         conn = await asyncpg.connect(self.db_url)
         try:
             query = """
                 SELECT id, title
                 FROM papers
                 WHERE analysis_data IS NOT NULL
+                    AND user_id = $1
                 ORDER BY created_at DESC
             """
             if limit:
                 query += f' LIMIT {limit}'
 
-            rows = await conn.fetch(query)
+            rows = await conn.fetch(query, user_id)
 
             logger.info(f'Found {len(rows)} papers with analysis data')
 

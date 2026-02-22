@@ -48,6 +48,10 @@ class ProjectOrganizer:
         """
         logger.info('Analyzing uncategorized papers...')
 
+        from thoth.mcp.auth import get_mcp_user_id
+
+        user_id = get_mcp_user_id()
+
         # Query papers without collection_id that have actual files on disk
         async with self.db.acquire() as conn:
             rows = await conn.fetch(
@@ -65,8 +69,10 @@ class ProjectOrganizer:
                 INNER JOIN processed_papers pp ON pm.id = pp.paper_id
                 WHERE pm.collection_id IS NULL
                 AND pm.document_category = 'research_paper'
+                AND pm.user_id = $1
                 ORDER BY pm.created_at DESC
-                """
+                """,
+                user_id,
             )
 
         logger.info(f'Query returned {len(rows)} rows')

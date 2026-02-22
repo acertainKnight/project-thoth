@@ -157,7 +157,12 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to get credentials for workflow {workflow_id}: {e}')
             return None
 
-    async def update(self, workflow_id: UUID, credentials: dict[str, str]) -> bool:
+    async def update(
+        self,
+        workflow_id: UUID,
+        credentials: dict[str, str],
+        user_id: str | None = None,
+    ) -> bool:
         """
         Update encrypted credentials for a workflow.
 
@@ -169,18 +174,28 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
             bool: True if successful, False otherwise
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'update')
             # Encrypt all credential values
             encrypted_credentials = {
                 key: self._encrypt(value) for key, value in credentials.items()
             }
 
-            query = """
-                UPDATE workflow_credentials
-                SET encrypted_data = $1
-                WHERE workflow_id = $2
-            """
-
-            await self.postgres.execute(query, encrypted_credentials, workflow_id)
+            if user_id is not None:
+                query = """
+                    UPDATE workflow_credentials
+                    SET encrypted_data = $1
+                    WHERE workflow_id = $2 AND user_id = $3
+                """
+                await self.postgres.execute(
+                    query, encrypted_credentials, workflow_id, user_id
+                )
+            else:
+                query = """
+                    UPDATE workflow_credentials
+                    SET encrypted_data = $1
+                    WHERE workflow_id = $2
+                """
+                await self.postgres.execute(query, encrypted_credentials, workflow_id)
 
             self._invalidate_cache(str(workflow_id))
 
@@ -193,7 +208,7 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
             )
             return False
 
-    async def delete(self, workflow_id: UUID) -> bool:
+    async def delete(self, workflow_id: UUID, user_id: str | None = None) -> bool:
         """
         Delete credentials for a workflow.
 
@@ -204,8 +219,16 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
             bool: True if successful, False otherwise
         """
         try:
-            query = 'DELETE FROM workflow_credentials WHERE workflow_id = $1'
-            await self.postgres.execute(query, workflow_id)
+            user_id = self._resolve_user_id(user_id, 'delete')
+            if user_id is not None:
+                query = (
+                    'DELETE FROM workflow_credentials '
+                    'WHERE workflow_id = $1 AND user_id = $2'
+                )
+                await self.postgres.execute(query, workflow_id, user_id)
+            else:
+                query = 'DELETE FROM workflow_credentials WHERE workflow_id = $1'
+                await self.postgres.execute(query, workflow_id)
 
             self._invalidate_cache(str(workflow_id))
 
@@ -218,7 +241,7 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
             )
             return False
 
-    async def exists(self, workflow_id: UUID) -> bool:
+    async def exists(self, workflow_id: UUID, user_id: str | None = None) -> bool:
         """
         Check if credentials exist for a workflow.
 
@@ -229,8 +252,21 @@ class WorkflowCredentialsRepository(BaseRepository[dict[str, Any]]):
             bool: True if credentials exist, False otherwise
         """
         try:
-            query = 'SELECT EXISTS(SELECT 1 FROM workflow_credentials WHERE workflow_id = $1)'
-            return await self.postgres.fetchval(query, workflow_id) or False
+            user_id = self._resolve_user_id(user_id, 'exists')
+            if user_id is not None:
+                query = (
+                    'SELECT EXISTS(SELECT 1 FROM workflow_credentials '
+                    'WHERE workflow_id = $1 AND user_id = $2)'
+                )
+                return (
+                    await self.postgres.fetchval(query, workflow_id, user_id) or False
+                )
+            else:
+                query = (
+                    'SELECT EXISTS(SELECT 1 FROM workflow_credentials '
+                    'WHERE workflow_id = $1)'
+                )
+                return await self.postgres.fetchval(query, workflow_id) or False
 
         except Exception as e:
             logger.error(

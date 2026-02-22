@@ -672,6 +672,9 @@ class RAGService(BaseService):
                 )
 
             async def fetch_papers():
+                from thoth.mcp.auth import get_mcp_user_id
+
+                user_id = get_mcp_user_id()
                 conn = await asyncpg.connect(db_url)
                 try:
                     query = """
@@ -680,6 +683,7 @@ class RAGService(BaseService):
                         JOIN processed_papers pp ON pp.paper_id = pm.id
                         WHERE pp.markdown_content IS NOT NULL
                           AND pp.markdown_content != ''
+                          AND pm.user_id = $1
                     """
                     if not force:
                         query += """
@@ -692,7 +696,7 @@ class RAGService(BaseService):
                     query += ' ORDER BY pm.created_at DESC'
                     if limit:
                         query += f' LIMIT {limit}'
-                    rows = await conn.fetch(query)
+                    rows = await conn.fetch(query, user_id)
                     return rows
                 finally:
                     await conn.close()

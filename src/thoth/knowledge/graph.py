@@ -212,17 +212,21 @@ class CitationGraph:
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
         async def load():
+            user_id = get_mcp_user_id()
             conn = await asyncpg.connect(db_url)
             try:
                 # Load papers (nodes)
-                papers = await conn.fetch('SELECT * FROM papers')
+                papers = await conn.fetch(
+                    'SELECT * FROM papers WHERE user_id = $1', user_id
+                )
                 for paper in papers:
                     self.graph.add_node(
                         paper['doi'] or f'title:{paper["title"]}', **dict(paper)
                     )
 
                 # Load citations (edges)
-                citations = await conn.fetch("""
+                citations = await conn.fetch(
+                    """
                     SELECT
                         p1.doi as source_doi,
                         p1.title as source_title,
@@ -232,7 +236,10 @@ class CitationGraph:
                     FROM citations c
                     JOIN papers p1 ON c.citing_paper_id = p1.id
                     JOIN papers p2 ON c.cited_paper_id = p2.id
-                """)
+                    WHERE p1.user_id = $1
+                """,
+                    user_id,
+                )
                 for citation in citations:
                     # Use DOI if available, otherwise fall back to title-based ID
                     source_node = (

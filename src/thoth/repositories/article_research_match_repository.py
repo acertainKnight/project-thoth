@@ -527,17 +527,21 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to set sentiment for match {match_id}: {e}')
             return False
 
-    async def get_sentiment_summary(self, question_id: UUID) -> dict[str, int]:
+    async def get_sentiment_summary(
+        self, question_id: UUID, user_id: str | None = None
+    ) -> dict[str, int]:
         """
         Get sentiment summary counts for a research question.
 
         Args:
             question_id: Research question UUID
+            user_id: Optional user filter
 
         Returns:
             dict[str, int]: Counts for liked, disliked, skipped, and pending
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'get_sentiment_summary')
             query = """
                 SELECT
                     COUNT(*) FILTER (WHERE user_sentiment = 'like') as liked,
@@ -546,9 +550,16 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                     COUNT(*) FILTER (WHERE user_sentiment IS NULL) as pending
                 FROM research_question_matches
                 WHERE question_id = $1
+                {user_filter}
             """
 
-            result = await self.postgres.fetchrow(query, question_id)
+            if user_id is not None:
+                query = query.format(user_filter='AND user_id = $2')
+                result = await self.postgres.fetchrow(query, question_id, user_id)
+            else:
+                query = query.format(user_filter='')
+                result = await self.postgres.fetchrow(query, question_id)
+
             return (
                 dict(result)
                 if result
@@ -566,17 +577,21 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             )
             return {'liked': 0, 'disliked': 0, 'skipped': 0, 'pending': 0}
 
-    async def get_statistics_by_question(self, question_id: UUID) -> dict[str, Any]:
+    async def get_statistics_by_question(
+        self, question_id: UUID, user_id: str | None = None
+    ) -> dict[str, Any]:
         """
         Get match statistics for a research question.
 
         Args:
             question_id: Research question UUID
+            user_id: Optional user filter
 
         Returns:
             dict[str, Any]: Statistics including counts, averages, etc.
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'get_statistics_by_question')
             query = """
                 SELECT
                     COUNT(*) as total_matches,
@@ -589,9 +604,16 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                     COUNT(DISTINCT discovered_via_source) as source_count
                 FROM research_question_matches
                 WHERE question_id = $1
+                {user_filter}
             """
 
-            result = await self.postgres.fetchrow(query, question_id)
+            if user_id is not None:
+                query = query.format(user_filter='AND user_id = $2')
+                result = await self.postgres.fetchrow(query, question_id, user_id)
+            else:
+                query = query.format(user_filter='')
+                result = await self.postgres.fetchrow(query, question_id)
+
             return dict(result) if result else {}
 
         except Exception as e:
@@ -599,7 +621,11 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             return {}
 
     async def get_matches_by_source(
-        self, question_id: UUID, source_name: str, limit: int = 50
+        self,
+        question_id: UUID,
+        source_name: str,
+        limit: int = 50,
+        user_id: str | None = None,
     ) -> List[dict[str, Any]]:  # noqa: UP006
         """
         Get matches discovered by a specific source.
@@ -608,11 +634,13 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
             question_id: Research question UUID
             source_name: Source name (e.g., 'arxiv', 'pubmed')
             limit: Maximum number of results
+            user_id: Optional user filter
 
         Returns:
             List[dict[str, Any]]: List of matches from that source
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'get_matches_by_source')
             query = """
                 SELECT
                     rqm.*,
@@ -621,11 +649,24 @@ class ArticleResearchMatchRepository(BaseRepository[dict[str, Any]]):
                 JOIN paper_metadata pm ON rqm.paper_id = pm.id
                 WHERE rqm.question_id = $1
                 AND rqm.discovered_via_source = $2
+                {user_filter}
                 ORDER BY rqm.relevance_score DESC, rqm.matched_at DESC
                 LIMIT $3
             """
 
-            results = await self.postgres.fetch(query, question_id, source_name, limit)
+            if user_id is not None:
+                query = query.format(
+                    user_filter='AND rqm.user_id = $4 AND pm.user_id = $4'
+                )
+                results = await self.postgres.fetch(
+                    query, question_id, source_name, limit, user_id
+                )
+            else:
+                query = query.format(user_filter='')
+                results = await self.postgres.fetch(
+                    query, question_id, source_name, limit
+                )
+
             return [dict(row) for row in results]
 
         except Exception as e:

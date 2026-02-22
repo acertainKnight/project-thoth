@@ -109,10 +109,13 @@ class NoteService(BaseService):
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
         async def fetch():
+            user_id = get_mcp_user_id()
             conn = await asyncpg.connect(db_url)
             try:
                 result = await conn.fetchval(
-                    'SELECT markdown_content FROM papers WHERE title = $1', title
+                    'SELECT markdown_content FROM papers WHERE title = $1 AND user_id = $2',
+                    title,
+                    user_id,
                 )
                 return result or ''
             finally:

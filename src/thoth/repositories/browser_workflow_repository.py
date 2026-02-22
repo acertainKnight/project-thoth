@@ -143,7 +143,9 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to get workflow by ID {workflow_id}: {e}')
             return None
 
-    async def get_by_name(self, name: str) -> dict[str, Any] | None:
+    async def get_by_name(
+        self, name: str, user_id: str | None = None
+    ) -> dict[str, Any] | None:
         """
         Get a workflow by name.
 
@@ -153,14 +155,21 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
         Returns:
             Optional[dict[str, Any]]: Workflow data or None
         """
-        cache_key = self._cache_key('name', name)
+        user_id = self._resolve_user_id(user_id, 'get_by_name')
+        cache_key = self._cache_key('name', name, user_id=user_id)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
 
         try:
-            query = 'SELECT * FROM browser_workflows WHERE name = $1'
-            result = await self.postgres.fetchrow(query, name)
+            if user_id is not None:
+                query = (
+                    'SELECT * FROM browser_workflows WHERE name = $1 AND user_id = $2'
+                )
+                result = await self.postgres.fetchrow(query, name, user_id)
+            else:
+                query = 'SELECT * FROM browser_workflows WHERE name = $1'
+                result = await self.postgres.fetchrow(query, name)
 
             if result:
                 data = self._deserialize_row(dict(result))
@@ -211,7 +220,9 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to get active workflows: {e}')
             return []
 
-    async def update(self, workflow_id: UUID, updates: dict[str, Any]) -> bool:
+    async def update(
+        self, workflow_id: UUID, updates: dict[str, Any], user_id: str | None = None
+    ) -> bool:
         """
         Update a workflow.
 
@@ -223,6 +234,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             bool: True if successful
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'update')
             if not updates:
                 return True
 
@@ -242,11 +254,19 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             set_clauses.append(f'updated_at = ${len(values) + 1}')
             values.append(datetime.now())
 
-            query = f"""
-                UPDATE browser_workflows
-                SET {', '.join(set_clauses)}
-                WHERE id = $1
-            """
+            if user_id is not None:
+                query = f"""
+                    UPDATE browser_workflows
+                    SET {', '.join(set_clauses)}
+                    WHERE id = $1 AND user_id = ${len(values) + 1}
+                """
+                values.append(user_id)
+            else:
+                query = f"""
+                    UPDATE browser_workflows
+                    SET {', '.join(set_clauses)}
+                    WHERE id = $1
+                """
 
             await self.postgres.execute(query, *values)
 
@@ -260,7 +280,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to update workflow {workflow_id}: {e}')
             return False
 
-    async def delete(self, workflow_id: UUID) -> bool:
+    async def delete(self, workflow_id: UUID, user_id: str | None = None) -> bool:
         """
         Delete a workflow.
 
@@ -271,8 +291,13 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             bool: True if successful
         """
         try:
-            query = 'DELETE FROM browser_workflows WHERE id = $1'
-            await self.postgres.execute(query, workflow_id)
+            user_id = self._resolve_user_id(user_id, 'delete')
+            if user_id is not None:
+                query = 'DELETE FROM browser_workflows WHERE id = $1 AND user_id = $2'
+                await self.postgres.execute(query, workflow_id, user_id)
+            else:
+                query = 'DELETE FROM browser_workflows WHERE id = $1'
+                await self.postgres.execute(query, workflow_id)
 
             # Invalidate cache
             self._invalidate_cache(str(workflow_id))
@@ -390,7 +415,9 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             )
             return False
 
-    async def get_by_domain(self, domain: str) -> list[dict[str, Any]]:
+    async def get_by_domain(
+        self, domain: str, user_id: str | None = None
+    ) -> list[dict[str, Any]]:
         """
         Get workflows by domain.
 
@@ -400,19 +427,27 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
         Returns:
             list[dict[str, Any]]: List of workflows for the domain
         """
-        cache_key = self._cache_key('domain', domain)
+        user_id = self._resolve_user_id(user_id, 'get_by_domain')
+        cache_key = self._cache_key('domain', domain, user_id=user_id)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
 
         try:
-            query = """
-                SELECT * FROM browser_workflows
-                WHERE website_domain = $1
-                ORDER BY name ASC
-            """
-
-            results = await self.postgres.fetch(query, domain)
+            if user_id is not None:
+                query = """
+                    SELECT * FROM browser_workflows
+                    WHERE website_domain = $1 AND user_id = $2
+                    ORDER BY name ASC
+                """
+                results = await self.postgres.fetch(query, domain, user_id)
+            else:
+                query = """
+                    SELECT * FROM browser_workflows
+                    WHERE website_domain = $1
+                    ORDER BY name ASC
+                """
+                results = await self.postgres.fetch(query, domain)
             data = [self._deserialize_row(dict(row)) for row in results]
 
             self._set_in_cache(cache_key, data)
@@ -422,7 +457,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to get workflows by domain {domain}: {e}')
             return []
 
-    async def get_statistics(self) -> dict[str, Any]:
+    async def get_statistics(self, user_id: str | None = None) -> dict[str, Any]:
         """
         Get overall workflow statistics.
 
@@ -430,22 +465,42 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
             dict[str, Any]: Aggregated statistics across all workflows
         """
         try:
-            query = """
-                SELECT
-                    COUNT(*) as total_workflows,
-                    COUNT(*) FILTER (WHERE is_active = true) as active_workflows,
-                    COUNT(*) FILTER (WHERE health_status = 'active') as healthy_workflows,
-                    COUNT(*) FILTER (WHERE health_status = 'degraded') as degraded_workflows,
-                    COUNT(*) FILTER (WHERE health_status = 'down') as down_workflows,
-                    SUM(total_executions) as total_executions,
-                    SUM(successful_executions) as successful_executions,
-                    SUM(failed_executions) as failed_executions,
-                    SUM(total_articles_extracted) as total_articles_extracted,
-                    AVG(average_execution_time_ms) as avg_execution_time_ms
-                FROM browser_workflows
-            """
+            user_id = self._resolve_user_id(user_id, 'get_statistics')
 
-            result = await self.postgres.fetchrow(query)
+            if user_id is not None:
+                query = """
+                    SELECT
+                        COUNT(*) as total_workflows,
+                        COUNT(*) FILTER (WHERE is_active = true) as active_workflows,
+                        COUNT(*) FILTER (WHERE health_status = 'active') as healthy_workflows,
+                        COUNT(*) FILTER (WHERE health_status = 'degraded') as degraded_workflows,
+                        COUNT(*) FILTER (WHERE health_status = 'down') as down_workflows,
+                        SUM(total_executions) as total_executions,
+                        SUM(successful_executions) as successful_executions,
+                        SUM(failed_executions) as failed_executions,
+                        SUM(total_articles_extracted) as total_articles_extracted,
+                        AVG(average_execution_time_ms) as avg_execution_time_ms
+                    FROM browser_workflows
+                    WHERE user_id = $1
+                """
+                result = await self.postgres.fetchrow(query, user_id)
+            else:
+                query = """
+                    SELECT
+                        COUNT(*) as total_workflows,
+                        COUNT(*) FILTER (WHERE is_active = true) as active_workflows,
+                        COUNT(*) FILTER (WHERE health_status = 'active') as healthy_workflows,
+                        COUNT(*) FILTER (WHERE health_status = 'degraded') as degraded_workflows,
+                        COUNT(*) FILTER (WHERE health_status = 'down') as down_workflows,
+                        SUM(total_executions) as total_executions,
+                        SUM(successful_executions) as successful_executions,
+                        SUM(failed_executions) as failed_executions,
+                        SUM(total_articles_extracted) as total_articles_extracted,
+                        AVG(average_execution_time_ms) as avg_execution_time_ms
+                    FROM browser_workflows
+                """
+                result = await self.postgres.fetchrow(query)
+
             return dict(result) if result else {}
 
         except Exception as e:
@@ -477,7 +532,7 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
         return await self.update(workflow_id, {'is_active': True})
 
     async def get_workflows_due_for_run(
-        self, hours_since_last_run: int = 24
+        self, hours_since_last_run: int = 24, user_id: str | None = None
     ) -> list[dict[str, Any]]:
         """
         Get workflows that are due for execution based on time since last run.
@@ -492,25 +547,44 @@ class BrowserWorkflowRepository(BaseRepository[dict[str, Any]]):
         Returns:
             list[dict[str, Any]]: List of workflows due for execution
         """  # noqa: W505
-        cache_key = self._cache_key('due_for_run', str(hours_since_last_run))
+        user_id = self._resolve_user_id(user_id, 'get_workflows_due_for_run')
+        cache_key = self._cache_key(
+            'due_for_run', str(hours_since_last_run), user_id=user_id
+        )
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
 
         try:
-            query = """
-                SELECT * FROM browser_workflows
-                WHERE is_active = true
-                  AND (
-                    last_executed_at IS NULL
-                    OR last_executed_at < NOW() - ($1 || ' hours')::INTERVAL
-                  )
-                ORDER BY
-                    last_executed_at ASC NULLS FIRST,
-                    name ASC
-            """
-
-            results = await self.postgres.fetch(query, hours_since_last_run)
+            if user_id is not None:
+                query = """
+                    SELECT * FROM browser_workflows
+                    WHERE is_active = true
+                      AND user_id = $2
+                      AND (
+                        last_executed_at IS NULL
+                        OR last_executed_at < NOW() - ($1 || ' hours')::INTERVAL
+                      )
+                    ORDER BY
+                        last_executed_at ASC NULLS FIRST,
+                        name ASC
+                """
+                results = await self.postgres.fetch(
+                    query, hours_since_last_run, user_id
+                )
+            else:
+                query = """
+                    SELECT * FROM browser_workflows
+                    WHERE is_active = true
+                      AND (
+                        last_executed_at IS NULL
+                        OR last_executed_at < NOW() - ($1 || ' hours')::INTERVAL
+                      )
+                    ORDER BY
+                        last_executed_at ASC NULLS FIRST,
+                        name ASC
+                """
+                results = await self.postgres.fetch(query, hours_since_last_run)
             data = [self._deserialize_row(dict(row)) for row in results]
 
             # Cache for shorter time since this is time-sensitive

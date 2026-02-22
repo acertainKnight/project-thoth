@@ -100,7 +100,9 @@ async def import_config_from_obsidian(
             )
         else:
             # Write to global vault
-            settings_file = config.vault_root / 'thoth' / '_thoth' / 'settings.json'
+            settings_file = (
+                user_context.vault_path / 'thoth' / '_thoth' / 'settings.json'
+            )
 
         # Ensure directory exists
         settings_file.parent.mkdir(parents=True, exist_ok=True)

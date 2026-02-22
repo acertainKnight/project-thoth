@@ -78,11 +78,15 @@ async def _authenticate_websocket_user(
     """Authenticate a WebSocket client and resolve its default agent ID."""
     multi_user = os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true'
     if not multi_user:
+        from thoth.mcp.auth import get_current_user_paths
+
+        user_paths = get_current_user_paths()
+        vault_path = user_paths.vault_root if user_paths else config.vault_root
         return (
             UserContext(
                 user_id='default_user',
                 username='default_user',
-                vault_path=config.vault_root,
+                vault_path=vault_path,
                 is_admin=True,
             ),
             None,

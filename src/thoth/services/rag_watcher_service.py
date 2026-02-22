@@ -295,11 +295,21 @@ class RAGWatcherService(BaseService):
         try:
             # Determine which directories to watch
             if watch_dirs is None:
-                watch_dirs = [
-                    self.config.pdf_dir,
-                    self.config.markdown_dir,
-                    self.config.notes_dir,
-                ]
+                from thoth.mcp.auth import get_current_user_paths
+
+                user_paths = get_current_user_paths()
+                if user_paths:
+                    watch_dirs = [
+                        user_paths.pdf_dir,
+                        user_paths.markdown_dir,
+                        user_paths.notes_dir,
+                    ]
+                else:
+                    watch_dirs = [
+                        self.config.pdf_dir,
+                        self.config.markdown_dir,
+                        self.config.notes_dir,
+                    ]
 
             # Create event handler
             handler = RAGFileHandler(
@@ -393,17 +403,28 @@ class RAGWatcherService(BaseService):
         Returns:
             dict[str, Any]: Status information
         """
-        return {
-            'is_running': self._is_running,
-            'watched_directories': (
-                [
+        if self._is_running:
+            from thoth.mcp.auth import get_current_user_paths
+
+            user_paths = get_current_user_paths()
+            if user_paths:
+                dirs = [
+                    str(user_paths.pdf_dir),
+                    str(user_paths.markdown_dir),
+                    str(user_paths.notes_dir),
+                ]
+            else:
+                dirs = [
                     str(self.config.pdf_dir),
                     str(self.config.markdown_dir),
                     str(self.config.notes_dir),
                 ]
-                if self._is_running
-                else []
-            ),
+        else:
+            dirs = []
+
+        return {
+            'is_running': self._is_running,
+            'watched_directories': dirs,
         }
 
     def health_check(self) -> dict[str, str]:

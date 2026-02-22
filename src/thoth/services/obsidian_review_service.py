@@ -380,26 +380,30 @@ class ObsidianReviewService:
             return None
 
         try:
+            from thoth.mcp.auth import get_mcp_user_id
+
+            user_id = get_mcp_user_id()
+
             if question_id:
                 # Query with question filter for precision
                 query = """
                     SELECT rqm.id
                     FROM research_question_matches rqm
                     JOIN paper_metadata pm ON rqm.paper_id = pm.id
-                    WHERE pm.title = $1 AND rqm.question_id = $2
+                    WHERE pm.title = $1 AND rqm.question_id = $2 AND rqm.user_id = $3
                     LIMIT 1
                 """
-                result = await pg.fetchval(query, title, question_id)
+                result = await pg.fetchval(query, title, question_id, user_id)
             else:
                 # Query without question filter
                 query = """
                     SELECT rqm.id
                     FROM research_question_matches rqm
                     JOIN paper_metadata pm ON rqm.paper_id = pm.id
-                    WHERE pm.title = $1
+                    WHERE pm.title = $1 AND rqm.user_id = $2
                     LIMIT 1
                 """
-                result = await pg.fetchval(query, title)
+                result = await pg.fetchval(query, title, user_id)
 
             if result:
                 return UUID(str(result))
