@@ -460,14 +460,20 @@ class InstallationScreen(BaseScreen):
 
         # Build plugin settings
         is_remote = deployment_mode == 'remote'
+        wizard_data = self.app.wizard_data if hasattr(self.app, 'wizard_data') else {}
+        api_token = wizard_data.get('api_token', '')
+
         plugin_data = {
-            **existing_data,  # Preserve any existing settings
+            **existing_data,
             'remoteMode': is_remote,
             'remoteEndpointUrl': thoth_api_url
             if is_remote
-            else 'http://localhost:8000',  # Only Thoth API URL
+            else 'http://localhost:8000',
             'lettaEndpointUrl': letta_url,
         }
+
+        if api_token:
+            plugin_data['apiToken'] = api_token
 
         # Write data.json
         try:
