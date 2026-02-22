@@ -1272,9 +1272,12 @@ Your response (JSON only):"""
                 )
                 continue
 
-            # Get or create paper in database
+            # Get or create paper in database using the first applicable
+            # question's user_id.  Papers in paper_metadata are shared; the
+            # user_id here only matters for the initial INSERT row ownership.
+            first_question = question_by_id[next(iter(applicable_question_ids))]
             paper_id, _was_created = await self._get_or_create_article(
-                article, user_id=question.get('user_id')
+                article, user_id=first_question.get('user_id')
             )
             if not paper_id:
                 self.logger.error(

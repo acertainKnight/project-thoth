@@ -260,14 +260,12 @@ class DiscoveryDashboardService:
 
     async def _check_and_export_new_results(self):
         """
-        Check all research questions for new results and export to dashboard.
+        Check all active research questions across every user for new results.
 
-        For each research question:
-        1. Count new matches since last export
-        2. If new matches exist, export to dashboard
-        3. Update last export timestamp
+        Fetches questions globally so the background loop serves all users.
+        Each question row already carries its own user_id/username which is
+        passed through to the export and match-counting logic.
         """
-        # Get all active research questions
         query = """
             SELECT rq.id, rq.name, rq.created_at, rq.user_id, u.username
             FROM research_questions rq
@@ -284,9 +282,8 @@ class DiscoveryDashboardService:
         for question in questions:
             question_id = question['id']
             question_name = question['name']
-
-            # Check if there are new matches since last export
             user_id = question.get('user_id')
+
             new_count = await self._count_new_matches(question_id, user_id=user_id)
 
             if new_count > 0:
