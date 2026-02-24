@@ -14,6 +14,7 @@ from loguru import logger
 from thoth.mcp.auth import (
     is_multi_user_mode,
     reset_current_user_context,
+    resolve_mcp_user_id,
     set_current_user_context,
 )
 from thoth.services.service_manager import ServiceManager
@@ -103,9 +104,30 @@ class MCPTool(ABC):
         pass
 
     def to_schema(self) -> MCPToolSchema:
-        """Convert tool to MCP schema format."""
+        """Convert tool to MCP schema format.
+
+        In multi-user mode, automatically injects an optional ``user_id``
+        property into the input schema so Letta agents can pass the calling
+        user's ID with every tool call.  The system prompt instructs the LLM
+        to include this value, and ``execute_tool`` uses it to set the
+        per-request UserContext for data isolation.
+        """
+        schema = dict(self.input_schema)
+
+        if is_multi_user_mode() and 'properties' in schema:
+            props = dict(schema['properties'])
+            if 'user_id' not in props:
+                props['user_id'] = {
+                    'type': 'string',
+                    'description': (
+                        'Your user ID (from your system prompt). '
+                        'Required in multi-user mode for data isolation.'
+                    ),
+                }
+                schema['properties'] = props
+
         return MCPToolSchema(
-            name=self.name, description=self.description, inputSchema=self.input_schema
+            name=self.name, description=self.description, inputSchema=schema
         )
 
     def validate_arguments(self, arguments: dict[str, Any]) -> bool:
@@ -341,10 +363,17 @@ class MCPToolRegistry:
         # Coerce arguments to match schema types (LLM agents often send strings)
         coerced_arguments = self._coerce_arguments(tool.input_schema, arguments)
 
-        user_id = coerced_arguments.get('user_id')
+        # Resolve user from explicit user_id, agent_id, or ContextVar fallback.
+        # resolve_mcp_user_id checks arguments for user_id, agent_id, and
+        # letta_agent_id, doing a DB lookup to map agent -> user when needed.
+        user_id = await resolve_mcp_user_id(
+            explicit_user_id=coerced_arguments.get('user_id'),
+            arguments=coerced_arguments,
+            service_manager=self.service_manager,
+        )
         username, vault_path = None, None
 
-        if user_id and is_multi_user_mode():
+        if user_id and user_id != 'default_user' and is_multi_user_mode():
             username, vault_path = await self._resolve_user_vault(user_id)
 
         ctx_tokens = set_current_user_context(user_id, username, vault_path)

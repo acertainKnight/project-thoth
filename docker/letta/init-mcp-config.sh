@@ -8,6 +8,7 @@ set -e
 
 MCP_CONFIG_FILE="/letta/.letta/mcp-servers.json"
 THOTH_MCP_URL="${THOTH_MCP_URL:-http://thoth-mcp:8000}"
+THOTH_MCP_SERVICE_TOKEN="${THOTH_MCP_SERVICE_TOKEN:-}"
 
 echo "==================================================================="
 echo "Letta MCP Configuration Setup"
@@ -49,6 +50,15 @@ if [ -f "$MCP_CONFIG_FILE" ]; then
     fi
 else
     echo "⚙ Creating new MCP configuration..."
+
+    # Build optional auth block
+    AUTH_BLOCK=""
+    if [ -n "$THOTH_MCP_SERVICE_TOKEN" ]; then
+        AUTH_BLOCK=",
+      \"auth_header\": \"Authorization\",
+      \"auth_token\": \"Bearer $THOTH_MCP_SERVICE_TOKEN\""
+    fi
+
     cat > "$MCP_CONFIG_FILE" << EOF
 {
   "servers": {
@@ -57,7 +67,7 @@ else
       "description": "Access all 68 Thoth research tools dynamically via MCP protocol",
       "enabled": true,
       "transport": "sse",
-      "url": "$THOTH_MCP_URL/mcp",
+      "url": "$THOTH_MCP_URL/mcp"$AUTH_BLOCK,
       "connection": {
         "timeout": 30,
         "read_timeout": 300,
@@ -85,9 +95,14 @@ if command -v curl &> /dev/null; then
     if curl -sf "$THOTH_MCP_URL/health" > /dev/null 2>&1; then
         echo "✓ Thoth MCP server is accessible at $THOTH_MCP_URL"
 
-        # Try to get tool count
-        TOOL_COUNT=$(curl -sf -X POST \
+        # Try to get tool count (use service token if available)
+        AUTH_HEADER=""
+        if [ -n "$THOTH_MCP_SERVICE_TOKEN" ]; then
+            AUTH_HEADER="-H \"Authorization: Bearer $THOTH_MCP_SERVICE_TOKEN\""
+        fi
+        TOOL_COUNT=$(eval curl -sf -X POST \
             -H "Content-Type: application/json" \
+            $AUTH_HEADER \
             -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
             "$THOTH_MCP_URL/mcp" 2>/dev/null | grep -o '"tools":\[' | wc -l || echo "0")
 

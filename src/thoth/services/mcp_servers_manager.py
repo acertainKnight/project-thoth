@@ -215,16 +215,17 @@ class MCPServersManager(BaseService):
     async def _on_config_changed(self) -> None:
         """Handle config file changes by diffing and reconnecting servers."""
         try:
+            # Snapshot the old config before load_config() overwrites it
+            old_config = self.current_config
             new_config = await self.load_config()
 
             # If this is the first load, just connect all enabled servers
-            if self.current_config is None:
-                self.current_config = new_config
+            if old_config is None:
                 await self._connect_all_enabled_servers()
                 return
 
             # Diff the configs
-            old_servers = set(self.current_config.mcp_servers.keys())
+            old_servers = set(old_config.mcp_servers.keys())
             new_servers = set(new_config.mcp_servers.keys())
 
             # Removed servers
@@ -234,7 +235,7 @@ class MCPServersManager(BaseService):
 
             # Added or changed servers
             for server_id in new_servers:
-                old_entry = self.current_config.mcp_servers.get(server_id)
+                old_entry = old_config.mcp_servers.get(server_id)
                 new_entry = new_config.mcp_servers[server_id]
 
                 # If server exists and config changed, reconnect

@@ -69,6 +69,27 @@ class MCPTransport:
         raise NotImplementedError
 
 
+def _extract_bearer_token(request: Request) -> str | None:
+    """Pull the raw bearer token from an Authorization header."""
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return None
+    token = auth_header[7:]
+    return token or None
+
+
+def _is_service_token(token: str) -> bool:
+    """Check if a bearer token is the internal service token.
+
+    Internal services (like Letta) authenticate with a shared secret so
+    they can call MCP tools without per-user bearer tokens.  User-level
+    scoping still happens inside execute_tool via the user_id / agent_id
+    that the LLM includes in tool arguments.
+    """
+    service_token = os.getenv('THOTH_MCP_SERVICE_TOKEN')
+    return bool(service_token and token == service_token)
+
+
 async def _resolve_bearer_user(
     request: Request,
     service_manager: ServiceManager | None,
@@ -87,11 +108,7 @@ async def _resolve_bearer_user(
     if not service_manager or not vaults_root:
         return None
 
-    auth_header = request.headers.get('Authorization', '')
-    if not auth_header.startswith('Bearer '):
-        return None
-
-    token = auth_header[7:]
+    token = _extract_bearer_token(request)
     if not token:
         return None
 
@@ -247,7 +264,18 @@ class HTTPTransport(MCPTransport):
             (allowed, user_context) -- allowed is True when the request may
             proceed.  user_context is non-None in multi-user mode when the
             bearer token maps to a valid user.
+
+        Service tokens (THOTH_MCP_SERVICE_TOKEN) are accepted as a second
+        auth path for internal callers like Letta.  They bypass per-user
+        token resolution -- user scoping happens downstream in execute_tool
+        via user_id / agent_id in the tool arguments.
         """
+        token = _extract_bearer_token(request)
+
+        # Internal service auth (Letta, etc.) -- allowed but no user context.
+        if token and _is_service_token(token):
+            return (True, None)
+
         if is_multi_user_mode():
             user_ctx = await _resolve_bearer_user(
                 request, self.service_manager, self._vaults_root
@@ -257,10 +285,9 @@ class HTTPTransport(MCPTransport):
         if not self.auth_token:
             return (True, None)
 
-        auth_header = request.headers.get('Authorization', '')
-        if not auth_header.startswith('Bearer '):
+        if not token:
             return (False, None)
-        return (auth_header[7:] == self.auth_token, None)
+        return (token == self.auth_token, None)
 
     def _setup_routes(self):
         """Set up HTTP routes for MCP."""
@@ -412,6 +439,11 @@ class SSETransport(MCPTransport):
 
     async def _authenticate(self, request: Request) -> tuple[bool, UserContext | None]:
         """Authenticate and optionally resolve user from bearer token."""
+        token = _extract_bearer_token(request)
+
+        if token and _is_service_token(token):
+            return (True, None)
+
         if is_multi_user_mode():
             user_ctx = await _resolve_bearer_user(
                 request, self.service_manager, self._vaults_root
@@ -421,10 +453,9 @@ class SSETransport(MCPTransport):
         if not self.auth_token:
             return (True, None)
 
-        auth_header = request.headers.get('Authorization', '')
-        if not auth_header.startswith('Bearer '):
+        if not token:
             return (False, None)
-        return (auth_header[7:] == self.auth_token, None)
+        return (token == self.auth_token, None)
 
     def _setup_routes(self):
         """Set up SSE routes for MCP."""

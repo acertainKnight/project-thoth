@@ -168,17 +168,13 @@ You have direct access to analysis tools. Use them to:
                 'answer_research_question',
                 'explore_citation_network',
                 'compare_articles',
-                'extract_article_insights',
-                'get_article_full_content',
-                'find_related_papers',
-                'analyze_topic',
-                'generate_research_summary',
                 'evaluate_article',
                 'get_citation_context',
+                'find_related_papers',
+                'read_full_article',
+                'unload_article',
                 # Supporting tools
                 'search_articles',
-                'search_by_topic',
-                'find_articles_by_authors',
                 # Skill loading for additional capabilities
                 'list_skills',
                 'load_skill',
@@ -400,12 +396,15 @@ Comparison Aspects:
 
             # Fetch MCP tools from all registered MCP servers
             mcp_resp = await client.get(
-                f'{self.letta_base_url}/v1/tools/mcp/servers', headers=self.headers
+                f'{self.letta_base_url}/v1/mcp-servers/', headers=self.headers
             )
             if mcp_resp.status_code == 200:
-                for server_name in mcp_resp.json().keys():
+                for server in mcp_resp.json():
+                    server_id = server.get('id')
+                    if not server_id:
+                        continue
                     tools_resp = await client.get(
-                        f'{self.letta_base_url}/v1/tools/mcp/servers/{server_name}/tools',
+                        f'{self.letta_base_url}/v1/mcp-servers/{server_id}/tools',
                         headers=self.headers,
                     )
                     if tools_resp.status_code == 200:
@@ -677,14 +676,18 @@ Comparison Aspects:
             )
             all_tools = {t['name']: t['id'] for t in response.json()}
 
-            # Also index MCP tools
+            # Index MCP tools via the /v1/mcp-servers/{id}/tools endpoint,
+            # which returns full Letta tool objects (with id fields).
             mcp_resp = await client.get(
-                f'{self.letta_base_url}/v1/tools/mcp/servers', headers=self.headers
+                f'{self.letta_base_url}/v1/mcp-servers/', headers=self.headers
             )
             if mcp_resp.status_code == 200:
-                for server_name in mcp_resp.json().keys():
+                for server in mcp_resp.json():
+                    server_id = server.get('id')
+                    if not server_id:
+                        continue
                     tools_resp = await client.get(
-                        f'{self.letta_base_url}/v1/tools/mcp/servers/{server_name}/tools',
+                        f'{self.letta_base_url}/v1/mcp-servers/{server_id}/tools',
                         headers=self.headers,
                     )
                     if tools_resp.status_code == 200:
