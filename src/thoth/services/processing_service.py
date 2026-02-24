@@ -15,7 +15,6 @@ from mistralai.utils.retries import BackoffStrategy, RetryConfig
 from pypdf import PdfReader
 
 from thoth.analyze.llm_processor import LLMProcessor
-from thoth.mcp.auth import get_mcp_user_id
 from thoth.services.analysis_schema_service import AnalysisSchemaService
 from thoth.services.base import BaseService, ServiceError
 from thoth.services.llm_service import LLMService
@@ -74,6 +73,8 @@ class ProcessingService(BaseService):
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
         async def save():
+            from thoth.mcp.auth import get_mcp_user_id
+
             user_id = get_mcp_user_id()
             conn = await asyncpg.connect(db_url)
             try:
