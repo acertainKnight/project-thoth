@@ -63,7 +63,7 @@ class ReadFullArticleMCPTool(MCPTool):
             'properties': {
                 'article_identifier': {
                     'type': 'string',
-                    'description': 'Article title, DOI, or arXiv ID to look up',
+                    'description': 'Article title, DOI, arXiv ID, or paper_id (UUID) to look up. paper_id from search_articles is the most reliable.',
                 },
                 'max_length': {
                     'type': 'integer',
@@ -120,17 +120,26 @@ class ReadFullArticleMCPTool(MCPTool):
                     isError=True,
                 )
 
-            # Import PaperRepository for database access
+            from uuid import UUID
+
             from thoth.repositories.paper_repository import PaperRepository
 
             postgres_service = self.service_manager.postgres
             paper_repo = PaperRepository(postgres_service)
 
-            # Try to find the paper by different identifiers
             paper = None
 
+            # Check if identifier is a UUID (paper_id from search results)
+            try:
+                paper_uuid = UUID(identifier)
+                paper = await paper_repo.get(paper_uuid)
+                if paper:
+                    logger.info(f'Found paper by UUID: {identifier}')
+            except (ValueError, AttributeError):
+                pass
+
             # Check if identifier looks like a DOI
-            if identifier.startswith('10.') or 'doi.org' in identifier:
+            if not paper and (identifier.startswith('10.') or 'doi.org' in identifier):
                 doi = identifier.replace('https://doi.org/', '').replace(
                     'http://doi.org/', ''
                 )

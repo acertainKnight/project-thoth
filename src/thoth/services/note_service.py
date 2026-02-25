@@ -198,13 +198,16 @@ class NoteService(BaseService):
                     result = await conn.execute(
                         """
                         INSERT INTO processed_papers
-                            (paper_id, markdown_content, pdf_path, note_path, markdown_path, user_id, created_at, updated_at)
-                        VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+                            (paper_id, markdown_content, pdf_path, note_path, markdown_path,
+                             processing_status, processed_at, user_id, created_at, updated_at)
+                        VALUES ($1, $2, $3, $4, $5, 'completed', NOW(), $6, NOW(), NOW())
                         ON CONFLICT (paper_id, user_id) DO UPDATE SET
                             markdown_content = EXCLUDED.markdown_content,
                             pdf_path = EXCLUDED.pdf_path,
                             note_path = EXCLUDED.note_path,
                             markdown_path = EXCLUDED.markdown_path,
+                            processing_status = 'completed',
+                            processed_at = COALESCE(processed_papers.processed_at, NOW()),
                             updated_at = NOW()
                         """,
                         paper_id,

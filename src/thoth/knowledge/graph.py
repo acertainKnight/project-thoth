@@ -738,11 +738,14 @@ class CitationGraph:
                 # Update or insert into processed_papers
                 await conn.execute(
                     """
-                    INSERT INTO processed_papers (paper_id, markdown_content, markdown_path, user_id, created_at, updated_at)
-                    VALUES ($1, $2, $3, $4, NOW(), NOW())
+                    INSERT INTO processed_papers
+                        (paper_id, markdown_content, markdown_path, processing_status, processed_at, user_id, created_at, updated_at)
+                    VALUES ($1, $2, $3, 'completed', NOW(), $4, NOW(), NOW())
                     ON CONFLICT (paper_id, user_id) DO UPDATE SET
                         markdown_content = EXCLUDED.markdown_content,
                         markdown_path = EXCLUDED.markdown_path,
+                        processing_status = 'completed',
+                        processed_at = COALESCE(processed_papers.processed_at, NOW()),
                         updated_at = NOW()
                 """,
                     paper_id,

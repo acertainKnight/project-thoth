@@ -111,10 +111,13 @@ class ProcessingService(BaseService):
                     # Then insert/update processed_papers with markdown_content
                     await conn.execute(
                         """
-                        INSERT INTO processed_papers (paper_id, markdown_content, user_id, created_at, updated_at)
-                        VALUES ($1, $2, $3, NOW(), NOW())
+                        INSERT INTO processed_papers
+                            (paper_id, markdown_content, processing_status, processed_at, user_id, created_at, updated_at)
+                        VALUES ($1, $2, 'completed', NOW(), $3, NOW(), NOW())
                         ON CONFLICT (paper_id, user_id) DO UPDATE SET
                             markdown_content = EXCLUDED.markdown_content,
+                            processing_status = 'completed',
+                            processed_at = COALESCE(processed_papers.processed_at, NOW()),
                             updated_at = NOW()
                         """,
                         paper_id,
