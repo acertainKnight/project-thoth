@@ -156,8 +156,8 @@ class MetricsCollector:
         self._active_operations: dict[str, int] = {}
 
         # Storage directory
-        self.metrics_dir = config.workspace_dir / 'metrics'
-        self.metrics_dir.mkdir(exist_ok=True)
+        self.metrics_dir = config.data_root / 'metrics'
+        self.metrics_dir.mkdir(parents=True, exist_ok=True)
 
         # Collection state
         self._collecting = False

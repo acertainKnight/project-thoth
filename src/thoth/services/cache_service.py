@@ -41,7 +41,7 @@ class CacheService(BaseService):
         super().__init__(config)
 
         # Cache directories (defaults, may be overridden by user paths at call-time)
-        self._default_cache_dir = cache_dir or (self.config.workspace_dir / 'cache')
+        self._default_cache_dir = cache_dir or self.config.cache_root
         self.ocr_cache_dir = self._default_cache_dir / 'ocr'
         self.analysis_cache_dir = self._default_cache_dir / 'analysis'
         self.citation_cache_dir = self._default_cache_dir / 'citations'

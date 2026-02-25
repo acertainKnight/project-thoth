@@ -193,18 +193,12 @@ class InstallationScreen(BaseScreen):
         notes_rel = paths_config.get('notes', 'thoth/notes')
         markdown_rel = paths_config.get('markdown', 'thoth/papers/markdown')
 
-        # Create workspace (internal data)
+        # Create workspace (vault-resident config only -- cache/data/logs are
+        # created at runtime outside the vault under XDG dirs)
         workspace_dir = self.vault_path / workspace_rel
-        for subdir in [
-            workspace_dir,
-            workspace_dir / 'data',
-            workspace_dir / 'logs',
-            workspace_dir / 'cache',
-            workspace_dir / 'backups',
-        ]:
-            if not subdir.exists():
-                subdir.mkdir(parents=True, exist_ok=True)
-                self.transaction.record_create_directory(subdir)
+        if not workspace_dir.exists():
+            workspace_dir.mkdir(parents=True, exist_ok=True)
+            self.transaction.record_create_directory(workspace_dir)
 
         # Create user-facing directories
         for rel_path in (pdf_rel, notes_rel, markdown_rel):

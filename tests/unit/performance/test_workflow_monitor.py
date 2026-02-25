@@ -342,8 +342,8 @@ class TestWorkflowMonitorInitialization:
     def mock_config(self, tmp_path):
         """Create mock configuration."""
         config = Mock(spec=Config)
-        config.workspace_dir = tmp_path / 'workspace'
-        config.workspace_dir.mkdir(exist_ok=True)
+        config.data_root = tmp_path / 'data'
+        config.data_root.mkdir(exist_ok=True)
         return config
 
     @pytest.fixture
@@ -400,8 +400,8 @@ class TestWorkflowCreation:
     def monitor(self, tmp_path):
         """Create WorkflowMonitor instance."""
         config = Mock(spec=Config)
-        config.workspace_dir = tmp_path / 'workspace'
-        config.workspace_dir.mkdir(exist_ok=True)
+        config.data_root = tmp_path / 'data'
+        config.data_root.mkdir(exist_ok=True)
 
         service_manager = Mock(spec=ServiceManager)
 
@@ -446,8 +446,8 @@ class TestWorkflowStepManagement:
     def monitor(self, tmp_path):
         """Create WorkflowMonitor instance with active workflow."""
         config = Mock(spec=Config)
-        config.workspace_dir = tmp_path / 'workspace'
-        config.workspace_dir.mkdir(exist_ok=True)
+        config.data_root = tmp_path / 'data'
+        config.data_root.mkdir(exist_ok=True)
 
         service_manager = Mock(spec=ServiceManager)
 
@@ -586,8 +586,8 @@ class TestDurationCalculation:
     def monitor(self, tmp_path):
         """Create WorkflowMonitor instance."""
         config = Mock(spec=Config)
-        config.workspace_dir = tmp_path / 'workspace'
-        config.workspace_dir.mkdir(exist_ok=True)
+        config.data_root = tmp_path / 'data'
+        config.data_root.mkdir(exist_ok=True)
 
         service_manager = Mock(spec=ServiceManager)
 
@@ -639,8 +639,8 @@ class TestWorkflowCompletion:
     def monitor(self, tmp_path):
         """Create WorkflowMonitor instance."""
         config = Mock(spec=Config)
-        config.workspace_dir = tmp_path / 'workspace'
-        config.workspace_dir.mkdir(exist_ok=True)
+        config.data_root = tmp_path / 'data'
+        config.data_root.mkdir(exist_ok=True)
 
         service_manager = Mock(spec=ServiceManager)
 
@@ -806,8 +806,8 @@ class TestWorkflowPerformanceAnalysis:
     def monitor(self, tmp_path):
         """Create WorkflowMonitor with completed workflows."""
         config = Mock(spec=Config)
-        config.workspace_dir = tmp_path / 'workspace'
-        config.workspace_dir.mkdir(exist_ok=True)
+        config.data_root = tmp_path / 'data'
+        config.data_root.mkdir(exist_ok=True)
 
         service_manager = Mock(spec=ServiceManager)
         monitor = WorkflowMonitor(config=config, service_manager=service_manager)
@@ -881,8 +881,8 @@ class TestWorkflowSerialization:
     def monitor(self, tmp_path):
         """Create WorkflowMonitor instance."""
         config = Mock(spec=Config)
-        config.workspace_dir = tmp_path / 'workspace'
-        config.workspace_dir.mkdir(exist_ok=True)
+        config.data_root = tmp_path / 'data'
+        config.data_root.mkdir(exist_ok=True)
 
         service_manager = Mock(spec=ServiceManager)
 

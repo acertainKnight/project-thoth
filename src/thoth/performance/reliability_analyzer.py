@@ -181,8 +181,8 @@ class ReliabilityAnalyzer:
         self.temporal_patterns: dict[str, list[datetime]] = defaultdict(list)
 
         # Analysis storage
-        self.reliability_dir = config.workspace_dir / 'reliability'
-        self.reliability_dir.mkdir(exist_ok=True)
+        self.reliability_dir = config.data_root / 'reliability'
+        self.reliability_dir.mkdir(parents=True, exist_ok=True)
 
         # Baseline metrics
         self.baseline_reliability: ReliabilityMetrics | None = None
@@ -720,7 +720,7 @@ class ReliabilityAnalyzer:
         signature_parts = pattern.error_signature.split('|')
 
         if len(signature_parts) >= 4:
-            service, error_type, message, category = signature_parts[:4]
+            _service, _error_type, _message, category = signature_parts[:4]
 
             if 'api' in category:
                 fixes.extend(

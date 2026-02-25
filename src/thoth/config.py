@@ -1387,6 +1387,9 @@ class UserPaths:
     discovery_results_dir: Path
     discovery_chrome_configs_dir: Path
     data_dir: Path
+    cache_root: Path
+    data_root: Path
+    logs_root: Path
 
 
 # --- Config Object ---
@@ -1476,6 +1479,25 @@ class Config:
         self._initialized = True
         logger.success('Configuration loaded successfully with ALL settings preserved')
 
+    @staticmethod
+    def _get_runtime_roots() -> tuple[Path, Path, Path]:
+        """Return (cache_root, data_root, logs_root) based on environment.
+
+        In Docker (DOCKER_ENV=true), runtime dirs live under /workspace/ so
+        they're backed by the container volume. Otherwise we follow the XDG
+        base directory spec, respecting XDG_CACHE_HOME / XDG_DATA_HOME.
+
+        Returns:
+            Tuple of (cache_root, data_root, logs_root) as absolute Paths.
+        """
+        if os.getenv('DOCKER_ENV', '').lower() in ('1', 'true'):
+            base = Path('/workspace')
+            return base / 'cache', base / 'data', base / 'logs'
+
+        xdg_cache = Path(os.getenv('XDG_CACHE_HOME', Path.home() / '.cache'))
+        xdg_data = Path(os.getenv('XDG_DATA_HOME', Path.home() / '.local' / 'share'))
+        return xdg_cache / 'thoth', xdg_data / 'thoth', xdg_data / 'thoth' / 'logs'
+
     def _resolve_paths(self) -> None:
         """Convert relative paths to absolute (vault-relative).
 
@@ -1514,27 +1536,32 @@ class Config:
             # Relative path: resolve relative to vault root
             return (self.vault_root / path).resolve()
 
-        # Resolve all main paths
+        # --- Runtime roots (outside the vault) ---
+        self.cache_root, self.data_root, self.logs_root = self._get_runtime_roots()
+
+        # --- Vault-resident paths (settings, prompts, templates, user content) ---
         self.workspace_dir = resolve_path(paths.workspace)
         self.pdf_dir = resolve_path(paths.pdf)
         self.markdown_dir = resolve_path(paths.markdown)
         self.notes_dir = resolve_path(paths.notes)
         self.prompts_dir = resolve_path(paths.prompts)
         self.templates_dir = resolve_path(paths.templates)
-        self.output_dir = resolve_path(paths.output)
         self.knowledge_base_dir = resolve_path(paths.knowledge_base)
-        self.graph_storage_path = resolve_path(paths.graph_storage)
-        self.queries_dir = resolve_path(paths.queries)
-        self.agent_storage_dir = resolve_path(paths.agent_storage)
-        self.logs_dir = resolve_path(paths.logs)
 
-        # Analysis schema path (for customizable document analysis)
+        # Analysis schema path (lives in vault alongside settings)
         self.analysis_schema_path = resolve_path('thoth/_thoth/analysis_schema.json')
 
-        # Resolve discovery paths
-        self.discovery_sources_dir = resolve_path(paths.discovery.sources)
-        self.discovery_results_dir = resolve_path(paths.discovery.results)
-        self.discovery_chrome_configs_dir = resolve_path(paths.discovery.chrome_configs)
+        # --- Runtime paths (outside vault, under data_root / logs_root) ---
+        self.output_dir = self.data_root / 'output'
+        self.graph_storage_path = self.data_root / 'graph' / 'citations.graphml'
+        self.queries_dir = self.data_root / 'queries'
+        self.agent_storage_dir = self.data_root / 'agent'
+        self.logs_dir = self.logs_root
+        self.discovery_sources_dir = self.data_root / 'discovery' / 'sources'
+        self.discovery_results_dir = self.data_root / 'discovery' / 'results'
+        self.discovery_chrome_configs_dir = (
+            self.data_root / 'discovery' / 'chrome_configs'
+        )
 
         # Resolve RAG vector_db_path (avoid relative path permission errors)
         rag_config = self.settings.rag
@@ -1543,7 +1570,7 @@ class Config:
         # Resolve external MCP servers config path
         mcp_config = self.settings.servers.mcp
         if not mcp_config.external_servers_file:
-            # Default to _thoth/mcps.json
+            # Default to _thoth/mcps.json (vault-resident)
             mcp_config.external_servers_file = str(
                 self.vault_root / 'thoth' / '_thoth' / 'mcps.json'
             )
@@ -1552,24 +1579,31 @@ class Config:
                 resolve_path(mcp_config.external_servers_file)
             )
 
-        # Create directories if they don't exist
-        for dir_path in [
+        # Create vault-resident directories (settings/config/content)
+        vault_dirs = [
             self.workspace_dir,
             self.pdf_dir,
             self.markdown_dir,
             self.notes_dir,
             self.prompts_dir,
             self.templates_dir,
-            self.output_dir,
             self.knowledge_base_dir,
+            self.analysis_schema_path.parent,
+        ]
+        # Create runtime directories (outside vault)
+        runtime_dirs = [
+            self.cache_root,
+            self.data_root,
+            self.logs_root,
+            self.output_dir,
+            self.graph_storage_path.parent,
             self.queries_dir,
             self.agent_storage_dir,
-            self.logs_dir,
             self.discovery_sources_dir,
             self.discovery_results_dir,
             self.discovery_chrome_configs_dir,
-            self.analysis_schema_path.parent,  # Create parent dir for schema file
-        ]:
+        ]
+        for dir_path in vault_dirs + runtime_dirs:
             try:
                 dir_path.mkdir(parents=True, exist_ok=True)
                 logger.debug(f'Ensured directory exists: {dir_path}')
@@ -1814,8 +1848,8 @@ class Config:
 
     @property
     def data_dir(self) -> Path:
-        """Data directory under workspace (for custom indexes, etc.)."""
-        return self.workspace_dir / 'data'
+        """Runtime data directory (outside vault)."""
+        return self.data_root
 
     def resolve_paths_for_vault(
         self,
@@ -1827,6 +1861,10 @@ class Config:
         This is the multi-user equivalent of ``_resolve_paths``. Given a
         user's vault root directory, it returns a ``UserPaths`` with every
         path resolved to an absolute location inside that vault.
+
+        Vault-resident paths (settings, prompts, templates, content) are
+        resolved relative to vault_root. Runtime paths (cache, data, logs)
+        are scoped per-user under the global runtime roots.
 
         Args:
             vault_root: Absolute path to the user's vault directory.
@@ -1850,6 +1888,14 @@ class Config:
 
         workspace = _resolve(paths.workspace)
 
+        # For multi-user, scope runtime dirs by username (vault_root basename)
+        username = vault_root.name
+        cache_root, data_root, logs_root = self._get_runtime_roots()
+        # Each user gets an isolated subdirectory under the runtime roots
+        user_cache = cache_root / username
+        user_data = data_root / username
+        user_logs = logs_root / username
+
         return UserPaths(
             vault_root=vault_root,
             workspace_dir=workspace,
@@ -1858,17 +1904,20 @@ class Config:
             notes_dir=_resolve(paths.notes),
             prompts_dir=_resolve(paths.prompts),
             templates_dir=_resolve(paths.templates),
-            output_dir=_resolve(paths.output),
+            output_dir=user_data / 'output',
             knowledge_base_dir=_resolve(paths.knowledge_base),
-            graph_storage_path=_resolve(paths.graph_storage),
-            queries_dir=_resolve(paths.queries),
-            agent_storage_dir=_resolve(paths.agent_storage),
-            logs_dir=_resolve(paths.logs),
+            graph_storage_path=user_data / 'graph' / 'citations.graphml',
+            queries_dir=user_data / 'queries',
+            agent_storage_dir=user_data / 'agent',
+            logs_dir=user_logs,
             analysis_schema_path=_resolve('thoth/_thoth/analysis_schema.json'),
-            discovery_sources_dir=_resolve(paths.discovery.sources),
-            discovery_results_dir=_resolve(paths.discovery.results),
-            discovery_chrome_configs_dir=_resolve(paths.discovery.chrome_configs),
-            data_dir=workspace / 'data',
+            discovery_sources_dir=user_data / 'discovery' / 'sources',
+            discovery_results_dir=user_data / 'discovery' / 'results',
+            discovery_chrome_configs_dir=user_data / 'discovery' / 'chrome_configs',
+            data_dir=user_data,
+            cache_root=user_cache,
+            data_root=user_data,
+            logs_root=user_logs,
         )
 
     def get_user_settings(self, username: str) -> Settings:

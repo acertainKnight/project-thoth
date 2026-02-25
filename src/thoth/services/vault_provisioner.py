@@ -101,17 +101,11 @@ class VaultProvisioner:
         notes_rel = paths_config.get('notes', 'thoth/notes')
         markdown_rel = paths_config.get('markdown', 'thoth/papers/markdown')
 
-        # Create workspace (internal data)
+        # Create workspace (vault-resident config only -- cache/data/logs are
+        # created at runtime outside the vault under XDG dirs)
         workspace_dir = vault_path / workspace_rel
-        for subdir in [
-            workspace_dir,
-            workspace_dir / 'data',
-            workspace_dir / 'logs',
-            workspace_dir / 'cache',
-            workspace_dir / 'backups',
-        ]:
-            subdir.mkdir(parents=True, exist_ok=True)
-            logger.debug(f'Created directory: {subdir}')
+        workspace_dir.mkdir(parents=True, exist_ok=True)
+        logger.debug(f'Created directory: {workspace_dir}')
 
         # Create user-facing directories
         for rel_path in (pdf_rel, notes_rel, markdown_rel):
@@ -221,7 +215,7 @@ class VaultProvisioner:
                 'templates': 'thoth/_thoth/templates',
                 'output': 'thoth/output',
                 'knowledge_base': 'thoth/knowledge_base',
-                'graph_storage': 'thoth/_thoth/graph.json',
+                'graphStorage': 'thoth/_thoth/data/graph/citations.graphml',
                 'queries': 'thoth/queries',
                 'agent_storage': 'thoth/_thoth/agents',
                 'logs': 'thoth/_thoth/logs',

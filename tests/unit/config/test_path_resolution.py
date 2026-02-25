@@ -29,10 +29,11 @@ class TestVaultRelativePaths:
 
         config = Config()
 
-        # Relative paths should be under vault_root
+        # Vault-resident paths (content) should be under vault_root
         assert config.pdf_dir.is_relative_to(temp_vault)
         assert config.markdown_dir.is_relative_to(temp_vault)
-        assert config.output_dir.is_relative_to(temp_vault)
+        # Runtime paths (output, logs, cache) live outside the vault
+        assert not config.output_dir.is_relative_to(temp_vault)
 
     def test_paths_are_absolute(self, temp_vault: Path, monkeypatch):
         """Test all resolved paths are absolute."""
@@ -84,16 +85,17 @@ class TestDockerAbsolutePaths:
         expected_notes = temp_vault / 'thoth' / 'notes'
         assert config.notes_dir == expected_notes.resolve()
 
-    def test_logs_maps_to_vault_thoth_logs(self, temp_vault: Path, monkeypatch):
-        """Test default logs resolves to vault/thoth/_thoth/logs."""
+    def test_logs_outside_vault(self, temp_vault: Path, monkeypatch):
+        """Test logs_dir resolves to XDG data dir, not vault."""
         monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
+        monkeypatch.delenv('DOCKER_ENV', raising=False)
 
         Config._instance = None
         config = Config()
 
-        # Default logs 'thoth/_thoth/logs' resolves to vault/thoth/_thoth/logs
-        expected_logs = temp_vault / 'thoth' / '_thoth' / 'logs'
-        assert config.logs_dir == expected_logs.resolve()
+        # logs_dir should be absolute and outside the vault
+        assert config.logs_dir.is_absolute()
+        assert not config.logs_dir.is_relative_to(temp_vault)
 
     def test_thoth_prefix_migrated(self, temp_vault: Path, monkeypatch):
         """Test /thoth/ prefix is migrated to vault/thoth/ layout."""
@@ -212,9 +214,8 @@ class TestPathCreation:
 
     def test_existing_directories_not_error(self, temp_vault: Path, monkeypatch):
         """Test existing directories don't cause errors."""
-        # Pre-create some directories
-        (temp_vault / 'data' / 'pdf').mkdir(parents=True)
-        (temp_vault / 'logs').mkdir(parents=True)
+        # Pre-create pdf dir in vault
+        (temp_vault / 'thoth' / 'papers' / 'pdfs').mkdir(parents=True)
 
         monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
@@ -264,43 +265,25 @@ class TestGraphStoragePath:
     """Test graph storage path resolution."""
 
     def test_graph_storage_path_resolved(self, temp_vault: Path, monkeypatch):
-        """Test graph storage path is resolved correctly."""
+        """Test graph storage path is resolved correctly and lives outside vault."""
         monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
+        monkeypatch.delenv('DOCKER_ENV', raising=False)
 
         Config._instance = None
         config = Config()
 
         assert config.graph_storage_path.is_absolute()
-        assert config.graph_storage_path.is_relative_to(temp_vault)
-
-    def test_graph_storage_custom_path(self, temp_vault: Path, monkeypatch):
-        """Test custom graph storage path."""
-        import json
-
-        settings_data = get_minimal_settings_json()
-        settings_data['paths'] = {
-            'workspace': '/workspace',
-            'graphStorage': 'custom/citations.graphml',
-        }
-
-        settings_file = temp_vault / '_thoth' / 'settings.json'
-        settings_file.write_text(json.dumps(settings_data))
-
-        monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
-
-        Config._instance = None
-        config = Config()
-
-        expected = temp_vault / 'custom' / 'citations.graphml'
-        assert config.graph_storage_path == expected.resolve()
+        # Graph data is a runtime artifact, not vault-resident
+        assert not config.graph_storage_path.is_relative_to(temp_vault)
 
 
 class TestDiscoveryPaths:
     """Test discovery-specific paths."""
 
     def test_discovery_paths_resolved(self, temp_vault: Path, monkeypatch):
-        """Test all discovery paths are resolved."""
+        """Test all discovery paths are resolved and live outside vault."""
         monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
+        monkeypatch.delenv('DOCKER_ENV', raising=False)
 
         Config._instance = None
         config = Config()
@@ -309,9 +292,10 @@ class TestDiscoveryPaths:
         assert config.discovery_results_dir.is_absolute()
         assert config.discovery_chrome_configs_dir.is_absolute()
 
-        assert config.discovery_sources_dir.is_relative_to(temp_vault)
-        assert config.discovery_results_dir.is_relative_to(temp_vault)
-        assert config.discovery_chrome_configs_dir.is_relative_to(temp_vault)
+        # Discovery data is runtime-ephemeral, not vault-resident
+        assert not config.discovery_sources_dir.is_relative_to(temp_vault)
+        assert not config.discovery_results_dir.is_relative_to(temp_vault)
+        assert not config.discovery_chrome_configs_dir.is_relative_to(temp_vault)
 
     def test_discovery_paths_created(self, temp_vault: Path, monkeypatch):
         """Test discovery directories are created."""

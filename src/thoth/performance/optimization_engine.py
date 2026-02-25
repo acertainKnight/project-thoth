@@ -154,8 +154,8 @@ class OptimizationEngine:
         self.performance_baselines: dict[str, Any] = {}
 
         # Storage
-        self.optimization_dir = config.workspace_dir / 'optimizations'
-        self.optimization_dir.mkdir(exist_ok=True)
+        self.optimization_dir = config.data_root / 'optimizations'
+        self.optimization_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info('OptimizationEngine initialized')
 
