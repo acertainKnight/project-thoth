@@ -166,8 +166,7 @@ class WorkflowMonitor:
         self.user_behavior_analytics: dict[str, Any] = {}
 
         # Storage
-        self.workflow_dir = config.workspace_dir / 'workflows'
-        self.workflow_dir.mkdir(exist_ok=True)
+        self.workflow_dir = config.data_root / 'workflows'
 
         # Performance baselines
         self.baseline_metrics: dict[str, WorkflowMetrics] = {}

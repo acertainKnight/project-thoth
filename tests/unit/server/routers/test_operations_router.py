@@ -6,6 +6,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from thoth.auth.dependencies import get_user_context
 from thoth.server.dependencies import get_service_manager
 from thoth.server.routers import operations
 
@@ -22,33 +23,32 @@ def mock_service_manager():
 
 
 @pytest.fixture
-def test_client(mock_service_manager):
+def test_client(mock_service_manager, mock_user_context):
     """Create FastAPI test client with operations router and dependency override."""
     app = FastAPI()
     app.include_router(operations.router)
 
-    # Override dependency to return mock
     app.dependency_overrides[get_service_manager] = lambda: mock_service_manager
+    app.dependency_overrides[get_user_context] = lambda: mock_user_context
 
     client = TestClient(app)
     yield client
 
-    # Clean up
     app.dependency_overrides.clear()
 
 
 class TestCollectionStatsEndpoint:
     """Tests for /collection/stats endpoint."""
 
-    def test_collection_stats_without_service_manager(self):
-        """Test collection stats returns basic stats when service manager has no services."""
-        # When service_manager is available but has no services, returns basic stats
+    def test_collection_stats_without_service_manager(self, mock_user_context):
+        """Test collection stats returns basic stats with no services."""
         app = FastAPI()
         app.include_router(operations.router)
         mock_manager = Mock()
         mock_manager.citation_service = None
         mock_manager.citation = None
         app.dependency_overrides[get_service_manager] = lambda: mock_manager
+        app.dependency_overrides[get_user_context] = lambda: mock_user_context
 
         with TestClient(app) as client:
             response = client.get('/collection/stats')
@@ -89,13 +89,13 @@ class TestCollectionStatsEndpoint:
 class TestListArticlesEndpoint:
     """Tests for /articles endpoint."""
 
-    def test_list_articles_without_service_manager(self):
-        """Test list articles returns mock data (endpoint works without real services)."""
-        # list_articles returns mock data, doesn't actually use service_manager
+    def test_list_articles_without_service_manager(self, mock_user_context):
+        """Test list articles returns mock data without real services."""
         app = FastAPI()
         app.include_router(operations.router)
         mock_manager = Mock()
         app.dependency_overrides[get_service_manager] = lambda: mock_manager
+        app.dependency_overrides[get_user_context] = lambda: mock_user_context
 
         with TestClient(app) as client:
             response = client.get('/articles')
@@ -105,7 +105,9 @@ class TestListArticlesEndpoint:
             assert 'total' in data
 
     def test_list_articles_returns_paginated_results(
-        self, test_client, mock_service_manager
+        self,
+        test_client,
+        mock_service_manager,  # noqa: ARG002
     ):
         """Test list articles returns paginated mock data."""
         response = test_client.get('/articles?limit=5&offset=0')
@@ -121,7 +123,9 @@ class TestListArticlesEndpoint:
         assert isinstance(data['articles'], list)
 
     def test_list_articles_with_custom_pagination(
-        self, test_client, mock_service_manager
+        self,
+        test_client,
+        mock_service_manager,  # noqa: ARG002
     ):
         """Test list articles respects pagination parameters."""
         response = test_client.get('/articles?limit=2&offset=1')
@@ -192,7 +196,9 @@ class TestStreamingOperationEndpoint:
 
     @patch('thoth.server.routers.operations.create_background_task')
     def test_start_streaming_operation_with_custom_id(
-        self, mock_create_task, test_client
+        self,
+        mock_create_task,  # noqa: ARG002
+        test_client,
     ):
         """Test starting streaming operation with custom operation ID."""
         request_data = {

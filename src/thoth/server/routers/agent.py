@@ -10,12 +10,15 @@ All agent management is now handled by the Letta platform running on port 8283.
 import os
 from typing import Any  # noqa: F401
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from loguru import logger
 from pydantic import BaseModel
 
+from thoth.auth.context import UserContext
+from thoth.auth.dependencies import get_user_context
 from thoth.config import config
+from thoth.mcp.auth import get_current_user_paths
 
 router = APIRouter()
 
@@ -40,6 +43,31 @@ class AgentCreateRequest(BaseModel):
     description: str | None = None
     tools: list[str] | None = None
     system_prompt: str | None = None
+
+
+async def _resolve_user_agent_ids(
+    request: Request, user_id: str
+) -> dict[str, str | None]:
+    """Resolve orchestrator/analyst agent IDs for the authenticated user."""
+    service_manager = getattr(request.app.state, 'service_manager', None)
+    if service_manager is None:
+        raise HTTPException(status_code=503, detail='Service manager not initialized')
+
+    row = await service_manager.auth.postgres.fetchrow(
+        """
+        SELECT orchestrator_agent_id, analyst_agent_id
+        FROM users
+        WHERE id = $1 AND is_active = TRUE
+        """,
+        user_id,
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail='Authenticated user not found')
+
+    return {
+        'orchestrator': row['orchestrator_agent_id'],
+        'analyst': row['analyst_agent_id'],
+    }
 
 
 @router.get('/status')
@@ -98,7 +126,10 @@ def agent_status():
 
 
 @router.get('/list')
-async def list_available_agents():
+async def list_available_agents(
+    request: Request,
+    _user_context: UserContext = Depends(get_user_context),  # noqa: B008
+):
     """
     List all available Letta agents.
 
@@ -107,24 +138,45 @@ async def list_available_agents():
     try:
         import httpx
 
+        user_agents = await _resolve_user_agent_ids(request, _user_context.user_id)
+        allowed_ids = {
+            agent_id for agent_id in user_agents.values() if agent_id is not None
+        }
+
+        # User has no agents provisioned yet — skip the Letta call entirely.
+        if not allowed_ids:
+            return JSONResponse(
+                {
+                    'agents': [],
+                    'total_count': 0,
+                    'platform': 'letta',
+                    'message': 'No agents provisioned for this user',
+                }
+            )
+
         headers = {}
         if LETTA_API_KEY:
             headers['Authorization'] = f'Bearer {LETTA_API_KEY}'
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f'{LETTA_BASE_URL}/api/agents', headers=headers, timeout=10.0
+                f'{LETTA_BASE_URL}/v1/agents/', headers=headers, timeout=10.0
             )
             response.raise_for_status()
 
+            # Letta v1 returns a plain array, not {"agents": [...]}
             agents_data = response.json()
+            if isinstance(agents_data, dict):
+                agents_data = agents_data.get('agents', [])
 
-            # Format response
             agents_list = []
-            for agent in agents_data.get('agents', []):
+            for agent in agents_data:
+                agent_id = agent.get('id')
+                if agent_id not in allowed_ids:
+                    continue
                 agents_list.append(
                     {
-                        'id': agent.get('id'),
+                        'id': agent_id,
                         'name': agent.get('name'),
                         'description': agent.get('description'),
                         'tools': agent.get('tools', []),
@@ -154,7 +206,11 @@ async def list_available_agents():
 
 
 @router.post('/chat')
-async def agent_chat(message_request: ChatMessage):
+async def agent_chat(
+    request: Request,
+    message_request: ChatMessage,
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
+):
     """
     Send a message to a Letta agent.
 
@@ -174,13 +230,25 @@ async def agent_chat(message_request: ChatMessage):
         if LETTA_API_KEY:
             headers['Authorization'] = f'Bearer {LETTA_API_KEY}'
 
-        # Determine agent to use
-        agent_name = message_request.agent_name or 'research_assistant'
+        user_agents = await _resolve_user_agent_ids(request, user_context.user_id)
+        requested_role = (message_request.agent_name or 'orchestrator').lower()
+        preferred_role = 'analyst' if 'analyst' in requested_role else 'orchestrator'
+        agent_id = (
+            user_agents.get(preferred_role)
+            or user_agents.get('orchestrator')
+            or user_agents.get('analyst')
+        )
+        if not agent_id:
+            raise HTTPException(
+                status_code=400,
+                detail='No Letta agent is configured for the authenticated user',
+            )
 
         # Build request payload
         payload = {
             'message': message_request.message,
-            'user_id': message_request.user_id,
+            # Always enforce authenticated user identity in multi-user mode.
+            'user_id': user_context.user_id,
         }
 
         if message_request.conversation_id:
@@ -189,7 +257,7 @@ async def agent_chat(message_request: ChatMessage):
         async with httpx.AsyncClient() as client:
             # Send message to Letta
             response = await client.post(
-                f'{LETTA_BASE_URL}/api/agents/{agent_name}/messages',
+                f'{LETTA_BASE_URL}/api/agents/{agent_id}/messages',
                 headers=headers,
                 json=payload,
                 timeout=60.0,
@@ -201,9 +269,10 @@ async def agent_chat(message_request: ChatMessage):
             return JSONResponse(
                 {
                     'response': result.get('message', 'No response'),
-                    'agent_name': agent_name,
+                    'agent_name': preferred_role,
+                    'agent_id': agent_id,
                     'conversation_id': result.get('thread_id'),
-                    'user_id': message_request.user_id,
+                    'user_id': user_context.user_id,
                     'platform': 'letta',
                 }
             )
@@ -221,7 +290,10 @@ async def agent_chat(message_request: ChatMessage):
 
 
 @router.post('/create')
-async def create_agent(request: AgentCreateRequest):
+async def create_agent(
+    request: AgentCreateRequest,
+    _user_context: UserContext = Depends(get_user_context),  # noqa: B008
+):
     """
     Create a new Letta agent.
 
@@ -285,13 +357,19 @@ async def create_agent(request: AgentCreateRequest):
 
 
 @router.get('/config')
-def get_agent_config():
+def get_agent_config(
+    _user_context: UserContext = Depends(get_user_context),  # noqa: B008
+):
     """
     Get Letta configuration.
 
     Returns sanitized configuration for agent management.
     """
     try:
+        user_paths = get_current_user_paths()
+        workspace_dir = user_paths.workspace_dir if user_paths else config.workspace_dir
+        pdf_dir = user_paths.pdf_dir if user_paths else config.pdf_dir
+        notes_dir = user_paths.notes_dir if user_paths else config.notes_dir
         sanitized_config = {
             'letta': {
                 'base_url': LETTA_BASE_URL,
@@ -299,9 +377,9 @@ def get_agent_config():
                 'platform': 'letta',
             },
             'thoth': {
-                'workspace_dir': str(config.workspace_dir),
-                'pdf_dir': str(config.pdf_dir),
-                'notes_dir': str(config.notes_dir),
+                'workspace_dir': str(workspace_dir),
+                'pdf_dir': str(pdf_dir),
+                'notes_dir': str(notes_dir),
             },
             'message': 'For advanced agent configuration, use Letta REST API directly',
             'api_docs': f'{LETTA_BASE_URL}/docs',
@@ -317,7 +395,9 @@ def get_agent_config():
 
 
 @router.get('/info')
-def agent_info():
+def agent_info(
+    _user_context: UserContext = Depends(get_user_context),  # noqa: B008
+):
     """
     Get information about Letta agent management.
 

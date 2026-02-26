@@ -47,7 +47,9 @@ class DocumentPipeline(BasePipeline):
             # Fallback to conservative default
             return 2
 
-    def process_pdf(self, pdf_path: str | Path) -> tuple[Path, Path, Path]:
+    def process_pdf(
+        self, pdf_path: str | Path, user_id: str | None = None
+    ) -> tuple[Path, Path, Path]:
         """Process a PDF through OCR, analysis, citation extraction and note
         generation."""
         pdf_path = Path(pdf_path)
@@ -127,8 +129,8 @@ class DocumentPipeline(BasePipeline):
         # Run RAG indexing in background to avoid blocking main pipeline
         def _background_rag_indexing():
             try:
-                self._index_to_rag(Path(new_markdown_path))
-                self._index_to_rag(Path(note_path))
+                self._index_to_rag(Path(new_markdown_path), user_id=user_id)
+                self._index_to_rag(Path(note_path), user_id=user_id)
                 self.logger.debug('Background RAG indexing completed')
             except Exception as e:  # pragma: no cover - optional integration
                 self.logger.warning(f'Failed to index documents to RAG system: {e}')
@@ -188,10 +190,10 @@ class DocumentPipeline(BasePipeline):
 
         return str(note_path), str(new_pdf_path), str(new_markdown_path)
 
-    def _index_to_rag(self, file_path: Path) -> None:
+    def _index_to_rag(self, file_path: Path, user_id: str | None = None) -> None:
         try:
             if file_path.exists() and file_path.suffix == '.md':
-                self.services.rag.index_file(file_path)
+                self.services.rag.index_file(file_path, user_id=user_id)
                 self.logger.debug(f'Indexed {file_path} to RAG system')
         except Exception as e:  # pragma: no cover - optional integration
             self.logger.debug(f'Failed to index {file_path} to RAG: {e}')

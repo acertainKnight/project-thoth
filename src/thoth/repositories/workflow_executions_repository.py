@@ -21,7 +21,9 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
         """Initialize workflow executions repository."""
         super().__init__(postgres_service, table_name='workflow_executions', **kwargs)
 
-    async def create(self, execution_data: dict[str, Any]) -> UUID | None:
+    async def create(
+        self, execution_data: dict[str, Any], user_id: str | None = None
+    ) -> UUID | None:
         """
         Create a new workflow execution record.
 
@@ -37,6 +39,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             Optional[UUID]: ID of created execution or None
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'create')
             import json as _json
 
             # Set default started_at if not provided
@@ -46,6 +49,8 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             # Set default status if not provided
             if 'status' not in execution_data:
                 execution_data['status'] = 'running'
+            if user_id is not None and 'user_id' not in execution_data:
+                execution_data['user_id'] = user_id
 
             # asyncpg requires JSONB values as JSON strings, not raw dicts
             serialized = {}
@@ -77,7 +82,9 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to create workflow execution: {e}')
             return None
 
-    async def get_by_id(self, execution_id: UUID) -> dict[str, Any] | None:
+    async def get_by_id(
+        self, execution_id: UUID, user_id: str | None = None
+    ) -> dict[str, Any] | None:
         """
         Get a workflow execution by ID.
 
@@ -87,14 +94,21 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
         Returns:
             Optional[dict[str, Any]]: Execution data or None
         """
-        cache_key = self._cache_key('id', str(execution_id))
+        user_id = self._resolve_user_id(user_id, 'get_by_id')
+        cache_key = self._cache_key('id', str(execution_id), user_id=user_id)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
 
         try:
-            query = f'SELECT * FROM {self.table_name} WHERE id = $1'  # nosec B608
-            result = await self.postgres.fetchrow(query, execution_id)
+            if user_id is not None:
+                query = (
+                    f'SELECT * FROM {self.table_name} WHERE id = $1 AND user_id = $2'  # nosec B608
+                )
+                result = await self.postgres.fetchrow(query, execution_id, user_id)
+            else:
+                query = f'SELECT * FROM {self.table_name} WHERE id = $1'  # nosec B608
+                result = await self.postgres.fetchrow(query, execution_id)
 
             if result:
                 data = dict(result)
@@ -108,7 +122,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             return None
 
     async def get_by_workflow_id(
-        self, workflow_id: UUID, limit: int = 10
+        self, workflow_id: UUID, limit: int = 10, user_id: str | None = None
     ) -> list[dict[str, Any]]:
         """
         Get recent executions for a workflow.
@@ -120,7 +134,10 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
         Returns:
             list[dict[str, Any]]: List of execution records ordered by started_at DESC
         """
-        cache_key = self._cache_key('workflow', str(workflow_id), f'limit_{limit}')
+        user_id = self._resolve_user_id(user_id, 'get_by_workflow_id')
+        cache_key = self._cache_key(
+            'workflow', str(workflow_id), f'limit_{limit}', user_id=user_id
+        )
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
@@ -129,10 +146,23 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             query = """
                 SELECT * FROM workflow_executions
                 WHERE workflow_id = $1
+                {user_filter}
                 ORDER BY started_at DESC
                 LIMIT $2
             """
-            results = await self.postgres.fetch(query, workflow_id, limit)
+            if user_id is not None:
+                results = await self.postgres.fetch(
+                    query.format(user_filter='AND user_id = $3'),
+                    workflow_id,
+                    limit,
+                    user_id,
+                )
+            else:
+                results = await self.postgres.fetch(
+                    query.format(user_filter=''),
+                    workflow_id,
+                    limit,
+                )
             executions = [dict(row) for row in results]
 
             self._set_in_cache(cache_key, executions)
@@ -143,7 +173,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             return []
 
     async def get_recent_executions(
-        self, workflow_id: UUID, hours: int = 24
+        self, workflow_id: UUID, hours: int = 24, user_id: str | None = None
     ) -> list[dict[str, Any]]:
         """
         Get executions within a recent time window.
@@ -156,14 +186,23 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             list[dict[str, Any]]: List of recent execution records
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'get_recent_executions')
             since = datetime.now() - timedelta(hours=hours)
 
-            query = """
-                SELECT * FROM workflow_executions
-                WHERE workflow_id = $1 AND started_at >= $2
-                ORDER BY started_at DESC
-            """
-            results = await self.postgres.fetch(query, workflow_id, since)
+            if user_id is not None:
+                query = """
+                    SELECT * FROM workflow_executions
+                    WHERE workflow_id = $1 AND started_at >= $2 AND user_id = $3
+                    ORDER BY started_at DESC
+                """
+                results = await self.postgres.fetch(query, workflow_id, since, user_id)
+            else:
+                query = """
+                    SELECT * FROM workflow_executions
+                    WHERE workflow_id = $1 AND started_at >= $2
+                    ORDER BY started_at DESC
+                """
+                results = await self.postgres.fetch(query, workflow_id, since)
             return [dict(row) for row in results]
 
         except Exception as e:
@@ -177,6 +216,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
         execution_id: UUID,
         status: str,
         error_message: str | None = None,
+        user_id: str | None = None,
     ) -> bool:
         """
         Update the status of a workflow execution.
@@ -190,6 +230,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             bool: True if successful, False otherwise
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'update_status')
             updates = {'status': status}
 
             # Set completed_at timestamp for terminal states
@@ -204,12 +245,21 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             set_clauses = [f'{col} = ${i + 2}' for i, col in enumerate(updates.keys())]
             values = [execution_id] + list(updates.values())  # noqa: RUF005
 
-            query = f"""
-                UPDATE {self.table_name}
-                SET {', '.join(set_clauses)}
-                WHERE id = $1
-                RETURNING workflow_id
-            """  # nosec B608  # table_name is set in __init__, not user input
+            if user_id is not None:
+                query = f"""
+                    UPDATE {self.table_name}
+                    SET {', '.join(set_clauses)}
+                    WHERE id = $1 AND user_id = ${len(values) + 1}
+                    RETURNING workflow_id
+                """  # nosec B608
+                values.append(user_id)
+            else:
+                query = f"""
+                    UPDATE {self.table_name}
+                    SET {', '.join(set_clauses)}
+                    WHERE id = $1
+                    RETURNING workflow_id
+                """  # nosec B608
 
             workflow_id = await self.postgres.fetchval(query, *values)
 
@@ -225,7 +275,9 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to update execution status for {execution_id}: {e}')
             return False
 
-    async def get_success_rate(self, workflow_id: UUID, days: int = 7) -> float:
+    async def get_success_rate(
+        self, workflow_id: UUID, days: int = 7, user_id: str | None = None
+    ) -> float:
         """
         Calculate the success rate for a workflow over a time period.
 
@@ -237,16 +289,29 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             float: Success rate as a percentage (0.0 to 1.0)
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'get_success_rate')
             since = datetime.now() - timedelta(days=days)
 
-            query = """
-                SELECT
-                    COUNT(*) as total,
-                    COUNT(*) FILTER (WHERE status = 'completed') as successful
-                FROM workflow_executions
-                WHERE workflow_id = $1 AND started_at >= $2
-            """
-            result = await self.postgres.fetchrow(query, workflow_id, since)
+            if user_id is not None:
+                query = """
+                    SELECT
+                        COUNT(*) as total,
+                        COUNT(*) FILTER (WHERE status = 'completed') as successful
+                    FROM workflow_executions
+                    WHERE workflow_id = $1 AND started_at >= $2 AND user_id = $3
+                """
+                result = await self.postgres.fetchrow(
+                    query, workflow_id, since, user_id
+                )
+            else:
+                query = """
+                    SELECT
+                        COUNT(*) as total,
+                        COUNT(*) FILTER (WHERE status = 'completed') as successful
+                    FROM workflow_executions
+                    WHERE workflow_id = $1 AND started_at >= $2
+                """
+                result = await self.postgres.fetchrow(query, workflow_id, since)
 
             if not result or result['total'] == 0:
                 return 0.0
@@ -261,7 +326,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             return 0.0
 
     async def get_execution_statistics(
-        self, workflow_id: UUID, days: int = 7
+        self, workflow_id: UUID, days: int = 7, user_id: str | None = None
     ) -> dict[str, Any]:
         """
         Get comprehensive execution statistics for a workflow.
@@ -274,23 +339,43 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             dict[str, Any]: Dictionary containing execution statistics
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'get_execution_statistics')
             since = datetime.now() - timedelta(days=days)
 
-            query = """
-                SELECT
-                    COUNT(*) as total_executions,
-                    COUNT(*) FILTER (WHERE status = 'completed') as successful,
-                    COUNT(*) FILTER (WHERE status = 'failed') as failed,
-                    COUNT(*) FILTER (WHERE status = 'running') as running,
-                    AVG(
-                        EXTRACT(EPOCH FROM (completed_at - started_at))
-                    ) FILTER (WHERE completed_at IS NOT NULL) as avg_duration_seconds,
-                    MIN(started_at) as first_execution,
-                    MAX(started_at) as last_execution
-                FROM workflow_executions
-                WHERE workflow_id = $1 AND started_at >= $2
-            """
-            result = await self.postgres.fetchrow(query, workflow_id, since)
+            if user_id is not None:
+                query = """
+                    SELECT
+                        COUNT(*) as total_executions,
+                        COUNT(*) FILTER (WHERE status = 'completed') as successful,
+                        COUNT(*) FILTER (WHERE status = 'failed') as failed,
+                        COUNT(*) FILTER (WHERE status = 'running') as running,
+                        AVG(
+                            EXTRACT(EPOCH FROM (completed_at - started_at))
+                        ) FILTER (WHERE completed_at IS NOT NULL) as avg_duration_seconds,
+                        MIN(started_at) as first_execution,
+                        MAX(started_at) as last_execution
+                    FROM workflow_executions
+                    WHERE workflow_id = $1 AND started_at >= $2 AND user_id = $3
+                """
+                result = await self.postgres.fetchrow(
+                    query, workflow_id, since, user_id
+                )
+            else:
+                query = """
+                    SELECT
+                        COUNT(*) as total_executions,
+                        COUNT(*) FILTER (WHERE status = 'completed') as successful,
+                        COUNT(*) FILTER (WHERE status = 'failed') as failed,
+                        COUNT(*) FILTER (WHERE status = 'running') as running,
+                        AVG(
+                            EXTRACT(EPOCH FROM (completed_at - started_at))
+                        ) FILTER (WHERE completed_at IS NOT NULL) as avg_duration_seconds,
+                        MIN(started_at) as first_execution,
+                        MAX(started_at) as last_execution
+                    FROM workflow_executions
+                    WHERE workflow_id = $1 AND started_at >= $2
+                """
+                result = await self.postgres.fetchrow(query, workflow_id, since)
 
             if not result:
                 return {}
@@ -312,7 +397,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             return {}
 
     async def get_failed_executions(
-        self, workflow_id: UUID, limit: int = 10
+        self, workflow_id: UUID, limit: int = 10, user_id: str | None = None
     ) -> list[dict[str, Any]]:
         """
         Get recent failed executions for debugging.
@@ -325,13 +410,23 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             list[dict[str, Any]]: List of failed execution records
         """
         try:
-            query = """
-                SELECT * FROM workflow_executions
-                WHERE workflow_id = $1 AND status = 'failed'
-                ORDER BY started_at DESC
-                LIMIT $2
-            """
-            results = await self.postgres.fetch(query, workflow_id, limit)
+            user_id = self._resolve_user_id(user_id, 'get_failed_executions')
+            if user_id is not None:
+                query = """
+                    SELECT * FROM workflow_executions
+                    WHERE workflow_id = $1 AND status = 'failed' AND user_id = $3
+                    ORDER BY started_at DESC
+                    LIMIT $2
+                """
+                results = await self.postgres.fetch(query, workflow_id, limit, user_id)
+            else:
+                query = """
+                    SELECT * FROM workflow_executions
+                    WHERE workflow_id = $1 AND status = 'failed'
+                    ORDER BY started_at DESC
+                    LIMIT $2
+                """
+                results = await self.postgres.fetch(query, workflow_id, limit)
             return [dict(row) for row in results]
 
         except Exception as e:
@@ -343,6 +438,7 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
     async def get_running_executions(
         self,
         workflow_id: UUID | None = None,
+        user_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Get all currently running executions.
@@ -354,20 +450,37 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             list[dict[str, Any]]: List of running execution records
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'get_running_executions')
             if workflow_id:
-                query = """
-                    SELECT * FROM workflow_executions
-                    WHERE workflow_id = $1 AND status = 'running'
-                    ORDER BY started_at DESC
-                """
-                results = await self.postgres.fetch(query, workflow_id)
+                if user_id is not None:
+                    query = """
+                        SELECT * FROM workflow_executions
+                        WHERE workflow_id = $1 AND status = 'running' AND user_id = $2
+                        ORDER BY started_at DESC
+                    """
+                    results = await self.postgres.fetch(query, workflow_id, user_id)
+                else:
+                    query = """
+                        SELECT * FROM workflow_executions
+                        WHERE workflow_id = $1 AND status = 'running'
+                        ORDER BY started_at DESC
+                    """
+                    results = await self.postgres.fetch(query, workflow_id)
             else:
-                query = """
-                    SELECT * FROM workflow_executions
-                    WHERE status = 'running'
-                    ORDER BY started_at DESC
-                """
-                results = await self.postgres.fetch(query)
+                if user_id is not None:
+                    query = """
+                        SELECT * FROM workflow_executions
+                        WHERE status = 'running' AND user_id = $1
+                        ORDER BY started_at DESC
+                    """
+                    results = await self.postgres.fetch(query, user_id)
+                else:
+                    query = """
+                        SELECT * FROM workflow_executions
+                        WHERE status = 'running'
+                        ORDER BY started_at DESC
+                    """
+                    results = await self.postgres.fetch(query)
 
             return [dict(row) for row in results]
 
@@ -375,7 +488,9 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             logger.error('Failed to get running executions: {e}')
             return []
 
-    async def update_results(self, execution_id: UUID, results: dict[str, Any]) -> bool:
+    async def update_results(
+        self, execution_id: UUID, results: dict[str, Any], user_id: str | None = None
+    ) -> bool:
         """
         Update the results of a workflow execution.
 
@@ -386,10 +501,10 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
         Returns:
             bool: True if successful, False otherwise
         """
-        return await self.update(execution_id, {'results': results})
+        return await self.update(execution_id, {'results': results}, user_id=user_id)
 
     async def get_average_duration(
-        self, workflow_id: UUID, days: int = 7
+        self, workflow_id: UUID, days: int = 7, user_id: str | None = None
     ) -> float | None:
         """
         Get average execution duration in seconds.
@@ -402,19 +517,36 @@ class WorkflowExecutionsRepository(BaseRepository[dict[str, Any]]):
             Optional[float]: Average duration in seconds or None
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'get_average_duration')
             since = datetime.now() - timedelta(days=days)
 
-            query = """
-                SELECT AVG(
-                    EXTRACT(EPOCH FROM (completed_at - started_at))
-                ) as avg_duration
-                FROM workflow_executions
-                WHERE workflow_id = $1
-                  AND started_at >= $2
-                  AND completed_at IS NOT NULL
-                  AND status = 'completed'
-            """
-            result = await self.postgres.fetchval(query, workflow_id, since)
+            if user_id is not None:
+                query = """
+                    SELECT AVG(
+                        EXTRACT(EPOCH FROM (completed_at - started_at))
+                    ) as avg_duration
+                    FROM workflow_executions
+                    WHERE workflow_id = $1
+                      AND started_at >= $2
+                      AND completed_at IS NOT NULL
+                      AND status = 'completed'
+                      AND user_id = $3
+                """
+                result = await self.postgres.fetchval(
+                    query, workflow_id, since, user_id
+                )
+            else:
+                query = """
+                    SELECT AVG(
+                        EXTRACT(EPOCH FROM (completed_at - started_at))
+                    ) as avg_duration
+                    FROM workflow_executions
+                    WHERE workflow_id = $1
+                      AND started_at >= $2
+                      AND completed_at IS NOT NULL
+                      AND status = 'completed'
+                """
+                result = await self.postgres.fetchval(query, workflow_id, since)
             return result
 
         except Exception as e:

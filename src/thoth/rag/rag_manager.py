@@ -26,6 +26,7 @@ from thoth.rag.agentic_retrieval import AgenticRAGOrchestrator
 from thoth.rag.document_grader import DocumentGrader
 from thoth.rag.hallucination_checker import HallucinationChecker
 from thoth.rag.knowledge_refiner import KnowledgeRefiner
+from thoth.mcp.auth import get_mcp_user_id
 from thoth.utilities import OpenRouterClient
 from thoth.config import config
 
@@ -352,12 +353,14 @@ class RAGManager:
             return None
 
         async def lookup():
+            resolved_user_id = get_mcp_user_id()
             conn = await asyncpg.connect(db_url)
             try:
                 # Try exact match first, then normalized match
                 paper_id = await conn.fetchval(
-                    'SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1)',
+                    'SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1) AND user_id = $2',
                     title,
+                    resolved_user_id,
                 )
                 if paper_id:
                     return str(paper_id)
@@ -365,8 +368,9 @@ class RAGManager:
                 # Try fuzzy match with title normalization
                 normalized_title = title.replace('_', ' ').replace('-', ' ')
                 paper_id = await conn.fetchval(
-                    'SELECT id FROM paper_metadata WHERE LOWER(title_normalized) = LOWER($1)',
+                    'SELECT id FROM paper_metadata WHERE LOWER(title_normalized) = LOWER($1) AND user_id = $2',
                     normalized_title,
+                    resolved_user_id,
                 )
                 return str(paper_id) if paper_id else None
             finally:
@@ -381,7 +385,10 @@ class RAGManager:
             return asyncio.run(lookup())
 
     def index_paper_by_id(
-        self, paper_id: str, markdown_content: str | None = None
+        self,
+        paper_id: str,
+        markdown_content: str | None = None,
+        user_id: str | None = None,
     ) -> list[str]:
         """
         Index a paper directly from the database by its ID.
@@ -390,6 +397,7 @@ class RAGManager:
             paper_id: UUID of the paper to index.
             markdown_content: Optional markdown content (if not provided,
                 fetched from DB).
+            user_id: Optional user ID for multi-tenant isolation.
 
         Returns:
             List of document IDs that were indexed.
@@ -408,6 +416,7 @@ class RAGManager:
                 raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
             async def fetch_and_index():
+                resolved_user_id = user_id or get_mcp_user_id()
                 conn = await asyncpg.connect(db_url)
                 try:
                     # Fetch paper details and markdown content including collection info
@@ -425,9 +434,10 @@ class RAGManager:
                         FROM paper_metadata pm
                         LEFT JOIN processed_papers pp ON pp.paper_id = pm.id
                         LEFT JOIN knowledge_collections kc ON kc.id = pm.collection_id
-                        WHERE pm.id = $1
+                        WHERE pm.id = $1 AND pm.user_id = $2
                         """,
                         paper_uuid,
+                        resolved_user_id,
                     )
 
                     if not row:
@@ -490,7 +500,7 @@ class RAGManager:
 
                     # Index documents using async method
                     doc_ids = await self.vector_store_manager.add_documents_async(
-                        documents, paper_id=paper_uuid
+                        documents, paper_id=paper_uuid, user_id=user_id
                     )
                     logger.info(
                         f'Successfully indexed {len(doc_ids)} chunks for paper {paper_id}'
@@ -516,7 +526,10 @@ class RAGManager:
             raise
 
     async def index_paper_by_id_async(
-        self, paper_id: str, markdown_content: str | None = None
+        self,
+        paper_id: str,
+        markdown_content: str | None = None,
+        user_id: str | None = None,
     ) -> list[str]:
         """
         Index a paper from the database by its ID (async version).
@@ -525,6 +538,7 @@ class RAGManager:
             paper_id: UUID of the paper to index.
             markdown_content: Optional markdown content (if not provided,
                 fetched from DB).
+            user_id: Optional user ID for multi-tenant isolation.
 
         Returns:
             List of document IDs that were indexed.
@@ -543,6 +557,7 @@ class RAGManager:
 
             conn = await asyncpg.connect(db_url)
             try:
+                resolved_user_id = user_id or get_mcp_user_id()
                 row = await conn.fetchrow(
                     """
                     SELECT
@@ -557,9 +572,10 @@ class RAGManager:
                     FROM paper_metadata pm
                     LEFT JOIN processed_papers pp ON pp.paper_id = pm.id
                     LEFT JOIN knowledge_collections kc ON kc.id = pm.collection_id
-                    WHERE pm.id = $1
+                    WHERE pm.id = $1 AND pm.user_id = $2
                     """,
                     paper_uuid,
+                    resolved_user_id,
                 )
 
                 if not row:
@@ -604,7 +620,7 @@ class RAGManager:
                     )
 
                 doc_ids = await self.vector_store_manager.add_documents_async(
-                    documents, paper_id=paper_uuid
+                    documents, paper_id=paper_uuid, user_id=user_id
                 )
                 logger.info(
                     f'Successfully indexed {len(doc_ids)} chunks for paper {paper_id}'
@@ -618,7 +634,10 @@ class RAGManager:
             raise
 
     def index_markdown_file(
-        self, file_path: Path, paper_id: str | None = None
+        self,
+        file_path: Path,
+        paper_id: str | None = None,
+        user_id: str | None = None,
     ) -> list[str]:
         """
         Index a markdown file into the vector store.
@@ -627,6 +646,7 @@ class RAGManager:
             file_path: Path to the markdown file.
             paper_id: Optional paper ID (UUID string). If not provided,
                 attempts lookup by title.
+            user_id: Optional user ID for multi-tenant isolation.
 
         Returns:
             List of document IDs that were indexed.
@@ -666,7 +686,9 @@ class RAGManager:
                     )
 
             # If we have paper_id, use the database-backed method for consistency
-            return self.index_paper_by_id(paper_id, markdown_content=content)
+            return self.index_paper_by_id(
+                paper_id, markdown_content=content, user_id=user_id
+            )
 
         except Exception as e:
             logger.error(f'Error indexing markdown file {file_path}: {e}')

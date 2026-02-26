@@ -215,16 +215,17 @@ class MCPServersManager(BaseService):
     async def _on_config_changed(self) -> None:
         """Handle config file changes by diffing and reconnecting servers."""
         try:
+            # Snapshot the old config before load_config() overwrites it
+            old_config = self.current_config
             new_config = await self.load_config()
 
             # If this is the first load, just connect all enabled servers
-            if self.current_config is None:
-                self.current_config = new_config
+            if old_config is None:
                 await self._connect_all_enabled_servers()
                 return
 
             # Diff the configs
-            old_servers = set(self.current_config.mcp_servers.keys())
+            old_servers = set(old_config.mcp_servers.keys())
             new_servers = set(new_config.mcp_servers.keys())
 
             # Removed servers
@@ -234,15 +235,18 @@ class MCPServersManager(BaseService):
 
             # Added or changed servers
             for server_id in new_servers:
-                old_entry = self.current_config.mcp_servers.get(server_id)
+                old_entry = old_config.mcp_servers.get(server_id)
                 new_entry = new_config.mcp_servers[server_id]
 
-                # If server exists and config changed, reconnect
+                # If server exists and config changed, update in place
                 if old_entry and old_entry != new_entry:
-                    self.logger.info(f'Server {server_id} config changed, reconnecting')
-                    await self._disconnect_server(server_id)
                     if new_entry.enabled:
-                        await self._connect_server(server_id, new_entry)
+                        self.logger.info(
+                            f"Server '{server_id}' config changed, updating"
+                        )
+                        await self._update_server_in_letta(server_id, new_entry)
+                    else:
+                        await self._disconnect_server(server_id)
 
                 # If server is new and enabled, connect
                 elif not old_entry and new_entry.enabled:
@@ -252,7 +256,7 @@ class MCPServersManager(BaseService):
                 elif old_entry and old_entry.enabled and not new_entry.enabled:
                     await self._disconnect_server(server_id)
 
-                # If server was enabled, connect
+                # If server was re-enabled, connect
                 elif old_entry and not old_entry.enabled and new_entry.enabled:
                     await self._connect_server(server_id, new_entry)
 
@@ -263,6 +267,53 @@ class MCPServersManager(BaseService):
 
         except Exception as e:
             self.logger.error(f'Failed to handle config change: {e}')
+
+    async def _update_server_in_letta(
+        self, server_id: str, server_entry: MCPServerEntry
+    ) -> None:
+        """Update an already-registered MCP server in Letta with new config.
+
+        Calls PATCH on Letta's MCP server endpoint, then re-syncs tool discovery.
+        Falls back to delete+create if no Letta UUID is tracked for this server.
+
+        Args:
+            server_id: Internal server identifier.
+            server_entry: New server configuration.
+        """
+        if not self._letta_service:
+            return
+
+        letta_id = self._letta_id_map.get(server_id)
+        if not letta_id:
+            # No UUID tracked -- treat as a new registration
+            self.logger.warning(
+                f"No Letta ID tracked for '{server_id}', registering as new"
+            )
+            await self._connect_server(server_id, server_entry)
+            return
+
+        server_config = {
+            'transport': server_entry.transport,
+            'command': server_entry.command,
+            'args': server_entry.args,
+            'env': server_entry.env,
+            'url': server_entry.url,
+        }
+
+        result = self._letta_service.update_mcp_server(
+            letta_id, server_id, server_config
+        )
+
+        if result.get('success'):
+            tool_details = await self._sync_tools_from_letta(server_id, letta_id)
+            if tool_details:
+                self.server_tools[server_id] = tool_details
+            self.connected_servers[server_id] = 'letta_managed'
+            self.logger.info(f"Updated MCP server '{server_id}' in Letta")
+        else:
+            self.logger.error(
+                f"Failed to update '{server_id}' in Letta: {result.get('error')}"
+            )
 
     async def _connect_all_enabled_servers(self) -> None:
         """Connect to all enabled servers in the config."""
@@ -383,7 +434,7 @@ class MCPServersManager(BaseService):
 
     async def _disconnect_server(self, server_id: str) -> None:
         """
-        Disconnect from an external MCP server and unregister its tools.
+        Disconnect from an external MCP server and delete it from Letta.
 
         Args:
             server_id: Server identifier
@@ -394,19 +445,20 @@ class MCPServersManager(BaseService):
         try:
             self.logger.info(f'Disconnecting from MCP server: {server_id}')
 
-            # Close session
+            # Close direct session if one exists (non-Letta path)
             session = self.connected_servers[server_id]
             if hasattr(session, '__aexit__'):
                 await session.__aexit__(None, None, None)
 
-            # Remove from tracking
             del self.connected_servers[server_id]
 
-            # Detach tools from agents
             if server_id in self.server_tools:
-                # TODO: Unregister prefixed tool names from MCP registry
-                # TODO: Detach from Letta agents
                 del self.server_tools[server_id]
+
+            # Delete from Letta so it doesn't persist across reconnects
+            letta_id = self._letta_id_map.pop(server_id, None)
+            if letta_id and self._letta_service:
+                self._letta_service.delete_mcp_server(letta_id)
 
             self.logger.info(f'Disconnected from {server_id}')
 

@@ -16,6 +16,9 @@ from thoth.repositories.base import BaseRepository
 class AvailableSourceRepository(BaseRepository[dict[str, Any]]):
     """Repository for managing available discovery source plugins."""
 
+    # Available sources are global - shared across all users
+    TENANT_SCOPED = False
+
     def __init__(self, postgres_service, **kwargs):
         """Initialize available source repository."""
         super().__init__(postgres_service, table_name='available_sources', **kwargs)

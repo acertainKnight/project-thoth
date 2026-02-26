@@ -123,8 +123,7 @@ class PipelineAnalyzer:
         self.baselines: dict[str, PipelineMetrics] = {}
 
         # Analysis results storage
-        self.analysis_dir = config.workspace_dir / 'analysis' / 'pipelines'
-        self.analysis_dir.mkdir(parents=True, exist_ok=True)
+        self.analysis_dir = config.data_root / 'analysis' / 'pipelines'
 
         logger.info('PipelineAnalyzer initialized')
 

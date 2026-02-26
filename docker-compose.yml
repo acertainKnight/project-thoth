@@ -59,11 +59,22 @@ x-thoth-common: &thoth-common
     - THOTH_AGENT_MAX_TOOL_CALLS=20
     - THOTH_AGENT_TIMEOUT_SECONDS=300
 
-  volumes:
+    # Multi-user mode (set THOTH_MULTI_USER=true to enable)
+    # When enabled, each user gets an isolated vault under THOTH_VAULTS_ROOT
+    # and all data is scoped by user_id in the database.
+    - THOTH_MULTI_USER=${THOTH_MULTI_USER:-false}
+    - THOTH_VAULTS_ROOT=${THOTH_VAULTS_ROOT:-/vaults}
+    - THOTH_ALLOW_REGISTRATION=${THOTH_ALLOW_REGISTRATION:-false}
+
+  volumes: &thoth-volumes
     - ${OBSIDIAN_VAULT_PATH:?Please set OBSIDIAN_VAULT_PATH to your Obsidian vault root directory}:/vault:rw
     - thoth-tmp-cache:/tmp/cache
     - ./templates:/app/templates:ro
     - thoth-app-home:/home/thoth
+    # Multi-user vault root: mounted only when THOTH_MULTI_USER=true.
+    # Set THOTH_VAULTS_ROOT on the host and it will be bind-mounted at /vaults.
+    # In single-user mode this mount is harmless (unused directory).
+    - ${THOTH_VAULTS_ROOT:-./vaults}:/vaults:rw
 
   networks:
     - thoth-network

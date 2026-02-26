@@ -76,17 +76,20 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
     async def get_active_questions(
         self,
         limit: int | None = None,
+        user_id: str | None = None,
     ) -> List[dict[str, Any]]:  # noqa: UP006
         """
-        Get all active research questions across all users.
+        Get all active research questions, optionally filtered by user.
 
         Args:
             limit: Maximum number of results
+            user_id: Optional user filter
 
         Returns:
             List[dict[str, Any]]: List of active research questions
         """
-        cache_key = self._cache_key('active', limit)
+        user_id = self._resolve_user_id(user_id, 'get_active_questions')
+        cache_key = self._cache_key('active', limit, user_id)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
@@ -95,9 +98,16 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
             query = """
                 SELECT * FROM research_questions
                 WHERE is_active = true
+                {user_filter}
                 ORDER BY next_run_at ASC NULLS LAST, created_at DESC
             """
-            params = []
+            params: list[Any] = []
+
+            if user_id is not None:
+                params.append(user_id)
+                query = query.format(user_filter=f'AND user_id = ${len(params)}')
+            else:
+                query = query.format(user_filter='')
 
             if limit is not None:
                 query += f' LIMIT ${len(params) + 1}'
@@ -116,16 +126,20 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
     async def get_questions_due_for_run(
         self,
         as_of: datetime | None = None,
+        user_id: str | None = None,
     ) -> List[dict[str, Any]]:  # noqa: UP006
         """
         Get research questions that are due for discovery runs.
 
         Args:
             as_of: Timestamp to check against (default: now)
+            user_id: Optional user filter
 
         Returns:
             List[dict[str, Any]]: List of questions due for runs
         """
+        user_id = self._resolve_user_id(user_id, 'get_questions_due_for_run')
+
         if as_of is None:
             as_of = datetime.now()
 
@@ -138,10 +152,17 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
                 SELECT * FROM research_questions
                 WHERE is_active = true
                 AND (next_run_at IS NULL OR next_run_at <= $1)
+                {user_filter}
                 ORDER BY next_run_at ASC NULLS FIRST
             """
 
-            results = await self.postgres.fetch(query, as_of)
+            if user_id is not None:
+                query = query.format(user_filter='AND user_id = $2')
+                results = await self.postgres.fetch(query, as_of, user_id)
+            else:
+                query = query.format(user_filter='')
+                results = await self.postgres.fetch(query, as_of)
+
             return [dict(row) for row in results]
 
         except Exception as e:
@@ -385,16 +406,20 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
     async def get_statistics(
         self,
         question_id: UUID | None = None,
+        user_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Get statistics for research questions.
 
         Args:
             question_id: Optional specific question ID
+            user_id: Optional user filter
 
         Returns:
             dict[str, Any]: Statistics including match counts, run history, etc.
         """
+        user_id = self._resolve_user_id(user_id, 'get_statistics')
+
         try:
             if question_id:
                 query = """
@@ -416,9 +441,15 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
                     LEFT JOIN research_question_matches rqm ON rq.id = rqm.question_id
                     LEFT JOIN discovery_execution_log del ON rq.id = del.question_id
                     WHERE rq.id = $1
+                    {user_filter}
                     GROUP BY rq.id
                 """
-                result = await self.postgres.fetchrow(query, question_id)
+                if user_id is not None:
+                    query = query.format(user_filter='AND rq.user_id = $2')
+                    result = await self.postgres.fetchrow(query, question_id, user_id)
+                else:
+                    query = query.format(user_filter='')
+                    result = await self.postgres.fetchrow(query, question_id)
                 return dict(result) if result else {}
             else:
                 query = """
@@ -429,8 +460,14 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
                         AVG(rqm.relevance_score) as avg_relevance_score
                     FROM research_questions rq
                     LEFT JOIN research_question_matches rqm ON rq.id = rqm.question_id
+                    {where_clause}
                 """
-                result = await self.postgres.fetchrow(query)
+                if user_id is not None:
+                    query = query.format(where_clause='WHERE rq.user_id = $1')
+                    result = await self.postgres.fetchrow(query, user_id)
+                else:
+                    query = query.format(where_clause='')
+                    result = await self.postgres.fetchrow(query)
                 return dict(result) if result else {}
 
         except Exception as e:

@@ -18,6 +18,8 @@ from fastapi import FastAPI
 from loguru import logger
 from starlette.middleware.cors import CORSMiddleware
 
+from thoth.auth.middleware import TokenAuthMiddleware
+
 # Optional: MCP monitoring (requires mcp extras)
 try:
     from thoth.mcp.monitoring import mcp_health_router
@@ -27,7 +29,6 @@ except ImportError:
     mcp_health_router = None  # type: ignore
     MCP_HEALTH_AVAILABLE = False
 
-from thoth.server.chat_models import ChatPersistenceManager
 
 # Optional hot reload for development (requires watchdog package)
 try:
@@ -43,10 +44,11 @@ except ImportError:
 # Import routers - browser_workflows is optional (requires playwright)
 from thoth.server.routers import (  # noqa: I001
     agent,
-    chat,
+    auth,
     config as config_router,
     files,
     health,
+    letta_proxy,
     mcp_servers,
     models,
     operations,
@@ -98,7 +100,6 @@ workflow_execution_service = None
 # NOTE: The following have been moved to app.state for better thread safety:
 # - service_manager (accessed via dependencies.get_service_manager)
 # - research_agent (accessed via dependencies.get_research_agent)
-# - chat_manager (accessed via dependencies.get_chat_manager)
 # - agent_adapter, llm_router (not needed in routers)
 
 
@@ -529,6 +530,8 @@ async def lifespan(app: FastAPI):
         )
 
         agent_init = AgentInitializationService()
+        # Store on service_manager so /auth/register can call initialize_agents_for_user
+        service_manager._services['agent_initialization'] = agent_init
         agent_ids = await agent_init.initialize_all_agents(
             service_manager=service_manager
         )
@@ -576,6 +579,26 @@ async def lifespan(app: FastAPI):
     # Store workflow_execution_service in app.state for router access
     if workflow_execution_service is not None:
         app.state.workflow_execution_service = workflow_execution_service
+
+    # In multi-user mode, start the RAG watcher across all user vaults
+    if os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true' and service_manager:
+        try:
+            vaults_root = Path(os.getenv('THOTH_VAULTS_ROOT', '/vaults'))
+            if hasattr(
+                service_manager, 'rag_watcher'
+            ) and service_manager._services.get('rag_watcher'):
+                postgres_svc = service_manager.postgres
+                rows = await postgres_svc.fetch(
+                    'SELECT username FROM users WHERE is_active = TRUE'
+                )
+                usernames = [row['username'] for row in rows] if rows else []
+                if usernames:
+                    service_manager.rag_watcher.start_multi_user(vaults_root, usernames)
+                    logger.info(
+                        f'Multi-user RAG watcher started for {len(usernames)} users'
+                    )
+        except Exception as e:
+            logger.warning(f'Could not start multi-user RAG watcher: {e}')
 
     logger.success('API server startup complete')
 
@@ -666,8 +689,20 @@ def create_app() -> FastAPI:
         allow_headers=['*'],
     )
 
+    # Add token auth middleware (no-op in single-user mode; enforces Bearer tokens
+    # in multi-user mode). AuthService is resolved lazily from request.app.state
+    # so it always references the live service after lifespan initialization.
+    _multi_user = os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true'
+    app.add_middleware(
+        TokenAuthMiddleware,
+        vaults_root=Path(os.getenv('THOTH_VAULTS_ROOT', '/vaults'))
+        if _multi_user
+        else None,
+    )
+
     # Include routers with proper prefixes
     app.include_router(health.router, tags=['health'])
+    app.include_router(auth.router, tags=['authentication'])
 
     # Include MCP health router if available (requires mcp extras)
     if MCP_HEALTH_AVAILABLE:
@@ -679,7 +714,6 @@ def create_app() -> FastAPI:
         logger.debug('MCP health monitoring not available (requires mcp extras)')
 
     app.include_router(websocket.router, tags=['websocket'])
-    app.include_router(chat.router, prefix='/chat', tags=['chat'])
     app.include_router(agent.router, prefix='/agents', tags=['agent'])
     app.include_router(research.router, prefix='/research', tags=['research'])
     app.include_router(
@@ -700,6 +734,7 @@ def create_app() -> FastAPI:
     app.include_router(mcp_servers.router, tags=['mcp-servers'])
     app.include_router(tools.router, prefix='/tools', tags=['tools'])
     app.include_router(files.router, prefix='/api/files', tags=['files'])
+    app.include_router(letta_proxy.router, prefix='/api/letta', tags=['letta-proxy'])
 
     # Add hot-reload health check endpoint
     @app.get('/health/hot-reload')
@@ -804,14 +839,7 @@ async def start_server(
         auto_start_mcp: Whether to start the MCP server automatically
         **kwargs: Additional configuration options
     """
-    global \
-        service_manager, \
-        research_agent, \
-        chat_manager, \
-        pdf_dir, \
-        notes_dir, \
-        base_url, \
-        current_config
+    global service_manager, research_agent, pdf_dir, notes_dir, base_url, current_config
 
     try:
         # Get configuration
@@ -837,16 +865,6 @@ async def start_server(
 
         # Initialize LLM router
         llm_router = LLMRouter(config)  # noqa: F841
-
-        # Initialize chat persistence manager
-        try:
-            chat_manager = ChatPersistenceManager(
-                storage_path=config.agent_storage_dir / 'chat_sessions.db'
-            )
-            logger.info('Chat persistence manager initialized')
-        except Exception as e:
-            logger.warning(f'Failed to initialize chat manager: {e}')
-            chat_manager = None
 
         # Start MCP server FIRST if requested
         if auto_start_mcp:
@@ -917,7 +935,6 @@ def start_obsidian_server(
         # Store dependencies in app.state for router access
         app.state.service_manager = service_manager
         app.state.research_agent = research_agent
-        app.state.chat_manager = chat_manager
         app.state.workflow_execution_service = workflow_execution_service
 
         logger.info('Dependencies stored in app.state for router access')
@@ -967,7 +984,6 @@ app = create_app()
 # Initialize empty app.state for direct imports (populated by lifespan)
 app.state.service_manager = None
 app.state.research_agent = None
-app.state.chat_manager = None
 app.state.workflow_execution_service = None
 
 # Export the main functions

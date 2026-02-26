@@ -281,6 +281,33 @@ class LettaService(BaseService):
         except Exception:
             return False
 
+    def _build_mcp_config_block(self, server_config: dict[str, Any]) -> dict[str, Any]:
+        """Build the config block for Letta Create/Update MCP server requests.
+
+        Args:
+            server_config: Internal config with 'transport' and transport-specific
+                fields.
+
+        Returns:
+            Config block dict ready to embed under the 'config' key.
+        """
+        config_block: dict[str, Any] = {}
+
+        if server_config['transport'] == 'stdio':
+            config_block['mcp_server_type'] = 'stdio'
+            config_block['command'] = server_config['command']
+            config_block['args'] = server_config.get('args', [])
+            if server_config.get('env'):
+                config_block['env'] = server_config['env']
+        elif server_config['transport'] in ['http', 'sse']:
+            mcp_type = (
+                'streamable_http' if server_config['transport'] == 'http' else 'sse'
+            )
+            config_block['mcp_server_type'] = mcp_type
+            config_block['server_url'] = server_config['url']
+
+        return config_block
+
     def register_mcp_server(
         self, server_id: str, server_config: dict[str, Any]
     ) -> dict[str, Any]:
@@ -295,29 +322,11 @@ class LettaService(BaseService):
             dict: Registration result with server info
         """
         try:
-            # Build nested config matching Letta's CreateMCPServerRequest schema:
-            # { "server_name": "...", "config": { "mcp_server_type": "...", ... } }
-            config_block: dict[str, Any] = {}
-
-            if server_config['transport'] == 'stdio':
-                config_block['mcp_server_type'] = 'stdio'
-                config_block['command'] = server_config['command']
-                config_block['args'] = server_config.get('args', [])
-                if server_config.get('env'):
-                    config_block['env'] = server_config['env']
-            elif server_config['transport'] in ['http', 'sse']:
-                mcp_type = (
-                    'streamable_http' if server_config['transport'] == 'http' else 'sse'
-                )
-                config_block['mcp_server_type'] = mcp_type
-                config_block['server_url'] = server_config['url']
-
             letta_config: dict[str, Any] = {
                 'server_name': server_id,
-                'config': config_block,
+                'config': self._build_mcp_config_block(server_config),
             }
 
-            # Register with Letta
             resp = requests.post(
                 f'{self.letta_url}/v1/mcp-servers/',
                 headers=self._get_headers(),
@@ -330,13 +339,15 @@ class LettaService(BaseService):
                 self.logger.info(f"Registered MCP server '{server_id}' with Letta")
                 return {'success': True, 'server': result}
             elif resp.status_code == 409:
-                # Already registered -- look up the existing entry
+                # Already registered -- update in place so config changes take effect
                 self.logger.info(
-                    f"MCP server '{server_id}' already exists in Letta, fetching existing record"
+                    f"MCP server '{server_id}' already exists in Letta, updating with current config"
                 )
                 existing = self._find_mcp_server_by_name(server_id)
                 if existing:
-                    return {'success': True, 'server': existing}
+                    return self.update_mcp_server(
+                        existing['id'], server_id, server_config
+                    )
                 return {'success': False, 'error': 'duplicate but lookup failed'}
             else:
                 error_msg = resp.text[:200]
@@ -347,6 +358,71 @@ class LettaService(BaseService):
 
         except Exception as e:
             self.logger.error(f"Error registering MCP server '{server_id}': {e}")
+            return {'success': False, 'error': str(e)}
+
+    def delete_mcp_server(self, letta_server_id: str) -> bool:
+        """Delete an MCP server from Letta by its UUID.
+
+        Args:
+            letta_server_id: Letta's internal UUID (e.g. 'mcp_server-abc123...').
+
+        Returns:
+            True if deleted successfully, False otherwise.
+        """
+        try:
+            resp = requests.delete(
+                f'{self.letta_url}/v1/mcp-servers/{letta_server_id}',
+                headers=self._get_headers(),
+                timeout=30,
+            )
+            if resp.status_code in [200, 204]:
+                self.logger.info(f"Deleted MCP server '{letta_server_id}' from Letta")
+                return True
+            else:
+                self.logger.warning(
+                    f"Failed to delete MCP server '{letta_server_id}': HTTP {resp.status_code} - {resp.text[:200]}"
+                )
+                return False
+        except Exception as e:
+            self.logger.error(f"Error deleting MCP server '{letta_server_id}': {e}")
+            return False
+
+    def update_mcp_server(
+        self, letta_server_id: str, server_id: str, server_config: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update an existing MCP server in Letta with new configuration.
+
+        Args:
+            letta_server_id: Letta's internal UUID for the server.
+            server_id: Human-readable server name (for logging).
+            server_config: Updated server configuration.
+
+        Returns:
+            dict: Update result with 'success' and 'server' or 'error'.
+        """
+        try:
+            patch_payload = {'config': self._build_mcp_config_block(server_config)}
+
+            resp = requests.patch(
+                f'{self.letta_url}/v1/mcp-servers/{letta_server_id}',
+                headers=self._get_headers(),
+                json=patch_payload,
+                timeout=30,
+            )
+
+            if resp.status_code in [200, 201]:
+                result = resp.json()
+                self.logger.info(f"Updated MCP server '{server_id}' in Letta")
+                return {'success': True, 'server': result}
+            else:
+                error_msg = resp.text[:200]
+                self.logger.error(
+                    f"Failed to update MCP server '{server_id}': HTTP {resp.status_code} - {error_msg}"
+                )
+                return {'success': False, 'error': error_msg}
+
+        except Exception as e:
+            self.logger.error(f"Error updating MCP server '{server_id}': {e}")
             return {'success': False, 'error': str(e)}
 
     def _find_mcp_server_by_name(self, server_name: str) -> dict[str, Any] | None:

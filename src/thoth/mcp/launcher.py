@@ -188,7 +188,7 @@ async def launch_mcp_server(
             await mcp_manager.stop_watching()
         await server.stop()
     except Exception as e:
-        logger.error(f'Error starting MCP server: {e}')
+        logger.exception(f'Error starting MCP server: {e}')
         sys.exit(1)
 
 

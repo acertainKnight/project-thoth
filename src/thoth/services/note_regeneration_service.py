@@ -16,6 +16,7 @@ from pydantic import BaseModel  # noqa: F401
 from thoth.analyze.llm_processor import AnalysisResponse
 from thoth.analyze.citations.citations import Citation
 from thoth.config import config
+from thoth.mcp.auth import get_mcp_user_id
 
 
 class NoteRegenerationService:
@@ -42,6 +43,7 @@ class NoteRegenerationService:
         if not paper_id and not title:
             raise ValueError('Either paper_id or title must be provided')
 
+        user_id = get_mcp_user_id()
         conn = await asyncpg.connect(self.db_url)
         try:
             if paper_id:
@@ -49,18 +51,18 @@ class NoteRegenerationService:
                     SELECT id, title, doi, arxiv_id, authors, abstract, year, venue,
                            pdf_path, note_path, markdown_content, analysis_data, llm_model
                     FROM papers
-                    WHERE id = $1
+                    WHERE id = $1 AND user_id = $2
                 """
-                row = await conn.fetchrow(query, paper_id)
+                row = await conn.fetchrow(query, paper_id, user_id)
             else:
                 query = """
                     SELECT id, title, doi, arxiv_id, authors, abstract, year, venue,
                            pdf_path, note_path, markdown_content, analysis_data, llm_model
                     FROM papers
-                    WHERE title = $1
+                    WHERE title = $1 AND user_id = $2
                     LIMIT 1
                 """
-                row = await conn.fetchrow(query, title)
+                row = await conn.fetchrow(query, title, user_id)
 
             if not row:
                 logger.warning(f'Paper not found: paper_id={paper_id}, title={title}')
@@ -184,18 +186,18 @@ class NoteRegenerationService:
         citations = self._convert_citations_to_models(citations_data)
 
         # Ensure we have pdf_path and markdown_path
-        vault_root = Path(config.vault_root)
+        up = self._get_user_paths()
+        _vault_root = up.vault_root if up else Path(config.vault_root)
+        _md_dir = up.markdown_dir if up else self.config.markdown_dir
         pdf_path = Path(paper_data.get('pdf_path', ''))
         if not pdf_path.is_absolute():
-            # Assume it's relative to vault root
             pdf_path = (
-                vault_root / 'thoth' / 'papers' / 'pdfs' / pdf_path.name
+                _vault_root / 'thoth' / 'papers' / 'pdfs' / pdf_path.name
                 if pdf_path.name
                 else None
             )
 
-        # For markdown, we have the content stored, so create a temp file or use stored path  # noqa: W505
-        markdown_path = self.config.markdown_dir / f'{paper_data["title"]}.md'
+        markdown_path = _md_dir / f'{paper_data["title"]}.md'
         if paper_data.get('markdown_content'):
             markdown_path.parent.mkdir(parents=True, exist_ok=True)
             markdown_path.write_text(paper_data['markdown_content'], encoding='utf-8')
@@ -217,14 +219,15 @@ class NoteRegenerationService:
             )
 
             # Update database with new paths
-            # Note: 'papers' is a VIEW, so we update the underlying processed_papers table
+            # 'papers' is a VIEW; update processed_papers table
+            user_id = get_mcp_user_id()
             conn = await asyncpg.connect(self.db_url)
             try:
                 await conn.execute(
                     """
-                    INSERT INTO processed_papers (paper_id, note_path, pdf_path, created_at, updated_at)
-                    VALUES ($1, $2, $3, NOW(), NOW())
-                    ON CONFLICT (paper_id) DO UPDATE SET
+                    INSERT INTO processed_papers (paper_id, note_path, pdf_path, user_id, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, NOW(), NOW())
+                    ON CONFLICT (paper_id, user_id) DO UPDATE SET
                         note_path = EXCLUDED.note_path,
                         pdf_path = EXCLUDED.pdf_path,
                         updated_at = NOW()
@@ -232,6 +235,7 @@ class NoteRegenerationService:
                     paper_id,
                     str(note_path),
                     str(new_pdf_path),
+                    user_id,
                 )
             finally:
                 await conn.close()
@@ -256,18 +260,20 @@ class NoteRegenerationService:
         Returns:
             Dictionary with counts of success, skipped, and failed
         """
+        user_id = get_mcp_user_id()
         conn = await asyncpg.connect(self.db_url)
         try:
             query = """
                 SELECT id, title
                 FROM papers
                 WHERE analysis_data IS NOT NULL
+                    AND user_id = $1
                 ORDER BY created_at DESC
             """
             if limit:
                 query += f' LIMIT {limit}'
 
-            rows = await conn.fetch(query)
+            rows = await conn.fetch(query, user_id)
 
             logger.info(f'Found {len(rows)} papers with analysis data')
 

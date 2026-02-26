@@ -118,7 +118,7 @@ export class MCPServersTabComponent {
     try {
       const endpoint = `${this.plugin.getEndpointUrl()}/api/mcp-servers`;
 
-      const response = await fetch(endpoint);
+      const response = await this.plugin.authFetch(endpoint);
       if (response.ok) {
         this.servers = await response.json();
       } else {
@@ -134,7 +134,7 @@ export class MCPServersTabComponent {
   async loadAgents(): Promise<void> {
     try {
       const lettaEndpoint = this.plugin.getLettaEndpointUrl();
-      const response = await fetch(`${lettaEndpoint}/v1/agents/`);
+      const response = await this.plugin.authFetch(`${lettaEndpoint}/v1/agents/`);
       if (response.ok) {
         this.agents = await response.json();
       } else {
@@ -155,7 +155,7 @@ export class MCPServersTabComponent {
         ? `${endpoint}?agent_id=${this.selectedAgent}`
         : endpoint;
 
-      const response = await fetch(url);
+      const response = await this.plugin.authFetch(url);
       if (response.ok) {
         return await response.json();
       } else {
@@ -261,7 +261,7 @@ export class MCPServersTabComponent {
     try {
       const endpoint = `${this.plugin.getEndpointUrl()}/api/mcp-servers/${serverId}/toggle`;
 
-      const response = await fetch(endpoint, {
+      const response = await this.plugin.authFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled })
@@ -284,7 +284,7 @@ export class MCPServersTabComponent {
     try {
       const endpoint = `${this.plugin.getEndpointUrl()}/api/mcp-servers/${serverId}/test`;
 
-      const response = await fetch(endpoint, { method: 'POST' });
+      const response = await this.plugin.authFetch(endpoint, { method: 'POST' });
 
       if (response.ok) {
         const result = await response.json();
@@ -310,7 +310,7 @@ export class MCPServersTabComponent {
     try {
       const endpoint = `${this.plugin.getEndpointUrl()}/api/mcp-servers/${serverId}`;
 
-      const response = await fetch(endpoint, { method: 'DELETE' });
+      const response = await this.plugin.authFetch(endpoint, { method: 'DELETE' });
 
       if (response.ok) {
         await this.render(); // Refresh
@@ -558,7 +558,7 @@ export class MCPServersTabComponent {
     try {
       const endpoint = `${this.plugin.getEndpointUrl()}/api/mcp-servers/${serverId}/tools/attach`;
 
-      const response = await fetch(endpoint, {
+      const response = await this.plugin.authFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -598,7 +598,7 @@ export class MCPServersTabComponent {
     try {
       const endpoint = `${this.plugin.getEndpointUrl()}/api/mcp-servers/${serverId}/tools/detach`;
 
-      const response = await fetch(endpoint, {
+      const response = await this.plugin.authFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

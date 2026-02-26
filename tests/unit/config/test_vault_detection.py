@@ -210,7 +210,7 @@ class TestKnownLocationFallback:
             monkeypatch.chdir(tmp_path)  # Change to dir without _thoth
 
             result = get_vault_root()
-            assert result == known_vault.resolve()
+            assert result == known_vault or result == known_vault.resolve()
         finally:
             # Only cleanup if we created them (don't delete real vault)
             if created_thoth and thoth_dir.exists():

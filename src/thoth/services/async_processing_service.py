@@ -84,7 +84,7 @@ class AsyncProcessingService(BaseService):
 
     def _get_pdf_hash(self, pdf_path: Path) -> str:
         """Generate hash for PDF file for caching."""
-        hasher = hashlib.md5()
+        hasher = hashlib.md5(usedforsecurity=False)  # nosec B324
         with pdf_path.open('rb') as f:
             # Read file in chunks to handle large files
             for chunk in iter(lambda: f.read(4096), b''):
@@ -118,7 +118,8 @@ class AsyncProcessingService(BaseService):
                 raise ServiceError(f'PDF file not found: {pdf_path}')
 
             if output_dir is None:
-                output_dir = self.config.markdown_dir
+                up = self._get_user_paths()
+                output_dir = up.markdown_dir if up else self.config.markdown_dir
             output_dir.mkdir(parents=True, exist_ok=True)
 
             # Check cache first

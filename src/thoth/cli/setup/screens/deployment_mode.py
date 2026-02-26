@@ -37,7 +37,9 @@ class DeploymentModeScreen(BaseScreen):
         self.selected_mode: str = ''  # 'local' or 'remote'
         self.thoth_api_url: str = 'http://localhost:8000'
         self.detected_version: str | None = None
+        self.verified_user_info: dict[str, Any] | None = None
         self.existing_config: dict[str, Any] = {}
+        self.vault_path: Path | None = vault_path
 
         if vault_path:
             try:
@@ -90,10 +92,7 @@ class DeploymentModeScreen(BaseScreen):
             )
 
             yield Static(
-                '\n[yellow]Before using remote mode:[/yellow]\n'
-                '  1. Run this wizard on your server FIRST (local mode)\n'
-                '  2. Obsidian + vault must exist on the server\n'
-                '  3. Start services there ([cyan]thoth start[/cyan])',
+                '\n[yellow]Your admin provides these values when creating your account.[/yellow]',
                 classes='help-text',
             )
 
@@ -101,12 +100,27 @@ class DeploymentModeScreen(BaseScreen):
 
             yield Label('[cyan]Thoth Server URL:[/cyan]')
             yield Input(
-                placeholder='http://your-server:8000',
+                placeholder='https://your-server/thoth',
                 value=self._get_existing_api_url(),
                 id='thoth-api-url',
             )
 
-            yield Button('Test Connection', id='test-connection', variant='primary')
+            yield Label('[cyan]Letta Server URL:[/cyan]')
+            yield Input(
+                placeholder='https://your-server/letta',
+                value=self._get_existing_letta_url(),
+                id='letta-api-url',
+            )
+
+            yield Label('[cyan]API Token (multi-user):[/cyan]')
+            yield Input(
+                placeholder='thoth_...',
+                password=True,
+                value=self._get_existing_api_token(),
+                id='api-token',
+            )
+
+            yield Button('Verify Connection', id='test-connection', variant='primary')
 
         yield Static(
             '\n[dim]Use ↑/↓ arrows to switch mode. Change later in plugin settings.[/dim]',
@@ -129,6 +143,40 @@ class DeploymentModeScreen(BaseScreen):
         if parsed.hostname and parsed.hostname not in ('localhost', '127.0.0.1'):
             return 'remote'
         return 'local'
+
+    def _get_existing_letta_url(self) -> str:
+        """Get existing Letta URL from settings.json.
+
+        Returns:
+            Letta URL string.
+        """
+        letta = self.existing_config.get('letta', {})
+        return letta.get('url', '')
+
+    def _get_existing_api_token(self) -> str:
+        """Get existing API token from plugin data.json if available.
+
+        Returns:
+            Token string, or empty string.
+        """
+        if not self.vault_path:
+            return ''
+        try:
+            import json
+
+            data_path = (
+                self.vault_path
+                / '.obsidian'
+                / 'plugins'
+                / 'thoth-obsidian'
+                / 'data.json'
+            )
+            if data_path.exists():
+                data = json.loads(data_path.read_text())
+                return data.get('apiToken', '')
+        except Exception:
+            pass
+        return ''
 
     def _get_existing_api_url(self) -> str:
         """Get existing API URL from settings.json, or the default.
@@ -183,9 +231,11 @@ class DeploymentModeScreen(BaseScreen):
                 await self.on_next_screen()
 
     async def _test_remote_connection(self) -> None:
-        """Test connection to remote Thoth server."""
+        """Test connection to remote Thoth server and verify API token."""
         url_input = self.query_one('#thoth-api-url', Input)
-        url = url_input.value.strip()
+        token_input = self.query_one('#api-token', Input)
+        url = url_input.value.strip().rstrip('/')
+        token = token_input.value.strip()
 
         if not url:
             self.show_error('Please enter a server URL')
@@ -198,24 +248,43 @@ class DeploymentModeScreen(BaseScreen):
             async with httpx.AsyncClient() as client:
                 resp = await client.get(f'{url}/health', timeout=10.0)
 
-                if resp.status_code == 200:
-                    health_data = resp.json()
-                    version = health_data.get('version', 'unknown')
-                    self.detected_version = version
-
-                    self.clear_messages()
-                    self.show_success(f'Connected to Thoth v{version}')
-                    status_widget.update(
-                        f'[green]✓ Thoth v{version} is reachable at {url}[/green]'
-                    )
-                else:
+                if resp.status_code not in (200, 503):
                     self.show_error(
-                        f'Server returned status {resp.status_code}. '
-                        'Is this a Thoth server?'
+                        f'Server returned {resp.status_code}. Is this a Thoth server?'
                     )
                     status_widget.update(
                         f'[yellow]Server at {url} is not responding correctly[/yellow]'
                     )
+                    return
+
+                lines = [f'[green]✓ Thoth server reachable at {url}[/green]']
+
+                if token:
+                    me_resp = await client.get(
+                        f'{url}/auth/me',
+                        headers={'Authorization': f'Bearer {token}'},
+                        timeout=10.0,
+                    )
+                    if me_resp.status_code == 200:
+                        user_info = me_resp.json()
+                        username = user_info.get('username', '?')
+                        lines.append(
+                            f'[green]✓ Authenticated as [bold]{username}[/bold][/green]'
+                        )
+                        self.verified_user_info = user_info
+                    elif me_resp.status_code == 401:
+                        lines.append('[red]✗ Invalid token[/red]')
+                    else:
+                        lines.append(
+                            f'[yellow]Token check returned {me_resp.status_code}[/yellow]'
+                        )
+                else:
+                    lines.append(
+                        '[yellow]No token entered — enter your token to verify[/yellow]'
+                    )
+
+                self.clear_messages()
+                status_widget.update('\n'.join(lines))
 
         except httpx.ConnectError:
             self.show_error(f'Cannot connect to {url}. Check the URL and network.')
@@ -283,25 +352,33 @@ class DeploymentModeScreen(BaseScreen):
             url_input.focus()
             return None
 
+        # Read Letta URL and API token from the form
+        letta_input = self.query_one('#letta-api-url', Input)
+        token_input = self.query_one('#api-token', Input)
+        letta_url = letta_input.value.strip().rstrip('/')
+        api_token = token_input.value.strip()
+
+        if not letta_url:
+            self.show_error('Please enter the Letta server URL')
+            letta_input.focus()
+            return None
+
         # Derive MCP URL from API URL (same host, port 8001)
         parsed = urlparse(api_url)
         mcp_url = f'{parsed.scheme}://{parsed.hostname}:8001'
 
-        # Try to connect (non-blocking warning if unreachable)
+        # Verify connection (non-blocking)
         self.show_info(f'Verifying connection to {api_url}...')
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(f'{api_url}/health', timeout=10.0)
 
-                if resp.status_code == 200:
-                    health_data = resp.json()
-                    version = health_data.get('version', 'unknown')
+                if resp.status_code in (200, 503):
                     self.clear_messages()
-                    self.show_success(f'Connected to Thoth v{version}')
+                    self.show_success('Server reachable')
                 else:
                     self.show_warning(
-                        f'Server returned status {resp.status_code}. '
-                        'Proceeding anyway - verify the URL is correct.'
+                        f'Server returned {resp.status_code}. Proceeding anyway.'
                     )
                     await asyncio.sleep(1)
                     self.clear_messages()
@@ -314,13 +391,25 @@ class DeploymentModeScreen(BaseScreen):
             await asyncio.sleep(1.5)
             self.clear_messages()
 
-        logger.info(f'Remote deployment: API={api_url}, MCP={mcp_url} (auto-derived)')
-
-        return {
+        result: dict[str, Any] = {
             'deployment_mode': 'remote',
             'thoth_api_url': api_url,
-            'thoth_mcp_url': mcp_url,  # Auto-derived, not shown to user
+            'thoth_mcp_url': mcp_url,
+            'letta_url': letta_url,
         }
+
+        if api_token:
+            result['api_token'] = api_token
+
+        if self.verified_user_info:
+            result['user_info'] = self.verified_user_info
+
+        logger.info(
+            f'Remote deployment: API={api_url}, Letta={letta_url}, '
+            f'token={"set" if api_token else "none"}'
+        )
+
+        return result
 
     async def on_next_screen(self) -> None:
         """Navigate to Letta mode selection screen."""

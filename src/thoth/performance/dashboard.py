@@ -68,8 +68,7 @@ class PerformanceDashboard:
         self.last_update: datetime | None = None
 
         # Output directory
-        self.dashboard_dir = config.workspace_dir / 'dashboard'
-        self.dashboard_dir.mkdir(exist_ok=True)
+        self.dashboard_dir = config.data_root / 'dashboard'
 
         logger.info('PerformanceDashboard initialized')
 

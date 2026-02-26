@@ -145,8 +145,7 @@ class BenchmarkSuite:
         """
         self.config = config
         self.service_manager = service_manager
-        self.output_dir = output_dir or (config.workspace_dir / 'benchmarks')
-        self.output_dir.mkdir(exist_ok=True)
+        self.output_dir = output_dir or (config.data_root / 'benchmarks')
 
         # Benchmark configuration
         self.benchmark_tests: list[BenchmarkTest] = []

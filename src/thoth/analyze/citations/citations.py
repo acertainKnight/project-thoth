@@ -57,7 +57,16 @@ class CitationProcessor:
 
         # Set up prompts directory based on model provider
         if prompts_dir is None:
-            prompts_dir = Path(config.prompts_dir)
+            from thoth.mcp.auth import (
+                get_current_user_paths,
+            )  # local import to avoid cycles
+
+            user_paths = get_current_user_paths()
+            prompts_dir = (
+                user_paths.prompts_dir
+                if user_paths is not None
+                else Path(config.prompts_dir)
+            )
 
         # Determine model provider from llm model name or config
         model_provider = 'openai'  # Default provider

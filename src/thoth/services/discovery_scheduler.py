@@ -38,6 +38,7 @@ class DiscoveryExecutionLogRepository(BaseRepository[dict[str, Any]]):
     async def create_execution(
         self,
         question_id: UUID,
+        user_id: str | None = None,
         triggered_by: str = 'scheduler',
     ) -> UUID | None:
         """
@@ -53,14 +54,15 @@ class DiscoveryExecutionLogRepository(BaseRepository[dict[str, Any]]):
         try:
             query = """
                 INSERT INTO discovery_execution_log (
-                    question_id, status, started_at, triggered_by
+                    question_id, user_id, status, started_at, triggered_by
                 )
-                VALUES ($1, $2, $3, $4)
+                VALUES ($1, $2, $3, $4, $5)
                 RETURNING id
             """
             result = await self.postgres.fetchrow(
                 query,
                 question_id,
+                user_id or 'default_user',
                 'running',
                 datetime.now(),
                 triggered_by,
@@ -261,21 +263,23 @@ class ResearchQuestionScheduler(BaseService):
         """
         Main scheduler loop that runs in the background.
 
-        Checks for due questions every 5 minutes and executes their discoveries.
-        Handles errors gracefully to prevent loop crashes.
+        Fetches ALL users' due questions in one query so that the
+        consolidated pipeline can merge shared sources across users,
+        query each source once, deduplicate globally, and then fan
+        results to the correct user via the user_id on each question.
         """
         self.logger.info('Scheduler loop started')
 
         while self._running:
             try:
-                # Check for questions due for discovery
                 loop_start = time.time()
 
-                due_questions = await self.research_question_service.get_questions_due_for_discovery()
+                due_questions = await self._get_all_due_questions()
 
                 if due_questions:
                     self.logger.info(
-                        f'Found {len(due_questions)} research questions due for discovery'
+                        f'Found {len(due_questions)} research questions due for '
+                        f'discovery across all users'
                     )
                     await self._run_due_discoveries(due_questions)
                 else:
@@ -289,7 +293,6 @@ class ResearchQuestionScheduler(BaseService):
                     f'Error in scheduler loop (continuing): {e}', exc_info=True
                 )
 
-            # Wait for next check interval
             try:
                 await asyncio.sleep(self._check_interval)
             except asyncio.CancelledError:
@@ -297,6 +300,30 @@ class ResearchQuestionScheduler(BaseService):
                 break
 
         self.logger.info('Scheduler loop stopped')
+
+    async def _get_all_due_questions(self) -> list[dict[str, Any]]:
+        """Fetch all due research questions across every user.
+
+        Queries the database directly without tenant scoping so that the
+        consolidated pipeline receives questions from all users in one
+        batch.  Each question row already carries its own ``user_id``
+        which the orchestrator uses when storing matches and papers.
+
+        Returns:
+            List of research question dicts (with user_id) due for runs.
+        """
+        try:
+            query = """
+                SELECT * FROM research_questions
+                WHERE is_active = true
+                  AND (next_run_at IS NULL OR next_run_at <= NOW())
+                ORDER BY next_run_at ASC NULLS FIRST
+            """
+            rows = await self.postgres_service.fetch(query)
+            return [dict(row) for row in rows]
+        except Exception as e:
+            self.logger.error(f'Failed to fetch all due questions: {e}')
+            return []
 
     async def _run_due_discoveries(self, due_questions: list[dict[str, Any]]) -> None:
         """
@@ -319,6 +346,7 @@ class ResearchQuestionScheduler(BaseService):
         for question in due_questions:
             execution_id = await self.execution_log.create_execution(
                 question_id=question['id'],
+                user_id=question.get('user_id'),
                 triggered_by='scheduler',
             )
             if execution_id:
@@ -454,6 +482,7 @@ class ResearchQuestionScheduler(BaseService):
         # Create execution log entry
         execution_id = await self.execution_log.create_execution(
             question_id=question_id,
+            user_id=question.get('user_id'),
             triggered_by='scheduler',
         )
 
@@ -626,6 +655,7 @@ class ResearchQuestionScheduler(BaseService):
         # Create execution log entry
         execution_id = await self.execution_log.create_execution(
             question_id=question_id,
+            user_id=question.get('user_id'),
             triggered_by='manual',
         )
 

@@ -534,10 +534,10 @@ export class SchemaService implements ISchemaService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-      const response = await fetch(this.apiUtils.buildEndpointUrl(this.baseUrl, '/health'), {
+      const response = await fetch(this.apiUtils.buildEndpointUrl(this.baseUrl, '/health'), APIUtilities.withAuthHeaders({
         method: 'GET',
         signal: controller.signal
-      });
+      }));
 
       clearTimeout(timeoutId);
       return response.ok;

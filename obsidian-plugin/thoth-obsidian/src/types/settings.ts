@@ -13,6 +13,11 @@ export interface ThothSettings {
   remoteEndpointUrl: string;        // Thoth API URL for research/discovery (e.g., "http://localhost:8000")
   lettaEndpointUrl: string;         // Letta API URL for agent chats (e.g., "http://localhost:8284")
 
+  // === MULTI-USER AUTH ===
+  // Token obtained from the server admin (thoth_xxxx). Leave empty for single-user mode.
+  // When set, all Thoth API requests include: Authorization: Bearer <apiToken>
+  apiToken: string;                 // Bearer token for multi-user server auth (empty = single-user)
+
   // === API KEYS (optional - for displaying in UI) ===
   apiKeys?: {
     mistral?: string;
@@ -57,6 +62,9 @@ export const DEFAULT_SETTINGS: ThothSettings = {
   remoteMode: true,                 // Default to remote mode (works on desktop + mobile)
   remoteEndpointUrl: 'http://localhost:8000',  // Thoth API
   lettaEndpointUrl: 'http://localhost:8284',   // Letta API (via nginx proxy)
+
+  // Multi-user auth
+  apiToken: '',                     // Empty = single-user mode (no auth header)
 
   // API Keys (empty by default - backend reads from vault/thoth/_thoth/settings.json)
   apiKeys: {},

@@ -74,6 +74,8 @@ services:
       - LETTA_PG_URI=postgresql://letta:letta_password@letta-postgres:5432/letta
       # Thoth MCP Server URL (for auto-configuration)
       - THOTH_MCP_URL=http://thoth-mcp:8001
+      # Service token for authenticating MCP calls in multi-user mode
+      - THOTH_MCP_SERVICE_TOKEN=${THOTH_MCP_SERVICE_TOKEN:-}
     volumes:
       - letta-data:/letta/.persist
       - letta-home:/letta

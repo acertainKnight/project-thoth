@@ -11,7 +11,7 @@ This module provides intelligent caching for:
 
 import hashlib
 import json
-import pickle
+import pickle  # nosec B403
 import time
 from pathlib import Path
 from typing import Any
@@ -40,24 +40,16 @@ class CacheService(BaseService):
         """
         super().__init__(config)
 
-        # Cache directories
-        self.cache_dir = cache_dir or (self.config.workspace_dir / 'cache')
-        self.ocr_cache_dir = self.cache_dir / 'ocr'
-        self.analysis_cache_dir = self.cache_dir / 'analysis'
-        self.citation_cache_dir = self.cache_dir / 'citations'
-        self.api_cache_dir = self.cache_dir / 'api_responses'
-        self.embedding_cache_dir = self.cache_dir / 'embeddings'
+        # Cache directories (defaults, may be overridden by user paths at call-time)
+        self._default_cache_dir = cache_dir or self.config.cache_root
+        self.ocr_cache_dir = self._default_cache_dir / 'ocr'
+        self.analysis_cache_dir = self._default_cache_dir / 'analysis'
+        self.citation_cache_dir = self._default_cache_dir / 'citations'
+        self.api_cache_dir = self._default_cache_dir / 'api_responses'
+        self.embedding_cache_dir = self._default_cache_dir / 'embeddings'
 
-        # Create cache directories
-        for cache_path in [
-            self.cache_dir,
-            self.ocr_cache_dir,
-            self.analysis_cache_dir,
-            self.citation_cache_dir,
-            self.api_cache_dir,
-            self.embedding_cache_dir,
-        ]:
-            cache_path.mkdir(parents=True, exist_ok=True)
+        # Cache dirs are not created on init — disk caching is unused in
+        # Docker deployments where state lives in Postgres.
 
         # In-memory cache for frequently accessed items with bounded size
         # Using LRUCache to enforce the size limit automatically
@@ -83,6 +75,12 @@ class CacheService(BaseService):
             * 7,  # 7 days - Embeddings stable unless model changes
         }
 
+    @property
+    def cache_dir(self) -> Path:
+        """Cache dir, scoped to current user when available."""
+        up = self._get_user_paths()
+        return (up.workspace_dir / 'cache') if up else self._default_cache_dir
+
     def initialize(self) -> None:
         """Initialize the cache service."""
         self.logger.info(f'Cache service initialized with directory: {self.cache_dir}')
@@ -95,7 +93,7 @@ class CacheService(BaseService):
 
     def _get_file_hash(self, file_path: Path) -> str:
         """Generate hash for file content."""
-        hasher = hashlib.md5()
+        hasher = hashlib.md5(usedforsecurity=False)  # nosec B324
         with file_path.open('rb') as f:
             for chunk in iter(lambda: f.read(4096), b''):
                 hasher.update(chunk)
@@ -149,14 +147,18 @@ class CacheService(BaseService):
                 'pdf_stem': pdf_path.stem,
             }
 
-            cache_file = self.ocr_cache_dir / f'{cache_key}.pkl'
-            with cache_file.open('wb') as f:
-                pickle.dump(cache_data, f)
-
-            # Also cache in memory for quick access
+            # Write to memory first so caching always works
             self._memory_cache[f'ocr:{cache_key}'] = cache_data
             self._memory_cache_timestamps[f'ocr:{cache_key}'] = time.time()
             self._cleanup_memory_cache()
+
+            # Persist to disk if the directory exists
+            try:
+                cache_file = self.ocr_cache_dir / f'{cache_key}.pkl'
+                with cache_file.open('wb') as f:
+                    pickle.dump(cache_data, f)
+            except OSError:
+                pass
 
             self.logger.debug(f'Cached OCR result for {pdf_path.name}')
             return True
@@ -196,7 +198,7 @@ class CacheService(BaseService):
             cache_file = self.ocr_cache_dir / f'{cache_key}.pkl'
             if self._is_cache_valid(cache_file, self._ttl_settings['ocr']):
                 with cache_file.open('rb') as f:
-                    cached_data = pickle.load(f)
+                    cached_data = pickle.load(f)  # nosec B301
 
                 # Verify hash still matches
                 if cached_data['pdf_hash'] == pdf_hash:
@@ -241,15 +243,19 @@ class CacheService(BaseService):
                 'timestamp': time.time(),
             }
 
-            cache_file = self.analysis_cache_dir / f'{cache_key}.pkl'
-            with cache_file.open('wb') as f:
-                pickle.dump(cache_data, f)
-
-            # Also cache in memory
+            # Write to memory first so caching always works
             memory_key = f'analysis:{cache_key}'
             self._memory_cache[memory_key] = cache_data
             self._memory_cache_timestamps[memory_key] = time.time()
             self._cleanup_memory_cache()
+
+            # Persist to disk if the directory exists
+            try:
+                cache_file = self.analysis_cache_dir / f'{cache_key}.pkl'
+                with cache_file.open('wb') as f:
+                    pickle.dump(cache_data, f)
+            except OSError:
+                pass
 
             self.logger.debug(
                 f'Cached analysis result for content hash {content_hash[:8]}'
@@ -293,7 +299,7 @@ class CacheService(BaseService):
             cache_file = self.analysis_cache_dir / f'{cache_key}.pkl'
             if self._is_cache_valid(cache_file, self._ttl_settings['analysis']):
                 with cache_file.open('rb') as f:
-                    cached_data = pickle.load(f)
+                    cached_data = pickle.load(f)  # nosec B301
 
                 # Validate model compatibility
                 if model_info and cached_data.get('model_info', {}) != model_info:
@@ -345,15 +351,19 @@ class CacheService(BaseService):
                 'ttl': ttl,
             }
 
-            cache_file = self.api_cache_dir / f'{cache_key}.json'
-            with cache_file.open('w') as f:
-                json.dump(cache_data, f, default=str)
-
-            # Also cache in memory
+            # Write to memory first so caching always works
             memory_key = f'api:{cache_key}'
             self._memory_cache[memory_key] = cache_data
             self._memory_cache_timestamps[memory_key] = time.time()
             self._cleanup_memory_cache()
+
+            # Persist to disk if the directory exists
+            try:
+                cache_file = self.api_cache_dir / f'{cache_key}.json'
+                with cache_file.open('w') as f:
+                    json.dump(cache_data, f, default=str)
+            except OSError:
+                pass
 
             self.logger.debug(f'Cached {api_name} API response for {request_key[:20]}')
             return True

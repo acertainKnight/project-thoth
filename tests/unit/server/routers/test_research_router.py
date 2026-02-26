@@ -6,7 +6,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from thoth.server.dependencies import get_chat_manager, get_research_agent
+from thoth.auth.dependencies import get_user_context
+from thoth.server.dependencies import get_research_agent
 from thoth.server.routers import research
 
 
@@ -16,21 +17,11 @@ def mock_research_agent():
     agent = Mock()
 
     # Set up async mock that returns a proper response
-    async def default_chat_response(*args, **kwargs):
+    async def default_chat_response(*_args, **_kwargs):
         return {'response': 'Here is the answer', 'tool_calls': []}
 
     agent.chat = AsyncMock(side_effect=default_chat_response)
     return agent
-
-
-@pytest.fixture
-def mock_chat_manager():
-    """Create mock chat manager."""
-    manager = Mock()
-    manager.get_session = Mock(return_value=None)
-    manager.create_session = Mock()
-    manager.add_message = Mock()
-    return manager
 
 
 @pytest.fixture
@@ -42,32 +33,29 @@ def mock_llm_router():
 
 
 @pytest.fixture
-def test_client(mock_research_agent, mock_chat_manager):
+def test_client(mock_research_agent, mock_user_context):
     """Create FastAPI test client with research router and dependency overrides."""
     app = FastAPI()
     app.include_router(research.router)
 
-    # Override dependencies to return mocks
     app.dependency_overrides[get_research_agent] = lambda: mock_research_agent
-    app.dependency_overrides[get_chat_manager] = lambda: mock_chat_manager
+    app.dependency_overrides[get_user_context] = lambda: mock_user_context
 
     client = TestClient(app)
     yield client
 
-    # Clean up
     app.dependency_overrides.clear()
 
 
 class TestResearchChatEndpoint:
     """Tests for POST /chat endpoint."""
 
-    def test_research_chat_without_agent(self, mock_chat_manager):
+    def test_research_chat_without_agent(self, mock_user_context):
         """Test chat fails when research agent not initialized."""
-        # Create app with None agent override
         app = FastAPI()
         app.include_router(research.router)
         app.dependency_overrides[get_research_agent] = lambda: None
-        app.dependency_overrides[get_chat_manager] = lambda: mock_chat_manager
+        app.dependency_overrides[get_user_context] = lambda: mock_user_context
 
         with TestClient(app) as client:
             request_data = {'message': 'Hello'}
@@ -77,7 +65,10 @@ class TestResearchChatEndpoint:
             assert 'Research agent not initialized' in response.json()['detail']
 
     def test_research_chat_success(
-        self, test_client, mock_research_agent, mock_llm_router
+        self,
+        test_client,
+        mock_research_agent,  # noqa: ARG002
+        mock_llm_router,
     ):
         """Test chat returns response from research agent."""
         # Mock already set up in fixture with default response
@@ -93,11 +84,13 @@ class TestResearchChatEndpoint:
             assert data['response'] == 'Here is the answer'
             assert 'tool_calls' in data
 
-    def test_research_chat_with_chat_manager(
-        self, test_client, mock_research_agent, mock_chat_manager, mock_llm_router
+    def test_research_chat_with_conversation_id(
+        self,
+        test_client,
+        mock_research_agent,  # noqa: ARG002
+        mock_llm_router,
     ):
-        """Test chat stores messages when chat manager available."""
-        # Mock already set up in fixture with default response
+        """Test chat accepts a conversation_id field."""
         with patch(
             'thoth.server.routers.research.LLMRouter', return_value=mock_llm_router
         ):
@@ -108,9 +101,8 @@ class TestResearchChatEndpoint:
             response = test_client.post('/chat', json=request_data)
 
             assert response.status_code == 200
-            # Verify chat manager was called
-            assert mock_chat_manager.get_session.called
-            assert mock_chat_manager.add_message.called
+            data = response.json()
+            assert 'response' in data
 
     def test_research_chat_handles_errors_gracefully(
         self, test_client, mock_research_agent, mock_llm_router
@@ -134,12 +126,12 @@ class TestResearchChatEndpoint:
 class TestResearchQueryEndpoint:
     """Tests for POST /query endpoint."""
 
-    def test_research_query_without_agent(self):
+    def test_research_query_without_agent(self, mock_user_context):
         """Test query fails when research agent not initialized."""
-        # Create app with None agent override
         app = FastAPI()
         app.include_router(research.router)
         app.dependency_overrides[get_research_agent] = lambda: None
+        app.dependency_overrides[get_user_context] = lambda: mock_user_context
 
         with TestClient(app) as client:
             request_data = {'query': 'machine learning papers'}

@@ -99,13 +99,11 @@ class CompletionScreen(BaseScreen):
                 f'  • Thoth API: [cyan]{thoth_api_url}[/cyan]\n'
                 f'  • Letta: [cyan]{letta_url}[/cyan]\n\n'
                 '[yellow]Important:[/yellow] Ensure your remote servers are running before using Thoth.\n\n'
-                '[bold]Recommended: Obsidian Sync[/bold]\n'
-                'Thoth does not sync your vault between devices. We strongly\n'
-                'recommend [cyan]Obsidian Sync[/cyan] for remote deployments:\n'
-                '  • Keeps your vault in sync with the remote server\n'
-                '  • Enable [bold]Sync community plugins[/bold] and [bold]Settings[/bold]\n'
-                '    so local config changes hot-reload into Thoth\n'
-                '  • Enables mobile access to your Thoth-powered vault',
+                '[bold]Vault Sync[/bold]\n'
+                'Thoth generates notes and dashboards into your server-side vault.\n'
+                'To see them locally, set up file sync between your machine and the server.\n'
+                'Options: [cyan]Syncthing[/cyan] (recommended), rsync, SSHFS, or\n'
+                '[cyan]Obsidian Git[/cyan] plugin.',
                 id='start-prompt',
             )
         else:
@@ -364,13 +362,18 @@ class CompletionScreen(BaseScreen):
         letta_url = wizard_data.get('letta_url', 'http://localhost:8283')
         is_remote = deployment_mode == 'remote'
 
-        data = {
+        api_token = wizard_data.get('api_token', '')
+
+        data: dict[str, Any] = {
             'remoteMode': is_remote,
             'remoteEndpointUrl': thoth_api_url
             if is_remote
             else 'http://localhost:8000',
             'lettaEndpointUrl': letta_url,
         }
+
+        if api_token:
+            data['apiToken'] = api_token
 
         try:
             plugin_dir.mkdir(parents=True, exist_ok=True)

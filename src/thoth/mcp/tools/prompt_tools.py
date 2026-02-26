@@ -51,8 +51,12 @@ class ListPromptTemplatesMCPTool(MCPTool):
 
             config = self.service_manager.config
 
-            # Custom prompts directory (vault)
-            custom_dir = Path(config.prompts_dir)
+            from thoth.mcp.auth import get_current_user_paths
+
+            user_paths = get_current_user_paths()
+            custom_dir = (
+                user_paths.prompts_dir if user_paths else Path(config.prompts_dir)
+            )
 
             # Default prompts directory (repo)
             repo_root = Path(__file__).resolve().parents[3]
@@ -213,8 +217,13 @@ class ReadPromptTemplateMCPTool(MCPTool):
 
             config = self.service_manager.config
 
-            # Custom prompts directory (vault)
-            custom_path = Path(config.prompts_dir) / provider / template_name
+            from thoth.mcp.auth import get_current_user_paths
+
+            user_paths = get_current_user_paths()
+            prompts_dir = (
+                user_paths.prompts_dir if user_paths else Path(config.prompts_dir)
+            )
+            custom_path = prompts_dir / provider / template_name
 
             # Default prompts directory (repo)
             repo_root = Path(__file__).resolve().parents[3]
@@ -322,8 +331,13 @@ class UpdatePromptTemplateMCPTool(MCPTool):
 
             config = self.service_manager.config
 
-            # Custom prompts directory (vault)
-            custom_dir = Path(config.prompts_dir) / provider
+            from thoth.mcp.auth import get_current_user_paths
+
+            user_paths = get_current_user_paths()
+            prompts_base = (
+                user_paths.prompts_dir if user_paths else Path(config.prompts_dir)
+            )
+            custom_dir = prompts_base / provider
             custom_path = custom_dir / template_name
 
             # Validate Jinja2 content based on template type
@@ -453,8 +467,13 @@ class ResetPromptTemplateMCPTool(MCPTool):
 
             config = self.service_manager.config
 
-            # Custom prompts directory (vault)
-            custom_path = Path(config.prompts_dir) / provider / template_name
+            from thoth.mcp.auth import get_current_user_paths
+
+            user_paths = get_current_user_paths()
+            prompts_base = (
+                user_paths.prompts_dir if user_paths else Path(config.prompts_dir)
+            )
+            custom_path = prompts_base / provider / template_name
 
             # Check if custom file exists
             if not custom_path.exists():

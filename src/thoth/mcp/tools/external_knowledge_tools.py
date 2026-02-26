@@ -434,7 +434,11 @@ class MovePaperToProjectMCPTool(MCPTool):
 
             postgres_service = self.service_manager.postgres
             knowledge_repo = KnowledgeCollectionRepository(postgres_service)
-            vault_resolver = VaultPathResolver(config.vault_root)
+            from thoth.mcp.auth import get_current_user_paths
+
+            user_paths = get_current_user_paths()
+            vault_root = user_paths.vault_root if user_paths else config.vault_root
+            vault_resolver = VaultPathResolver(vault_root)
 
             # Get or create collection
             collection = await knowledge_repo.get_by_name(project_name)
@@ -482,10 +486,13 @@ class MovePaperToProjectMCPTool(MCPTool):
                 vault_resolver.resolve(row['note_path']) if row['note_path'] else None
             )
 
-            # Create project directories
-            pdf_project_dir = config.pdf_dir / project_name
-            markdown_project_dir = config.markdown_dir / project_name
-            notes_project_dir = config.notes_dir / project_name
+            # Create project directories (user-scoped)
+            _pdf_dir = user_paths.pdf_dir if user_paths else config.pdf_dir
+            _md_dir = user_paths.markdown_dir if user_paths else config.markdown_dir
+            _notes_dir = user_paths.notes_dir if user_paths else config.notes_dir
+            pdf_project_dir = _pdf_dir / project_name
+            markdown_project_dir = _md_dir / project_name
+            notes_project_dir = _notes_dir / project_name
 
             pdf_project_dir.mkdir(parents=True, exist_ok=True)
             markdown_project_dir.mkdir(parents=True, exist_ok=True)

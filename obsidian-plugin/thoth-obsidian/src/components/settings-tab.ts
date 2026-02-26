@@ -11,11 +11,17 @@ export class SettingsTabComponent {
   private containerEl: HTMLElement;
   private plugin: any;
   private settings: ThothSettings;
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(containerEl: HTMLElement, plugin: any) {
     this.containerEl = containerEl;
     this.plugin = plugin;
     this.settings = plugin.settings;
+  }
+
+  private debouncedSave(): void {
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => this.saveSettings(), 500);
   }
 
   render() {
@@ -84,6 +90,7 @@ export class SettingsTabComponent {
       thothEndpointInput.placeholder = 'http://localhost:8000';
       thothEndpointInput.oninput = () => {
         this.settings.remoteEndpointUrl = thothEndpointInput.value;
+        this.debouncedSave();
       };
       thothEndpointRow.createEl('span', {
         text: 'Thoth backend server for research/discovery (e.g., http://localhost:8000)',
@@ -98,11 +105,73 @@ export class SettingsTabComponent {
       lettaEndpointInput.placeholder = 'http://localhost:8284';
       lettaEndpointInput.oninput = () => {
         this.settings.lettaEndpointUrl = lettaEndpointInput.value;
+        this.debouncedSave();
       };
       lettaEndpointRow.createEl('span', {
         text: 'Letta backend server for AI agent chats (e.g., http://localhost:8284 or Tailscale URL)',
         cls: 'thoth-setting-description'
       });
+
+      // API Token (multi-user mode only — leave blank for single-user)
+      const tokenSection = section.createDiv({ cls: 'thoth-setting-row' });
+      tokenSection.createEl('label', { text: 'API Token (Multi-User)' });
+      const tokenInput = tokenSection.createEl('input', { type: 'password' });
+      tokenInput.value = (this.settings as any).apiToken ?? '';
+      tokenInput.placeholder = 'thoth_… (leave blank for single-user mode)';
+      tokenInput.style.width = '100%';
+      tokenInput.style.maxWidth = '500px';
+      tokenInput.oninput = () => {
+        (this.settings as any).apiToken = tokenInput.value.trim();
+        this.debouncedSave();
+      };
+      tokenSection.createEl('span', {
+        text: 'Token from your Thoth server admin. Required when connecting to a shared server.',
+        cls: 'thoth-setting-description'
+      });
+
+      // Verify token button
+      const verifyRow = section.createDiv({ cls: 'thoth-setting-row' });
+      const verifyBtn = verifyRow.createEl('button', { text: 'Verify Token & Connection' });
+      const verifyStatus = verifyRow.createEl('span', { cls: 'thoth-setting-description' });
+
+      verifyBtn.onclick = async () => {
+        const token: string = tokenInput.value.trim();
+        const thothUrl = this.settings.remoteEndpointUrl.replace(/\/$/, '');
+
+        if (!token) {
+          verifyStatus.textContent = '⚠ No token entered — running in single-user mode';
+          verifyStatus.style.color = 'var(--color-orange)';
+          return;
+        }
+
+        verifyBtn.disabled = true;
+        verifyStatus.textContent = 'Checking…';
+        verifyStatus.style.color = 'var(--text-muted)';
+
+        try {
+          const response = await this.plugin.authFetch(`${thothUrl}/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (response.ok) {
+            const info = await response.json();
+            verifyStatus.textContent = `✓ Connected as ${info.username}`;
+            verifyStatus.style.color = 'var(--color-green)';
+            (this.settings as any).apiToken = token;
+            await this.saveSettings();
+          } else if (response.status === 401) {
+            verifyStatus.textContent = '✗ Invalid token';
+            verifyStatus.style.color = 'var(--color-red)';
+          } else {
+            verifyStatus.textContent = `✗ Server returned ${response.status}`;
+            verifyStatus.style.color = 'var(--color-red)';
+          }
+        } catch {
+          verifyStatus.textContent = '✗ Cannot reach server';
+          verifyStatus.style.color = 'var(--color-red)';
+        } finally {
+          verifyBtn.disabled = false;
+        }
+      };
     }
   }
 
@@ -227,7 +296,7 @@ export class SettingsTabComponent {
 
     Promise.all([
       // Fetch models from Letta
-      fetch(`${this.settings.lettaEndpointUrl}/v1/models/`)
+      this.plugin.authFetch(`${this.settings.lettaEndpointUrl}/v1/models/`)
         .then((res) => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();

@@ -30,6 +30,7 @@ from __future__ import annotations  # noqa: I001
 import json
 import os
 import threading
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List  # noqa: UP035
 
@@ -1250,6 +1251,147 @@ class Secrets(BaseSettings):
     brave_api_key: str = Field(default='', alias='BRAVE_API_KEY')
 
 
+# --- User Config Manager (Multi-User) ---
+
+
+class UserConfigManager:
+    """Manages per-user settings in multi-user mode.
+
+    In multi-user deployments, each user has their own settings.json file
+    in their vault. This manager loads and caches per-user Settings objects,
+    reloading when files change.
+
+    In single-user mode, this class is not used -- the Config singleton
+    loads settings directly from the single vault.
+    """
+
+    def __init__(self, vaults_root: Path):
+        """Initialize the user config manager.
+
+        Args:
+            vaults_root: Root directory containing all user vaults (e.g. /vaults/)
+        """
+        self._vaults_root = vaults_root
+        # Cache: username -> (Settings, mtime)
+        self._cache: dict[str, tuple[Settings, float]] = {}
+        self._cache_lock = threading.Lock()
+
+    def get_settings(self, username: str) -> Settings:
+        """Load settings for a user, using cache when file hasn't changed.
+
+        Args:
+            username: The user's username
+
+        Returns:
+            Settings object for this user
+
+        Raises:
+            FileNotFoundError: If the user's settings.json doesn't exist
+        """
+        settings_path = (
+            self._vaults_root / username / 'thoth' / '_thoth' / 'settings.json'
+        )
+
+        if not settings_path.exists():
+            # Try legacy location
+            legacy_path = self._vaults_root / username / '_thoth' / 'settings.json'
+            if legacy_path.exists():
+                settings_path = legacy_path
+            else:
+                raise FileNotFoundError(
+                    f"Settings file not found for user '{username}' at {settings_path}"
+                )
+
+        # Get current mtime
+        current_mtime = settings_path.stat().st_mtime
+
+        with self._cache_lock:
+            # Check cache
+            if username in self._cache:
+                cached_settings, cached_mtime = self._cache[username]
+                # If file hasn't changed, return cached version
+                if cached_mtime == current_mtime:
+                    return cached_settings
+
+            # Load fresh settings
+            settings = Settings.from_json_file(settings_path)
+
+            # Update cache
+            self._cache[username] = (settings, current_mtime)
+
+            logger.debug(f"Loaded settings for user '{username}' from {settings_path}")
+            return settings
+
+    def get_settings_or_default(self, username: str) -> Settings:
+        """Return user settings, falling back to a default Settings instance.
+
+        This is useful for background services that process data for users who
+        may not have fully initialized settings yet.
+
+        Args:
+            username: The user's username
+
+        Returns:
+            Settings object (loaded or default)
+        """
+        try:
+            return self.get_settings(username)
+        except FileNotFoundError:
+            logger.warning(
+                f"Settings not found for user '{username}', using default settings"
+            )
+            return Settings()
+
+    def invalidate_cache(self, username: str | None = None) -> None:
+        """Invalidate the settings cache for a user or all users.
+
+        Args:
+            username: User to invalidate, or None to invalidate all
+        """
+        with self._cache_lock:
+            if username is None:
+                self._cache.clear()
+                logger.debug('Invalidated all user settings cache')
+            elif username in self._cache:
+                del self._cache[username]
+                logger.debug(f"Invalidated settings cache for user '{username}'")
+
+
+# --- User Paths (multi-user path resolution) ---
+
+
+@dataclass(frozen=True)
+class UserPaths:
+    """Resolved absolute paths for a specific user's vault.
+
+    Produced by ``Config.resolve_paths_for_vault`` so that services and MCP
+    tools can work with user-scoped directories instead of the global config
+    paths.
+    """
+
+    vault_root: Path
+    workspace_dir: Path
+    pdf_dir: Path
+    markdown_dir: Path
+    notes_dir: Path
+    prompts_dir: Path
+    templates_dir: Path
+    output_dir: Path
+    knowledge_base_dir: Path
+    graph_storage_path: Path
+    queries_dir: Path
+    agent_storage_dir: Path
+    logs_dir: Path
+    analysis_schema_path: Path
+    discovery_sources_dir: Path
+    discovery_results_dir: Path
+    discovery_chrome_configs_dir: Path
+    data_dir: Path
+    cache_root: Path
+    data_root: Path
+    logs_root: Path
+
+
 # --- Config Object ---
 
 
@@ -1314,8 +1456,47 @@ class Config:
         # 6. Configure logging
         self._configure_logging()
 
+        # 7. Multi-user mode detection
+        self.multi_user: bool = os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true'
+        self.vaults_root: Path | None = None
+        self.user_config_manager: UserConfigManager | None = None
+
+        if self.multi_user:
+            vaults_root_str = os.getenv('THOTH_VAULTS_ROOT')
+            if not vaults_root_str:
+                logger.warning(
+                    'THOTH_MULTI_USER=true but THOTH_VAULTS_ROOT not set. '
+                    'Defaulting to /vaults'
+                )
+                vaults_root_str = '/vaults'
+            self.vaults_root = Path(vaults_root_str).resolve()
+
+            # Initialize UserConfigManager for per-user settings
+            self.user_config_manager = UserConfigManager(self.vaults_root)
+
+            logger.info(f'Multi-user mode enabled. Vaults root: {self.vaults_root}')
+
         self._initialized = True
         logger.success('Configuration loaded successfully with ALL settings preserved')
+
+    @staticmethod
+    def _get_runtime_roots() -> tuple[Path, Path, Path]:
+        """Return (cache_root, data_root, logs_root) as Path objects.
+
+        These paths exist for backward compatibility with code that references
+        config.data_root etc. Nothing actively writes to them — all persistent
+        state lives in Postgres. Directories are NOT created on startup.
+
+        Returns:
+            Tuple of (cache_root, data_root, logs_root) as absolute Paths.
+        """
+        try:
+            home = Path.home()
+        except (RuntimeError, KeyError):
+            home = Path('/tmp')  # nosec B108
+        xdg_cache = Path(os.getenv('XDG_CACHE_HOME', home / '.cache'))
+        xdg_data = Path(os.getenv('XDG_DATA_HOME', home / '.local' / 'share'))
+        return xdg_cache / 'thoth', xdg_data / 'thoth', xdg_data / 'thoth' / 'logs'
 
     def _resolve_paths(self) -> None:
         """Convert relative paths to absolute (vault-relative).
@@ -1355,27 +1536,32 @@ class Config:
             # Relative path: resolve relative to vault root
             return (self.vault_root / path).resolve()
 
-        # Resolve all main paths
+        # --- Runtime roots (outside the vault) ---
+        self.cache_root, self.data_root, self.logs_root = self._get_runtime_roots()
+
+        # --- Vault-resident paths (settings, prompts, templates, user content) ---
         self.workspace_dir = resolve_path(paths.workspace)
         self.pdf_dir = resolve_path(paths.pdf)
         self.markdown_dir = resolve_path(paths.markdown)
         self.notes_dir = resolve_path(paths.notes)
         self.prompts_dir = resolve_path(paths.prompts)
         self.templates_dir = resolve_path(paths.templates)
-        self.output_dir = resolve_path(paths.output)
         self.knowledge_base_dir = resolve_path(paths.knowledge_base)
-        self.graph_storage_path = resolve_path(paths.graph_storage)
-        self.queries_dir = resolve_path(paths.queries)
-        self.agent_storage_dir = resolve_path(paths.agent_storage)
-        self.logs_dir = resolve_path(paths.logs)
 
-        # Analysis schema path (for customizable document analysis)
+        # Analysis schema path (lives in vault alongside settings)
         self.analysis_schema_path = resolve_path('thoth/_thoth/analysis_schema.json')
 
-        # Resolve discovery paths
-        self.discovery_sources_dir = resolve_path(paths.discovery.sources)
-        self.discovery_results_dir = resolve_path(paths.discovery.results)
-        self.discovery_chrome_configs_dir = resolve_path(paths.discovery.chrome_configs)
+        # --- Runtime paths (outside vault, under data_root / logs_root) ---
+        self.output_dir = self.data_root / 'output'
+        self.graph_storage_path = self.data_root / 'graph' / 'citations.graphml'
+        self.queries_dir = self.data_root / 'queries'
+        self.agent_storage_dir = self.data_root / 'agent'
+        self.logs_dir = self.logs_root
+        self.discovery_sources_dir = self.data_root / 'discovery' / 'sources'
+        self.discovery_results_dir = self.data_root / 'discovery' / 'results'
+        self.discovery_chrome_configs_dir = (
+            self.data_root / 'discovery' / 'chrome_configs'
+        )
 
         # Resolve RAG vector_db_path (avoid relative path permission errors)
         rag_config = self.settings.rag
@@ -1384,7 +1570,7 @@ class Config:
         # Resolve external MCP servers config path
         mcp_config = self.settings.servers.mcp
         if not mcp_config.external_servers_file:
-            # Default to _thoth/mcps.json
+            # Default to _thoth/mcps.json (vault-resident)
             mcp_config.external_servers_file = str(
                 self.vault_root / 'thoth' / '_thoth' / 'mcps.json'
             )
@@ -1393,27 +1579,23 @@ class Config:
                 resolve_path(mcp_config.external_servers_file)
             )
 
-        # Create directories if they don't exist
-        for dir_path in [
+        # Create vault-resident directories only (actual content lives here).
+        # Runtime dirs (data_root, cache_root, etc.) are NOT created — all
+        # persistent state is in Postgres. The path attributes are kept for
+        # backward compatibility but point to dirs that may not exist.
+        vault_dirs = [
             self.workspace_dir,
             self.pdf_dir,
             self.markdown_dir,
             self.notes_dir,
             self.prompts_dir,
             self.templates_dir,
-            self.output_dir,
             self.knowledge_base_dir,
-            self.queries_dir,
-            self.agent_storage_dir,
-            self.logs_dir,
-            self.discovery_sources_dir,
-            self.discovery_results_dir,
-            self.discovery_chrome_configs_dir,
-            self.analysis_schema_path.parent,  # Create parent dir for schema file
-        ]:
+            self.analysis_schema_path.parent,
+        ]
+        for dir_path in vault_dirs:
             try:
                 dir_path.mkdir(parents=True, exist_ok=True)
-                logger.debug(f'Ensured directory exists: {dir_path}')
             except PermissionError:
                 logger.warning(f'Permission denied creating directory: {dir_path}')
 
@@ -1436,17 +1618,21 @@ class Config:
                 .replace('{message}', '<level>{message}</level>'),
             )
 
-        # Add file handler if enabled
-        if log_config.file.enabled:
+        # File logging only outside Docker (containers use stdout).
+        if log_config.file.enabled and not os.getenv('DOCKER_ENV'):
             log_file = self.logs_dir / Path(log_config.file.path).name
-            logger.add(
-                log_file,
-                level=log_config.file.level,
-                rotation=log_config.file.rotation,
-                retention=log_config.file.retention,
-                compression=log_config.file.compression,
-                format=log_config.format,
-            )
+            try:
+                log_file.parent.mkdir(parents=True, exist_ok=True)
+                logger.add(
+                    log_file,
+                    level=log_config.file.level,
+                    rotation=log_config.file.rotation,
+                    retention=log_config.file.retention,
+                    compression=log_config.file.compression,
+                    format=log_config.format,
+                )
+            except OSError:
+                pass
 
     @classmethod
     def register_reload_callback(
@@ -1632,9 +1818,116 @@ class Config:
     def mcp_port(self) -> int:
         return int(os.getenv('THOTH_MCP_PORT', '8001'))
 
+    def resolve_user_vault_path(self, username: str) -> Path:
+        """
+        Resolve the absolute vault path for a specific user.
+
+        In multi-user mode, each user has an isolated vault under THOTH_VAULTS_ROOT.
+        In single-user mode, always returns the global vault_root.
+
+        Args:
+            username: The user's username
+
+        Returns:
+            Absolute path to the user's vault directory
+
+        Example:
+            >>> config.resolve_user_vault_path('alice')
+            PosixPath('/vaults/alice')
+        """
+        if self.multi_user and self.vaults_root:
+            return self.vaults_root / username
+        return self.vault_root
+
+    @property
+    def data_dir(self) -> Path:
+        """Runtime data directory (outside vault)."""
+        return self.data_root
+
+    def resolve_paths_for_vault(
+        self,
+        vault_root: Path,
+        paths_config: PathsConfig | None = None,
+    ) -> UserPaths:
+        """Resolve all standard paths relative to a specific vault root.
+
+        This is the multi-user equivalent of ``_resolve_paths``. Given a
+        user's vault root directory, it returns a ``UserPaths`` with every
+        path resolved to an absolute location inside that vault.
+
+        Vault-resident paths (settings, prompts, templates, content) are
+        resolved relative to vault_root. Runtime paths (cache, data, logs)
+        are scoped per-user under the global runtime roots.
+
+        Args:
+            vault_root: Absolute path to the user's vault directory.
+            paths_config: Optional PathsConfig; defaults to global settings.
+
+        Returns:
+            UserPaths with all directories resolved.
+
+        Example:
+            >>> paths = config.resolve_paths_for_vault(Path('/vaults/alice'))
+            >>> paths.pdf_dir
+            PosixPath('/vaults/alice/thoth/papers/pdfs')
+        """
+        paths = paths_config or self.settings.paths
+
+        def _resolve(path_str: str) -> Path:
+            p = Path(path_str)
+            if p.is_absolute():
+                return p.resolve()
+            return (vault_root / p).resolve()
+
+        workspace = _resolve(paths.workspace)
+
+        # For multi-user, scope runtime dirs by username (vault_root basename)
+        username = vault_root.name
+        cache_root, data_root, logs_root = self._get_runtime_roots()
+        # Each user gets an isolated subdirectory under the runtime roots
+        user_cache = cache_root / username
+        user_data = data_root / username
+        user_logs = logs_root / username
+
+        return UserPaths(
+            vault_root=vault_root,
+            workspace_dir=workspace,
+            pdf_dir=_resolve(paths.pdf),
+            markdown_dir=_resolve(paths.markdown),
+            notes_dir=_resolve(paths.notes),
+            prompts_dir=_resolve(paths.prompts),
+            templates_dir=_resolve(paths.templates),
+            output_dir=user_data / 'output',
+            knowledge_base_dir=_resolve(paths.knowledge_base),
+            graph_storage_path=user_data / 'graph' / 'citations.graphml',
+            queries_dir=user_data / 'queries',
+            agent_storage_dir=user_data / 'agent',
+            logs_dir=user_logs,
+            analysis_schema_path=_resolve('thoth/_thoth/analysis_schema.json'),
+            discovery_sources_dir=user_data / 'discovery' / 'sources',
+            discovery_results_dir=user_data / 'discovery' / 'results',
+            discovery_chrome_configs_dir=user_data / 'discovery' / 'chrome_configs',
+            data_dir=user_data,
+            cache_root=user_cache,
+            data_root=user_data,
+            logs_root=user_logs,
+        )
+
+    def get_user_settings(self, username: str) -> Settings:
+        """
+        Get effective settings for a user.
+
+        In multi-user mode this reads the user's settings file from their vault.
+        In single-user mode this returns the global settings.
+        """
+        if self.multi_user and self.user_config_manager:
+            return self.user_config_manager.get_settings_or_default(username)
+        return self.settings
+
     def __repr__(self) -> str:
         return (
             f'Config(vault_root={self.vault_root}, '
+            f'multi_user={self.multi_user}, '
             f'model={self.llm_config.default.model}, '
             f'log_level={self.logging_config.level})'
         )

@@ -34,6 +34,7 @@ class InstallationScreen(BaseScreen):
             'Creating workspace directory',
             'Saving configuration',
             'Setting up database schema',
+            'Syncing Letta agents',
             'Installing Obsidian plugin',
             'Validating installation',
         ]
@@ -110,27 +111,36 @@ class InstallationScreen(BaseScreen):
             self.current_step = 3
             self._update_step(3, 'active')
             status_text.update(f'[cyan]{self.installation_steps[2]}...[/cyan]')
-            progress_bar.update(progress=60)
+            progress_bar.update(progress=50)
             await self.setup_database()
             self._update_step(3, 'done')
             await asyncio.sleep(0.3)
 
-            # Step 4: Install Obsidian plugin
+            # Step 4: Sync Letta agents (create missing, update tools on existing)
             self.current_step = 4
             self._update_step(4, 'active')
             status_text.update(f'[cyan]{self.installation_steps[3]}...[/cyan]')
-            progress_bar.update(progress=80)
-            await self.install_plugin()
+            progress_bar.update(progress=65)
+            await self.sync_letta_agents()
             self._update_step(4, 'done')
             await asyncio.sleep(0.3)
 
-            # Step 5: Validate installation
+            # Step 5: Install Obsidian plugin
             self.current_step = 5
             self._update_step(5, 'active')
             status_text.update(f'[cyan]{self.installation_steps[4]}...[/cyan]')
+            progress_bar.update(progress=80)
+            await self.install_plugin()
+            self._update_step(5, 'done')
+            await asyncio.sleep(0.3)
+
+            # Step 6: Validate installation
+            self.current_step = 6
+            self._update_step(6, 'active')
+            status_text.update(f'[cyan]{self.installation_steps[5]}...[/cyan]')
             progress_bar.update(progress=95)
             await self.validate_installation()
-            self._update_step(5, 'done')
+            self._update_step(6, 'done')
             await asyncio.sleep(0.3)
 
             # Complete - commit transaction
@@ -183,18 +193,12 @@ class InstallationScreen(BaseScreen):
         notes_rel = paths_config.get('notes', 'thoth/notes')
         markdown_rel = paths_config.get('markdown', 'thoth/papers/markdown')
 
-        # Create workspace (internal data)
+        # Create workspace (vault-resident config only -- cache/data/logs are
+        # created at runtime outside the vault under XDG dirs)
         workspace_dir = self.vault_path / workspace_rel
-        for subdir in [
-            workspace_dir,
-            workspace_dir / 'data',
-            workspace_dir / 'logs',
-            workspace_dir / 'cache',
-            workspace_dir / 'backups',
-        ]:
-            if not subdir.exists():
-                subdir.mkdir(parents=True, exist_ok=True)
-                self.transaction.record_create_directory(subdir)
+        if not workspace_dir.exists():
+            workspace_dir.mkdir(parents=True, exist_ok=True)
+            self.transaction.record_create_directory(workspace_dir)
 
         # Create user-facing directories
         for rel_path in (pdf_rel, notes_rel, markdown_rel):
@@ -450,14 +454,20 @@ class InstallationScreen(BaseScreen):
 
         # Build plugin settings
         is_remote = deployment_mode == 'remote'
+        wizard_data = self.app.wizard_data if hasattr(self.app, 'wizard_data') else {}
+        api_token = wizard_data.get('api_token', '')
+
         plugin_data = {
-            **existing_data,  # Preserve any existing settings
+            **existing_data,
             'remoteMode': is_remote,
             'remoteEndpointUrl': thoth_api_url
             if is_remote
-            else 'http://localhost:8000',  # Only Thoth API URL
+            else 'http://localhost:8000',
             'lettaEndpointUrl': letta_url,
         }
+
+        if api_token:
+            plugin_data['apiToken'] = api_token
 
         # Write data.json
         try:
@@ -658,6 +668,98 @@ class InstallationScreen(BaseScreen):
         except Exception as e:
             logger.error(f'Failed to initialize database: {e}')
             raise RuntimeError(f'Database setup failed: {e}') from e
+
+    async def sync_letta_agents(self) -> None:
+        """Sync Letta agents for all registered users.
+
+        Creates agents for users who don't have them yet and updates tool
+        configurations on existing agents. Safe to run on every install/update.
+        Skips when: multi-user is off, deployment is remote (no local services),
+        or Letta is unreachable.
+        """
+        import os
+
+        wizard_data = self.app.wizard_data if hasattr(self.app, 'wizard_data') else {}
+        deployment_mode = wizard_data.get('deployment_mode', 'local')
+
+        if deployment_mode == 'remote':
+            logger.info('Remote deployment, skipping agent sync (server handles this)')
+            return
+
+        if os.getenv('THOTH_MULTI_USER', 'false').lower() != 'true':
+            logger.info('Single-user mode, skipping multi-user agent sync')
+            return
+
+        try:
+            import asyncpg
+
+            from thoth.auth.context import UserContext
+            from thoth.auth.service import AuthService
+            from thoth.services.agent_initialization_service import (
+                AgentInitializationService,
+            )
+
+            database_url = os.getenv(
+                'DATABASE_URL',
+                'postgresql://thoth:thoth_password@localhost:5432/thoth',
+            )
+            vaults_root = Path(os.getenv('THOTH_VAULTS_ROOT', '/vaults'))
+
+            conn = await asyncpg.connect(database_url)
+            try:
+                rows = await conn.fetch(
+                    'SELECT id, username, vault_path, orchestrator_agent_id '
+                    'FROM users WHERE is_active = TRUE ORDER BY created_at',
+                )
+
+                if not rows:
+                    logger.info('No users found, skipping agent sync')
+                    return
+
+                svc = AgentInitializationService()
+
+                class _Pg:
+                    def __init__(self, c):
+                        self._c = c
+
+                    async def execute(self, q, *a):
+                        return await self._c.execute(q, *a)
+
+                    async def fetchrow(self, q, *a):
+                        return await self._c.fetchrow(q, *a)
+
+                    async def fetch(self, q, *a):
+                        return await self._c.fetch(q, *a)
+
+                auth = AuthService(postgres=_Pg(conn))
+
+                synced = 0
+                for row in rows:
+                    username = row['username']
+                    ctx = UserContext(
+                        user_id=str(row['id']),
+                        username=username,
+                        vault_path=vaults_root / row['vault_path'],
+                    )
+                    try:
+                        agent_ids = await svc.initialize_agents_for_user(ctx)
+                        if agent_ids:
+                            await auth.update_agent_ids(
+                                str(row['id']),
+                                orchestrator_agent_id=agent_ids.get('orchestrator'),
+                                analyst_agent_id=agent_ids.get('analyst'),
+                            )
+                            synced += 1
+                    except Exception as e:
+                        logger.warning(f'Agent sync failed for {username}: {e}')
+
+                logger.info(f'Synced agents for {synced}/{len(rows)} user(s)')
+
+            finally:
+                await conn.close()
+
+        except Exception as e:
+            logger.warning(f'Agent sync skipped: {e}')
 
     async def install_plugin(self) -> None:
         """Install Obsidian plugin."""

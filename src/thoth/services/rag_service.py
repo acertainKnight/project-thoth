@@ -59,12 +59,18 @@ class RAGService(BaseService):
             self.logger.info('RAGManager loaded successfully')
         return self._rag_manager
 
-    def index_file(self, file_path: Path, paper_id: str | None = None) -> list[str]:
+    def index_file(
+        self,
+        file_path: Path,
+        user_id: str | None = None,
+        paper_id: str | None = None,
+    ) -> list[str]:
         """
         Index a single file into the knowledge base.
 
         Args:
             file_path: Path to the file to index
+            user_id: Optional user ID for multi-tenant isolation
             paper_id: Optional paper ID (UUID) to skip title-based lookup
 
         Returns:
@@ -84,7 +90,9 @@ class RAGService(BaseService):
                     f'Only markdown files are supported, got: {file_path.suffix}'
                 )
 
-            doc_ids = self.rag_manager.index_markdown_file(file_path, paper_id=paper_id)
+            doc_ids = self.rag_manager.index_markdown_file(
+                file_path, user_id=user_id, paper_id=paper_id
+            )
 
             self.log_operation(
                 'file_indexed',
@@ -145,6 +153,21 @@ class RAGService(BaseService):
                 self.handle_error(e, f'indexing directory {directory}')
             ) from e
 
+    def _inject_user_filter(
+        self, filter: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
+        """Inject user_id into filter if multi-user mode and not already set."""
+        from thoth.mcp.auth import get_mcp_user_id, is_multi_user_mode
+
+        if not is_multi_user_mode():
+            return filter
+
+        user_id = get_mcp_user_id()
+        if user_id and user_id != 'default_user':
+            filter = dict(filter) if filter else {}
+            filter.setdefault('user_id', user_id)
+        return filter
+
     async def search_async(
         self,
         query: str,
@@ -168,6 +191,7 @@ class RAGService(BaseService):
         """
         try:
             self.validate_input(query=query)
+            filter = self._inject_user_filter(filter)
 
             # Search with scores using async method
             results_with_scores = await self.rag_manager.search_async(
@@ -223,6 +247,7 @@ class RAGService(BaseService):
         """
         try:
             self.validate_input(query=query)
+            filter = self._inject_user_filter(filter)
 
             # Search with scores
             results_with_scores = self.rag_manager.search(
@@ -478,8 +503,11 @@ class RAGService(BaseService):
             ServiceError: If indexing fails
         """
         try:
-            markdown_dir = markdown_dir or self.config.markdown_dir
-            notes_dir = notes_dir or self.config.notes_dir
+            up = self._get_user_paths()
+            markdown_dir = markdown_dir or (
+                up.markdown_dir if up else self.config.markdown_dir
+            )
+            notes_dir = notes_dir or (up.notes_dir if up else self.config.notes_dir)
 
             stats = {
                 'markdown_files': 0,
@@ -540,7 +568,10 @@ class RAGService(BaseService):
             raise ServiceError(self.handle_error(e, 'indexing knowledge base')) from e
 
     def index_paper_by_id(
-        self, paper_id: str, markdown_content: str | None = None
+        self,
+        paper_id: str,
+        markdown_content: str | None = None,
+        user_id: str | None = None,
     ) -> list[str]:
         """
         Index a paper by its UUID from the database.
@@ -548,6 +579,7 @@ class RAGService(BaseService):
         Args:
             paper_id: UUID of the paper in paper_metadata table
             markdown_content: Optional markdown content (fetched if omitted)
+            user_id: Optional user ID for multi-tenant isolation
 
         Returns:
             list[str]: List of document chunk IDs created
@@ -558,7 +590,9 @@ class RAGService(BaseService):
         try:
             self.validate_input(paper_id=paper_id)
             doc_ids = self.rag_manager.index_paper_by_id(
-                paper_id, markdown_content=markdown_content
+                paper_id,
+                markdown_content=markdown_content,
+                user_id=user_id,
             )
             self.log_operation(
                 'paper_indexed_by_id',
@@ -572,7 +606,10 @@ class RAGService(BaseService):
             ) from e
 
     async def index_paper_by_id_async(
-        self, paper_id: str, markdown_content: str | None = None
+        self,
+        paper_id: str,
+        markdown_content: str | None = None,
+        user_id: str | None = None,
     ) -> list[str]:
         """
         Async version of index_paper_by_id. Indexes a paper by UUID from the database.
@@ -580,6 +617,7 @@ class RAGService(BaseService):
         Args:
             paper_id: UUID of the paper in paper_metadata table.
             markdown_content: Optional markdown content (fetched if omitted).
+            user_id: Optional user ID for multi-tenant isolation.
 
         Returns:
             list[str]: List of document chunk IDs created.
@@ -590,7 +628,9 @@ class RAGService(BaseService):
         try:
             self.validate_input(paper_id=paper_id)
             doc_ids = await self.rag_manager.index_paper_by_id_async(
-                paper_id, markdown_content=markdown_content
+                paper_id,
+                markdown_content=markdown_content,
+                user_id=user_id,
             )
             self.log_operation(
                 'paper_indexed_by_id_async',
@@ -632,6 +672,9 @@ class RAGService(BaseService):
                 )
 
             async def fetch_papers():
+                from thoth.mcp.auth import get_mcp_user_id
+
+                user_id = get_mcp_user_id()
                 conn = await asyncpg.connect(db_url)
                 try:
                     query = """
@@ -640,6 +683,7 @@ class RAGService(BaseService):
                         JOIN processed_papers pp ON pp.paper_id = pm.id
                         WHERE pp.markdown_content IS NOT NULL
                           AND pp.markdown_content != ''
+                          AND pm.user_id = $1
                     """
                     if not force:
                         query += """
@@ -652,7 +696,7 @@ class RAGService(BaseService):
                     query += ' ORDER BY pm.created_at DESC'
                     if limit:
                         query += f' LIMIT {limit}'
-                    rows = await conn.fetch(query)
+                    rows = await conn.fetch(query, user_id)
                     return rows
                 finally:
                     await conn.close()

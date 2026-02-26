@@ -74,9 +74,13 @@ services:
       - API_MISTRAL_KEY=${API_MISTRAL_KEY:-}
       - API_OPENROUTER_KEY=${API_OPENROUTER_KEY:-}
       - API_SEMANTIC_SCHOLAR_KEY=${API_SEMANTIC_SCHOLAR_KEY:-}
+
+      # Multi-user (container always sees /vaults regardless of host path)
+      - THOTH_VAULTS_ROOT=/vaults
     volumes:
       - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
       - ./src:/app/src:ro  # Mount source for development
+      - ${THOTH_VAULTS_ROOT:-./vaults}:/vaults:rw  # Multi-user vault root
     ports:
       - "8000:8000"
     networks:
@@ -138,9 +142,13 @@ services:
       # API Keys (REQUIRED - loaded from .env file)
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+
+      # Multi-user
+      - THOTH_VAULTS_ROOT=/vaults
     volumes:
       - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
       - ./src:/app/src:ro  # Mount source for development
+      - ${THOTH_VAULTS_ROOT:-./vaults}:/vaults:rw
     ports:
       - "8082:8001"  # HTTP transport (includes /mcp and /sse endpoints)
     networks:
@@ -200,9 +208,13 @@ services:
       # API Keys (REQUIRED - loaded from .env file)
       - API_SEMANTIC_SCHOLAR_KEY=${API_SEMANTIC_SCHOLAR_KEY:-}
       - API_WEB_SEARCH_KEY=${API_WEB_SEARCH_KEY:-}
+
+      # Multi-user
+      - THOTH_VAULTS_ROOT=/vaults
     volumes:
       - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
       - ./src:/app/src:ro  # Mount source for development
+      - ${THOTH_VAULTS_ROOT:-./vaults}:/vaults:rw
     ports:
       - "8004:8000"  # Map external 8004 to internal 8000 (FastAPI default)
     networks:
@@ -255,9 +267,13 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - API_MISTRAL_KEY=${API_MISTRAL_KEY:-}
+
+      # Multi-user
+      - THOTH_VAULTS_ROOT=/vaults
     volumes:
       - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
       - ./src:/app/src:ro  # Mount source for development
+      - ${THOTH_VAULTS_ROOT:-./vaults}:/vaults:rw
     networks:
       - thoth-dev-network
       - letta-network  # Connect to external Letta network for PostgreSQL access
@@ -311,9 +327,13 @@ services:
       # API Keys (REQUIRED - loaded from .env file)
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+
+      # Multi-user
+      - THOTH_VAULTS_ROOT=/vaults
     volumes:
       - ${OBSIDIAN_VAULT_PATH:-./workspace}:/vault:rw  # Mount entire vault
       - ./src:/app/src:ro  # Mount source for development
+      - ${THOTH_VAULTS_ROOT:-./vaults}:/vaults:rw
     networks:
       - thoth-dev-network
       - letta-network  # Connect to external Letta network

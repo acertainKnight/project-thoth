@@ -164,10 +164,12 @@ export default class ThothPlugin extends Plugin {
   async loadSettings() {
     const savedData = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_SETTINGS, savedData);
+    APIUtilities.setCurrentApiToken((this.settings as any).apiToken ?? '');
   }
 
   async saveSettings() {
     await this.saveData(this.settings);
+    APIUtilities.setCurrentApiToken((this.settings as any).apiToken ?? '');
   }
 
   public getEndpointUrl(): string {
@@ -180,6 +182,36 @@ export default class ThothPlugin extends Plugin {
     // Use plugin's Letta API endpoint URL (for agent chats)
     const baseUrl = this.settings.lettaEndpointUrl || 'http://localhost:8284';
     return baseUrl.replace(/\/$/, ''); // Remove trailing slash
+  }
+
+  /**
+   * Returns the base URL to use for Letta API calls.
+   *
+   * In multi-user mode (apiToken set), all Letta calls are routed through the
+   * Thoth proxy at /api/letta. This enforces per-user auth and ensures users
+   * can only access their own agents and conversations. In single-user mode
+   * the plugin hits Letta directly as before.
+   */
+  public getLettaProxyUrl(): string {
+    const apiToken: string = (this.settings as any).apiToken ?? '';
+    if (apiToken) {
+      return `${this.getEndpointUrl()}/api/letta`;
+    }
+    return this.getLettaEndpointUrl();
+  }
+
+  private getAuthHeaders(): Record<string, string> {
+    const apiToken: string = (this.settings as any).apiToken ?? '';
+    return APIUtilities.buildAuthHeaders(apiToken);
+  }
+
+  public async authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+    const authHeaders = this.getAuthHeaders();
+    const mergedHeaders = {
+      ...(options.headers as Record<string, string> | undefined),
+      ...authHeaders,
+    };
+    return fetch(url, { ...options, headers: mergedHeaders });
   }
 
     async startAgent(): Promise<void> {
@@ -207,7 +239,7 @@ export default class ThothPlugin extends Plugin {
         console.log('Testing connection to:', endpointUrl);
 
         // Test connection to remote server
-        const response = await fetch(`${endpointUrl}/health`, {
+        const response = await this.authFetch(`${endpointUrl}/health`, {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
@@ -298,7 +330,7 @@ export default class ThothPlugin extends Plugin {
         if (this.process) {
           // Test if the server is responding
           try {
-            const response = await fetch(`${this.getEndpointUrl()}/health`);
+            const response = await this.authFetch(`${this.getEndpointUrl()}/health`);
               if (response.ok) {
                 this.isAgentRunning = true;
                 this.updateStatusBar();
@@ -310,7 +342,7 @@ export default class ThothPlugin extends Plugin {
             // Give it more time
             setTimeout(async () => {
               try {
-                const response = await fetch(`${this.getEndpointUrl()}/health`);
+                const response = await this.authFetch(`${this.getEndpointUrl()}/health`);
                 if (response.ok) {
                   this.isAgentRunning = true;
                   this.updateStatusBar();
@@ -407,7 +439,7 @@ export default class ThothPlugin extends Plugin {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         const endpoint = this.getEndpointUrl();
-        const response = await fetch(`${endpoint}/health`);
+        const response = await this.authFetch(`${endpoint}/health`);
 
         if (response.ok) {
           this.isAgentRunning = true;
@@ -424,7 +456,12 @@ export default class ThothPlugin extends Plugin {
   }
 
   async connectWebSocket(retries = 3): Promise<void> {
-    const wsUrl = this.getEndpointUrl().replace(/^http/, 'ws') + '/ws/chat';
+    const baseWsUrl = this.getEndpointUrl().replace(/^http/, 'ws') + '/ws/chat';
+    // Attach token as query param for WebSocket auth (headers not supported in browser WS API)
+    const apiToken: string = (this.settings as any).apiToken ?? '';
+    const wsUrl = apiToken
+      ? `${baseWsUrl}?token=${encodeURIComponent(apiToken)}`
+      : baseWsUrl;
 
     for (let attempt = 0; attempt < retries; attempt++) {
       try {
@@ -506,7 +543,7 @@ export default class ThothPlugin extends Plugin {
       new Notice('Researching... This may take a moment.');
 
       const endpoint = this.getEndpointUrl();
-      const response = await fetch(`${endpoint}/research/query`, {
+      const response = await this.authFetch(`${endpoint}/research/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -820,9 +857,9 @@ export default class ThothPlugin extends Plugin {
         }
 
         // Send to server using Letta chat endpoint (same as full chat but without streaming)
-        const endpoint = this.getLettaEndpointUrl();
+        const endpoint = this.getLettaProxyUrl();
 
-        const response = await fetch(`${endpoint}/v1/conversations/${conversationId}/messages`, {
+        const response = await this.authFetch(`${endpoint}/v1/conversations/${conversationId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1238,7 +1275,7 @@ export default class ThothPlugin extends Plugin {
       progressNotification.updateProgress(10, `Sending ${command} request...`);
 
       const endpoint = this.getEndpointUrl();
-      const response = await fetch(`${endpoint}/execute/command`, {
+      const response = await this.authFetch(`${endpoint}/execute/command`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1335,7 +1372,7 @@ export default class ThothPlugin extends Plugin {
 
     try {
       const endpoint = this.getEndpointUrl();
-      const response = await fetch(`${endpoint}/stream/operation`, {
+      const response = await this.authFetch(`${endpoint}/stream/operation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1405,7 +1442,7 @@ export default class ThothPlugin extends Plugin {
       new Notice('Researching... This may take a moment.');
 
       const endpoint = this.getEndpointUrl();
-      const response = await fetch(`${endpoint}/research/query`, {
+      const response = await this.authFetch(`${endpoint}/research/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1449,7 +1486,7 @@ export default class ThothPlugin extends Plugin {
   async performHealthCheck() {
     try {
       const endpoint = this.getEndpointUrl();
-      const response = await fetch(`${endpoint}/health`);
+      const response = await this.authFetch(`${endpoint}/health`);
 
       if (response.ok) {
         const health = await response.json();
@@ -1465,7 +1502,7 @@ export default class ThothPlugin extends Plugin {
   async validateConfiguration() {
     try {
       const endpoint = this.getEndpointUrl();
-      const response = await fetch(`${endpoint}/config/validate`, {
+      const response = await this.authFetch(`${endpoint}/config/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(this.settings)
@@ -1505,7 +1542,7 @@ export default class ThothPlugin extends Plugin {
 
     // Queue the request to avoid overwhelming the server
     return this.queueRequest(async () => {
-      const response = await fetch(url, options);
+      const response = await this.authFetch(url, options);
       if (!response.ok) {
         throw new Error(`Request failed: ${response.statusText}`);
       }
@@ -1609,7 +1646,7 @@ export default class ThothPlugin extends Plugin {
     let lastError: Error;
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        const response = await this.queueRequest(() => fetch(url, options));
+        const response = await this.queueRequest(() => this.authFetch(url, options));
         if (response.ok) {
           return response;
         }

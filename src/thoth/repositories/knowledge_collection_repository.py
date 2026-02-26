@@ -9,8 +9,10 @@ from uuid import UUID
 
 from loguru import logger
 
+from thoth.repositories.base import BaseRepository
 
-class KnowledgeCollectionRepository:
+
+class KnowledgeCollectionRepository(BaseRepository[dict[str, Any]]):
     """Repository for managing knowledge collections."""
 
     def __init__(self, postgres_service):
@@ -20,9 +22,11 @@ class KnowledgeCollectionRepository:
         Args:
             postgres_service: PostgreSQL service instance
         """
-        self.db = postgres_service
+        super().__init__(postgres_service, table_name='knowledge_collections')
 
-    async def create(self, name: str, description: str | None = None) -> dict[str, Any]:
+    async def create(
+        self, name: str, description: str | None = None, user_id: str | None = None
+    ) -> dict[str, Any]:
         """
         Create a new knowledge collection.
 
@@ -36,16 +40,18 @@ class KnowledgeCollectionRepository:
         Raises:
             ValueError: If collection with name already exists
         """
-        async with self.db.acquire() as conn:
+        user_id = self._resolve_user_id(user_id, 'create_collection')
+        async with self.postgres.acquire() as conn:
             try:
                 row = await conn.fetchrow(
                     """
-                    INSERT INTO knowledge_collections (name, description)
-                    VALUES ($1, $2)
+                    INSERT INTO knowledge_collections (name, description, user_id)
+                    VALUES ($1, $2, $3)
                     RETURNING id, name, description, created_at, updated_at
                     """,
                     name,
                     description,
+                    user_id,
                 )
 
                 logger.info(f'Created knowledge collection: {name} (id: {row["id"]})')
@@ -59,7 +65,9 @@ class KnowledgeCollectionRepository:
                     ) from e
                 raise
 
-    async def get_by_id(self, collection_id: UUID) -> dict[str, Any] | None:
+    async def get_by_id(
+        self, collection_id: UUID, user_id: str | None = None
+    ) -> dict[str, Any] | None:
         """
         Get collection by ID.
 
@@ -69,19 +77,33 @@ class KnowledgeCollectionRepository:
         Returns:
             Collection dictionary or None if not found
         """
-        async with self.db.acquire() as conn:
-            row = await conn.fetchrow(
-                """
-                SELECT id, name, description, created_at, updated_at
-                FROM knowledge_collections
-                WHERE id = $1
-                """,
-                collection_id,
-            )
+        user_id = self._resolve_user_id(user_id, 'get_by_id')
+        async with self.postgres.acquire() as conn:
+            if user_id is not None:
+                row = await conn.fetchrow(
+                    """
+                    SELECT id, name, description, created_at, updated_at
+                    FROM knowledge_collections
+                    WHERE id = $1 AND user_id = $2
+                    """,
+                    collection_id,
+                    user_id,
+                )
+            else:
+                row = await conn.fetchrow(
+                    """
+                    SELECT id, name, description, created_at, updated_at
+                    FROM knowledge_collections
+                    WHERE id = $1
+                    """,
+                    collection_id,
+                )
 
             return dict(row) if row else None
 
-    async def get_by_name(self, name: str) -> dict[str, Any] | None:
+    async def get_by_name(
+        self, name: str, user_id: str | None = None
+    ) -> dict[str, Any] | None:
         """
         Get collection by name.
 
@@ -91,28 +113,40 @@ class KnowledgeCollectionRepository:
         Returns:
             Collection dictionary or None if not found
         """
-        async with self.db.acquire() as conn:
-            row = await conn.fetchrow(
-                """
-                SELECT id, name, description, created_at, updated_at
-                FROM knowledge_collections
-                WHERE name = $1
-                """,
-                name,
-            )
+        user_id = self._resolve_user_id(user_id, 'get_by_name')
+        async with self.postgres.acquire() as conn:
+            if user_id is not None:
+                row = await conn.fetchrow(
+                    """
+                    SELECT id, name, description, created_at, updated_at
+                    FROM knowledge_collections
+                    WHERE name = $1 AND user_id = $2
+                    """,
+                    name,
+                    user_id,
+                )
+            else:
+                row = await conn.fetchrow(
+                    """
+                    SELECT id, name, description, created_at, updated_at
+                    FROM knowledge_collections
+                    WHERE name = $1
+                    """,
+                    name,
+                )
 
             return dict(row) if row else None
 
-    async def list_all(self) -> list[dict[str, Any]]:
+    async def list_all(self, user_id: str | None = None) -> list[dict[str, Any]]:
         """
         List all collections with document counts.
 
         Returns:
             List of collection dictionaries with document_count field
         """
-        async with self.db.acquire() as conn:
-            rows = await conn.fetch(
-                """
+        user_id = self._resolve_user_id(user_id, 'list_all')
+        async with self.postgres.acquire() as conn:
+            query = """
                 SELECT
                     kc.id,
                     kc.name,
@@ -122,10 +156,19 @@ class KnowledgeCollectionRepository:
                     COUNT(pm.id) as document_count
                 FROM knowledge_collections kc
                 LEFT JOIN paper_metadata pm ON pm.collection_id = kc.id
+                {user_filter}
                 GROUP BY kc.id, kc.name, kc.description, kc.created_at, kc.updated_at
                 ORDER BY kc.name
-                """
-            )
+            """
+            if user_id is not None:
+                rows = await conn.fetch(
+                    query.format(
+                        user_filter='WHERE kc.user_id = $1 AND (pm.user_id = $1 OR pm.user_id IS NULL)'
+                    ),
+                    user_id,
+                )
+            else:
+                rows = await conn.fetch(query.format(user_filter=''))
 
             return [dict(row) for row in rows]
 
@@ -134,6 +177,7 @@ class KnowledgeCollectionRepository:
         collection_id: UUID,
         name: str | None = None,
         description: str | None = None,
+        user_id: str | None = None,
     ) -> dict[str, Any] | None:
         """
         Update collection.
@@ -149,7 +193,8 @@ class KnowledgeCollectionRepository:
         Raises:
             ValueError: If new name conflicts with existing collection
         """
-        async with self.db.acquire() as conn:
+        user_id = self._resolve_user_id(user_id, 'update')
+        async with self.postgres.acquire() as conn:
             # Build dynamic update query
             updates = []
             params = [collection_id]
@@ -166,20 +211,32 @@ class KnowledgeCollectionRepository:
                 param_num += 1
 
             if not updates:
-                return await self.get_by_id(collection_id)
+                return await self.get_by_id(collection_id, user_id=user_id)
 
             updates.append('updated_at = NOW()')
 
             try:
-                row = await conn.fetchrow(
-                    f"""
-                    UPDATE knowledge_collections
-                    SET {', '.join(updates)}
-                    WHERE id = $1
-                    RETURNING id, name, description, created_at, updated_at
-                    """,  # nosec B608
-                    *params,
-                )
+                if user_id is not None:
+                    row = await conn.fetchrow(
+                        f"""
+                        UPDATE knowledge_collections
+                        SET {', '.join(updates)}
+                        WHERE id = $1 AND user_id = ${param_num}
+                        RETURNING id, name, description, created_at, updated_at
+                        """,  # nosec B608
+                        *params,
+                        user_id,
+                    )
+                else:
+                    row = await conn.fetchrow(
+                        f"""
+                        UPDATE knowledge_collections
+                        SET {', '.join(updates)}
+                        WHERE id = $1
+                        RETURNING id, name, description, created_at, updated_at
+                        """,  # nosec B608
+                        *params,
+                    )
 
                 if row:
                     logger.info(
@@ -196,7 +253,12 @@ class KnowledgeCollectionRepository:
                     ) from e
                 raise
 
-    async def delete(self, collection_id: UUID, delete_documents: bool = False) -> bool:
+    async def delete(
+        self,
+        collection_id: UUID,
+        delete_documents: bool = False,
+        user_id: str | None = None,
+    ) -> bool:
         """
         Delete collection.
 
@@ -208,34 +270,67 @@ class KnowledgeCollectionRepository:
         Returns:
             True if deleted, False if not found
         """
-        async with self.db.acquire() as conn:
+        user_id = self._resolve_user_id(user_id, 'delete')
+        async with self.postgres.acquire() as conn:
             if delete_documents:
                 # Delete documents (CASCADE will handle document_chunks)
-                await conn.execute(
-                    """
-                    DELETE FROM processed_papers
-                    WHERE paper_id IN (
-                        SELECT id FROM paper_metadata WHERE collection_id = $1
+                if user_id is not None:
+                    await conn.execute(
+                        """
+                        DELETE FROM processed_papers
+                        WHERE paper_id IN (
+                            SELECT id FROM paper_metadata
+                            WHERE collection_id = $1 AND user_id = $2
+                        )
+                        AND user_id = $2
+                        """,
+                        collection_id,
+                        user_id,
                     )
-                    """,
-                    collection_id,
-                )
+                else:
+                    await conn.execute(
+                        """
+                        DELETE FROM processed_papers
+                        WHERE paper_id IN (
+                            SELECT id FROM paper_metadata WHERE collection_id = $1
+                        )
+                        """,
+                        collection_id,
+                    )
 
-                await conn.execute(
-                    """
-                    DELETE FROM paper_metadata
-                    WHERE collection_id = $1
-                    """,
-                    collection_id,
-                )
+                if user_id is not None:
+                    await conn.execute(
+                        """
+                        DELETE FROM paper_metadata
+                        WHERE collection_id = $1 AND user_id = $2
+                        """,
+                        collection_id,
+                        user_id,
+                    )
+                else:
+                    await conn.execute(
+                        """
+                        DELETE FROM paper_metadata
+                        WHERE collection_id = $1
+                        """,
+                        collection_id,
+                    )
 
                 logger.info(
                     f'Deleted documents in collection {collection_id} before deleting collection'
                 )
 
-            result = await conn.execute(
-                'DELETE FROM knowledge_collections WHERE id = $1', collection_id
-            )
+            if user_id is not None:
+                result = await conn.execute(
+                    'DELETE FROM knowledge_collections WHERE id = $1 AND user_id = $2',
+                    collection_id,
+                    user_id,
+                )
+            else:
+                result = await conn.execute(
+                    'DELETE FROM knowledge_collections WHERE id = $1',
+                    collection_id,
+                )
 
             deleted = result.split()[-1] == '1'
 
@@ -244,7 +339,9 @@ class KnowledgeCollectionRepository:
 
             return deleted
 
-    async def get_document_count(self, collection_id: UUID) -> int:
+    async def get_document_count(
+        self, collection_id: UUID, user_id: str | None = None
+    ) -> int:
         """
         Get count of documents in collection.
 
@@ -254,14 +351,26 @@ class KnowledgeCollectionRepository:
         Returns:
             Number of documents
         """
-        async with self.db.acquire() as conn:
-            row = await conn.fetchrow(
-                """
-                SELECT COUNT(*) as count
-                FROM paper_metadata
-                WHERE collection_id = $1
-                """,
-                collection_id,
-            )
+        user_id = self._resolve_user_id(user_id, 'get_document_count')
+        async with self.postgres.acquire() as conn:
+            if user_id is not None:
+                row = await conn.fetchrow(
+                    """
+                    SELECT COUNT(*) as count
+                    FROM paper_metadata
+                    WHERE collection_id = $1 AND user_id = $2
+                    """,
+                    collection_id,
+                    user_id,
+                )
+            else:
+                row = await conn.fetchrow(
+                    """
+                    SELECT COUNT(*) as count
+                    FROM paper_metadata
+                    WHERE collection_id = $1
+                    """,
+                    collection_id,
+                )
 
             return row['count'] if row else 0

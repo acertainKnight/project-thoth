@@ -20,7 +20,9 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
         """Initialize workflow actions repository."""
         super().__init__(postgres_service, table_name='workflow_actions', **kwargs)
 
-    async def create(self, action_data: dict[str, Any]) -> UUID | None:
+    async def create(
+        self, action_data: dict[str, Any], user_id: str | None = None
+    ) -> UUID | None:
         """
         Create a new workflow action step.
 
@@ -36,6 +38,9 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             Optional[UUID]: ID of created action or None
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'create')
+            if user_id is not None and 'user_id' not in action_data:
+                action_data = {**action_data, 'user_id': user_id}
             columns = list(action_data.keys())
             placeholders = [f'${i + 1}' for i in range(len(columns))]
 
@@ -58,7 +63,9 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to create workflow action: {e}')
             return None
 
-    async def get_by_workflow_id(self, workflow_id: UUID) -> list[dict[str, Any]]:
+    async def get_by_workflow_id(
+        self, workflow_id: UUID, user_id: str | None = None
+    ) -> list[dict[str, Any]]:
         """
         Get all actions for a workflow, ordered by step number.
 
@@ -68,7 +75,8 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
         Returns:
             list[dict[str, Any]]: List of action steps ordered by step_number
         """
-        cache_key = self._cache_key('workflow', str(workflow_id))
+        user_id = self._resolve_user_id(user_id, 'get_by_workflow_id')
+        cache_key = self._cache_key('workflow', str(workflow_id), user_id=user_id)
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
@@ -77,9 +85,19 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             query = """
                 SELECT * FROM workflow_actions
                 WHERE workflow_id = $1
+                {user_filter}
                 ORDER BY step_number ASC
             """
-            results = await self.postgres.fetch(query, workflow_id)
+            if user_id is not None:
+                results = await self.postgres.fetch(
+                    query.format(user_filter='AND user_id = $2'),
+                    workflow_id,
+                    user_id,
+                )
+            else:
+                results = await self.postgres.fetch(
+                    query.format(user_filter=''), workflow_id
+                )
             actions = [dict(row) for row in results]
 
             self._set_in_cache(cache_key, actions)
@@ -90,7 +108,7 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             return []
 
     async def get_by_step_number(
-        self, workflow_id: UUID, step_number: int
+        self, workflow_id: UUID, step_number: int, user_id: str | None = None
     ) -> dict[str, Any] | None:
         """
         Get a specific action step by its step number.
@@ -102,7 +120,10 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
         Returns:
             Optional[dict[str, Any]]: Action step data or None
         """
-        cache_key = self._cache_key('workflow', str(workflow_id), 'step', step_number)
+        user_id = self._resolve_user_id(user_id, 'get_by_step_number')
+        cache_key = self._cache_key(
+            'workflow', str(workflow_id), 'step', step_number, user_id=user_id
+        )
         cached = self._get_from_cache(cache_key)
         if cached is not None:
             return cached
@@ -111,8 +132,21 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             query = """
                 SELECT * FROM workflow_actions
                 WHERE workflow_id = $1 AND step_number = $2
+                {user_filter}
             """
-            result = await self.postgres.fetchrow(query, workflow_id, step_number)
+            if user_id is not None:
+                result = await self.postgres.fetchrow(
+                    query.format(user_filter='AND user_id = $3'),
+                    workflow_id,
+                    step_number,
+                    user_id,
+                )
+            else:
+                result = await self.postgres.fetchrow(
+                    query.format(user_filter=''),
+                    workflow_id,
+                    step_number,
+                )
 
             if result:
                 data = dict(result)
@@ -127,7 +161,9 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             )
             return None
 
-    async def update(self, action_id: UUID, updates: dict[str, Any]) -> bool:
+    async def update(
+        self, action_id: UUID, updates: dict[str, Any], user_id: str | None = None
+    ) -> bool:
         """
         Update a workflow action step.
 
@@ -139,6 +175,7 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             bool: True if successful, False otherwise
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'update')
             if not updates:
                 return True
 
@@ -146,12 +183,21 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             set_clauses = [f'{col} = ${i + 2}' for i, col in enumerate(updates.keys())]
             values = [action_id] + list(updates.values())  # noqa: RUF005
 
-            query = f"""
-                UPDATE {self.table_name}
-                SET {', '.join(set_clauses)}
-                WHERE id = $1
-                RETURNING workflow_id
-            """
+            if user_id is not None:
+                query = f"""
+                    UPDATE {self.table_name}
+                    SET {', '.join(set_clauses)}
+                    WHERE id = $1 AND user_id = ${len(values) + 1}
+                    RETURNING workflow_id
+                """
+                values.append(user_id)
+            else:
+                query = f"""
+                    UPDATE {self.table_name}
+                    SET {', '.join(set_clauses)}
+                    WHERE id = $1
+                    RETURNING workflow_id
+                """
 
             workflow_id = await self.postgres.fetchval(query, *values)
 
@@ -167,7 +213,7 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to update workflow action {action_id}: {e}')
             return False
 
-    async def delete(self, action_id: UUID) -> bool:
+    async def delete(self, action_id: UUID, user_id: str | None = None) -> bool:
         """
         Delete a workflow action step.
 
@@ -178,12 +224,25 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             bool: True if successful, False otherwise
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'delete')
             # Get workflow_id before deletion for cache invalidation
-            workflow_id_query = 'SELECT workflow_id FROM workflow_actions WHERE id = $1'
-            workflow_id = await self.postgres.fetchval(workflow_id_query, action_id)
-
-            query = f'DELETE FROM {self.table_name} WHERE id = $1'
-            await self.postgres.execute(query, action_id)
+            if user_id is not None:
+                workflow_id_query = (
+                    'SELECT workflow_id FROM workflow_actions '
+                    'WHERE id = $1 AND user_id = $2'
+                )
+                workflow_id = await self.postgres.fetchval(
+                    workflow_id_query, action_id, user_id
+                )
+                query = f'DELETE FROM {self.table_name} WHERE id = $1 AND user_id = $2'
+                await self.postgres.execute(query, action_id, user_id)
+            else:
+                workflow_id_query = (
+                    'SELECT workflow_id FROM workflow_actions WHERE id = $1'
+                )
+                workflow_id = await self.postgres.fetchval(workflow_id_query, action_id)
+                query = f'DELETE FROM {self.table_name} WHERE id = $1'
+                await self.postgres.execute(query, action_id)
 
             # Invalidate cache
             self._invalidate_cache(str(action_id))
@@ -197,7 +256,9 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to delete workflow action {action_id}: {e}')
             return False
 
-    async def reorder_steps(self, workflow_id: UUID, new_order: list[UUID]) -> bool:
+    async def reorder_steps(
+        self, workflow_id: UUID, new_order: list[UUID], user_id: str | None = None
+    ) -> bool:
         """
         Reorder workflow action steps by updating their step numbers.
 
@@ -211,15 +272,26 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             bool: True if successful, False otherwise
         """
         try:
+            user_id = self._resolve_user_id(user_id, 'reorder_steps')
             # Use a transaction to ensure atomicity
             async with self.postgres.transaction():
                 for idx, action_id in enumerate(new_order, start=1):
-                    query = """
-                        UPDATE workflow_actions
-                        SET step_number = $1
-                        WHERE id = $2 AND workflow_id = $3
-                    """
-                    await self.postgres.execute(query, idx, action_id, workflow_id)
+                    if user_id is not None:
+                        query = """
+                            UPDATE workflow_actions
+                            SET step_number = $1
+                            WHERE id = $2 AND workflow_id = $3 AND user_id = $4
+                        """
+                        await self.postgres.execute(
+                            query, idx, action_id, workflow_id, user_id
+                        )
+                    else:
+                        query = """
+                            UPDATE workflow_actions
+                            SET step_number = $1
+                            WHERE id = $2 AND workflow_id = $3
+                        """
+                        await self.postgres.execute(query, idx, action_id, workflow_id)
 
             # Invalidate cache for the workflow
             self._invalidate_cache(str(workflow_id))
@@ -231,7 +303,9 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             logger.error(f'Failed to reorder steps for workflow {workflow_id}: {e}')
             return False
 
-    async def get_step_count(self, workflow_id: UUID) -> int:
+    async def get_step_count(
+        self, workflow_id: UUID, user_id: str | None = None
+    ) -> int:
         """
         Get the total number of steps in a workflow.
 
@@ -242,18 +316,26 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             int: Number of action steps
         """
         try:
-            query = """
-                SELECT COUNT(*) FROM workflow_actions
-                WHERE workflow_id = $1
-            """
-            return await self.postgres.fetchval(query, workflow_id) or 0
+            user_id = self._resolve_user_id(user_id, 'get_step_count')
+            if user_id is not None:
+                query = """
+                    SELECT COUNT(*) FROM workflow_actions
+                    WHERE workflow_id = $1 AND user_id = $2
+                """
+                return await self.postgres.fetchval(query, workflow_id, user_id) or 0
+            else:
+                query = """
+                    SELECT COUNT(*) FROM workflow_actions
+                    WHERE workflow_id = $1
+                """
+                return await self.postgres.fetchval(query, workflow_id) or 0
 
         except Exception as e:
             logger.error(f'Failed to count steps for workflow {workflow_id}: {e}')
             return 0
 
     async def get_actions_by_type(
-        self, workflow_id: UUID, action_type: str
+        self, workflow_id: UUID, action_type: str, user_id: str | None = None
     ) -> list[dict[str, Any]]:
         """
         Get all actions of a specific type within a workflow.
@@ -266,12 +348,23 @@ class WorkflowActionsRepository(BaseRepository[dict[str, Any]]):
             list[dict[str, Any]]: List of matching action steps
         """
         try:
-            query = """
-                SELECT * FROM workflow_actions
-                WHERE workflow_id = $1 AND action_type = $2
-                ORDER BY step_number ASC
-            """
-            results = await self.postgres.fetch(query, workflow_id, action_type)
+            user_id = self._resolve_user_id(user_id, 'get_actions_by_type')
+            if user_id is not None:
+                query = """
+                    SELECT * FROM workflow_actions
+                    WHERE workflow_id = $1 AND action_type = $2 AND user_id = $3
+                    ORDER BY step_number ASC
+                """
+                results = await self.postgres.fetch(
+                    query, workflow_id, action_type, user_id
+                )
+            else:
+                query = """
+                    SELECT * FROM workflow_actions
+                    WHERE workflow_id = $1 AND action_type = $2
+                    ORDER BY step_number ASC
+                """
+                results = await self.postgres.fetch(query, workflow_id, action_type)
             return [dict(row) for row in results]
 
         except Exception as e:

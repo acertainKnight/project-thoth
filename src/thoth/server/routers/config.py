@@ -1,20 +1,28 @@
 """Configuration management endpoints."""
 
+import os
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from thoth.config import config
+from thoth.auth.context import UserContext
+from thoth.auth.dependencies import get_user_context
+from thoth.config import Settings, config
 
 # TODO: Re-implement SchemaGenerator and EnhancedValidator for new config system
 # from thoth.utilities.config.schema_generator import SchemaGenerator
 # from thoth.utilities.config.validation import EnhancedValidator
 
 router = APIRouter()
+
+
+def _settings_to_obsidian(settings: Settings) -> dict[str, Any]:
+    """Convert Settings model to Obsidian-friendly dict."""
+    return settings.model_dump(by_alias=True)
 
 
 class PartialValidationRequest(BaseModel):
@@ -36,11 +44,19 @@ class SchemaVersionResponse(BaseModel):
 
 
 @router.get('/export')
-def export_config_for_obsidian():
-    """Export current configuration in Obsidian plugin format."""
+def export_config_for_obsidian(user_context: UserContext = Depends(get_user_context)):  # noqa: B008
+    """Export current configuration in Obsidian plugin format.
+
+    In multi-user mode, exports the requesting user's settings from their vault.
+    In single-user mode, exports the global config.
+    """
     try:
-        config  # Already imported at module level  # noqa: B018
-        obsidian_config = config.export_for_obsidian()
+        effective_settings = (
+            user_context.settings
+            if user_context.settings is not None
+            else config.get_user_settings(user_context.username)
+        )
+        obsidian_config = _settings_to_obsidian(effective_settings)
 
         return JSONResponse(
             {
@@ -48,6 +64,7 @@ def export_config_for_obsidian():
                 'config': obsidian_config,
                 'config_version': '1.0.0',
                 'exported_at': time.time(),
+                'user_specific': user_context.settings is not None,
             }
         )
 
@@ -59,38 +76,60 @@ def export_config_for_obsidian():
 
 
 @router.post('/import')
-async def import_config_from_obsidian(obsidian_config: dict[str, Any]):  # noqa: ARG001
-    """Import configuration from Obsidian plugin format and validate it."""
+async def import_config_from_obsidian(
+    obsidian_config: dict[str, Any],
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
+):
+    """Import configuration from Obsidian plugin format and save to user's vault.
+
+    In multi-user mode, writes to the user's vault settings.json.
+    In single-user mode, writes to the global vault settings.json.
+    """
     try:
-        from thoth.config import config
+        # Determine which settings file to write to
+        multi_user = os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true'
 
-        # Import configuration from Obsidian format
-        config  # noqa: B018
-
-        # Validate the imported configuration
-        validation_result = imported_config.validate_for_obsidian()  # noqa: F821
-
-        if validation_result['errors']:
-            return JSONResponse(
-                {
-                    'status': 'validation_failed',
-                    'errors': validation_result['errors'],
-                    'warnings': validation_result['warnings'],
-                    'message': 'Configuration validation failed',
-                },
-                status_code=400,
+        if multi_user and config.vaults_root:
+            # Write to user's vault
+            settings_file = (
+                config.vaults_root
+                / user_context.username
+                / 'thoth'
+                / '_thoth'
+                / 'settings.json'
+            )
+        else:
+            # Write to global vault
+            settings_file = (
+                user_context.vault_path / 'thoth' / '_thoth' / 'settings.json'
             )
 
-        # If validation passed, sync to environment
-        synced_vars = imported_config.sync_to_environment()  # noqa: F821
+        # Ensure directory exists
+        settings_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write the config
+        import json
+
+        validated = Settings.model_validate(obsidian_config)
+        settings_file.write_text(
+            json.dumps(validated.model_dump(by_alias=True), indent=2),
+            encoding='utf-8',
+        )
+
+        # Invalidate cache if multi-user
+        if multi_user and config.user_config_manager:
+            config.user_config_manager.invalidate_cache(user_context.username)
+
+        logger.info(
+            f"Config imported for user '{user_context.username}' to {settings_file}"
+        )
 
         return JSONResponse(
             {
                 'status': 'success',
-                'message': 'Configuration imported and validated successfully',
-                'synced_environment_vars': list(synced_vars.keys()),
-                'warnings': validation_result['warnings'],
+                'message': 'Configuration imported successfully',
                 'imported_at': time.time(),
+                'settings_file': str(settings_file),
             }
         )
 

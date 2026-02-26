@@ -19,7 +19,7 @@ from thoth.repositories.base import BaseRepository
 
 
 class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
-    """Repository for research_question_matches - papers matched to research questions."""
+    """Repository for research question match records."""
 
     def __init__(self, postgres_service, **kwargs):
         """Initialize research question match repository."""
@@ -32,6 +32,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
         doi: str | None = None,
         arxiv_id: str | None = None,
         title: str = '',
+        user_id: str | None = None,
         **paper_data,
     ) -> tuple[UUID, bool]:
         """
@@ -41,7 +42,8 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
             doi: Digital Object Identifier
             arxiv_id: arXiv identifier
             title: Paper title
-            **paper_data: Additional paper metadata (authors, abstract, url, pdf_url, etc.)
+            **paper_data: Additional paper metadata
+                (authors, abstract, url, pdf_url, etc.)
 
         Returns:
             tuple[UUID, bool]: (paper_id, created) where created=True if new paper
@@ -56,7 +58,15 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
             )
 
             if existing_id:
-                return existing_id, False
+                if user_id:
+                    existing_user = await self.postgres.fetchval(
+                        'SELECT user_id FROM paper_metadata WHERE id = $1',
+                        existing_id,
+                    )
+                    if existing_user != user_id:
+                        existing_id = None
+                if existing_id:
+                    return existing_id, False
 
             # Create new paper in paper_metadata
             title_normalized = self._normalize_title_python(title)
@@ -80,6 +90,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
                 'title': title,
                 'title_normalized': title_normalized,
                 'source_of_truth': 'discovered',
+                'user_id': user_id or 'default_user',
                 'authors': authors,
                 'abstract': paper_data.get('abstract'),
                 'publication_date': publication_date,
@@ -93,8 +104,8 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
             query = """
                 INSERT INTO paper_metadata (
                     doi, arxiv_id, title, title_normalized, authors, abstract,
-                    publication_date, year, journal, url, pdf_url, source_of_truth
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                    publication_date, year, journal, url, pdf_url, source_of_truth, user_id
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 RETURNING id
             """
 
@@ -112,6 +123,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
                 insert_data['url'],
                 insert_data['pdf_url'],
                 insert_data['source_of_truth'],
+                insert_data['user_id'],
             )
 
             return paper_id, True
@@ -125,6 +137,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
         paper_id: UUID,
         question_id: UUID,
         relevance_score: float,
+        user_id: str | None = None,
         matched_keywords: list[str] | None = None,
         matched_topics: list[str] | None = None,
         matched_authors: list[str] | None = None,
@@ -147,15 +160,16 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
         """
         query = """
             INSERT INTO research_question_matches (
-                paper_id, question_id, relevance_score,
+                paper_id, question_id, relevance_score, user_id,
                 matched_keywords, matched_topics, matched_authors,
                 discovered_via_source
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (paper_id, question_id) DO UPDATE SET
                 relevance_score = GREATEST(
                     research_question_matches.relevance_score,
                     EXCLUDED.relevance_score
                 ),
+                user_id = EXCLUDED.user_id,
                 matched_keywords = EXCLUDED.matched_keywords,
                 matched_topics = EXCLUDED.matched_topics,
                 matched_authors = EXCLUDED.matched_authors,
@@ -168,6 +182,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
             paper_id,
             question_id,
             relevance_score,
+            user_id or 'default_user',
             matched_keywords or [],
             matched_topics or [],
             matched_authors or [],
@@ -179,6 +194,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
         question_id: UUID,
         limit: int = 100,
         min_relevance: float = 0.0,
+        user_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Get all papers matched to a research question with paper metadata.
@@ -191,6 +207,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
         Returns:
             list[dict]: Matches with full paper metadata
         """
+        user_id = self._resolve_user_id(user_id, 'get_matches_for_question')
         query = """
             SELECT
                 rqm.id as match_id,
@@ -219,14 +236,30 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
             JOIN paper_metadata pm ON pm.id = rqm.paper_id
             WHERE rqm.question_id = $1
               AND rqm.relevance_score >= $2
+              {user_filter}
             ORDER BY rqm.relevance_score DESC, rqm.matched_at DESC
             LIMIT $3
         """
-
-        results = await self.postgres.fetch(query, question_id, min_relevance, limit)
+        if user_id is not None:
+            results = await self.postgres.fetch(
+                query.format(user_filter='AND rqm.user_id = $4 AND pm.user_id = $4'),
+                question_id,
+                min_relevance,
+                limit,
+                user_id,
+            )
+        else:
+            results = await self.postgres.fetch(
+                query.format(user_filter=''),
+                question_id,
+                min_relevance,
+                limit,
+            )
         return [dict(row) for row in results]
 
-    async def get_matches_for_paper(self, paper_id: UUID) -> list[dict[str, Any]]:
+    async def get_matches_for_paper(
+        self, paper_id: UUID, user_id: str | None = None
+    ) -> list[dict[str, Any]]:
         """
         Get all research questions matched to a paper.
 
@@ -236,6 +269,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
         Returns:
             list[dict]: Matches with research question details
         """
+        user_id = self._resolve_user_id(user_id, 'get_matches_for_paper')
         query = """
             SELECT
                 rqm.*,
@@ -244,10 +278,17 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
             FROM research_question_matches rqm
             JOIN research_questions rq ON rq.id = rqm.question_id
             WHERE rqm.paper_id = $1
+            {user_filter}
             ORDER BY rqm.relevance_score DESC
         """
-
-        results = await self.postgres.fetch(query, paper_id)
+        if user_id is not None:
+            results = await self.postgres.fetch(
+                query.format(user_filter='AND rqm.user_id = $2 AND rq.user_id = $2'),
+                paper_id,
+                user_id,
+            )
+        else:
+            results = await self.postgres.fetch(query.format(user_filter=''), paper_id)
         return [dict(row) for row in results]
 
     async def update_user_interaction(
@@ -256,6 +297,7 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
         is_viewed: bool | None = None,
         is_bookmarked: bool | None = None,
         user_sentiment: str | None = None,
+        user_id: str | None = None,
     ) -> bool:
         """
         Update user interaction flags for a match.
@@ -294,20 +336,25 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
 
         updates.append('updated_at = NOW()')
 
+        user_id = self._resolve_user_id(user_id, 'update_user_interaction')
         query = f"""
             UPDATE research_question_matches
             SET {', '.join(updates)}
             WHERE id = ${param_count}
+            {' AND user_id = $' + str(param_count + 1) if user_id is not None else ''}
         """
 
         values.append(match_id)
+        if user_id is not None:
+            values.append(user_id)
         result = await self.postgres.execute(query, *values)
         return result == 'UPDATE 1'
 
     async def get_unviewed_matches(
-        self, question_id: UUID, limit: int = 50
+        self, question_id: UUID, limit: int = 50, user_id: str | None = None
     ) -> list[dict[str, Any]]:
         """Get unviewed matches for a question."""
+        user_id = self._resolve_user_id(user_id, 'get_unviewed_matches')
         query = """
             SELECT
                 rqm.*,
@@ -317,17 +364,31 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
             JOIN paper_metadata pm ON pm.id = rqm.paper_id
             WHERE rqm.question_id = $1
               AND rqm.is_viewed = false
+              {user_filter}
             ORDER BY rqm.relevance_score DESC, rqm.matched_at DESC
             LIMIT $2
         """
-
-        results = await self.postgres.fetch(query, question_id, limit)
+        if user_id is not None:
+            results = await self.postgres.fetch(
+                query.format(user_filter='AND rqm.user_id = $3 AND pm.user_id = $3'),
+                question_id,
+                limit,
+                user_id,
+            )
+        else:
+            results = await self.postgres.fetch(
+                query.format(user_filter=''), question_id, limit
+            )
         return [dict(row) for row in results]
 
     async def get_bookmarked_matches(
-        self, question_id: UUID | None = None, limit: int = 100
+        self,
+        question_id: UUID | None = None,
+        limit: int = 100,
+        user_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Get bookmarked matches, optionally filtered by question."""
+        user_id = self._resolve_user_id(user_id, 'get_bookmarked_matches')
         if question_id:
             query = """
                 SELECT
@@ -338,10 +399,25 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
                 JOIN paper_metadata pm ON pm.id = rqm.paper_id
                 WHERE rqm.question_id = $1
                   AND rqm.is_bookmarked = true
+                  {user_filter}
                 ORDER BY rqm.updated_at DESC
                 LIMIT $2
             """
-            results = await self.postgres.fetch(query, question_id, limit)
+            if user_id is not None:
+                results = await self.postgres.fetch(
+                    query.format(
+                        user_filter='AND rqm.user_id = $3 AND pm.user_id = $3'
+                    ),
+                    question_id,
+                    limit,
+                    user_id,
+                )
+            else:
+                results = await self.postgres.fetch(
+                    query.format(user_filter=''),
+                    question_id,
+                    limit,
+                )
         else:
             query = """
                 SELECT
@@ -353,15 +429,28 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
                 JOIN paper_metadata pm ON pm.id = rqm.paper_id
                 JOIN research_questions rq ON rq.id = rqm.question_id
                 WHERE rqm.is_bookmarked = true
+                {user_filter}
                 ORDER BY rqm.updated_at DESC
                 LIMIT $1
             """
-            results = await self.postgres.fetch(query, limit)
+            if user_id is not None:
+                results = await self.postgres.fetch(
+                    query.format(
+                        user_filter='AND rqm.user_id = $2 AND pm.user_id = $2 AND rq.user_id = $2'
+                    ),
+                    limit,
+                    user_id,
+                )
+            else:
+                results = await self.postgres.fetch(query.format(user_filter=''), limit)
 
         return [dict(row) for row in results]
 
-    async def get_statistics_for_question(self, question_id: UUID) -> dict[str, Any]:
+    async def get_statistics_for_question(
+        self, question_id: UUID, user_id: str | None = None
+    ) -> dict[str, Any]:
         """Get statistics for matches to a research question."""
+        user_id = self._resolve_user_id(user_id, 'get_statistics_for_question')
         query = """
             SELECT
                 COUNT(*) as total_matches,
@@ -374,32 +463,67 @@ class ResearchQuestionMatchRepository(BaseRepository[dict[str, Any]]):
                 MAX(matched_at) as latest_match
             FROM research_question_matches
             WHERE question_id = $1
+            {user_filter}
         """
-
-        row = await self.postgres.fetchrow(query, question_id)
+        if user_id is not None:
+            row = await self.postgres.fetchrow(
+                query.format(user_filter='AND user_id = $2'),
+                question_id,
+                user_id,
+            )
+        else:
+            row = await self.postgres.fetchrow(
+                query.format(user_filter=''), question_id
+            )
         return dict(row) if row else {}
 
-    async def delete_match(self, match_id: UUID) -> bool:
+    async def delete_match(self, match_id: UUID, user_id: str | None = None) -> bool:
         """Delete a specific match."""
-        query = 'DELETE FROM research_question_matches WHERE id = $1'
-        result = await self.postgres.execute(query, match_id)
+        user_id = self._resolve_user_id(user_id, 'delete_match')
+        if user_id is not None:
+            query = (
+                'DELETE FROM research_question_matches WHERE id = $1 AND user_id = $2'
+            )
+            result = await self.postgres.execute(query, match_id, user_id)
+        else:
+            query = 'DELETE FROM research_question_matches WHERE id = $1'
+            result = await self.postgres.execute(query, match_id)
         return result == 'DELETE 1'
 
-    async def delete_matches_for_question(self, question_id: UUID) -> int:
+    async def delete_matches_for_question(
+        self, question_id: UUID, user_id: str | None = None
+    ) -> int:
         """Delete all matches for a research question."""
-        query = 'DELETE FROM research_question_matches WHERE question_id = $1'
-        result = await self.postgres.execute(query, question_id)
+        user_id = self._resolve_user_id(user_id, 'delete_matches_for_question')
+        if user_id is not None:
+            query = 'DELETE FROM research_question_matches WHERE question_id = $1 AND user_id = $2'
+            result = await self.postgres.execute(query, question_id, user_id)
+        else:
+            query = 'DELETE FROM research_question_matches WHERE question_id = $1'
+            result = await self.postgres.execute(query, question_id)
         # Parse "DELETE N" response
         count = int(result.split()[-1]) if result.startswith('DELETE') else 0
         return count
 
-    async def get_paper_by_doi(self, doi: str) -> UUID | None:
+    async def get_paper_by_doi(
+        self, doi: str, user_id: str | None = None
+    ) -> UUID | None:
         """Get paper_id by DOI from paper_metadata."""
+        user_id = self._resolve_user_id(user_id, 'get_paper_by_doi')
+        if user_id is not None:
+            query = 'SELECT id FROM paper_metadata WHERE doi = $1 AND user_id = $2'
+            return await self.postgres.fetchval(query, doi, user_id)
         query = 'SELECT id FROM paper_metadata WHERE doi = $1'
         return await self.postgres.fetchval(query, doi)
 
-    async def get_paper_by_arxiv_id(self, arxiv_id: str) -> UUID | None:
+    async def get_paper_by_arxiv_id(
+        self, arxiv_id: str, user_id: str | None = None
+    ) -> UUID | None:
         """Get paper_id by arXiv ID from paper_metadata."""
+        user_id = self._resolve_user_id(user_id, 'get_paper_by_arxiv_id')
+        if user_id is not None:
+            query = 'SELECT id FROM paper_metadata WHERE arxiv_id = $1 AND user_id = $2'
+            return await self.postgres.fetchval(query, arxiv_id, user_id)
         query = 'SELECT id FROM paper_metadata WHERE arxiv_id = $1'
         return await self.postgres.fetchval(query, arxiv_id)
 

@@ -34,7 +34,7 @@ class TemplateServiceMixin:
         for provider in ['openai', 'google', 'anthropic']:
             provider_dir = self.prompts_dir / provider
             if provider_dir.exists():
-                self.jinja_envs[provider] = Environment(
+                self.jinja_envs[provider] = Environment(  # nosec B701
                     loader=FileSystemLoader(provider_dir)
                 )
 
@@ -83,6 +83,20 @@ class BaseService:
 
         self._config = thoth_config or global_config
         self._logger = logger.bind(service=self.__class__.__name__)
+
+    def _get_user_paths(self):
+        """Return user-scoped ``UserPaths`` from the current async context.
+
+        Convenience wrapper so that any service method performing file I/O
+        can resolve paths for the authenticated user.  Returns ``None`` in
+        single-user mode (callers should fall back to their instance defaults).
+
+        Returns:
+            UserPaths | None
+        """
+        from thoth.mcp.auth import get_current_user_paths
+
+        return get_current_user_paths()
 
     @property
     def config(self) -> Config:  # noqa: F811

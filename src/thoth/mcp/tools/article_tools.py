@@ -180,7 +180,9 @@ class SearchArticlesMCPTool(MCPTool):
                 except Exception:
                     pass  # Keep original order if sorting fails
 
-            # Format response
+            # Enrich results with full paper_metadata via a single DB query
+            paper_details = await self._fetch_paper_details(filtered_results)
+
             response_text = f"**Search Results for:** '{query}'\n\n"
             response_text += f'Found {len(filtered_results)} articles'
 
@@ -205,34 +207,55 @@ class SearchArticlesMCPTool(MCPTool):
 
             response_text += f' | Sorted by: {sort_by}\n\n'
 
-            # Add results
-            for i, result in enumerate(filtered_results, 1):
-                title = result.get('title', 'Untitled')
-                score = result.get('score', 0)
+            # Deduplicate by paper_id so the agent sees one entry per paper
+            seen_papers: set[str] = set()
+
+            for _i, result in enumerate(filtered_results, 1):
                 metadata = result.get('metadata', {})
+                pid = metadata.get('paper_id', '')
+                if pid in seen_papers:
+                    continue
+                seen_papers.add(pid)
 
-                response_text += f'**{i}. {title}**\n'
+                score = result.get('score', 0)
+                details = paper_details.get(pid, {})
+                title = details.get('title') or result.get('title', 'Untitled')
 
-                # Add metadata
-                authors = normalize_authors(metadata.get('authors'))
+                response_text += f'**{len(seen_papers)}. {title}**\n'
+
+                if pid:
+                    response_text += f'   paper_id: {pid}\n'
+
+                if details.get('doi'):
+                    response_text += f'   DOI: {details["doi"]}\n'
+
+                if details.get('arxiv_id'):
+                    response_text += f'   arXiv: {details["arxiv_id"]}\n'
+
+                authors = normalize_authors(
+                    details.get('authors') or metadata.get('authors')
+                )
                 if authors:
-                    authors_str = ', '.join(authors[:2])
-                    if len(authors) > 2:
-                        authors_str += f' (+{len(authors) - 2} more)'
+                    authors_str = ', '.join(authors[:3])
+                    if len(authors) > 3:
+                        authors_str += f' (+{len(authors) - 3} more)'
                     response_text += f'   Authors: {authors_str}\n'
 
-                if metadata.get('publication_date'):
-                    response_text += f'   Date: {metadata["publication_date"]}\n'
+                if details.get('publication_date'):
+                    response_text += f'   Date: {details["publication_date"]}\n'
 
-                if metadata.get('journal'):
-                    response_text += f'    Journal: {metadata["journal"]}\n'
+                if details.get('journal'):
+                    response_text += f'   Journal: {details["journal"]}\n'
 
-                if metadata.get('citation_count'):
-                    response_text += f'   Citations: {metadata["citation_count"]}\n'
+                if details.get('abstract'):
+                    abstract_preview = details['abstract'][:200].replace('\n', ' ')
+                    response_text += f'   Abstract: {abstract_preview}...\n'
+
+                if details.get('citation_count'):
+                    response_text += f'   Citations: {details["citation_count"]}\n'
 
                 response_text += f'   Relevance: {score:.3f}\n'
 
-                # Add content preview
                 content = result.get('content', '')
                 if content:
                     preview = content[:150].replace('\n', ' ')
@@ -246,6 +269,55 @@ class SearchArticlesMCPTool(MCPTool):
 
         except Exception as e:
             return self.handle_error(e)
+
+    async def _fetch_paper_details(
+        self, results: list[dict[str, Any]]
+    ) -> dict[str, dict[str, Any]]:
+        """Batch-fetch paper_metadata for a set of search results.
+
+        Collects unique paper_ids from chunk metadata, runs a single query
+        against paper_metadata, and returns a dict keyed by paper_id.
+        """
+        paper_ids = {
+            r.get('metadata', {}).get('paper_id')
+            for r in results
+            if r.get('metadata', {}).get('paper_id')
+        }
+        if not paper_ids:
+            return {}
+
+        try:
+            from uuid import UUID
+
+            uuids = [UUID(pid) for pid in paper_ids]
+            postgres = self.service_manager.postgres
+            rows = await postgres.fetch(
+                """
+                SELECT id, title, doi, arxiv_id, authors, abstract,
+                       publication_date, journal, venue, citation_count
+                FROM paper_metadata
+                WHERE id = ANY($1::uuid[])
+                """,
+                uuids,
+            )
+            details: dict[str, dict[str, Any]] = {}
+            for row in rows:
+                details[str(row['id'])] = {
+                    'title': row['title'],
+                    'doi': row['doi'],
+                    'arxiv_id': row['arxiv_id'],
+                    'authors': row['authors'],
+                    'abstract': row['abstract'],
+                    'publication_date': str(row['publication_date'])
+                    if row['publication_date']
+                    else None,
+                    'journal': row['journal'] or row['venue'],
+                    'citation_count': row['citation_count'],
+                }
+            return details
+        except Exception as e:
+            logger.warning(f'Failed to fetch paper details: {e}')
+            return {}
 
 
 class UpdateArticleMetadataMCPTool(MCPTool):

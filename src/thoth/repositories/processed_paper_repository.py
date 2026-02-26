@@ -20,13 +20,24 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
     def __init__(self, postgres_service, **kwargs):
         super().__init__(postgres_service, table_name='processed_papers', **kwargs)
 
-    async def get_by_paper_id(self, paper_id: UUID) -> dict | None:
+    async def get_by_paper_id(
+        self, paper_id: UUID, user_id: str | None = None
+    ) -> dict | None:
         """Get processed paper entry by paper_metadata ID."""
+        user_id = self._resolve_user_id(user_id, 'get_by_paper_id')
+        if user_id is not None:
+            query = (
+                'SELECT * FROM processed_papers WHERE paper_id = $1 AND user_id = $2'
+            )
+            return await self.postgres.fetchrow(query, paper_id, user_id)
         query = 'SELECT * FROM processed_papers WHERE paper_id = $1'
         return await self.postgres.fetchrow(query, paper_id)
 
-    async def get_with_metadata(self, processed_paper_id: UUID) -> dict | None:
+    async def get_with_metadata(
+        self, processed_paper_id: UUID, user_id: str | None = None
+    ) -> dict | None:
         """Get processed paper with full paper metadata."""
+        user_id = self._resolve_user_id(user_id, 'get_with_metadata')
         query = """
             SELECT
                 pp.*,
@@ -35,8 +46,17 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
             FROM processed_papers pp
             JOIN paper_metadata pm ON pm.id = pp.paper_id
             WHERE pp.id = $1
+            {user_filter}
         """
-        return await self.postgres.fetchrow(query, processed_paper_id)
+        if user_id is not None:
+            return await self.postgres.fetchrow(
+                query.format(user_filter='AND pp.user_id = $2'),
+                processed_paper_id,
+                user_id,
+            )
+        return await self.postgres.fetchrow(
+            query.format(user_filter=''), processed_paper_id
+        )
 
     async def get_all_with_metadata(
         self,
@@ -44,8 +64,10 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
         offset: int = 0,
         order_by: str = 'updated_at',
         order_dir: str = 'DESC',
+        user_id: str | None = None,
     ) -> list[dict]:
         """Get all processed papers with metadata."""
+        user_id = self._resolve_user_id(user_id, 'get_all_with_metadata')
         query = f"""
             SELECT
                 pp.*,
@@ -53,9 +75,12 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
                 pm.publication_date, pm.year, pm.journal, pm.url, pm.pdf_url
             FROM processed_papers pp
             JOIN paper_metadata pm ON pm.id = pp.paper_id
+            {'WHERE pp.user_id = $3' if user_id is not None else ''}
             ORDER BY pp.{order_by} {order_dir}
             LIMIT $1 OFFSET $2
         """
+        if user_id is not None:
+            return await self.postgres.fetch(query, limit, offset, user_id)
         return await self.postgres.fetch(query, limit, offset)
 
     async def create(
@@ -66,15 +91,17 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
         note_path: str | None = None,
         obsidian_uri: str | None = None,
         processing_status: str = 'pending',
+        user_id: str | None = None,
         **kwargs,
     ) -> UUID:
         """Create new processed paper entry."""
+        user_id = self._resolve_user_id(user_id, 'create')
         query = """
             INSERT INTO processed_papers (
                 paper_id, pdf_path, markdown_path, note_path, obsidian_uri,
-                processing_status, processed_at, user_notes, user_tags
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            ON CONFLICT (paper_id) DO UPDATE SET
+                processing_status, processed_at, user_notes, user_tags, user_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            ON CONFLICT (paper_id, user_id) DO UPDATE SET
                 pdf_path = COALESCE(EXCLUDED.pdf_path, processed_papers.pdf_path),
                 markdown_path = COALESCE(EXCLUDED.markdown_path, processed_papers.markdown_path),
                 note_path = COALESCE(EXCLUDED.note_path, processed_papers.note_path),
@@ -95,6 +122,7 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
             kwargs.get('processed_at'),
             kwargs.get('user_notes'),
             kwargs.get('user_tags'),
+            user_id,
         )
 
     async def update_paths(
@@ -104,8 +132,10 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
         markdown_path: str | None = None,
         note_path: str | None = None,
         obsidian_uri: str | None = None,
+        user_id: str | None = None,
     ) -> bool:
         """Update file paths for a processed paper."""
+        user_id = self._resolve_user_id(user_id, 'update_paths')
         query = """
             UPDATE processed_papers
             SET
@@ -115,18 +145,39 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
                 obsidian_uri = COALESCE($5, obsidian_uri),
                 updated_at = NOW()
             WHERE paper_id = $1
+            {user_filter}
         """
-
-        result = await self.postgres.execute(
-            query, paper_id, pdf_path, markdown_path, note_path, obsidian_uri
-        )
+        if user_id is not None:
+            result = await self.postgres.execute(
+                query.format(user_filter='AND user_id = $6'),
+                paper_id,
+                pdf_path,
+                markdown_path,
+                note_path,
+                obsidian_uri,
+                user_id,
+            )
+        else:
+            result = await self.postgres.execute(
+                query.format(user_filter=''),
+                paper_id,
+                pdf_path,
+                markdown_path,
+                note_path,
+                obsidian_uri,
+            )
 
         return result == 'UPDATE 1'
 
     async def update_status(
-        self, paper_id: UUID, processing_status: str, processed_at=None
+        self,
+        paper_id: UUID,
+        processing_status: str,
+        processed_at=None,
+        user_id: str | None = None,
     ) -> bool:
         """Update processing status."""
+        user_id = self._resolve_user_id(user_id, 'update_status')
         query = """
             UPDATE processed_papers
             SET
@@ -134,11 +185,23 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
                 processed_at = COALESCE($3, processed_at),
                 updated_at = NOW()
             WHERE paper_id = $1
+            {user_filter}
         """
-
-        result = await self.postgres.execute(
-            query, paper_id, processing_status, processed_at
-        )
+        if user_id is not None:
+            result = await self.postgres.execute(
+                query.format(user_filter='AND user_id = $4'),
+                paper_id,
+                processing_status,
+                processed_at,
+                user_id,
+            )
+        else:
+            result = await self.postgres.execute(
+                query.format(user_filter=''),
+                paper_id,
+                processing_status,
+                processed_at,
+            )
         return result == 'UPDATE 1'
 
     async def update_user_data(
@@ -147,8 +210,10 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
         user_rating: int | None = None,
         user_notes: str | None = None,
         user_tags: dict | None = None,
+        user_id: str | None = None,
     ) -> bool:
         """Update user interaction data."""
+        user_id = self._resolve_user_id(user_id, 'update_user_data')
         query = """
             UPDATE processed_papers
             SET
@@ -157,17 +222,32 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
                 user_tags = COALESCE($4, user_tags),
                 updated_at = NOW()
             WHERE paper_id = $1
+            {user_filter}
         """
-
-        result = await self.postgres.execute(
-            query, paper_id, user_rating, user_notes, user_tags
-        )
+        if user_id is not None:
+            result = await self.postgres.execute(
+                query.format(user_filter='AND user_id = $5'),
+                paper_id,
+                user_rating,
+                user_notes,
+                user_tags,
+                user_id,
+            )
+        else:
+            result = await self.postgres.execute(
+                query.format(user_filter=''),
+                paper_id,
+                user_rating,
+                user_notes,
+                user_tags,
+            )
         return result == 'UPDATE 1'
 
     async def get_by_status(
-        self, processing_status: str, limit: int = 100
+        self, processing_status: str, limit: int = 100, user_id: str | None = None
     ) -> list[dict]:
         """Get processed papers by status with metadata."""
+        user_id = self._resolve_user_id(user_id, 'get_by_status')
         query = """
             SELECT
                 pp.*,
@@ -176,13 +256,28 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
             FROM processed_papers pp
             JOIN paper_metadata pm ON pm.id = pp.paper_id
             WHERE pp.processing_status = $1
+            {user_filter}
             ORDER BY pp.updated_at DESC
             LIMIT $2
         """
-        return await self.postgres.fetch(query, processing_status, limit)
+        if user_id is not None:
+            return await self.postgres.fetch(
+                query.format(user_filter='AND pp.user_id = $3'),
+                processing_status,
+                limit,
+                user_id,
+            )
+        return await self.postgres.fetch(
+            query.format(user_filter=''),
+            processing_status,
+            limit,
+        )
 
-    async def get_recently_accessed(self, limit: int = 20) -> list[dict]:
+    async def get_recently_accessed(
+        self, limit: int = 20, user_id: str | None = None
+    ) -> list[dict]:
         """Get recently accessed papers."""
+        user_id = self._resolve_user_id(user_id, 'get_recently_accessed')
         query = """
             SELECT
                 pp.*,
@@ -191,13 +286,23 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
             FROM processed_papers pp
             JOIN paper_metadata pm ON pm.id = pp.paper_id
             WHERE pp.last_accessed IS NOT NULL
+            {user_filter}
             ORDER BY pp.last_accessed DESC
             LIMIT $1
         """
-        return await self.postgres.fetch(query, limit)
+        if user_id is not None:
+            return await self.postgres.fetch(
+                query.format(user_filter='AND pp.user_id = $2'),
+                limit,
+                user_id,
+            )
+        return await self.postgres.fetch(query.format(user_filter=''), limit)
 
-    async def get_by_rating(self, min_rating: int, limit: int = 100) -> list[dict]:
+    async def get_by_rating(
+        self, min_rating: int, limit: int = 100, user_id: str | None = None
+    ) -> list[dict]:
         """Get papers with minimum rating."""
+        user_id = self._resolve_user_id(user_id, 'get_by_rating')
         query = """
             SELECT
                 pp.*,
@@ -206,34 +311,66 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
             FROM processed_papers pp
             JOIN paper_metadata pm ON pm.id = pp.paper_id
             WHERE pp.user_rating >= $1
+            {user_filter}
             ORDER BY pp.user_rating DESC, pp.updated_at DESC
             LIMIT $2
         """
-        return await self.postgres.fetch(query, min_rating, limit)
+        if user_id is not None:
+            return await self.postgres.fetch(
+                query.format(user_filter='AND pp.user_id = $3'),
+                min_rating,
+                limit,
+                user_id,
+            )
+        return await self.postgres.fetch(
+            query.format(user_filter=''), min_rating, limit
+        )
 
-    async def count_by_status(self) -> dict[str, int]:
+    async def count_by_status(self, user_id: str | None = None) -> dict[str, int]:
         """Get count of papers by processing status."""
+        user_id = self._resolve_user_id(user_id, 'count_by_status')
         query = """
             SELECT processing_status, COUNT(*) as count
             FROM processed_papers
+            {user_filter}
             GROUP BY processing_status
         """
-        rows = await self.postgres.fetch(query)
+        if user_id is not None:
+            rows = await self.postgres.fetch(
+                query.format(user_filter='WHERE user_id = $1'),
+                user_id,
+            )
+        else:
+            rows = await self.postgres.fetch(query.format(user_filter=''))
         return {row['processing_status']: row['count'] for row in rows}
 
-    async def has_processed_paper(self, paper_id: UUID) -> bool:
+    async def has_processed_paper(
+        self, paper_id: UUID, user_id: str | None = None
+    ) -> bool:
         """Check if paper has been processed."""
+        user_id = self._resolve_user_id(user_id, 'has_processed_paper')
+        if user_id is not None:
+            query = 'SELECT EXISTS(SELECT 1 FROM processed_papers WHERE paper_id = $1 AND user_id = $2)'
+            return await self.postgres.fetchval(query, paper_id, user_id)
         query = 'SELECT EXISTS(SELECT 1 FROM processed_papers WHERE paper_id = $1)'
         return await self.postgres.fetchval(query, paper_id)
 
-    async def delete_by_paper_id(self, paper_id: UUID) -> bool:
+    async def delete_by_paper_id(
+        self, paper_id: UUID, user_id: str | None = None
+    ) -> bool:
         """Delete processed paper entry (paper_metadata remains)."""
-        query = 'DELETE FROM processed_papers WHERE paper_id = $1'
-        result = await self.postgres.execute(query, paper_id)
+        user_id = self._resolve_user_id(user_id, 'delete_by_paper_id')
+        if user_id is not None:
+            query = 'DELETE FROM processed_papers WHERE paper_id = $1 AND user_id = $2'
+            result = await self.postgres.execute(query, paper_id, user_id)
+        else:
+            query = 'DELETE FROM processed_papers WHERE paper_id = $1'
+            result = await self.postgres.execute(query, paper_id)
         return result == 'DELETE 1'
 
-    async def get_statistics(self) -> dict:
+    async def get_statistics(self, user_id: str | None = None) -> dict:
         """Get statistics about processed papers."""
+        user_id = self._resolve_user_id(user_id, 'get_statistics')
         query = """
             SELECT
                 COUNT(*) as total_processed,
@@ -244,6 +381,13 @@ class ProcessedPaperRepository(BaseRepository[dict[str, Any]]):
                 ROUND(AVG(user_rating)::numeric, 2) as avg_rating,
                 COUNT(DISTINCT processing_status) as status_count
             FROM processed_papers
+            {user_filter}
         """
-        row = await self.postgres.fetchrow(query)
+        if user_id is not None:
+            row = await self.postgres.fetchrow(
+                query.format(user_filter='WHERE user_id = $1'),
+                user_id,
+            )
+        else:
+            row = await self.postgres.fetchrow(query.format(user_filter=''))
         return dict(row) if row else {}

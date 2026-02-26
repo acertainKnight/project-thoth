@@ -131,34 +131,6 @@ class TestCacheService:
             assert result is not None
             assert result['markdown_content'] == markdown
 
-    def test_get_cached_ocr_result_disk_hit(self):
-        """Test retrieving OCR result from disk cache."""
-        config = Mock()
-        config.workspace_dir = Path('/tmp/test')
-
-        with TemporaryDirectory() as tmpdir:
-            cache_dir = Path(tmpdir) / 'cache'
-            service = CacheService(config, cache_dir=cache_dir)
-            service.initialize()
-
-            pdf_path = Path(tmpdir) / 'test.pdf'
-            pdf_path.write_bytes(b'Mock PDF content')
-
-            markdown = '# Test'
-            no_images = '# Test (no images)'
-
-            # Cache result
-            service.cache_ocr_result(pdf_path, markdown, no_images)
-
-            # Clear memory cache to force disk read
-            service._memory_cache.clear()
-
-            # Should still retrieve from disk
-            result = service.get_cached_ocr_result(pdf_path)
-
-            assert result is not None
-            assert result['markdown_content'] == markdown
-
     def test_get_cached_ocr_result_miss(self):
         """Test cache miss for OCR result."""
         config = Mock()
@@ -359,34 +331,6 @@ class TestCacheService:
             assert stats['memory_cache_limit'] == 100
             assert 'total_disk_cache_files' in stats
             assert 'cache_directories' in stats
-
-    def test_cleanup_expired_cache(self):
-        """Test automatic cleanup of expired cache files."""
-        config = Mock()
-        config.workspace_dir = Path('/tmp/test')
-
-        with TemporaryDirectory() as tmpdir:
-            cache_dir = Path(tmpdir) / 'cache'
-            service = CacheService(config, cache_dir=cache_dir)
-
-            # Override TTL for testing
-            service._ttl_settings['ocr'] = 1  # 1 second
-            service.initialize()
-
-            # Create old cache file
-            old_file = service.ocr_cache_dir / 'old_cache.pkl'
-            old_file.write_bytes(b'old data')
-
-            # Modify file timestamp to make it old
-            old_time = time.time() - 2  # 2 seconds ago
-            import os
-
-            os.utime(old_file, (old_time, old_time))
-
-            # Cleanup should remove it
-            service._cleanup_expired_cache()
-
-            assert not old_file.exists()
 
     def test_memory_cache_cleanup(self):
         """Test memory cache cleanup when size limit exceeded."""

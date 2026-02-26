@@ -222,5 +222,5 @@ class TestModuleLevelManagers:
 
 
 # REMOVED: TestDependencySetup - Phase 5
-# set_dependencies() function removed in favor of FastAPI Depends() pattern
-# Dependencies are now injected via get_service_manager(), get_research_agent(), get_chat_manager()
+# set_dependencies() removed in favor of FastAPI Depends() pattern
+# Dependencies injected via get_service_manager(), get_research_agent()

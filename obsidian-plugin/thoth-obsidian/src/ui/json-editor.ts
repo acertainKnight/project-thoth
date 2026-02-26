@@ -1,5 +1,6 @@
 import { ThothSettings } from '../types';
 import { ValidationResult, FieldValidationResult } from '../services/schema-service';
+import { APIUtilities } from '../utils/api';
 
 /**
  * JSON validation error interface
@@ -571,13 +572,13 @@ export class TextareaJSONEditor implements IJSONEditor {
     }
 
     try {
-      const response = await fetch(`${this.validationEndpoint}/config/validate-partial`, {
+      const response = await fetch(`${this.validationEndpoint}/config/validate-partial`, APIUtilities.withAuthHeaders({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ content })
-      });
+      }));
 
       if (!response.ok) {
         throw new Error(`Validation request failed: ${response.statusText}`);

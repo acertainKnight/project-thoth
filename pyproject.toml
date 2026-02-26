@@ -274,12 +274,15 @@ extend-unsafe-fixes = ["UP034"]
 
 [tool.ruff.lint.per-file-ignores]
 # FastAPI Depends() in argument defaults is intentional
+"src/thoth/server/routers/auth.py" = ["B008"]
 "src/thoth/server/routers/browser_workflows.py" = ["B008"]
 "src/thoth/server/routers/mcp_servers.py" = ["B008"]
 "src/thoth/server/routers/operations.py" = ["B008"]
 "src/thoth/server/routers/research.py" = ["B008"]
 "src/thoth/server/routers/tools.py" = ["B008"]
 "src/thoth/server/routers/websocket.py" = ["B008"]
+# BaseRepository uses Generic[T] for backward compatibility
+"src/thoth/repositories/base.py" = ["UP046"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"

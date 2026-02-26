@@ -540,9 +540,15 @@ class CreateCustomIndexMCPTool(MCPTool):
 
                 # Save custom index configuration
                 try:
-                    custom_indexes_dir = (
-                        self.service_manager.config.data_dir / 'custom_indexes'
+                    from thoth.mcp.auth import get_current_user_paths
+
+                    _user_paths = get_current_user_paths()
+                    _data_dir = (
+                        _user_paths.data_dir
+                        if _user_paths
+                        else self.service_manager.config.data_dir
                     )
+                    custom_indexes_dir = _data_dir / 'custom_indexes'
                     custom_indexes_dir.mkdir(exist_ok=True)
 
                     index_file = custom_indexes_dir / f'{index_name}.json'

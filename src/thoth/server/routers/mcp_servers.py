@@ -9,6 +9,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from thoth.auth.context import UserContext
+from thoth.auth.dependencies import get_user_context
 from thoth.models.mcp_server_config import MCPServerEntry
 from thoth.server.dependencies import get_service_manager
 from thoth.services.service_manager import ServiceManager
@@ -349,6 +351,7 @@ async def get_server_tools(
     server_id: str,
     agent_id: str | None = None,
     service_manager: ServiceManager = Depends(get_service_manager),
+    _user_context: UserContext = Depends(get_user_context),
 ) -> list[ToolInfo]:
     """
     Get detailed tool list from an MCP server.
@@ -418,6 +421,7 @@ async def attach_tools_to_agent(
     server_id: str,
     request: ToolAttachRequest,
     service_manager: ServiceManager = Depends(get_service_manager),
+    _user_context: UserContext = Depends(get_user_context),
 ) -> dict[str, Any]:
     """
     Attach selected tools from an MCP server to a Letta agent.
@@ -481,6 +485,7 @@ async def detach_tools_from_agent(
     server_id: str,
     request: ToolDetachRequest,
     service_manager: ServiceManager = Depends(get_service_manager),
+    _user_context: UserContext = Depends(get_user_context),
 ) -> dict[str, Any]:
     """
     Detach selected tools from a Letta agent.

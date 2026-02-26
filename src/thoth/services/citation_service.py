@@ -89,15 +89,23 @@ class CitationService(BaseService):
 
     @property
     def citation_tracker(self) -> 'CitationGraph':
-        """Get or create the citation graph."""
-        if not hasattr(self, '_citation_tracker'):
-            from thoth.knowledge.graph import CitationGraph
+        """Get or create the citation graph (user-scoped paths)."""
+        from thoth.knowledge.graph import CitationGraph
 
-            self._citation_tracker = CitationGraph(
-                knowledge_base_dir=self.config.knowledge_base_dir,
-                notes_dir=self.config.notes_dir,
+        up = self._get_user_paths()
+        kb_dir = up.knowledge_base_dir if up else self.config.knowledge_base_dir
+        n_dir = up.notes_dir if up else self.config.notes_dir
+
+        cache_key = str(kb_dir)
+        if not hasattr(self, '_citation_trackers'):
+            self._citation_trackers: dict[str, CitationGraph] = {}
+
+        if cache_key not in self._citation_trackers:
+            self._citation_trackers[cache_key] = CitationGraph(
+                knowledge_base_dir=kb_dir,
+                notes_dir=n_dir,
             )
-        return self._citation_tracker
+        return self._citation_trackers[cache_key]
 
     def initialize(self) -> None:
         """Initialize the citation service."""

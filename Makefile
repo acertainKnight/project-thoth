@@ -134,30 +134,62 @@ deploy-and-start: ## 🚀 ONE COMMAND: Deploy plugin + start complete ecosystem
 	@echo "5. Start researching! 🧠"
 
 .PHONY: deploy-plugin
-deploy-plugin: _check-vault _build-plugin ## Deploy Obsidian plugin with complete vault integration
-	@echo "$(YELLOW)Deploying plugin with vault integration...$(NC)"
-	@mkdir -p "$(PLUGIN_DEST_DIR)"
-	@echo "$(CYAN)  Copying main.js...$(NC)"
-	@cp $(PLUGIN_SRC_DIR)/dist/main.js "$(PLUGIN_DEST_DIR)/main.js"
-	@echo "$(CYAN)  Copying manifest.json...$(NC)"
-	@cp $(PLUGIN_SRC_DIR)/manifest.json "$(PLUGIN_DEST_DIR)/manifest.json"
-	@echo "$(CYAN)  Copying styles.css...$(NC)"
-	@cp $(PLUGIN_SRC_DIR)/styles.css "$(PLUGIN_DEST_DIR)/styles.css"
-	@echo "$(CYAN)  Clearing Obsidian cache...$(NC)"
-	@rm -rf ~/.config/obsidian/Cache/* 2>/dev/null || true
-	@rm -rf ~/.config/obsidian/Code\ Cache/* 2>/dev/null || true
-	@rm -rf ~/.config/obsidian/GPUCache/* 2>/dev/null || true
-	@make _setup-vault-integration OBSIDIAN_VAULT="$(OBSIDIAN_VAULT)"
-	@echo ""
-	@echo "$(GREEN)✅ Plugin deployment complete!$(NC)"
-	@echo ""
-	@echo "$(YELLOW)📱 Next steps:$(NC)"
-	@echo "  1. Close Obsidian completely (don't just reload)"
-	@echo "  2. Reopen Obsidian"
-	@echo "  3. Enable plugin: Settings → Community plugins → Enable 'Thoth'"
-	@echo ""
-	@echo "$(CYAN)Plugin files deployed:$(NC)"
-	@ls -lh "$(PLUGIN_DEST_DIR)/" | grep -E "main.js|manifest.json|styles.css" || true
+deploy-plugin: _build-plugin ## Deploy Obsidian plugin to all vaults (multi-user) or a single vault
+	@# Load .env if it exists so THOTH_MULTI_USER and THOTH_VAULTS_ROOT are available
+	@if [ -f .env ]; then export $$(grep -v '^#' .env | grep -v '^$$' | xargs); fi; \
+	MULTI_USER="$${THOTH_MULTI_USER:-false}"; \
+	VAULTS_ROOT="$${THOTH_VAULTS_ROOT:-/vaults}"; \
+	if [ "$$MULTI_USER" = "true" ] && [ -d "$$VAULTS_ROOT" ]; then \
+		echo "$(YELLOW)Multi-user mode: deploying to all vaults in $$VAULTS_ROOT$(NC)"; \
+		echo "$(CYAN)  Clearing Obsidian cache...$(NC)"; \
+		rm -rf ~/.config/obsidian/Cache/* 2>/dev/null || true; \
+		rm -rf ~/.config/obsidian/Code\ Cache/* 2>/dev/null || true; \
+		rm -rf ~/.config/obsidian/GPUCache/* 2>/dev/null || true; \
+		deployed=0; \
+		for vault in "$$VAULTS_ROOT"/*/; do \
+			[ -d "$$vault" ] || continue; \
+			username=$$(basename "$$vault"); \
+			dest="$$vault/.obsidian/plugins/thoth-obsidian"; \
+			echo "$(CYAN)  Deploying to vault: $$username$(NC)"; \
+			mkdir -p "$$dest"; \
+			cp $(PLUGIN_SRC_DIR)/dist/main.js "$$dest/main.js"; \
+			cp $(PLUGIN_SRC_DIR)/manifest.json "$$dest/manifest.json"; \
+			cp $(PLUGIN_SRC_DIR)/styles.css "$$dest/styles.css"; \
+			$(MAKE) _setup-vault-integration OBSIDIAN_VAULT="$$vault"; \
+			deployed=$$((deployed + 1)); \
+		done; \
+		echo ""; \
+		echo "$(GREEN)Plugin deployed to $$deployed vault(s).$(NC)"; \
+	else \
+		if [ -z "$(OBSIDIAN_VAULT)" ]; then \
+			echo "$(RED)ERROR: OBSIDIAN_VAULT not set and multi-user mode is off.$(NC)"; \
+			echo "$(YELLOW)Set OBSIDIAN_VAULT_PATH or enable multi-user mode (make multi-user-enable).$(NC)"; \
+			exit 1; \
+		fi; \
+		if [ ! -d "$(OBSIDIAN_VAULT)" ]; then \
+			echo "$(RED)Obsidian vault not found: $(OBSIDIAN_VAULT)$(NC)"; \
+			exit 1; \
+		fi; \
+		echo "$(YELLOW)Deploying plugin to $(OBSIDIAN_VAULT)...$(NC)"; \
+		mkdir -p "$(PLUGIN_DEST_DIR)"; \
+		cp $(PLUGIN_SRC_DIR)/dist/main.js "$(PLUGIN_DEST_DIR)/main.js"; \
+		cp $(PLUGIN_SRC_DIR)/manifest.json "$(PLUGIN_DEST_DIR)/manifest.json"; \
+		cp $(PLUGIN_SRC_DIR)/styles.css "$(PLUGIN_DEST_DIR)/styles.css"; \
+		rm -rf ~/.config/obsidian/Cache/* 2>/dev/null || true; \
+		rm -rf ~/.config/obsidian/Code\ Cache/* 2>/dev/null || true; \
+		rm -rf ~/.config/obsidian/GPUCache/* 2>/dev/null || true; \
+		$(MAKE) _setup-vault-integration OBSIDIAN_VAULT="$(OBSIDIAN_VAULT)"; \
+		echo ""; \
+		echo "$(GREEN)Plugin deployment complete!$(NC)"; \
+		echo ""; \
+		echo "$(YELLOW)Next steps:$(NC)"; \
+		echo "  1. Close Obsidian completely (don't just reload)"; \
+		echo "  2. Reopen Obsidian"; \
+		echo "  3. Enable plugin: Settings -> Community plugins -> Enable 'Thoth'"; \
+		echo ""; \
+		echo "$(CYAN)Plugin files deployed:$(NC)"; \
+		ls -lh "$(PLUGIN_DEST_DIR)/" | grep -E "main.js|manifest.json|styles.css" || true; \
+	fi
 
 # =============================================================================
 # SERVICE MANAGEMENT
@@ -379,6 +411,49 @@ letta-restart: ## Restart Letta services (WARNING: affects ALL projects)
 .PHONY: letta-logs
 letta-logs: ## View Letta server logs
 	@docker logs -f letta-server
+
+# ==============================================================================
+# Multi-User Management
+# ==============================================================================
+
+.PHONY: user-create
+user-create: ## Create a user: make user-create USERNAME=alice [EMAIL=a@b.com] [ADMIN=true]
+	@if [ -z "$(USERNAME)" ]; then echo "Usage: make user-create USERNAME=alice"; exit 1; fi
+	@uv run thoth users create $(USERNAME) \
+		$(if $(EMAIL),--email $(EMAIL),) \
+		$(if $(filter true,$(ADMIN)),--admin,)
+
+.PHONY: user-list
+user-list: ## List all users
+	@uv run thoth users list
+
+.PHONY: user-reset-token
+user-reset-token: ## Reset a user's API token: make user-reset-token USERNAME=alice
+	@if [ -z "$(USERNAME)" ]; then echo "Usage: make user-reset-token USERNAME=alice"; exit 1; fi
+	@uv run thoth users reset-token $(USERNAME)
+
+.PHONY: user-deactivate
+user-deactivate: ## Deactivate a user: make user-deactivate USERNAME=alice
+	@if [ -z "$(USERNAME)" ]; then echo "Usage: make user-deactivate USERNAME=alice"; exit 1; fi
+	@uv run thoth users deactivate $(USERNAME)
+
+.PHONY: user-info
+user-info: ## Show user details: make user-info USERNAME=alice
+	@if [ -z "$(USERNAME)" ]; then echo "Usage: make user-info USERNAME=alice"; exit 1; fi
+	@uv run thoth users info $(USERNAME)
+
+.PHONY: user-sync-agents
+user-sync-agents: ## Create/update Letta agents for all users (run after updates)
+	@uv run thoth users sync-agents $(if $(USERNAME),--username $(USERNAME),)
+
+.PHONY: multi-user-enable
+multi-user-enable: ## Enable multi-user mode: sets THOTH_MULTI_USER=true in .env
+	@grep -q 'THOTH_MULTI_USER' .env && \
+		sed -i 's/.*THOTH_MULTI_USER.*/THOTH_MULTI_USER=true/' .env || \
+		echo 'THOTH_MULTI_USER=true' >> .env
+	@grep -q 'THOTH_VAULTS_ROOT' .env || echo 'THOTH_VAULTS_ROOT=/vaults' >> .env
+	@echo "Multi-user mode enabled. Set THOTH_VAULTS_ROOT in .env if needed."
+	@echo "Run 'make user-create USERNAME=admin ADMIN=true' to create the first admin."
 
 .PHONY: thoth-start
 thoth-start: ## Start Thoth services (requires Letta to be running)

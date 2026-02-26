@@ -1,15 +1,19 @@
 """WebSocket endpoints for real-time communication."""
 
 import asyncio
+import os
 import threading
 import time
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from loguru import logger
 
+from thoth.auth.context import UserContext
+from thoth.config import config
+from thoth.mcp.auth import reset_current_user_context, set_current_user_context
 from thoth.server.dependencies import (
-    get_chat_manager,
     get_research_agent,
 )
 
@@ -57,12 +61,95 @@ operation_lock = threading.Lock()
 # Track background tasks to prevent garbage collection
 background_tasks: set[asyncio.Task[Any]] = set()
 
+LETTA_BASE_URL = os.getenv('LETTA_BASE_URL', 'http://localhost:8283')
+LETTA_API_KEY = os.getenv('LETTA_SERVER_PASS', '')
+
 
 def create_background_task(coro) -> None:
     """Create a background task and track it to prevent garbage collection."""
     task = asyncio.create_task(coro)
     background_tasks.add(task)
     task.add_done_callback(background_tasks.discard)
+
+
+async def _authenticate_websocket_user(
+    websocket: WebSocket,
+) -> tuple[UserContext, str | None]:
+    """Authenticate a WebSocket client and resolve its default agent ID."""
+    multi_user = os.getenv('THOTH_MULTI_USER', 'false').lower() == 'true'
+    if not multi_user:
+        from thoth.mcp.auth import get_current_user_paths
+
+        user_paths = get_current_user_paths()
+        vault_path = user_paths.vault_root if user_paths else config.vault_root
+        return (
+            UserContext(
+                user_id='default_user',
+                username='default_user',
+                vault_path=vault_path,
+                is_admin=True,
+            ),
+            None,
+        )
+
+    token = websocket.query_params.get('token') or websocket.query_params.get(
+        'api_token'
+    )
+    if not token:
+        raise ValueError('Missing token query parameter')
+
+    service_manager = getattr(websocket.app.state, 'service_manager', None)
+    if service_manager is None:
+        raise RuntimeError('Service manager is not initialized')
+
+    auth_service = service_manager.auth
+    vaults_root = config.vaults_root
+    if vaults_root is None:
+        vaults_root = Path(os.getenv('THOTH_VAULTS_ROOT', '/vaults'))
+
+    user_context = await auth_service.get_user_context_from_token(token, vaults_root)
+    if user_context is None:
+        raise ValueError('Invalid token')
+
+    user = await auth_service.get_user_by_token(token)
+    default_agent_id = user.orchestrator_agent_id if user else None
+    return user_context, default_agent_id
+
+
+async def _send_letta_message(
+    *,
+    agent_id: str,
+    message: str,
+    user_id: str,
+    session_id: str | None = None,
+) -> dict[str, Any]:
+    """Send a chat message to a specific Letta agent."""
+    import httpx
+
+    payload: dict[str, Any] = {'message': message, 'user_id': user_id}
+    if session_id:
+        payload['thread_id'] = session_id
+
+    headers = {'Content-Type': 'application/json'}
+    if LETTA_API_KEY:
+        headers['Authorization'] = f'Bearer {LETTA_API_KEY}'
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            f'{LETTA_BASE_URL}/api/agents/{agent_id}/messages',
+            headers=headers,
+            json=payload,
+            timeout=60.0,
+        )
+        response.raise_for_status()
+        result = response.json()
+
+    return {
+        'response': result.get('message', ''),
+        'tool_calls': result.get('tool_calls', []),
+        'thread_id': result.get('thread_id'),
+        'agent_id': agent_id,
+    }
 
 
 async def shutdown_background_tasks(timeout: float = 10.0) -> None:
@@ -148,7 +235,6 @@ def get_operation_status(operation_id: str) -> dict[str, Any] | None:
 async def websocket_chat(
     websocket: WebSocket,
     research_agent=Depends(get_research_agent),
-    chat_manager=Depends(get_chat_manager),
 ) -> None:
     """
     WebSocket endpoint for real-time chat with the research agent.
@@ -156,8 +242,20 @@ async def websocket_chat(
     This endpoint allows for bidirectional communication with the research agent,
     enabling real-time conversation and tool usage.
     """
+    try:
+        user_context, default_agent_id = await _authenticate_websocket_user(websocket)
+    except Exception as e:
+        logger.warning(f'WebSocket auth failed: {e}')
+        await websocket.close(code=4401, reason='Unauthorized')
+        return
+
     await chat_ws_manager.connect(websocket)
-    logger.info('WebSocket chat connection established')
+    logger.info(f'WebSocket chat connection established for {user_context.username}')
+    ctx_tokens = set_current_user_context(
+        user_context.user_id,
+        user_context.username,
+        user_context.vault_path,
+    )
 
     try:
         while True:
@@ -176,6 +274,7 @@ async def websocket_chat(
             message = data.get('message', '')
             session_id = data.get('session_id')
             message_id = data.get('id')
+            agent_id = data.get('agent_id') or default_agent_id
 
             if not message:
                 error_response = {
@@ -188,30 +287,34 @@ async def websocket_chat(
                 continue
 
             try:
-                # Process message with research agent
-                response = await research_agent.chat(
-                    message=message,
-                    session_id=session_id,
-                )
-
-                # Save to chat history if we have a chat manager
-                if chat_manager and session_id:
-                    await chat_manager.save_message(
+                # Prefer the authenticated user's orchestrator agent.
+                # Fall back to the legacy in-process research agent.
+                if agent_id:
+                    response = await _send_letta_message(
+                        agent_id=agent_id,
+                        message=message,
+                        user_id=user_context.user_id,
                         session_id=session_id,
-                        role='user',
-                        content=message,
                     )
-
-                    await chat_manager.save_message(
+                elif research_agent:
+                    response = await research_agent.chat(
+                        message=message,
                         session_id=session_id,
-                        role='assistant',
-                        content=response.get('response', ''),
                     )
+                else:
+                    await websocket.send_json(
+                        {
+                            'error': 'No per-user agent is configured for this user',
+                            'type': 'error',
+                        }
+                    )
+                    continue
 
                 # Send response back to client
                 response_data = {
                     'response': response.get('response', ''),
                     'tool_calls': response.get('tool_calls', []),
+                    'agent_id': response.get('agent_id', agent_id),
                     'type': 'response',
                 }
                 if message_id:
@@ -233,6 +336,7 @@ async def websocket_chat(
     except Exception as e:
         logger.error(f'WebSocket chat error: {e}')
     finally:
+        reset_current_user_context(ctx_tokens)
         chat_ws_manager.disconnect(websocket)
 
 

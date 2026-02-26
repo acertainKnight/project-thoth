@@ -48,6 +48,7 @@ class AgentInitializationService:
             'description': """You are the Thoth Research Orchestrator - the user's primary research assistant.
 
 Your agent ID is: {{AGENT_ID}}
+Your user ID is: {{USER_ID}}
 
 ## Your Role
 You coordinate all research activities, loading specialized skills as needed. You start with minimal tools and dynamically load more based on user requests.
@@ -70,6 +71,10 @@ Always check `list_skills` if unsure which skill to use for a task.
 4. Follow the skill's guidance to complete the task
 5. For complex analysis, delegate to thoth_research_analyst
 6. When a task/project is complete, clear the planning block
+
+## Multi-user Safety
+- Always include `user_id: {{USER_ID}}` in MCP tool calls when the tool accepts user_id.
+- Never query, mutate, or summarize another user's data.
 
 ## Communication Style
 - Be warm, helpful, and professional
@@ -131,6 +136,7 @@ Always check `list_skills` if unsure which skill to use for a task.
             'description': """You are the Thoth Research Analyst - a specialist in deep research analysis.
 
 Your agent ID is: {{AGENT_ID}}
+Your user ID is: {{USER_ID}}
 
 ## Your Role
 You handle complex analysis tasks delegated by the Orchestrator:
@@ -152,23 +158,23 @@ You have direct access to analysis tools. Use them to:
 - Be thorough and systematic
 - Always cite sources for claims
 - Identify limitations and gaps
-- Suggest follow-up analyses if relevant""",
+- Suggest follow-up analyses if relevant
+
+## Multi-user Safety
+- Always include `user_id: {{USER_ID}}` in MCP tool calls when the tool accepts user_id.
+- Only analyze and reference data scoped to this user.""",
             'tools': [
                 # Deep analysis tools
                 'answer_research_question',
                 'explore_citation_network',
                 'compare_articles',
-                'extract_article_insights',
-                'get_article_full_content',
-                'find_related_papers',
-                'analyze_topic',
-                'generate_research_summary',
                 'evaluate_article',
                 'get_citation_context',
+                'find_related_papers',
+                'read_full_article',
+                'unload_article',
                 # Supporting tools
                 'search_articles',
-                'search_by_topic',
-                'find_articles_by_authors',
                 # Skill loading for additional capabilities
                 'list_skills',
                 'load_skill',
@@ -229,6 +235,98 @@ Comparison Aspects:
         },
     }
 
+    async def initialize_agents_for_user(
+        self,
+        user_context,
+        existing_agent_ids: dict[str, str] | None = None,
+    ) -> dict[str, str]:
+        """
+        Initialize or update Letta agents for a user.
+
+        When ``existing_agent_ids`` is provided (e.g. from the DB), those agents
+        are updated in-place (tools, system prompt, memory blocks) without
+        creating new ones.  This preserves conversation history and memory.
+
+        When no existing IDs are given, new namespaced agents are created
+        (e.g. ``thoth_main_orchestrator_alice``) to avoid global collisions.
+
+        Args:
+            user_context: UserContext with user_id, username, vault_path.
+            existing_agent_ids: Optional dict with ``orchestrator`` and/or
+                ``analyst`` keys mapped to Letta agent IDs that already belong
+                to this user.  Pass these to update rather than recreate.
+
+        Returns:
+            Dict with 'orchestrator' and 'analyst' keys mapped to agent IDs.
+            Empty dict if initialization fails.
+
+        Example:
+            >>> ids = await svc.initialize_agents_for_user(user_context)
+            >>> ids == {'orchestrator': 'agent-xxx', 'analyst': 'agent-yyy'}
+        """
+        username = user_context.username
+        existing = existing_agent_ids or {}
+        logger.info(f'Initializing Letta agents for user: {username}')
+
+        agent_ids: dict[str, str] = {}
+
+        try:
+            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+                available_tools = await self._get_all_tools(client)
+
+                for agent_key, base_config in self.AGENT_CONFIGS.items():
+                    user_config = dict(base_config)
+                    user_config['user_id'] = user_context.user_id
+                    role = (
+                        'orchestrator'
+                        if agent_key == 'thoth_main_orchestrator'
+                        else 'analyst'
+                    )
+                    existing_id = existing.get(role)
+
+                    try:
+                        if existing_id:
+                            # User already has this agent -- update it in place
+                            await self._update_agent(
+                                client,
+                                existing_id,
+                                user_config,
+                                available_tools,
+                            )
+                            agent_ids[role] = existing_id
+                            if role == 'orchestrator':
+                                await self._attach_filesystem(client, existing_id)
+                            logger.info(f'  Updated {role}: {existing_id[:16]}...')
+                        else:
+                            # No existing agent -- create a new namespaced one
+                            user_config['name'] = f'{base_config["name"]}_{username}'
+
+                            agent_id = await self._ensure_agent_exists(
+                                client,
+                                user_config['name'],
+                                user_config,
+                                available_tools,
+                            )
+                            if agent_id:
+                                agent_ids[role] = agent_id
+                                if role == 'orchestrator':
+                                    await self._attach_filesystem(client, agent_id)
+                                logger.info(
+                                    f'  Created {user_config["name"]}: {agent_id[:16]}...'
+                                )
+                    except Exception as e:
+                        logger.error(
+                            f'Failed to init {role} agent for user {username}: {e}'
+                        )
+        except Exception as e:
+            logger.error(f'Agent initialization failed for user {username}: {e}')
+
+        logger.info(
+            f'Initialized {len(agent_ids)}/{len(self.AGENT_CONFIGS)} agents '
+            f'for user {username}'
+        )
+        return agent_ids
+
     async def initialize_all_agents(self, service_manager=None) -> dict[str, str]:
         """
         Initialize all required agents on startup.
@@ -256,9 +354,11 @@ Comparison Aspects:
 
             # Create/update each agent
             for agent_name, config in self.AGENT_CONFIGS.items():
+                agent_config = dict(config)
+                agent_config['user_id'] = 'default_user'
                 try:
                     agent_id = await self._ensure_agent_exists(
-                        client, agent_name, config, available_tools
+                        client, agent_name, agent_config, available_tools
                     )
                     if agent_id:
                         agent_ids[agent_name] = agent_id
@@ -296,12 +396,15 @@ Comparison Aspects:
 
             # Fetch MCP tools from all registered MCP servers
             mcp_resp = await client.get(
-                f'{self.letta_base_url}/v1/tools/mcp/servers', headers=self.headers
+                f'{self.letta_base_url}/v1/mcp-servers/', headers=self.headers
             )
             if mcp_resp.status_code == 200:
-                for server_name in mcp_resp.json().keys():
+                for server in mcp_resp.json():
+                    server_id = server.get('id')
+                    if not server_id:
+                        continue
                     tools_resp = await client.get(
-                        f'{self.letta_base_url}/v1/tools/mcp/servers/{server_name}/tools',
+                        f'{self.letta_base_url}/v1/mcp-servers/{server_id}/tools',
                         headers=self.headers,
                     )
                     if tools_resp.status_code == 200:
@@ -354,54 +457,164 @@ Comparison Aspects:
             logger.warning(f'Error finding agent {name}: {e}')
             return None
 
+    async def _resolve_embedding_config(
+        self,
+        client: httpx.AsyncClient,
+    ) -> dict | None:
+        """Fetch the full embedding config from Letta for the configured model.
+
+        Letta requires ``embedding_endpoint_type`` and ``embedding_dim`` in the
+        ``embedding_config`` payload.  Rather than hard-coding these, we query
+        the ``/v1/models/embedding`` endpoint and match by model name.
+
+        Returns:
+            dict: Full embedding config dict, or None if the model was not found.
+        """
+        if hasattr(self, '_cached_embedding_config'):
+            return self._cached_embedding_config
+
+        try:
+            resp = await client.get(
+                f'{self.letta_base_url}/v1/models/embedding',
+                headers=self.headers,
+            )
+            resp.raise_for_status()
+
+            # Match on the short model name (e.g. "text-embedding-3-small")
+            # self.embedding_model may be "openai/text-embedding-3-small"
+            model_short = (
+                self.embedding_model.split('/')[-1]
+                if '/' in self.embedding_model
+                else self.embedding_model
+            )
+
+            for model in resp.json():
+                if (
+                    model.get('embedding_model') == model_short
+                    or model.get('handle') == self.embedding_model
+                ):
+                    cfg = {
+                        'embedding_endpoint_type': model['embedding_endpoint_type'],
+                        'embedding_endpoint': model['embedding_endpoint'],
+                        'embedding_model': model['embedding_model'],
+                        'embedding_dim': model['embedding_dim'],
+                        'embedding_chunk_size': model.get('embedding_chunk_size', 300),
+                    }
+                    self._cached_embedding_config = cfg
+                    return cfg
+
+            logger.warning(
+                f'Embedding model {self.embedding_model!r} not found in Letta'
+            )
+        except Exception as e:
+            logger.warning(f'Could not fetch embedding models from Letta: {e}')
+
+        return None
+
+    async def _resolve_llm_config(
+        self,
+        client: httpx.AsyncClient,
+    ) -> dict | None:
+        """Fetch the full LLM config from Letta for the configured agent model.
+
+        Letta requires ``model_endpoint_type`` in the ``llm_config`` payload.
+        We query ``/v1/models/`` and match by model name or handle.
+
+        Returns:
+            dict: Full LLM config dict, or None if no model configured / not found.
+        """
+        if not self.agent_model:
+            return None
+
+        if hasattr(self, '_cached_llm_config'):
+            return self._cached_llm_config
+
+        try:
+            resp = await client.get(
+                f'{self.letta_base_url}/v1/models/',
+                headers=self.headers,
+            )
+            resp.raise_for_status()
+
+            model_short = (
+                self.agent_model.split('/')[-1]
+                if '/' in self.agent_model
+                else self.agent_model
+            )
+
+            for model in resp.json():
+                if (
+                    model.get('model') == model_short
+                    or model.get('handle') == self.agent_model
+                ):
+                    cfg = {
+                        'model': model['model'],
+                        'model_endpoint_type': model['model_endpoint_type'],
+                        'model_endpoint': model['model_endpoint'],
+                        'context_window': model.get('context_window', 128000),
+                    }
+                    self._cached_llm_config = cfg
+                    return cfg
+
+            logger.warning(f'LLM model {self.agent_model!r} not found in Letta')
+        except Exception as e:
+            logger.warning(f'Could not fetch LLM models from Letta: {e}')
+
+        return None
+
     async def _create_agent(
         self, client: httpx.AsyncClient, agent_config: dict, available_tools: set[str]
     ) -> str | None:
-        """Create a new agent."""
+        """Create a new agent with full model configuration from Letta."""
 
-        # Filter to only tools that exist
         tool_names = [t for t in agent_config['tools'] if t in available_tools]
         missing = [t for t in agent_config['tools'] if t not in available_tools]
         if missing:
             logger.warning(f'Missing tools for {agent_config["name"]}: {missing}')
 
-        # Use placeholder for agent_id - will update after creation
-        system_prompt = agent_config['description'].replace('{{AGENT_ID}}', 'PENDING')
+        system_prompt = self._render_system_prompt(agent_config, 'PENDING')
 
-        # Agent payload - Letta accepts tool names directly
+        # Resolve full embedding config from Letta (required fields: endpoint_type, dim)
+        embedding_cfg = await self._resolve_embedding_config(client)
+        if not embedding_cfg:
+            logger.error(
+                f'Cannot create agent {agent_config["name"]}: '
+                f'embedding model {self.embedding_model!r} not available in Letta'
+            )
+            return None
+
         payload: dict = {
             'name': agent_config['name'],
             'system': system_prompt,
-            'embedding_config': {'embedding_model': self.embedding_model},
-            'tools': tool_names,  # Letta expects tool names, not IDs
+            'embedding_config': embedding_cfg,
+            'tools': tool_names,
         }
 
-        # Set LLM model if configured in settings
-        if self.agent_model:
-            payload['llm_config'] = {'model': self.agent_model}
-            logger.info(f'Using configured model: {self.agent_model}')
+        # Resolve full LLM config from Letta (required fields: endpoint_type)
+        llm_cfg = await self._resolve_llm_config(client)
+        if llm_cfg:
+            payload['llm_config'] = llm_cfg
+            logger.info(f'Using configured model: {llm_cfg["model"]}')
 
-        # Add memory blocks if defined
         if agent_config.get('memory_blocks'):
             payload['memory_blocks'] = agent_config['memory_blocks']
 
-        # Add tool rules if defined
         if agent_config.get('tool_rules'):
             payload['tool_rules'] = agent_config['tool_rules']
 
         try:
             response = await client.post(
-                f'{self.letta_base_url}/v1/agents/', headers=self.headers, json=payload
+                f'{self.letta_base_url}/v1/agents/',
+                headers=self.headers,
+                json=payload,
             )
             response.raise_for_status()
 
             agent = response.json()
             agent_id = agent['id']
 
-            # Update system prompt with actual agent_id
-            updated_system = agent_config['description'].replace(
-                '{{AGENT_ID}}', agent_id
-            )
+            # Update system prompt with actual agent_id and user_id
+            updated_system = self._render_system_prompt(agent_config, agent_id)
             await client.patch(
                 f'{self.letta_base_url}/v1/agents/{agent_id}',
                 headers=self.headers,
@@ -430,8 +643,8 @@ Comparison Aspects:
         # Filter to only tools that exist
         desired_tools = set(t for t in agent_config['tools'] if t in available_tools)
 
-        # Update system prompt with actual agent_id
-        updated_system = agent_config['description'].replace('{{AGENT_ID}}', agent_id)
+        # Update system prompt with actual agent_id and user_id
+        updated_system = self._render_system_prompt(agent_config, agent_id)
 
         try:
             # Build PATCH payload: system prompt + optional model override + tool rules
@@ -463,14 +676,18 @@ Comparison Aspects:
             )
             all_tools = {t['name']: t['id'] for t in response.json()}
 
-            # Also index MCP tools
+            # Index MCP tools via the /v1/mcp-servers/{id}/tools endpoint,
+            # which returns full Letta tool objects (with id fields).
             mcp_resp = await client.get(
-                f'{self.letta_base_url}/v1/tools/mcp/servers', headers=self.headers
+                f'{self.letta_base_url}/v1/mcp-servers/', headers=self.headers
             )
             if mcp_resp.status_code == 200:
-                for server_name in mcp_resp.json().keys():
+                for server in mcp_resp.json():
+                    server_id = server.get('id')
+                    if not server_id:
+                        continue
                     tools_resp = await client.get(
-                        f'{self.letta_base_url}/v1/tools/mcp/servers/{server_name}/tools',
+                        f'{self.letta_base_url}/v1/mcp-servers/{server_id}/tools',
                         headers=self.headers,
                     )
                     if tools_resp.status_code == 200:
@@ -498,6 +715,15 @@ Comparison Aspects:
 
         except Exception as e:
             logger.warning(f'Could not update agent {agent_config["name"]}: {e}')
+
+    def _render_system_prompt(self, agent_config: dict, agent_id: str) -> str:
+        """Render system prompt with runtime placeholders."""
+        user_id = agent_config.get('user_id', 'default_user')
+        return (
+            agent_config['description']
+            .replace('{{AGENT_ID}}', agent_id)
+            .replace('{{USER_ID}}', user_id)
+        )
 
     async def _ensure_memory_blocks(
         self, client: httpx.AsyncClient, agent_id: str, agent_config: dict

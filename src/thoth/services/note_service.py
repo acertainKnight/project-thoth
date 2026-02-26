@@ -12,6 +12,7 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from thoth.mcp.auth import get_mcp_user_id
 from thoth.services.base import BaseService, ServiceError
 from thoth.utilities.schemas import AnalysisResponse, Citation
 
@@ -49,18 +50,15 @@ class NoteService(BaseService):
         """
         super().__init__(config)
         self.templates_dir = Path(templates_dir or self.config.templates_dir)
-        self.notes_dir = Path(notes_dir or self.config.notes_dir)
-        self.pdf_dir = Path(pdf_dir or self.config.pdf_dir)
-        self.markdown_dir = Path(markdown_dir or self.config.markdown_dir)
+        self._default_notes_dir = Path(notes_dir or self.config.notes_dir)
+        self._default_pdf_dir = Path(pdf_dir or self.config.pdf_dir)
+        self._default_markdown_dir = Path(markdown_dir or self.config.markdown_dir)
         self.api_base_url = (
             api_base_url
             or f'http://{self.config.servers_config.api.host}:{self.config.servers_config.api.port}'
         )
 
-        # Ensure directories exist
-        self.notes_dir.mkdir(parents=True, exist_ok=True)
-        self.pdf_dir.mkdir(parents=True, exist_ok=True)
-        self.markdown_dir.mkdir(parents=True, exist_ok=True)
+        # Vault dirs are created by Config on init.
 
         # Initialize Jinja environment (autoescape for XSS safety)
         self.jinja_env = Environment(
@@ -76,6 +74,24 @@ class NoteService(BaseService):
 
         self._notes_cache: LRUCache = LRUCache(maxsize=500)
 
+    @property
+    def notes_dir(self) -> Path:
+        """Notes directory, scoped to the current user when available."""
+        up = self._get_user_paths()
+        return up.notes_dir if up else self._default_notes_dir
+
+    @property
+    def pdf_dir(self) -> Path:
+        """PDF directory, scoped to the current user when available."""
+        up = self._get_user_paths()
+        return up.pdf_dir if up else self._default_pdf_dir
+
+    @property
+    def markdown_dir(self) -> Path:
+        """Markdown directory, scoped to the current user when available."""
+        up = self._get_user_paths()
+        return up.markdown_dir if up else self._default_markdown_dir
+
     def _get_markdown_content(self, title: str, markdown_path: Path) -> str:  # noqa: ARG002
         """Get markdown content from PostgreSQL."""
         import asyncpg  # noqa: I001
@@ -90,10 +106,13 @@ class NoteService(BaseService):
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
         async def fetch():
+            user_id = get_mcp_user_id()
             conn = await asyncpg.connect(db_url)
             try:
                 result = await conn.fetchval(
-                    'SELECT markdown_content FROM papers WHERE title = $1', title
+                    'SELECT markdown_content FROM papers WHERE title = $1 AND user_id = $2',
+                    title,
+                    user_id,
                 )
                 return result or ''
             finally:
@@ -143,28 +162,32 @@ class NoteService(BaseService):
             raise ValueError('DATABASE_URL not configured - PostgreSQL is required')
 
         async def save():
+            user_id = get_mcp_user_id()
             conn = await asyncpg.connect(db_url)
             try:
                 # First get the paper_id from paper_metadata
                 # Try exact match first, then normalized match (hyphens -> spaces)
                 paper_id = await conn.fetchval(
-                    'SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1)',
+                    'SELECT id FROM paper_metadata WHERE LOWER(title) = LOWER($1) AND user_id = $2',
                     title,
+                    user_id,
                 )
 
                 # If not found, try with normalized title (replace hyphens with spaces)
                 if paper_id is None:
                     normalized_title = title.replace('-', ' ').replace(',', '')
                     paper_id = await conn.fetchval(
-                        "SELECT id FROM paper_metadata WHERE LOWER(REPLACE(title, '-', ' ')) = LOWER($1)",
+                        "SELECT id FROM paper_metadata WHERE LOWER(REPLACE(title, '-', ' ')) = LOWER($1) AND user_id = $2",
                         normalized_title,
+                        user_id,
                     )
 
                 # Also try matching against title_normalized column
                 if paper_id is None:
                     paper_id = await conn.fetchval(
-                        'SELECT id FROM paper_metadata WHERE title_normalized = LOWER($1)',
+                        'SELECT id FROM paper_metadata WHERE title_normalized = LOWER($1) AND user_id = $2',
                         title.replace('-', ' ').replace(',', '').lower(),
+                        user_id,
                     )
 
                 if paper_id:
@@ -172,13 +195,16 @@ class NoteService(BaseService):
                     result = await conn.execute(
                         """
                         INSERT INTO processed_papers
-                            (paper_id, markdown_content, pdf_path, note_path, markdown_path, created_at, updated_at)
-                        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-                        ON CONFLICT (paper_id) DO UPDATE SET
+                            (paper_id, markdown_content, pdf_path, note_path, markdown_path,
+                             processing_status, processed_at, user_id, created_at, updated_at)
+                        VALUES ($1, $2, $3, $4, $5, 'completed', NOW(), $6, NOW(), NOW())
+                        ON CONFLICT (paper_id, user_id) DO UPDATE SET
                             markdown_content = EXCLUDED.markdown_content,
                             pdf_path = EXCLUDED.pdf_path,
                             note_path = EXCLUDED.note_path,
                             markdown_path = EXCLUDED.markdown_path,
+                            processing_status = 'completed',
+                            processed_at = COALESCE(processed_papers.processed_at, NOW()),
                             updated_at = NOW()
                         """,
                         paper_id,
@@ -186,6 +212,7 @@ class NoteService(BaseService):
                         pdf_path,
                         note_path,
                         markdown_path,
+                        user_id,
                     )
                     rows_affected = int(result.split()[-1]) if result else 0
                     if rows_affected > 0:

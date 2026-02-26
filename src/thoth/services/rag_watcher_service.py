@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
@@ -43,6 +44,7 @@ class RAGFileHandler(FileSystemEventHandler):
         self.config = config
         self.processing_queue: dict[str, float] = {}  # path -> timestamp
         self.debounce_seconds = 2.0  # Wait 2s before processing
+        self._user_id_cache: dict[str, str] = {}  # username -> user_id
 
     def on_created(self, event: FileSystemEvent) -> None:
         """Handle file creation events."""
@@ -133,9 +135,10 @@ class RAGFileHandler(FileSystemEventHandler):
         """
         try:
             print(f'Indexing markdown: {markdown_path.name}')
+            user_id = await self._resolve_user_id_from_path(markdown_path)
 
             # Use async version to avoid event loop conflicts
-            doc_ids = self.rag_service.index_file(markdown_path)
+            doc_ids = self.rag_service.index_file(markdown_path, user_id=user_id)
 
             print(
                 f'Indexed {len(doc_ids)} chunks from {markdown_path.name} into vector store'
@@ -143,6 +146,51 @@ class RAGFileHandler(FileSystemEventHandler):
 
         except Exception as e:
             print(f'Error indexing markdown {markdown_path}: {e}')
+
+    async def _resolve_user_id_from_path(self, file_path: Path) -> str | None:
+        """Resolve user_id from a vault file path in multi-user mode."""
+        if not getattr(self.config, 'multi_user', False):
+            return None
+
+        vaults_root = getattr(self.config, 'vaults_root', None)
+        if vaults_root is None:
+            return None
+
+        try:
+            relative = file_path.resolve().relative_to(vaults_root.resolve())
+        except ValueError:
+            return None
+
+        if not relative.parts:
+            return None
+
+        username = relative.parts[0]
+        if username in self._user_id_cache:
+            return self._user_id_cache[username]
+
+        db_url = getattr(self.config.secrets, 'database_url', None)
+        if not db_url:
+            logger.warning('Cannot resolve user_id from path: DATABASE_URL missing')
+            return None
+
+        import asyncpg
+
+        conn = await asyncpg.connect(db_url)
+        try:
+            row = await conn.fetchrow(
+                'SELECT id FROM users WHERE username = $1 AND is_active = TRUE',
+                username,
+            )
+        finally:
+            await conn.close()
+
+        if row is None:
+            logger.warning(f'No active user found for vault path username={username}')
+            return None
+
+        user_id = str(row['id'])
+        self._user_id_cache[username] = user_id
+        return user_id
 
 
 class RAGWatcherService(BaseService):
@@ -195,6 +243,41 @@ class RAGWatcherService(BaseService):
         """Initialize the watcher service."""
         self.logger.info('RAG watcher service initialized')
 
+    def start_multi_user(self, vaults_root: Path, users: list[str]) -> None:
+        """
+        Start watching vault directories for all registered users.
+
+        In multi-user mode, each user has their own vault under vaults_root.
+        This method collects all per-user pdf/markdown/notes directories and
+        starts a single shared watcher that monitors all of them.
+
+        Args:
+            vaults_root: Root directory containing all user vaults (THOTH_VAULTS_ROOT)
+            users: List of usernames to watch (from the users table)
+
+        Example:
+            >>> watcher.start_multi_user(Path('/vaults'), ['alice', 'bob'])
+        """
+        watch_dirs = []
+        for username in users:
+            user_vault = vaults_root / username / 'thoth'
+            for sub in ('papers/pdfs', 'papers/markdown', 'notes'):
+                candidate = user_vault / sub
+                if candidate.exists():
+                    watch_dirs.append(candidate)
+
+        if not watch_dirs:
+            self.logger.warning(
+                f'No vault directories found under {vaults_root} for users {users}'
+            )
+            return
+
+        self.logger.info(
+            f'Multi-user RAG watcher: watching {len(watch_dirs)} directories '
+            f'across {len(users)} users'
+        )
+        self.start(watch_dirs=watch_dirs)
+
     def start(self, watch_dirs: list[Path] | None = None) -> None:
         """
         Start watching directories for new files.
@@ -212,11 +295,21 @@ class RAGWatcherService(BaseService):
         try:
             # Determine which directories to watch
             if watch_dirs is None:
-                watch_dirs = [
-                    self.config.pdf_dir,
-                    self.config.markdown_dir,
-                    self.config.notes_dir,
-                ]
+                from thoth.mcp.auth import get_current_user_paths
+
+                user_paths = get_current_user_paths()
+                if user_paths:
+                    watch_dirs = [
+                        user_paths.pdf_dir,
+                        user_paths.markdown_dir,
+                        user_paths.notes_dir,
+                    ]
+                else:
+                    watch_dirs = [
+                        self.config.pdf_dir,
+                        self.config.markdown_dir,
+                        self.config.notes_dir,
+                    ]
 
             # Create event handler
             handler = RAGFileHandler(
@@ -310,17 +403,28 @@ class RAGWatcherService(BaseService):
         Returns:
             dict[str, Any]: Status information
         """
-        return {
-            'is_running': self._is_running,
-            'watched_directories': (
-                [
+        if self._is_running:
+            from thoth.mcp.auth import get_current_user_paths
+
+            user_paths = get_current_user_paths()
+            if user_paths:
+                dirs = [
+                    str(user_paths.pdf_dir),
+                    str(user_paths.markdown_dir),
+                    str(user_paths.notes_dir),
+                ]
+            else:
+                dirs = [
                     str(self.config.pdf_dir),
                     str(self.config.markdown_dir),
                     str(self.config.notes_dir),
                 ]
-                if self._is_running
-                else []
-            ),
+        else:
+            dirs = []
+
+        return {
+            'is_running': self._is_running,
+            'watched_directories': dirs,
         }
 
     def health_check(self) -> dict[str, str]:
