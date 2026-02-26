@@ -147,14 +147,18 @@ class CacheService(BaseService):
                 'pdf_stem': pdf_path.stem,
             }
 
-            cache_file = self.ocr_cache_dir / f'{cache_key}.pkl'
-            with cache_file.open('wb') as f:
-                pickle.dump(cache_data, f)
-
-            # Also cache in memory for quick access
+            # Write to memory first so caching always works
             self._memory_cache[f'ocr:{cache_key}'] = cache_data
             self._memory_cache_timestamps[f'ocr:{cache_key}'] = time.time()
             self._cleanup_memory_cache()
+
+            # Persist to disk if the directory exists
+            try:
+                cache_file = self.ocr_cache_dir / f'{cache_key}.pkl'
+                with cache_file.open('wb') as f:
+                    pickle.dump(cache_data, f)
+            except OSError:
+                pass
 
             self.logger.debug(f'Cached OCR result for {pdf_path.name}')
             return True
@@ -239,15 +243,19 @@ class CacheService(BaseService):
                 'timestamp': time.time(),
             }
 
-            cache_file = self.analysis_cache_dir / f'{cache_key}.pkl'
-            with cache_file.open('wb') as f:
-                pickle.dump(cache_data, f)
-
-            # Also cache in memory
+            # Write to memory first so caching always works
             memory_key = f'analysis:{cache_key}'
             self._memory_cache[memory_key] = cache_data
             self._memory_cache_timestamps[memory_key] = time.time()
             self._cleanup_memory_cache()
+
+            # Persist to disk if the directory exists
+            try:
+                cache_file = self.analysis_cache_dir / f'{cache_key}.pkl'
+                with cache_file.open('wb') as f:
+                    pickle.dump(cache_data, f)
+            except OSError:
+                pass
 
             self.logger.debug(
                 f'Cached analysis result for content hash {content_hash[:8]}'
@@ -343,15 +351,19 @@ class CacheService(BaseService):
                 'ttl': ttl,
             }
 
-            cache_file = self.api_cache_dir / f'{cache_key}.json'
-            with cache_file.open('w') as f:
-                json.dump(cache_data, f, default=str)
-
-            # Also cache in memory
+            # Write to memory first so caching always works
             memory_key = f'api:{cache_key}'
             self._memory_cache[memory_key] = cache_data
             self._memory_cache_timestamps[memory_key] = time.time()
             self._cleanup_memory_cache()
+
+            # Persist to disk if the directory exists
+            try:
+                cache_file = self.api_cache_dir / f'{cache_key}.json'
+                with cache_file.open('w') as f:
+                    json.dump(cache_data, f, default=str)
+            except OSError:
+                pass
 
             self.logger.debug(f'Cached {api_name} API response for {request_key[:20]}')
             return True
