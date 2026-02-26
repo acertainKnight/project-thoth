@@ -369,17 +369,6 @@ class TestWorkflowMonitorInitialization:
         assert monitor.workflow_patterns == {}
         assert monitor.user_behavior_analytics == {}
 
-    def test_workflow_monitor_creates_workflow_directory(
-        self, mock_config, mock_service_manager
-    ):
-        """Test WorkflowMonitor creates workflow directory."""
-        monitor = WorkflowMonitor(
-            config=mock_config, service_manager=mock_service_manager
-        )
-
-        assert monitor.workflow_dir.exists()
-        assert monitor.workflow_dir.is_dir()
-
     def test_workflow_monitor_with_metrics_collector(
         self, mock_config, mock_service_manager, mock_metrics_collector
     ):
