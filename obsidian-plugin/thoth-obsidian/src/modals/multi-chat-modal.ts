@@ -1122,7 +1122,7 @@ export class MultiChatModal extends Modal {
   }
 
   showConnectionDetails() {
-    const lettaEndpoint = this.plugin.getLettaEndpointUrl(); // Chat uses Letta
+    const lettaEndpoint = this.plugin.getLettaProxyUrl();
     const isConnected = this.plugin.isAgentRunning || this.plugin.settings.remoteMode;
     const mode = this.plugin.settings.remoteMode ? 'Remote' : 'Local';
 
@@ -1185,7 +1185,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       // Fetch available agents from Letta
       // Note: Letta API requires trailing slash on collection endpoints
       // Use view=basic to avoid fetching full memory blocks (reduces response from 30MB to ~100KB)
-      const endpoint = this.plugin.getLettaEndpointUrl();
+      const endpoint = this.plugin.getLettaProxyUrl();
       const response = await this.plugin.authFetch(`${endpoint}/v1/agents/?view=basic`);
 
       loadingEl.remove();
@@ -1302,7 +1302,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
     if (confirm(`Delete this conversation? This action cannot be undone.`)) {
       try {
-        const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat
+        const endpoint = this.plugin.getLettaProxyUrl();
         // Note: NO trailing slash for DELETE - Letta API returns 405 with trailing slash
         const response = await this.plugin.authFetch(`${endpoint}/v1/conversations/${sessionId}`, {
           method: 'DELETE'
@@ -2029,7 +2029,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
   async loadChatSessions() {
     try {
-      const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat
+      const endpoint = this.plugin.getLettaProxyUrl();
       // Get conversations for the default agent
       // Note: Use trailing slash to avoid nginx redirect that duplicates query params
       const agentId = await this.getOrCreateDefaultAgent();
@@ -2074,64 +2074,69 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
   }
 
   async getOrCreateDefaultAgent(): Promise<string> {
-    // Return cached agent ID from settings (persists across sessions)
+    const apiToken: string = (this.plugin.settings as any).apiToken ?? '';
+
+    // In multi-user mode, /auth/me is the authoritative source for the agent ID.
+    // Never trust the local cache alone — it could belong to a different user if
+    // accounts were switched or the setting was populated before multi-user mode.
+    if (apiToken) {
+      const thothUrl = this.plugin.settings.remoteEndpointUrl;
+      const meUrl = `${thothUrl.replace(/\/$/, '')}/auth/me`;
+      try {
+        const meResponse = await this.fetchWithTimeout(meUrl, {
+          headers: { Authorization: `Bearer ${apiToken}` },
+        });
+        if (meResponse.ok) {
+          const userInfo = await meResponse.json();
+          const orchestratorId = userInfo.orchestrator_agent_id;
+          if (orchestratorId) {
+            // Overwrite cache with server-authoritative value every time.
+            if (this.plugin.settings.lettaAgentId !== orchestratorId) {
+              this.plugin.settings.lettaAgentId = orchestratorId;
+              await this.plugin.saveSettings();
+            }
+            return orchestratorId;
+          }
+        }
+      } catch (meError) {
+        console.warn('[MultiChatModal] /auth/me lookup failed, falling back to cache:', meError);
+        // Fall through — use cache if available, else scan agent list below.
+      }
+    }
+
+    // In multi-user mode, /auth/me is the only safe source — scanning the full
+    // agent list by name risks picking up another user's agent.
+    if (apiToken) {
+      throw new Error('Could not resolve agent: /auth/me failed and no valid cache. Check that the Thoth server is reachable.');
+    }
+
+    // Single-user mode: use cache if we have it.
     if (this.plugin.settings.lettaAgentId) {
       console.log('[MultiChatModal] Using cached agent ID:', this.plugin.settings.lettaAgentId);
       return this.plugin.settings.lettaAgentId;
     }
 
-    console.log('[MultiChatModal] No cached agent ID, fetching from server...');
-
+    // Single-user last resort: scan Letta agent list by name.
+    // Use view=basic to avoid fetching full memory blocks (30MB+ with all agents).
+    console.log('[MultiChatModal] No cached agent ID, scanning agent list...');
     try {
-      const endpoint = this.plugin.getLettaEndpointUrl();
-      const apiToken: string = (this.plugin.settings as any).apiToken ?? '';
-
-      // Multi-user mode: resolve agent ID via /auth/me (returns per-user agent ID)
-      if (apiToken) {
-        const thothUrl = this.plugin.settings.remoteEndpointUrl;
-        const meUrl = `${thothUrl.replace(/\/$/, '')}/auth/me`;
-        try {
-          const meResponse = await this.fetchWithTimeout(meUrl, {
-            headers: { Authorization: `Bearer ${apiToken}` },
-          });
-          if (meResponse.ok) {
-            const userInfo = await meResponse.json();
-            const orchestratorId = userInfo.orchestrator_agent_id;
-            if (orchestratorId) {
-              this.plugin.settings.lettaAgentId = orchestratorId;
-              await this.plugin.saveSettings();
-              console.log('[MultiChatModal] Resolved agent ID from /auth/me:', orchestratorId);
-              return orchestratorId;
-            }
-          }
-        } catch (meError) {
-          console.warn('[MultiChatModal] /auth/me lookup failed, falling back to agent list:', meError);
-        }
-      }
-
-      // Single-user mode (or /auth/me fallback): scan Letta agent list by name
-      // Use view=basic to avoid fetching full memory blocks (30MB+ with all agents!)
+      const endpoint = this.plugin.getLettaProxyUrl();
       const listResponse = await this.fetchWithTimeout(`${endpoint}/v1/agents/?view=basic`);
       if (listResponse.ok) {
         const agents = await listResponse.json();
         console.log('[MultiChatModal] Found agents:', agents.map((a: any) => a.name));
 
-        // The main orchestrator is named "thoth_main_orchestrator"
         const thothAgent = agents.find((a: any) => a.name === 'thoth_main_orchestrator');
-
         if (thothAgent) {
-          // Cache in settings for future use
           this.plugin.settings.lettaAgentId = thothAgent.id;
           await this.plugin.saveSettings();
           console.log('[MultiChatModal] Cached agent ID for future use:', thothAgent.id);
           return thothAgent.id;
         }
 
-        // If not found, log all available agent names to help debug
         console.error('[MultiChatModal] thoth_main_orchestrator not found. Available agents:', agents.map((a: any) => a.name));
       }
 
-      // Agent not found - backend may not have started properly
       throw new Error('Thoth orchestrator agent not found. Please ensure the Thoth backend is running and has initialized agents.');
     } catch (error) {
       console.error('Failed to get Thoth agent:', error);
@@ -2140,7 +2145,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
   }
 
   async getOrCreateDefaultConversation(): Promise<string> {
-    const endpoint = this.plugin.getLettaEndpointUrl();
+    const endpoint = this.plugin.getLettaProxyUrl();
     const agentId = await this.getOrCreateDefaultAgent();
 
     console.log('[MultiChatModal] Getting or creating default conversation...');
@@ -2337,7 +2342,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         sessionTitle = `New Chat - ${timeStr}`;
       }
 
-      const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat
+      const endpoint = this.plugin.getLettaProxyUrl();
       const agentId = await this.getOrCreateDefaultAgent();
 
       // Note: Letta API expects agent_id as query param, with trailing slash to avoid nginx redirect
@@ -2405,7 +2410,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     }
 
     try {
-      const endpoint = this.plugin.getLettaEndpointUrl();
+      const endpoint = this.plugin.getLettaProxyUrl();
 
       // Build URL with pagination support.
       // use_assistant_message converts send_message tool calls into
@@ -2788,7 +2793,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         }
 
         // Send to Letta conversation with streaming enabled
-        const endpoint = this.plugin.getLettaEndpointUrl();
+        const endpoint = this.plugin.getLettaProxyUrl();
         const response = await this.plugin.authFetch(`${endpoint}/v1/conversations/${sessionId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3830,7 +3835,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     if (!newTitle || newTitle === session.title) return;
 
     try {
-      const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat
+      const endpoint = this.plugin.getLettaProxyUrl();
       // Note: NO trailing slash for PATCH - Letta API may have issues with trailing slashes
       const response = await this.plugin.authFetch(`${endpoint}/v1/conversations/${sessionId}`, {
         method: 'PATCH',
@@ -3914,7 +3919,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     if (!confirmed) return;
 
     try {
-      const endpoint = this.plugin.getLettaEndpointUrl(); // Use Letta endpoint for chat
+      const endpoint = this.plugin.getLettaProxyUrl();
       // Note: NO trailing slash for DELETE - Letta API returns 405 with trailing slash
       const response = await this.plugin.authFetch(`${endpoint}/v1/conversations/${sessionId}`, {
         method: 'DELETE'
@@ -4661,7 +4666,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     if (!newTitle || newTitle === session.title) return;
 
     try {
-      const endpoint = this.plugin.getLettaEndpointUrl();
+      const endpoint = this.plugin.getLettaProxyUrl();
       // Sync to Letta API - NO trailing slash for PATCH
       const response = await this.plugin.authFetch(`${endpoint}/v1/conversations/${session.id}`, {
         method: 'PATCH',
@@ -4709,7 +4714,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     if (confirmed) {
       try {
       // Delete from server
-      const endpoint = this.plugin.getLettaEndpointUrl();
+      const endpoint = this.plugin.getLettaProxyUrl();
       // Note: NO trailing slash for DELETE - Letta API returns 405 with trailing slash
       const deleteUrl = `${endpoint}/v1/conversations/${session.id}`;
 

@@ -58,10 +58,7 @@ class NoteService(BaseService):
             or f'http://{self.config.servers_config.api.host}:{self.config.servers_config.api.port}'
         )
 
-        # Ensure directories exist
-        self._default_notes_dir.mkdir(parents=True, exist_ok=True)
-        self._default_pdf_dir.mkdir(parents=True, exist_ok=True)
-        self._default_markdown_dir.mkdir(parents=True, exist_ok=True)
+        # Vault dirs are created by Config on init.
 
         # Initialize Jinja environment (autoescape for XSS safety)
         self.jinja_env = Environment(

@@ -66,12 +66,9 @@ class DiscoveryService(BaseService):
         self._default_sources_dir = Path(
             sources_dir or self.config.discovery_sources_dir
         )
-        self._default_sources_dir.mkdir(parents=True, exist_ok=True)
-
         self._default_results_dir = Path(
             results_dir or self.config.discovery_results_dir
         )
-        self._default_results_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize API sources and plugin registry
         self.api_sources = {

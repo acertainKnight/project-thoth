@@ -48,6 +48,7 @@ from thoth.server.routers import (  # noqa: I001
     config as config_router,
     files,
     health,
+    letta_proxy,
     mcp_servers,
     models,
     operations,
@@ -733,6 +734,7 @@ def create_app() -> FastAPI:
     app.include_router(mcp_servers.router, tags=['mcp-servers'])
     app.include_router(tools.router, prefix='/tools', tags=['tools'])
     app.include_router(files.router, prefix='/api/files', tags=['files'])
+    app.include_router(letta_proxy.router, prefix='/api/letta', tags=['letta-proxy'])
 
     # Add hot-reload health check endpoint
     @app.get('/health/hot-reload')

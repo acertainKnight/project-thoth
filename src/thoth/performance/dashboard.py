@@ -69,7 +69,6 @@ class PerformanceDashboard:
 
         # Output directory
         self.dashboard_dir = config.data_root / 'dashboard'
-        self.dashboard_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info('PerformanceDashboard initialized')
 

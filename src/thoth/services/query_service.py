@@ -35,7 +35,6 @@ class QueryService(TemplateServiceMixin, BaseService):
         """
         super().__init__(config)
         self._default_storage_dir = Path(storage_dir or self.config.queries_dir)
-        self._default_storage_dir.mkdir(parents=True, exist_ok=True)
         self._llm = None  # Lazy initialization
         self._queries: dict[str, ResearchQuery] = {}
 

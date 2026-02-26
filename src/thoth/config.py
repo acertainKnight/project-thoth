@@ -1481,21 +1481,21 @@ class Config:
 
     @staticmethod
     def _get_runtime_roots() -> tuple[Path, Path, Path]:
-        """Return (cache_root, data_root, logs_root) based on environment.
+        """Return (cache_root, data_root, logs_root) as Path objects.
 
-        In Docker (DOCKER_ENV=true), runtime dirs live under /workspace/ so
-        they're backed by the container volume. Otherwise we follow the XDG
-        base directory spec, respecting XDG_CACHE_HOME / XDG_DATA_HOME.
+        These paths exist for backward compatibility with code that references
+        config.data_root etc. Nothing actively writes to them — all persistent
+        state lives in Postgres. Directories are NOT created on startup.
 
         Returns:
             Tuple of (cache_root, data_root, logs_root) as absolute Paths.
         """
-        if os.getenv('DOCKER_ENV', '').lower() in ('1', 'true'):
-            base = Path('/workspace')
-            return base / 'cache', base / 'data', base / 'logs'
-
-        xdg_cache = Path(os.getenv('XDG_CACHE_HOME', Path.home() / '.cache'))
-        xdg_data = Path(os.getenv('XDG_DATA_HOME', Path.home() / '.local' / 'share'))
+        try:
+            home = Path.home()
+        except (RuntimeError, KeyError):
+            home = Path('/tmp')  # nosec B108
+        xdg_cache = Path(os.getenv('XDG_CACHE_HOME', home / '.cache'))
+        xdg_data = Path(os.getenv('XDG_DATA_HOME', home / '.local' / 'share'))
         return xdg_cache / 'thoth', xdg_data / 'thoth', xdg_data / 'thoth' / 'logs'
 
     def _resolve_paths(self) -> None:
@@ -1579,7 +1579,10 @@ class Config:
                 resolve_path(mcp_config.external_servers_file)
             )
 
-        # Create vault-resident directories (settings/config/content)
+        # Create vault-resident directories only (actual content lives here).
+        # Runtime dirs (data_root, cache_root, etc.) are NOT created — all
+        # persistent state is in Postgres. The path attributes are kept for
+        # backward compatibility but point to dirs that may not exist.
         vault_dirs = [
             self.workspace_dir,
             self.pdf_dir,
@@ -1590,23 +1593,9 @@ class Config:
             self.knowledge_base_dir,
             self.analysis_schema_path.parent,
         ]
-        # Create runtime directories (outside vault)
-        runtime_dirs = [
-            self.cache_root,
-            self.data_root,
-            self.logs_root,
-            self.output_dir,
-            self.graph_storage_path.parent,
-            self.queries_dir,
-            self.agent_storage_dir,
-            self.discovery_sources_dir,
-            self.discovery_results_dir,
-            self.discovery_chrome_configs_dir,
-        ]
-        for dir_path in vault_dirs + runtime_dirs:
+        for dir_path in vault_dirs:
             try:
                 dir_path.mkdir(parents=True, exist_ok=True)
-                logger.debug(f'Ensured directory exists: {dir_path}')
             except PermissionError:
                 logger.warning(f'Permission denied creating directory: {dir_path}')
 
@@ -1629,17 +1618,21 @@ class Config:
                 .replace('{message}', '<level>{message}</level>'),
             )
 
-        # Add file handler if enabled
-        if log_config.file.enabled:
+        # File logging only outside Docker (containers use stdout).
+        if log_config.file.enabled and not os.getenv('DOCKER_ENV'):
             log_file = self.logs_dir / Path(log_config.file.path).name
-            logger.add(
-                log_file,
-                level=log_config.file.level,
-                rotation=log_config.file.rotation,
-                retention=log_config.file.retention,
-                compression=log_config.file.compression,
-                format=log_config.format,
-            )
+            try:
+                log_file.parent.mkdir(parents=True, exist_ok=True)
+                logger.add(
+                    log_file,
+                    level=log_config.file.level,
+                    rotation=log_config.file.rotation,
+                    retention=log_config.file.retention,
+                    compression=log_config.file.compression,
+                    format=log_config.format,
+                )
+            except OSError:
+                pass
 
     @classmethod
     def register_reload_callback(

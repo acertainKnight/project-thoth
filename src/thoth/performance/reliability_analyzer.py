@@ -182,7 +182,6 @@ class ReliabilityAnalyzer:
 
         # Analysis storage
         self.reliability_dir = config.data_root / 'reliability'
-        self.reliability_dir.mkdir(parents=True, exist_ok=True)
 
         # Baseline metrics
         self.baseline_reliability: ReliabilityMetrics | None = None

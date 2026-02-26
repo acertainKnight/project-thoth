@@ -98,17 +98,27 @@ async def register(
                 is_admin=user.is_admin,
             )
 
-            agent_ids = (
-                await service_manager.agent_initialization.initialize_agents_for_user(
+            try:
+                agent_ids = await service_manager.agent_initialization.initialize_agents_for_user(
                     user_context
                 )
-            )
+            except Exception:
+                logger.exception(
+                    f'Agent initialization failed for user {user.username} — '
+                    f'user created but will have no agents until re-provisioned'
+                )
+                agent_ids = {}
 
             if agent_ids:
                 await auth_service.update_agent_ids(
                     user.id,
                     orchestrator_agent_id=agent_ids.get('orchestrator'),
                     analyst_agent_id=agent_ids.get('analyst'),
+                )
+            else:
+                logger.warning(
+                    f'No agent IDs returned for user {user.username} — '
+                    f'orchestrator_agent_id and analyst_agent_id will be NULL'
                 )
 
         return UserResponse(

@@ -137,8 +137,7 @@ class PDFTracker:
             self.vault_resolver = None
             logger.warning('No vault_root in config - vault-relative paths disabled')
 
-        # Ensure the parent directory exists
-        self.track_file.parent.mkdir(parents=True, exist_ok=True)
+        # track_file is legacy — tracking is in Postgres now.
 
         # Load existing tracked files
         self.processed_files: dict[str, dict] = {}

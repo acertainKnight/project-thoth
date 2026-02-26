@@ -47,14 +47,12 @@ def initialize_thoth(
     # Load configuration
     config = config or global_config
 
-    # Ensure required directories exist
+    # Path references for the pipeline. Vault dirs (notes, markdown) are
+    # already created by Config; runtime dirs (output) are not created
+    # because nothing writes to them — all state is in Postgres.
     output_dir = Path(config.output_dir)
     notes_dir = Path(config.notes_dir)
     markdown_dir = Path(config.markdown_dir)
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    notes_dir.mkdir(parents=True, exist_ok=True)
-    markdown_dir.mkdir(parents=True, exist_ok=True)
 
     # Initialize service manager
     services = ServiceManager(config=config)

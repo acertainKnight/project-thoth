@@ -501,7 +501,9 @@ async def list_research_questions(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f'Error listing research questions: {e}')
+        logger.exception(
+            f'Error listing research questions for user {user_context.user_id}'
+        )
         raise HTTPException(  # noqa: B904
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f'Internal server error: {str(e)}',  # noqa: RUF010

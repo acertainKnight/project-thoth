@@ -101,24 +101,20 @@ export class ResearchTabComponent {
   private async loadResearchQuestions() {
     try {
       const endpoint = this.plugin.getEndpointUrl();
-      console.log('[ResearchTab] Loading research questions from:', `${endpoint}/api/research/questions`);
-
       const response = await this.plugin.authFetch(`${endpoint}/api/research/questions?limit=50&active_only=true`);
-      console.log('[ResearchTab] Response status:', response.status);
 
       if (response.ok) {
         const data = await response.json();
-        console.log('[ResearchTab] Received data:', data);
         this.questions = data.questions || [];
-        console.log('[ResearchTab] Loaded questions:', this.questions.length);
       } else {
+        // Log for debugging but degrade to empty state — don't surface as error UI.
         const errorText = await response.text();
-        console.error('[ResearchTab] API error:', response.status, errorText);
-        new Notice(`Failed to load research questions: ${response.status}`);
+        console.error('[ResearchTab] Failed to load questions:', response.status, errorText);
+        this.questions = [];
       }
     } catch (error) {
       console.error('[ResearchTab] Failed to load research questions:', error);
-      new Notice('Failed to load research questions');
+      this.questions = [];
     }
   }
 

@@ -76,7 +76,6 @@ class DiscoveryManager:
             else self.config.discovery_sources_dir
         )
         self.sources_config_dir = Path(sources_config_dir or default_sources_dir)
-        self.sources_config_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize plugin registry for modern plugin-based sources
         self.plugin_registry = plugin_registry
@@ -99,7 +98,6 @@ class DiscoveryManager:
             if user_paths
             else self.config.discovery_results_dir
         )
-        self.results_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info(
             f'Discovery manager initialized with sources dir: {self.sources_config_dir}'

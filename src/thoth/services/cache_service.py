@@ -48,16 +48,8 @@ class CacheService(BaseService):
         self.api_cache_dir = self._default_cache_dir / 'api_responses'
         self.embedding_cache_dir = self._default_cache_dir / 'embeddings'
 
-        # Create cache directories
-        for cache_path in [
-            self._default_cache_dir,
-            self.ocr_cache_dir,
-            self.analysis_cache_dir,
-            self.citation_cache_dir,
-            self.api_cache_dir,
-            self.embedding_cache_dir,
-        ]:
-            cache_path.mkdir(parents=True, exist_ok=True)
+        # Cache dirs are not created on init — disk caching is unused in
+        # Docker deployments where state lives in Postgres.
 
         # In-memory cache for frequently accessed items with bounded size
         # Using LRUCache to enforce the size limit automatically

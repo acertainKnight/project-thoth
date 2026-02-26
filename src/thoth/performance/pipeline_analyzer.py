@@ -124,7 +124,6 @@ class PipelineAnalyzer:
 
         # Analysis results storage
         self.analysis_dir = config.data_root / 'analysis' / 'pipelines'
-        self.analysis_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info('PipelineAnalyzer initialized')
 

@@ -11,11 +11,17 @@ export class SettingsTabComponent {
   private containerEl: HTMLElement;
   private plugin: any;
   private settings: ThothSettings;
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(containerEl: HTMLElement, plugin: any) {
     this.containerEl = containerEl;
     this.plugin = plugin;
     this.settings = plugin.settings;
+  }
+
+  private debouncedSave(): void {
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => this.saveSettings(), 500);
   }
 
   render() {
@@ -84,6 +90,7 @@ export class SettingsTabComponent {
       thothEndpointInput.placeholder = 'http://localhost:8000';
       thothEndpointInput.oninput = () => {
         this.settings.remoteEndpointUrl = thothEndpointInput.value;
+        this.debouncedSave();
       };
       thothEndpointRow.createEl('span', {
         text: 'Thoth backend server for research/discovery (e.g., http://localhost:8000)',
@@ -98,6 +105,7 @@ export class SettingsTabComponent {
       lettaEndpointInput.placeholder = 'http://localhost:8284';
       lettaEndpointInput.oninput = () => {
         this.settings.lettaEndpointUrl = lettaEndpointInput.value;
+        this.debouncedSave();
       };
       lettaEndpointRow.createEl('span', {
         text: 'Letta backend server for AI agent chats (e.g., http://localhost:8284 or Tailscale URL)',
@@ -114,6 +122,7 @@ export class SettingsTabComponent {
       tokenInput.style.maxWidth = '500px';
       tokenInput.oninput = () => {
         (this.settings as any).apiToken = tokenInput.value.trim();
+        this.debouncedSave();
       };
       tokenSection.createEl('span', {
         text: 'Token from your Thoth server admin. Required when connecting to a shared server.',

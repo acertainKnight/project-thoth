@@ -155,7 +155,6 @@ class OptimizationEngine:
 
         # Storage
         self.optimization_dir = config.data_root / 'optimizations'
-        self.optimization_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info('OptimizationEngine initialized')
 

@@ -138,27 +138,41 @@ async def list_available_agents(
     try:
         import httpx
 
+        user_agents = await _resolve_user_agent_ids(request, _user_context.user_id)
+        allowed_ids = {
+            agent_id for agent_id in user_agents.values() if agent_id is not None
+        }
+
+        # User has no agents provisioned yet — skip the Letta call entirely.
+        if not allowed_ids:
+            return JSONResponse(
+                {
+                    'agents': [],
+                    'total_count': 0,
+                    'platform': 'letta',
+                    'message': 'No agents provisioned for this user',
+                }
+            )
+
         headers = {}
         if LETTA_API_KEY:
             headers['Authorization'] = f'Bearer {LETTA_API_KEY}'
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f'{LETTA_BASE_URL}/api/agents', headers=headers, timeout=10.0
+                f'{LETTA_BASE_URL}/v1/agents/', headers=headers, timeout=10.0
             )
             response.raise_for_status()
 
+            # Letta v1 returns a plain array, not {"agents": [...]}
             agents_data = response.json()
-            user_agents = await _resolve_user_agent_ids(request, _user_context.user_id)
-            allowed_ids = {
-                agent_id for agent_id in user_agents.values() if agent_id is not None
-            }
+            if isinstance(agents_data, dict):
+                agents_data = agents_data.get('agents', [])
 
-            # Format response
             agents_list = []
-            for agent in agents_data.get('agents', []):
+            for agent in agents_data:
                 agent_id = agent.get('id')
-                if allowed_ids and agent_id not in allowed_ids:
+                if agent_id not in allowed_ids:
                     continue
                 agents_list.append(
                     {

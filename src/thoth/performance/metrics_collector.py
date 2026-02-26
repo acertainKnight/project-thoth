@@ -157,7 +157,6 @@ class MetricsCollector:
 
         # Storage directory
         self.metrics_dir = config.data_root / 'metrics'
-        self.metrics_dir.mkdir(parents=True, exist_ok=True)
 
         # Collection state
         self._collecting = False

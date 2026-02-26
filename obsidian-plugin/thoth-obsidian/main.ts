@@ -184,6 +184,22 @@ export default class ThothPlugin extends Plugin {
     return baseUrl.replace(/\/$/, ''); // Remove trailing slash
   }
 
+  /**
+   * Returns the base URL to use for Letta API calls.
+   *
+   * In multi-user mode (apiToken set), all Letta calls are routed through the
+   * Thoth proxy at /api/letta. This enforces per-user auth and ensures users
+   * can only access their own agents and conversations. In single-user mode
+   * the plugin hits Letta directly as before.
+   */
+  public getLettaProxyUrl(): string {
+    const apiToken: string = (this.settings as any).apiToken ?? '';
+    if (apiToken) {
+      return `${this.getEndpointUrl()}/api/letta`;
+    }
+    return this.getLettaEndpointUrl();
+  }
+
   private getAuthHeaders(): Record<string, string> {
     const apiToken: string = (this.settings as any).apiToken ?? '';
     return APIUtilities.buildAuthHeaders(apiToken);
@@ -841,7 +857,7 @@ export default class ThothPlugin extends Plugin {
         }
 
         // Send to server using Letta chat endpoint (same as full chat but without streaming)
-        const endpoint = this.getLettaEndpointUrl();
+        const endpoint = this.getLettaProxyUrl();
 
         const response = await this.authFetch(`${endpoint}/v1/conversations/${conversationId}/messages`, {
           method: 'POST',
