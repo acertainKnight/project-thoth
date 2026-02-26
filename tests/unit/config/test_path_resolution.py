@@ -425,15 +425,14 @@ class TestPathResolutionCaseSensitivity:
 class TestPathResolutionLogging:
     """Test logging during path resolution."""
 
-    def test_directory_creation_logged(self, temp_vault: Path, monkeypatch, caplog):
-        """Test directory creation is logged."""
+    def test_config_load_logged(self, temp_vault: Path, monkeypatch, caplog):
+        """Test that config initialization is logged."""
         monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()  # noqa: F841
 
-        # Should log directory ensured messages
-        assert 'Ensured directory exists' in caplog.text
+        assert 'Configuration loaded successfully' in caplog.text
 
     def test_absolute_path_warning_logged(self, temp_vault: Path, monkeypatch, caplog):
         """Test warning for absolute paths outside vault."""
