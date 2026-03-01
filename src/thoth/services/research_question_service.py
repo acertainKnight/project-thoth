@@ -327,6 +327,7 @@ class ResearchQuestionService(BaseService):
         articles_matched: int,
         execution_time: float,
         errors: list[str] | None = None,  # noqa: ARG002
+        user_id: str | None = None,
     ) -> bool:
         """
         Mark a discovery run as completed and update statistics.
@@ -337,11 +338,13 @@ class ResearchQuestionService(BaseService):
             articles_matched: Articles that matched relevance criteria
             execution_time: Execution time in seconds
             errors: List of error messages if any
+            user_id: Owner of the question — required in multi-user mode so the
+                repo lookup isn't scoped to the default tenant fallback.
 
         Returns:
             True if update succeeded, False otherwise
         """
-        question = await self.repository.get_by_id(question_id)
+        question = await self.repository.get_by_id(question_id, user_id=user_id)
         if not question:
             self.logger.error(
                 f'Cannot mark completion for non-existent question {question_id}'
@@ -355,15 +358,12 @@ class ResearchQuestionService(BaseService):
             schedule_days_of_week=question.get('schedule_days_of_week'),
         )
 
-        # Update statistics and schedule
+        # Update schedule timestamps only — the repo doesn't track cumulative counts
         success = await self.repository.update_question(
             question_id=question_id,
             last_run_at=datetime.now(),
             next_run_at=next_run_at,
-            articles_found_count=question.get('articles_found_count', 0)
-            + articles_found,
-            articles_matched_count=question.get('articles_matched_count', 0)
-            + articles_matched,
+            user_id=user_id,
         )
 
         if success:

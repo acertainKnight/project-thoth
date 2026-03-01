@@ -417,11 +417,14 @@ class ResearchQuestionScheduler(BaseService):
                 )
 
             else:
-                # Consolidated discovery failed - mark all as failed
+                # Consolidated discovery failed - mark all as failed but still advance
+                # the schedule so the scheduler doesn't hammer the same questions
+                # forever
                 error_msg = result.get('error', 'Unknown error')
                 self.logger.error(f'Consolidated discovery failed: {error_msg}')
 
                 for question in due_questions:
+                    await self._update_question_schedule(question)
                     execution_id = execution_ids.get(question['id'])
                     if execution_id:
                         await self.execution_log.complete_execution(
@@ -442,8 +445,9 @@ class ResearchQuestionScheduler(BaseService):
                 exc_info=True,
             )
 
-            # Mark all executions as failed
+            # Always advance the schedule, even on hard failure
             for question in due_questions:
+                await self._update_question_schedule(question)
                 execution_id = execution_ids.get(question['id'])
                 if execution_id:
                     await self.execution_log.complete_execution(
@@ -601,6 +605,9 @@ class ResearchQuestionScheduler(BaseService):
                 articles_found=0,  # Already tracked in execution log
                 articles_matched=0,  # Already tracked in execution log
                 execution_time=0.0,  # Already tracked in execution log
+                user_id=str(question.get('user_id'))
+                if question.get('user_id')
+                else None,
             )
 
             if success:

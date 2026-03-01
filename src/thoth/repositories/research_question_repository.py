@@ -329,6 +329,7 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
         last_run_at: datetime | None = None,
         next_run_at: datetime | None = None,
         publication_date_range: dict[str, str] | None = None,
+        user_id: str | None = None,
     ) -> bool:
         """
         Update research question fields.
@@ -397,7 +398,7 @@ class ResearchQuestionRepository(BaseRepository[dict[str, Any]]):
             if not data:
                 return True
 
-            return await self.update(question_id, data)
+            return await self.update(question_id, data, user_id=user_id)
 
         except Exception as e:
             logger.error(f'Failed to update research question {question_id}: {e}')
