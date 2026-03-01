@@ -118,6 +118,7 @@ class UpdateSettingsMCPTool(MCPTool):
         'llm.queryBasedRouting.routingModel',
         'rag.qa.model',
         'memory.letta.agentModel',
+        'memory.letta.conversationTitleModel',
     }
 
     @property

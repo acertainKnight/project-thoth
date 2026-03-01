@@ -389,30 +389,86 @@ export class SettingsTabComponent {
 
   private renderLettaModelSection(container: HTMLElement) {
     const section = container.createDiv({ cls: 'thoth-settings-section' });
-    section.createEl('h3', { text: '🤖 Letta Agent Model' });
+    section.createEl('h3', { text: '🤖 Letta Agent Models' });
 
     const description = section.createDiv({ cls: 'thoth-setting-info' });
     description.createEl('p', {
-      text: 'Configure the LLM model used by your Letta research agents. Changes are applied automatically via hot-reload.',
+      text: 'Configure the LLM models used by your Letta research agents. Changes are applied automatically via hot-reload.',
     });
 
     const settingsPath = 'thoth/_thoth/settings.json';
 
-    // Model dropdown (rendered immediately, populated async)
-    const modelRow = section.createDiv({ cls: 'thoth-setting-row' });
-    modelRow.createEl('label', { text: 'Agent LLM Model' });
-    const modelSelect = modelRow.createEl('select', { cls: 'dropdown' });
-    modelSelect.disabled = true;
-    modelSelect.style.width = '100%';
-    modelSelect.style.maxWidth = '500px';
-    modelSelect.createEl('option', { text: 'Loading models from Letta API...', value: '' });
-    modelRow.createEl('span', {
-      text: 'Select from available models. Leave empty to use Letta server default.',
+    type ModelEntry = { handle: string; display_name: string; provider_name: string; context_window: number };
+
+    // Helper: build a grouped select from a list of models
+    const buildGroupedSelect = (
+      selectEl: HTMLSelectElement,
+      models: ModelEntry[],
+      currentValue: string,
+      filterText: string = ''
+    ) => {
+      selectEl.empty();
+      selectEl.createEl('option', { text: 'Server Default (configured in Letta)', value: '' });
+
+      const filtered = models.filter((m) => {
+        if (!filterText) return true;
+        return `${m.handle} ${m.display_name} ${m.provider_name}`.toLowerCase().includes(filterText.toLowerCase());
+      });
+
+      const byProvider: Record<string, ModelEntry[]> = {};
+      filtered.forEach((m) => {
+        if (!byProvider[m.provider_name]) byProvider[m.provider_name] = [];
+        byProvider[m.provider_name].push(m);
+      });
+
+      for (const [provider, providerModels] of Object.entries(byProvider).sort()) {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = provider.toUpperCase();
+        providerModels
+          .sort((a, b) => a.display_name.localeCompare(b.display_name))
+          .forEach((m) => {
+            const option = document.createElement('option');
+            option.value = m.handle;
+            option.text = `${m.display_name} (${m.context_window.toLocaleString()} ctx)`;
+            optgroup.appendChild(option);
+          });
+        selectEl.appendChild(optgroup);
+      }
+
+      selectEl.value = currentValue;
+      return filtered.length;
+    };
+
+    // --- Agent model ---
+    const agentModelRow = section.createDiv({ cls: 'thoth-setting-row' });
+    agentModelRow.createEl('label', { text: 'Agent LLM Model' });
+    const agentSelect = agentModelRow.createEl('select', { cls: 'dropdown' });
+    agentSelect.disabled = true;
+    agentSelect.style.width = '100%';
+    agentSelect.style.maxWidth = '500px';
+    agentSelect.createEl('option', { text: 'Loading models from Letta API...', value: '' });
+    agentModelRow.createEl('span', {
+      text: 'Powers your conversational research agent. Leave empty to use Letta server default.',
       cls: 'thoth-setting-description'
     });
 
-    // Filter input for search
+    // --- Conversation title model ---
+    const titleModelRow = section.createDiv({ cls: 'thoth-setting-row' });
+    titleModelRow.style.marginTop = '12px';
+    titleModelRow.createEl('label', { text: 'Conversation Title Model' });
+    const titleSelect = titleModelRow.createEl('select', { cls: 'dropdown' });
+    titleSelect.disabled = true;
+    titleSelect.style.width = '100%';
+    titleSelect.style.maxWidth = '500px';
+    titleSelect.createEl('option', { text: 'Loading models from Letta API...', value: '' });
+    titleModelRow.createEl('span', {
+      text: 'Generates short titles for conversations automatically. A cheap, fast model works well.',
+      cls: 'thoth-setting-description'
+    });
+
+    // Filter input (shared — filters both dropdowns)
     const filterRow = section.createDiv({ cls: 'thoth-setting-row' });
+    filterRow.style.marginTop = '12px';
     filterRow.createEl('label', { text: 'Filter models' });
     const filterInput = filterRow.createEl('input', {
       type: 'text',
@@ -430,84 +486,41 @@ export class SettingsTabComponent {
     statusEl.setText('Loading...');
     statusEl.style.color = 'var(--text-muted)';
 
-    // Save model button
+    // Save button
     const saveModelBtn = section.createEl('button', {
-      text: 'Apply Model Change',
+      text: 'Apply Model Changes',
       cls: 'thoth-save-model-btn'
     });
     saveModelBtn.style.marginTop = '8px';
     saveModelBtn.disabled = true;
 
-    // Store models data for filtering
-    let allModels: Array<{ handle: string; display_name: string; provider_name: string; context_window: number }> = [];
-    let currentConfigModel = '';
+    let allModels: ModelEntry[] = [];
+    let currentAgentModel = '';
+    let currentTitleModel = '';
 
-    const populateDropdown = (filterText: string = '') => {
-      modelSelect.empty();
+    const refreshDropdowns = (filterText: string = '') => {
+      buildGroupedSelect(agentSelect, allModels, currentAgentModel, filterText);
+      buildGroupedSelect(titleSelect, allModels, currentTitleModel, filterText);
 
-      // Add default option
-      modelSelect.createEl('option', {
-        text: 'Server Default (configured in Letta)',
-        value: ''
-      });
+      const count = filterText
+        ? allModels.filter((m) =>
+            `${m.handle} ${m.display_name} ${m.provider_name}`.toLowerCase().includes(filterText.toLowerCase())
+          ).length
+        : allModels.length;
 
-      // Filter models
-      const filtered = allModels.filter((m) => {
-        if (!filterText) return true;
-        const searchStr = `${m.handle} ${m.display_name} ${m.provider_name}`.toLowerCase();
-        return searchStr.includes(filterText.toLowerCase());
-      });
-
-      // Group by provider
-      const byProvider: Record<string, typeof allModels> = {};
-      filtered.forEach((m) => {
-        if (!byProvider[m.provider_name]) byProvider[m.provider_name] = [];
-        byProvider[m.provider_name].push(m);
-      });
-
-      // Add optgroups
-      for (const [provider, models] of Object.entries(byProvider).sort()) {
-        const optgroup = document.createElement('optgroup');
-        optgroup.label = provider.toUpperCase();
-        models
-          .sort((a, b) => a.display_name.localeCompare(b.display_name))
-          .forEach((m) => {
-            const option = document.createElement('option');
-            option.value = m.handle;
-            option.text = `${m.display_name} (${m.context_window.toLocaleString()} ctx)`;
-            optgroup.appendChild(option);
-          });
-        modelSelect.appendChild(optgroup);
-      }
-
-      // Select current model
-      modelSelect.value = currentConfigModel;
-
-      // Update status
-      if (filtered.length === allModels.length) {
-        if (currentConfigModel) {
-          statusEl.setText(`Current: ${currentConfigModel} | ${allModels.length} models available`);
-          statusEl.style.color = 'var(--text-success)';
-        } else {
-          statusEl.setText(`Using server default | ${allModels.length} models available`);
-          statusEl.style.color = 'var(--text-muted)';
-        }
-      } else {
-        statusEl.setText(`Showing ${filtered.length} of ${allModels.length} models`);
-        statusEl.style.color = 'var(--text-muted)';
-      }
+      statusEl.setText(
+        filterText
+          ? `Showing ${count} of ${allModels.length} models`
+          : `${allModels.length} models available`
+      );
+      statusEl.style.color = 'var(--text-muted)';
     };
 
-    // Filter handler
-    filterInput.oninput = () => {
-      populateDropdown(filterInput.value.trim());
-    };
+    filterInput.oninput = () => refreshDropdowns(filterInput.value.trim());
 
-    // Async: Fetch models from Letta API and load current config
     const adapter = this.plugin.app.vault.adapter;
 
     Promise.all([
-      // Fetch models from Letta
       this.plugin.authFetch(`${this.settings.lettaEndpointUrl}/v1/models/`)
         .then((res) => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -517,55 +530,57 @@ export class SettingsTabComponent {
           console.error('[Settings] Failed to fetch Letta models:', err);
           return [];
         }),
-      // Read current configured model
       adapter.exists(settingsPath)
         .then((exists: boolean) => {
-          if (!exists) return '';
+          if (!exists) return { agentModel: '', titleModel: '' };
           return adapter.read(settingsPath).then((raw: string) => {
-            const backendSettings = JSON.parse(raw);
-            return backendSettings?.memory?.letta?.agentModel || '';
+            const s = JSON.parse(raw);
+            return {
+              agentModel: s?.memory?.letta?.agentModel || '',
+              titleModel: s?.memory?.letta?.conversationTitleModel || 'google/gemini-2.5-flash',
+            };
           });
         })
         .catch((err: Error) => {
           console.warn('[Settings] Could not read backend settings:', err);
-          return '';
+          return { agentModel: '', titleModel: '' };
         })
-    ]).then(([models, configModel]) => {
+    ]).then(([models, { agentModel, titleModel }]) => {
       allModels = models;
-      currentConfigModel = configModel;
+      currentAgentModel = agentModel;
+      currentTitleModel = titleModel;
 
       if (allModels.length === 0) {
-        statusEl.setText('⚠️ Could not fetch models from Letta API — check connection');
+        statusEl.setText('Could not fetch models from Letta API — check connection');
         statusEl.style.color = 'var(--text-warning)';
-        modelSelect.empty();
-        modelSelect.createEl('option', { text: 'Failed to load models', value: '' });
-        modelSelect.disabled = false;
-        filterInput.disabled = true;
+        agentSelect.disabled = false;
+        titleSelect.disabled = false;
         saveModelBtn.disabled = false;
         return;
       }
 
-      populateDropdown();
-      modelSelect.disabled = false;
+      refreshDropdowns();
+      agentSelect.disabled = false;
+      titleSelect.disabled = false;
       filterInput.disabled = false;
       saveModelBtn.disabled = false;
     }).catch((error: Error) => {
       console.error('[Settings] Unexpected error in model loading:', error);
       statusEl.setText(`Error: ${error.message}`);
       statusEl.style.color = 'var(--text-error)';
-      modelSelect.disabled = false;
+      agentSelect.disabled = false;
+      titleSelect.disabled = false;
       saveModelBtn.disabled = false;
     });
 
-    // Save handler
     saveModelBtn.onclick = async () => {
-      const newModel = modelSelect.value.trim();
+      const newAgentModel = agentSelect.value.trim();
+      const newTitleModel = titleSelect.value.trim();
 
       try {
         saveModelBtn.disabled = true;
         saveModelBtn.textContent = 'Saving...';
 
-        // Read the latest settings from vault
         let settings: any = {};
         try {
           if (await adapter.exists(settingsPath)) {
@@ -576,35 +591,28 @@ export class SettingsTabComponent {
           console.warn('[Settings] Could not read settings, starting fresh:', readError);
         }
 
-        // Ensure nested structure exists
         if (!settings.memory) settings.memory = {};
         if (!settings.memory.letta) settings.memory.letta = {};
 
-        // Update the model
-        settings.memory.letta.agentModel = newModel;
+        settings.memory.letta.agentModel = newAgentModel;
+        settings.memory.letta.conversationTitleModel = newTitleModel;
 
-        // Write back to vault (triggers hot-reload on backend)
         await adapter.write(settingsPath, JSON.stringify(settings, null, 2));
 
-        // Update status
-        currentConfigModel = newModel;
-        if (newModel) {
-          statusEl.setText(`Model updated to: ${newModel}`);
-          statusEl.style.color = 'var(--text-success)';
-        } else {
-          statusEl.setText('Cleared — using Letta server default');
-          statusEl.style.color = 'var(--text-muted)';
-        }
+        currentAgentModel = newAgentModel;
+        currentTitleModel = newTitleModel;
+        statusEl.setText('Model settings saved. Hot-reload will apply the changes.');
+        statusEl.style.color = 'var(--text-success)';
 
-        new Notice(`Agent model ${newModel ? `set to ${newModel}` : 'reset to server default'}. Hot-reload will apply the change.`);
+        new Notice('Model settings saved. Hot-reload will apply the changes.');
       } catch (error) {
         console.error('[Settings] Failed to save model:', error);
         statusEl.setText(`Error: ${(error as Error).message}`);
         statusEl.style.color = 'var(--text-error)';
-        new Notice('Failed to save model setting');
+        new Notice('Failed to save model settings');
       } finally {
         saveModelBtn.disabled = false;
-        saveModelBtn.textContent = 'Apply Model Change';
+        saveModelBtn.textContent = 'Apply Model Changes';
       }
     };
   }

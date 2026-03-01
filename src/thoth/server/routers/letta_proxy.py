@@ -17,11 +17,29 @@ from loguru import logger
 
 from thoth.auth.context import UserContext
 from thoth.auth.dependencies import get_user_context
+from thoth.config import config
 
 router = APIRouter()
 
-LETTA_BASE_URL = os.getenv('LETTA_BASE_URL', 'http://letta-server:8283')
 LETTA_API_KEY = os.getenv('LETTA_SERVER_PASS', '')
+
+
+def _get_letta_base_url() -> str:
+    """Resolve the Letta server URL at request time.
+
+    Priority order:
+    1. LETTA_BASE_URL env var — explicit override (CI, custom deployments)
+    2. THOTH_LETTA_URL env var — Docker-compose injection (http://letta-server:8283)
+    3. config.settings.memory.letta.server_url — wizard-configured value
+       (covers cloud users with https://api.letta.com and remote self-hosted)
+    """
+    url = (
+        os.getenv('LETTA_BASE_URL')
+        or os.getenv('THOTH_LETTA_URL')
+        or config.settings.memory.letta.server_url
+    )
+    return (url or 'http://letta-server:8283').rstrip('/')
+
 
 # Paths that contain an agent_id segment we need to validate.
 # Matches /v1/agents/{agent_id} and /v1/agents/{agent_id}/anything
@@ -100,7 +118,7 @@ async def letta_proxy(
                 detail='agent in path does not belong to the authenticated user',
             )
 
-    target_url = f'{LETTA_BASE_URL}/v1/{path}'
+    target_url = f'{_get_letta_base_url()}/v1/{path}'
     query_string = request.url.query
     if query_string:
         target_url = f'{target_url}?{query_string}'

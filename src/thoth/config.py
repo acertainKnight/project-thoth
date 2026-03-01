@@ -623,6 +623,16 @@ class LettaMemoryConfig(BaseModel):
         ),
     )
 
+    # Model used for generating short conversation titles (cheap/fast model recommended)
+    conversation_title_model: str = Field(
+        default='google/gemini-2.5-flash',
+        alias='conversationTitleModel',
+        description=(
+            'LLM model for generating conversation titles. '
+            'A cheap, fast model is ideal — titles are just 3-6 words.'
+        ),
+    )
+
     # Agent configuration
     agent_name: str = Field(default='thoth_research_agent', alias='agentName')
     core_memory_limit: int = Field(default=10000, alias='coreMemoryLimit')

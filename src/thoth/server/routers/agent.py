@@ -7,7 +7,10 @@ Letta agents. Direct Letta REST API access is recommended for advanced usage.
 All agent management is now handled by the Letta platform running on port 8283.
 """
 
+import json
 import os
+import re
+from pathlib import Path
 from typing import Any  # noqa: F401
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -22,9 +25,24 @@ from thoth.mcp.auth import get_current_user_paths
 
 router = APIRouter()
 
-# Letta configuration
-LETTA_BASE_URL = os.getenv('LETTA_BASE_URL', 'http://localhost:8283')
 LETTA_API_KEY = os.getenv('LETTA_SERVER_PASS', '')
+
+
+def _get_letta_base_url() -> str:
+    """Resolve the Letta server URL at request time.
+
+    Priority order:
+    1. LETTA_BASE_URL env var — explicit override (CI, custom deployments)
+    2. THOTH_LETTA_URL env var — Docker-compose injection (http://letta-server:8283)
+    3. config.settings.memory.letta.server_url — wizard-configured value
+       (covers cloud users with https://api.letta.com and remote self-hosted)
+    """
+    url = (
+        os.getenv('LETTA_BASE_URL')
+        or os.getenv('THOTH_LETTA_URL')
+        or config.settings.memory.letta.server_url
+    )
+    return (url or 'http://letta-server:8283').rstrip('/')
 
 
 class ChatMessage(BaseModel):
@@ -81,14 +99,14 @@ def agent_status():
         import httpx
 
         # Check if Letta is accessible
-        response = httpx.get(f'{LETTA_BASE_URL}/health', timeout=5.0)
+        response = httpx.get(f'{_get_letta_base_url()}/health', timeout=5.0)
 
         if response.status_code == 200:
             return JSONResponse(
                 {
                     'status': 'running',
                     'platform': 'letta',
-                    'base_url': LETTA_BASE_URL,
+                    'base_url': _get_letta_base_url(),
                     'message': 'Letta platform is running and accessible',
                 }
             )
@@ -97,7 +115,7 @@ def agent_status():
                 {
                     'status': 'degraded',
                     'platform': 'letta',
-                    'base_url': LETTA_BASE_URL,
+                    'base_url': _get_letta_base_url(),
                     'message': f'Letta returned status {response.status_code}',
                 },
                 status_code=503,
@@ -117,7 +135,7 @@ def agent_status():
             {
                 'status': 'unavailable',
                 'platform': 'letta',
-                'base_url': LETTA_BASE_URL,
+                'base_url': _get_letta_base_url(),
                 'error': str(e),
                 'message': 'Cannot connect to Letta platform',
             },
@@ -160,7 +178,7 @@ async def list_available_agents(
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f'{LETTA_BASE_URL}/v1/agents/', headers=headers, timeout=10.0
+                f'{_get_letta_base_url()}/v1/agents/', headers=headers, timeout=10.0
             )
             response.raise_for_status()
 
@@ -257,7 +275,7 @@ async def agent_chat(
         async with httpx.AsyncClient() as client:
             # Send message to Letta
             response = await client.post(
-                f'{LETTA_BASE_URL}/api/agents/{agent_id}/messages',
+                f'{_get_letta_base_url()}/api/agents/{agent_id}/messages',
                 headers=headers,
                 json=payload,
                 timeout=60.0,
@@ -327,7 +345,7 @@ async def create_agent(
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f'{LETTA_BASE_URL}/api/agents',
+                f'{_get_letta_base_url()}/api/agents',
                 headers=headers,
                 json=agent_config,
                 timeout=30.0,
@@ -372,7 +390,7 @@ def get_agent_config(
         notes_dir = user_paths.notes_dir if user_paths else config.notes_dir
         sanitized_config = {
             'letta': {
-                'base_url': LETTA_BASE_URL,
+                'base_url': _get_letta_base_url(),
                 'has_api_key': bool(LETTA_API_KEY),
                 'platform': 'letta',
             },
@@ -382,7 +400,7 @@ def get_agent_config(
                 'notes_dir': str(notes_dir),
             },
             'message': 'For advanced agent configuration, use Letta REST API directly',
-            'api_docs': f'{LETTA_BASE_URL}/docs',
+            'api_docs': f'{_get_letta_base_url()}/docs',
         }
 
         return JSONResponse(sanitized_config)
@@ -392,6 +410,248 @@ def get_agent_config(
         raise HTTPException(
             status_code=500, detail=f'Failed to get config: {e!s}'
         ) from e
+
+
+class TitleRequest(BaseModel):
+    """Request body for conversation title generation."""
+
+    message: str
+
+
+class BackfillResult(BaseModel):
+    """Summary returned by the backfill-titles endpoint."""
+
+    updated: int
+    skipped: int
+    errors: int
+
+
+# Patterns that indicate a conversation has never been given a real title.
+_DEFAULT_TITLE_RE = re.compile(
+    r'^(New Chat - .+|Chat [0-9a-f]{8,}|Default Conversation)$',
+    re.IGNORECASE,
+)
+
+
+def _is_default_title(summary: str | None) -> bool:
+    if not summary:
+        return True
+    return bool(_DEFAULT_TITLE_RE.match(summary.strip()))
+
+
+async def _generate_title(message: str) -> str:
+    """Call the configured LLM to produce a 3-6 word conversation title."""
+    import asyncio
+
+    from thoth.services.llm_service import LLMService
+
+    title_model = config.settings.memory.letta.conversation_title_model or None
+    llm = LLMService(config)
+
+    prompt = (
+        'Generate a short title (3 to 6 words) for a conversation that starts '
+        f'with this message. Return only the title — no quotes, no punctuation at the end:\n\n{message[:500]}'
+    )
+
+    client = await asyncio.to_thread(
+        llm.get_client,
+        model=title_model,
+        temperature=0.3,
+        max_tokens=30,
+    )
+    response = await asyncio.to_thread(llm.invoke_with_retry, client, prompt)
+    # LangChain returns an AIMessage; extract content string.
+    raw = response.content if hasattr(response, 'content') else str(response)
+    return raw.strip().strip('"').strip("'")
+
+
+@router.post('/conversations/generate-title')
+async def generate_conversation_title(
+    request: TitleRequest,
+    _user_context: UserContext = Depends(get_user_context),  # noqa: B008
+):
+    """
+    Generate a short LLM-produced title from the first message of a conversation.
+
+    Args:
+        request: Contains the user's opening message.
+
+    Returns:
+        JSON with a `title` string (3-6 words).
+    """
+    try:
+        title = await _generate_title(request.message)
+        return JSONResponse({'title': title})
+    except Exception as e:
+        logger.error(f'Title generation failed: {e}')
+        raise HTTPException(
+            status_code=500, detail=f'Title generation failed: {e!s}'
+        ) from e
+
+
+@router.post('/conversations/backfill-titles')
+async def backfill_conversation_titles(
+    http_request: Request,
+    user_context: UserContext = Depends(get_user_context),  # noqa: B008
+):
+    """
+    Generate titles for all conversations that still have a default or empty name.
+
+    Fetches the user's conversations from Letta, skips any that already have a
+    meaningful title, then generates and PATCHes titles for the rest.
+
+    Returns:
+        JSON summary with updated/skipped/errors counts.
+    """
+    import httpx
+
+    updated = skipped = errors = 0
+
+    try:
+        user_agents = await _resolve_user_agent_ids(http_request, user_context.user_id)
+        agent_id = user_agents.get('orchestrator') or user_agents.get('analyst')
+        if not agent_id:
+            raise HTTPException(
+                status_code=400, detail='No Letta agent configured for this user'
+            )
+
+        letta_headers: dict[str, str] = {'Content-Type': 'application/json'}
+        if LETTA_API_KEY:
+            letta_headers['Authorization'] = f'Bearer {LETTA_API_KEY}'
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            # Fetch all conversations for this agent
+            resp = await client.get(
+                f'{_get_letta_base_url()}/v1/conversations/',
+                params={'agent_id': agent_id, 'limit': 200},
+                headers=letta_headers,
+            )
+            resp.raise_for_status()
+            conversations = resp.json()
+
+            for conv in conversations:
+                conv_id = conv.get('id')
+                summary = conv.get('summary') or ''
+
+                if not _is_default_title(summary):
+                    skipped += 1
+                    continue
+
+                # Fetch the first few messages to find the opening user message
+                try:
+                    msgs_resp = await client.get(
+                        f'{_get_letta_base_url()}/v1/conversations/{conv_id}/messages',
+                        params={'limit': 10, 'order': 'asc'},
+                        headers=letta_headers,
+                    )
+                    msgs_resp.raise_for_status()
+                    messages = msgs_resp.json()
+                except Exception as e:
+                    logger.warning(
+                        f'Could not fetch messages for conversation {conv_id}: {e}'
+                    )
+                    errors += 1
+                    continue
+
+                # Find first user text message
+                first_user_text = ''
+                for msg in messages:
+                    role = msg.get('role') or msg.get('message_type') or ''
+                    content = msg.get('content') or msg.get('text') or ''
+                    if isinstance(content, list):
+                        # Multimodal: extract text parts
+                        content = ' '.join(
+                            part.get('text', '')
+                            for part in content
+                            if isinstance(part, dict)
+                        )
+                    if 'user' in role.lower() and content.strip():
+                        first_user_text = content.strip()
+                        break
+
+                if not first_user_text:
+                    skipped += 1
+                    continue
+
+                try:
+                    title = await _generate_title(first_user_text)
+                    patch_resp = await client.patch(
+                        f'{_get_letta_base_url()}/v1/conversations/{conv_id}',
+                        headers=letta_headers,
+                        json={'summary': title},
+                    )
+                    patch_resp.raise_for_status()
+                    updated += 1
+                except Exception as e:
+                    logger.warning(
+                        f'Failed to generate/set title for conversation {conv_id}: {e}'
+                    )
+                    errors += 1
+
+        return JSONResponse({'updated': updated, 'skipped': skipped, 'errors': errors})
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f'Backfill titles failed: {e}')
+        raise HTTPException(status_code=500, detail=f'Backfill failed: {e!s}') from e
+
+
+def _archive_file_path() -> Path:
+    """Path to the per-vault archived conversations list."""
+    return config.vault_root / 'thoth' / '_thoth' / 'archived_conversations.json'
+
+
+def _read_archived_ids() -> list[str]:
+    """Load archived conversation IDs from disk."""
+    path = _archive_file_path()
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        return data.get('archived', [])
+    except Exception:
+        return []
+
+
+def _write_archived_ids(ids: list[str]) -> None:
+    """Persist archived conversation IDs to disk."""
+    path = _archive_file_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({'archived': ids}, indent=2), encoding='utf-8')
+
+
+@router.get('/conversations/archived')
+def list_archived_conversations(
+    _user_context: UserContext = Depends(get_user_context),  # noqa: B008
+):
+    """Return the list of archived conversation IDs for this vault."""
+    return JSONResponse({'archived': _read_archived_ids()})
+
+
+@router.post('/conversations/{conv_id}/archive')
+def archive_conversation(
+    conv_id: str,
+    _user_context: UserContext = Depends(get_user_context),  # noqa: B008
+):
+    """Mark a conversation as archived (hidden from the main list)."""
+    ids = _read_archived_ids()
+    if conv_id not in ids:
+        ids.append(conv_id)
+        _write_archived_ids(ids)
+    return JSONResponse({'archived': ids})
+
+
+@router.delete('/conversations/{conv_id}/archive')
+def unarchive_conversation(
+    conv_id: str,
+    _user_context: UserContext = Depends(get_user_context),  # noqa: B008
+):
+    """Restore a conversation from the archive."""
+    ids = _read_archived_ids()
+    ids = [i for i in ids if i != conv_id]
+    _write_archived_ids(ids)
+    return JSONResponse({'archived': ids})
 
 
 @router.get('/info')
@@ -406,8 +666,8 @@ def agent_info(
     return JSONResponse(
         {
             'platform': 'letta',
-            'base_url': LETTA_BASE_URL,
-            'api_docs': f'{LETTA_BASE_URL}/docs',
+            'base_url': _get_letta_base_url(),
+            'api_docs': f'{_get_letta_base_url()}/docs',
             'description': 'All agent management is handled by Letta platform',
             'features': [
                 'Multi-agent orchestration',
@@ -419,10 +679,10 @@ def agent_info(
                 'Recall memory (entity tracking)',
             ],
             'endpoints': {
-                'health': f'{LETTA_BASE_URL}/health',
-                'agents': f'{LETTA_BASE_URL}/api/agents',
-                'messages': f'{LETTA_BASE_URL}/api/agents/{{agent_name}}/messages',
-                'docs': f'{LETTA_BASE_URL}/docs',
+                'health': f'{_get_letta_base_url()}/health',
+                'agents': f'{_get_letta_base_url()}/api/agents',
+                'messages': f'{_get_letta_base_url()}/api/agents/{{agent_name}}/messages',
+                'docs': f'{_get_letta_base_url()}/docs',
             },
             'recommendations': [
                 'Use Letta REST API directly for advanced features',

@@ -67,6 +67,9 @@ export class MultiChatModal extends Modal {
   tabContainer: HTMLElement;
   contentContainer: HTMLElement;
 
+  // Archived conversation IDs (hidden from main list, restorable)
+  private archivedIds: Set<string> = new Set();
+
   // Pagination tracking
   private messageCache: Map<string, any[]> = new Map();
   private hasMoreMessages: Map<string, boolean> = new Map();
@@ -1159,6 +1162,36 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       this.switchTab('chat'); // Switch to chat after creating
     };
 
+    const backfillBtn = header.createEl('button', {
+      text: 'Generate Titles',
+      cls: 'thoth-backfill-titles-btn',
+      attr: { title: 'Generate names for all untitled conversations using AI' }
+    });
+
+    backfillBtn.onclick = async () => {
+      backfillBtn.disabled = true;
+      backfillBtn.textContent = 'Generating...';
+      try {
+        const thothUrl = this.plugin.settings.remoteEndpointUrl.replace(/\/$/, '');
+        const res = await this.plugin.authFetch(`${thothUrl}/agents/conversations/backfill-titles`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        if (res.ok) {
+          const { updated, skipped, errors } = await res.json();
+          new Notice(`Titles generated: ${updated} updated, ${skipped} skipped${errors ? `, ${errors} errors` : ''}`);
+          await this.loadAndDisplayConversations(conversationsListContainer);
+        } else {
+          new Notice('Failed to generate titles — check server logs');
+        }
+      } catch (err) {
+        new Notice(`Title generation failed: ${(err as Error).message}`);
+      } finally {
+        backfillBtn.disabled = false;
+        backfillBtn.textContent = 'Generate Titles';
+      }
+    };
+
     // Search box
     const searchInput = conversationsArea.createEl('input', {
       type: 'text',
@@ -1167,8 +1200,15 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     });
 
     searchInput.oninput = () => {
-      this.filterConversations(searchInput.value);
+      this.handleConversationSearch(searchInput.value);
     };
+
+    // Info note
+    const infoNote = conversationsArea.createEl('div', { cls: 'thoth-conversations-info' });
+    infoNote.createEl('span', {
+      text: 'By default, Thoth uses one long-running conversation. You can create separate ones for different workflows — all conversations share the same agent memory, only the messages differ.',
+      cls: 'thoth-conversations-info-text'
+    });
 
     // Conversations list
     const conversationsListContainer = conversationsArea.createEl('div', { cls: 'conversations-list-container' });
@@ -1422,6 +1462,8 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         padding: 8px 12px 0 12px;
         gap: 4px;
         flex-shrink: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
         user-select: none;
       }
 
@@ -1457,10 +1499,20 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         overflow: hidden;
       }
 
-      .tab-content-container > .research-area {
+      /* Tabs that manage their own internal scroll layout */
+      .tab-content-container > .conversations-area {
         flex: 1;
-        overflow-y: auto;
         min-height: 0;
+        overflow: hidden;
+      }
+
+      /* Tabs where the whole area scrolls as one block */
+      .tab-content-container > .research-area,
+      .tab-content-container > .settings-area,
+      .tab-content-container > .mcp-servers-area {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
       }
 
       .chat-top-bar {
@@ -2030,37 +2082,44 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
   async loadChatSessions() {
     try {
       const endpoint = this.plugin.getLettaProxyUrl();
-      // Get conversations for the default agent
-      // Note: Use trailing slash to avoid nginx redirect that duplicates query params
+      const thothUrl = this.plugin.settings.remoteEndpointUrl.replace(/\/$/, '');
+
+      // Fetch conversations and archived IDs in parallel
       const agentId = await this.getOrCreateDefaultAgent();
-      const response = await this.fetchWithTimeout(`${endpoint}/v1/conversations/?agent_id=${agentId}&limit=50`);
+      const [convResponse, archivedResponse] = await Promise.all([
+        this.fetchWithTimeout(`${endpoint}/v1/conversations/?agent_id=${agentId}&limit=50`),
+        this.plugin.authFetch(`${thothUrl}/agents/conversations/archived`).catch(() => null),
+      ]);
 
-      if (response.ok) {
-        const conversations = await response.json();
+      // Update archived set
+      if (archivedResponse?.ok) {
+        const { archived } = await archivedResponse.json();
+        this.archivedIds = new Set(archived);
+      }
 
-        // Get default conversation ID to mark it in metadata
+      if (convResponse.ok) {
+        const conversations = await convResponse.json();
         const defaultConvId = await this.getOrCreateDefaultConversation();
 
-        // Map Letta conversations to session format with all required ChatSession properties
-        this.chatSessions = conversations.map((conv: any): ChatSession => ({
-          id: conv.id,
-          title: conv.summary || `Chat ${conv.id.slice(0, 8)}`,
-          created_at: conv.created_at,
-          updated_at: conv.updated_at || conv.created_at,
-          is_active: conv.id === this.activeSessionId,
-          message_count: conv.message_count || 0,
-          last_message_preview: conv.last_message || '',
-          metadata: {
-            agent_id: conv.agent_id,
-            is_default: conv.id === defaultConvId
-          }
-        }));
+        this.chatSessions = conversations
+          .filter((conv: any) => !this.archivedIds.has(conv.id))
+          .map((conv: any): ChatSession => ({
+            id: conv.id,
+            title: conv.summary || `Chat ${conv.id.slice(0, 8)}`,
+            created_at: conv.created_at,
+            updated_at: conv.updated_at || conv.created_at,
+            is_active: conv.id === this.activeSessionId,
+            message_count: conv.message_count || 0,
+            last_message_preview: conv.last_message || '',
+            metadata: {
+              agent_id: conv.agent_id,
+              is_default: conv.id === defaultConvId
+            }
+          }));
 
-        // Sort to ensure default conversation is first in the list
         this.chatSessions.sort((a, b) => {
           if (a.metadata?.is_default) return -1;
           if (b.metadata?.is_default) return 1;
-          // Sort others by updated_at (most recent first)
           return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
         });
       } else {
@@ -2148,9 +2207,6 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     const endpoint = this.plugin.getLettaProxyUrl();
     const agentId = await this.getOrCreateDefaultAgent();
 
-    console.log('[MultiChatModal] Getting or creating default conversation...');
-
-    // Find or create a default conversation via list endpoint
     try {
       const listResponse = await this.fetchWithTimeout(
         `${endpoint}/v1/conversations/?agent_id=${agentId}&limit=50`
@@ -2161,31 +2217,30 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       }
 
       const conversations = await listResponse.json();
-      console.log('[MultiChatModal] Found conversations:', conversations.length);
+      const ids = new Set(conversations.map((c: any) => c.id));
 
-      // Look for existing default (by title or oldest)
-      let defaultConv = conversations.find((c: any) =>
+      // 1. User-designated default (stored in settings)
+      const pinned = (this.plugin.settings as any).defaultConversationId;
+      if (pinned && ids.has(pinned)) {
+        return pinned;
+      }
+
+      // 2. Legacy: conversation whose title includes "default"
+      const byTitle = conversations.find((c: any) =>
         c.summary?.toLowerCase().includes('default') ||
         c.summary === 'Main Conversation'
       );
+      if (byTitle) return byTitle.id;
 
-      if (defaultConv) {
-        console.log('[MultiChatModal] Found existing default conversation by title:', defaultConv.id);
-        return defaultConv.id;
-      }
-
+      // 3. Oldest conversation
       if (conversations.length > 0) {
-        // Use oldest conversation as default
         const sorted = [...conversations].sort((a: any, b: any) =>
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         );
-        defaultConv = sorted[0];
-        console.log('[MultiChatModal] Using oldest conversation as default:', defaultConv.id);
-        return defaultConv.id;
+        return sorted[0].id;
       }
 
-      // No conversations exist, create new default conversation
-      console.log('[MultiChatModal] No conversations exist, creating default...');
+      // 4. Nothing exists — create one
       const createResponse = await this.fetchWithTimeout(
         `${endpoint}/v1/conversations/?agent_id=${agentId}`,
         {
@@ -2194,19 +2249,25 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           body: JSON.stringify({ summary: 'Default Conversation' })
         }
       );
-
-      if (!createResponse.ok) {
-        throw new Error('Failed to create default conversation');
-      }
-
-      defaultConv = await createResponse.json();
-      console.log('[MultiChatModal] Created new default conversation:', defaultConv.id);
-      return defaultConv.id;
+      if (!createResponse.ok) throw new Error('Failed to create default conversation');
+      const created = await createResponse.json();
+      return created.id;
 
     } catch (error) {
       console.error('[MultiChatModal] Error in getOrCreateDefaultConversation:', error);
       throw error;
     }
+  }
+
+  async setDefaultConversation(session: ChatSession) {
+    (this.plugin.settings as any).defaultConversationId = session.id;
+    await this.plugin.saveSettings();
+
+    // Rebuild the session list so the star moves to the right card
+    await this.loadChatSessions();
+    await this.renderTabContent();
+    if (this.currentTab === 'chat') this.renderSessionList();
+    new Notice(`"${session.title}" set as default conversation`);
   }
 
   renderSessionList() {
@@ -2293,8 +2354,6 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         }
 
         const metaEl = sessionEl.createEl('div', { cls: 'session-meta' });
-        metaEl.createEl('span', { text: `${session.message_count} msgs` });
-
         const date = new Date(session.updated_at);
         metaEl.createEl('span', { text: date.toLocaleDateString() });
       });
@@ -3283,6 +3342,10 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           // Update session list to reflect new message
           await this.loadChatSessions();
           this.renderSessionList();
+
+          // Auto-generate a title for this conversation if it still has a default name.
+          // Fires non-blocking so it doesn't delay the UI.
+          this.maybeGenerateConversationTitle(sessionId, message);
         } else {
           // Add better error logging with response body
           const errorBody = await response.text();
@@ -3829,6 +3892,51 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     emptyEl.createEl('div', { text: '💬' });
     emptyEl.createEl('h3', { text: 'No chat selected' });
     emptyEl.createEl('p', { text: 'Select a chat from the dropdown or create a new one' });
+  }
+
+  private isDefaultTitle(title: string | undefined): boolean {
+    if (!title) return true;
+    return (
+      /^New Chat - .+$/i.test(title) ||
+      /^Chat [0-9a-f]{8,}$/i.test(title) ||
+      title.toLowerCase() === 'default conversation'
+    );
+  }
+
+  maybeGenerateConversationTitle(sessionId: string, firstMessage: string): void {
+    const session = this.chatSessions.find(s => s.id === sessionId);
+    if (!session || !this.isDefaultTitle(session.title)) return;
+
+    const thothUrl = this.plugin.settings.remoteEndpointUrl.replace(/\/$/, '');
+
+    this.plugin.authFetch(`${thothUrl}/agents/conversations/generate-title`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: firstMessage })
+    })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const { title } = await res.json();
+        if (!title) return;
+
+        const endpoint = this.plugin.getLettaProxyUrl();
+        const patchRes = await this.plugin.authFetch(`${endpoint}/v1/conversations/${sessionId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ summary: title })
+        });
+
+        if (patchRes.ok && session) {
+          session.title = title;
+          const inList = this.chatSessions.find(s => s.id === sessionId);
+          if (inList) inList.title = title;
+          this.renderSessionList();
+        }
+      })
+      .catch((err) => {
+        // Title generation is best-effort — don't surface errors to the user
+        console.warn('[MultiChatModal] Auto-title generation failed:', err);
+      });
   }
 
   async renameSession(sessionId: string) {
@@ -4571,6 +4679,16 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         this.createConversationCard(container, session);
       });
 
+      // Archived conversations link — only shown if there are any
+      if (this.archivedIds.size > 0) {
+        const archivedLink = container.createEl('div', { cls: 'thoth-archived-link' });
+        archivedLink.createEl('span', {
+          text: `${this.archivedIds.size} archived`,
+          cls: 'thoth-archived-link-text'
+        });
+        archivedLink.onclick = () => this.showArchivedPanel();
+      }
+
     } catch (error) {
       container.empty();
       container.createEl('div', {
@@ -4581,7 +4699,10 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
   }
 
   createConversationCard(container: HTMLElement, session: ChatSession) {
-    const card = container.createEl('div', { cls: 'thoth-conversation-card' });
+    const card = container.createEl('div', {
+      cls: 'thoth-conversation-card',
+      attr: { 'data-session-id': session.id }
+    });
 
     // Prevent text selection on the card
     card.style.userSelect = 'none';
@@ -4611,13 +4732,9 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       });
     }
 
-    // Metadata (time and message count)
+    // Metadata (time)
     const metaEl = card.createEl('div', { cls: 'thoth-card-meta' });
-
-    const timeAgo = this.getTimeAgo(session.created_at);
-    const messageCount = session.message_count || 0;
-
-    metaEl.setText(`${timeAgo} • ${messageCount} message${messageCount !== 1 ? 's' : ''}`);
+    metaEl.setText(this.getTimeAgo(session.updated_at || session.created_at));
 
     // Click to switch
     card.onclick = async (e) => {
@@ -4643,17 +4760,31 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       await this.renameConversation(session);
     };
 
-    // Delete button removed - Letta API 0.16.3 doesn't support deleting conversations
-    // const deleteBtn = actionsEl.createEl('button', {
-    //   text: '🗑️',
-    //   cls: 'thoth-card-action delete',
-    //   attr: { 'aria-label': 'Delete' }
-    // });
-    //
-    // deleteBtn.onclick = async (e) => {
-    //   e.stopPropagation();
-    //   await this.deleteConversation(session);
-    // };
+    // Make-default button — only shown on non-default conversations
+    if (!session.metadata?.is_default) {
+      const pinBtn = actionsEl.createEl('button', {
+        text: '⭐',
+        cls: 'thoth-card-action thoth-pin-btn',
+        attr: { 'aria-label': 'Set as default conversation', 'title': 'Set as default' }
+      });
+      pinBtn.onclick = async (e) => {
+        e.stopPropagation();
+        await this.setDefaultConversation(session);
+      };
+    }
+
+    // Default conversation cannot be archived
+    if (!session.metadata?.is_default) {
+      const archiveBtn = actionsEl.createEl('button', {
+        text: '×',
+        cls: 'thoth-card-action thoth-archive-btn',
+        attr: { 'aria-label': 'Archive conversation', 'title': 'Archive (hide from list)' }
+      });
+      archiveBtn.onclick = async (e) => {
+        e.stopPropagation();
+        await this.archiveConversation(session);
+      };
+    }
   }
 
   getTimeAgo(dateString: string): string {
@@ -4769,20 +4900,217 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     }
   }
 
-  filterConversations(query: string) {
-    const cards = this.contentContainer.querySelectorAll('.thoth-conversation-card');
-    const lowerQuery = query.toLowerCase();
+  async archiveConversation(session: ChatSession) {
+    const thothUrl = this.plugin.settings.remoteEndpointUrl.replace(/\/$/, '');
+    try {
+      const res = await this.plugin.authFetch(
+        `${thothUrl}/agents/conversations/${session.id}/archive`,
+        { method: 'POST' }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
+      this.archivedIds.add(session.id);
+      // If this was the active session, fall back to default
+      if (this.activeSessionId === session.id) {
+        this.activeSessionId = null;
+        const defaultId = await this.getOrCreateDefaultConversation().catch(() => null);
+        if (defaultId) await this.switchToSession(defaultId);
+      }
+      this.chatSessions = this.chatSessions.filter(s => s.id !== session.id);
+      await this.renderTabContent();
+      if (this.currentTab === 'chat') this.renderSessionList();
+      new Notice(`"${session.title}" archived`);
+    } catch (err) {
+      new Notice(`Failed to archive: ${(err as Error).message}`);
+    }
+  }
+
+  async showArchivedPanel() {
+    const thothUrl = this.plugin.settings.remoteEndpointUrl.replace(/\/$/, '');
+    const lettaProxy = this.plugin.getLettaProxyUrl();
+
+    // Fetch the full conversation list so we can show titles
+    let allConversations: any[] = [];
+    try {
+      const agentId = await this.getOrCreateDefaultAgent();
+      const res = await this.fetchWithTimeout(`${lettaProxy}/v1/conversations/?agent_id=${agentId}&limit=200`);
+      if (res.ok) allConversations = await res.json();
+    } catch { /* show IDs only if fetch fails */ }
+
+    const archived = allConversations.filter(c => this.archivedIds.has(c.id));
+
+    // Build a modal overlay inside the conversations tab
+    const overlay = this.contentContainer.createEl('div', { cls: 'thoth-archived-overlay' });
+
+    const panel = overlay.createEl('div', { cls: 'thoth-archived-panel' });
+
+    const panelHeader = panel.createEl('div', { cls: 'thoth-archived-panel-header' });
+    panelHeader.createEl('span', { text: 'Archived Conversations', cls: 'thoth-archived-panel-title' });
+    const closeBtn = panelHeader.createEl('button', { text: '×', cls: 'thoth-archived-panel-close' });
+    closeBtn.onclick = () => overlay.remove();
+
+    const list = panel.createEl('div', { cls: 'thoth-archived-panel-list' });
+
+    if (archived.length === 0) {
+      list.createEl('p', { text: 'No archived conversations.', cls: 'thoth-archived-empty' });
+    } else {
+      archived.forEach(conv => {
+        const row = list.createEl('div', { cls: 'thoth-archived-row' });
+        row.createEl('span', {
+          text: conv.summary || `Chat ${conv.id.slice(0, 8)}`,
+          cls: 'thoth-archived-row-title'
+        });
+        const restoreBtn = row.createEl('button', { text: 'Restore', cls: 'thoth-archived-restore-btn' });
+        restoreBtn.onclick = async () => {
+          try {
+            const res = await this.plugin.authFetch(
+              `${thothUrl}/agents/conversations/${conv.id}/archive`,
+              { method: 'DELETE' }
+            );
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            this.archivedIds.delete(conv.id);
+            row.remove();
+            if (this.archivedIds.size === 0) {
+              list.createEl('p', { text: 'No archived conversations.', cls: 'thoth-archived-empty' });
+            }
+            await this.loadChatSessions();
+            await this.renderTabContent();
+            if (this.currentTab === 'chat') this.renderSessionList();
+            new Notice(`"${conv.summary || 'Conversation'}" restored`);
+          } catch (err) {
+            new Notice(`Failed to restore: ${(err as Error).message}`);
+          }
+        };
+      });
+    }
+
+    // Close on backdrop click
+    overlay.onclick = (e) => {
+      if (e.target === overlay) overlay.remove();
+    };
+  }
+
+  filterConversations(query: string) {
+    const cards = this.contentContainer.querySelectorAll<HTMLElement>('.thoth-conversation-card');
+    const lowerQuery = query.toLowerCase().trim();
+
+    if (!lowerQuery) {
+      // Restore all cards and clear any snippets
+      cards.forEach(card => {
+        card.style.display = '';
+        card.querySelector('.thoth-card-snippet')?.remove();
+      });
+      return;
+    }
+
+    // Tier 1: instant title filter + highlight
     cards.forEach(card => {
       const titleEl = card.querySelector('.thoth-card-title');
       const title = titleEl?.textContent?.toLowerCase() || '';
-
-      if (title.includes(lowerQuery)) {
-        (card as HTMLElement).style.display = '';
-      } else {
-        (card as HTMLElement).style.display = 'none';
-      }
+      card.style.display = title.includes(lowerQuery) ? '' : 'none';
+      // Remove any stale content snippet from a previous search
+      card.querySelector('.thoth-card-snippet')?.remove();
     });
+  }
+
+  private _searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  handleConversationSearch(query: string) {
+    // Instant tier-1 title filter runs immediately
+    this.filterConversations(query);
+
+    // Tier-2 content search fires after a short delay (only for 3+ char queries)
+    if (this._searchDebounceTimer) clearTimeout(this._searchDebounceTimer);
+
+    if (query.trim().length < 3) return;
+
+    this._searchDebounceTimer = setTimeout(() => {
+      this.searchConversationContent(query.trim());
+    }, 300);
+  }
+
+  private async searchConversationContent(query: string) {
+    const lowerQuery = query.toLowerCase();
+    const endpoint = this.plugin.getLettaProxyUrl();
+    const cards = this.contentContainer.querySelectorAll<HTMLElement>('.thoth-conversation-card');
+
+    // Only search sessions that are currently visible (title matched or no title filter)
+    const visibleSessions = this.chatSessions.filter(session => {
+      const card = this.contentContainer.querySelector(
+        `.thoth-conversation-card[data-session-id="${session.id}"]`
+      ) as HTMLElement | null;
+      return card && card.style.display !== 'none';
+    });
+
+    // For sessions whose titles didn't match, try fetching messages
+    const titlesNotMatching = this.chatSessions.filter(session => {
+      const title = (session.title || '').toLowerCase();
+      if (title.includes(lowerQuery)) return false; // already showing from tier-1
+      const card = this.contentContainer.querySelector(
+        `.thoth-conversation-card[data-session-id="${session.id}"]`
+      ) as HTMLElement | null;
+      return card !== null; // only sessions that have a rendered card
+    });
+
+    await Promise.all(
+      titlesNotMatching.map(async (session) => {
+        const card = this.contentContainer.querySelector(
+          `.thoth-conversation-card[data-session-id="${session.id}"]`
+        ) as HTMLElement | null;
+        if (!card) return;
+
+        // Use cached messages if available; otherwise fetch a small batch
+        let messages: any[] = this.messageCache.get(session.id) || [];
+
+        if (messages.length === 0) {
+          try {
+            const res = await this.plugin.authFetch(
+              `${endpoint}/v1/conversations/${session.id}/messages?limit=20&order=asc`
+            );
+            if (res.ok) {
+              messages = await res.json();
+            }
+          } catch {
+            return;
+          }
+        }
+
+        // Search message content
+        const matchingMsg = messages.find((msg: any) => {
+          const content = typeof msg.content === 'string'
+            ? msg.content
+            : (Array.isArray(msg.content)
+                ? msg.content.map((p: any) => p.text || '').join(' ')
+                : '');
+          return content.toLowerCase().includes(lowerQuery);
+        });
+
+        if (matchingMsg) {
+          // Show this card and add a content snippet
+          card.style.display = '';
+          card.querySelector('.thoth-card-snippet')?.remove();
+
+          const rawText = typeof matchingMsg.content === 'string'
+            ? matchingMsg.content
+            : (Array.isArray(matchingMsg.content)
+                ? matchingMsg.content.map((p: any) => p.text || '').join(' ')
+                : '');
+
+          // Extract a short window around the match
+          const idx = rawText.toLowerCase().indexOf(lowerQuery);
+          const start = Math.max(0, idx - 40);
+          const end = Math.min(rawText.length, idx + query.length + 80);
+          let snippet = (start > 0 ? '…' : '') + rawText.slice(start, end) + (end < rawText.length ? '…' : '');
+
+          // Highlight the match
+          const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          snippet = snippet.replace(new RegExp(escaped, 'gi'), (m) => `<mark>${m}</mark>`);
+
+          const snippetEl = card.createEl('div', { cls: 'thoth-card-snippet' });
+          snippetEl.innerHTML = snippet;
+        }
+      })
+    );
   }
 
   async promptForInput(title: string, defaultValue: string = ''): Promise<string | null> {

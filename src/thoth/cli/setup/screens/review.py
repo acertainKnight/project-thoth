@@ -88,6 +88,8 @@ class ReviewScreen(BaseScreen):
                 letta_cfg = memory_config.get('letta', {})
                 letta_model = letta_cfg.get('agentModel', 'Not set')
                 yield Static(f'    • Letta Chat Agent: {letta_model}')
+                title_model = letta_cfg.get('conversationTitleModel', 'Not set')
+                yield Static(f'    • Conversation Titles: {title_model}')
 
             rag_config = model_settings.get('rag', {})
             if rag_config:

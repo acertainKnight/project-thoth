@@ -126,6 +126,15 @@ class ModelSelectionScreen(BaseScreen):
             ),
         )
 
+        # Conversation Title Model
+        self._update_select(
+            'model-conversation-title',
+            self.letta_models,
+            self._get_default(
+                'memory.letta.conversationTitleModel', 'google/gemini-2.5-flash'
+            ),
+        )
+
         # Embedding Model
         self._update_select(
             'model-embedding',
@@ -272,6 +281,16 @@ class ModelSelectionScreen(BaseScreen):
             id='model-letta',
         )
         yield Static(id='warning-letta', classes='context-warning hidden')
+
+        yield Label('\n[cyan]Conversation Title Model[/cyan]')
+        yield Static(
+            '[dim]Generates short titles for chat conversations automatically.\n'
+            'A cheap, fast model is ideal — titles are just 3-6 words.[/dim]'
+        )
+        yield Select(
+            options=[('Loading...', '')],
+            id='model-conversation-title',
+        )
 
         yield Label('\n[cyan]Embedding Model[/cyan]')
         yield Static(
@@ -617,6 +636,9 @@ class ModelSelectionScreen(BaseScreen):
             model_settings['memory'] = {
                 'letta': {
                     'agentModel': self.query_one('#model-letta', Select).value,
+                    'conversationTitleModel': self.query_one(
+                        '#model-conversation-title', Select
+                    ).value,
                     'filesystem': {
                         'embeddingModel': embedding_model,  # Same as RAG embedding
                     },

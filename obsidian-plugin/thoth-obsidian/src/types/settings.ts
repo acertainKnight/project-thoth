@@ -41,6 +41,7 @@ export interface ThothSettings {
   maxChatWindows: number;           // Max concurrent chat windows
   chatWindowStates: ChatWindowState[]; // Saved chat window states
   activeChatSessionId: string | null; // Currently active session
+  defaultConversationId: string | null; // User-designated default conversation
   lettaAgentId: string | null;      // Cached Letta agent ID (avoids repeated fetches)
 
   // === UI PREFERENCES ===
@@ -83,6 +84,7 @@ export const DEFAULT_SETTINGS: ThothSettings = {
   maxChatWindows: 5,
   chatWindowStates: [],
   activeChatSessionId: null,
+  defaultConversationId: null,
   lettaAgentId: null,
 
   // UI Preferences
