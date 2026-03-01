@@ -4,7 +4,13 @@ Thoth - Academic PDF processing system.
 This package provides tools for processing academic PDF documents.
 """
 
-__version__ = '0.3.0-alpha.1'
+from importlib.metadata import PackageNotFoundError as _PkgNotFound
+from importlib.metadata import version as _pkg_version
+
+try:
+    __version__ = _pkg_version('thoth')
+except _PkgNotFound:
+    __version__ = '0.0.0-dev'
 
 # Lazy imports to avoid loading heavy dependencies at module import time
 # Import only when actually used to support running without all optional dependencies

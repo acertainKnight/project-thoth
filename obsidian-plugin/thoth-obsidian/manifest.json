@@ -3,6 +3,7 @@
   "name": "Thoth Research Assistant",
   "version": "1.0.0",
   "minAppVersion": "0.15.0",
+  "minServerVersion": "0.5.0",
   "description": "Advanced research assistant with AI-powered analysis, PDF processing, and knowledge management. Mobile requires remote server connection.",
   "author": "Thoth Project",
   "authorUrl": "https://github.com/acertainKnight/project-thoth",

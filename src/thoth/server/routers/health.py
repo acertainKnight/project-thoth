@@ -7,12 +7,18 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from loguru import logger
 
+from thoth import __version__ as _SERVER_VERSION
 from thoth.auth.context import UserContext
 from thoth.auth.dependencies import get_user_context
 from thoth.ingestion.pdf_downloader import download_pdf
 from thoth.monitoring import HealthMonitor
 from thoth.server.dependencies import get_service_manager
 from thoth.services.service_manager import ServiceManager
+
+# Oldest plugin version this server release supports.
+# Bump this constant when a server change breaks backward
+# compatibility with older plugin builds.
+_MIN_PLUGIN_VERSION = '1.0.0'
 
 router = APIRouter()
 
@@ -79,6 +85,25 @@ def health_check(service_manager: ServiceManager = Depends(get_service_manager))
                 'timestamp': datetime.now().isoformat(),
             },
         )
+
+
+@router.get('/version')
+def version_info():
+    """
+    Return server version and plugin compatibility information.
+
+    No authentication required — the plugin needs this to check compatibility
+    before credentials are established and to surface warnings at startup.
+
+    Returns:
+        JSONResponse: Server version and minimum supported plugin version.
+    """
+    return JSONResponse(
+        content={
+            'server_version': _SERVER_VERSION,
+            'min_plugin_version': _MIN_PLUGIN_VERSION,
+        }
+    )
 
 
 @router.get('/download-pdf')

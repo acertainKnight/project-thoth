@@ -7,6 +7,25 @@ interface GitHubRelease {
   prerelease: boolean;
 }
 
+export interface ServerVersionInfo {
+  server_version: string;
+  min_plugin_version: string;
+}
+
+export interface CompatibilityStatus {
+  serverVersion: string;
+  /** Minimum plugin version the server supports. */
+  minPluginVersion: string;
+  /** Minimum server version the installed plugin requires. */
+  minServerVersion: string;
+  /** Installed plugin version satisfies server's minimum. */
+  pluginCompatible: boolean;
+  /** Running server version satisfies the installed plugin's minimum. */
+  serverCompatible: boolean;
+  /** Both directions are satisfied. */
+  ok: boolean;
+}
+
 export class UpdateChecker {
   private plugin: ThothPlugin;
   private readonly GITHUB_REPO = 'acertainKnight/project-thoth';
@@ -87,7 +106,15 @@ export class UpdateChecker {
 
       // Compare versions
       if (this.isNewerVersion(remoteVersion, localVersion)) {
-        this.showUpdateNotice(remoteVersion);
+        // When in remote mode also surface a compatibility warning in the notice
+        let compatNote = '';
+        if (this.plugin.settings.remoteMode) {
+          const compat = await this.checkCompatibility().catch(() => null);
+          if (compat && !compat.ok) {
+            compatNote = ' Verify compatibility with your server before installing.';
+          }
+        }
+        this.showUpdateNotice(remoteVersion, compatNote);
       } else {
         console.log('[Thoth Update Checker] Already on latest version');
       }
@@ -179,10 +206,14 @@ export class UpdateChecker {
    *
    * Args:
    *     version: The new version available.
+   *     extraNote: Optional sentence appended to the notice (e.g. compatibility warning).
    */
-  private showUpdateNotice(version: string): void {
+  private showUpdateNotice(version: string, extraNote: string = ''): void {
     const currentVersion = this.normalizeVersion(this.plugin.manifest.version);
-    const message = `Thoth v${version} is available (you have v${currentVersion}). Run the install script to update.`;
+    const installInstruction = this.plugin.settings.remoteMode
+      ? 'Open plugin settings → Plugin Updates to install.'
+      : 'Run the install script to update.';
+    const message = `Thoth v${version} is available (you have v${currentVersion}). ${installInstruction}${extraNote}`;
 
     const notice = new Notice(message, 30000); // Show for 30 seconds
 
@@ -206,5 +237,89 @@ export class UpdateChecker {
     }
 
     console.log(`[Thoth Update Checker] Update available: ${version}`);
+  }
+
+  // ─── Public helpers used by the Plugin Updates settings UI ───────────────
+
+  /**
+   * Fetch version and compatibility info from the connected remote server.
+   *
+   * Returns:
+   *     ServerVersionInfo on success, null if the server is unreachable or
+   *     not running a version that exposes /version.
+   */
+  async fetchServerVersion(): Promise<ServerVersionInfo | null> {
+    const base = this.plugin.settings.remoteEndpointUrl.replace(/\/$/, '');
+    try {
+      const response = await this.plugin.authFetch(`${base}/version`);
+      if (!response.ok) return null;
+      return await response.json() as ServerVersionInfo;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Fetch the manifest.json from a specific GitHub release tag to read its
+   * minServerVersion field (and any other metadata the candidate build declares).
+   *
+   * Args:
+   *     version: Normalised version string (without 'v' prefix).
+   *
+   * Returns:
+   *     Parsed manifest object or null on failure.
+   */
+  async fetchGitHubManifest(version: string): Promise<{ minServerVersion?: string } | null> {
+    const tag = `v${version}`;
+    const url = `https://raw.githubusercontent.com/${this.GITHUB_REPO}/${tag}/obsidian-plugin/thoth-obsidian/manifest.json`;
+    try {
+      const response = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Check whether the installed plugin and the remote server are mutually compatible.
+   *
+   * Returns:
+   *     CompatibilityStatus or null if the server could not be reached.
+   */
+  async checkCompatibility(): Promise<CompatibilityStatus | null> {
+    const serverInfo = await this.fetchServerVersion();
+    if (!serverInfo) return null;
+
+    const installedPluginVersion = this.normalizeVersion(this.plugin.manifest.version);
+    const minServerVersion = (this.plugin.manifest as any).minServerVersion ?? '0.0.0';
+
+    const pluginCompatible = !this.isNewerVersion(
+      this.normalizeVersion(serverInfo.min_plugin_version),
+      installedPluginVersion,
+    );
+    const serverCompatible = !this.isNewerVersion(
+      this.normalizeVersion(minServerVersion),
+      this.normalizeVersion(serverInfo.server_version),
+    );
+
+    return {
+      serverVersion: serverInfo.server_version,
+      minPluginVersion: serverInfo.min_plugin_version,
+      minServerVersion,
+      pluginCompatible,
+      serverCompatible,
+      ok: pluginCompatible && serverCompatible,
+    };
+  }
+
+  /**
+   * Public wrapper around fetchLatestRelease for use by the settings UI.
+   *
+   * Returns:
+   *     The latest GitHub release, or null if none found.
+   */
+  async getLatestRelease(): Promise<GitHubRelease | null> {
+    return this.fetchLatestRelease();
   }
 }

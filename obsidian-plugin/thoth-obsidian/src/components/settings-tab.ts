@@ -5,6 +5,7 @@
  */
 
 import { Notice, Platform } from 'obsidian';
+import { PluginInstaller } from '../services/plugin-installer';
 import { ThothSettings } from '../types/settings';
 
 export class SettingsTabComponent {
@@ -39,6 +40,11 @@ export class SettingsTabComponent {
 
     // Connection Section
     this.renderConnectionSection(settingsContainer);
+
+    // Plugin Updates Section (remote mode only)
+    if (this.settings.remoteMode) {
+      this.renderPluginUpdateSection(settingsContainer);
+    }
 
     // Letta Agent Model Section
     this.renderLettaModelSection(settingsContainer);
@@ -173,6 +179,212 @@ export class SettingsTabComponent {
         }
       };
     }
+  }
+
+  private renderPluginUpdateSection(container: HTMLElement) {
+    const section = container.createDiv({ cls: 'thoth-settings-section' });
+    section.createEl('h3', { text: '🔄 Plugin Updates' });
+
+    const desc = section.createDiv({ cls: 'thoth-setting-info' });
+    desc.createEl('p', {
+      text: 'Manage plugin updates directly from here when using a remote server. ' +
+            'The installer downloads the pre-built release files and applies them to your vault.',
+    });
+
+    // ── Static rows (known immediately) ──────────────────────────────────
+    const currentPluginVersion = this.plugin.manifest.version;
+
+    const makeRow = (label: string, valueText: string) => {
+      const row = section.createDiv({ cls: 'thoth-setting-row' });
+      row.createEl('label', { text: label });
+      const val = row.createEl('span', { text: valueText, cls: 'thoth-setting-description' });
+      return val;
+    };
+
+    makeRow('Current plugin:', `v${currentPluginVersion}`);
+
+    // Async-populated rows
+    const serverVersionEl = makeRow('Server version:', 'Checking…');
+    const serverReqEl     = makeRow('Server requires plugin:', 'Checking…');
+    const compatEl        = makeRow('Current compatibility:', 'Checking…');
+
+    section.createEl('hr');
+
+    const latestEl      = makeRow('Latest available:', 'Checking GitHub…');
+    const updateCompatEl = makeRow('Update compatible with server:', '—');
+
+    // ── Buttons ──────────────────────────────────────────────────────────
+    const buttonRow = section.createDiv({ cls: 'thoth-setting-row' });
+    buttonRow.style.gap = '10px';
+    buttonRow.style.display = 'flex';
+    buttonRow.style.alignItems = 'center';
+    buttonRow.style.flexWrap = 'wrap';
+
+    const checkBtn = buttonRow.createEl('button', { text: 'Check for Updates' });
+
+    // Install button — desktop only
+    let installBtn: HTMLButtonElement | null = null;
+    if (!Platform.isMobile) {
+      installBtn = buttonRow.createEl('button', {
+        text: 'Install Update',
+        cls: 'thoth-install-update-btn',
+      });
+      installBtn.disabled = true;
+    }
+
+    const statusEl = section.createDiv({ cls: 'thoth-model-status' });
+    statusEl.style.marginTop = '8px';
+    statusEl.style.fontSize = '12px';
+
+    // State tracked across refreshes
+    let latestVersion: string | null = null;
+    let updateIsCompatible = false;
+
+    // ── Core refresh logic ────────────────────────────────────────────────
+    const refresh = async () => {
+      checkBtn.disabled = true;
+      checkBtn.textContent = 'Checking…';
+      if (installBtn) installBtn.disabled = true;
+      statusEl.textContent = '';
+
+      try {
+        const [compat, release] = await Promise.all([
+          this.plugin.updateChecker.checkCompatibility(),
+          this.plugin.updateChecker.getLatestRelease(),
+        ]);
+
+        // ── Compatibility rows ──
+        if (compat) {
+          serverVersionEl.textContent = `v${compat.serverVersion}`;
+          serverReqEl.textContent = `≥ ${compat.minPluginVersion}`;
+
+          if (compat.ok) {
+            compatEl.textContent = '✓ Compatible';
+            compatEl.style.color = 'var(--color-green)';
+          } else {
+            const reasons: string[] = [];
+            if (!compat.pluginCompatible) {
+              reasons.push(`server requires plugin ≥ ${compat.minPluginVersion}`);
+            }
+            if (!compat.serverCompatible) {
+              reasons.push(`plugin requires server ≥ ${compat.minServerVersion}`);
+            }
+            compatEl.textContent = `✗ Incompatible — ${reasons.join('; ')}`;
+            compatEl.style.color = 'var(--color-red)';
+          }
+        } else {
+          serverVersionEl.textContent = '⚠ Could not reach server';
+          serverVersionEl.style.color = 'var(--color-orange)';
+          serverReqEl.textContent = '—';
+          compatEl.textContent = '—';
+        }
+
+        // ── Latest release rows ──
+        if (release) {
+          const normalise = (v: string) => v.replace(/^v/, '').split('-')[0].split('+')[0];
+          latestVersion = normalise(release.tag_name);
+          const hasUpdate = (() => {
+            const a = latestVersion.split('.').map(Number);
+            const b = currentPluginVersion.split('.').map(Number);
+            for (let i = 0; i < 3; i++) {
+              if ((a[i] || 0) > (b[i] || 0)) return true;
+              if ((a[i] || 0) < (b[i] || 0)) return false;
+            }
+            return false;
+          })();
+
+          if (hasUpdate) {
+            latestEl.textContent = `v${latestVersion} (new)`;
+            latestEl.style.color = 'var(--color-blue)';
+
+            // Fetch the candidate release's manifest to check minServerVersion
+            let candidateMinServer = '0.0.0';
+            if (compat) {
+              const ghManifest = await this.plugin.updateChecker.fetchGitHubManifest(latestVersion);
+              candidateMinServer = ghManifest?.minServerVersion ?? '0.0.0';
+            }
+
+            const serverSatisfied = compat
+              ? (() => {
+                  const sv = compat.serverVersion.replace(/^v/, '').split('-')[0];
+                  const req = candidateMinServer.replace(/^v/, '').split('-')[0];
+                  const a = sv.split('.').map(Number);
+                  const b = req.split('.').map(Number);
+                  for (let i = 0; i < 3; i++) {
+                    if ((a[i] || 0) > (b[i] || 0)) return true;
+                    if ((a[i] || 0) < (b[i] || 0)) return false;
+                  }
+                  return true;
+                })()
+              : true; // can't verify → optimistically allow
+
+            updateIsCompatible = serverSatisfied;
+
+            if (serverSatisfied) {
+              updateCompatEl.textContent = '✓ Yes';
+              updateCompatEl.style.color = 'var(--color-green)';
+            } else {
+              updateCompatEl.textContent = `✗ No — update requires server ≥ ${candidateMinServer}`;
+              updateCompatEl.style.color = 'var(--color-red)';
+            }
+
+            if (installBtn) {
+              installBtn.textContent = `Install v${latestVersion}`;
+              installBtn.disabled = !updateIsCompatible;
+            }
+          } else {
+            latestEl.textContent = `v${latestVersion} (up to date)`;
+            latestEl.style.color = 'var(--text-muted)';
+            updateCompatEl.textContent = '—';
+            if (installBtn) {
+              installBtn.textContent = 'Install Update';
+              installBtn.disabled = true;
+            }
+          }
+        } else {
+          latestEl.textContent = '⚠ Could not fetch release info';
+          latestEl.style.color = 'var(--color-orange)';
+        }
+      } catch (err) {
+        console.error('[Settings] Plugin update check error:', err);
+        statusEl.textContent = `Error: ${(err as Error).message}`;
+        statusEl.style.color = 'var(--color-red)';
+      } finally {
+        checkBtn.disabled = false;
+        checkBtn.textContent = 'Check for Updates';
+      }
+    };
+
+    // ── Wire up buttons ───────────────────────────────────────────────────
+    checkBtn.onclick = () => refresh();
+
+    if (installBtn) {
+      installBtn.onclick = async () => {
+        if (!latestVersion || !updateIsCompatible) return;
+
+        const installer = new PluginInstaller(this.plugin);
+        installBtn!.disabled = true;
+        checkBtn.disabled = true;
+
+        try {
+          await installer.install(latestVersion, (msg) => {
+            statusEl.textContent = msg;
+            statusEl.style.color = 'var(--text-muted)';
+          });
+        } catch (err) {
+          console.error('[Settings] Plugin install error:', err);
+          statusEl.textContent = `Install failed: ${(err as Error).message}`;
+          statusEl.style.color = 'var(--color-red)';
+          installBtn!.disabled = false;
+          checkBtn.disabled = false;
+        }
+      };
+    }
+
+    // Kick off initial check without blocking render
+    refresh().catch(err => {
+      console.error('[Settings] Initial plugin update check failed:', err);
+    });
   }
 
   private renderLettaModelSection(container: HTMLElement) {
