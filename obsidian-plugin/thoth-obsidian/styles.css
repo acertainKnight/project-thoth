@@ -1868,13 +1868,28 @@
   font-weight: 500;
   color: var(--text-muted);
   margin-left: 0.25rem;
-  transition: color 0.3s ease;
+  transition: opacity 0.2s ease, color 0.3s ease;
 }
 
 .status-indicator-dynamic .message-content {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+/* Inline thinking indicator shown between multi-turn agent responses */
+.inline-thinking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.inline-thinking-indicator .status-text {
+  font-weight: 500;
+  transition: opacity 0.2s ease;
 }
 
 /* ===== EXPANDABLE STEP PILLS ===== */
@@ -1965,6 +1980,65 @@
   font-family: var(--font-monospace);
   font-size: 11px;
   line-height: 1.4;
+}
+
+/* Reasoning pill content uses prose formatting instead of monospace pre */
+.pill-detail-text.reasoning-text {
+  font-family: var(--font-text);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-muted);
+}
+
+/* Pills with no expandable detail: no pointer cursor, chevron hidden */
+.step-pill.pill-no-detail .pill-header {
+  cursor: default;
+}
+
+.step-pill.pill-no-detail:hover {
+  border-color: transparent;
+}
+
+.step-pill.pill-no-detail .pill-chevron {
+  display: none;
+}
+
+/* Active tool pill: subtle shimmer while waiting for tool return */
+.step-pill.pill-active {
+  border-color: var(--color-accent-1, var(--color-accent));
+}
+
+.step-pill.pill-active .pill-label {
+  color: var(--text-normal);
+}
+
+@keyframes thoth-pill-shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.step-pill.pill-active::after {
+  content: '';
+  display: block;
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(var(--color-accent-rgb, 100, 100, 255), 0.07) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: thoth-pill-shimmer 1.8s linear infinite;
+  pointer-events: none;
+  border-radius: 8px;
+}
+
+/* Need relative positioning on the pill for the shimmer overlay */
+.step-pill {
+  position: relative;
 }
 
 /* Dark theme adjustments */

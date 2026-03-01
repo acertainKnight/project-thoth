@@ -2810,6 +2810,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           // assistant message container so the UI reads as one turn.
           let assistantMessageEl: HTMLElement | null = null;
           let stepsContainer: HTMLElement | null = null;
+          let inlineThinkingEl: HTMLElement | null = null;
           let contentEl: HTMLElement | null = null;
           let streamingRenderer: StreamingMarkdownRenderer | null = null;
           let accumulatedContent = '';
@@ -2831,11 +2832,23 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           let sendMsgPrefixIdx = -1; // char index right after the opening "
           let sendMsgRenderedLen = 0;
 
-          // Ensure the assistant message container + steps section exist.
-          // Called on the first SSE event of any kind so pills appear
-          // immediately rather than waiting for the first content token.
+          // Remove the inline thinking indicator shown during multi-turn gaps.
+          const clearInlineThinking = (): void => {
+            if (!inlineThinkingEl) return;
+            const id = (inlineThinkingEl as any).__rotationInterval;
+            if (id) clearInterval(id);
+            inlineThinkingEl.remove();
+            inlineThinkingEl = null;
+          };
+
+          // Ensure the assistant message bubble exists. Called on the first
+          // SSE event so the bubble appears immediately. Also clears any
+          // inline thinking indicator left over from a multi-turn gap.
           const ensureContainer = (): void => {
+            clearInlineThinking();
             if (assistantMessageEl) return;
+            const rotId = (thinkingMsg as any).__rotationInterval;
+            if (rotId) clearInterval(rotId);
             thinkingMsg.remove();
             assistantMessageEl = messagesContainer.createEl('div', {
               cls: 'chat-message assistant'
@@ -2844,9 +2857,20 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
               text: 'Assistant',
               cls: 'message-role'
             });
-            stepsContainer = assistantMessageEl.createEl('div', {
-              cls: 'agent-steps'
-            });
+          };
+
+          // Return the current steps container, or create a new one inline
+          // below whatever is currently the last child of the bubble. This
+          // interleaves pills and content in the order they arrive rather
+          // than collecting all pills above all content.
+          const getOrCreateInlineSteps = (): HTMLElement => {
+            const last = assistantMessageEl!.lastElementChild;
+            if (last && last.classList.contains('agent-steps')) {
+              stepsContainer = last as HTMLElement;
+              return stepsContainer;
+            }
+            stepsContainer = assistantMessageEl!.createEl('div', { cls: 'agent-steps' });
+            return stepsContainer;
           };
 
           // --- Helper: process one SSE stream into the shared container ---
@@ -2856,10 +2880,12 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
             let buffer = '';
             let lastPaintYield = 0;
 
-            // Reset per-stream pill tracking (a new stream = new group of steps)
+            // Reset per-stream pill tracking (a new stream = new group of steps).
+            // stepsContainer is nulled so each stream creates its containers inline.
             currentReasoningPill = null;
             accumulatedReasoning = '';
             currentToolPill = null;
+            stepsContainer = null;
             activeToolCallId = null;
             activeToolName = null;
             sendMsgArgBuf = '';
@@ -2930,7 +2956,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                     if (!currentReasoningPill) {
                       const phrase = getRandomThinkingPhrase('thinking');
                       currentReasoningPill = this.createStepPill(
-                        stepsContainer!, '💭', `${phrase}...`
+                        getOrCreateInlineSteps(), '💭', `${phrase}...`, undefined, 'reasoning'
                       );
                     }
 
@@ -3032,8 +3058,9 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                     } catch { /* keep empty -- likely a delta fragment */ }
 
                     currentToolPill = this.createStepPill(
-                      stepsContainer!, '🔧', `${statusMsg}...`, toolDetail
+                      getOrCreateInlineSteps(), '🔧', `${statusMsg}...`, toolDetail
                     );
+                    currentToolPill.addClass('pill-active');
 
                     if (toolName === 'agentic_research_question') {
                       this.startAgenticProgressListener(currentToolPill);
@@ -3079,7 +3106,8 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                     }
 
                     if (currentToolPill) {
-                      // Mark the tool pill as complete
+                      // Remove active shimmer and strip trailing ellipsis
+                      currentToolPill.removeClass('pill-active');
                       const label = (currentToolPill as any).__labelEl;
                       if (label) {
                         label.textContent = label.textContent.replace('...', '');
@@ -3185,26 +3213,22 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           // Remove the initial thinking indicator if nothing rendered at all
           // (e.g. the stream ended with no events)
           if (!assistantMessageEl) {
+            const rotId = (thinkingMsg as any).__rotationInterval;
+            if (rotId) clearInterval(rotId);
             thinkingMsg.remove();
-          }
-
-          // Hide the steps container if it ended up empty
-          if (stepsContainer) {
-            const steps = stepsContainer as HTMLElement;
-            if (steps.childElementCount === 0) {
-              steps.style.display = 'none';
-            }
           }
 
           // --- Auto-follow-up for skill loading/unloading ---
           if (skillToolDetected) {
             console.log('[MultiChatModal] Skill tool detected, sending follow-up...');
 
-            // Add an activation pill inside the same assistant container
-            ensureContainer();
+            // Show activation pill inline below any prior content
             const activationPill = this.createStepPill(
-              stepsContainer!, '⚡', 'Activating skill tools...'
+              getOrCreateInlineSteps(), '⚡', 'Activating skill tools...'
             );
+
+            // Show a rotating inline indicator while the follow-up request is in flight
+            inlineThinkingEl = this.addInlineThinkingIndicator(assistantMessageEl!);
             this.scrollToBottom(messagesContainer, true);
 
             try {
@@ -3227,34 +3251,21 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
               if (!followUpResponse.ok) {
                 const errorBody = await followUpResponse.text();
                 console.error(`[MultiChatModal] Follow-up failed: ${followUpResponse.status}`, errorBody);
+                clearInlineThinking();
                 this.updateStepPillLabel(activationPill, 'Follow-up failed');
                 await this.addMessageToChat(messagesContainer, 'assistant',
                   'Skill tools loaded, but the follow-up request failed. Try sending your message again.');
               } else if (followUpResponse.body) {
                 console.log('[MultiChatModal] Follow-up stream started...');
-
-                // Mark activation complete
                 this.updateStepPillLabel(activationPill, 'Skill tools activated');
 
-                // Create a new steps section for the follow-up's reasoning/tools
-                stepsContainer = assistantMessageEl!.createEl('div', {
-                  cls: 'agent-steps'
-                });
-
-                // Process the follow-up into the same assistant container
+                // ensureContainer() will clear inlineThinkingEl on first SSE event.
+                // processStream creates its own inline steps containers as needed.
                 await processStream(followUpResponse.body);
-
-                // Hide empty follow-up steps section
-                if (stepsContainer) {
-                  const steps = stepsContainer as HTMLElement;
-                  if (steps.childElementCount === 0) {
-                    steps.style.display = 'none';
-                  }
-                }
               }
             } catch (followUpError) {
               console.error('[MultiChatModal] Auto-follow-up error:', followUpError);
-              this.updateStepPillLabel(activationPill, 'Follow-up error');
+              clearInlineThinking();
               messagesContainer.querySelectorAll('.message.thinking').forEach(el => el.remove());
               await this.addMessageToChat(messagesContainer, 'assistant',
                 'Skill tools loaded, but an error occurred while processing. Try sending your message again.');
@@ -3280,7 +3291,8 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         }
       } catch (error) {
         console.error('Chat error:', error);
-        // Remove thinking indicator
+        const rotId = (thinkingMsg as any).__rotationInterval;
+        if (rotId) clearInterval(rotId);
         thinkingMsg.remove();
         await this.addMessageToChat(messagesContainer, 'assistant', `Error: ${error.message}`);
         this.showToast(`Error: ${error.message}`, 'error');
@@ -3467,7 +3479,8 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
   /**
    * Render a grouped assistant turn (reasoning + tools + content) as a single
-   * message bubble with expandable step pills.
+   * message bubble with expandable step pills interleaved with content in the
+   * order the messages actually occurred.
    */
   private async renderAssistantTurn(
     container: HTMLElement,
@@ -3477,10 +3490,6 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     const messageEl = container.createEl('div', { cls: 'chat-message assistant' });
     messageEl.createEl('div', { text: 'Assistant', cls: 'message-role' });
 
-    const stepsEl = messageEl.createEl('div', { cls: 'agent-steps' });
-    let hasSteps = false;
-    let combinedContent = '';
-
     // Flat log so message types are visible without expanding objects
     const groupTypes = messages.map(m => {
       const mt = m.message_type || m.type;
@@ -3489,15 +3498,26 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     }).join(', ');
     console.log(`[renderAssistantTurn] ${messages.length} msgs: ${groupTypes}`);
 
+    // Track the current steps container. When content appears after pills,
+    // we null this out so the next pill group creates a new container below.
+    let currentStepsEl: HTMLElement | null = null;
+    let combinedContent = '';
+
+    const ensureSteps = () => {
+      if (!currentStepsEl) {
+        currentStepsEl = messageEl.createEl('div', { cls: 'agent-steps' });
+      }
+      return currentStepsEl;
+    };
+
     for (const msg of messages) {
       const mt = msg.message_type || msg.type;
 
       if (mt === 'reasoning_message') {
-        hasSteps = true;
         const reasoning = msg.reasoning || extractContent(msg);
         if (reasoning) {
           const phrase = getRandomThinkingPhrase('thinking');
-          this.createStepPill(stepsEl, '💭', phrase, reasoning);
+          this.createStepPill(ensureSteps(), '💭', phrase, reasoning, 'reasoning');
         }
       } else if (mt === 'tool_call_message') {
         // Letta can put the tool call in either `tool_call` (singular)
@@ -3520,12 +3540,13 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           } catch { /* ignore malformed args */ }
 
           if (sendText) {
+            // Content follows pills -- close the current steps group
+            currentStepsEl = null;
             combinedContent += (combinedContent ? '\n\n' : '') + sendText;
           }
           continue;
         }
 
-        hasSteps = true;
         const statusMsg = getToolStatusMessage(toolName);
         let detail = '';
         try {
@@ -3537,14 +3558,15 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
             detail = JSON.stringify(parsed, null, 2);
           }
         } catch { /* keep empty */ }
-        this.createStepPill(stepsEl, '🔧', statusMsg, detail);
+        this.createStepPill(ensureSteps(), '🔧', statusMsg, detail);
       } else if (mt === 'tool_return_message') {
-        // Skip tool returns in history pills to reduce noise --
-        // the tool call pill already conveys what happened.
+        // Skip tool returns in history pills -- the tool call pill already
+        // conveys what happened.
         continue;
       } else if (mt === 'assistant_message') {
         const text = extractContent(msg);
         if (text) {
+          currentStepsEl = null;
           combinedContent += (combinedContent ? '\n\n' : '') + text;
         }
       }
@@ -3563,7 +3585,9 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       }
     }
 
-    if (!combinedContent) {
+    const hasSteps = messageEl.querySelector('.step-pill') !== null;
+
+    if (!hasSteps && !combinedContent) {
       // Log full detail when a group produces no visible content
       // so we can diagnose missing messages.
       console.warn('[renderAssistantTurn] EMPTY group:', messages.map(m => ({
@@ -3572,23 +3596,12 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         content: (m.content || m.text || m.reasoning || '').substring(0, 200),
         keys: Object.keys(m).join(','),
       })));
-    } else {
-      console.log(`[renderAssistantTurn] content: ${combinedContent.length} chars`);
-    }
-
-    // If a group has only internal steps and no user-visible content,
-    // still show the pills (so the user can see the agent was active)
-    // but skip the content area and action buttons.
-    if (!hasSteps && !combinedContent) {
       messageEl.style.display = 'none';
       return;
     }
 
-    if (!hasSteps) {
-      stepsEl.style.display = 'none';
-    }
-
     if (combinedContent) {
+      console.log(`[renderAssistantTurn] content: ${combinedContent.length} chars`);
       const contentEl = messageEl.createEl('div', { cls: 'message-content' });
       await this.renderMessageContent(combinedContent, contentEl);
       this.addMessageActions(messageEl, combinedContent);
@@ -4839,7 +4852,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     await mcpServersTab.render();
   }
 
-  // Helper: Add dynamic status indicator
+  // Helper: Add dynamic status indicator with rotating thinking phrases
   addThinkingIndicator(container: HTMLElement): HTMLElement {
     const msg = container.createEl('div', { cls: 'message assistant thinking status-indicator-dynamic' });
     const content = msg.createEl('div', { cls: 'message-content' });
@@ -4848,18 +4861,51 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     indicator.createEl('span', { cls: 'dot' });
     indicator.createEl('span', { cls: 'dot' });
     const statusText = content.createEl('span', {
-      text: 'Thinking...',
+      text: getRandomThinkingPhrase('thinking') + '...',
       cls: 'status-text'
     });
 
-    // Store reference to status text for updates
     (msg as any).__statusText = statusText;
     (msg as any).__lastStatusUpdate = 0;
 
-    // Scroll to bottom
+    // Rotate phrase every 2.5 seconds with a brief fade
+    const rotationInterval = setInterval(() => {
+      statusText.style.opacity = '0';
+      setTimeout(() => {
+        statusText.textContent = getRandomThinkingPhrase('thinking') + '...';
+        statusText.style.opacity = '1';
+      }, 200);
+    }, 2500);
+    (msg as any).__rotationInterval = rotationInterval;
+
     container.scrollTop = container.scrollHeight;
 
     return msg;
+  }
+
+  // Helper: Add a compact inline thinking indicator inside an existing assistant
+  // bubble, used to bridge the gap between multi-turn agent responses.
+  private addInlineThinkingIndicator(parent: HTMLElement): HTMLElement {
+    const el = parent.createEl('div', { cls: 'inline-thinking-indicator' });
+    const dots = el.createEl('div', { cls: 'thinking-indicator' });
+    dots.createEl('span', { cls: 'dot' });
+    dots.createEl('span', { cls: 'dot' });
+    dots.createEl('span', { cls: 'dot' });
+    const statusText = el.createEl('span', {
+      text: getRandomThinkingPhrase('thinking') + '...',
+      cls: 'status-text'
+    });
+
+    const rotationInterval = setInterval(() => {
+      statusText.style.opacity = '0';
+      setTimeout(() => {
+        statusText.textContent = getRandomThinkingPhrase('thinking') + '...';
+        statusText.style.opacity = '1';
+      }, 200);
+    }, 2500);
+    (el as any).__rotationInterval = rotationInterval;
+
+    return el;
   }
 
   // Helper: Update status indicator (throttled to prevent rapid flickering)
@@ -4946,30 +4992,50 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
   }
 
   /**
-   * Create a collapsible step pill inside a container.
-   * Pills show a compact header row that expands on click to reveal detail.
+   * Create a step pill inside a container.
+   *
+   * Reasoning pills are always expandable (content accumulates via streaming).
+   * Tool pills are only expandable when the detail has meaningful content
+   * (i.e. non-trivial JSON args). Simple tool calls with no args render as
+   * a flat non-interactive badge.
    */
   private createStepPill(
     container: HTMLElement,
     icon: string,
     label: string,
-    detail?: string
+    detail?: string,
+    pillType: 'reasoning' | 'tool' = 'tool'
   ): HTMLElement {
-    const pill = container.createEl('div', { cls: 'step-pill' });
+    // Reasoning pills are always expandable; tool pills only if detail is non-trivial
+    const hasDetail = detail && detail.trim().length > 20;
+    const isExpandable = pillType === 'reasoning' || hasDetail;
+
+    const pill = container.createEl('div', {
+      cls: isExpandable ? 'step-pill' : 'step-pill pill-no-detail'
+    });
+    pill.dataset.pillType = pillType;
 
     const header = pill.createEl('div', { cls: 'pill-header' });
     header.createEl('span', { cls: 'pill-icon', text: icon });
     const labelEl = header.createEl('span', { cls: 'pill-label', text: label });
-    header.createEl('span', { cls: 'pill-chevron', text: '\u203A' });
 
-    const detailEl = pill.createEl('div', { cls: 'pill-detail' });
-    if (detail) {
-      detailEl.createEl('pre', { text: detail, cls: 'pill-detail-text' });
+    let detailEl: HTMLElement | null = null;
+
+    if (isExpandable) {
+      header.createEl('span', { cls: 'pill-chevron', text: '\u203A' });
+      detailEl = pill.createEl('div', { cls: 'pill-detail' });
+      if (detail) {
+        if (pillType === 'reasoning') {
+          const textEl = detailEl.createEl('div', { cls: 'pill-detail-text reasoning-text' });
+          textEl.textContent = detail.replace(/\n{3,}/g, '\n\n').trim();
+        } else {
+          detailEl.createEl('pre', { text: detail, cls: 'pill-detail-text' });
+        }
+      }
+      header.addEventListener('click', () => {
+        pill.toggleClass('expanded', !pill.hasClass('expanded'));
+      });
     }
-
-    header.addEventListener('click', () => {
-      pill.toggleClass('expanded', !pill.hasClass('expanded'));
-    });
 
     (pill as any).__labelEl = labelEl;
     (pill as any).__detailEl = detailEl;
@@ -4986,7 +5052,14 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     const detailEl = (pill as any).__detailEl as HTMLElement;
     if (!detailEl) return;
     detailEl.empty();
-    if (detail) {
+    if (!detail) return;
+
+    const pillType = pill.dataset.pillType;
+    if (pillType === 'reasoning') {
+      const textEl = detailEl.createEl('div', { cls: 'pill-detail-text reasoning-text' });
+      // Collapse excessive blank lines that accumulate during streaming
+      textEl.textContent = detail.replace(/\n{3,}/g, '\n\n').trim();
+    } else {
       detailEl.createEl('pre', { text: detail, cls: 'pill-detail-text' });
     }
   }
