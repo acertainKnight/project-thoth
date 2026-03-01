@@ -28,7 +28,9 @@ export class CommandsModal extends Modal {
   }
 
   addStyles() {
+    if (document.getElementById('thoth-commands-modal-styles')) return;
     const style = document.createElement('style');
+    style.id = 'thoth-commands-modal-styles';
     style.textContent = `
       .thoth-commands-modal {
         width: 70vw !important;
@@ -104,7 +106,7 @@ export class CommandsModal extends Modal {
 
   createAgentCommands(contentEl: HTMLElement) {
     const section = contentEl.createEl('div', { cls: 'thoth-command-section' });
-    section.createEl('h3').innerHTML = '🤖 Agent Management';
+    section.createEl('h3').textContent = 'Agent Management';
     section.createEl('p', { text: 'Control the Thoth research agent' });
 
     const commandGrid = section.createEl('div', { cls: 'thoth-command-grid' });
@@ -136,16 +138,13 @@ export class CommandsModal extends Modal {
       const button = commandGrid.createEl('div', { cls: 'thoth-command-button' });
       button.createEl('div', { text: cmd.title, cls: 'command-title' });
       button.createEl('div', { text: cmd.desc, cls: 'command-desc' });
-      button.onclick = () => {
-        cmd.action();
-        new Notice(`Executed: ${cmd.title}`);
-      };
+      button.onclick = () => cmd.action();
     });
   }
 
   createDiscoveryCommands(contentEl: HTMLElement) {
     const section = contentEl.createEl('div', { cls: 'thoth-command-section' });
-    section.createEl('h3').innerHTML = '🔍 Discovery System';
+    section.createEl('h3').textContent = 'Discovery System';
     section.createEl('p', { text: 'Manage content discovery and indexing' });
 
     const commandGrid = section.createEl('div', { cls: 'thoth-command-grid' });
@@ -165,11 +164,6 @@ export class CommandsModal extends Modal {
         title: 'Discovery Status',
         desc: 'Check discovery system status',
         action: () => this.runDiscoveryCommand('status')
-      },
-      {
-        title: 'Add Discovery Source',
-        desc: 'Add new content source',
-        action: () => this.plugin.openDiscoverySourceModal()
       }
     ];
 
@@ -177,16 +171,13 @@ export class CommandsModal extends Modal {
       const button = commandGrid.createEl('div', { cls: 'thoth-command-button' });
       button.createEl('div', { text: cmd.title, cls: 'command-title' });
       button.createEl('div', { text: cmd.desc, cls: 'command-desc' });
-      button.onclick = () => {
-        cmd.action();
-        new Notice(`Executed: ${cmd.title}`);
-      };
+      button.onclick = () => cmd.action();
     });
   }
 
   createDataCommands(contentEl: HTMLElement) {
     const section = contentEl.createEl('div', { cls: 'thoth-command-section' });
-    section.createEl('h3').innerHTML = '📊 Data Management';
+    section.createEl('h3').textContent = 'Data Management';
     section.createEl('p', { text: 'Manage knowledge base and data' });
 
     const commandGrid = section.createEl('div', { cls: 'thoth-command-grid' });
@@ -218,26 +209,18 @@ export class CommandsModal extends Modal {
       const button = commandGrid.createEl('div', { cls: 'thoth-command-button' });
       button.createEl('div', { text: cmd.title, cls: 'command-title' });
       button.createEl('div', { text: cmd.desc, cls: 'command-desc' });
-      button.onclick = () => {
-        cmd.action();
-        new Notice(`Executed: ${cmd.title}`);
-      };
+      button.onclick = () => cmd.action();
     });
   }
 
   createSystemCommands(contentEl: HTMLElement) {
     const section = contentEl.createEl('div', { cls: 'thoth-command-section' });
-    section.createEl('h3').innerHTML = '⚙️ System Operations';
+    section.createEl('h3').textContent = 'System Operations';
     section.createEl('p', { text: 'System-level operations and utilities' });
 
     const commandGrid = section.createEl('div', { cls: 'thoth-command-grid' });
 
     const commands = [
-      {
-        title: 'System Status',
-        desc: 'View comprehensive system status',
-        action: () => this.openSystemStatus()
-      },
       {
         title: 'View Logs',
         desc: 'Open system logs',
@@ -259,10 +242,7 @@ export class CommandsModal extends Modal {
       const button = commandGrid.createEl('div', { cls: 'thoth-command-button' });
       button.createEl('div', { text: cmd.title, cls: 'command-title' });
       button.createEl('div', { text: cmd.desc, cls: 'command-desc' });
-      button.onclick = () => {
-        cmd.action();
-        new Notice(`Executed: ${cmd.title}`);
-      };
+      button.onclick = () => cmd.action();
     });
   }
 
@@ -349,11 +329,6 @@ export class CommandsModal extends Modal {
     } catch (error) {
       new Notice(`System ${command} failed: ${error.message}`, 3000);
     }
-  }
-
-  openSystemStatus() {
-    // This could open a separate status modal
-    new Notice('System status feature coming soon!');
   }
 
   async confirmResetSettings() {

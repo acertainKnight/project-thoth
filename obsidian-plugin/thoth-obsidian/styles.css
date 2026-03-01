@@ -1,5 +1,17 @@
 /* Thoth Research Assistant Plugin Styles */
 
+/* Ensure all selects inside Thoth UI have enough height for their text */
+.thoth-chat-popup select,
+.thoth-settings-container select,
+.thoth-floating-chat-panel select,
+.modal-container .thoth-chat-popup select {
+  min-height: 2rem;
+  line-height: 1.4;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  box-sizing: border-box;
+}
+
 /* ===== RIBBON ICON ===== */
 .thoth-ribbon-icon {
     color: var(--text-normal);
@@ -140,22 +152,22 @@
 
 .thoth-status-success {
     background: var(--color-green);
-    color: white;
+    color: var(--text-on-accent);
 }
 
 .thoth-status-error {
     background: var(--color-red);
-    color: white;
+    color: var(--text-on-accent);
 }
 
 .thoth-status-warning {
     background: var(--color-orange);
-    color: white;
+    color: var(--text-on-accent);
 }
 
 .thoth-status-info {
     background: var(--color-blue);
-    color: white;
+    color: var(--text-on-accent);
 }
 
 /* Test Connection */
@@ -202,12 +214,12 @@
 
 .thoth-test-success {
     background: var(--color-green);
-    color: white;
+    color: var(--text-on-accent);
 }
 
 .thoth-test-error {
     background: var(--color-red);
-    color: white;
+    color: var(--text-on-accent);
 }
 
 /* Advanced Settings */
@@ -259,38 +271,38 @@
 
 .thoth-button-start {
     background: var(--color-green);
-    color: white;
+    color: var(--text-on-accent);
 }
 
 .thoth-button-start:hover:not(:disabled) {
-    background: #28a745;
+    filter: brightness(1.1);
 }
 
 .thoth-button-stop {
     background: var(--color-red);
-    color: white;
+    color: var(--text-on-accent);
 }
 
 .thoth-button-stop:hover:not(:disabled) {
-    background: #dc3545;
+    filter: brightness(1.1);
 }
 
 .thoth-button-restart {
     background: var(--color-orange);
-    color: white;
+    color: var(--text-on-accent);
 }
 
 .thoth-button-restart:hover:not(:disabled) {
-    background: #fd7e14;
+    filter: brightness(1.1);
 }
 
 .thoth-button-test {
     background: var(--color-blue);
-    color: white;
+    color: var(--text-on-accent);
 }
 
 .thoth-button-test:hover:not(:disabled) {
-    background: #0056b3;
+    filter: brightness(1.1);
 }
 
 .thoth-button-chat {
@@ -338,7 +350,10 @@
     border-radius: 4px;
     background: var(--background-primary);
     color: var(--text-normal);
-    padding: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    min-height: 2rem;
+    line-height: 1.4;
+    box-sizing: border-box;
 }
 
 .thoth-settings-section select:focus {
@@ -1458,7 +1473,7 @@
 .thoth-badge-new {
   padding: 0.25rem 0.5rem;
   background: var(--color-green);
-  color: white;
+  color: var(--text-on-accent);
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 600;
@@ -1508,7 +1523,7 @@
 .thoth-run-discovery-btn {
   padding: 0.5rem 1rem;
   background: var(--color-green);
-  color: white;
+  color: var(--text-on-accent);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -1517,7 +1532,7 @@
 }
 
 .thoth-run-discovery-btn:hover {
-  background: #28a745;
+  filter: brightness(1.1);
   transform: translateY(-1px);
 }
 
@@ -1599,12 +1614,12 @@
 
 .thoth-relevance-badge.high {
   background: var(--color-green);
-  color: white;
+  color: var(--text-on-accent);
 }
 
 .thoth-relevance-badge.medium {
   background: var(--color-orange);
-  color: white;
+  color: var(--text-on-accent);
 }
 
 .thoth-relevance-badge.low {
@@ -1953,12 +1968,15 @@
 .thoth-setting-row input[type="text"],
 .thoth-setting-row input[type="password"],
 .thoth-setting-row select {
-  padding: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  min-height: 2rem;
+  line-height: 1.4;
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 4px;
   color: var(--text-normal);
   font-size: 0.9rem;
+  box-sizing: border-box;
 }
 
 .thoth-setting-row input[type="text"]:focus,
@@ -2346,17 +2364,6 @@
   }
 }
 
-/* Empty States */
-.thoth-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 3rem 2rem;
-  color: var(--text-muted);
-}
-
 .empty-state-icon {
   font-size: 3rem;
   margin-bottom: 1rem;
@@ -2439,15 +2446,6 @@
   animation: thoth-pulse 2s infinite;
 }
 
-@keyframes thoth-pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-
 /* Keyboard Shortcuts Hints */
 .keyboard-hint {
   display: inline-flex;
@@ -2480,12 +2478,6 @@
   border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: thoth-spin 0.8s linear infinite;
-}
-
-@keyframes thoth-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 /* General Animation Utilities */
@@ -2575,7 +2567,7 @@
 
 .thoth-workflow-status.active {
   color: var(--color-green);
-  background: rgba(0, 255, 0, 0.1);
+  background: color-mix(in srgb, var(--color-green) 15%, transparent);
 }
 
 .thoth-workflow-status.inactive {
@@ -3687,19 +3679,19 @@
 
 .mcp-btn-success {
   background: var(--color-green) !important;
-  color: white !important;
+  color: var(--text-on-accent) !important;
   border-color: var(--color-green) !important;
 }
 
 .mcp-btn-warning {
   background: var(--color-orange) !important;
-  color: white !important;
+  color: var(--text-on-accent) !important;
   border-color: var(--color-orange) !important;
 }
 
 .mcp-btn-danger {
   background: var(--color-red) !important;
-  color: white !important;
+  color: var(--text-on-accent) !important;
   border-color: var(--color-red) !important;
 }
 
@@ -3786,12 +3778,15 @@
 
 .mcp-agent-selector select {
   flex: 1;
-  padding: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  min-height: 2rem;
+  line-height: 1.4;
   border: 1px solid var(--background-modifier-border);
   border-radius: 4px;
   background: var(--background-primary);
   color: var(--text-normal);
   font-size: 0.9rem;
+  box-sizing: border-box;
 }
 
 /* Tool List Container */
@@ -3883,7 +3878,7 @@
   display: inline-block;
   padding: 0.15rem 0.5rem;
   background: var(--color-green);
-  color: white;
+  color: var(--text-on-accent);
   font-size: 0.75rem;
   border-radius: 3px;
   font-weight: 600;
@@ -3982,5 +3977,17 @@
 
   .mcp-tool-copy-btn {
     width: 100%;
+  }
+}
+
+/* Accessibility: Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

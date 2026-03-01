@@ -59,13 +59,6 @@ export class SettingsTabComponent {
 
     // Backend Settings Info
     this.renderBackendSettingsInfo(settingsContainer);
-
-    // Save button
-    const saveButton = settingsContainer.createEl('button', {
-      text: 'Save Settings',
-      cls: 'thoth-save-settings-btn'
-    });
-    saveButton.onclick = () => this.saveSettings();
   }
 
   private renderConnectionSection(container: HTMLElement) {
@@ -79,7 +72,8 @@ export class SettingsTabComponent {
     remoteModeToggle.checked = this.settings.remoteMode;
     remoteModeToggle.onchange = () => {
       this.settings.remoteMode = remoteModeToggle.checked;
-      this.render(); // Re-render to show/hide URL field
+      this.debouncedSave();
+      this.render();
     };
     remoteModeRow.createEl('span', {
       text: 'Connect to remote server (unchecked = manage local agent on desktop)',
@@ -661,101 +655,97 @@ export class SettingsTabComponent {
 
   private renderPluginBehaviorSection(container: HTMLElement) {
     const section = container.createDiv({ cls: 'thoth-settings-section' });
-    section.createEl('h3', { text: '⚙️ Plugin Behavior' });
+    section.createEl('h3', { text: 'Plugin Behavior' });
 
-    // Auto-start agent
     const autoStartRow = section.createDiv({ cls: 'thoth-setting-row' });
     autoStartRow.createEl('label', { text: 'Auto-start Agent' });
     const autoStartToggle = autoStartRow.createEl('input', { type: 'checkbox' });
     autoStartToggle.checked = this.settings.autoStartAgent;
     autoStartToggle.onchange = () => {
       this.settings.autoStartAgent = autoStartToggle.checked;
+      this.debouncedSave();
     };
     autoStartRow.createEl('span', {
       text: 'Automatically start Thoth agent when Obsidian starts (desktop only)',
       cls: 'thoth-setting-description'
     });
 
-    // Show status bar
     const statusBarRow = section.createDiv({ cls: 'thoth-setting-row' });
     statusBarRow.createEl('label', { text: 'Show Status Bar' });
     const statusBarToggle = statusBarRow.createEl('input', { type: 'checkbox' });
     statusBarToggle.checked = this.settings.showStatusBar;
     statusBarToggle.onchange = () => {
       this.settings.showStatusBar = statusBarToggle.checked;
+      this.debouncedSave();
     };
 
-    // Show ribbon icon
     const ribbonRow = section.createDiv({ cls: 'thoth-setting-row' });
     ribbonRow.createEl('label', { text: 'Show Ribbon Icon' });
     const ribbonToggle = ribbonRow.createEl('input', { type: 'checkbox' });
     ribbonToggle.checked = this.settings.showRibbonIcon;
     ribbonToggle.onchange = () => {
       this.settings.showRibbonIcon = ribbonToggle.checked;
+      this.debouncedSave();
     };
   }
 
   private renderUIPreferencesSection(container: HTMLElement) {
     const section = container.createDiv({ cls: 'thoth-settings-section' });
-    section.createEl('h3', { text: '🎨 UI Preferences' });
+    section.createEl('h3', { text: 'UI Preferences' });
 
-    // Theme
     const themeRow = section.createDiv({ cls: 'thoth-setting-row' });
     themeRow.createEl('label', { text: 'Theme' });
     const themeSelect = themeRow.createEl('select');
     ['auto', 'light', 'dark'].forEach(theme => {
       const option = themeSelect.createEl('option', { value: theme, text: theme });
-      if (theme === this.settings.theme) {
-        option.selected = true;
-      }
+      if (theme === this.settings.theme) option.selected = true;
     });
     themeSelect.onchange = () => {
       this.settings.theme = themeSelect.value as any;
+      this.debouncedSave();
     };
 
-    // Compact mode
     const compactRow = section.createDiv({ cls: 'thoth-setting-row' });
     compactRow.createEl('label', { text: 'Compact Mode' });
     const compactToggle = compactRow.createEl('input', { type: 'checkbox' });
     compactToggle.checked = this.settings.compactMode;
     compactToggle.onchange = () => {
       this.settings.compactMode = compactToggle.checked;
+      this.debouncedSave();
     };
 
-    // Enable notifications
     const notificationsRow = section.createDiv({ cls: 'thoth-setting-row' });
     notificationsRow.createEl('label', { text: 'Enable Notifications' });
     const notificationsToggle = notificationsRow.createEl('input', { type: 'checkbox' });
     notificationsToggle.checked = this.settings.enableNotifications;
     notificationsToggle.onchange = () => {
       this.settings.enableNotifications = notificationsToggle.checked;
+      this.debouncedSave();
     };
 
-    // Check for updates
     const updatesRow = section.createDiv({ cls: 'thoth-setting-row' });
     updatesRow.createEl('label', { text: 'Check for Updates' });
     const updatesToggle = updatesRow.createEl('input', { type: 'checkbox' });
     updatesToggle.checked = this.settings.checkForUpdates;
     updatesToggle.onchange = () => {
       this.settings.checkForUpdates = updatesToggle.checked;
+      this.debouncedSave();
     };
     updatesRow.createEl('span', {
       text: 'Automatically check for new stable releases daily',
       cls: 'thoth-setting-description'
     });
 
-    // Release channel
     const channelRow = section.createDiv({ cls: 'thoth-setting-row' });
     channelRow.createEl('label', { text: 'Release Channel' });
     const channelSelect = channelRow.createEl('select');
     ['stable', 'alpha', 'nightly'].forEach(channel => {
       const option = channelSelect.createEl('option', { value: channel, text: channel });
-      if (channel === this.settings.releaseChannel) {
-        option.selected = true;
-      }
+      if (channel === this.settings.releaseChannel) option.selected = true;
     });
     channelSelect.onchange = () => {
       this.settings.releaseChannel = channelSelect.value as any;
+      this.debouncedSave();
     };
     channelRow.createEl('span', {
       text: 'Update checks only run for stable channel',
@@ -792,7 +782,6 @@ export class SettingsTabComponent {
   private async saveSettings() {
     try {
       await this.plugin.saveSettings();
-      new Notice('Settings saved successfully!');
     } catch (error) {
       console.error('Failed to save settings:', error);
       new Notice('Failed to save settings');

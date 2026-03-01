@@ -405,7 +405,7 @@ export default class ThothPlugin extends Plugin {
 
     try {
       // Backend reads settings from file directly - just restart
-      if (Platform.isMobile || this.getEndpointUrl().includes('http')) {
+      if (Platform.isMobile || this.settings.remoteMode) {
         // Remote/mobile - can't restart server
         new Notice('Remote server restart not supported. Please restart backend manually if needed.');
         this.isRestarting = false;
@@ -523,13 +523,13 @@ export default class ThothPlugin extends Plugin {
 
     if (this.isRestarting) {
       this.statusBarItem.setText('Thoth: Restarting...');
-      this.statusBarItem.style.color = '#ffa500'; // Orange
+      this.statusBarItem.style.color = 'var(--color-orange)';
     } else if (this.isAgentRunning) {
       this.statusBarItem.setText('Thoth: Running');
-      this.statusBarItem.style.color = '#00ff00'; // Green
+      this.statusBarItem.style.color = 'var(--color-green)';
     } else {
       this.statusBarItem.setText('Thoth: Stopped');
-      this.statusBarItem.style.color = '#ff0000'; // Red
+      this.statusBarItem.style.color = 'var(--color-red)';
     }
   }
 
@@ -970,10 +970,16 @@ export default class ThothPlugin extends Plugin {
   }
 
   getLastAssistantMessage(): string | null {
-    // Try to get the last assistant message from the current session
-    if (this.chatModalInstance && this.chatModalInstance.activeSessionId) {
-      // This is a simplified version - in a full implementation, you'd access the actual messages
-      return null; // For now, return null - can be enhanced later
+    if (this.chatModalInstance) {
+      const messages = (this.chatModalInstance as any).messageCache?.get(
+        this.chatModalInstance.activeSessionId
+      );
+      if (messages?.length) {
+        const last = [...messages].reverse().find(
+          (m: any) => m.message_type === 'assistant_message'
+        );
+        return last?.text ?? null;
+      }
     }
     return null;
   }
@@ -1048,11 +1054,6 @@ export default class ThothPlugin extends Plugin {
     }
   }
 
-  openDiscoverySourceModal() {
-    // Placeholder for discovery source modal - create when needed
-    new Notice('Discovery source modal not yet implemented');
-  }
-
   async showConfirm(message: string): Promise<boolean> {
     return new Promise((resolve) => {
       new ConfirmModal(this.app, message, resolve).open();
@@ -1084,14 +1085,6 @@ export default class ThothPlugin extends Plugin {
       name: 'Thoth: Run Discovery',
       callback: () => {
         this.promptAndExecuteCommand('discovery', ['run'], 'Enter source name (optional):');
-      }
-    });
-
-    this.addCommand({
-      id: 'thoth-discovery-create',
-      name: 'Thoth: Create Discovery Source',
-      callback: () => {
-        this.openDiscoverySourceCreator();
       }
     });
 
@@ -1193,27 +1186,9 @@ export default class ThothPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: 'thoth-insert-citation',
-      name: 'Thoth: Insert Citation',
-      editorCallback: (editor: Editor, view: MarkdownView) => {
-        this.openCitationInserter(editor);
-      }
-    });
-
-    this.addCommand({
       id: 'thoth-open-commands',
       name: 'Thoth: Open Commands',
       callback: () => {
-        this.openCommandsModal();
-      }
-    });
-
-    this.addCommand({
-      id: 'thoth-open-status',
-      name: 'Thoth: Open Status',
-      callback: () => {
-        // TODO: Create StatusModal when needed
-        new Notice('Status modal coming soon! Use Commands modal for now.');
         this.openCommandsModal();
       }
     });
@@ -1471,16 +1446,6 @@ export default class ThothPlugin extends Plugin {
       console.error('Research error:', error);
       new Notice(`Research failed: ${error.message}`);
     }
-  }
-
-  async openCitationInserter(editor: Editor) {
-    // Citation inserter functionality would go here
-    new Notice('Citation inserter not yet implemented');
-  }
-
-  async openDiscoverySourceCreator() {
-    // Discovery source creator functionality would go here
-    new Notice('Discovery source creator not yet implemented');
   }
 
   async performHealthCheck() {
@@ -2108,16 +2073,27 @@ class ThothSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    // Header
     containerEl.createEl('h2', { text: 'Thoth Research Assistant' });
     containerEl.createEl('p', {
-      text: 'Most settings are now in the Thoth Chat modal. Open the chat to access full settings.'
+      text: 'All settings are in the Thoth Chat panel. Open it to configure connections, models, and preferences.',
+      cls: 'setting-item-description'
     });
 
-    // Connection Settings
+    new Setting(containerEl)
+      .setName('Open Thoth Chat')
+      .setDesc('Access connection settings, model configuration, and plugin preferences')
+      .addButton(button => button
+        .setButtonText('Open Thoth Chat')
+        .setCta()
+        .onClick(() => {
+          this.plugin.openChatModal();
+        }));
+
+    // Remote mode is surfaced here as a quick escape hatch for users who
+    // can't open the chat because the connection isn't set up yet.
     new Setting(containerEl)
       .setName('Remote Mode')
-      .setDesc('Connect to a remote Thoth server (required for mobile)')
+      .setDesc('Connect to a remote Thoth server. Required for mobile. Toggle this if you need to change modes before the chat can connect.')
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.remoteMode)
         .onChange(async (value) => {
@@ -2129,7 +2105,7 @@ class ThothSettingTab extends PluginSettingTab {
     if (this.plugin.settings.remoteMode) {
       new Setting(containerEl)
         .setName('Thoth API URL')
-        .setDesc('URL of the Thoth API server (research, discovery, PDF processing)')
+        .setDesc('URL of the Thoth API server')
         .addText(text => text
           .setPlaceholder('http://localhost:8000')
           .setValue(this.plugin.settings.remoteEndpointUrl)
@@ -2140,7 +2116,7 @@ class ThothSettingTab extends PluginSettingTab {
 
       new Setting(containerEl)
         .setName('Letta API URL')
-        .setDesc('URL of the Letta API server (agent chat functionality)')
+        .setDesc('URL of the Letta API server')
         .addText(text => text
           .setPlaceholder('http://localhost:8284')
           .setValue(this.plugin.settings.lettaEndpointUrl)
@@ -2149,93 +2125,5 @@ class ThothSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }));
     }
-
-    // Plugin Behavior
-    new Setting(containerEl)
-      .setName('Auto-start Agent')
-      .setDesc('Automatically start local agent on Obsidian startup (desktop only)')
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.autoStartAgent)
-        .onChange(async (value) => {
-          this.plugin.settings.autoStartAgent = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName('Show Status Bar')
-      .setDesc('Show Thoth status in the status bar')
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.showStatusBar)
-        .onChange(async (value) => {
-          this.plugin.settings.showStatusBar = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName('Show Ribbon Icon')
-      .setDesc('Show Thoth icon in the left ribbon')
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.showRibbonIcon)
-        .onChange(async (value) => {
-          this.plugin.settings.showRibbonIcon = value;
-          await this.plugin.saveSettings();
-        }));
-
-    // Update checking settings
-    new Setting(containerEl)
-      .setName('Check for Updates')
-      .setDesc('Automatically check for new stable releases daily')
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.checkForUpdates)
-        .onChange(async (value) => {
-          this.plugin.settings.checkForUpdates = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName('Release Channel')
-      .setDesc('Update checks only run for stable channel')
-      .addDropdown(dropdown => dropdown
-        .addOption('stable', 'stable')
-        .addOption('alpha', 'alpha')
-        .addOption('nightly', 'nightly')
-        .setValue(this.plugin.settings.releaseChannel)
-        .onChange(async (value) => {
-          this.plugin.settings.releaseChannel = value as 'stable' | 'alpha' | 'nightly';
-          await this.plugin.saveSettings();
-        }));
-
-    // Check for updates now button
-    new Setting(containerEl)
-      .setName('Check for Updates Now')
-      .setDesc('Force an immediate update check')
-      .addButton(button => button
-        .setButtonText('Check Now')
-        .onClick(async () => {
-          button.setDisabled(true);
-          button.setButtonText('Checking...');
-          try {
-            await this.plugin.updateChecker.checkForUpdate(true);
-            new Notice('Update check complete');
-          } catch (error) {
-            console.error('Update check failed:', error);
-            new Notice('Update check failed');
-          } finally {
-            button.setDisabled(false);
-            button.setButtonText('Check Now');
-          }
-        }));
-
-    // Link to modal settings
-    const linkSetting = new Setting(containerEl)
-      .setName('Full Settings')
-      .setDesc('Open Thoth Chat to access all settings including backend configuration');
-
-    linkSetting.controlEl.createEl('button', {
-      text: 'Open Thoth Chat',
-      cls: 'mod-cta'
-    }).onclick = () => {
-      new MultiChatModal(this.app, this.plugin).open();
-    };
   }
 }

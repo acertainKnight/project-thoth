@@ -601,6 +601,9 @@ export class MultiChatModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
+    // Remove injected styles
+    document.getElementById('thoth-multi-chat-modal-styles')?.remove();
+
     // Clean up keyboard listeners
     if (this.keyboardCleanup) {
       this.keyboardCleanup();
@@ -1372,7 +1375,9 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
   }
 
   addStyles() {
+    if (document.getElementById('thoth-multi-chat-modal-styles')) return;
     const style = document.createElement('style');
+    style.id = 'thoth-multi-chat-modal-styles';
     style.textContent = `
       .thoth-chat-popup {
         border-radius: 12px !important;
@@ -4133,11 +4138,6 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
         title: 'Discovery Status',
         desc: 'Check discovery system status',
         action: () => this.runDiscoveryCommand('status')
-      },
-      {
-        title: 'Add Discovery Source',
-        desc: 'Add new content source',
-        action: () => this.plugin.openDiscoverySourceModal()
       }
     ];
 
@@ -4333,206 +4333,12 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     }
   }
 
-  // Tools tab functionality
-  createCitationTools(contentEl: HTMLElement) {
-    const section = contentEl.createEl('div', { cls: 'thoth-command-section' });
-    section.createEl('h3').innerHTML = '📝 Citation Tools';
-    section.createEl('p', { text: 'Tools for managing citations and references' });
-
-    const commandGrid = section.createEl('div', { cls: 'thoth-command-grid' });
-
-    const tools = [
-      {
-        title: 'Citation Inserter',
-        desc: 'Insert formatted citations into your notes',
-        action: () => this.openCitationInserter()
-      },
-      {
-        title: 'Reference Manager',
-        desc: 'Manage your reference library',
-        action: () => this.openReferenceManager()
-      },
-      {
-        title: 'Auto-Cite Selection',
-        desc: 'Automatically cite selected text',
-        action: () => this.autoCiteSelection()
-      },
-      {
-        title: 'Export Bibliography',
-        desc: 'Export bibliography in various formats',
-        action: () => this.exportBibliography()
-      }
-    ];
-
-    tools.forEach(tool => {
-      const button = commandGrid.createEl('div', { cls: 'thoth-command-button' });
-      button.createEl('div', { text: tool.title, cls: 'command-title' });
-      button.createEl('div', { text: tool.desc, cls: 'command-desc' });
-      button.onclick = () => {
-        tool.action();
-        new Notice(`Executed: ${tool.title}`);
-      };
-    });
-  }
-
-  createResearchTools(contentEl: HTMLElement) {
-    const section = contentEl.createEl('div', { cls: 'thoth-command-section' });
-    section.createEl('h3').innerHTML = '🔬 Research Tools';
-    section.createEl('p', { text: 'Advanced research and analysis tools' });
-
-    const commandGrid = section.createEl('div', { cls: 'thoth-command-grid' });
-
-    const tools = [
-      {
-        title: 'Research Assistant',
-        desc: 'Open the research assistant interface',
-        action: () => this.openResearchAssistant()
-      },
-      {
-        title: 'Topic Explorer',
-        desc: 'Explore topics and connections',
-        action: () => this.openTopicExplorer()
-      },
-      {
-        title: 'Source Discovery',
-        desc: 'Discover new relevant sources',
-        action: () => this.openSourceDiscovery()
-      },
-      {
-        title: 'Concept Map',
-        desc: 'Generate concept maps from your notes',
-        action: () => this.generateConceptMap()
-      }
-    ];
-
-    tools.forEach(tool => {
-      const button = commandGrid.createEl('div', { cls: 'thoth-command-button' });
-      button.createEl('div', { text: tool.title, cls: 'command-title' });
-      button.createEl('div', { text: tool.desc, cls: 'command-desc' });
-      button.onclick = () => {
-        tool.action();
-        new Notice(`Executed: ${tool.title}`);
-      };
-    });
-  }
-
-  createUtilityTools(contentEl: HTMLElement) {
-    const section = contentEl.createEl('div', { cls: 'thoth-command-section' });
-    section.createEl('h3').innerHTML = '🛠️ Utility Tools';
-    section.createEl('p', { text: 'General utility and helper functions' });
-
-    const commandGrid = section.createEl('div', { cls: 'thoth-command-grid' });
-
-    const tools = [
-      {
-        title: 'Note Templates',
-        desc: 'Create notes from templates',
-        action: () => this.openNoteTemplates()
-      },
-      {
-        title: 'Quick Actions',
-        desc: 'Access quick action menu',
-        action: () => this.openQuickActions()
-      },
-      {
-        title: 'File Organization',
-        desc: 'Organize and manage files',
-        action: () => this.openFileOrganizer()
-      },
-      {
-        title: 'Bulk Operations',
-        desc: 'Perform bulk operations on notes',
-        action: () => this.openBulkOperations()
-      }
-    ];
-
-    tools.forEach(tool => {
-      const button = commandGrid.createEl('div', { cls: 'thoth-command-button' });
-      button.createEl('div', { text: tool.title, cls: 'command-title' });
-      button.createEl('div', { text: tool.desc, cls: 'command-desc' });
-      button.onclick = () => {
-        tool.action();
-        new Notice(`Executed: ${tool.title}`);
-      };
-    });
-  }
-
-  // Tool action methods
-  async openCitationInserter() {
-    // Check if there's an active editor
-    const activeLeaf = this.app.workspace.activeLeaf;
-    if (activeLeaf?.view?.getViewType() === 'markdown') {
-      const editor = (activeLeaf.view as any).editor;
-      if (editor) {
-        await this.plugin.openCitationInserter(editor);
-      } else {
-        new Notice('No active editor found');
-      }
-    } else {
-      new Notice('Please open a markdown file first');
-    }
-  }
-
-  openReferenceManager() {
-    new Notice('Reference manager coming soon!');
-  }
-
-  autoCiteSelection() {
-    const activeLeaf = this.app.workspace.activeLeaf;
-    if (activeLeaf?.view?.getViewType() === 'markdown') {
-      const editor = (activeLeaf.view as any).editor;
-      if (editor) {
-        const selection = editor.getSelection();
-        if (selection) {
-          new Notice(`Auto-citing: "${selection.substring(0, 50)}..."`);
-          // Auto-cite logic would go here
-        } else {
-          new Notice('Please select text to cite');
-        }
-      }
-    } else {
-      new Notice('Please open a markdown file first');
-    }
-  }
-
-  exportBibliography() {
-    new Notice('Bibliography export coming soon!');
-  }
-
   openResearchAssistant() {
-    // Switch to chat tab as that's our research interface
     this.switchTab('chat');
-    new Notice('Research assistant is available in the Chat tab');
-  }
-
-  openTopicExplorer() {
-    new Notice('Topic explorer coming soon!');
-  }
-
-  openSourceDiscovery() {
-    this.plugin.openDiscoverySourceCreator();
-  }
-
-  generateConceptMap() {
-    new Notice('Concept map generation coming soon!');
-  }
-
-  openNoteTemplates() {
-    new Notice('Note templates coming soon!');
   }
 
   openQuickActions() {
-    // Switch to commands tab
     this.switchTab('commands');
-    new Notice('Quick actions are available in the Commands tab');
-  }
-
-  openFileOrganizer() {
-    new Notice('File organizer coming soon!');
-  }
-
-  openBulkOperations() {
-    new Notice('Bulk operations coming soon!');
   }
 
   // Status tab functionality

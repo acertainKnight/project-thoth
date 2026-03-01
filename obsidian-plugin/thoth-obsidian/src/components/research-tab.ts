@@ -344,10 +344,17 @@ export class ResearchTabComponent {
 
     // View button - opens article URL
     const viewBtn = actions.createEl('button', {
-      text: '👁 View',
+      text: 'View',
       cls: `thoth-action-btn ${article.is_viewed ? 'active' : ''}`
     });
     viewBtn.onclick = () => this.viewArticle(article);
+
+    // Create note button - saves article as an Obsidian note
+    const noteBtn = actions.createEl('button', {
+      text: 'Create Note',
+      cls: 'thoth-action-btn'
+    });
+    noteBtn.onclick = () => this.createNoteFromArticle(article);
 
     // Rating buttons
     const ratingGroup = actions.createDiv({ cls: 'thoth-rating-group' });
@@ -379,13 +386,10 @@ export class ResearchTabComponent {
         const data = await response.json();
         console.log('[ResearchTab] Received articles data:', data);
         const rawArticles: MatchedArticle[] = data.matches || [];
-        // On fresh load, filter out articles already rated or downloaded
-        // so the user only sees unprocessed articles in their triage queue
-        this.allArticles = rawArticles.filter(a => !a.user_sentiment);
+        this.allArticles = rawArticles;
         this.articles = [...this.allArticles];
         this.currentFilter = 'all';
-        console.log('[ResearchTab] Loaded articles:', rawArticles.length,
-          '| After filtering rated/downloaded:', this.allArticles.length);
+        console.log('[ResearchTab] Loaded articles:', rawArticles.length);
       } else {
         const errorText = await response.text();
         console.error('[ResearchTab] Articles API error:', response.status, errorText);
