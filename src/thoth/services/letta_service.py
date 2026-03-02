@@ -83,13 +83,19 @@ class LettaService(BaseService):
                         if tools_resp.status_code == 200:
                             server_tools = tools_resp.json()
                             for tool in server_tools:
-                                # Use MCP-qualified name as key, tool dict as value
-                                # Letta expects MCP tools to be attached using their ID
                                 tool_name = tool.get('name')
-                                tool_id = tool.get('id')  # MCP tools have IDs too
+                                tool_id = tool.get('id')
                                 if tool_name and tool_id:
                                     self._tool_cache[tool_name] = tool_id
                                     mcp_tool_count += 1
+                                    # Letta prefixes MCP tool names with the server
+                                    # name (e.g. thoth__create_plan). Skills list
+                                    # unprefixed names, so store both so lookups work
+                                    # either way.
+                                    if '__' in tool_name:
+                                        unprefixed = tool_name.split('__', 1)[1]
+                                        if unprefixed not in self._tool_cache:
+                                            self._tool_cache[unprefixed] = tool_id
             except Exception as mcp_error:
                 self.logger.warning(f'Failed to fetch MCP tools: {mcp_error}')
 
