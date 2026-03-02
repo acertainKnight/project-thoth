@@ -2151,8 +2151,15 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
           }
 
           // --- Auto-follow-up for skill loading/unloading ---
-          if (skillToolDetected) {
-            console.log('[MultiChatModal] Skill tool detected, sending follow-up...');
+          // Loop to handle chained skill loads: if the agent calls load_skill
+          // again inside a follow-up turn (e.g. loading a second skill after
+          // the first), processStream sets skillToolDetected = true again and
+          // we fire another follow-up. Cap at 3 to avoid infinite loops.
+          let skillFollowUpCount = 0;
+          while (skillToolDetected && skillFollowUpCount < 3) {
+            skillToolDetected = false;
+            skillFollowUpCount++;
+            console.log(`[MultiChatModal] Skill tool detected, sending follow-up (attempt ${skillFollowUpCount})...`);
 
             // Show activation pill inline below any prior content
             const activationPill = this.createStepPill(
@@ -2187,6 +2194,7 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
                 this.updateStepPillLabel(activationPill, 'Follow-up failed');
                 await this.addMessageToChat(messagesContainer, 'assistant',
                   'Skill tools loaded, but the follow-up request failed. Try sending your message again.');
+                break;
               } else if (followUpResponse.body) {
                 console.log('[MultiChatModal] Follow-up stream started...');
                 this.updateStepPillLabel(activationPill, 'Skill tools activated');
@@ -2201,6 +2209,7 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
               messagesContainer.querySelectorAll('.message.thinking').forEach(el => el.remove());
               await this.addMessageToChat(messagesContainer, 'assistant',
                 'Skill tools loaded, but an error occurred while processing. Try sending your message again.');
+              break;
             }
           }
 
