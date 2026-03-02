@@ -190,6 +190,8 @@ class TestViewMarkdownEndpoint:
 
     def test_view_markdown_file_exists(self, test_client):
         """Test viewing markdown file that exists."""
+        from unittest.mock import patch
+
         # Create a test markdown file
         with TemporaryDirectory() as tmpdir:
             notes_dir = Path(tmpdir)
@@ -200,8 +202,12 @@ class TestViewMarkdownEndpoint:
             # Update router directories
             health.set_directories(Path(tmpdir), notes_dir, 'http://localhost:8000')
 
-            # Make request with relative path
-            response = test_client.get('/view-markdown?path=test.md')
+            # Patch out user-path resolution so the endpoint uses our notes_dir
+            with patch(
+                'thoth.mcp.auth.get_current_user_paths',
+                return_value=None,
+            ):
+                response = test_client.get('/view-markdown?path=test.md')
 
             # Assertions
             assert response.status_code == 200

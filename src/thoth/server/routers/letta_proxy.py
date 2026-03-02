@@ -7,12 +7,13 @@ plugin calls through this proxy enforces the Thoth auth layer and validates that
 each user can only touch their own agents.
 """
 
+import json
 import os
 import re
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from loguru import logger
 
 from thoth.auth.context import UserContext
@@ -130,7 +131,52 @@ async def letta_proxy(
 
     body = await request.body()
 
+    # Check if the client is expecting an SSE stream so we can relay
+    # chunks as they arrive rather than buffering the full response.
+    wants_stream = False
+    if body:
+        try:
+            payload = json.loads(body)
+            wants_stream = payload.get('streaming', False)
+        except Exception:
+            pass
+
     try:
+        if wants_stream:
+            # SSE / streaming path: relay chunks to the client in real time
+            # so the plugin sees reasoning pills and token deltas immediately.
+            client = httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=10.0))
+            upstream = await client.send(
+                client.build_request(
+                    method=request.method,
+                    url=target_url,
+                    headers=headers,
+                    content=body or None,
+                ),
+                stream=True,
+            )
+
+            async def _relay():
+                try:
+                    async for chunk in upstream.aiter_bytes():
+                        yield chunk
+                finally:
+                    await upstream.aclose()
+                    await client.aclose()
+
+            return StreamingResponse(
+                _relay(),
+                status_code=upstream.status_code,
+                headers={
+                    'content-type': upstream.headers.get(
+                        'content-type', 'text/event-stream'
+                    ),
+                    'cache-control': 'no-cache',
+                    'x-accel-buffering': 'no',
+                },
+            )
+
+        # Non-streaming path: buffer and forward as before.
         async with httpx.AsyncClient() as client:
             letta_response = await client.request(
                 method=request.method,
@@ -140,7 +186,6 @@ async def letta_proxy(
                 timeout=120.0,
             )
 
-        # Stream the response back with the original status and content-type.
         return Response(
             content=letta_response.content,
             status_code=letta_response.status_code,

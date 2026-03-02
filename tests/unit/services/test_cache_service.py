@@ -8,10 +8,17 @@ caching behavior for OCR, analysis, and API response caching.
 import time  # noqa: I001
 import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch  # noqa: F401
+from unittest.mock import Mock, patch
 from tempfile import TemporaryDirectory
 
 from thoth.services.cache_service import CacheService
+
+
+@pytest.fixture(autouse=True)
+def _isolate_from_global_config():
+    """Disable user-path resolution so services use mock config paths."""
+    with patch('thoth.services.base.BaseService._get_user_paths', return_value=None):
+        yield
 
 
 @pytest.mark.asyncio

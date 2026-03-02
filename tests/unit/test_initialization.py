@@ -75,14 +75,14 @@ class TestInitializationFactory:
         assert isinstance(graph, CitationGraph)
 
     def test_initialize_thoth_creates_directories(self):
-        """Test that required directories are created."""
+        """Test that vault-resident directories are created."""
         from thoth.config import config
 
-        # Should not raise even if directories don't exist
-        services, pipeline, graph = initialize_thoth()
+        _services, _pipeline, _graph = initialize_thoth()
 
-        # Directories should exist after initialization
-        assert config.output_dir.exists()
+        # Vault-resident directories should exist after initialization.
+        # Runtime dirs (output_dir, data_root) are NOT created — all
+        # persistent state lives in Postgres.
         assert config.notes_dir.exists()
         assert config.markdown_dir.exists()
 
@@ -100,9 +100,9 @@ class TestInitializationFactory:
         assert graph1 is not graph2
 
         # But same types
-        assert type(services1) == type(services2)
-        assert type(pipeline1) == type(pipeline2)
-        assert type(graph1) == type(graph2)
+        assert isinstance(services1, type(services2))
+        assert isinstance(pipeline1, type(pipeline2))
+        assert isinstance(graph1, type(graph2))
 
 
 class TestThothPipelineDeprecation:
@@ -173,6 +173,6 @@ class TestThothPipelineDeprecation:
         services, doc_pipeline, graph = initialize_thoth()
 
         # Should have same types
-        assert type(pipeline.services) == type(services)
-        assert type(pipeline.document_pipeline) == type(doc_pipeline)
-        assert type(pipeline.citation_tracker) == type(graph)
+        assert isinstance(pipeline.services, type(services))
+        assert isinstance(pipeline.document_pipeline, type(doc_pipeline))
+        assert isinstance(pipeline.citation_tracker, type(graph))

@@ -15,6 +15,22 @@ from pydantic import BaseModel, ValidationError
 from thoth.services.analysis_schema_service import AnalysisSchemaService
 from thoth.utilities.schemas import AnalysisResponse
 
+# Prevent services from resolving paths via the global config singleton.
+# Without this, _get_user_paths() returns real vault paths that override
+# the mock config paths these tests set up.
+_NO_USER_PATHS = patch(
+    'thoth.services.base.BaseService._get_user_paths', return_value=None
+)
+
+pytestmark = pytest.mark.usefixtures()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_from_global_config():
+    """Disable user-path resolution so services use mock config paths."""
+    with _NO_USER_PATHS:
+        yield
+
 
 @pytest.fixture
 def temp_schema_file():
@@ -109,7 +125,7 @@ class TestAnalysisSchemaServiceInit:
 class TestSchemaLoading:
     """Test schema loading and validation."""
 
-    def test_load_valid_schema(self, mock_config, temp_schema_file):
+    def test_load_valid_schema(self, mock_config, temp_schema_file):  # noqa: ARG002
         """Test loading a valid schema file."""
         service = AnalysisSchemaService(config=mock_config)
         service.initialize()
@@ -336,14 +352,14 @@ class TestTypeMapping:
         service = AnalysisSchemaService(config=mock_config)
 
         py_type = service._map_json_type_to_python('string', {})
-        assert py_type == str
+        assert py_type is str
 
     def test_map_integer_type(self, mock_config):
         """Test mapping integer type."""
         service = AnalysisSchemaService(config=mock_config)
 
         py_type = service._map_json_type_to_python('integer', {})
-        assert py_type == int
+        assert py_type is int
 
     def test_map_array_of_strings(self, mock_config):
         """Test mapping array of strings."""
@@ -398,7 +414,7 @@ class TestHotReload:
         """Test that service registers for config reload."""
         mock_config.register_reload_callback = mock_register
 
-        service = AnalysisSchemaService(config=mock_config)
+        AnalysisSchemaService(config=mock_config)
 
         # Should have registered callback
         mock_register.assert_called_once()

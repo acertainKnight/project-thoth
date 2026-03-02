@@ -8,6 +8,13 @@ import pytest
 from thoth.services.skill_service import SkillService
 
 
+@pytest.fixture(autouse=True)
+def _isolate_from_global_config():
+    """Disable user-path resolution so services use mock config paths."""
+    with patch('thoth.services.base.BaseService._get_user_paths', return_value=None):
+        yield
+
+
 @pytest.fixture
 def mock_config(tmp_path):
     """Create a mock config object with temp directory."""

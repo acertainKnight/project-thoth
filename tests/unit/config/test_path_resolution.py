@@ -174,20 +174,20 @@ class TestPathCreation:
     """Test automatic directory creation."""
 
     def test_directories_created_on_init(self, temp_vault: Path, monkeypatch):
-        """Test all configured directories are created."""
+        """Test vault-resident directories are created on init."""
         monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
-        # All directories should exist
+        # Vault-resident directories should exist
         assert config.workspace_dir.exists()
         assert config.pdf_dir.exists()
         assert config.markdown_dir.exists()
         assert config.notes_dir.exists()
-        assert config.logs_dir.exists()
-        assert config.discovery_sources_dir.exists()
-        assert config.discovery_results_dir.exists()
+
+        # Runtime dirs (logs, discovery) live under ~/.local/share/thoth
+        # and are NOT created on init -- persistent state is in Postgres.
 
     def test_nested_directories_created(self, temp_vault: Path, monkeypatch):
         """Test nested directories are created with parents=True."""
@@ -297,16 +297,18 @@ class TestDiscoveryPaths:
         assert not config.discovery_results_dir.is_relative_to(temp_vault)
         assert not config.discovery_chrome_configs_dir.is_relative_to(temp_vault)
 
-    def test_discovery_paths_created(self, temp_vault: Path, monkeypatch):
-        """Test discovery directories are created."""
+    def test_discovery_paths_are_runtime_dirs(self, temp_vault: Path, monkeypatch):
+        """Test discovery paths are runtime dirs (not created on init)."""
         monkeypatch.setenv('OBSIDIAN_VAULT_PATH', str(temp_vault))
 
         Config._instance = None
         config = Config()
 
-        assert config.discovery_sources_dir.exists()
-        assert config.discovery_results_dir.exists()
-        assert config.discovery_chrome_configs_dir.exists()
+        # Discovery dirs are under data_root (runtime), not vault-resident.
+        # They are NOT created on init -- persistent state lives in Postgres.
+        assert config.discovery_sources_dir.is_absolute()
+        assert config.discovery_results_dir.is_absolute()
+        assert config.discovery_chrome_configs_dir.is_absolute()
 
 
 class TestPathResolutionEdgeCases:
