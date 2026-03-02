@@ -2005,6 +2005,13 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
                         }
                       }
 
+                      // If both parse strategies failed, fall back to whatever
+                      // the streaming renderer already wrote to the DOM so the
+                      // finalization step doesn't wipe visible content.
+                      if (!sendText && streamContentEl) {
+                        sendText = streamContentEl.textContent || '';
+                      }
+
                       if (sendText) {
                         streamAccumulated += (streamAccumulated ? '\n\n' : '') + sendText;
                       }
@@ -2099,13 +2106,25 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
               }
             }
 
-            // Finalize: re-render streamed content with Obsidian markdown
+            // Finalize: flush the streaming parser, then re-render with
+            // Obsidian's native markdown for proper styling.
             if (streamRenderer) {
               streamRenderer.end();
-              if (streamContentEl && streamAccumulated) {
-                await this.renderMessageContent(streamAccumulated, streamContentEl);
-              }
             }
+
+            if (streamContentEl && streamAccumulated) {
+              // Normal path: replace streaming preview with full Obsidian render.
+              await this.renderMessageContent(streamAccumulated, streamContentEl);
+            } else if (!streamContentEl && streamAccumulated && assistantMessageEl) {
+              // Message arrived in a single chunk so no streaming element was
+              // created. Render into a new content div now.
+              const el = (assistantMessageEl as HTMLElement).createEl('div', { cls: 'message-content' });
+              await this.renderMessageContent(streamAccumulated, el);
+              streamContentEl = el;
+            }
+            // If streamAccumulated is empty (stream cut out before
+            // tool_return_message), leave the streaming preview in place rather
+            // than replacing it with nothing.
 
             // Merge this stream's content into the overall accumulated content
             if (streamAccumulated) {
