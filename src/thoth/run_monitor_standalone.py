@@ -111,8 +111,8 @@ def main() -> int:
 
         # Start knowledge folder watcher (non-blocking)
         print('MONITOR: Checking for knowledge service...', flush=True)
-        knowledge_service = service_manager.knowledge
-        postgres_service = service_manager.postgres
+        knowledge_service = service_manager._services.get('knowledge')
+        postgres_service = service_manager._services.get('postgres')
 
         if knowledge_service and postgres_service:
             print('MONITOR: Starting knowledge folder watcher...', flush=True)

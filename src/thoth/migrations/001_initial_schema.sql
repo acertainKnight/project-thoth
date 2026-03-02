@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS processed_papers (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
 
-    UNIQUE(paper_id)
+    UNIQUE(paper_id, user_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_processed_papers_status ON processed_papers(processing_status);
@@ -507,11 +507,12 @@ SELECT
     pm.id,
     pm.doi,
     pm.arxiv_id,
-    NULL::TEXT as backup_id,  -- Deprecated field
+    pm.title,
+    pm.title_normalized,
     pm.authors,
     pm.affiliations,
-    pm.year,
     pm.publication_date,
+    pm.year,
     pm.journal,
     pm.venue,
     pm.volume,
@@ -521,31 +522,34 @@ SELECT
     pm.abstract,
     pm.keywords,
     pm.fields_of_study,
-    NULL::JSONB as s2_fields_of_study,  -- Deprecated
     pm.url,
     pm.pdf_url,
     pm.pdf_source,
-    pp.obsidian_uri,
+    pm.is_open_access,
     pm.citation_count,
     pm.reference_count,
     pm.influential_citation_count,
-    pm.is_open_access,
-    CASE WHEN pm.source_of_truth = 'citation' THEN true ELSE false END as is_document_citation,
+    pm.source_of_truth,
+    pm.original_papers_id,
+    pm.search_vector,
     pm.created_at,
     pm.updated_at,
-    -- Processed paper fields
+    pm.collection_id,
+    pm.document_category,
+    pm.user_id,
     pp.pdf_path,
     pp.markdown_path,
     pp.note_path,
+    pp.markdown_content,
+    pp.obsidian_uri,
     pp.processing_status,
+    pp.processed_at,
+    pp.last_accessed,
     pp.user_notes,
     pp.user_rating,
     pp.user_tags,
     pp.analysis_schema_name,
-    pp.analysis_schema_version,
-    -- Full-text search
-    pm.search_vector,
-    pm.title  -- Add title explicitly
+    pp.analysis_schema_version
 FROM paper_metadata pm
 LEFT JOIN processed_papers pp ON pp.paper_id = pm.id;
 

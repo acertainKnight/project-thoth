@@ -215,9 +215,10 @@ class CitationGraph:
             user_id = get_mcp_user_id()
             conn = await asyncpg.connect(db_url)
             try:
-                # Load papers (nodes)
+                # Load papers (nodes) from paper_metadata
+                # (the papers VIEW lacks user_id)
                 papers = await conn.fetch(
-                    'SELECT * FROM papers WHERE user_id = $1', user_id
+                    'SELECT * FROM paper_metadata WHERE user_id = $1', user_id
                 )
                 for paper in papers:
                     self.graph.add_node(
@@ -234,8 +235,8 @@ class CitationGraph:
                         p2.title as target_title,
                         c.citation_context as context
                     FROM citations c
-                    JOIN papers p1 ON c.citing_paper_id = p1.id
-                    JOIN papers p2 ON c.cited_paper_id = p2.id
+                    JOIN paper_metadata p1 ON c.citing_paper_id = p1.id
+                    JOIN paper_metadata p2 ON c.cited_paper_id = p2.id
                     WHERE p1.user_id = $1
                 """,
                     user_id,

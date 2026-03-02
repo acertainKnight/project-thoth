@@ -110,7 +110,12 @@ class NoteService(BaseService):
             conn = await asyncpg.connect(db_url)
             try:
                 result = await conn.fetchval(
-                    'SELECT markdown_content FROM papers WHERE title = $1 AND user_id = $2',
+                    """
+                    SELECT pp.markdown_content
+                    FROM processed_papers pp
+                    JOIN paper_metadata pm ON pm.id = pp.paper_id
+                    WHERE pm.title = $1 AND pm.user_id = $2
+                    """,
                     title,
                     user_id,
                 )
