@@ -1874,7 +1874,7 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
                     }
 
                     if (reasoning) {
-                      accumulatedReasoning += reasoning + '\n';
+                      accumulatedReasoning += reasoning;
                       this.updateStepPillDetail(
                         currentReasoningPill, accumulatedReasoning.trim()
                       );
