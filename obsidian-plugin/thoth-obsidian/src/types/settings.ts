@@ -51,6 +51,10 @@ export interface ThothSettings {
   enableNotifications: boolean;
   notificationDuration: number;     // milliseconds
 
+  // === CHAT DISPLAY MODE ===
+  chatDisplayMode: 'sidebar' | 'floating' | 'minimized' | 'closed';
+  defaultChatMode: 'sidebar' | 'floating';
+
   // === UPDATE CHECKING ===
   checkForUpdates: boolean;                          // User-facing toggle
   releaseChannel: 'stable' | 'alpha' | 'nightly';   // Which channel the user installed from
@@ -93,6 +97,10 @@ export const DEFAULT_SETTINGS: ThothSettings = {
   showAdvancedSettings: false,
   enableNotifications: true,
   notificationDuration: 5000,
+
+  // Chat Display Mode
+  chatDisplayMode: 'closed',
+  defaultChatMode: 'sidebar',
 
   // Update Checking
   checkForUpdates: true,

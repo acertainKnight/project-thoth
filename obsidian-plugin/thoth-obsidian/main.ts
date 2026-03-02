@@ -28,6 +28,9 @@ function initDesktopUtils() {
 // Import modular components
 import { ThothSettings, ChatMessage, ChatSession, ChatWindowState, NotificationProgress, DEFAULT_SETTINGS } from './src/types';
 import { MultiChatModal, CommandsModal, InputModal, ConfirmModal } from './src/modals';
+import { ChatRenderer } from './src/views/chat-renderer';
+import { ThothSidebarView, THOTH_VIEW_TYPE } from './src/views/sidebar-view';
+import { makeDraggable } from './src/utils/draggable';
 import { APIUtilities } from './src/utils/api';
 import { UpdateChecker } from './src/services/update-checker';
 
@@ -54,6 +57,9 @@ export default class ThothPlugin extends Plugin {
   async onload() {
     await this.loadSettings();
 
+    // Register native Obsidian sidebar view (must be done before layout ready)
+    this.registerView(THOTH_VIEW_TYPE, (leaf) => new ThothSidebarView(leaf, this));
+
     // Initialize desktop utilities if available
     initDesktopUtils();
 
@@ -65,7 +71,7 @@ export default class ThothPlugin extends Plugin {
 
       // Show helpful notice if no remote URL configured
       if (!this.settings.remoteEndpointUrl) {
-        new Notice('📱 Thoth: Mobile requires remote mode. Please configure your remote server URL in settings.', 8000);
+        new Notice('Thoth: Mobile requires remote mode. Please configure your remote server URL in settings.', 8000);
       }
     }
 
@@ -107,6 +113,27 @@ export default class ThothPlugin extends Plugin {
       name: 'Open Research Chat',
       callback: () => {
         this.openChatModal();
+      }
+    });
+
+    this.addCommand({
+      id: 'open-thoth-sidebar',
+      name: 'Open Thoth Chat Sidebar',
+      callback: () => {
+        this.activateSidebarView();
+      }
+    });
+
+    this.addCommand({
+      id: 'open-thoth-floating',
+      name: 'Open Thoth Chat Floating Panel',
+      callback: () => {
+        if (this.floatingChatPanel) {
+          this.floatingChatPanel.style.display =
+            this.floatingChatPanel.style.display === 'none' ? 'flex' : 'none';
+        } else {
+          this.createFloatingChatPanel();
+        }
       }
     });
 
@@ -159,6 +186,13 @@ export default class ThothPlugin extends Plugin {
     // Initialize and schedule update checker
     this.updateChecker = new UpdateChecker(this);
     this.updateChecker.scheduleCheck();
+
+    // Restore sidebar if it was open when Obsidian was last closed
+    this.app.workspace.onLayoutReady(() => {
+      if (this.settings.chatDisplayMode === 'sidebar') {
+        this.activateSidebarView();
+      }
+    });
   }
 
   async loadSettings() {
@@ -561,7 +595,7 @@ export default class ThothPlugin extends Plugin {
 
         // Insert the research results at the cursor position
         const cursor = editor.getCursor();
-        const researchText = `\n\n## 🔍 Research: ${query}\n*Generated on ${new Date().toLocaleString()} by Thoth Research Assistant*\n\n${result.response}\n\n---\n`;
+        const researchText = `\n\n## Research: ${query}\n*Generated on ${new Date().toLocaleString()} by Thoth Research Assistant*\n\n${result.response}\n\n---\n`;
 
         editor.replaceRange(researchText, cursor);
         new Notice('Research completed and inserted!');
@@ -575,47 +609,80 @@ export default class ThothPlugin extends Plugin {
   }
 
   private floatingChatPanel: HTMLElement | null = null;
-  private chatModalInstance: MultiChatModal | null = null;
+  private floatingRenderer: ChatRenderer | null = null;
   private isMinimized: boolean = false;
 
   openChatModal() {
-    // Platform-adaptive chat interface
+    // Mobile: Use full-screen modal
     if ((this.app as any).isMobile) {
-      // Mobile: Use full-screen modal
       new MultiChatModal(this.app, this).open();
-    } else {
-      // Desktop: Use floating panel
-      // Check if floating panel already exists
+      return;
+    }
+
+    // Desktop: restore to the last known state; fall back to defaultChatMode when closed
+    const lastMode = this.settings.chatDisplayMode;
+
+    if (lastMode === 'floating' || lastMode === 'minimized') {
       if (this.floatingChatPanel) {
-        // Toggle visibility
-        if (this.floatingChatPanel.style.display === 'none') {
-          this.floatingChatPanel.style.display = 'flex';
-        } else {
-          this.floatingChatPanel.style.display = 'none';
-        }
+        // Already open — toggle visibility
+        this.floatingChatPanel.style.display =
+          this.floatingChatPanel.style.display === 'none' ? 'flex' : 'none';
         return;
       }
-
-      // Create floating panel for desktop
       this.createFloatingChatPanel();
+      return;
+    }
+
+    if (lastMode === 'sidebar') {
+      this.activateSidebarView();
+      return;
+    }
+
+    // 'closed' — use the user's preferred default mode
+    if (this.settings.defaultChatMode === 'floating') {
+      this.createFloatingChatPanel();
+    } else {
+      this.activateSidebarView();
     }
   }
 
-  createFloatingChatPanel() {
-    // Create floating panel
+  async activateSidebarView(): Promise<void> {
+    // Enforce mutual exclusivity: close floating panel before opening sidebar
+    this.closeFloatingPanel();
+
+    const existing = this.app.workspace.getLeavesOfType(THOTH_VIEW_TYPE);
+    if (existing.length) {
+      this.app.workspace.revealLeaf(existing[0]);
+      return;
+    }
+    const leaf = this.app.workspace.getRightLeaf(false);
+    if (leaf) {
+      await leaf.setViewState({ type: THOTH_VIEW_TYPE, active: true });
+      this.app.workspace.revealLeaf(leaf);
+    }
+  }
+
+  async createFloatingChatPanel(): Promise<void> {
+    // Enforce mutual exclusivity: close sidebar before opening floating panel
+    this.app.workspace.detachLeavesOfType(THOTH_VIEW_TYPE);
+
+    // Collapse the right sidebar so it doesn't linger as an empty panel
+    const rightSplit = (this.app.workspace as any).rightSplit;
+    if (rightSplit && !rightSplit.collapsed) {
+      rightSplit.collapse();
+    }
+
     this.floatingChatPanel = document.body.createEl('div', {
       cls: 'thoth-floating-chat-panel'
     });
-
-    // Position and style
     this.floatingChatPanel.style.cssText = `
       position: fixed;
       bottom: 20px;
       right: 20px;
-      width: 450px;
-      height: 600px;
+      width: 380px;
+      height: 420px;
       max-width: 90vw;
-      max-height: 80vh;
+      max-height: 70vh;
       z-index: 1000;
       border-radius: 12px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
@@ -627,25 +694,16 @@ export default class ThothPlugin extends Plugin {
       flex-direction: column;
       font-family: var(--font-interface);
     `;
-
-    // Create modal instance but don't open it - just use its functionality
-    this.chatModalInstance = new MultiChatModal(this.app, this);
-
-    // Replace the modal's contentEl with our floating panel
-    this.chatModalInstance.contentEl = this.floatingChatPanel;
-    this.chatModalInstance.modalEl = this.floatingChatPanel;
-
-    // Initialize the modal's content in our floating panel
     this.initializeFloatingPanel();
   }
 
-  async initializeFloatingPanel() {
-    if (!this.chatModalInstance || !this.floatingChatPanel) return;
+  async initializeFloatingPanel(): Promise<void> {
+    if (!this.floatingChatPanel) return;
 
     // Add title bar with minimize and close buttons
     const titleBar = this.floatingChatPanel.createEl('div', { cls: 'thoth-title-bar' });
 
-    const titleText = titleBar.createEl('span', { text: '🧠 Thoth Chat' });
+    const titleText = titleBar.createEl('span', { text: 'Thoth Chat' });
     titleText.style.flexGrow = '1';
 
     titleBar.style.cssText = `
@@ -702,7 +760,7 @@ export default class ThothPlugin extends Plugin {
     `;
     closeBtn.onclick = () => this.closeFloatingPanel();
 
-    // Content area for the modal content
+    // Content area for ChatRenderer
     const contentArea = this.floatingChatPanel.createEl('div', { cls: 'thoth-panel-content' });
     contentArea.style.cssText = `
       flex: 1;
@@ -712,13 +770,26 @@ export default class ThothPlugin extends Plugin {
       overflow: hidden;
     `;
 
-    // Now use the content area as the modal's contentEl
-    this.chatModalInstance.contentEl = contentArea;
+    // Create ChatRenderer directly — no Modal hijacking
+    this.floatingRenderer = new ChatRenderer(contentArea, this, this.app);
 
-    // Initialize the modal content
-    await this.chatModalInstance.onOpen();
+    // Mode buttons: dock to sidebar, minimize to pill
+    this.floatingRenderer.modeButtons = [
+      {
+        label: '⇲',
+        title: 'Dock to sidebar',
+        onClick: async () => {
+          this.closeFloatingPanel();
+          await this.activateSidebarView();
+        }
+      }
+    ];
 
-    // Make draggable
+    await this.floatingRenderer.mount();
+
+    this.settings.chatDisplayMode = 'floating';
+    await this.saveSettings();
+
     this.makeFloatingPanelDraggable();
   }
 
@@ -738,8 +809,8 @@ export default class ThothPlugin extends Plugin {
     if (!this.floatingChatPanel) return;
 
     // Store original dimensions
-    const originalWidth = this.floatingChatPanel.style.width || '450px';
-    const originalHeight = this.floatingChatPanel.style.height || '600px';
+    const originalWidth = this.floatingChatPanel.style.width || '380px';
+    const originalHeight = this.floatingChatPanel.style.height || '420px';
     this.floatingChatPanel.dataset.originalWidth = originalWidth;
     this.floatingChatPanel.dataset.originalHeight = originalHeight;
 
@@ -838,19 +909,18 @@ export default class ThothPlugin extends Plugin {
       sendBtn.textContent = 'Asking...';
 
       try {
-        // Ensure we have a chat modal instance
-        if (!this.chatModalInstance) {
+        // Ensure we have a renderer for the active session
+        if (!this.floatingRenderer) {
           throw new Error('Chat system not initialized');
         }
 
-        // Ensure we have an active session, create one if needed
-        let conversationId = this.chatModalInstance.activeSessionId;
+        let conversationId = this.floatingRenderer.activeSessionId;
         if (!conversationId) {
           responseArea.textContent = 'Initializing chat session...';
           try {
-            conversationId = await this.chatModalInstance.getOrCreateDefaultConversation();
-            this.chatModalInstance.activeSessionId = conversationId;
-            await this.chatModalInstance.loadChatSessions();
+            conversationId = await this.floatingRenderer.getOrCreateDefaultConversation();
+            this.floatingRenderer.activeSessionId = conversationId;
+            await this.floatingRenderer.loadChatSessions();
           } catch (initError) {
             throw new Error(`Failed to initialize chat: ${initError.message}`);
           }
@@ -898,8 +968,8 @@ export default class ThothPlugin extends Plugin {
             assistantResponse.substring(0, 150) + '...' : assistantResponse;
 
           // Update full chat in background
-          await this.chatModalInstance.loadChatSessions();
-          this.chatModalInstance.renderSessionList();
+          await this.floatingRenderer?.loadChatSessions();
+          this.floatingRenderer?.renderSessionList();
         } else {
           const errorData = await response.json().catch(() => ({}));
           throw new Error(errorData.message || errorData.detail || `Server error: ${response.status}`);
@@ -935,6 +1005,38 @@ export default class ThothPlugin extends Plugin {
       minimizeBtn.title = 'Restore';
     }
 
+    // Add dock-to-sidebar button to the title bar button container
+    const btnContainer = this.floatingChatPanel.querySelector('.thoth-title-bar > div') as HTMLElement;
+    if (btnContainer) {
+      const sidebarBtn = btnContainer.createEl('button', { text: '⇲' });
+      sidebarBtn.addClass('thoth-dock-btn');
+      sidebarBtn.title = 'Dock to sidebar';
+      sidebarBtn.style.cssText = `
+        background: none;
+        border: none;
+        font-size: 14px;
+        cursor: pointer;
+        color: var(--text-muted);
+        padding: 0;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      `;
+      sidebarBtn.onmouseenter = () => { sidebarBtn.style.color = 'var(--text-normal)'; };
+      sidebarBtn.onmouseleave = () => { sidebarBtn.style.color = 'var(--text-muted)'; };
+      sidebarBtn.onclick = async () => {
+        this.closeFloatingPanel();
+        await this.activateSidebarView();
+      };
+      btnContainer.insertBefore(sidebarBtn, btnContainer.firstChild);
+    }
+
+    // Track state
+    this.settings.chatDisplayMode = 'minimized';
+    this.saveSettings();
+
     // Focus input
     setTimeout(() => inputEl.focus(), 100);
   }
@@ -947,6 +1049,10 @@ export default class ThothPlugin extends Plugin {
     if (minimizedContent) {
       minimizedContent.remove();
     }
+
+    // Remove the dock-to-sidebar button added during minimise
+    const dockBtn = this.floatingChatPanel.querySelector('.thoth-dock-btn');
+    if (dockBtn) dockBtn.remove();
 
     // Show the main content
     const contentArea = this.floatingChatPanel.querySelector('.thoth-panel-content') as HTMLElement;
@@ -967,13 +1073,16 @@ export default class ThothPlugin extends Plugin {
       minimizeBtn.textContent = '_';
       minimizeBtn.title = 'Minimize';
     }
+
+    // Track state
+    this.settings.chatDisplayMode = 'floating';
+    this.saveSettings();
   }
 
   getLastAssistantMessage(): string | null {
-    if (this.chatModalInstance) {
-      const messages = (this.chatModalInstance as any).messageCache?.get(
-        this.chatModalInstance.activeSessionId
-      );
+    const renderer = this.floatingRenderer;
+    if (renderer) {
+      const messages = renderer.messageCache?.get(renderer.activeSessionId ?? '');
       if (messages?.length) {
         const last = [...messages].reverse().find(
           (m: any) => m.message_type === 'assistant_message'
@@ -984,73 +1093,30 @@ export default class ThothPlugin extends Plugin {
     return null;
   }
 
-  closeFloatingPanel() {
+  closeFloatingPanel(): void {
+    if (!this.floatingChatPanel && !this.floatingRenderer) return;
+
+    this.floatingRenderer?.unmount();
+    this.floatingRenderer = null;
     if (this.floatingChatPanel) {
       this.floatingChatPanel.remove();
       this.floatingChatPanel = null;
     }
-    if (this.chatModalInstance) {
-      this.chatModalInstance.onClose();
-      this.chatModalInstance = null;
-    }
     this.isMinimized = false;
+
+    // Only mark as closed if the sidebar isn't about to take over
+    // (sidebar-view.ts sets chatDisplayMode to 'sidebar' in onOpen)
+    if (this.settings.chatDisplayMode !== 'sidebar') {
+      this.settings.chatDisplayMode = 'closed';
+      this.saveSettings();
+    }
   }
 
-  makeFloatingPanelDraggable() {
+  makeFloatingPanelDraggable(): void {
     if (!this.floatingChatPanel) return;
-
     const titleBar = this.floatingChatPanel.querySelector('.thoth-title-bar') as HTMLElement;
-    let isDragging = false;
-    let currentX = 0;
-    let currentY = 0;
-    let initialX = 0;
-    let initialY = 0;
-    let xOffset = 0;
-    let yOffset = 0;
-
-    titleBar.addEventListener('mousedown', dragStart);
-    document.addEventListener('mousemove', drag);
-    document.addEventListener('mouseup', dragEnd);
-
-    const self = this;
-    function dragStart(e: MouseEvent) {
-      if ((e.target as HTMLElement).tagName === 'BUTTON') return;
-
-      initialX = e.clientX - xOffset;
-      initialY = e.clientY - yOffset;
-      isDragging = true;
-      self.floatingChatPanel!.style.cursor = 'grabbing';
-    }
-
-    function drag(e: MouseEvent) {
-      if (isDragging) {
-        e.preventDefault();
-        currentX = e.clientX - initialX;
-        currentY = e.clientY - initialY;
-        xOffset = currentX;
-        yOffset = currentY;
-
-        const rect = self.floatingChatPanel!.getBoundingClientRect();
-        const maxX = window.innerWidth - rect.width;
-        const maxY = window.innerHeight - rect.height;
-
-        currentX = Math.max(0, Math.min(currentX, maxX));
-        currentY = Math.max(0, Math.min(currentY, maxY));
-
-        self.floatingChatPanel!.style.right = 'unset';
-        self.floatingChatPanel!.style.bottom = 'unset';
-        self.floatingChatPanel!.style.left = currentX + 'px';
-        self.floatingChatPanel!.style.top = currentY + 'px';
-      }
-    }
-
-    function dragEnd() {
-      initialX = currentX;
-      initialY = currentY;
-      isDragging = false;
-      if (self.floatingChatPanel) {
-        self.floatingChatPanel.style.cursor = 'auto';
-      }
+    if (titleBar) {
+      makeDraggable(this.floatingChatPanel, titleBar);
     }
   }
 
@@ -1435,7 +1501,7 @@ export default class ThothPlugin extends Plugin {
 
         // Insert the research results at the cursor position
         const cursor = editor.getCursor();
-        const researchText = `\n\n## 🔍 Research: ${query}\n*Generated on ${new Date().toLocaleString()} by Thoth Research Assistant*\n\n${result.response || result.results}\n\n---\n`;
+        const researchText = `\n\n## Research: ${query}\n*Generated on ${new Date().toLocaleString()} by Thoth Research Assistant*\n\n${result.response || result.results}\n\n---\n`;
 
         editor.replaceRange(researchText, cursor);
         new Notice('Research completed and inserted!');
@@ -1476,9 +1542,9 @@ export default class ThothPlugin extends Plugin {
       if (response.ok) {
         const validation = await response.json();
         if (validation.is_valid) {
-          new Notice('✅ Configuration is valid');
+          new Notice('Configuration is valid');
         } else {
-          new Notice(`❌ Configuration errors: ${validation.error_count}`);
+          new Notice(`Configuration errors: ${validation.error_count}`);
           console.log('Validation errors:', validation.errors);
         }
       } else {
@@ -1686,9 +1752,9 @@ export default class ThothPlugin extends Plugin {
 
     const iconMap = {
       info: 'ℹ️',
-      success: '✅',
-      warning: '⚠️',
-      error: '❌'
+      success: '+',
+      warning: '!',
+      error: 'x'
     };
 
     const colorMap = {
@@ -1722,10 +1788,10 @@ export default class ThothPlugin extends Plugin {
    */
   private getNotificationIcon(type: 'info' | 'success' | 'warning' | 'error'): string {
     const iconMap = {
-      info: '🔵',
-      success: '✅',
-      warning: '⚠️',
-      error: '❌'
+      info: '·',
+      success: '+',
+      warning: '!',
+      error: 'x'
     };
     return iconMap[type];
   }
@@ -1770,7 +1836,7 @@ export default class ThothPlugin extends Plugin {
       </div>
       ${canCancel ? `
         <div class="thoth-notice-actions">
-          <button class="thoth-notice-btn thoth-cancel-btn">🚫 Cancel</button>
+          <button class="thoth-notice-btn thoth-cancel-btn">Cancel</button>
         </div>
       ` : ''}
     `;
@@ -2039,6 +2105,9 @@ export default class ThothPlugin extends Plugin {
    * Cleanup resources on plugin unload
    */
   onunload() {
+    // Detach sidebar view leaves
+    this.app.workspace.detachLeavesOfType(THOTH_VIEW_TYPE);
+
     // Clean up floating panel
     this.closeFloatingPanel();
 

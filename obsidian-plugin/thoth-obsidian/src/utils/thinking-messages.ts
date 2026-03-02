@@ -245,19 +245,19 @@ export function getToolStatusMessage(toolName: string): string {
 
 /**
  * Agentic retrieval step icons for UI display.
- * Maps retrieval step names to emoji icons.
+ * Maps retrieval step names to ICONS keys (see src/utils/icons.ts).
  */
 export const RETRIEVAL_STEP_ICONS: Record<string, string> = {
-  classify: '🔍',
-  expand: '🔎',
-  decompose: '✂️',
-  extract_filters: '🏷️',
-  retrieve: '📚',
-  grade: '📊',
-  rewrite: '✏️',
-  rerank: '🏆',
-  generate: '💡',
-  hallucination_check: '✅',
+  classify:         'search',
+  expand:           'search',
+  decompose:        'scissors',
+  extract_filters:  'tag',
+  retrieve:         'book',
+  grade:            'barChart',
+  rewrite:          'edit',
+  rerank:           'barChart',
+  generate:         'lightbulb',
+  hallucination_check: 'check',
 };
 
 /**
@@ -278,10 +278,10 @@ export const RETRIEVAL_STEP_MESSAGES: Record<string, string> = {
 };
 
 /**
- * Get icon for a retrieval step.
+ * Get icon key for a retrieval step (resolves via ICONS in chat-renderer).
  */
 export function getRetrievalStepIcon(step: string): string {
-  return RETRIEVAL_STEP_ICONS[step] || '⚙️';
+  return RETRIEVAL_STEP_ICONS[step] || 'tool';
 }
 
 /**

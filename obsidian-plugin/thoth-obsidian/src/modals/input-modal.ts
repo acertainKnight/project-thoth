@@ -4,11 +4,18 @@ export class InputModal extends Modal {
   private promptText: string;
   private resolve: (value: string | null) => void;
   private inputEl: HTMLInputElement;
+  private defaultValue: string;
 
-  constructor(app: App, promptText: string, resolve: (value: string | null) => void) {
+  constructor(
+    app: App,
+    promptText: string,
+    resolve: (value: string | null) => void,
+    defaultValue: string = ''
+  ) {
     super(app);
     this.promptText = promptText;
     this.resolve = resolve;
+    this.defaultValue = defaultValue;
   }
 
   onOpen() {
@@ -19,6 +26,10 @@ export class InputModal extends Modal {
 
     this.inputEl = contentEl.createEl('input', { type: 'text' });
     this.inputEl.style.cssText = 'width: 100%; padding: 8px; margin: 10px 0; border: 1px solid var(--background-modifier-border); border-radius: 4px;';
+    if (this.defaultValue) {
+      this.inputEl.value = this.defaultValue;
+      this.inputEl.select();
+    }
     this.inputEl.focus();
 
     const buttonContainer = contentEl.createEl('div');
