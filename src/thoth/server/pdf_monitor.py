@@ -44,6 +44,19 @@ if TYPE_CHECKING:
     from thoth.pipeline import ThothPipeline
 
 
+def _resolve_username_from_path(file_path: Path, cfg: object) -> str | None:
+    """Extract the username segment from a vault path in multi-user mode."""
+    multi_user = bool(getattr(cfg, 'multi_user', False))
+    vaults_root = getattr(cfg, 'vaults_root', None)
+    if not multi_user or vaults_root is None:
+        return None
+    try:
+        relative = file_path.resolve().relative_to(Path(vaults_root).resolve())
+    except ValueError:
+        return None
+    return relative.parts[0] if relative.parts else None
+
+
 def _resolve_user_id_from_path(
     file_path: Path, cfg: object, cache: dict[str, str] | None = None
 ) -> str | None:
@@ -648,7 +661,22 @@ class PDFHandler(FileSystemEventHandler):
             user_id = _resolve_user_id_from_path(
                 file_path, self.config, self._user_id_cache
             )
-            self.pipeline.process_pdf(file_path, user_id=user_id)
+            username = _resolve_username_from_path(file_path, self.config)
+            vault_path = (
+                Path(self.config.vaults_root) / username
+                if username and getattr(self.config, 'vaults_root', None)
+                else None
+            )
+            from thoth.mcp.auth import (
+                reset_current_user_context,
+                set_current_user_context,
+            )
+
+            tokens = set_current_user_context(user_id, username, vault_path)
+            try:
+                self.pipeline.process_pdf(file_path, user_id=user_id)
+            finally:
+                reset_current_user_context(tokens)
         except Exception as e:
             logger.error(f'Error processing {file_path}: {e!s}')
 
@@ -966,7 +994,22 @@ class PDFMonitor:
                 user_id = _resolve_user_id_from_path(
                     pdf_file, self.config, self._user_id_cache
                 )
-                self.pipeline.process_pdf(pdf_file, user_id=user_id)
+                username = _resolve_username_from_path(pdf_file, self.config)
+                vault_path = (
+                    Path(self.config.vaults_root) / username
+                    if username and getattr(self.config, 'vaults_root', None)
+                    else None
+                )
+                from thoth.mcp.auth import (
+                    reset_current_user_context,
+                    set_current_user_context,
+                )
+
+                tokens = set_current_user_context(user_id, username, vault_path)
+                try:
+                    self.pipeline.process_pdf(pdf_file, user_id=user_id)
+                finally:
+                    reset_current_user_context(tokens)
                 print(
                     f'MONITOR:  process_pdf() returned for {pdf_file.name}',
                     flush=True,

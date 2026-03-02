@@ -10,6 +10,7 @@ local environments including:
 """
 
 import asyncio
+import contextvars
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -216,8 +217,14 @@ class OptimizedDocumentPipeline(BasePipeline):
         # OCR conversion (potentially cached)
         # Detect project folder from PDF path for organized output
         project_name = self._get_project_name(pdf_path)
+        from thoth.mcp.auth import get_current_user_paths
+
+        up = get_current_user_paths()
+        effective_markdown_dir = up.markdown_dir if up else self.markdown_dir
         output_dir = (
-            self.markdown_dir / project_name if project_name else self.markdown_dir
+            effective_markdown_dir / project_name
+            if project_name
+            else effective_markdown_dir
         )
         markdown_path, no_images_markdown_path = self._ocr_convert_optimized(
             pdf_path, output_dir=output_dir
@@ -236,8 +243,12 @@ class OptimizedDocumentPipeline(BasePipeline):
 
         # PRIORITY 2: Generate note asynchronously using background executor
         # This enables parallel document processing by not blocking on note generation
+        # copy_context() captures the current ContextVars (including vault path) so the
+        # background thread sees the same per-user context as the calling thread.
         self.logger.info(f'Submitting note generation task for {pdf_path.name}...')
+        ctx = contextvars.copy_context()
         note_future = self._background_tasks_executor.submit(
+            ctx.run,
             self._generate_note,
             pdf_path=pdf_path,
             markdown_path=markdown_path,
