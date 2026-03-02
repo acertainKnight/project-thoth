@@ -223,11 +223,15 @@ ask_and_run() {
     fi
 }
 
-# --- Update pyproject.toml (always runs, not optional) ---
+# --- Update pyproject.toml and uv.lock (always runs, not optional) ---
 
 echo ""
 echo -e "${CYAN}Updating pyproject.toml version: ${CURRENT_VERSION} -> ${NEW_VERSION}${NC}"
 sed -i "s/^version\s*=\s*['\"].*['\"]$/version = '${NEW_VERSION}'/" pyproject.toml
+echo -e "${GREEN}Done.${NC}"
+
+echo -e "${CYAN}Syncing uv.lock to new version...${NC}"
+uv lock
 echo -e "${GREEN}Done.${NC}"
 
 # --- Present release steps ---
@@ -250,7 +254,7 @@ COMMIT_MSG="chore: bump version to ${NEW_VERSION}
 ${CHANGELOG_BODY}"
 
 ask_and_run 1 "Stage and commit version bump" \
-    "git add pyproject.toml && git commit -m \"\$(cat <<'COMMITMSG'
+    "git add pyproject.toml uv.lock && git commit -m \"\$(cat <<'COMMITMSG'
 ${COMMIT_MSG}
 COMMITMSG
 )\""
