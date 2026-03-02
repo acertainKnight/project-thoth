@@ -4204,7 +4204,7 @@ wheels = [
 
 [[package]]
 name = "thoth"
-version = "0.5.2a0"
+version = "0.5.3a0"
 source = { editable = "." }
 dependencies = [
     { name = "cachetools" },
