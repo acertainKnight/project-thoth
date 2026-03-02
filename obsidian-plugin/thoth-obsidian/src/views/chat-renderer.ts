@@ -387,21 +387,33 @@ export class ChatRenderer {
     // Ensure default conversation exists and get its ID
     const defaultConvId = await this.getOrCreateDefaultConversation();
 
-    // Load active session or fall back to default
-    if (this.plugin.settings.activeChatSessionId) {
-      // Try to load the previously active session
-      const sessionExists = this.chatSessions.find(s => s.id === this.plugin.settings.activeChatSessionId);
-      if (sessionExists) {
-        await this.switchToSession(this.plugin.settings.activeChatSessionId);
+    // Load active session or fall back to default.
+    // If chatSessions is empty (e.g. server was slow to respond on startup)
+    // but we have a persisted activeChatSessionId, try loading it directly
+    // rather than falling back to the oldest conversation.
+    const savedSessionId = this.plugin.settings.activeChatSessionId;
+    if (savedSessionId) {
+      const sessionInList = this.chatSessions.find(s => s.id === savedSessionId);
+      if (sessionInList || this.chatSessions.length === 0) {
+        await this.switchToSession(savedSessionId);
       } else {
-        // Previous session doesn't exist, use default conversation
         await this.switchToSession(defaultConvId);
       }
     } else {
-      // No active session stored, use default conversation
       await this.switchToSession(defaultConvId);
     }
 
+
+    // If the session list was empty (server not ready at startup), retry in
+    // the background so the sidebar populates once the server comes up.
+    if (this.chatSessions.length === 0) {
+      setTimeout(async () => {
+        await this.loadChatSessions();
+        if (this.chatSessions.length > 0) {
+          this.renderSessionList();
+        }
+      }, 3000);
+    }
 
     // Add global keyboard shortcuts
     this.setupKeyboardShortcuts();
@@ -906,7 +918,7 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
       // Fetch conversations and archived IDs in parallel
       const agentId = await this.getOrCreateDefaultAgent();
       const [convResponse, archivedResponse] = await Promise.all([
-        this.fetchWithTimeout(`${endpoint}/v1/conversations/?agent_id=${agentId}&limit=50`),
+        this.fetchWithTimeout(`${endpoint}/v1/conversations/?agent_id=${agentId}&limit=200`),
         this.plugin.authFetch(`${thothUrl}/agents/conversations/archived`).catch(() => null),
       ]);
 
@@ -1028,7 +1040,7 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
 
     try {
       const listResponse = await this.fetchWithTimeout(
-        `${endpoint}/v1/conversations/?agent_id=${agentId}&limit=50`
+        `${endpoint}/v1/conversations/?agent_id=${agentId}&limit=200`
       );
 
       if (!listResponse.ok) {
@@ -1294,9 +1306,11 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
       // use_assistant_message converts send_message tool calls into
       // assistant_message entries in the response, which is the format
       // the rendering code expects for user-visible agent replies.
-      let url = `${endpoint}/v1/conversations/${sessionId}/messages?limit=50&order=desc&use_assistant_message=true`;
+      let url = `${endpoint}/v1/conversations/${sessionId}/messages?limit=300&order=desc&use_assistant_message=true`;
 
-      // If loading earlier messages, use cursor-based pagination
+      // If loading earlier messages, use cursor-based pagination.
+      // Letta's "before" filter returns messages with a lower position
+      // (chronologically older), regardless of sort order.
       if (loadEarlier && this.oldestMessageId.has(sessionId)) {
         const oldestId = this.oldestMessageId.get(sessionId);
         url += `&before=${oldestId}`;
@@ -1360,7 +1374,7 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
         this.messageCache.set(sessionId, allMessages);
 
         // Track if there are more messages to load
-        this.hasMoreMessages.set(sessionId, newMessages.length >= 50);
+        this.hasMoreMessages.set(sessionId, newMessages.length >= 300);
 
         // Track oldest message ID for pagination
         // Since messages are in desc order initially, sort by date to find oldest
@@ -3269,11 +3283,10 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
         return;
       }
 
-      // Sort by most recent first
       const sortedSessions = [...this.chatSessions].sort((a, b) => {
-        const dateA = new Date(b.created_at || 0).getTime();
-        const dateB = new Date(a.created_at || 0).getTime();
-        return dateA - dateB;
+        if (a.metadata?.is_default) return -1;
+        if (b.metadata?.is_default) return 1;
+        return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
       });
 
       // Display conversation cards
