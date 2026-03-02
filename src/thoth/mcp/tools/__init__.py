@@ -151,6 +151,13 @@ from .skill_management_tools import (
     CreateSkillMCPTool,
     UpdateSkillMCPTool,
 )
+from .planning_tools import (
+    CreatePlanMCPTool,
+    ListPlansMCPTool,
+    GetPlanMCPTool,
+    UpdatePlanMCPTool,
+    DeletePlanMCPTool,
+)
 from .tag_tools import (
     ConsolidateAndRetagMCPTool,
     ConsolidateTagsMCPTool,
@@ -278,6 +285,12 @@ MCP_TOOL_CLASSES = [
     AnalyzeSourceUrlMCPTool,
     RefineSourceSelectorsMCPTool,
     ConfirmSourceWorkflowMCPTool,
+    # Planning tools
+    CreatePlanMCPTool,
+    ListPlansMCPTool,
+    GetPlanMCPTool,
+    UpdatePlanMCPTool,
+    DeletePlanMCPTool,
 ]
 
 # Deprecated tools - kept for backwards compatibility, not registered
@@ -435,6 +448,12 @@ __all__ = [  # noqa: RUF022
     'UpdateWorkflowStatusMCPTool',
     'ValidatePdfSourcesMCPTool',
     'WebSearchMCPTool',
+    # Planning tools
+    'CreatePlanMCPTool',
+    'ListPlansMCPTool',
+    'GetPlanMCPTool',
+    'UpdatePlanMCPTool',
+    'DeletePlanMCPTool',
     # Functions
     'register_all_mcp_tools',
 ]

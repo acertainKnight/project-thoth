@@ -113,6 +113,15 @@ class VaultProvisioner:
             full.mkdir(parents=True, exist_ok=True)
             logger.debug(f'Created directory: {full}')
 
+        # Create plan directories
+        user_plans_dir = vault_path / 'thoth' / 'plans'
+        user_plans_dir.mkdir(parents=True, exist_ok=True)
+        logger.debug(f'Created directory: {user_plans_dir}')
+
+        internal_plans_dir = workspace_dir / 'plans'
+        internal_plans_dir.mkdir(parents=True, exist_ok=True)
+        logger.debug(f'Created directory: {internal_plans_dir}')
+
         # Copy template files from project to vault
         templates_dest = workspace_dir / 'templates'
         templates_dest.mkdir(parents=True, exist_ok=True)
@@ -177,6 +186,8 @@ class VaultProvisioner:
         logger.info(f'PDF dir: {vault_path / pdf_rel}')
         logger.info(f'Notes dir: {vault_path / notes_rel}')
         logger.info(f'Markdown dir: {vault_path / markdown_rel}')
+        logger.info(f'User plans dir: {user_plans_dir}')
+        logger.info(f'Internal plans dir: {internal_plans_dir}')
 
         return vault_path
 

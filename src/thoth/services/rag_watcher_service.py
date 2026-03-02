@@ -261,10 +261,14 @@ class RAGWatcherService(BaseService):
         watch_dirs = []
         for username in users:
             user_vault = vaults_root / username / 'thoth'
-            for sub in ('papers/pdfs', 'papers/markdown', 'notes'):
+            for sub in ('papers/pdfs', 'papers/markdown', 'notes', 'plans'):
                 candidate = user_vault / sub
                 if candidate.exists():
                     watch_dirs.append(candidate)
+            # Internal (_thoth) plans directory
+            internal_plans = vaults_root / username / 'thoth' / '_thoth' / 'plans'
+            if internal_plans.exists():
+                watch_dirs.append(internal_plans)
 
         if not watch_dirs:
             self.logger.warning(
@@ -303,12 +307,18 @@ class RAGWatcherService(BaseService):
                         user_paths.pdf_dir,
                         user_paths.markdown_dir,
                         user_paths.notes_dir,
+                        # Plans directories (user-facing and internal)
+                        user_paths.vault_root / 'thoth' / 'plans',
+                        user_paths.workspace_dir / 'plans',
                     ]
                 else:
                     watch_dirs = [
                         self.config.pdf_dir,
                         self.config.markdown_dir,
                         self.config.notes_dir,
+                        # Plans directories (user-facing and internal)
+                        self.config.vault_root / 'thoth' / 'plans',
+                        self.config.workspace_dir / 'plans',
                     ]
 
             # Create event handler
@@ -412,12 +422,16 @@ class RAGWatcherService(BaseService):
                     str(user_paths.pdf_dir),
                     str(user_paths.markdown_dir),
                     str(user_paths.notes_dir),
+                    str(user_paths.vault_root / 'thoth' / 'plans'),
+                    str(user_paths.workspace_dir / 'plans'),
                 ]
             else:
                 dirs = [
                     str(self.config.pdf_dir),
                     str(self.config.markdown_dir),
                     str(self.config.notes_dir),
+                    str(self.config.vault_root / 'thoth' / 'plans'),
+                    str(self.config.workspace_dir / 'plans'),
                 ]
         else:
             dirs = []

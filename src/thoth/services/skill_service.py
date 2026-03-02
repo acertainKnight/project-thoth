@@ -39,6 +39,7 @@ class SkillService(BaseService):
             'knowledge-base-qa',
             'research-query-management',
             'research-project-coordination',
+            'research-planning',
         ],
         # Research Analyst - deep analysis specialist
         'analyst': [

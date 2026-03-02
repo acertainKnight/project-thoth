@@ -162,6 +162,14 @@ TOOL_CATEGORIES = {
         'toggle_mcp_server',
         'test_mcp_connection',
     ],
+    # Planning - create and manage research plan documents in the vault
+    'planning': [
+        'create_plan',
+        'list_plans',
+        'get_plan',
+        'update_plan',
+        'delete_plan',
+    ],
     # DEPRECATED CATEGORIES (code kept but not registered):
     # "query": Legacy query management - replaced by research_question tools
     # "workflow": Browser workflow tools - complex, rarely used
@@ -183,6 +191,7 @@ ROLE_TOOL_CATEGORIES = {
         'schema',  # Analysis schema management
         'prompts',  # Prompt template management
         'mcp_management',  # MCP server management
+        'planning',  # Research plan creation and management
     ],
     # Research Analyst: Deep analysis, synthesis, quality assessment
     'analyst': [
