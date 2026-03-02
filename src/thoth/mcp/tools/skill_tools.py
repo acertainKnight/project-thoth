@@ -388,6 +388,30 @@ class LoadSkillMCPTool(MCPTool):
                 )
             results.append('--- END TOOL ATTACHMENT ---\n')
 
+            # If the skill requires tools but none could be attached, fail the load.
+            # There's no point in injecting the skill content without its tools.
+            total_available = len(tool_attachment_result['attached']) + len(
+                tool_attachment_result['already_attached']
+            )
+            if unique_tools and total_available == 0:
+                missing = ', '.join(tool_attachment_result['not_found'])
+                logger.error(
+                    f'All required tools missing for skill(s) {successfully_loaded_ids}: {missing}'
+                )
+                summary = [
+                    '\nSkill Loading Summary:',
+                    '  Skills loaded: 0',
+                    f'  Skills failed: {loaded_count + failed_count}',
+                    '  Tools available: 0',
+                    f'\nRequired tools not found in Letta registry: {missing}',
+                    '\nThe MCP server may still be registering its tools with Letta.',
+                    'Wait a moment and try again.',
+                ]
+                return MCPToolCallResult(
+                    content=[{'type': 'text', 'text': '\n'.join(results + summary)}],
+                    isError=True,
+                )
+
             # Persist loaded skills to database
             for skill_id in successfully_loaded_ids:
                 await _add_loaded_skill(postgres, agent_id, skill_id)
@@ -441,10 +465,7 @@ class LoadSkillMCPTool(MCPTool):
                 f'  Skills failed: {failed_count}',
             ]
 
-            total_attached = len(tool_attachment_result['attached']) + len(
-                tool_attachment_result['already_attached']
-            )
-            summary.append(f'  Tools available: {total_attached}')
+            summary.append(f'  Tools available: {total_available}')
 
             if failed_count > 0:
                 summary.append(
