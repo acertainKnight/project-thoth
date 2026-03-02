@@ -1,5 +1,5 @@
 import { App, Modal, Notice, Menu, SuggestModal, MarkdownRenderer, MarkdownView } from 'obsidian';
-import { ChatSession, ChatMessage, ImageAttachment, FileAttachment } from '../types';
+import { ChatSession, ChatMessage, ImageAttachment, FileAttachment, QueuedMessage } from '../types';
 import type ThothPlugin from '../../main';
 import { ResearchTabComponent } from '../components/research-tab';
 import { SettingsTabComponent } from '../components/settings-tab';
@@ -86,6 +86,18 @@ export class MultiChatModal extends Modal {
   private progressWs: WebSocket | null = null;
   private agenticProgressListener: ((event: MessageEvent) => void) | null = null;
 
+  // Stream control: track the active SSE stream so it can be stopped mid-flight
+  private isAgentWorking: boolean = false;
+  private activeStreamStopped: boolean = false;
+  private activeStreamController: AbortController | null = null;
+  private activeStreamReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  private activeRunId: string | null = null;
+  private activeAgentId: string | null = null;
+
+  // Message queue: messages composed while the agent is working
+  private messageQueue: QueuedMessage[] = [];
+  private queueContainer: HTMLElement | null = null;
+
   constructor(app: App, plugin: ThothPlugin) {
     super(app);
     this.plugin = plugin;
@@ -123,6 +135,111 @@ export class MultiChatModal extends Modal {
     if (this.progressWs) {
       this.progressWs.close();
       this.progressWs = null;
+    }
+  }
+
+  /**
+   * Render a single queued message as an editable pill in the queue container.
+   *
+   * The pill shows a truncated preview of the message text, an Edit button
+   * that pops the text back into the input for revision, and a Delete button
+   * to discard it entirely. Clicking Edit removes the entry from the queue
+   * and from the array -- the user can then edit freely and the normal
+   * send/queue logic will apply when they submit.
+   *
+   * Args:
+   *     queuedMsg: The message to render.
+   */
+  private renderQueuedMessagePill(queuedMsg: QueuedMessage): void {
+    if (!this.queueContainer) return;
+
+    this.queueContainer.style.display = 'flex';
+
+    const pill = this.queueContainer.createEl('div', {
+      cls: 'queued-message-pill',
+      attr: { 'data-queue-id': queuedMsg.id },
+    });
+
+    // Preview text (truncated)
+    const MAX_PREVIEW = 120;
+    const preview = queuedMsg.text.length > MAX_PREVIEW
+      ? queuedMsg.text.slice(0, MAX_PREVIEW) + '…'
+      : queuedMsg.text;
+
+    const textEl = pill.createEl('span', { cls: 'queued-message-text', text: preview });
+
+    // Attachment indicator badge
+    const totalAttachments = queuedMsg.attachments.length + queuedMsg.fileAttachments.length;
+    if (totalAttachments > 0) {
+      pill.createEl('span', {
+        cls: 'queued-message-attachments',
+        text: `📎 ${totalAttachments}`,
+      });
+    }
+
+    const controls = pill.createEl('div', { cls: 'queued-message-controls' });
+
+    // Edit button: restore text into input and remove from queue
+    const editBtn = controls.createEl('button', {
+      cls: 'queued-message-edit-btn',
+      text: 'Edit',
+      attr: { 'aria-label': 'Edit queued message', 'title': 'Edit before sending' },
+    });
+    editBtn.onclick = () => {
+      // Remove from queue array
+      this.messageQueue = this.messageQueue.filter(m => m.id !== queuedMsg.id);
+      // Remove the pill from the DOM
+      pill.remove();
+      if (this.queueContainer && this.queueContainer.children.length === 0) {
+        this.queueContainer.style.display = 'none';
+      }
+      // Restore attachments and text to the input
+      this.pendingAttachments = [...queuedMsg.attachments];
+      this.pendingFileAttachments = [...queuedMsg.fileAttachments];
+      // Find the input textarea in the current chat content container
+      const inputEl = this.chatContentContainer.querySelector<HTMLTextAreaElement>('.chat-input');
+      if (inputEl) {
+        inputEl.value = queuedMsg.text;
+        inputEl.style.height = '36px';
+        inputEl.style.height = Math.min(inputEl.scrollHeight, 80) + 'px';
+        inputEl.focus();
+        // Move caret to end
+        inputEl.selectionStart = inputEl.selectionEnd = inputEl.value.length;
+      }
+    };
+
+    // Delete button: remove from queue
+    const deleteBtn = controls.createEl('button', {
+      cls: 'queued-message-delete-btn',
+      text: '✕',
+      attr: { 'aria-label': 'Remove queued message', 'title': 'Remove from queue' },
+    });
+    deleteBtn.onclick = () => {
+      this.messageQueue = this.messageQueue.filter(m => m.id !== queuedMsg.id);
+      pill.remove();
+      if (this.queueContainer && this.queueContainer.children.length === 0) {
+        this.queueContainer.style.display = 'none';
+      }
+    };
+
+    // Suppress unused variable warning -- textEl is used for the DOM but not read back
+    void textEl;
+  }
+
+  /**
+   * Remove a queued message pill from the queue container by its ID.
+   *
+   * Called when a queued message is dequeued and about to be sent.
+   *
+   * Args:
+   *     id: The queue entry ID to remove.
+   */
+  private removeQueuedMessagePill(id: string): void {
+    if (!this.queueContainer) return;
+    const pill = this.queueContainer.querySelector(`[data-queue-id="${id}"]`);
+    if (pill) pill.remove();
+    if (this.queueContainer.children.length === 0) {
+      this.queueContainer.style.display = 'none';
     }
   }
 
@@ -2702,6 +2819,18 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       }
     }
 
+    // Queued messages container -- sits between the chat history and the input
+    // bar. Becomes visible when the user composes a follow-up while the agent
+    // is processing. Each entry shows a preview with edit/delete controls.
+    this.queueContainer = this.chatContentContainer.createEl('div', {
+      cls: 'chat-queue-container'
+    });
+    this.queueContainer.style.display = 'none';
+    // Re-render any existing queued messages (e.g. after session switch)
+    for (const queuedMsg of this.messageQueue) {
+      this.renderQueuedMessagePill(queuedMsg);
+    }
+
     // Input area
     const inputArea = this.chatContentContainer.createEl('div', {
       cls: 'chat-input-area'
@@ -2793,10 +2922,51 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       cls: 'chat-send-btn'
     });
 
+    // Stop the active SSE stream: cancels the reader, aborts the fetch, and
+    // fires a server-side cancel request to Letta so the LLM stops generating.
+    const stopStream = () => {
+      this.activeStreamStopped = true;
+      if (this.activeStreamReader) {
+        this.activeStreamReader.cancel().catch(() => {});
+        this.activeStreamReader = null;
+      }
+      if (this.activeStreamController) {
+        this.activeStreamController.abort();
+        this.activeStreamController = null;
+      }
+      // Fire-and-forget the Letta cancel API so the server stops generating
+      if (this.activeAgentId) {
+        const endpoint = this.plugin.getLettaProxyUrl();
+        const cancelBody = this.activeRunId ? { run_ids: [this.activeRunId] } : {};
+        this.plugin.authFetch(`${endpoint}/v1/agents/${this.activeAgentId}/messages/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cancelBody),
+        }).catch(e => console.warn('[MultiChatModal] Cancel API call failed (non-critical):', e));
+      }
+    };
+
     // Event handlers
     const sendMessage = async () => {
       const message = inputEl.value.trim();
-      if (!message || sendBtn.disabled) return;
+      if (!message) return;
+
+      // If the agent is mid-stream, enqueue this message instead of sending it.
+      // The queue drains automatically once each stream completes (or is stopped).
+      if (this.isAgentWorking) {
+        const queuedMsg: QueuedMessage = {
+          id: `queue-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          text: message,
+          attachments: [...this.pendingAttachments],
+          fileAttachments: [...this.pendingFileAttachments],
+        };
+        this.messageQueue.push(queuedMsg);
+        this.clearAttachments();
+        inputEl.value = '';
+        inputEl.style.height = '36px';
+        this.renderQueuedMessagePill(queuedMsg);
+        return;
+      }
 
       // Capture pending attachments for this message
       const messageAttachments = [...this.pendingAttachments];
@@ -2822,16 +2992,22 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       // Clear attachments after adding to UI
       this.clearAttachments();
 
-      // Disable send button and input while agent is working
-      sendBtn.disabled = true;
-      sendBtn.textContent = 'Sending...';
-      inputEl.disabled = true;
+      // Transition to "Stop" mode -- input stays enabled so the user can
+      // compose follow-up messages while the agent is working.
+      this.isAgentWorking = true;
+      sendBtn.textContent = '■ Stop';
+      sendBtn.classList.add('chat-stop-btn');
       inputEl.classList.add('agent-working');
 
       // Add thinking indicator
       const thinkingMsg = this.addThinkingIndicator(messagesContainer);
 
       try {
+        // Reset stop flag and capture the agent ID for the stop handler
+        this.activeStreamStopped = false;
+        this.activeAgentId = await this.getOrCreateDefaultAgent();
+        this.activeRunId = null;
+
         // Build input payload: use array format if image attachments present, string otherwise
         let inputPayload: string | any[];
 
@@ -2856,7 +3032,11 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           inputPayload = augmentedMessage;  // Use augmented message with file content
         }
 
-        // Send to Letta conversation with streaming enabled
+        // Send to Letta conversation with streaming enabled.
+        // An AbortController lets the Stop button kill the network connection.
+        const streamController = new AbortController();
+        this.activeStreamController = streamController;
+
         const endpoint = this.plugin.getLettaProxyUrl();
         const response = await this.plugin.authFetch(`${endpoint}/v1/conversations/${sessionId}/messages`, {
           method: 'POST',
@@ -2865,7 +3045,8 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
             input: inputPayload,
             streaming: true,  // Enable SSE streaming for real-time token display
             stream_tokens: true  // Stream individual tokens
-          })
+          }),
+          signal: streamController.signal,
         });
 
         if (response.ok && response.body) {
@@ -2940,6 +3121,8 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           // --- Helper: process one SSE stream into the shared container ---
           const processStream = async (body: ReadableStream<Uint8Array>): Promise<void> => {
             const reader = body.getReader();
+            // Expose the reader so the stop handler can cancel it
+            this.activeStreamReader = reader;
             const decoder = new TextDecoder();
             let buffer = '';
             let lastPaintYield = 0;
@@ -2962,6 +3145,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
             let streamAccumulated = '';
             let streamMsgId: string | null = null;
 
+            try {
             while (true) {
               const { done, value } = await reader.read();
               if (done) break;
@@ -2970,7 +3154,9 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
               const lines = buffer.split('\n\n');
               buffer = lines.pop() || '';
 
-              let wroteContent = false;
+              // Tracks any DOM mutation in this chunk so we always yield to
+              // the browser for pill additions, not just text token writes.
+              let wroteDom = false;
 
               for (const block of lines) {
                 const dataLine = block.split('\n').find(l => l.trim().startsWith('data:'));
@@ -2982,6 +3168,10 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                 try {
                   const msg = JSON.parse(jsonStr);
                   const messageType = msg.message_type;
+
+                  // Capture run_id from any event so the stop handler can
+                  // pass it to the Letta cancel API for precise cancellation
+                  if (msg.run_id) this.activeRunId = msg.run_id;
 
                   // Diagnostic: log every SSE event type and key fields
                   if (messageType === 'tool_call_message') {
@@ -3030,7 +3220,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                         currentReasoningPill, accumulatedReasoning.trim()
                       );
                     }
-                    this.scrollToBottom(messagesContainer, true);
+                    wroteDom = true;
                   }
 
                   // --- tool call (handles both full ToolCall and streamed ToolCallDelta) ---
@@ -3069,7 +3259,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                             sendMsgRenderedLen = len;
                           }
                         );
-                        if (streamRenderer) wroteContent = true;
+                        if (streamRenderer) wroteDom = true;
                       }
                       continue;
                     }
@@ -3103,8 +3293,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                           sendMsgRenderedLen = len;
                         }
                       );
-                      if (streamRenderer) wroteContent = true;
-                      this.scrollToBottom(messagesContainer, true);
+                      if (streamRenderer) wroteDom = true;
                       continue;
                     }
 
@@ -3130,7 +3319,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                       this.startAgenticProgressListener(currentToolPill);
                     }
 
-                    this.scrollToBottom(messagesContainer, true);
+                    wroteDom = true;
                   }
 
                   // --- tool return ---
@@ -3181,7 +3370,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                     currentToolPill = null;
                     activeToolCallId = null;
                     activeToolName = null;
-                    this.scrollToBottom(messagesContainer, true);
+                    wroteDom = true;
                   }
 
                   // --- assistant content ---
@@ -3227,7 +3416,7 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
 
                       if (streamRenderer) {
                         streamRenderer.write(delta);
-                        wroteContent = true;
+                        wroteDom = true;
                       }
                     }
                   }
@@ -3239,8 +3428,10 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                 }
               }
 
-              // Yield to browser for repaint between chunk batches
-              if (wroteContent) {
+              // Yield to the browser for a repaint whenever any DOM mutation
+              // occurred -- including pill additions, not just text tokens.
+              // Without this yield pills would only appear between text chunks.
+              if (wroteDom) {
                 const now = Date.now();
                 if (now - lastPaintYield > 40) {
                   lastPaintYield = now;
@@ -3249,8 +3440,16 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                 this.scrollToBottom(messagesContainer, true);
               }
             }
+            } catch (streamErr) {
+              // An AbortError means the stream was intentionally cancelled via
+              // the Stop button -- finalize partial content below rather than
+              // surfacing an error to the user.
+              if ((streamErr as Error).name !== 'AbortError') throw streamErr;
+              this.activeStreamStopped = true;
+            }
 
             // Finalize: re-render streamed content with Obsidian markdown
+            // (runs whether the stream completed normally or was stopped)
             if (streamRenderer) {
               streamRenderer.end();
               if (streamContentEl && streamAccumulated) {
@@ -3274,12 +3473,37 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           // --- Run the primary stream ---
           await processStream(response.body);
 
+          // Re-render pill detail content with proper markdown now that the
+          // stream is done (plain-text placeholders → formatted output).
+          if (assistantMessageEl) {
+            await this.finalizeStepPillContent(assistantMessageEl as HTMLElement);
+          }
+
           // Remove the initial thinking indicator if nothing rendered at all
           // (e.g. the stream ended with no events)
           if (!assistantMessageEl) {
             const rotId = (thinkingMsg as any).__rotationInterval;
             if (rotId) clearInterval(rotId);
             thinkingMsg.remove();
+          }
+
+          // If the user stopped the stream, add a visual marker and skip any
+          // follow-up logic (skill activation, session refresh, title gen).
+          if (this.activeStreamStopped) {
+            const stoppedEl = assistantMessageEl as HTMLElement | null;
+            if (stoppedEl) {
+              const stoppedBadge = stoppedEl.createEl('div', {
+                cls: 'stream-stopped-badge',
+                text: '■ Generation stopped',
+              });
+              stoppedEl.appendChild(stoppedBadge);
+            }
+            // Still add copy button for whatever partial content was captured
+            if (stoppedEl && accumulatedContent) {
+              stoppedEl.querySelectorAll('.message-actions').forEach(el => el.remove());
+              this.addMessageActions(stoppedEl, accumulatedContent);
+            }
+            return; // Skip follow-ups and session refresh -- finally block handles cleanup
           }
 
           // --- Auto-follow-up for skill loading/unloading ---
@@ -3302,6 +3526,11 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
               const followUpInput =
                 `${SKILL_ACTIVATION_PREFIX} Tools ready. Continue with my request: ${truncatedRequest}`;
 
+              // Give the follow-up its own AbortController so Stop works here too
+              const followUpController = new AbortController();
+              this.activeStreamController = followUpController;
+              this.activeStreamStopped = false;
+
               const followUpResponse = await this.plugin.authFetch(`${endpoint}/v1/conversations/${sessionId}/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -3309,7 +3538,8 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                   input: followUpInput,
                   streaming: true,
                   stream_tokens: true
-                })
+                }),
+                signal: followUpController.signal,
               });
 
               if (!followUpResponse.ok) {
@@ -3326,13 +3556,39 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
                 // ensureContainer() will clear inlineThinkingEl on first SSE event.
                 // processStream creates its own inline steps containers as needed.
                 await processStream(followUpResponse.body);
+
+                // Re-render any new pills added by the follow-up stream
+                if (assistantMessageEl) {
+                  await this.finalizeStepPillContent(assistantMessageEl as HTMLElement);
+                }
               }
             } catch (followUpError) {
-              console.error('[MultiChatModal] Auto-follow-up error:', followUpError);
-              clearInlineThinking();
-              messagesContainer.querySelectorAll('.message.thinking').forEach(el => el.remove());
-              await this.addMessageToChat(messagesContainer, 'assistant',
-                'Skill tools loaded, but an error occurred while processing. Try sending your message again.');
+              if ((followUpError as Error).name === 'AbortError' || this.activeStreamStopped) {
+                clearInlineThinking();
+              } else {
+                console.error('[MultiChatModal] Auto-follow-up error:', followUpError);
+                clearInlineThinking();
+                messagesContainer.querySelectorAll('.message.thinking').forEach(el => el.remove());
+                await this.addMessageToChat(messagesContainer, 'assistant',
+                  'Skill tools loaded, but an error occurred while processing. Try sending your message again.');
+              }
+            }
+
+            // If stopped during the follow-up, add stopped badge and return early
+            if (this.activeStreamStopped) {
+              const stoppedEl2 = assistantMessageEl as HTMLElement | null;
+              if (stoppedEl2) {
+                const stoppedBadge = stoppedEl2.createEl('div', {
+                  cls: 'stream-stopped-badge',
+                  text: '■ Generation stopped',
+                });
+                stoppedEl2.appendChild(stoppedBadge);
+              }
+              if (stoppedEl2 && accumulatedContent) {
+                stoppedEl2.querySelectorAll('.message-actions').forEach(el => el.remove());
+                this.addMessageActions(stoppedEl2, accumulatedContent);
+              }
+              return;
             }
           }
 
@@ -3358,32 +3614,74 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
           throw new Error(`Failed to send message: ${response.status}`);
         }
       } catch (error) {
-        console.error('Chat error:', error);
-        const rotId = (thinkingMsg as any).__rotationInterval;
-        if (rotId) clearInterval(rotId);
-        thinkingMsg.remove();
-        await this.addMessageToChat(messagesContainer, 'assistant', `Error: ${error.message}`);
-        this.showToast(`Error: ${error.message}`, 'error');
+        // AbortError on the initial fetch (before response) -- the user stopped
+        // before the response even started. Treat same as a mid-stream stop.
+        if ((error as Error).name === 'AbortError' || this.activeStreamStopped) {
+          const rotId = (thinkingMsg as any).__rotationInterval;
+          if (rotId) clearInterval(rotId);
+          thinkingMsg.remove();
+        } else {
+          console.error('Chat error:', error);
+          const rotId = (thinkingMsg as any).__rotationInterval;
+          if (rotId) clearInterval(rotId);
+          thinkingMsg.remove();
+          await this.addMessageToChat(messagesContainer, 'assistant', `Error: ${error.message}`);
+          this.showToast(`Error: ${error.message}`, 'error');
+        }
       } finally {
-        sendBtn.disabled = false;
-        sendBtn.textContent = 'Send';
-        inputEl.disabled = false;
+        this.isAgentWorking = false;
+        this.activeStreamController = null;
+        this.activeStreamReader = null;
+        this.activeRunId = null;
+        sendBtn.classList.remove('chat-stop-btn');
         inputEl.classList.remove('agent-working');
-        inputEl.focus();
+
+        // Drain the message queue: if a follow-up was composed while the agent
+        // was working, send it now. Otherwise just re-enable the send button.
+        if (this.messageQueue.length > 0) {
+          const nextMsg = this.messageQueue.shift()!;
+          this.removeQueuedMessagePill(nextMsg.id);
+          sendBtn.textContent = 'Send';
+          inputEl.value = nextMsg.text;
+          this.pendingAttachments = nextMsg.attachments;
+          this.pendingFileAttachments = nextMsg.fileAttachments;
+          // Use setTimeout so the current execution stack is clean before
+          // the next sendMessage begins (avoids deeply nested async calls)
+          setTimeout(() => { sendMessage(); }, 0);
+        } else {
+          sendBtn.textContent = 'Send';
+          inputEl.focus();
+        }
       }
     };
 
-    sendBtn.onclick = sendMessage;
+    sendBtn.onclick = () => {
+      if (this.isAgentWorking) {
+        stopStream();
+      } else {
+        sendMessage();
+      }
+    };
 
     // Enhanced keyboard handling
     inputEl.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        sendMessage();
+        if (this.isAgentWorking) {
+          // Queue (or send if idle) -- handled inside sendMessage
+          sendMessage();
+        } else {
+          sendMessage();
+        }
       } else if (e.key === 'Escape') {
-        // Clear input on Escape
-        inputEl.value = '';
-        inputEl.style.height = '36px';
+        if (this.isAgentWorking) {
+          // Escape while agent is working = stop the stream
+          stopStream();
+        } else {
+          // Escape while idle = clear the input
+          inputEl.value = '';
+          inputEl.style.height = '36px';
+        }
       }
     });
 
@@ -5140,9 +5438,8 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     detail?: string,
     pillType: 'reasoning' | 'tool' = 'tool'
   ): HTMLElement {
-    // Reasoning pills are always expandable; tool pills only if detail is non-trivial
-    const hasDetail = detail && detail.trim().length > 20;
-    const isExpandable = pillType === 'reasoning' || hasDetail;
+    // Only reasoning pills are expandable; tool pills are always flat badges
+    const isExpandable = pillType === 'reasoning';
 
     const pill = container.createEl('div', {
       cls: isExpandable ? 'step-pill' : 'step-pill pill-no-detail'
@@ -5159,6 +5456,8 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
       header.createEl('span', { cls: 'pill-chevron', text: '\u203A' });
       detailEl = pill.createEl('div', { cls: 'pill-detail' });
       if (detail) {
+        // Store raw content for later markdown finalization
+        (pill as any).__rawContent = detail;
         if (pillType === 'reasoning') {
           const textEl = detailEl.createEl('div', { cls: 'pill-detail-text reasoning-text' });
           textEl.textContent = detail.replace(/\n{3,}/g, '\n\n').trim();
@@ -5182,16 +5481,42 @@ ${isConnected ? '✓ Ready to chat with Letta' : '⚠ Start the Letta server to 
     if (labelEl) labelEl.textContent = label;
   }
 
+  /**
+   * Re-render all step pill detail sections inside a container using Obsidian's
+   * full markdown renderer. Called after a stream completes so the plain-text
+   * placeholders written during streaming are replaced with properly formatted
+   * content (reasoning → prose markdown, tool → fenced JSON code block).
+   *
+   * Args:
+   *     container: The assistant message element containing the step pills.
+   */
+  private async finalizeStepPillContent(container: HTMLElement): Promise<void> {
+    const pills = Array.from(
+      container.querySelectorAll<HTMLElement>('.step-pill[data-pill-type="reasoning"]')
+    );
+    for (const pill of pills) {
+      const detailEl = (pill as any).__detailEl as HTMLElement | null;
+      const rawContent = (pill as any).__rawContent as string | null;
+      if (!detailEl || !rawContent?.trim()) continue;
+      await this.renderMessageContent(rawContent.trim(), detailEl);
+    }
+  }
+
   private updateStepPillDetail(pill: HTMLElement, detail: string): void {
     const detailEl = (pill as any).__detailEl as HTMLElement;
     if (!detailEl) return;
+
+    // Always keep the raw accumulated content on the pill so the
+    // post-stream markdown finalizer can re-render it properly.
+    (pill as any).__rawContent = detail;
+
     detailEl.empty();
     if (!detail) return;
 
     const pillType = pill.dataset.pillType;
     if (pillType === 'reasoning') {
       const textEl = detailEl.createEl('div', { cls: 'pill-detail-text reasoning-text' });
-      // Collapse excessive blank lines that accumulate during streaming
+      // Plain-text during streaming; finalized to markdown after stream ends
       textEl.textContent = detail.replace(/\n{3,}/g, '\n\n').trim();
     } else {
       detailEl.createEl('pre', { text: detail, cls: 'pill-detail-text' });

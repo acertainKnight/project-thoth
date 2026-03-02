@@ -46,6 +46,13 @@ export interface ChatWindowState {
   isActive: boolean;
 }
 
+export interface QueuedMessage {
+  id: string;
+  text: string;
+  attachments: ImageAttachment[];
+  fileAttachments: FileAttachment[];
+}
+
 export interface NotificationProgress {
   notice: Notice;
   updateProgress: (progress: number, message?: string) => void;

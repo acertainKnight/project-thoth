@@ -535,9 +535,10 @@
 }
 
 .chat-input.agent-working {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: var(--background-secondary);
+  /* Input stays enabled while the agent is working so users can queue messages.
+     A subtle border hint signals "queue mode" without blocking interaction. */
+  border-color: var(--color-accent);
+  opacity: 0.85;
 }
 
 .thoth-chat-input:focus {
@@ -2206,17 +2207,19 @@
 
 .pill-detail {
   display: none;
-  padding: 4px 10px 8px;
+  padding: 6px 10px 10px;
   border-top: 1px solid var(--background-modifier-border);
   color: var(--text-muted);
-  max-height: 200px;
+  max-height: 260px;
   overflow-y: auto;
+  font-size: 12px;
 }
 
 .step-pill.expanded .pill-detail {
   display: block;
 }
 
+/* Fallback plain-text style (used during streaming before finalization) */
 .pill-detail-text {
   margin: 0;
   white-space: pre-wrap;
@@ -2226,7 +2229,7 @@
   line-height: 1.4;
 }
 
-/* Reasoning pill content uses prose formatting instead of monospace pre */
+/* Reasoning plain-text placeholder during streaming */
 .pill-detail-text.reasoning-text {
   font-family: var(--font-text);
   font-size: 12px;
@@ -2234,6 +2237,67 @@
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--text-muted);
+}
+
+/* --- Markdown-rendered pill content (after finalization) --- */
+
+/* Scope all rendered markdown inside pill-detail to smaller sizes and
+   muted colours so it doesn't visually compete with the main response. */
+.pill-detail p,
+.pill-detail li,
+.pill-detail blockquote {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: 2px 0;
+}
+
+.pill-detail p:first-child { margin-top: 0; }
+.pill-detail p:last-child  { margin-bottom: 0; }
+
+.pill-detail ul,
+.pill-detail ol {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+
+.pill-detail li { margin: 1px 0; }
+
+.pill-detail strong { color: var(--text-normal); }
+
+.pill-detail h1,
+.pill-detail h2,
+.pill-detail h3,
+.pill-detail h4 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-normal);
+  margin: 6px 0 2px;
+}
+
+/* Inline code inside pills */
+.pill-detail code:not(pre code) {
+  font-size: 11px;
+  padding: 1px 4px;
+  background: var(--background-primary);
+  border-radius: 3px;
+  color: var(--text-accent, var(--color-accent));
+}
+
+/* Fenced code blocks inside pills (JSON tool args) */
+.pill-detail pre {
+  margin: 4px 0;
+  padding: 6px 8px;
+  background: var(--background-primary);
+  border-radius: 4px;
+  overflow-x: auto;
+  max-height: 180px;
+}
+
+.pill-detail pre code {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-normal);
 }
 
 /* Pills with no expandable detail: no pointer cursor, chevron hidden */
@@ -3977,6 +4041,137 @@
 
   .mcp-tool-copy-btn {
     width: 100%;
+  }
+}
+
+/* ============================================================
+   Stream Control: Stop Button
+   ============================================================ */
+
+/* Stop button replaces Send while the agent is generating.
+   Matches Send button dimensions exactly to avoid layout shift. */
+.chat-send-btn.chat-stop-btn {
+  background: var(--color-red, #e03e3e);
+  color: #fff;
+  border-color: transparent;
+}
+
+.chat-send-btn.chat-stop-btn:hover {
+  background: color-mix(in srgb, var(--color-red, #e03e3e) 85%, #000 15%);
+}
+
+/* Stopped-generation badge appended to partial assistant messages */
+.stream-stopped-badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  font-size: 0.75em;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  user-select: none;
+}
+
+/* ============================================================
+   Message Queue: scheduled follow-up messages
+   ============================================================ */
+
+/* Container sits between the messages area and the input bar */
+.chat-queue-container {
+  display: none; /* hidden by default, shown when queue is non-empty */
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 12px 0;
+  flex-shrink: 0;
+}
+
+/* Individual queued message pill */
+.queued-message-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  font-size: 0.85em;
+  color: var(--text-normal);
+  transition: border-color 0.15s ease;
+}
+
+.queued-message-pill:hover {
+  border-color: var(--color-accent);
+}
+
+/* Prefix label to signal this is queued (not yet sent) */
+.queued-message-pill::before {
+  content: '↳';
+  color: var(--text-muted);
+  flex-shrink: 0;
+  font-size: 1em;
+}
+
+/* Truncated preview text, fills available space */
+.queued-message-text {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-normal);
+  cursor: default;
+}
+
+/* Attachment count badge next to the text */
+.queued-message-attachments {
+  font-size: 0.8em;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Wrapper for Edit + Delete buttons */
+.queued-message-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.queued-message-edit-btn,
+.queued-message-delete-btn {
+  padding: 2px 8px;
+  font-size: 0.8em;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-muted);
+  line-height: 1.4;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+
+.queued-message-edit-btn:hover {
+  background: var(--interactive-hover);
+  color: var(--text-normal);
+  border-color: var(--color-accent);
+}
+
+.queued-message-delete-btn:hover {
+  background: color-mix(in srgb, var(--color-red, #e03e3e) 15%, var(--background-primary) 85%);
+  color: var(--color-red, #e03e3e);
+  border-color: var(--color-red, #e03e3e);
+}
+
+/* Mobile: make queue pills full-width with larger tap targets */
+@media (max-width: 768px) {
+  .chat-queue-container {
+    padding: 6px 16px 0;
+  }
+
+  .queued-message-edit-btn,
+  .queued-message-delete-btn {
+    padding: 4px 12px;
+    font-size: 0.85em;
   }
 }
 
