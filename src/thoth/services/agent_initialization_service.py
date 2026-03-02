@@ -40,6 +40,15 @@ class AgentInitializationService:
         if self.letta_api_key:
             self.headers['Authorization'] = f'Bearer {self.letta_api_key}'
 
+    # Letta built-in tools that agents need but aren't in AGENT_CONFIGS['tools'].
+    # Used by _update_agent to attach them to existing agents that predate this fix.
+    LETTA_BASE_TOOLS: ClassVar[set[str]] = {
+        'archival_memory_insert',
+        'archival_memory_search',
+        'conversation_search',
+        'send_message',
+    }
+
     # Agent definitions - Optimized 2-agent architecture
     # See docs/OPTIMIZED_RESEARCH_ARCHITECTURE.md for details
     AGENT_CONFIGS: ClassVar[dict] = {
@@ -588,6 +597,7 @@ Comparison Aspects:
             'system': system_prompt,
             'embedding_config': embedding_cfg,
             'tools': tool_names,
+            'include_base_tools': config.settings.memory.letta.archival_memory_enabled,
         }
 
         # Resolve full LLM config from Letta (required fields: endpoint_type)
@@ -642,6 +652,8 @@ Comparison Aspects:
 
         # Filter to only tools that exist
         desired_tools = set(t for t in agent_config['tools'] if t in available_tools)
+        if config.settings.memory.letta.archival_memory_enabled:
+            desired_tools |= self.LETTA_BASE_TOOLS & available_tools
 
         # Update system prompt with actual agent_id and user_id
         updated_system = self._render_system_prompt(agent_config, agent_id)
