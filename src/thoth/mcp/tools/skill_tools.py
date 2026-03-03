@@ -53,6 +53,22 @@ async def _add_loaded_skill(postgres, agent_id: str, skill_id: str) -> None:
     )
 
 
+def _build_loaded_skills_tracker(
+    loaded: list[str], skill_tools_map: dict[str, list[str]]
+) -> str:
+    """Build the loaded_skills memory block value from the current load state."""
+    lines = ['=== Currently Loaded Skills ===']
+    for slot in range(1, MAX_LOADED_SKILLS + 1):
+        if slot <= len(loaded):
+            skill_id = loaded[slot - 1]
+            tools = skill_tools_map.get(skill_id, [])
+            tool_str = ', '.join(tools) if tools else 'no tools'
+            lines.append(f'Slot {slot}: {skill_id} (tools: {tool_str})')
+        else:
+            lines.append(f'Slot {slot}: [empty]')
+    return '\n'.join(lines)
+
+
 async def _remove_loaded_skill(postgres, agent_id: str, skill_id: str) -> None:
     """Remove a skill from the loaded set."""
     await postgres.execute(
@@ -323,6 +339,9 @@ class LoadSkillMCPTool(MCPTool):
             all_tools_to_attach = []
             successfully_loaded_ids = []
 
+            skill_contents: dict[str, str] = {}
+            skill_tools_map: dict[str, list[str]] = {}
+
             for skill_id in skill_ids:
                 if skill_id in currently_loaded:
                     results.append(f"'{skill_id}' is already loaded, skipping")
@@ -336,27 +355,20 @@ class LoadSkillMCPTool(MCPTool):
                 else:
                     required_tools = skill_service.get_skill_tools(skill_id)
                     all_tools_to_attach.extend(required_tools)
-
-                    results.append(f"Loaded '{skill_id}' successfully")
-                    if required_tools:
-                        results.append(
-                            f'   Required tools: {", ".join(required_tools)}'
-                        )
+                    skill_contents[skill_id] = skill_content
+                    skill_tools_map[skill_id] = required_tools
                     loaded_count += 1
                     successfully_loaded_ids.append(skill_id)
 
-                    results.append(f'\n--- BEGIN SKILL: {skill_id} ---\n')
-                    results.append(skill_content)
-                    results.append(f'\n--- END SKILL: {skill_id} ---\n')
-
             if loaded_count == 0:
-                summary = [
-                    '\nSkill Loading Summary:',
-                    f'  Skills failed: {failed_count}',
-                    '\nUse list_skills to see available skill IDs.',
-                ]
                 return MCPToolCallResult(
-                    content=[{'type': 'text', 'text': '\n'.join(results + summary)}],
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': '\n'.join(results)
+                            + f'\nFailed to load {failed_count} skill(s). Use list_skills to see available skill IDs.',
+                        }
+                    ],
                     isError=True,
                 )
 
@@ -370,26 +382,12 @@ class LoadSkillMCPTool(MCPTool):
                 agent_id=agent_id, tool_names=unique_tools
             )
 
-            results.append('\n--- TOOL ATTACHMENT ---')
-            if tool_attachment_result['attached']:
-                results.append(
-                    f'Attached: {", ".join(tool_attachment_result["attached"])}'
-                )
-            if tool_attachment_result['already_attached']:
-                results.append(
-                    f'Already had: {", ".join(tool_attachment_result["already_attached"])}'
-                )
             if tool_attachment_result['not_found']:
-                results.append(
-                    f'Not found: {", ".join(tool_attachment_result["not_found"])}'
-                )
                 logger.warning(
                     f'Tools not found in Letta: {tool_attachment_result["not_found"]}'
                 )
-            results.append('--- END TOOL ATTACHMENT ---\n')
 
             # If the skill requires tools but none could be attached, fail the load.
-            # There's no point in injecting the skill content without its tools.
             total_available = len(tool_attachment_result['attached']) + len(
                 tool_attachment_result['already_attached']
             )
@@ -398,17 +396,13 @@ class LoadSkillMCPTool(MCPTool):
                 logger.error(
                     f'All required tools missing for skill(s) {successfully_loaded_ids}: {missing}'
                 )
-                summary = [
-                    '\nSkill Loading Summary:',
-                    '  Skills loaded: 0',
-                    f'  Skills failed: {loaded_count + failed_count}',
-                    '  Tools available: 0',
-                    f'\nRequired tools not found in Letta registry: {missing}',
-                    '\nThe MCP server may still be registering its tools with Letta.',
-                    'Wait a moment and try again.',
-                ]
                 return MCPToolCallResult(
-                    content=[{'type': 'text', 'text': '\n'.join(results + summary)}],
+                    content=[
+                        {
+                            'type': 'text',
+                            'text': f'Failed to load skill(s) {successfully_loaded_ids}: required tools not found in Letta registry: {missing}.\nThe MCP server may still be registering tools. Wait a moment and try again.',
+                        }
+                    ],
                     isError=True,
                 )
 
@@ -417,8 +411,26 @@ class LoadSkillMCPTool(MCPTool):
                 await _add_loaded_skill(postgres, agent_id, skill_id)
 
             skills_after = skills_before + loaded_count
-
             logger.info(f'Agent {agent_id[:8]} now has {skills_after} skills loaded')
+
+            # Write each skill's content into its dedicated memory block
+            all_loaded = await _get_loaded_skills(postgres, agent_id)
+            for slot, sid in enumerate(all_loaded, start=1):
+                if sid in skill_contents:
+                    ok = letta_service.update_memory_block(
+                        agent_id, f'skill_{slot}', skill_contents[sid]
+                    )
+                    if not ok:
+                        logger.warning(
+                            f'Could not write skill content to skill_{slot} block for {sid}'
+                        )
+
+            # Update the loaded_skills tracker block
+            all_skill_tools: dict[str, list[str]] = {}
+            for sid in all_loaded:
+                all_skill_tools[sid] = skill_service.get_skill_tools(sid)
+            tracker_value = _build_loaded_skills_tracker(all_loaded, all_skill_tools)
+            letta_service.update_memory_block(agent_id, 'loaded_skills', tracker_value)
 
             # Dynamic tool management based on count thresholds
             if skills_before == 0 and skills_after > 0:
@@ -441,50 +453,42 @@ class LoadSkillMCPTool(MCPTool):
                 if detach_result['detached']:
                     logger.info(f'Detached load_skill from agent {agent_id[:8]}')
 
-            # Memory status banner
-            all_loaded = await _get_loaded_skills(postgres, agent_id)
-            memory_banner = f'\n**Skill Memory: {len(all_loaded)}/{MAX_LOADED_SKILLS} slots used**\n'
-            if all_loaded:
-                memory_banner += '\nCurrently loaded:\n'
-                memory_banner += '\n'.join(
-                    f'  {i + 1}. {sid}' for i, sid in enumerate(all_loaded)
-                )
-            if len(all_loaded) >= MAX_LOADED_SKILLS:
-                memory_banner += (
-                    '\n\nSkill memory full. Use unload_skill to free a slot.'
-                )
-            elif all_loaded:
-                memory_banner += (
-                    '\n\nUse unload_skill to free slots when done with a skill.'
-                )
-
-            # Summary
-            summary = [
-                '\nSkill Loading Summary:',
-                f'  Skills loaded: {loaded_count}',
-                f'  Skills failed: {failed_count}',
-            ]
-
-            summary.append(f'  Tools available: {total_available}')
-
-            if failed_count > 0:
-                summary.append(
-                    '\nSome skills failed to load. Use list_skills to see available skill IDs.'
-                )
+            # Build brief confirmation (not the full skill content)
+            loaded_summaries = []
+            for slot, sid in enumerate(all_loaded, start=1):
+                if sid in skill_tools_map:
+                    tools_str = (
+                        ', '.join(skill_tools_map[sid])
+                        if skill_tools_map[sid]
+                        else 'no tools'
+                    )
+                    loaded_summaries.append(
+                        f'  Slot {slot}: {sid} (tools: {tools_str})'
+                    )
 
             if len(skill_ids) < len(arguments.get('skill_ids', [])):
                 skipped = arguments['skill_ids'][slots_available:]
-                summary.append(f'\nSkipped (no capacity): {", ".join(skipped)}')
+                results.append(f'Skipped (no capacity): {", ".join(skipped)}')
 
-            all_text = '\n'.join(results + summary) + '\n' + memory_banner
+            confirmation_lines = [
+                f'Loaded {loaded_count} skill(s). Skill content is in your skill_N memory blocks.',
+                *loaded_summaries,
+            ]
 
-            # Tell the agent that tools are attached and it should wrap up this turn.
-            # The client sends an automatic follow-up to start a new turn where
-            # the agent can use the newly attached tools with the original request.
-            all_text += '\n\nYour new tools are now attached. Finish this turn with a brief acknowledgment -- the user will be prompted to continue automatically.'
+            if failed_count > 0:
+                confirmation_lines.append(
+                    f'{failed_count} skill(s) failed. Use list_skills to check available skill IDs.'
+                )
+
+            confirmation_lines.append(
+                f'Skill memory: {len(all_loaded)}/{MAX_LOADED_SKILLS} slots used.'
+            )
+            confirmation_lines.append(
+                'Your new tools are now attached. Finish this turn with a brief acknowledgment -- the user will be prompted to continue automatically.'
+            )
 
             return MCPToolCallResult(
-                content=[{'type': 'text', 'text': all_text}],
+                content=[{'type': 'text', 'text': '\n'.join(confirmation_lines)}],
                 isError=False,
             )
 
@@ -631,11 +635,34 @@ class UnloadSkillMCPTool(MCPTool):
                     f'Kept tools shared with other loaded skills: {", ".join(kept_tools)}'
                 )
 
+            # Find slot numbers before removing from DB so we can clear the right blocks
+            slot_map = {sid: i + 1 for i, sid in enumerate(currently_loaded)}
+
             # Remove skills from the database
             for skill_id in skill_ids:
                 await _remove_loaded_skill(postgres, agent_id, skill_id)
 
             skills_after = skills_before - len(skill_ids)
+
+            # Clear skill content blocks for unloaded skills
+            for skill_id in skill_ids:
+                slot = slot_map.get(skill_id)
+                if slot:
+                    ok = letta_service.update_memory_block(
+                        agent_id, f'skill_{slot}', '[empty]'
+                    )
+                    if not ok:
+                        logger.warning(
+                            f'Could not clear skill_{slot} block for {skill_id}'
+                        )
+
+            # Update the loaded_skills tracker block
+            all_loaded = await _get_loaded_skills(postgres, agent_id)
+            all_skill_tools: dict[str, list[str]] = {}
+            for sid in all_loaded:
+                all_skill_tools[sid] = skill_service.get_skill_tools(sid)
+            tracker_value = _build_loaded_skills_tracker(all_loaded, all_skill_tools)
+            letta_service.update_memory_block(agent_id, 'loaded_skills', tracker_value)
 
             # Dynamic tool management based on count thresholds
             if skills_after < MAX_LOADED_SKILLS:
@@ -660,28 +687,24 @@ class UnloadSkillMCPTool(MCPTool):
                     f'Agent {agent_id[:8]} has {skills_after} skill(s) remaining'
                 )
 
-            # Memory status banner
-            all_loaded = await _get_loaded_skills(postgres, agent_id)
-            memory_banner = (
-                f'\n**Skill Memory: {len(all_loaded)}/{MAX_LOADED_SKILLS} slots used**'
-            )
+            confirmation_lines = [
+                f'Unloaded {len(skill_ids)} skill(s): {", ".join(skill_ids)}.',
+                f'Skill memory: {len(all_loaded)}/{MAX_LOADED_SKILLS} slots used.',
+            ]
             if all_loaded:
-                memory_banner += '\n\nCurrently loaded:\n'
-                memory_banner += '\n'.join(
-                    f'  {i + 1}. {sid}' for i, sid in enumerate(all_loaded)
+                slots_str = ', '.join(
+                    f'slot {slot_map.get(sid, "?")}: {sid}' for sid in all_loaded
                 )
-                memory_banner += '\n\nYou can load more skills or unload others.'
+                confirmation_lines.append(f'Still loaded: {slots_str}')
             else:
-                memory_banner += '\n\nAll skill slots are free.'
+                confirmation_lines.append('All skill slots are now free.')
 
-            results.append(f'\nUnloaded {len(skill_ids)} skill(s).')
-            results.append(memory_banner)
-            results.append(
-                '\nTools detached. Finish this turn with a brief acknowledgment -- the user will be prompted to continue automatically.'
+            confirmation_lines.append(
+                'Tools detached. Finish this turn with a brief acknowledgment -- the user will be prompted to continue automatically.'
             )
 
             return MCPToolCallResult(
-                content=[{'type': 'text', 'text': '\n'.join(results)}]
+                content=[{'type': 'text', 'text': '\n'.join(confirmation_lines)}]
             )
 
         except Exception as e:
