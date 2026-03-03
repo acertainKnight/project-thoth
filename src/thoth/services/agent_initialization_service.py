@@ -743,6 +743,10 @@ Comparison Aspects:
             # Check for missing memory blocks and add them
             await self._ensure_memory_blocks(client, agent_id, agent_config)
 
+            # Always start with a clean skill state so in-memory blocks,
+            # DB records, and attached tools are consistent after restart
+            await self._reset_skill_state(client, agent_id, agent_config)
+
         except Exception as e:
             logger.warning(f'Could not update agent {agent_config["name"]}: {e}')
 
@@ -777,6 +781,93 @@ Comparison Aspects:
 
         except Exception as e:
             logger.warning(f'Could not ensure memory blocks: {e}')
+
+    async def _reset_skill_state(
+        self, client: httpx.AsyncClient, agent_id: str, agent_config: dict
+    ):
+        """
+        Reset all skill state to empty on startup.
+
+        Detaches any dynamically-attached skill tools, resets skill_N and
+        loaded_skills memory blocks to their defaults, and clears the
+        agent_loaded_skills DB records. This ensures a consistent clean
+        slate after every restart.
+        """
+        try:
+            # Fetch current agent state
+            response = await client.get(
+                f'{self.letta_base_url}/v1/agents/{agent_id}', headers=self.headers
+            )
+            response.raise_for_status()
+            agent_data = response.json()
+            current_tools = {t['name']: t['id'] for t in agent_data.get('tools', [])}
+
+            # Anything not in the static config is a dynamically-attached skill tool
+            base_tools = set(agent_config.get('tools', [])) | self.LETTA_BASE_TOOLS
+            skill_tools = {
+                name: tid
+                for name, tid in current_tools.items()
+                if name not in base_tools
+            }
+
+            # Detach skill tools
+            for tool_name, tool_id in skill_tools.items():
+                try:
+                    await client.patch(
+                        f'{self.letta_base_url}/v1/agents/{agent_id}/tools/detach/{tool_id}',
+                        headers=self.headers,
+                    )
+                except Exception:
+                    logger.warning(
+                        f'Could not detach skill tool {tool_name} from {agent_id[:8]}'
+                    )
+
+            if skill_tools:
+                logger.debug(
+                    f'Detached {len(skill_tools)} skill tool(s) from {agent_id[:8]}'
+                )
+
+            # Reset skill content blocks and loaded_skills tracker
+            blocks_response = await client.get(
+                f'{self.letta_base_url}/v1/agents/{agent_id}/core-memory/blocks',
+                headers=self.headers,
+            )
+            if blocks_response.status_code == 200:
+                blocks = {b['label']: b for b in blocks_response.json()}
+
+                for slot in ('skill_1', 'skill_2', 'skill_3'):
+                    if slot in blocks:
+                        await client.patch(
+                            f'{self.letta_base_url}/v1/blocks/{blocks[slot]["id"]}',
+                            headers=self.headers,
+                            json={'value': '[empty]'},
+                        )
+
+                if 'loaded_skills' in blocks:
+                    empty_tracker = '=== Currently Loaded Skills ===\n\nSlot 1: [empty]\nSlot 2: [empty]\nSlot 3: [empty]'
+                    await client.patch(
+                        f'{self.letta_base_url}/v1/blocks/{blocks["loaded_skills"]["id"]}',
+                        headers=self.headers,
+                        json={'value': empty_tracker},
+                    )
+
+            # Clear DB records
+            if hasattr(self, '_service_manager') and self._service_manager:
+                try:
+                    postgres = self._service_manager.get_service('postgres')
+                    await postgres.execute(
+                        'DELETE FROM agent_loaded_skills WHERE agent_id = $1',
+                        agent_id,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f'Could not clear agent_loaded_skills for {agent_id[:8]}: {e}'
+                    )
+
+            logger.debug(f'Reset skill state for agent {agent_id[:8]}')
+
+        except Exception as e:
+            logger.warning(f'Could not reset skill state for agent {agent_id[:8]}: {e}')
 
     async def _create_and_attach_block(
         self, client: httpx.AsyncClient, agent_id: str, block_config: dict
