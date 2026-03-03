@@ -274,6 +274,75 @@ class LettaService(BaseService):
             'not_found': not_found,
         }
 
+    def get_agent_blocks(self, agent_id: str) -> dict[str, dict]:
+        """
+        Get all core memory blocks for an agent, keyed by label.
+
+        Args:
+            agent_id: Letta agent ID
+
+        Returns:
+            dict mapping block label to {'id', 'value', 'limit'}
+        """
+        try:
+            resp = requests.get(
+                f'{self.letta_url}/v1/agents/{agent_id}/core-memory/blocks',
+                headers=self._get_headers(),
+                timeout=30,
+            )
+            if resp.status_code == 200:
+                return {
+                    b['label']: {
+                        'id': b['id'],
+                        'value': b.get('value', ''),
+                        'limit': b.get('limit', 0),
+                    }
+                    for b in resp.json()
+                }
+            self.logger.warning(
+                f'Failed to get blocks for agent {agent_id[:8]}: HTTP {resp.status_code}'
+            )
+            return {}
+        except Exception as e:
+            self.logger.error(f'Error getting agent blocks: {e}')
+            return {}
+
+    def update_memory_block(self, agent_id: str, label: str, value: str) -> bool:
+        """
+        Update the value of a named core memory block on an agent.
+
+        Args:
+            agent_id: Letta agent ID
+            label: Block label (e.g. 'skill_1', 'loaded_skills')
+            value: New content for the block
+
+        Returns:
+            True if updated successfully, False otherwise
+        """
+        blocks = self.get_agent_blocks(agent_id)
+        block = blocks.get(label)
+        if not block:
+            self.logger.warning(f"Block '{label}' not found on agent {agent_id[:8]}")
+            return False
+
+        try:
+            resp = requests.patch(
+                f'{self.letta_url}/v1/blocks/{block["id"]}',
+                headers=self._get_headers(),
+                json={'value': value},
+                timeout=30,
+            )
+            if resp.status_code in [200, 201]:
+                self.logger.debug(f"Updated block '{label}' on agent {agent_id[:8]}")
+                return True
+            self.logger.warning(
+                f"Failed to update block '{label}': HTTP {resp.status_code} - {resp.text[:200]}"
+            )
+            return False
+        except Exception as e:
+            self.logger.error(f"Error updating block '{label}': {e}")
+            return False
+
     def verify_connection(self) -> bool:
         """
         Verify connection to Letta server.

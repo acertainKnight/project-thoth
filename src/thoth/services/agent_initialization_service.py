@@ -122,9 +122,27 @@ Always check `list_skills` if unsure which skill to use for a task.
                 },
                 {
                     'label': 'loaded_skills',
-                    'value': '=== Currently Loaded Skills ===\n\nNo skills loaded. Use list_skills to see available skills, then load_skill to add capabilities.',
+                    'value': '=== Currently Loaded Skills ===\n\nSlot 1: [empty]\nSlot 2: [empty]\nSlot 3: [empty]',
                     'limit': 1000,
-                    'description': 'Track which skills you have currently loaded and what tools they provide. Update when loading/unloading skills. This helps you remember what capabilities you have without re-checking.',
+                    'description': 'Snapshot of which skills are loaded in each slot and what tools they provide. Updated automatically by load_skill/unload_skill.',
+                },
+                {
+                    'label': 'skill_1',
+                    'value': '[empty]',
+                    'limit': 15000,
+                    'description': 'Skill slot 1. Contains the full instructions for the loaded skill. Updated by load_skill/unload_skill.',
+                },
+                {
+                    'label': 'skill_2',
+                    'value': '[empty]',
+                    'limit': 15000,
+                    'description': 'Skill slot 2. Contains the full instructions for the loaded skill. Updated by load_skill/unload_skill.',
+                },
+                {
+                    'label': 'skill_3',
+                    'value': '[empty]',
+                    'limit': 15000,
+                    'description': 'Skill slot 3. Contains the full instructions for the loaded skill. Updated by load_skill/unload_skill.',
                 },
                 {
                     'label': 'planning',
