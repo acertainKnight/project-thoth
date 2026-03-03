@@ -243,8 +243,7 @@ echo ""
 echo "  1. Stage and commit the version bump"
 echo "  2. Tag the release"
 echo "  3. Push commit to origin"
-echo "  4. Push tag to origin"
-echo "  5. Create GitHub release (requires gh CLI)"
+echo "  4. Push tag to origin  (triggers CI release workflow)"
 echo ""
 echo -e "${YELLOW}For each step you can choose: [y]es, [n]o, [a]ll remaining, [q]uit${NC}"
 
@@ -279,17 +278,9 @@ ask_and_run 3 "Push commit to origin/${BRANCH}" \
 ask_and_run 4 "Push tag ${TAG_NAME} to origin" \
     "git push origin '${TAG_NAME}'"
 
-# Step 5: GitHub release
-GH_NOTES="## ${TAG_NAME}
-
-${CHANGELOG_BODY}"
-
-ask_and_run 5 "Create GitHub release for ${TAG_NAME}" \
-    "gh release create '${TAG_NAME}' --title '${TAG_NAME}' --notes \"\$(cat <<'GHNOTES'
-${GH_NOTES}
-GHNOTES
-)\""
-
 echo ""
 echo "============================================="
 echo -e "${GREEN}Release ${TAG_NAME} complete.${NC}"
+echo ""
+echo -e "${CYAN}The tag push will trigger the release workflow on CI.${NC}"
+echo -e "${CYAN}Track it at: https://github.com/$(git remote get-url origin | sed 's|.*github.com[:/]\(.*\)\.git|\1|')/actions${NC}"
