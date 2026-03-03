@@ -41,11 +41,14 @@ class AgentInitializationService:
             self.headers['Authorization'] = f'Bearer {self.letta_api_key}'
 
     # Letta built-in tools that agents need but aren't in AGENT_CONFIGS['tools'].
-    # Used by _update_agent to attach them to existing agents that predate this fix.
+    # These must include ALL tools Letta auto-provides via include_base_tools so
+    # that _reset_skill_state doesn't accidentally detach them on restart.
     LETTA_BASE_TOOLS: ClassVar[set[str]] = {
         'archival_memory_insert',
         'archival_memory_search',
         'conversation_search',
+        'core_memory_append',
+        'core_memory_replace',
         'send_message',
     }
 
@@ -97,7 +100,9 @@ Always check `list_skills` if unsure which skill to use for a task.
                 'search_articles',
             ],
             'tool_rules': [
-                # Terminal tools - end agent execution after skill loading/unloading
+                # Letta doesn't refresh agent tool lists mid-turn, so skill
+                # load/unload must end the turn. The Obsidian plugin sends an
+                # auto-follow-up message to resume with the new tools.
                 {'tool_name': 'load_skill', 'type': 'exit_loop'},
                 {'tool_name': 'unload_skill', 'type': 'exit_loop'},
             ],
@@ -207,7 +212,6 @@ You have direct access to analysis tools. Use them to:
                 'load_skill',
             ],
             'tool_rules': [
-                # Terminal tools - end agent execution after skill loading/unloading
                 {'tool_name': 'load_skill', 'type': 'exit_loop'},
                 {'tool_name': 'unload_skill', 'type': 'exit_loop'},
             ],
@@ -313,13 +317,23 @@ Comparison Aspects:
 
                     try:
                         if existing_id:
-                            # User already has this agent -- update it in place
                             await self._update_agent(
                                 client,
                                 existing_id,
                                 user_config,
                                 available_tools,
                             )
+
+                            if config.settings.memory.letta.archival_memory_enabled:
+                                if not await self._verify_archival_memory(
+                                    client, existing_id
+                                ):
+                                    logger.warning(
+                                        f'{role} agent for user {username} '
+                                        f'({existing_id[:16]}) has broken '
+                                        f'archival memory'
+                                    )
+
                             agent_ids[role] = existing_id
                             if role == 'orchestrator':
                                 await self._attach_filesystem(client, existing_id)
@@ -452,16 +466,22 @@ Comparison Aspects:
     ) -> str | None:
         """Ensure agent exists with correct configuration (preserves memory)."""
 
-        # Check if agent exists
         existing_agent = await self._find_agent_by_name(client, agent_name)
 
         if existing_agent:
-            # Agent exists - update tools and persona (preserves memory)
             agent_id = existing_agent['id']
             await self._update_agent(client, agent_id, agent_config, available_tools)
+
+            if config.settings.memory.letta.archival_memory_enabled:
+                if not await self._verify_archival_memory(client, agent_id):
+                    logger.warning(
+                        f'Agent {agent_name} ({agent_id[:16]}) has broken '
+                        f'archival memory. archival_memory_insert/search may '
+                        f'fail until the agent is manually recreated.'
+                    )
+
             return agent_id
         else:
-            # Create new agent
             return await self._create_agent(client, agent_config, available_tools)
 
     async def _find_agent_by_name(
@@ -483,6 +503,153 @@ Comparison Aspects:
         except Exception as e:
             logger.warning(f'Error finding agent {name}: {e}')
             return None
+
+    async def _validate_agent_in_letta(
+        self, client: httpx.AsyncClient, agent_id: str
+    ) -> bool:
+        """Check whether an agent ID still exists in Letta.
+
+        Args:
+            client: Active httpx client.
+            agent_id: Letta agent ID to validate.
+
+        Returns:
+            True if the agent exists, False if it returned 404 or an error.
+        """
+        try:
+            resp = await client.get(
+                f'{self.letta_base_url}/v1/agents/{agent_id}',
+                headers=self.headers,
+                timeout=10,
+            )
+            return resp.status_code == 200
+        except Exception as e:
+            logger.warning(f'Could not validate agent {agent_id[:16]}: {e}')
+            return False
+
+    async def sync_all_user_agents(self, postgres) -> None:
+        """Update every registered user's agents to match current AGENT_CONFIGS.
+
+        Runs after initialize_all_agents on startup. For each active user:
+        - If their agent ID exists in Letta: update in place (preserves memory
+          and conversations)
+        - If their agent ID is missing or stale: create a new agent and update
+          the users table with the new ID
+
+        This is the mechanism that propagates config changes (new tools, updated
+        system prompts, new memory blocks) to per-user agents on every restart.
+
+        Args:
+            postgres: PostgresService instance for DB access.
+        """
+        if postgres is None:
+            logger.warning(
+                'sync_all_user_agents: postgres service not available, skipping'
+            )
+            return
+
+        try:
+            rows = await postgres.fetch(
+                'SELECT id, username, orchestrator_agent_id, analyst_agent_id '
+                'FROM users WHERE is_active = TRUE'
+            )
+        except Exception as e:
+            logger.error(f'sync_all_user_agents: could not fetch users: {e}')
+            return
+
+        if not rows:
+            logger.info('sync_all_user_agents: no active users found')
+            return
+
+        logger.success(f'Syncing per-user agents for {len(rows)} user(s)...')
+
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+            available_tools = await self._get_all_tools(client)
+
+            for row in rows:
+                username = row['username']
+                user_id = str(row['id'])
+                new_ids: dict[str, str] = {}
+
+                role_map = {
+                    'orchestrator': (
+                        row['orchestrator_agent_id'],
+                        'thoth_main_orchestrator',
+                    ),
+                    'analyst': (
+                        row['analyst_agent_id'],
+                        'thoth_research_analyst',
+                    ),
+                }
+
+                for role, (existing_id, base_name) in role_map.items():
+                    base_config = self.AGENT_CONFIGS[base_name]
+                    user_config = dict(base_config)
+                    user_config['user_id'] = user_id
+
+                    try:
+                        if existing_id and await self._validate_agent_in_letta(
+                            client, existing_id
+                        ):
+                            # Agent still exists -- update it in place
+                            await self._update_agent(
+                                client, existing_id, user_config, available_tools
+                            )
+                            if role == 'orchestrator':
+                                await self._attach_filesystem(client, existing_id)
+                            logger.info(
+                                f'  {username}/{role}: updated {existing_id[:16]}...'
+                            )
+                        else:
+                            # Agent is missing -- create a fresh one
+                            if existing_id:
+                                logger.warning(
+                                    f'  {username}/{role}: agent {existing_id[:16]} '
+                                    f'not found in Letta -- creating replacement'
+                                )
+                            else:
+                                logger.warning(
+                                    f'  {username}/{role}: no agent ID -- creating'
+                                )
+
+                            user_config['name'] = f'{base_name}_{username}'
+                            new_id = await self._create_agent(
+                                client, user_config, available_tools
+                            )
+                            if new_id:
+                                new_ids[role] = new_id
+                                if role == 'orchestrator':
+                                    await self._attach_filesystem(client, new_id)
+                                logger.info(
+                                    f'  {username}/{role}: created {new_id[:16]}...'
+                                )
+                    except Exception as e:
+                        logger.error(f'  {username}/{role}: sync failed: {e}')
+
+                # Write any new IDs back to the users table
+                if new_ids:
+                    try:
+                        updates = []
+                        params: list = []
+                        idx = 1
+                        if 'orchestrator' in new_ids:
+                            updates.append(f'orchestrator_agent_id = ${idx}')
+                            params.append(new_ids['orchestrator'])
+                            idx += 1
+                        if 'analyst' in new_ids:
+                            updates.append(f'analyst_agent_id = ${idx}')
+                            params.append(new_ids['analyst'])
+                            idx += 1
+                        params.append(row['id'])
+                        await postgres.execute(
+                            f'UPDATE users SET {", ".join(updates)} WHERE id = ${idx}',
+                            *params,
+                        )
+                        logger.info(
+                            f'  {username}: updated users table with new agent IDs'
+                        )
+                    except Exception as e:
+                        logger.error(f'  {username}: failed to update users table: {e}')
 
     async def _resolve_embedding_config(
         self,
@@ -854,7 +1021,9 @@ Comparison Aspects:
             # Clear DB records
             if hasattr(self, '_service_manager') and self._service_manager:
                 try:
-                    postgres = self._service_manager.get_service('postgres')
+                    postgres = getattr(self._service_manager, '_services', {}).get(
+                        'postgres'
+                    )
                     await postgres.execute(
                         'DELETE FROM agent_loaded_skills WHERE agent_id = $1',
                         agent_id,
@@ -868,6 +1037,41 @@ Comparison Aspects:
 
         except Exception as e:
             logger.warning(f'Could not reset skill state for agent {agent_id[:8]}: {e}')
+
+    async def _verify_archival_memory(
+        self, client: httpx.AsyncClient, agent_id: str
+    ) -> bool:
+        """Quick check that archival memory insert/search works for this agent.
+
+        Agents created without include_base_tools won't have a working passage
+        store. Returns False if the endpoint 404s or errors.
+        """
+        try:
+            resp = await client.post(
+                f'{self.letta_base_url}/v1/agents/{agent_id}/archival',
+                headers=self.headers,
+                json={'content': '__thoth_health_check__'},
+                timeout=10,
+            )
+            if resp.status_code in (404, 405):
+                return False
+            if resp.status_code in (200, 201):
+                # Clean up the test entry
+                passages = resp.json()
+                if isinstance(passages, list):
+                    for p in passages:
+                        pid = p.get('id')
+                        if pid:
+                            await client.delete(
+                                f'{self.letta_base_url}/v1/agents/{agent_id}/archival/{pid}',
+                                headers=self.headers,
+                                timeout=10,
+                            )
+                return True
+            return resp.status_code < 400
+        except Exception as e:
+            logger.warning(f'Archival memory check failed for {agent_id[:8]}: {e}')
+            return False
 
     async def _create_and_attach_block(
         self, client: httpx.AsyncClient, agent_id: str, block_config: dict

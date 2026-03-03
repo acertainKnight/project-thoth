@@ -141,8 +141,10 @@ async def get_current_user_info(
     """
     Get current authenticated user's information.
 
-    Fetches full user record from database, including Letta agent IDs
-    needed by the Obsidian plugin for agent resolution.
+    Returns Letta agent IDs from the database. Agent IDs are kept current by
+    the startup sync (sync_all_user_agents). As a fallback for users created
+    between restarts, if agent IDs are NULL this endpoint triggers creation
+    immediately so the user can start chatting right away.
 
     Args:
         user_context: Injected user context from token
@@ -150,23 +152,28 @@ async def get_current_user_info(
 
     Returns:
         UserInfo with public user data and agent IDs
-
-    Example:
-        >>> GET / auth / me
-        >>> Headers: Authorization: Bearer thoth_abc123...
-        >>> Response: {"id": "...", "username": "alice", ...}
     """
     auth_service = service_manager.auth
     user = await auth_service.get_user_by_username(user_context.username)
 
     if user:
+        orch_id = user.orchestrator_agent_id
+        analyst_id = user.analyst_agent_id
+
+        # Only trigger agent creation if IDs are completely absent. Stale IDs
+        # are handled at startup by sync_all_user_agents, not on every request.
+        if not orch_id or not analyst_id:
+            new_ids = await _create_agents_for_user(user, user_context, service_manager)
+            orch_id = new_ids.get('orchestrator', orch_id)
+            analyst_id = new_ids.get('analyst', analyst_id)
+
         return UserInfo(
             id=str(user.id),
             username=user.username,
             email=user.email,
             vault_path=str(user_context.vault_path),
-            orchestrator_agent_id=user.orchestrator_agent_id,
-            analyst_agent_id=user.analyst_agent_id,
+            orchestrator_agent_id=orch_id,
+            analyst_agent_id=analyst_id,
             is_admin=user.is_admin,
             is_active=user.is_active,
             created_at=user.created_at,
@@ -179,3 +186,40 @@ async def get_current_user_info(
         is_admin=user_context.is_admin,
         is_active=True,
     )
+
+
+async def _create_agents_for_user(
+    user: object, user_context: UserContext, service_manager: ServiceManager
+) -> dict[str, str]:
+    """Create agents for a user that has NULL agent IDs in the DB.
+
+    This is a fallback for users created between server restarts. The primary
+    mechanism for keeping agents current is sync_all_user_agents at startup.
+    """
+    agent_init = service_manager._services.get('agent_initialization')
+    if agent_init is None:
+        logger.warning(
+            f'Cannot create agents for {user_context.username}: '
+            f'AgentInitializationService not available'
+        )
+        return {}
+
+    logger.info(f'Creating agents for user {user_context.username} (none found in DB)')
+    try:
+        agent_ids = await agent_init.initialize_agents_for_user(user_context)
+    except Exception:
+        logger.exception(f'Agent creation failed for {user_context.username}')
+        return {}
+
+    if agent_ids:
+        auth_service = service_manager.auth
+        await auth_service.update_agent_ids(
+            user.id,  # type: ignore[attr-defined]
+            orchestrator_agent_id=agent_ids.get('orchestrator'),
+            analyst_agent_id=agent_ids.get('analyst'),
+        )
+        logger.info(
+            f'Created agents for {user_context.username}: {list(agent_ids.keys())}'
+        )
+
+    return agent_ids

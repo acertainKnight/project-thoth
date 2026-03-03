@@ -496,9 +496,17 @@ class ServiceManager:
         return self._services.copy()
 
     def _ensure_initialized(self) -> None:
-        """Ensure services are initialized."""
+        """Ensure services are initialized.
+
+        Wraps initialize() failures as AttributeError so that Python's
+        hasattr() and getattr() behave correctly instead of leaking
+        PermissionError or other unexpected exceptions.
+        """
         if not self._initialized:
-            self.initialize()
+            try:
+                self.initialize()
+            except Exception as e:
+                raise AttributeError(f'ServiceManager failed to initialize: {e}') from e
 
     def shutdown(self) -> None:
         """Shutdown all services and clean up resources."""

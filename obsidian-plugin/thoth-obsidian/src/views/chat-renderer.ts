@@ -1874,7 +1874,9 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
                     }
 
                     if (reasoning) {
-                      accumulatedReasoning += reasoning;
+                      // Strip trailing newline that Letta appends to each
+                      // reasoning chunk -- they cause line-per-chunk rendering.
+                      accumulatedReasoning += reasoning.replace(/\n$/, '');
                       this.updateStepPillDetail(
                         currentReasoningPill, accumulatedReasoning.trim()
                       );
@@ -1992,10 +1994,15 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
                     // unescaped text for the Obsidian markdown re-render.
                     if (activeToolName === 'send_message') {
                       let sendText = '';
+
+                      // Strategy 1: clean JSON parse
                       try {
                         const parsed = JSON.parse(sendMsgArgBuf);
                         sendText = parsed?.message || '';
-                      } catch {
+                      } catch { /* fall through */ }
+
+                      // Strategy 2: regex extraction (handles incomplete JSON)
+                      if (!sendText) {
                         const m = sendMsgArgBuf.match(/"message"\s*:\s*"((?:[^"\\]|\\.)*)"/);
                         if (m) {
                           sendText = m[1]
@@ -2005,11 +2012,28 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
                         }
                       }
 
-                      // If both parse strategies failed, fall back to whatever
-                      // the streaming renderer already wrote to the DOM so the
-                      // finalization step doesn't wipe visible content.
+                      // Strategy 3: greedy extraction - find "message":" and
+                      // take everything until the last unescaped quote
+                      if (!sendText) {
+                        const prefixMatch = sendMsgArgBuf.match(/"message"\s*:\s*"/);
+                        if (prefixMatch) {
+                          const start = prefixMatch.index! + prefixMatch[0].length;
+                          let raw = sendMsgArgBuf.substring(start);
+                          raw = raw.replace(/"\s*\}?\s*$/, '');
+                          sendText = raw
+                            .replace(/\\n/g, '\n')
+                            .replace(/\\"/g, '"')
+                            .replace(/\\\\/g, '\\');
+                        }
+                      }
+
+                      // Strategy 4: use whatever the streaming renderer wrote
                       if (!sendText && streamContentEl) {
                         sendText = streamContentEl.textContent || '';
+                      }
+
+                      if (!sendText) {
+                        console.warn('[MultiChatModal] send_message finalization: all extraction strategies failed, buf length:', sendMsgArgBuf.length);
                       }
 
                       if (sendText) {
@@ -2151,10 +2175,10 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
           }
 
           // --- Auto-follow-up for skill loading/unloading ---
-          // Loop to handle chained skill loads: if the agent calls load_skill
-          // again inside a follow-up turn (e.g. loading a second skill after
-          // the first), processStream sets skillToolDetected = true again and
-          // we fire another follow-up. Cap at 3 to avoid infinite loops.
+          // exit_loop forces the agent's turn to end after load_skill/unload_skill
+          // because Letta doesn't refresh available tools mid-turn. We send a
+          // follow-up message to start a new turn where the agent can use the
+          // newly attached tools. Cap at 3 for chained loads.
           let skillFollowUpCount = 0;
           while (skillToolDetected && skillFollowUpCount < 3) {
             skillToolDetected = false;
@@ -2171,6 +2195,9 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
             this.scrollToBottom(messagesContainer, true);
 
             try {
+              // Brief delay to let Letta finalize the previous turn
+              await new Promise<void>(r => setTimeout(r, 500));
+
               const truncatedRequest = message.length > 300
                 ? message.slice(0, 300) + '...'
                 : message;
@@ -2210,6 +2237,20 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
               await this.addMessageToChat(messagesContainer, 'assistant',
                 'Skill tools loaded, but an error occurred while processing. Try sending your message again.');
               break;
+            }
+          }
+
+          // If the skill follow-up loop ran but never produced visible content,
+          // render a fallback so the user isn't left staring at nothing.
+          if (skillFollowUpCount > 0 && !accumulatedContent.trim()) {
+            console.warn(`[MultiChatModal] Skill follow-up produced no visible content after ${skillFollowUpCount} attempt(s)`);
+            const fallbackText = 'Skill loaded. Send your message again to continue.';
+            if (assistantMessageEl) {
+              const el = (assistantMessageEl as HTMLElement).createEl('div', { cls: 'message-content' });
+              await this.renderMessageContent(fallbackText, el);
+              accumulatedContent = fallbackText;
+            } else {
+              await this.addMessageToChat(messagesContainer, 'assistant', fallbackText);
             }
           }
 

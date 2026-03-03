@@ -1030,7 +1030,7 @@ class LoggingConsoleConfig(BaseModel):
     """Logging console configuration."""
 
     enabled: bool = True
-    level: str = 'WARNING'
+    level: str = 'INFO'
 
     class Config:
         populate_by_name = True
@@ -1039,7 +1039,7 @@ class LoggingConsoleConfig(BaseModel):
 class LoggingConfig(BaseModel):
     """Logging configuration."""
 
-    level: str = 'WARNING'
+    level: str = 'INFO'
     format: str = '{time} | {level} | {file}:{line} | {function} | {message}'
     date_format: str = Field(default='YYYY-MM-DD HH:mm:ss', alias='dateFormat')
     rotation: LoggingRotationConfig = Field(default_factory=LoggingRotationConfig)
@@ -1613,6 +1613,12 @@ class Config:
         """Configure loguru logging based on your settings."""
         log_config = self.settings.logging
 
+        # THOTH_LOG_LEVEL env var overrides the settings file. This lets
+        # docker-compose.dev.yml control verbosity without editing JSON.
+        env_level = os.getenv('THOTH_LOG_LEVEL')
+        console_level = env_level or log_config.console.level
+        file_level = env_level or log_config.file.level
+
         # Remove default handler
         logger.remove()
 
@@ -1620,7 +1626,7 @@ class Config:
         if log_config.console.enabled:
             logger.add(
                 lambda msg: print(msg, end=''),
-                level=log_config.console.level,
+                level=console_level,
                 format=log_config.format.replace('{file}', '<cyan>{file}</cyan>')
                 .replace('{line}', '<cyan>{line}</cyan>')
                 .replace('{function}', '<cyan>{function}</cyan>')
@@ -1635,7 +1641,7 @@ class Config:
                 log_file.parent.mkdir(parents=True, exist_ok=True)
                 logger.add(
                     log_file,
-                    level=log_config.file.level,
+                    level=file_level,
                     rotation=log_config.file.rotation,
                     retention=log_config.file.retention,
                     compression=log_config.file.compression,

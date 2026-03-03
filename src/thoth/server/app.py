@@ -524,6 +524,7 @@ async def lifespan(app: FastAPI):
             )
 
     # NOW initialize Letta agents (after MCP manager is ready)
+    agent_init = None
     try:
         from thoth.services.agent_initialization_service import (
             AgentInitializationService,
@@ -542,25 +543,32 @@ async def lifespan(app: FastAPI):
             'Continuing without agent initialization - agents may need manual setup'
         )
 
-    # Initialize PostgreSQL connection pool if postgres service exists
-    if service_manager and hasattr(service_manager, 'postgres'):
+    # Sync per-user agents with latest AGENT_CONFIGS. We create a standalone
+    # PostgresService here to avoid depending on ServiceManager (which can fail
+    # during initialization due to unrelated permission errors).
+    if agent_init is not None:
         try:
-            postgres_svc = service_manager.postgres
-            await postgres_svc.initialize()
-            logger.success('PostgreSQL connection pool initialized')
+            from thoth.services.postgres_service import PostgresService
+
+            pg = PostgresService(config=config)
+            await pg.initialize()
+            await agent_init.sync_all_user_agents(pg)
         except Exception as e:
-            logger.error(f'Failed to initialize PostgreSQL: {e}')
-            logger.warning('Continuing without PostgreSQL (some features may not work)')
+            logger.error(f'sync_all_user_agents failed: {e}')
 
     # Initialize WorkflowExecutionService after PostgreSQL is ready
-    if service_manager and hasattr(service_manager, 'postgres'):
+    postgres_svc = (
+        getattr(service_manager, '_services', {}).get('postgres')
+        if service_manager
+        else None
+    )
+    if postgres_svc:
         try:
             from thoth.discovery.browser.workflow_execution_service import (
                 WorkflowExecutionService,
             )
 
             logger.info('Initializing workflow execution service...')
-            postgres_svc = service_manager.postgres
             workflow_execution_service = WorkflowExecutionService(
                 postgres_service=postgres_svc,
                 max_concurrent_browsers=5,
