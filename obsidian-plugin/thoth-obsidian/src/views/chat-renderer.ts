@@ -1804,6 +1804,10 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
             sendMsgArgBuf = '';
             sendMsgPrefixIdx = -1;
             sendMsgRenderedLen = 0;
+            // Once send_message completes its tool_return, any subsequent reasoning
+            // or tool-call events are internal Letta loop bookkeeping reacting to
+            // the injected skill system messages -- not user-visible work.
+            let sendMessageCompleted = false;
 
             // Each stream may produce a new content section below the steps
             let streamContentEl: HTMLElement | null = null;
@@ -1863,6 +1867,10 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
 
                   // --- reasoning ---
                   if (messageType === 'reasoning_message') {
+                    if (sendMessageCompleted) {
+                      console.log('[SSE] suppressing post-response reasoning_message');
+                      continue;
+                    }
                     ensureContainer();
                     const reasoning = msg.reasoning || msg.content || msg.text || '';
 
@@ -1886,6 +1894,20 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
 
                   // --- tool call (handles both full ToolCall and streamed ToolCallDelta) ---
                   else if (messageType === 'tool_call_message') {
+                    // After send_message completes, only pass through skill tool calls
+                    // (which trigger the follow-up loop) and additional send_message
+                    // calls. Everything else is Letta reacting to injected skill system
+                    // messages -- internal bookkeeping the user shouldn't see.
+                    if (sendMessageCompleted) {
+                      const tc = msg.tool_call || msg.tool_calls?.[0];
+                      const name = tc?.name || '';
+                      const allowed = name === 'send_message' || name === 'load_skill' || name === 'unload_skill';
+                      if (!allowed) {
+                        console.log('[SSE] suppressing post-response tool_call_message:', name);
+                        continue;
+                      }
+                    }
+
                     ensureContainer();
 
                     // Letta may use `tool_call` (singular) or `tool_calls` (array)
@@ -2045,6 +2067,7 @@ ${isConnected ? 'Ready to chat with Letta' : 'Start the Letta server to begin'}
                       sendMsgRenderedLen = 0;
                       activeToolCallId = null;
                       activeToolName = null;
+                      sendMessageCompleted = true;
                       this.scrollToBottom(messagesContainer, true);
                       continue;
                     }
