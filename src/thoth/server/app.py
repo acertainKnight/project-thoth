@@ -78,6 +78,9 @@ except ImportError as e:
 from thoth.config import config
 from thoth.services.llm_router import LLMRouter
 
+# Holds strong references to fire-and-forget tasks so they aren't GC'd mid-run.
+_background_tasks: set[asyncio.Task] = set()
+
 # Module-level variables to store configuration
 pdf_dir: Path = None
 notes_dir: Path = None
@@ -607,6 +610,36 @@ async def lifespan(app: FastAPI):
                     )
         except Exception as e:
             logger.warning(f'Could not start multi-user RAG watcher: {e}')
+
+    # Index Thoth's own documentation into the RAG system for agent search.
+    # Runs in the background so it doesn't delay startup -- the docs are only
+    # needed when the user asks the agent a question about how something works.
+    rag_svc = (
+        getattr(service_manager, '_services', {}).get('rag')
+        if service_manager
+        else None
+    )
+    postgres_svc_for_docs = (
+        getattr(service_manager, '_services', {}).get('postgres')
+        if service_manager
+        else None
+    )
+    if rag_svc and postgres_svc_for_docs:
+        import asyncio as _asyncio
+
+        from thoth.services import documentation_service as _doc_svc
+
+        async def _index_docs():
+            try:
+                await _doc_svc.index_all(postgres_svc_for_docs, rag_svc)
+            except Exception as e:
+                logger.warning(f'Documentation indexing failed (non-fatal): {e}')
+
+        _doc_index_task = _asyncio.create_task(_index_docs())
+        _background_tasks.add(_doc_index_task)
+        _doc_index_task.add_done_callback(_background_tasks.discard)
+    else:
+        logger.debug('Skipping documentation indexing: RAG or postgres not available')
 
     logger.success('API server startup complete')
 

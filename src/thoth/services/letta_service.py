@@ -340,6 +340,11 @@ class LettaService(BaseService):
         """
         Update the value of a named core memory block on an agent.
 
+        Uses the agent-scoped endpoint so Letta updates both the persisted
+        block and the agent's in-memory state. The global /v1/blocks/{id}
+        endpoint only writes to the DB — the agent won't see the change
+        until the next full state reload.
+
         Args:
             agent_id: Letta agent ID
             label: Block label (e.g. 'skill_1', 'loaded_skills')
@@ -348,15 +353,9 @@ class LettaService(BaseService):
         Returns:
             True if updated successfully, False otherwise
         """
-        blocks = self.get_agent_blocks(agent_id)
-        block = blocks.get(label)
-        if not block:
-            self.logger.warning(f"Block '{label}' not found on agent {agent_id[:8]}")
-            return False
-
         try:
             resp = requests.patch(
-                f'{self.letta_url}/v1/blocks/{block["id"]}',
+                f'{self.letta_url}/v1/agents/{agent_id}/core-memory/blocks/{label}',
                 headers=self._get_headers(),
                 json={'value': value},
                 timeout=30,

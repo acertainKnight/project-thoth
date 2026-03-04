@@ -193,6 +193,14 @@ from .workflow_builder_tools import (
     ConfirmSourceWorkflowMCPTool,
     RefineSourceSelectorsMCPTool,
 )
+from .documentation_tools import (
+    SearchDocumentationMCPTool,
+    LoadDocumentationMCPTool,
+    UnloadDocumentationMCPTool,
+)
+from .update_tools import (
+    CheckWhatsNewMCPTool,
+)
 
 # List of ACTIVE MCP tool classes (deprecated tools excluded)
 MCP_TOOL_CLASSES = [
@@ -291,6 +299,11 @@ MCP_TOOL_CLASSES = [
     GetPlanMCPTool,
     UpdatePlanMCPTool,
     DeletePlanMCPTool,
+    # Documentation and update tools
+    SearchDocumentationMCPTool,
+    LoadDocumentationMCPTool,
+    UnloadDocumentationMCPTool,
+    CheckWhatsNewMCPTool,
 ]
 
 # Deprecated tools - kept for backwards compatibility, not registered
@@ -454,6 +467,11 @@ __all__ = [  # noqa: RUF022
     'GetPlanMCPTool',
     'UpdatePlanMCPTool',
     'DeletePlanMCPTool',
+    # Documentation and update tools
+    'SearchDocumentationMCPTool',
+    'LoadDocumentationMCPTool',
+    'UnloadDocumentationMCPTool',
+    'CheckWhatsNewMCPTool',
     # Functions
     'register_all_mcp_tools',
 ]

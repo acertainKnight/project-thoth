@@ -65,7 +65,7 @@ services:
   # Letta Memory Server
   # ==============================================================================
   letta:
-    image: letta/letta:0.16.3  # Upgraded to latest version
+    image: letta/letta:0.16.5
     container_name: letta-server
     env_file:
       - .env.letta

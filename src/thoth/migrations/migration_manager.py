@@ -48,6 +48,8 @@ class MigrationManager:
             ),
             (6, 'add_knowledge_collections', MIGRATION_006_ADD_KNOWLEDGE_COLLECTIONS),
             (7, 'add_multi_user_support', MIGRATION_007_ADD_MULTI_USER_SUPPORT),
+            (8, 'add_thoth_docs_tables', MIGRATION_008_ADD_THOTH_DOCS_TABLES),
+            (9, 'add_skill_message_count', MIGRATION_009_ADD_SKILL_MESSAGE_COUNT),
         ]
         return sorted(migrations, key=lambda x: x[0])
 
@@ -1283,4 +1285,44 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_collections_user_id ON knowledge_collec
 -- Usage tracking
 ALTER TABLE token_usage ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'default_user';
 CREATE INDEX IF NOT EXISTS idx_token_usage_user_id ON token_usage(user_id);
+"""
+
+MIGRATION_009_ADD_SKILL_MESSAGE_COUNT = """
+-- Migration 009: Add message_count to agent_loaded_skills for auto-unload tracking
+--
+-- The proxy increments message_count on every non-skill-tools-ready user message.
+-- When a skill reaches 50 messages it is considered stale and auto-unloaded.
+
+ALTER TABLE agent_loaded_skills
+    ADD COLUMN IF NOT EXISTS message_count INTEGER NOT NULL DEFAULT 0;
+"""
+
+MIGRATION_008_ADD_THOTH_DOCS_TABLES = """
+-- Migration 008: Dedicated tables for Thoth's own documentation
+--
+-- Separate from paper_metadata / document_chunks so docs can be wiped and
+-- reindexed independently without touching user research data.
+
+CREATE TABLE IF NOT EXISTS thoth_docs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL UNIQUE,
+    file_path TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    markdown_content TEXT NOT NULL,
+    indexed_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS thoth_doc_chunks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    doc_id UUID NOT NULL REFERENCES thoth_docs(id) ON DELETE CASCADE,
+    chunk_index INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    embedding vector(1536),
+    UNIQUE (doc_id, chunk_index)
+);
+
+CREATE INDEX IF NOT EXISTS idx_thoth_doc_chunks_doc ON thoth_doc_chunks(doc_id);
+CREATE INDEX IF NOT EXISTS idx_thoth_doc_chunks_embedding
+    ON thoth_doc_chunks USING ivfflat (embedding vector_cosine_ops);
 """

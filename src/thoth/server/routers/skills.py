@@ -124,14 +124,11 @@ async def list_skills(
                     parts = skill_id.split('/')
                     bundle_name = parts[1]
                     skill_name = parts[2]
-                    skill_path = (
-                        skill_service.bundles_dir
-                        / bundle_name
-                        / skill_name
-                        / 'SKILL.md'
+                    skill_path = skill_service._find_bundle_skill_path(
+                        bundle_name, skill_name
                     )
 
-                    if skill_path.exists():
+                    if skill_path and skill_path.exists():
                         metadata = skill_service._parse_skill_metadata(skill_path)
                         skills_list.append(
                             SkillMetadata(
@@ -181,14 +178,11 @@ async def list_skills(
                 for skill_id in skill_ids:
                     parts = skill_id.split('/')
                     skill_name = parts[2]
-                    skill_path = (
-                        skill_service.bundles_dir
-                        / bundle_name
-                        / skill_name
-                        / 'SKILL.md'
+                    skill_path = skill_service._find_bundle_skill_path(
+                        bundle_name, skill_name
                     )
 
-                    if skill_path.exists():
+                    if skill_path and skill_path.exists():
                         metadata = skill_service._parse_skill_metadata(skill_path)
                         name = metadata.get('name', skill_name)
                         display_name = name.replace('-', ' ').title()
@@ -256,9 +250,11 @@ async def get_skill(skill_id: str) -> SkillContent:
             parts = skill_id.split('/')
             bundle_name = parts[1]
             skill_name = parts[2]
-            skill_path = (
-                skill_service.bundles_dir / bundle_name / skill_name / 'SKILL.md'
-            )
+            skill_path = skill_service._find_bundle_skill_path(bundle_name, skill_name)
+            if not skill_path:
+                raise HTTPException(
+                    status_code=404, detail=f'Bundle skill not found: {skill_id}'
+                )
             metadata_dict = skill_service._parse_skill_metadata(skill_path)
             name = metadata_dict.get('name', skill_name)
             display_name = name.replace('-', ' ').title()
@@ -332,7 +328,9 @@ async def create_skill(
         # Determine skill path
         if skill_data.bundle:
             skill_dir = (
-                skill_service.bundles_dir / skill_data.bundle / skill_data.skill_id
+                skill_service.vault_bundles_dir
+                / skill_data.bundle
+                / skill_data.skill_id
             )
             skill_id = f'bundles/{skill_data.bundle}/{skill_data.skill_id}'
             source = 'bundle'
@@ -423,9 +421,11 @@ async def update_skill(
             parts = skill_id.split('/')
             bundle_name = parts[1]
             skill_name = parts[2]
-            skill_file = (
-                skill_service.bundles_dir / bundle_name / skill_name / 'SKILL.md'
-            )
+            skill_file = skill_service._find_bundle_skill_path(bundle_name, skill_name)
+            if not skill_file:
+                raise HTTPException(
+                    status_code=404, detail=f'Bundle skill not found: {skill_id}'
+                )
         else:
             skills = skill_service.discover_skills()
             if skill_id not in skills:
@@ -524,7 +524,15 @@ async def delete_skill(
             parts = skill_id.split('/')
             bundle_name = parts[1]
             skill_name = parts[2]
-            skill_dir = skill_service.bundles_dir / bundle_name / skill_name
+            skill_dir = skill_service._find_bundle_skill_path(bundle_name, skill_name)
+            if skill_dir:
+                skill_dir = (
+                    skill_dir.parent
+                )  # _find_bundle_skill_path returns SKILL.md path
+            else:
+                raise HTTPException(
+                    status_code=404, detail=f'Bundle skill not found: {skill_id}'
+                )
         else:
             skills = skill_service.discover_skills()
             if skill_id not in skills:

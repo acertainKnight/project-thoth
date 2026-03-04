@@ -1,9 +1,51 @@
 #!/bin/bash
 set -e
 
-# Start Letta server in the background. Letta handles its own schema
-# creation and seeds the default org/user on first boot — we don't need
-# to create tables or insert rows manually.
+# --- Database migration ---
+# Letta's startup.sh normally runs `alembic upgrade head`, but we bypass
+# it by calling `letta server` directly. Run migrations here instead.
+#
+# Databases created before Letta used Alembic won't have an
+# alembic_version table. If we detect that case, stamp the version that
+# matches the last known schema so Alembic can apply incremental
+# migrations going forward.
+echo "==> Running database migrations..."
+cd /app
+
+# LETTA_PG_URI is set by docker-compose (e.g. postgresql://letta:pass@host:5432/letta)
+DB_URI="${LETTA_PG_URI:-postgresql://letta:letta_password@letta-postgres:5432/letta}"
+
+HAS_ALEMBIC=$(psql "$DB_URI" -tAc \
+    "SELECT 1 FROM information_schema.tables WHERE table_name='alembic_version'" 2>/dev/null || echo "")
+
+if [ "$HAS_ALEMBIC" != "1" ]; then
+    HAS_TABLES=$(psql "$DB_URI" -tAc \
+        "SELECT 1 FROM information_schema.tables WHERE table_name='organizations'" 2>/dev/null || echo "")
+
+    if [ "$HAS_TABLES" = "1" ]; then
+        # Pre-Alembic database. Check which era it's from so we can stamp
+        # the right revision and let alembic apply only the missing ones.
+        HAS_LAST_SYNCED=$(psql "$DB_URI" -tAc \
+            "SELECT 1 FROM information_schema.columns WHERE table_name='providers' AND column_name='last_synced'" 2>/dev/null || echo "")
+
+        if [ "$HAS_LAST_SYNCED" = "1" ]; then
+            echo "==> Pre-Alembic database detected (already patched), stamping at head"
+            alembic stamp head
+        else
+            # 0.16.3-era schema. Stamp at the last revision whose tables
+            # already exist so alembic upgrade head fills the gaps.
+            echo "==> Pre-Alembic database detected (0.16.3 era), stamping at 82feb220a9b8"
+            alembic stamp 82feb220a9b8
+        fi
+    fi
+    # No tables = fresh install. alembic upgrade head creates everything.
+fi
+
+if ! alembic upgrade head; then
+    echo "==> WARNING: alembic upgrade head failed, Letta will attempt its own migration"
+fi
+cd /
+
 echo "==> Starting Letta server..."
 letta server --host 0.0.0.0 --port 8283 --ade &
 LETTA_PID=$!

@@ -148,14 +148,11 @@ class ListSkillsMCPTool(MCPTool):
                         parts = skill_id.split('/')
                         bundle_name = parts[1]
                         skill_name = parts[2]
-                        skill_path = (
-                            skill_service.bundles_dir
-                            / bundle_name
-                            / skill_name
-                            / 'SKILL.md'
+                        skill_path = skill_service._find_bundle_skill_path(
+                            bundle_name, skill_name
                         )
 
-                        if skill_path.exists():
+                        if skill_path and skill_path.exists():
                             metadata = skill_service._parse_skill_metadata(skill_path)
                             name = metadata.get('name', skill_name)
                             display_name = name.replace('-', ' ').title()
@@ -413,19 +410,10 @@ class LoadSkillMCPTool(MCPTool):
             skills_after = skills_before + loaded_count
             logger.info(f'Agent {agent_id[:8]} now has {skills_after} skills loaded')
 
-            # Write each skill's content into its dedicated memory block
+            # Update the loaded_skills tracker block.
+            # Full skill content is delivered by the proxy as a system message
+            # on the [skill-tools-ready] follow-up -- no memory block writes needed.
             all_loaded = await _get_loaded_skills(postgres, agent_id)
-            for slot, sid in enumerate(all_loaded, start=1):
-                if sid in skill_contents:
-                    ok = letta_service.update_memory_block(
-                        agent_id, f'skill_{slot}', skill_contents[sid]
-                    )
-                    if not ok:
-                        logger.warning(
-                            f'Could not write skill content to skill_{slot} block for {sid}'
-                        )
-
-            # Update the loaded_skills tracker block
             all_skill_tools: dict[str, list[str]] = {}
             for sid in all_loaded:
                 all_skill_tools[sid] = skill_service.get_skill_tools(sid)
@@ -453,7 +441,6 @@ class LoadSkillMCPTool(MCPTool):
                 if detach_result['detached']:
                     logger.info(f'Detached load_skill from agent {agent_id[:8]}')
 
-            # Build brief confirmation (not the full skill content)
             loaded_summaries = []
             for slot, sid in enumerate(all_loaded, start=1):
                 if sid in skill_tools_map:
@@ -471,8 +458,9 @@ class LoadSkillMCPTool(MCPTool):
                 results.append(f'Skipped (no capacity): {", ".join(skipped)}')
 
             confirmation_lines = [
-                f'Loaded {loaded_count} skill(s). Skill content is in your skill_N memory blocks.',
+                f'Loaded {loaded_count} skill(s).',
                 *loaded_summaries,
+                f'Skill memory: {len(all_loaded)}/{MAX_LOADED_SKILLS} slots used.',
             ]
 
             if failed_count > 0:
@@ -480,11 +468,12 @@ class LoadSkillMCPTool(MCPTool):
                     f'{failed_count} skill(s) failed. Use list_skills to check available skill IDs.'
                 )
 
+            # The full skill instructions will be injected into the conversation
+            # stream by the proxy on the [skill-tools-ready] follow-up message.
+            # No need to read memory blocks.
             confirmation_lines.append(
-                f'Skill memory: {len(all_loaded)}/{MAX_LOADED_SKILLS} slots used.'
-            )
-            confirmation_lines.append(
-                'Your new tools are now attached. Finish this turn with a brief acknowledgment -- the user will be prompted to continue automatically.'
+                '\nSkill instructions will appear as a system message on the next turn. '
+                'End this turn with a brief acknowledgment -- the follow-up will deliver the full guidance.'
             )
 
             return MCPToolCallResult(
@@ -635,26 +624,11 @@ class UnloadSkillMCPTool(MCPTool):
                     f'Kept tools shared with other loaded skills: {", ".join(kept_tools)}'
                 )
 
-            # Find slot numbers before removing from DB so we can clear the right blocks
-            slot_map = {sid: i + 1 for i, sid in enumerate(currently_loaded)}
-
             # Remove skills from the database
             for skill_id in skill_ids:
                 await _remove_loaded_skill(postgres, agent_id, skill_id)
 
             skills_after = skills_before - len(skill_ids)
-
-            # Clear skill content blocks for unloaded skills
-            for skill_id in skill_ids:
-                slot = slot_map.get(skill_id)
-                if slot:
-                    ok = letta_service.update_memory_block(
-                        agent_id, f'skill_{slot}', '[empty]'
-                    )
-                    if not ok:
-                        logger.warning(
-                            f'Could not clear skill_{slot} block for {skill_id}'
-                        )
 
             # Update the loaded_skills tracker block
             all_loaded = await _get_loaded_skills(postgres, agent_id)
@@ -692,15 +666,14 @@ class UnloadSkillMCPTool(MCPTool):
                 f'Skill memory: {len(all_loaded)}/{MAX_LOADED_SKILLS} slots used.',
             ]
             if all_loaded:
-                slots_str = ', '.join(
-                    f'slot {slot_map.get(sid, "?")}: {sid}' for sid in all_loaded
-                )
+                slots_str = ', '.join(f'{sid}' for sid in all_loaded)
                 confirmation_lines.append(f'Still loaded: {slots_str}')
             else:
                 confirmation_lines.append('All skill slots are now free.')
 
             confirmation_lines.append(
-                'Tools detached. Finish this turn with a brief acknowledgment -- the user will be prompted to continue automatically.'
+                'Tools detached. Skill instructions will no longer be injected for unloaded skills. '
+                'End this turn with a brief acknowledgment.'
             )
 
             return MCPToolCallResult(

@@ -185,7 +185,7 @@ class CreateSkillMCPTool(MCPTool):
 
             # Determine skill path
             if bundle:
-                skill_dir = skill_service.bundles_dir / bundle / skill_id
+                skill_dir = skill_service.vault_bundles_dir / bundle / skill_id
                 full_skill_id = f'bundles/{bundle}/{skill_id}'
             else:
                 skill_dir = skill_service.vault_skills_dir / skill_id
@@ -419,9 +419,20 @@ class UpdateSkillMCPTool(MCPTool):
                 parts = skill_id.split('/')
                 bundle_name = parts[1]
                 skill_name = parts[2]
-                skill_file = (
-                    skill_service.bundles_dir / bundle_name / skill_name / 'SKILL.md'
+                skill_file_path = skill_service._find_bundle_skill_path(
+                    bundle_name, skill_name
                 )
+                if not skill_file_path:
+                    return MCPToolCallResult(
+                        content=[
+                            {
+                                'type': 'text',
+                                'text': f'Error: Bundle skill not found: {skill_id}',
+                            }
+                        ],
+                        isError=True,
+                    )
+                skill_file = skill_file_path
             else:
                 skills = skill_service.discover_skills()
                 if skill_id not in skills:

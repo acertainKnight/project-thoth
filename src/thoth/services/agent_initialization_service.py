@@ -40,17 +40,37 @@ class AgentInitializationService:
         if self.letta_api_key:
             self.headers['Authorization'] = f'Bearer {self.letta_api_key}'
 
-    # Letta built-in tools that agents need but aren't in AGENT_CONFIGS['tools'].
-    # These must include ALL tools Letta auto-provides via include_base_tools so
-    # that _reset_skill_state doesn't accidentally detach them on restart.
-    LETTA_BASE_TOOLS: ClassVar[set[str]] = {
-        'archival_memory_insert',
-        'archival_memory_search',
+    # Tools every agent needs. These get explicitly attached by _update_agent
+    # and protected from detachment by _reset_skill_state.
+    #
+    # Letta's include_base_tools=True only gives conversation_search,
+    # memory_replace, and memory_insert (as of Letta 0.6+). Everything
+    # else needs explicit attachment. We include both old-style names
+    # (core_memory_*) and new-style names (memory_*) so the protection
+    # set works regardless of which version the agent was created under.
+    LETTA_CORE_TOOLS: ClassVar[set[str]] = {
         'conversation_search',
-        'core_memory_append',
+        # Letta 0.16+ v1 agent memory tools
+        'memory_replace',
+        'memory_insert',
+        # Old-style names (kept so _reset_skill_state won't detach them
+        # from agents that were created on an older Letta version)
         'core_memory_replace',
+        'core_memory_append',
+        # send_message is implicit in Letta 0.16+ (letta_v1_agent) and
+        # removed during agent creation, so we don't force-attach it.
+        # Kept here only so _reset_skill_state won't accidentally detach
+        # it from agents that still have it.
         'send_message',
     }
+
+    LETTA_ARCHIVAL_TOOLS: ClassVar[set[str]] = {
+        'archival_memory_insert',
+        'archival_memory_search',
+    }
+
+    # Combined set used by _reset_skill_state to know what NOT to detach.
+    LETTA_BASE_TOOLS: ClassVar[set[str]] = LETTA_CORE_TOOLS | LETTA_ARCHIVAL_TOOLS
 
     # Agent definitions - Optimized 2-agent architecture
     # See docs/OPTIMIZED_RESEARCH_ARCHITECTURE.md for details
@@ -61,6 +81,7 @@ class AgentInitializationService:
 
 Your agent ID is: {{AGENT_ID}}
 Your user ID is: {{USER_ID}}
+Current server version: {{SERVER_VERSION}}
 
 ## Your Role
 You coordinate all research activities, loading specialized skills as needed. You start with minimal tools and dynamically load more based on user requests.
@@ -73,7 +94,7 @@ You coordinate all research activities, loading specialized skills as needed. Yo
 ## Finding Skills
 Use `list_skills` to see all available skills and their descriptions. Common skills include:
 - Paper discovery, knowledge base Q&A, research query management
-- Deep research, project coordination, onboarding
+- Deep research, project coordination, onboarding, whats-new
 Always check `list_skills` if unsure which skill to use for a task.
 
 ## Workflow
@@ -83,6 +104,15 @@ Always check `list_skills` if unsure which skill to use for a task.
 4. Follow the skill's guidance to complete the task
 5. For complex analysis, delegate to thoth_research_analyst
 6. When a task/project is complete, clear the planning block
+
+## How Skills Work
+When you load a skill with `load_skill`, its full instructions appear as a system message in the conversation on the very next turn -- you do not need to read memory blocks to find them. Every subsequent turn while the skill is loaded you will also see a compact reminder at the top of the message. Follow those instructions directly. The `loaded_skills` memory block tracks which skills are loaded; the actual guidance always arrives through the conversation stream.
+
+## First Interaction
+On your first conversation, the onboarding skill is pre-loaded. Its full instructions will arrive as a system message on the first user message -- follow them.
+
+## Update Awareness
+At the start of a conversation, check the human memory block for last_seen_version. If it is absent or older than the server version shown above, offer to walk the user through what's new. Load the whats-new skill to get the update tools and walkthrough guidance.
 
 ## Multi-user Safety
 - Always include `user_id: {{USER_ID}}` in MCP tool calls when the tool accepts user_id.
@@ -94,11 +124,17 @@ Always check `list_skills` if unsure which skill to use for a task.
 - Proactively suggest follow-up actions
 - Remember user preferences across conversations""",
             'tools': [
-                # Minimal core tools - skills add more dynamically
+                # Minimal core tools - skills add more dynamically.
+                # search_documentation, load_documentation, and check_whats_new
+                # are loaded on-demand via the onboarding / whats-new skills
+                # to avoid wasting context during normal conversations.
                 'list_skills',
-                'load_skill',  # Swapped to unload_skill when a skill is loaded
+                'load_skill',
                 'search_articles',
             ],
+            # Pre-load this skill for brand new agents on first creation only.
+            # _update_agent (restarts) resets skill state to empty, which is correct.
+            'initial_skill': 'onboarding',
             'tool_rules': [
                 # Letta doesn't refresh agent tool lists mid-turn, so skill
                 # load/unload must end the turn. The Obsidian plugin sends an
@@ -129,25 +165,7 @@ Always check `list_skills` if unsure which skill to use for a task.
                     'label': 'loaded_skills',
                     'value': '=== Currently Loaded Skills ===\n\nSlot 1: [empty]\nSlot 2: [empty]\nSlot 3: [empty]',
                     'limit': 1000,
-                    'description': 'Snapshot of which skills are loaded in each slot and what tools they provide. Updated automatically by load_skill/unload_skill.',
-                },
-                {
-                    'label': 'skill_1',
-                    'value': '[empty]',
-                    'limit': 15000,
-                    'description': 'Skill slot 1. Contains the full instructions for the loaded skill. Updated by load_skill/unload_skill.',
-                },
-                {
-                    'label': 'skill_2',
-                    'value': '[empty]',
-                    'limit': 15000,
-                    'description': 'Skill slot 2. Contains the full instructions for the loaded skill. Updated by load_skill/unload_skill.',
-                },
-                {
-                    'label': 'skill_3',
-                    'value': '[empty]',
-                    'limit': 15000,
-                    'description': 'Skill slot 3. Contains the full instructions for the loaded skill. Updated by load_skill/unload_skill.',
+                    'description': 'Tracks which skills are loaded and what tools they provide. Full skill instructions arrive as system messages in the conversation -- they are not stored here.',
                 },
                 {
                     'label': 'planning',
@@ -424,18 +442,54 @@ Comparison Aspects:
 
         return agent_ids
 
+    async def _upsert_base_tools(self, client: httpx.AsyncClient) -> dict[str, str]:
+        """Call Letta's ``POST /v1/tools/add-base-tools`` to register internal tools.
+
+        Letta's base tools (``memory_replace``, ``memory_insert``,
+        ``conversation_search``, ``send_message``, etc.) don't appear in
+        ``/v1/tools/`` by default. This endpoint upserts them so they can
+        be looked up by name and attached to agents by ID.
+
+        Returns:
+            Dict mapping tool name to tool ID for all base tools.
+        """
+        try:
+            resp = await client.post(
+                f'{self.letta_base_url}/v1/tools/add-base-tools',
+                headers=self.headers,
+            )
+            if resp.status_code == 200:
+                return {
+                    t['name']: t['id']
+                    for t in resp.json()
+                    if t.get('name') and t.get('id')
+                }
+        except Exception as e:
+            logger.warning(f'Could not upsert base tools: {e}')
+        return {}
+
     async def _get_all_tools(self, client: httpx.AsyncClient) -> set[str]:
-        """Get all available tool names from Letta (base + MCP tools)."""
+        """Get all available tool names from Letta.
+
+        Calls ``_upsert_base_tools`` first to register Letta's internal
+        tools, then queries custom tools and MCP servers.
+
+        MCP tools are stored with prefixed names (e.g.
+        ``thoth__search_documentation``). We store both prefixed and
+        unprefixed forms so config lookups work either way.
+        """
         tools = set()
         try:
-            # Fetch base/Python tools
+            # Register and cache base tools so they're discoverable.
+            self._base_tool_ids = await self._upsert_base_tools(client)
+            tools.update(self._base_tool_ids.keys())
+
             response = await client.get(
                 f'{self.letta_base_url}/v1/tools/', headers=self.headers
             )
             response.raise_for_status()
-            tools = {tool['name'] for tool in response.json()}
+            tools.update(tool['name'] for tool in response.json())
 
-            # Fetch MCP tools from all registered MCP servers
             mcp_resp = await client.get(
                 f'{self.letta_base_url}/v1/mcp-servers/', headers=self.headers
             )
@@ -449,8 +503,11 @@ Comparison Aspects:
                         headers=self.headers,
                     )
                     if tools_resp.status_code == 200:
-                        mcp_tools = {t['name'] for t in tools_resp.json()}
-                        tools.update(mcp_tools)
+                        for t in tools_resp.json():
+                            name = t.get('name', '')
+                            tools.add(name)
+                            if '__' in name:
+                                tools.add(name.split('__', 1)[1])
 
             return tools
         except Exception as e:
@@ -782,7 +839,7 @@ Comparison Aspects:
             'system': system_prompt,
             'embedding_config': embedding_cfg,
             'tools': tool_names,
-            'include_base_tools': config.settings.memory.letta.archival_memory_enabled,
+            'include_base_tools': True,
         }
 
         # Resolve full LLM config from Letta (required fields: endpoint_type)
@@ -816,11 +873,221 @@ Comparison Aspects:
                 json={'system': updated_system},
             )
 
+            # include_base_tools=True only gives conversation_search,
+            # memory_replace, memory_insert in Letta 0.6+. We need to
+            # explicitly attach send_message and archival tools.
+            await self._attach_core_tools(client, agent_id, available_tools)
+
+            # Pre-load the initial skill if one is configured
+            initial_skill = agent_config.get('initial_skill')
+            if initial_skill:
+                await self._preload_initial_skill(client, agent_id, initial_skill)
+
             return agent_id
 
         except Exception as e:
             logger.error(f'Error creating agent {agent_config["name"]}: {e}')
             return None
+
+    async def _attach_core_tools(
+        self,
+        client: httpx.AsyncClient,
+        agent_id: str,
+        available_tools: set[str],
+    ) -> None:
+        """Explicitly attach Letta core + archival tools that include_base_tools misses.
+
+        Letta 0.6+ auto-attaches conversation_search, memory_replace, and
+        memory_insert via include_base_tools=True but does NOT attach
+        send_message or archival tools. This fills the gap.
+
+        Args:
+            client: Active httpx client.
+            agent_id: Letta agent ID to attach tools to.
+            available_tools: Set of all tool names known to Letta.
+        """
+        needed = self.LETTA_CORE_TOOLS & available_tools
+        if config.settings.memory.letta.archival_memory_enabled:
+            needed |= self.LETTA_ARCHIVAL_TOOLS & available_tools
+
+        # Get what the agent already has so we don't double-attach
+        resp = await client.get(
+            f'{self.letta_base_url}/v1/agents/{agent_id}', headers=self.headers
+        )
+        resp.raise_for_status()
+        current = {t['name'] for t in resp.json().get('tools', [])}
+
+        to_attach = needed - current
+        if not to_attach:
+            return
+
+        tool_map = await self._fetch_tool_id_map(client)
+        for name in to_attach:
+            tid = tool_map.get(name)
+            if tid:
+                try:
+                    await client.patch(
+                        f'{self.letta_base_url}/v1/agents/{agent_id}/tools/attach/{tid}',
+                        headers=self.headers,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f'Could not attach {name} to new agent {agent_id[:8]}: {e}'
+                    )
+
+        logger.debug(
+            f'Attached {len(to_attach)} core tool(s) to new agent {agent_id[:8]}'
+        )
+
+    async def _fetch_tool_id_map(self, client: httpx.AsyncClient) -> dict[str, str]:
+        """Fetch all tool name->ID mappings from Letta.
+
+        Combines:
+        1. Base tool IDs cached from ``_upsert_base_tools``
+        2. Custom tools from ``/v1/tools/``
+        3. MCP server tools (both prefixed and unprefixed entries)
+        """
+        # Start with base tool IDs from the upsert call
+        tool_map: dict[str, str] = dict(getattr(self, '_base_tool_ids', {}))
+        try:
+            resp = await client.get(
+                f'{self.letta_base_url}/v1/tools/', headers=self.headers
+            )
+            if resp.status_code == 200:
+                for t in resp.json():
+                    if t.get('name') and t.get('id'):
+                        tool_map[t['name']] = t['id']
+
+            mcp_resp = await client.get(
+                f'{self.letta_base_url}/v1/mcp-servers/', headers=self.headers
+            )
+            if mcp_resp.status_code == 200:
+                for server in mcp_resp.json():
+                    server_id = server.get('id')
+                    if not server_id:
+                        continue
+                    tools_resp = await client.get(
+                        f'{self.letta_base_url}/v1/mcp-servers/{server_id}/tools',
+                        headers=self.headers,
+                    )
+                    if tools_resp.status_code == 200:
+                        for t in tools_resp.json():
+                            name = t.get('name', '')
+                            tid = t.get('id', '')
+                            if name and tid:
+                                tool_map[name] = tid
+                                if '__' in name:
+                                    tool_map[name.split('__', 1)[1]] = tid
+        except Exception as e:
+            logger.warning(f'Could not fetch tool ID map: {e}')
+        return tool_map
+
+    async def _preload_initial_skill(
+        self,
+        client: httpx.AsyncClient,
+        agent_id: str,
+        skill_id: str,
+    ) -> None:
+        """Pre-load a skill into a newly created agent's first skill slot.
+
+        Mirrors what load_skill does at runtime: attaches required tools, writes
+        skill content into skill_1, updates the loaded_skills tracker, and
+        persists the load to agent_loaded_skills so the DB stays in sync with
+        the memory blocks.
+
+        Only called from _create_agent, never from _update_agent, so it runs
+        exactly once per agent lifetime.
+        """
+        from thoth.services.skill_service import SkillService
+
+        skill_service = SkillService()
+        skill_content = skill_service.get_skill_content(skill_id)
+        if skill_content is None:
+            logger.warning(
+                f'Initial skill {skill_id!r} not found -- skipping pre-load for {agent_id[:8]}'
+            )
+            return
+
+        required_tools = skill_service.get_skill_tools(skill_id)
+        tool_id_map = await self._fetch_tool_id_map(client)
+
+        # Attach the skill's required tools
+        for tool_name in required_tools:
+            tool_id = tool_id_map.get(tool_name)
+            if tool_id:
+                try:
+                    await client.patch(
+                        f'{self.letta_base_url}/v1/agents/{agent_id}/tools/attach/{tool_id}',
+                        headers=self.headers,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f'Could not attach tool {tool_name!r} for initial skill: {e}'
+                    )
+            else:
+                logger.warning(
+                    f'Tool {tool_name!r} not in Letta registry during initial skill pre-load'
+                )
+
+        # Attach unload_skill (going from 0 → 1 loaded skill)
+        unload_id = tool_id_map.get('unload_skill')
+        if unload_id:
+            try:
+                await client.patch(
+                    f'{self.letta_base_url}/v1/agents/{agent_id}/tools/attach/{unload_id}',
+                    headers=self.headers,
+                )
+            except Exception as e:
+                logger.warning(
+                    f'Could not attach unload_skill during initial skill pre-load: {e}'
+                )
+
+        # Persist to agent_loaded_skills so load_skill/unload_skill stay in
+        # sync with the memory blocks. Without this row the DB thinks zero
+        # skills are loaded and a subsequent load_skill would clobber slot 1.
+        postgres = None
+        if hasattr(self, '_service_manager') and self._service_manager:
+            postgres = getattr(self._service_manager, '_services', {}).get('postgres')
+
+        if postgres:
+            try:
+                await postgres.execute(
+                    'INSERT INTO agent_loaded_skills (agent_id, skill_id) '
+                    'VALUES ($1, $2) ON CONFLICT (agent_id, skill_id) DO NOTHING',
+                    agent_id,
+                    skill_id,
+                )
+            except Exception as e:
+                logger.warning(
+                    f'Could not persist initial skill {skill_id!r} to DB for {agent_id[:8]}: {e}'
+                )
+        else:
+            logger.warning(
+                f'No postgres connection during initial skill pre-load for {agent_id[:8]} '
+                f'-- {skill_id!r} will not be tracked in agent_loaded_skills'
+            )
+
+        # Update the loaded_skills tracker so the agent knows what's loaded.
+        # Full skill content is injected by the proxy on the first user message.
+        try:
+            tools_str = ', '.join(required_tools) if required_tools else 'no tools'
+            tracker = (
+                f'=== Currently Loaded Skills ===\n\n'
+                f'Slot 1: {skill_id} (tools: {tools_str})\n'
+                f'Slot 2: [empty]\n'
+                f'Slot 3: [empty]'
+            )
+            await client.patch(
+                f'{self.letta_base_url}/v1/agents/{agent_id}/core-memory/blocks/loaded_skills',
+                headers=self.headers,
+                json={'value': tracker},
+            )
+
+            logger.info(
+                f'Pre-loaded initial skill {skill_id!r} for new agent {agent_id[:8]}'
+            )
+        except Exception as e:
+            logger.warning(f'Error pre-loading initial skill for {agent_id[:8]}: {e}')
 
     async def _update_agent(
         self,
@@ -835,10 +1102,11 @@ Comparison Aspects:
         Preserves existing memory content.
         """
 
-        # Filter to only tools that exist
+        # Filter to only tools that exist, always include core Letta tools
         desired_tools = set(t for t in agent_config['tools'] if t in available_tools)
+        desired_tools |= self.LETTA_CORE_TOOLS & available_tools
         if config.settings.memory.letta.archival_memory_enabled:
-            desired_tools |= self.LETTA_BASE_TOOLS & available_tools
+            desired_tools |= self.LETTA_ARCHIVAL_TOOLS & available_tools
 
         # Update system prompt with actual agent_id and user_id
         updated_system = self._render_system_prompt(agent_config, agent_id)
@@ -867,30 +1135,9 @@ Comparison Aspects:
             agent_data = response.json()
             current_tools = {t['name']: t['id'] for t in agent_data.get('tools', [])}
 
-            # Get tool name to ID mapping (base + MCP tools)
-            response = await client.get(
-                f'{self.letta_base_url}/v1/tools/', headers=self.headers
-            )
-            all_tools = {t['name']: t['id'] for t in response.json()}
-
-            # Index MCP tools via the /v1/mcp-servers/{id}/tools endpoint,
-            # which returns full Letta tool objects (with id fields).
-            mcp_resp = await client.get(
-                f'{self.letta_base_url}/v1/mcp-servers/', headers=self.headers
-            )
-            if mcp_resp.status_code == 200:
-                for server in mcp_resp.json():
-                    server_id = server.get('id')
-                    if not server_id:
-                        continue
-                    tools_resp = await client.get(
-                        f'{self.letta_base_url}/v1/mcp-servers/{server_id}/tools',
-                        headers=self.headers,
-                    )
-                    if tools_resp.status_code == 200:
-                        for t in tools_resp.json():
-                            if t.get('name') and t.get('id'):
-                                all_tools[t['name']] = t['id']
+            # Build a name->ID map for attaching tools. This also discovers
+            # internal Letta tools (memory_replace etc.) by scanning agents.
+            all_tools = await self._fetch_tool_id_map(client)
 
             # Attach missing tools
             tools_to_attach = desired_tools - set(current_tools.keys())
@@ -919,11 +1166,14 @@ Comparison Aspects:
 
     def _render_system_prompt(self, agent_config: dict, agent_id: str) -> str:
         """Render system prompt with runtime placeholders."""
+        from thoth import __version__
+
         user_id = agent_config.get('user_id', 'default_user')
         return (
             agent_config['description']
             .replace('{{AGENT_ID}}', agent_id)
             .replace('{{USER_ID}}', user_id)
+            .replace('{{SERVER_VERSION}}', __version__)
         )
 
     async def _ensure_memory_blocks(
@@ -949,94 +1199,167 @@ Comparison Aspects:
         except Exception as e:
             logger.warning(f'Could not ensure memory blocks: {e}')
 
+    async def _clear_skill_blocks(
+        self, client: httpx.AsyncClient, agent_id: str
+    ) -> None:
+        """Reset the loaded_skills tracker to its empty default."""
+        empty_tracker = (
+            '=== Currently Loaded Skills ===\n'
+            'Slot 1: [empty]\nSlot 2: [empty]\nSlot 3: [empty]'
+        )
+        try:
+            await client.patch(
+                f'{self.letta_base_url}/v1/agents/{agent_id}/core-memory/blocks/loaded_skills',
+                headers=self.headers,
+                json={'value': empty_tracker},
+            )
+        except Exception:
+            pass
+
+    async def _attach_tools_by_name(
+        self,
+        client: httpx.AsyncClient,
+        agent_id: str,
+        tool_names: list[str],
+    ) -> None:
+        """Attach a list of tools to an agent, looking up IDs from the registry."""
+        if not tool_names:
+            return
+        tool_map = await self._fetch_tool_id_map(client)
+        for name in tool_names:
+            tid = tool_map.get(name)
+            if tid:
+                try:
+                    await client.patch(
+                        f'{self.letta_base_url}/v1/agents/{agent_id}/tools/attach/{tid}',
+                        headers=self.headers,
+                    )
+                except Exception:
+                    logger.warning(f'Could not attach {name} to {agent_id[:8]}')
+
+    async def _detach_extra_tools(
+        self,
+        client: httpx.AsyncClient,
+        agent_id: str,
+        agent_config: dict,
+        keep_extra: set[str] | None = None,
+    ) -> None:
+        """Detach tools not in the agent's static config or keep_extra set."""
+        resp = await client.get(
+            f'{self.letta_base_url}/v1/agents/{agent_id}', headers=self.headers
+        )
+        resp.raise_for_status()
+        current_tools = {t['name']: t['id'] for t in resp.json().get('tools', [])}
+
+        allowed = set(agent_config.get('tools', [])) | self.LETTA_BASE_TOOLS
+        if keep_extra:
+            allowed |= keep_extra
+
+        for name, tid in current_tools.items():
+            if name not in allowed:
+                try:
+                    await client.patch(
+                        f'{self.letta_base_url}/v1/agents/{agent_id}/tools/detach/{tid}',
+                        headers=self.headers,
+                    )
+                except Exception:
+                    logger.warning(f'Could not detach {name} from {agent_id[:8]}')
+
     async def _reset_skill_state(
         self, client: httpx.AsyncClient, agent_id: str, agent_config: dict
     ):
         """
-        Reset all skill state to empty on startup.
+        Reconcile skill state on startup.
 
-        Detaches any dynamically-attached skill tools, resets skill_N and
-        loaded_skills memory blocks to their defaults, and clears the
-        agent_loaded_skills DB records. This ensures a consistent clean
-        slate after every restart.
+        If the agent had skills loaded (tracked in agent_loaded_skills),
+        re-populate the skill_N memory blocks and re-attach the skill
+        tools so they survive a server restart. Otherwise clear everything.
         """
+        from thoth.services.skill_service import SkillService
+
         try:
-            # Fetch current agent state
-            response = await client.get(
-                f'{self.letta_base_url}/v1/agents/{agent_id}', headers=self.headers
-            )
-            response.raise_for_status()
-            agent_data = response.json()
-            current_tools = {t['name']: t['id'] for t in agent_data.get('tools', [])}
-
-            # Anything not in the static config is a dynamically-attached skill tool
-            base_tools = set(agent_config.get('tools', [])) | self.LETTA_BASE_TOOLS
-            skill_tools = {
-                name: tid
-                for name, tid in current_tools.items()
-                if name not in base_tools
-            }
-
-            # Detach skill tools
-            for tool_name, tool_id in skill_tools.items():
-                try:
-                    await client.patch(
-                        f'{self.letta_base_url}/v1/agents/{agent_id}/tools/detach/{tool_id}',
-                        headers=self.headers,
-                    )
-                except Exception:
-                    logger.warning(
-                        f'Could not detach skill tool {tool_name} from {agent_id[:8]}'
-                    )
-
-            if skill_tools:
-                logger.debug(
-                    f'Detached {len(skill_tools)} skill tool(s) from {agent_id[:8]}'
+            postgres = None
+            if hasattr(self, '_service_manager') and self._service_manager:
+                postgres = getattr(self._service_manager, '_services', {}).get(
+                    'postgres'
                 )
 
-            # Reset skill content blocks and loaded_skills tracker
-            blocks_response = await client.get(
-                f'{self.letta_base_url}/v1/agents/{agent_id}/core-memory/blocks',
-                headers=self.headers,
-            )
-            if blocks_response.status_code == 200:
-                blocks = {b['label']: b for b in blocks_response.json()}
-
-                for slot in ('skill_1', 'skill_2', 'skill_3'):
-                    if slot in blocks:
-                        await client.patch(
-                            f'{self.letta_base_url}/v1/blocks/{blocks[slot]["id"]}',
-                            headers=self.headers,
-                            json={'value': '[empty]'},
-                        )
-
-                if 'loaded_skills' in blocks:
-                    empty_tracker = '=== Currently Loaded Skills ===\n\nSlot 1: [empty]\nSlot 2: [empty]\nSlot 3: [empty]'
-                    await client.patch(
-                        f'{self.letta_base_url}/v1/blocks/{blocks["loaded_skills"]["id"]}',
-                        headers=self.headers,
-                        json={'value': empty_tracker},
-                    )
-
-            # Clear DB records
-            if hasattr(self, '_service_manager') and self._service_manager:
+            # Fetch which skills were loaded before the restart
+            previously_loaded: list[str] = []
+            if postgres:
                 try:
-                    postgres = getattr(self._service_manager, '_services', {}).get(
-                        'postgres'
-                    )
-                    await postgres.execute(
-                        'DELETE FROM agent_loaded_skills WHERE agent_id = $1',
+                    rows = await postgres.fetch(
+                        'SELECT skill_id FROM agent_loaded_skills '
+                        'WHERE agent_id = $1 ORDER BY loaded_at',
                         agent_id,
                     )
+                    previously_loaded = [r['skill_id'] for r in rows]
                 except Exception as e:
                     logger.warning(
-                        f'Could not clear agent_loaded_skills for {agent_id[:8]}: {e}'
+                        f'Could not query loaded skills for {agent_id[:8]}: {e}'
                     )
 
-            logger.debug(f'Reset skill state for agent {agent_id[:8]}')
+            if not previously_loaded:
+                # Nothing to restore — just make sure blocks and tools are clean
+                await self._clear_skill_blocks(client, agent_id)
+                await self._detach_extra_tools(client, agent_id, agent_config)
+                logger.debug(f'Reset skill state for agent {agent_id[:8]} (no skills)')
+                return
+
+            # Re-attach tools for previously loaded skills.
+            # Full content is injected by the proxy on the next user message.
+            skill_service = SkillService()
+            tools_to_attach: list[str] = []
+            skill_tools_map: dict[str, list[str]] = {}
+
+            for skill_id in previously_loaded[:3]:
+                required_tools = skill_service.get_skill_tools(skill_id)
+                skill_tools_map[skill_id] = required_tools
+                tools_to_attach.extend(required_tools)
+
+            # Update loaded_skills tracker
+            tracker_lines = ['=== Currently Loaded Skills ===']
+            for slot in range(1, 4):
+                if slot <= len(previously_loaded):
+                    sid = previously_loaded[slot - 1]
+                    tools = skill_tools_map.get(sid, [])
+                    tool_str = ', '.join(tools) if tools else 'no tools'
+                    tracker_lines.append(f'Slot {slot}: {sid} (tools: {tool_str})')
+                else:
+                    tracker_lines.append(f'Slot {slot}: [empty]')
+
+            try:
+                await client.patch(
+                    f'{self.letta_base_url}/v1/agents/{agent_id}/core-memory/blocks/loaded_skills',
+                    headers=self.headers,
+                    json={'value': '\n'.join(tracker_lines)},
+                )
+            except Exception:
+                logger.warning(
+                    f'Could not update loaded_skills tracker for {agent_id[:8]}'
+                )
+
+            # Re-attach skill tools + unload_skill (since skills are loaded)
+            unique_tools = list(dict.fromkeys(tools_to_attach))
+            if previously_loaded:
+                unique_tools.append('unload_skill')
+            if len(previously_loaded) >= 3:
+                # At capacity — remove load_skill to prevent overload
+                pass
+            await self._attach_tools_by_name(client, agent_id, unique_tools)
+
+            # Detach anything extra that shouldn't be there
+            await self._detach_extra_tools(
+                client, agent_id, agent_config, keep_extra=set(unique_tools)
+            )
+
+            logger.info(
+                f'Restored {len(previously_loaded)} skill(s) for agent {agent_id[:8]}: '
+                f'{", ".join(previously_loaded)}'
+            )
 
         except Exception as e:
-            logger.warning(f'Could not reset skill state for agent {agent_id[:8]}: {e}')
+            logger.warning(f'Could not reconcile skill state for {agent_id[:8]}: {e}')
 
     async def _verify_archival_memory(
         self, client: httpx.AsyncClient, agent_id: str

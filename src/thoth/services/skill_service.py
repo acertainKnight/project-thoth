@@ -466,9 +466,9 @@ class SkillService(BaseService):
                 parts = skill_id.split('/')
                 bundle_name = parts[1]
                 skill_name = parts[2]
-                skill_path = self.bundles_dir / bundle_name / skill_name / 'SKILL.md'
+                skill_path = self._find_bundle_skill_path(bundle_name, skill_name)
 
-                if skill_path.exists():
+                if skill_path and skill_path.exists():
                     metadata = self._parse_skill_metadata(skill_path)
                     name = metadata.get('name', skill_name)
                     desc = metadata.get('description', '')
@@ -546,6 +546,44 @@ class SkillService(BaseService):
         """
         role_skill_ids = set(self.get_skills_for_role(role))
         return {k: v for k, v in skills.items() if k in role_skill_ids}
+
+    def get_skill_reminder(self, skill_id: str) -> str:
+        """Return a compact one-turn reminder for a loaded skill.
+
+        Used by the Letta proxy to prepend skill awareness on every message
+        turn without injecting the full SKILL.md content every time.
+
+        Args:
+            skill_id: Skill identifier.
+
+        Returns:
+            str: One-line reminder string for use as a system message injection.
+        """
+        import yaml
+
+        content = self.get_skill_content(skill_id)
+        if not content:
+            return f'[Skill: {skill_id} -- unavailable, use list_skills to verify]'
+
+        metadata: dict = {}
+        if content.startswith('---'):
+            parts = content.split('---', 2)
+            if len(parts) >= 3:
+                try:
+                    metadata = yaml.safe_load(parts[1].strip()) or {}
+                except Exception:
+                    pass
+
+        name = metadata.get('name', skill_id)
+        description = metadata.get('description', '')
+        tools = metadata.get('tools', [])
+        tools_str = ', '.join(tools) if tools else 'no extra tools'
+
+        reminder = f'[Skill active: {name}]'
+        if description:
+            reminder += f' {description}'
+        reminder += f' | Tools: {tools_str}'
+        return reminder
 
     def watch_vault_skills(self, _callback=None) -> None:
         """
