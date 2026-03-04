@@ -9,6 +9,8 @@ that drive the discovery system. Research questions define WHAT to search for
 from typing import Any
 from uuid import UUID
 
+from thoth.mcp.auth import get_mcp_user_id
+
 from ..base_tools import MCPTool, MCPToolCallResult, NoInputTool
 
 
@@ -102,11 +104,6 @@ class CreateResearchQuestionMCPTool(MCPTool):
         return {
             'type': 'object',
             'properties': {
-                'user_id': {
-                    'type': 'string',
-                    'description': 'User identifier',
-                    'default': 'default_user',
-                },
                 'name': {
                     'type': 'string',
                     'description': 'Unique name for the research question',
@@ -203,7 +200,7 @@ class CreateResearchQuestionMCPTool(MCPTool):
             research_question_service = self.service_manager.research_question
 
             question_id = await research_question_service.create_research_question(
-                user_id=arguments.get('user_id', 'default_user'),
+                user_id=get_mcp_user_id(),
                 name=arguments['name'],
                 description=arguments.get('description'),
                 keywords=arguments['keywords'],
@@ -294,11 +291,6 @@ class ListResearchQuestionsMCPTool(MCPTool):
         return {
             'type': 'object',
             'properties': {
-                'user_id': {
-                    'type': 'string',
-                    'description': 'User identifier',
-                    'default': 'default_user',
-                },
                 'active_only': {
                     'type': 'boolean',
                     'description': 'Only return active questions',
@@ -313,7 +305,7 @@ class ListResearchQuestionsMCPTool(MCPTool):
             research_question_service = self.service_manager.research_question
 
             questions = await research_question_service.get_user_questions(
-                user_id=arguments.get('user_id', 'default_user'),
+                user_id=get_mcp_user_id(),
                 active_only=arguments.get('active_only', True),
             )
 
@@ -383,11 +375,6 @@ class GetResearchQuestionMCPTool(MCPTool):
                     'type': 'string',
                     'description': 'UUID of the research question',
                 },
-                'user_id': {
-                    'type': 'string',
-                    'description': 'User identifier',
-                    'default': 'default_user',
-                },
             },
             'required': ['question_id'],
         }
@@ -396,6 +383,7 @@ class GetResearchQuestionMCPTool(MCPTool):
         """Get research question details."""
         try:
             question_id = UUID(arguments['question_id'])
+            user_id = get_mcp_user_id()
 
             # Get question from repository
             from thoth.repositories.research_question_repository import (
@@ -418,7 +406,6 @@ class GetResearchQuestionMCPTool(MCPTool):
                 )
 
             # Verify user ownership
-            user_id = arguments.get('user_id', 'default_user')
             if question.get('user_id') != user_id:
                 return MCPToolCallResult(
                     content=[
@@ -521,11 +508,6 @@ class UpdateResearchQuestionMCPTool(MCPTool):
                     'type': 'string',
                     'description': 'UUID of the research question',
                 },
-                'user_id': {
-                    'type': 'string',
-                    'description': 'User identifier',
-                    'default': 'default_user',
-                },
                 'name': {
                     'type': 'string',
                     'description': 'Updated name for the research question',
@@ -617,7 +599,7 @@ class UpdateResearchQuestionMCPTool(MCPTool):
         try:
             research_question_service = self.service_manager.research_question
             question_id = UUID(arguments['question_id'])
-            user_id = arguments.get('user_id', 'default_user')
+            user_id = get_mcp_user_id()
 
             # Build updates dict (only include fields that were provided)
             updates = {}
@@ -713,11 +695,6 @@ class DeleteResearchQuestionMCPTool(MCPTool):
                     'type': 'string',
                     'description': 'UUID of the research question',
                 },
-                'user_id': {
-                    'type': 'string',
-                    'description': 'User identifier',
-                    'default': 'default_user',
-                },
                 'hard_delete': {
                     'type': 'boolean',
                     'description': 'Permanently delete (default: soft delete)',
@@ -732,7 +709,7 @@ class DeleteResearchQuestionMCPTool(MCPTool):
         try:
             research_question_service = self.service_manager.research_question
             question_id = UUID(arguments['question_id'])
-            user_id = arguments.get('user_id', 'default_user')
+            user_id = get_mcp_user_id()
             hard_delete = arguments.get('hard_delete', False)
 
             success = await research_question_service.delete_research_question(
@@ -795,11 +772,6 @@ class RunDiscoveryForQuestionMCPTool(MCPTool):
                 'question_id': {
                     'type': 'string',
                     'description': 'UUID of the research question',
-                },
-                'user_id': {
-                    'type': 'string',
-                    'description': 'User identifier',
-                    'default': 'default_user',
                 },
                 'max_articles': {
                     'type': 'integer',

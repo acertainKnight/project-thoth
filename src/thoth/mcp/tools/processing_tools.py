@@ -508,100 +508,128 @@ class CollectionStatsMCPTool(NoInputTool):
     async def execute(self, _arguments: dict[str, Any]) -> MCPToolCallResult:
         """Get collection statistics."""
         try:
-            # Get RAG statistics with error handling (use async version in MCP context)
+            from thoth.mcp.auth import get_mcp_user_id
+
+            user_id = get_mcp_user_id()
+
             try:
                 rag_stats = await self.service_manager.rag.get_statistics_async()
             except Exception as e:
                 logger.warning(f'Failed to get RAG stats: {e}')
                 rag_stats = {}
 
-            # Try to get additional stats from other services
-            response_text = '**Collection Statistics**\n\n'
+            response_text = 'Collection Statistics\n\n'
 
-            # RAG System Stats
-            response_text += '**Knowledge Base:**\n'
-            response_text += (
-                f'  - Total documents: {rag_stats.get("document_count", 0)}\n'
-            )
-            response_text += f'  - Total chunks: {rag_stats.get("total_chunks", 0)}\n'
-            response_text += (
-                f'  - Collection: {rag_stats.get("collection_name", "N/A")}\n'
-            )
+            # Knowledge base counts -- use total_papers (distinct papers indexed),
+            # not total_chunks which was incorrectly surfaced as "documents" before.
+            total_papers_indexed = rag_stats.get('total_papers', 0)
+            total_chunks = rag_stats.get('total_chunks', 0)
 
-            if rag_stats.get('last_indexed'):
-                response_text += f'  - Last indexed: {rag_stats["last_indexed"]}\n'
-
-            # Try to get document type breakdown with improved error handling
+            # Authoritative paper counts from paper_metadata.
+            # source_of_truth distinguishes papers in the user's collection
+            # ('processed') from citation-only references ('citation') and
+            # discovery candidates ('discovered').
+            collection_size = 0
+            citation_refs = 0
+            discovered_only = 0
             try:
-                # Sample articles to get type distribution
-                sample_results = await self.service_manager.rag.search_async(
-                    query='', k=100
+                rows = await self.service_manager.postgres.fetch(
+                    """
+                    SELECT COALESCE(source_of_truth, 'unknown') as source,
+                           COUNT(*) as count
+                    FROM paper_metadata
+                    WHERE user_id = $1
+                    GROUP BY source_of_truth
+                    """,
+                    user_id,
                 )
-                if sample_results:
-                    doc_types = {}
-                    for result in sample_results:
-                        doc_type = result.get('document_type', 'Unknown')
-                        doc_types[doc_type] = doc_types.get(doc_type, 0) + 1
-
-                    response_text += '\n**Document Types:**\n'
-                    for doc_type, count in sorted(doc_types.items()):
-                        response_text += f'  - {doc_type}: {count}\n'
-                else:
-                    response_text += '\n**Document Types:** No documents found\n'
-
+                for row in rows:
+                    if row['source'] == 'processed':
+                        collection_size = row['count']
+                    elif row['source'] == 'citation':
+                        citation_refs = row['count']
+                    elif row['source'] == 'discovered':
+                        discovered_only = row['count']
             except Exception as e:
-                logger.warning(f'Failed to get document type breakdown: {e}')
+                logger.warning(f'Failed to get paper_metadata counts: {e}')
+
+            response_text += 'Knowledge Base:\n'
+            response_text += f'  - Papers in collection: {collection_size}\n'
+            if discovered_only:
                 response_text += (
-                    '\n**Document Types:** Unable to retrieve (service unavailable)\n'
+                    f'  - Discovered (not yet downloaded): {discovered_only}\n'
                 )
+            if citation_refs:
+                response_text += (
+                    f'  - Referenced papers (citation graph only): {citation_refs}\n'
+                )
+            response_text += f'  - Indexed for search: {total_papers_indexed}\n'
+            response_text += f'  - Indexed chunks: {total_chunks}\n'
+
+            # Document category breakdown for papers actually in the collection.
+            try:
+                rows = await self.service_manager.postgres.fetch(
+                    """
+                    SELECT COALESCE(document_category, 'uncategorized') as category,
+                           COUNT(*) as count
+                    FROM paper_metadata
+                    WHERE user_id = $1
+                      AND source_of_truth IN ('processed', 'merged')
+                    GROUP BY document_category
+                    ORDER BY count DESC
+                    """,
+                    user_id,
+                )
+                if rows:
+                    response_text += '\nDocument Categories:\n'
+                    for row in rows:
+                        response_text += f'  - {row["category"]}: {row["count"]}\n'
+            except Exception as e:
+                logger.warning(f'Failed to get document category breakdown: {e}')
 
             # Embeddings info
-            if 'embeddings' in rag_stats:
-                response_text += '\n**Search System:**\n'
+            if rag_stats.get('embedding_model'):
+                response_text += '\nSearch System:\n'
                 response_text += (
-                    f'  - Model: {rag_stats["embeddings"].get("model", "N/A")}\n'
+                    f'  - Embedding model: {rag_stats["embedding_model"]}\n'
                 )
-                response_text += f'  - Dimensions: {rag_stats["embeddings"].get("dimension", "N/A")}\n'
 
-            # Try to get discovery source stats
+            # Research questions -- use the active ResearchQuestionService
+            # which stores questions in PostgreSQL, not the deprecated file-based
+            # QueryService.
             try:
-                sources = self.service_manager.discovery.list_sources()
-                active_sources = [s for s in sources if s.is_active]
+                questions = (
+                    await self.service_manager.research_question.get_user_questions(
+                        user_id, active_only=False
+                    )
+                )
+                active_questions = [q for q in questions if q.get('is_active')]
+                response_text += '\nResearch Questions:\n'
+                response_text += f'  - Total: {len(questions)}\n'
+                if len(questions) != len(active_questions):
+                    response_text += f'  - Active: {len(active_questions)}\n'
+                if active_questions:
+                    for q in active_questions:
+                        name = q.get('name', 'Unnamed')
+                        freq = q.get('schedule_frequency', '')
+                        last_run = q.get('last_run_at')
+                        last_run_str = (
+                            last_run.strftime('%Y-%m-%d') if last_run else 'never'
+                        )
+                        response_text += (
+                            f'  - {name} ({freq}, last run: {last_run_str})\n'
+                        )
+            except Exception as e:
+                logger.warning(f'Failed to get research questions: {e}')
 
-                response_text += '\n**Discovery Sources:**\n'
-                response_text += f'  - Total sources: {len(sources)}\n'
-                response_text += f'  - Active sources: {len(active_sources)}\n'
-
-                # Source type breakdown
-                source_types = {}
-                for source in sources:
-                    source_type = getattr(source, 'source_type', 'Unknown')
-                    source_types[source_type] = source_types.get(source_type, 0) + 1
-
-                for source_type, count in sorted(source_types.items()):
-                    response_text += f'  - {source_type}: {count}\n'
-
-            except Exception:
-                pass  # Skip if not available
-
-            # Try to get query stats
-            try:
-                queries = self.service_manager.query.get_all_queries()
-                response_text += '\n**🔎 Research Queries:**\n'
-                response_text += f'  - Total queries: {len(queries)}\n'
-
-                if queries:
-                    # Average keywords per query
-                    total_keywords = sum(len(q.keywords) for q in queries if q.keywords)
-                    avg_keywords = total_keywords / len(queries) if queries else 0
-                    response_text += f'  - Avg keywords per query: {avg_keywords:.1f}\n'
-
-            except Exception:
-                pass  # Skip if not available
-
-            # System health indicator
-            response_text += '\n**System Status:**\n'
-            response_text += f'  - RAG System: {"Active" if rag_stats.get("document_count", 0) > 0 else "Empty"}\n'
+            # System health
+            response_text += '\nSystem Status:\n'
+            response_text += (
+                f'  - RAG system: {"active" if total_papers_indexed > 0 else "empty"}\n'
+            )
+            if collection_size > total_papers_indexed:
+                unindexed = collection_size - total_papers_indexed
+                response_text += f'  - Unindexed papers: {unindexed} (run reindex to include them in search)\n'
 
             return MCPToolCallResult(
                 content=[{'type': 'text', 'text': response_text.strip()}]

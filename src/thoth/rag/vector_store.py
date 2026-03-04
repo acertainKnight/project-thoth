@@ -884,7 +884,7 @@ class VectorStoreManager:
                 'total_chunks': row['total_chunks'],
                 'total_papers': row['total_papers'],
                 'indexed_chunks': row['indexed_chunks'],
-                'document_count': row['total_chunks'],  # Alias for compatibility
+                'document_count': row['total_papers'],  # papers, not chunks
                 'collection_name': 'document_chunks (pgvector)',
                 'backend': 'PostgreSQL + pgvector',
             }
